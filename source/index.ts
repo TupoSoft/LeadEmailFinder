@@ -1,11 +1,14 @@
 import {promises as dns} from 'dns'
 import net from "net"
+
 import PromiseSocket from "promise-socket";
+import express, {Request, Response} from "express";
 
 type Result<T, E extends Error = Error> = { success: true, result: T } | { success: false, error: E }
 
-export enum SMTPResponseCode {
+enum SMTPResponseCode {
     // 2xx: Success
+    SERVICE_READY = 220,
     OK = 250,                // Requested mail action okay, completed.
     MAIL_ACTION_OK = 251,    // User not local; will forward to <forward-path>.
 
@@ -87,6 +90,26 @@ async function verify(email: string): Promise<SMTPVerificationData> {
     await promiseSocket.connect(25, mxRecords[0].exchange);
     const response = await promiseSocket.readAll() as string
     const code = parseSmtpResponse(response)
+    if (code != SMTPResponseCode.SERVICE_READY) {
+        result.result = SMTPVerificationResult.SessionInitiationFailed;
+        return result;
+    }
+
+    await promiseSocket.writeAll("QUIT\r\n");
+    await promiseSocket.end()
 
     return result
 }
+
+const app = express()
+const port = process.env.PORT || 3000
+
+app.get('/verify', async (req: Request, res: Response) => {
+    const email = req.query.email as string
+    const verificationData = await verify(email)
+    res.json(verificationData)
+})
+
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+})
