@@ -1,0 +1,20 @@
+{
+  "name": "email-verifier",
+  "version": "1.0.0",
+  "description": "Email Verifier",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.0.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "promise-socket": "^8.0.0"
+  }
+}

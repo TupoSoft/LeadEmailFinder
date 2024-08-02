@@ -1,0 +1,72 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      promise-socket:
+        specifier: ^8.0.0
+        version: 8.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.2
+        version: 22.0.2
+      typescript:
+        specifier: ^5.5.4
+        version: 5.5.4
+
+packages:
+
+  '@types/node@22.0.2':
+    resolution: {integrity: sha512-yPL6DyFwY5PiMVEwymNeqUTKsDczQBJ/5T7W/46RwLU/VH+AA8aT5TZkvBviLKLbbm0hlfftEkGrNzfRk/fofQ==}
+
+  promise-duplex@8.0.0:
+    resolution: {integrity: sha512-JlrnT6KZMRD+t4cxP7gh/dlGP2pl01/jTPg3pTLvFLBTdHTbTTdc+g25q0qswC3ziO9RAr3L1b2n/++4y23GQg==}
+    engines: {node: '>=16.0.0'}
+
+  promise-readable@8.0.1:
+    resolution: {integrity: sha512-peVAz+49xRooF1Om2wYSOluKpOApnpiJVOKgQ6IR/ZAWo15tBa4ZtcKKSTAytRiNJVlkvil9NoFhqihY4Sl1Fw==}
+    engines: {node: '>=16.0.0'}
+
+  promise-socket@8.0.0:
+    resolution: {integrity: sha512-5Qb5719QcOm3/zrt0DLiAsJXutv2vb4HRxCiOVro1eyAOMak6vF2gTIoB6f0M1mnKMCsXW1SC/O+4G3P6p7kbw==}
+    engines: {node: '>=16.0.0'}
+
+  promise-writable@8.0.0:
+    resolution: {integrity: sha512-Qn7/5tE42fjLUWevPm/SFmVz26tRdhmxmPXgOJSeIwLnkI2V4u0/t+CrRXb8ic1Jy9qqvOHVYm+sAIgel++eVA==}
+    engines: {node: '>=16.0.0'}
+
+  typescript@5.5.4:
+    resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@6.11.1:
+    resolution: {integrity: sha512-mIDEX2ek50x0OlRgxryxsenE5XaQD4on5U2inY7RApK3SOJpofyw7uW2AyfMKkhAxXIceo2DeWGVGwyvng1GNQ==}
+
+snapshots:
+
+  '@types/node@22.0.2':
+    dependencies:
+      undici-types: 6.11.1
+
+  promise-duplex@8.0.0:
+    dependencies:
+      promise-readable: 8.0.1
+      promise-writable: 8.0.0
+
+  promise-readable@8.0.1: {}
+
+  promise-socket@8.0.0:
+    dependencies:
+      promise-duplex: 8.0.0
+
+  promise-writable@8.0.0: {}
+
+  typescript@5.5.4: {}
+
+  undici-types@6.11.1: {}
