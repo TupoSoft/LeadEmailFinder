@@ -1,5 +1,9 @@
 import net from "net"
 
+import {RoundRobin} from "./RoundRobin";
+
+
+
 export class SocketClient {
     private client: net.Socket;
 
@@ -9,7 +13,11 @@ export class SocketClient {
 
     connect(host: string, port: number): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.client.connect(port, host, () => {
+            this.client.connect({
+                port: port,
+                host: host,
+                localAddress: ""
+            }, () => {
                 console.debug(`Connected to server at ${host}:${port}`);
                 resolve();
             });

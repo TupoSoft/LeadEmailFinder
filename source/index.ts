@@ -1,4 +1,4 @@
-import dns from 'dns/promises'
+import {resolveMx} from 'node:dns/promises'
 import {constants as httpConstants} from "node:http2";
 import express, {Request, Response} from "express"
 
@@ -64,7 +64,7 @@ function verify(email: string): Promise<SMTPVerificationData> {
         const smtpClient = new SMTPClient()
 
         try {
-            const mxRecords = await dns.resolveMx(domain)
+            const mxRecords = await resolveMx(domain)
             const targetExchange = mxRecords[0].exchange
 
             let code = await smtpClient.connect(targetExchange)
