@@ -5,18 +5,19 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "tsc && node dist/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@tsconfig/recommended": "^1.0.7",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.2",
     "typescript": "^5.5.4"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "promise-socket": "^8.0.0"
+    "ip-address": "^9.0.5"
   }
 }
