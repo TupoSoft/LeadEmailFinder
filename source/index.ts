@@ -84,19 +84,34 @@ async function verify(email: string): Promise<SMTPVerificationData> {
 
     const [localPart, domain] = email.split('@')
     const mxRecords = await dns.resolveMx(domain)
+    const targetExchange = mxRecords[0].exchange
 
     const socket = new net.Socket()
     const promiseSocket = new PromiseSocket(socket)
+
+    console.log(`Connecting to ${targetExchange} on port 25`)
+
     await promiseSocket.connect(25, mxRecords[0].exchange);
+
+    console.log('Connection successful')
+
     const response = await promiseSocket.readAll() as string
+
+    console.log(`Received:\n${response}`)
+
     const code = parseSmtpResponse(response)
     if (code != SMTPResponseCode.SERVICE_READY) {
         result.result = SMTPVerificationResult.SessionInitiationFailed;
         return result;
     }
 
-    await promiseSocket.writeAll("QUIT\r\n");
+    const QUIT_CMD = "QUIT\r\n"
+    console.log(`Sending: ${QUIT_CMD}`)
+
+    await promiseSocket.writeAll(QUIT_CMD);
     await promiseSocket.end()
+
+    console.log('Socket closed.')
 
     return result
 }
