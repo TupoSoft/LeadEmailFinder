@@ -1,8 +1,6 @@
 import net from "net"
 
-import {RoundRobin} from "./RoundRobin";
-
-
+import networkInterfaceInfoRoundRobin from "./NetworkInterfaceInfoRoundRobin";
 
 export class SocketClient {
     private client: net.Socket;
@@ -12,11 +10,14 @@ export class SocketClient {
     }
 
     connect(host: string, port: number): Promise<void> {
+        networkInterfaceInfoRoundRobin.next()
         return new Promise((resolve, reject) => {
+            const nextInterface = networkInterfaceInfoRoundRobin.next()
+
             this.client.connect({
                 port: port,
                 host: host,
-                localAddress: ""
+                localAddress: nextInterface.address,
             }, () => {
                 console.debug(`Connected to server at ${host}:${port}`);
                 resolve();
