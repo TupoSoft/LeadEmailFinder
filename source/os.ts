@@ -1,6 +1,5 @@
 import {NetworkInterfaceInfo, networkInterfaces} from "node:os";
-
-import {RoundRobin} from "./RoundRobin";
+import {RoundRobin} from "./round-robin";
 
 function getInterfaces(): NetworkInterfaceInfo[] {
     return Object.values(networkInterfaces())
@@ -8,8 +7,10 @@ function getInterfaces(): NetworkInterfaceInfo[] {
         .filter(value => !value.internal)
 }
 
-export default new class extends RoundRobin<NetworkInterfaceInfo> {
+class NetworkInterfacesRR extends RoundRobin<NetworkInterfaceInfo> {
     constructor() {
         super(getInterfaces());
     }
 }
+
+export default new NetworkInterfacesRR()

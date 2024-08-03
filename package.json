@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Email Verifier",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "tsc && node dist/index.js"
