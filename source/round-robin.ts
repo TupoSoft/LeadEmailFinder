@@ -7,6 +7,10 @@ export class RoundRobin<T> {
         this.currentIndex = 0
     }
 
+    addItems(items: T[] = []) {
+        this.items.push(...items)
+    }
+
     next(): T {
         if (this.currentIndex >= this.items.length) {
             this.currentIndex = 0
