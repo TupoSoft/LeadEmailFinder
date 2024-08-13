@@ -1,35 +1,88 @@
 import {AddressInfo, Socket, SocketConstructorOpts, TcpSocketConnectOpts} from "net"
 import {SocketReadyState} from "node:net";
-import {clearTimeout} from "node:timers";
+import {ProxyData} from "./proxy";
+
+interface PromisifiedSocketConnectOpts extends TcpSocketConnectOpts {
+    proxy?: ProxyData
+}
 
 export class PromisifiedSocket {
     private readonly client: Socket;
-    private readonly idleTimeoutMillis: number
-    private idleTimeout: NodeJS.Timeout | null = null
+    private addressInfo?: AddressInfo
 
-    constructor(options?: SocketConstructorOpts, idleTimeoutMillis: number = 60000) {
+    constructor(options?: SocketConstructorOpts) {
         this.client = new Socket(options);
-        this.idleTimeoutMillis = idleTimeoutMillis
+        this.client.on('lookup', (err, address, family, host) => {
+            if (!err) {
+                console.debug(`The address have been looked up: ${address}, family: ${family}, host: ${host}`)
+            } else {
+                console.debug(`The error occurred during the address lookup: ${err}, address: ${address}, family: ${family}, host: ${host}`)
+            }
+        })
     }
 
-    connect(options: TcpSocketConnectOpts): Promise<this> {
-        return new Promise((resolve, reject) => {
-            this.resetIdleTimeout()
+    connect(options: PromisifiedSocketConnectOpts): Promise<this> {
+        return new Promise(async (resolve, reject) => {
+            const {proxy, host: targetHost, port: targetPort} = options
 
-            this.client.connect(options, () => {
+            const errorListener = (err: Error) => {
+                console.debug('Connection error:', err)
+                this.client.removeListener('connect', proxyConnectionListener)
+                reject(err)
+            }
+
+            const connectionListener = () => {
                 console.debug(`Connected to server at ${options.host}:${options.port}`);
-                resolve(this);
-            });
 
-            this.client.on('error', (err) => {
-                console.debug('Connection error:', err);
-                reject(err);
-            });
+                this.addressInfo = this.client.address() as AddressInfo
+
+                resolve(this);
+            }
+
+            const proxyConnectionListener = async () => {
+                const {host: proxyHost, port: proxyPort, user, password} = proxy!
+
+                console.debug(`Connection to proxy ${proxyHost}:${proxyPort} established successfully`)
+
+                this.addressInfo = {
+                    address: proxyHost,
+                    port: proxyPort,
+                    family: this.client.remoteFamily!
+                }
+
+                const connectRequest = `CONNECT ${targetHost}:${targetPort} HTTP/1.1\r\n` +
+                    `Host: ${targetHost}:${targetPort}\r\n` +
+                    (user && password ? `Proxy-Authorization: Basic ${this.generateProxyAuthToken(user, password)}\r\n` : ``) +
+                    `\r\n`
+
+                try {
+                    await this.write(connectRequest)
+                    const response = await this.read()
+                    if (response.includes('HTTP/1.1 200 Connection established')) {
+                        console.debug(`Connection to target server ${targetHost}:${targetPort} established successfully.`);
+                        this.client.removeListener('error', errorListener)
+                        resolve(this)
+                    } else {
+                        this.end()
+                        reject(`Failed to establish connection: ${response}`)
+                    }
+                } catch (error) {
+                    reject(error)
+                }
+            }
+
+            const connectionHandler = proxy ? proxyConnectionListener : connectionListener
+
+            if (proxy) {
+                options.host = proxy.host
+                options.port = proxy.port
+            }
+
+            this.client.connect(options, connectionHandler).once('error', errorListener)
         });
     }
 
     write(message: string): Promise<void> {
-        this.resetIdleTimeout()
         console.debug(`Write: ${message}`)
 
         return new Promise((resolve, reject) => {
@@ -44,18 +97,19 @@ export class PromisifiedSocket {
     }
 
     read(): Promise<string> {
-        this.resetIdleTimeout()
-
         return new Promise((resolve, reject) => {
-            this.client.once('data', (data) => {
+            const onError = (error: Error) => {
+                reject(error);
+            }
+
+            const onData = (data: Buffer) => {
                 const read = data.toString();
                 console.debug(`Read: ${read}`)
+                this.client.removeListener('error', onError)
                 resolve(read);
-            });
+            }
 
-            this.client.on('error', (err) => {
-                reject(err);
-            });
+            this.client.once('data', onData).once('error', onError);
         });
     }
 
@@ -64,22 +118,15 @@ export class PromisifiedSocket {
         console.debug('Disconnected from server');
     }
 
-    getAddressInfo(): AddressInfo {
-        return this.client.address() as AddressInfo
+    getAddressInfo(): AddressInfo | undefined {
+        return this.addressInfo
     }
 
     getReadyState(): SocketReadyState {
         return this.client.readyState
     }
 
-    private resetIdleTimeout() {
-        if (this.idleTimeout) {
-            clearTimeout(this.idleTimeout);
-        }
-
-        this.idleTimeout = setTimeout(() => {
-            this.client.end()
-            console.debug('Socket connection timed out due to inactivity')
-        }, this.idleTimeoutMillis)
+    private generateProxyAuthToken(user: string, password: string): string {
+        return Buffer.from(`${user}:${password}`).toString('base64')
     }
 }

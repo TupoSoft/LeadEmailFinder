@@ -1,41 +1,39 @@
 import {resolveMx} from 'node:dns/promises'
-import {constants as httpConstants} from "node:http2";
-import express, {Request, Response} from "express"
 import {MxRecord} from "node:dns";
 
 import {SMTPClient, SMTPResponseCode} from "./smtp"
-import networkInterfacesRR from "./os"
+import {generateRandomString} from "./util";
+import rotator, {ProxyRotator} from "./proxy";
 
-const enum SMTPVerificationResult {
-    Undefined,
+export const enum SMTPVerificationError {
     InvalidEmailFormat,
     NoMxRecords,
-    SessionInitiationFailed,
-    ClientInitiationFailed,
     SenderIdentificationFailed,
     CatchAll,
-    ForwardPathAccepted,
     ForwardPathRejected,
 }
 
-interface SMTPVerificationData {
+interface VerificationData {
     email: string
     localPart: string
     domain: string
-    result: SMTPVerificationResult
+    error: SMTPVerificationError | null
     targetExchange?: MxRecord
     verifiedAt: number
+    exists: boolean
 }
 
-class EmailVerifier {
-    private activeConnections: Record<string, SMTPClient> = {}
+export class EmailVerifier {
+    constructor(private readonly proxyRotator: ProxyRotator = rotator) {
+    }
 
-    verify(email: string): Promise<SMTPVerificationData> {
+    verify(email: string): Promise<VerificationData> {
         return new Promise(async (resolve, reject) => {
-                const data: SMTPVerificationData = {
+                const data: VerificationData = {
+                    exists: false,
                     domain: "",
                     localPart: "",
-                    result: SMTPVerificationResult.Undefined,
+                    error: null,
                     email: email,
                     verifiedAt: Date.now()
                 }
@@ -48,57 +46,37 @@ class EmailVerifier {
 
                 const mxRecords = await this.getMxRecords(data.domain)
                 if (mxRecords.length < 0) {
-                    data.result = SMTPVerificationResult.NoMxRecords
+                    data.error = SMTPVerificationError.NoMxRecords
                     return data
                 }
 
-                let activeConnection = this.findActiveConnections(mxRecords)
+                const activeConnection = new SMTPClient()
+                const nextProxy = this.proxyRotator.getRandomProxy()
 
                 try {
-                    if (activeConnection) {
-                        const code = await activeConnection.rcptTo(email)
-                        if (code === SMTPResponseCode.OK) {
-                            data.result = SMTPVerificationResult.ForwardPathAccepted
-                        } else {
-                            data.result = SMTPVerificationResult.ForwardPathRejected
-                        }
-                    } else {
-                        activeConnection = new SMTPClient()
-                        const nextInterface = networkInterfacesRR.next()
-                        const targetExchange = await activeConnection.connect(mxRecords, nextInterface)
+                    await activeConnection.connect({mxRecords: mxRecords, proxy: nextProxy})
+                    await activeConnection.helo()
 
-                        let code = await activeConnection.helo()
-                        if (code !== SMTPResponseCode.OK) {
-                            data.result = SMTPVerificationResult.ClientInitiationFailed
-                            resolve(data)
-                        }
-
-                        code = await activeConnection.mailFrom()
-                        if (code !== SMTPResponseCode.OK) {
-                            data.result = SMTPVerificationResult.SenderIdentificationFailed
-                            resolve(data)
-                        }
-
-
-                        code = await activeConnection.rcptTo(this.generateRandomString(5) + email)
-                        if (code === SMTPResponseCode.OK) {
-                            data.result = SMTPVerificationResult.CatchAll
-                            resolve(data)
-                        }
-
-                        this.activeConnections[targetExchange.exchange] = activeConnection
-
-                        code = await activeConnection.rcptTo(email)
-                        if (code === SMTPResponseCode.OK) {
-                            data.result = SMTPVerificationResult.ForwardPathAccepted
-                        } else {
-                            data.result = SMTPVerificationResult.ForwardPathRejected
-                        }
-
-                        data.verifiedAt = Date.now()
-
+                    let code = await activeConnection.mailFrom()
+                    if (code !== SMTPResponseCode.OK) {
+                        data.error = SMTPVerificationError.SenderIdentificationFailed
                         resolve(data)
+                    }
 
+
+                    code = await activeConnection.rcptTo(generateRandomString(5) + email)
+                    if (code === SMTPResponseCode.OK) {
+                        data.error = SMTPVerificationError.CatchAll
+                        resolve(data)
+                    }
+
+                    code = await activeConnection.rcptTo(email)
+                    data.verifiedAt = Date.now()
+                    if (code !== SMTPResponseCode.OK) {
+                        resolve(data)
+                    } else {
+                        data.exists = true
+                        resolve(data)
                     }
                 } catch
                     (error) {
@@ -111,20 +89,6 @@ class EmailVerifier {
                 }
             }
         )
-    }
-
-    private findActiveConnections(mxRecords: MxRecord[]):
-        SMTPClient | undefined {
-        const match = mxRecords.find(value => this.activeConnections[value.exchange])
-
-        if (match) {
-            const activeConnection = this.activeConnections[match.exchange]
-            if (activeConnection.isReady()) {
-                return activeConnection
-            } else {
-
-            }
-        }
     }
 
     private async getMxRecords(domain: string): Promise<MxRecord[]> {
@@ -144,34 +108,4 @@ class EmailVerifier {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     }
-
-    private generateRandomString(length: number): string {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-        let result = ''
-        for (let i = 0; i < length; i++) {
-            const randomIndex = Math.floor(Math.random() * characters.length)
-            result += characters[randomIndex]
-        }
-        return result
-    }
 }
-
-const app = express()
-const port = process.env.PORT || 3000
-const emailVerifier = new EmailVerifier()
-
-app.get('/verify', async (req: Request, res: Response) => {
-    const email = req.query.email as string
-    const verificationData = await emailVerifier.verify(email)
-
-    if (verificationData.result === SMTPVerificationResult.InvalidEmailFormat
-    ) {
-        res.status(httpConstants.HTTP_STATUS_BAD_REQUEST)
-    }
-
-    res.json(verificationData)
-})
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-})

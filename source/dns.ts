@@ -1,11 +1,6 @@
 import {AddressInfo} from "node:net";
 import {Address6} from "ip-address";
 
-export interface Endpoint {
-    host: string
-    port: number
-}
-
 export function getDomainFromSubdomain(subdomain: string): string {
     return subdomain.split('.').slice(-2).join('.')
 }

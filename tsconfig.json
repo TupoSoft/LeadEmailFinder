@@ -2,10 +2,10 @@
   "extends": "@tsconfig/recommended/tsconfig.json",
   "compilerOptions": {
     "sourceMap": true,
-    "outDir": "dist",
-    "declaration": true
+    "outDir": "dist"
   },
   "include": [
-    "source"
+    "source",
+    "test"
   ]
 }
