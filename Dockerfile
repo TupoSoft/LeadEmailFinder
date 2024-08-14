@@ -11,7 +11,7 @@ ARG PNPM_VERSION=9.7.0
 
 FROM node:${NODE_VERSION}-alpine
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl wget
 
 RUN echo ${NODE_ENV}
 
