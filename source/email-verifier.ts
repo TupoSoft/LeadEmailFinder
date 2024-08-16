@@ -10,7 +10,18 @@ export const enum SMTPVerificationError {
     NoMxRecords,
     SenderIdentificationFailed,
     CatchAll,
-    ForwardPathRejected,
+}
+
+const enum DeliveryStatus {
+    Accepted = "accepted",
+    Rejected = "rejected",
+    NotProcessed = "not-processed",
+}
+
+const enum CatchAllStatus {
+    Enabled = "enabled",
+    Disabled = "disabled",
+    Unknown = "unknown",
 }
 
 interface VerificationData {
@@ -20,7 +31,8 @@ interface VerificationData {
     error: SMTPVerificationError | null
     targetExchange?: MxRecord
     verifiedAt: number
-    exists: boolean
+    deliveryStatus: DeliveryStatus,
+    catchAll: CatchAllStatus,
 }
 
 export class EmailVerifier {
@@ -30,7 +42,8 @@ export class EmailVerifier {
     verify(email: string): Promise<VerificationData> {
         return new Promise(async (resolve, reject) => {
                 const data: VerificationData = {
-                    exists: false,
+                    deliveryStatus: DeliveryStatus.NotProcessed,
+                    catchAll: CatchAllStatus.Unknown,
                     domain: "",
                     localPart: "",
                     error: null,
@@ -73,13 +86,15 @@ export class EmailVerifier {
                     code = await activeConnection.rcptTo(email)
                     data.verifiedAt = Date.now()
                     if (code !== SMTPResponseCode.OK) {
+                        data.catchAll = CatchAllStatus.Enabled
+                        data.deliveryStatus = DeliveryStatus.Rejected
                         resolve(data)
                     } else {
-                        data.exists = true
+                        data.catchAll = CatchAllStatus.Disabled
+                        data.deliveryStatus = DeliveryStatus.Accepted
                         resolve(data)
                     }
-                } catch
-                    (error) {
+                } catch (error) {
                     reject(error)
                 } finally {
                     const code = await activeConnection?.quit();

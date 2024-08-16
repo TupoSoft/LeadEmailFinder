@@ -4,12 +4,11 @@ import {EmailVerifier, SMTPVerificationError} from "./email-verifier";
 import {LeadEmailFinder} from "./lead-email-finder";
 import authenticate from "./authenticate";
 
-const app = express()
 const port = process.env.PORT || 3000
 const emailVerifier = new EmailVerifier()
 const leadEmailFinder = new LeadEmailFinder()
 
-app.disable('x-powered-by').get('/verify', authenticate, async (req: Request, res: Response) => {
+express().disable('x-powered-by').get('/verify', authenticate, async (req: Request, res: Response) => {
     const email = req.query.email as string
     const verificationData = await emailVerifier.verify(email)
 
