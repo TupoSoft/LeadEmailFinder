@@ -1,9 +1,9 @@
-import {resolveMx} from "node:dns/promises";
-import {SMTPClient, SMTPClientError, SMTPResponseCode} from "./smtp";
-import {SMTPVerificationError} from "./email-verifier";
-import {generateRandomString} from "./util";
-import {generateEmailFormats} from "./email-format";
-import rotator, {ProxyRotator} from "./proxy";
+import { resolveMx } from 'node:dns/promises'
+import { SMTPClient, SMTPClientError, SMTPResponseCode } from './smtp'
+import { SMTPVerificationError } from './email-verifier'
+import { generateRandomString } from './util'
+import { generateEmails } from './email-format'
+import rotator, { type ProxyRotator } from './proxy'
 
 interface FindLeadData {
     lead: Lead
@@ -19,18 +19,17 @@ export interface Lead {
 }
 
 export class LeadEmailFinder {
-    constructor(private readonly proxyRotator: ProxyRotator = rotator) {
-    }
+    constructor(private readonly proxyRotator: ProxyRotator = rotator) {}
 
     async findLead(lead: Lead): Promise<FindLeadData> {
         const data: FindLeadData = {
-            lead: lead,
+            lead,
             matches: [],
             error: null,
             catchAll: false,
         }
 
-        const mxRecords = await resolveMx(lead.domain);
+        const mxRecords = await resolveMx(lead.domain)
         if (mxRecords.length < 0) {
             data.error = SMTPVerificationError.NoMxRecords
             return data
@@ -41,9 +40,9 @@ export class LeadEmailFinder {
 
         try {
             await client.connect({
-                mxRecords: mxRecords,
+                mxRecords,
                 proxy: nextProxy,
-            });
+            })
             await client.helo()
 
             let code = await client.mailFrom()
@@ -52,30 +51,29 @@ export class LeadEmailFinder {
                 return data
             }
 
-            const emails = generateEmailFormats(lead)
+            const emails = generateEmails(lead)
 
-            code = await client.rcptTo(generateRandomString(5) + emails[0])
+            code = await client.rcptTo(generateRandomString(5) + emails[0].address)
             if (code === SMTPResponseCode.OK) {
                 data.error = SMTPVerificationError.CatchAll
                 return data
             }
 
-            for (const [type, email] of Object.entries(emails)) {
-                code = await client.rcptTo(email)
+            for (const { address } of emails) {
+                code = await client.rcptTo(address)
                 if (code !== SMTPResponseCode.MailboxNotFound) {
-                    data.matches.push(email)
+                    data.matches.push(address)
                 }
             }
-        } catch (error) {
+        } catch (error: unknown) {
             if (error instanceof SMTPClientError) {
                 data.error = error.code
+            } else if (error instanceof Error) {
+                throw error
             }
-
-            throw error
         } finally {
             await client.quit()
         }
-
 
         return data
     }

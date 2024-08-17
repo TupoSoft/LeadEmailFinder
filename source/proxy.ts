@@ -1,4 +1,4 @@
-import {readFileSync} from "fs";
+import { readFileSync } from 'fs'
 
 export interface ProxyData {
     host: string
@@ -7,11 +7,18 @@ export interface ProxyData {
     password?: string
 }
 
-const filePath = 'source/config/proxies.json';
+const filePath = 'source/config/proxies.json'
 
 function loadProxiesFromFile(filePath: string): string[] {
     const data = readFileSync(filePath, 'ascii')
     return JSON.parse(data) as string[]
+}
+
+export function generateAuthTokenFromCredentials(
+    user: string,
+    password: string,
+): string {
+    return Buffer.from(`${user}:${password}`).toString('base64')
 }
 
 export class ProxyRotator {
@@ -24,19 +31,19 @@ export class ProxyRotator {
     }
 
     private static parseProxyUrl(proxyUrl: string): ProxyData {
-        const url = new URL(proxyUrl);
+        const url = new URL(proxyUrl)
 
         return {
             host: url.hostname,
             port: parseInt(url.port),
             user: url.username,
-            password: url.password
-        };
+            password: url.password,
+        }
     }
 
     getRandomProxy(): ProxyData {
-        const randomIndex = Math.floor(Math.random() * this.proxies.length);
-        return this.proxies[randomIndex];
+        const randomIndex = Math.floor(Math.random() * this.proxies.length)
+        return this.proxies[randomIndex]
     }
 }
 

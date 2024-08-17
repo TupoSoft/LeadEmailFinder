@@ -1,0 +1,32 @@
+import type { NextFunction, Request, Response } from 'express'
+
+const log = (req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now()
+
+    console.log(`[${new Date().toISOString()}] Request Body:`, req.body)
+
+    const originalSend = res.send
+    const originalJson = res.json
+
+    let responseBody: unknown = {}
+
+    res.send = (body: unknown) => {
+        responseBody = body
+        return originalSend.call(res, body)
+    }
+
+    res.json = (body: unknown) => {
+        responseBody = body
+        return originalJson.call(res, body)
+    }
+
+    res.on('finish', () => {
+        const duration = Date.now() - start
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`)
+        console.log(`[${new Date().toISOString()}] Response Body:`, responseBody)
+    })
+
+    next()
+}
+
+export default log

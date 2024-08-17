@@ -2,7 +2,7 @@ export class SMTPClientError extends Error {
     readonly code: number
 
     constructor(code: number, message?: string) {
-        super(message);
+        super(message)
         this.code = code
     }
 }

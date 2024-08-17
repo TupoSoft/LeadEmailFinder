@@ -2,7 +2,9 @@
   "extends": "@tsconfig/recommended/tsconfig.json",
   "compilerOptions": {
     "sourceMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true
   },
   "include": [
     "source",

@@ -1,5 +1,7 @@
-import {AddressInfo} from "node:net";
-import {Address6} from "ip-address";
+import type { AddressInfo } from 'node:net'
+import { Address6 } from 'ip-address'
+import type { MxRecord } from 'node:dns'
+import { resolveMx } from 'node:dns/promises'
 
 export function getDomainFromSubdomain(subdomain: string): string {
     return subdomain.split('.').slice(-2).join('.')
@@ -15,17 +17,30 @@ export function ipv4ToArpa(ipv4: string): string {
 
 export function ipv6ToArpa(ipv6: string): string {
     // Create an Address6 object
-    const addr = new Address6(ipv6);
+    const addr = new Address6(ipv6)
 
     // Get the fully expanded address without colons
-    const fullHex = addr.canonicalForm().replace(/:/g, '');
+    const fullHex = addr.canonicalForm().replace(/:/g, '')
 
     // Reverse the order of the digits
-    const reversedDigits = fullHex.split('').reverse().join('');
+    const reversedDigits = fullHex.split('').reverse().join('')
 
     // Insert dots between each digit
-    const dottedDigits = reversedDigits.split('').join('.');
+    const dottedDigits = reversedDigits.split('').join('.')
 
     // Append the domain
-    return `${dottedDigits}.ip6.arpa`;
+    return `${dottedDigits}.ip6.arpa`
+}
+
+export async function getMxRecords(domain: string): Promise<MxRecord[]> {
+    try {
+        const mxRecords = await resolveMx(domain)
+        mxRecords.sort((a, b) => {
+            return a.priority - b.priority
+        })
+        return mxRecords
+    } catch (error: unknown) {
+        console.debug(`Failed to get MX records for domain: ${domain}`)
+        return []
+    }
 }
