@@ -11,7 +11,7 @@ ARG PNPM_VERSION=9.7.0
 
 FROM node:${NODE_VERSION}-alpine
 
-RUN apk add --no-cache curl wget
+RUN apk add --no-cache curl wget bind-tools
 
 RUN echo ${NODE_ENV}
 
@@ -36,8 +36,11 @@ USER node
 # Copy the rest of the source files into the image.
 COPY . .
 
+# Debug
+EXPOSE 9229
+
 # Expose the port that the application listens on.
 EXPOSE 3000
 
 # Run the application.
-CMD pnpm start:prod
+CMD pnpm run start:debug

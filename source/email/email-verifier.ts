@@ -1,27 +1,15 @@
 import type { MxRecord } from 'node:dns'
 
-import { SMTPClient, SMTPClientError, SMTPResponseCode } from './smtp'
-import { generateRandomString } from './util'
-import rotator, { type ProxyRotator } from './proxy'
-import { getMxRecords } from './dns'
+import { SMTPClient, SMTPClientError, SMTPResponseCode } from '../smtp'
+import { generateRandomString } from '../util'
+import type { ProxyRotator } from '../proxy'
+import { getMxRecords } from '../dns'
+import { CatchAllStatus, DeliveryStatus } from './enums'
 
 export const enum SMTPVerificationError {
-    InvalidEmailFormat,
     NoMxRecords,
     SenderIdentificationFailed,
     CatchAll,
-}
-
-const enum DeliveryStatus {
-    Accepted = 'accepted',
-    Rejected = 'rejected',
-    NotProcessed = 'not-processed',
-}
-
-const enum CatchAllStatus {
-    Enabled = 'enabled',
-    Disabled = 'disabled',
-    Unknown = 'unknown',
 }
 
 interface VerificationData {
@@ -36,8 +24,7 @@ interface VerificationData {
 }
 
 export class EmailVerifier {
-    constructor(private readonly proxyRotator: ProxyRotator = rotator) {
-    }
+    constructor(private readonly proxyRotator: ProxyRotator) {}
 
     async verify(email: string): Promise<VerificationData> {
         const data: VerificationData = {
@@ -75,24 +62,25 @@ export class EmailVerifier {
 
             code = await activeConnection.rcptTo(generateRandomString(5) + email)
             if (code === SMTPResponseCode.OK) {
-                data.error = SMTPVerificationError.CatchAll
+                data.catchAll = CatchAllStatus.Enabled
+                data.deliveryStatus = DeliveryStatus.Accepted
                 return data
+            } else {
+                data.catchAll = CatchAllStatus.Disabled
             }
 
             code = await activeConnection.rcptTo(email)
             data.verifiedAt = Date.now()
             if (code !== SMTPResponseCode.OK) {
-                data.catchAll = CatchAllStatus.Enabled
                 data.deliveryStatus = DeliveryStatus.Rejected
-                return data
             } else {
-                data.catchAll = CatchAllStatus.Disabled
                 data.deliveryStatus = DeliveryStatus.Accepted
-                return data
             }
         } catch (error) {
             if (error instanceof SMTPClientError) {
                 data.error = error.code
+            } else if (error instanceof Error) {
+                throw error
             }
         } finally {
             const code = await activeConnection?.quit()

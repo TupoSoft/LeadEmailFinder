@@ -4,5 +4,6 @@
   "semi": false,
   "quoteProps": "as-needed",
   "singleQuote": true,
-  "arrowParens": "avoid"
+  "arrowParens": "avoid",
+  "endOfLine": "lf"
 }

@@ -1,5 +1,5 @@
 import { PromisifiedSocket } from '../socket/promisified-socket'
-import { resolvePtr } from 'dns/promises'
+import { resolvePtr } from 'node:dns/promises'
 import { getDomainFromSubdomain, ipToArpa } from '../dns'
 import { SMTPResponseCode } from './smtp-response-code'
 import { SMTPClientError } from './smtp-client-error'
@@ -19,10 +19,7 @@ interface SMTPClientConnectOpts {
 }
 
 export class SMTPClient {
-    constructor(
-        private readonly socketClient: PromisifiedSocket = new PromisifiedSocket(),
-    ) {
-    }
+    constructor(private readonly socketClient: PromisifiedSocket = new PromisifiedSocket()) {}
 
     private static getSmtpResponseCode(response: string): SMTPResponseCode {
         const responseCode = Number(response.substring(0, 3))
@@ -31,10 +28,7 @@ export class SMTPClient {
             return responseCode as SMTPResponseCode
         }
 
-        throw new SMTPClientError(
-            SMTPClientErrorCode.UnknownErrorCode,
-            'Unknown error code: ' + responseCode,
-        )
+        throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown error code: ' + responseCode)
     }
 
     async connect(options: SMTPClientConnectOpts): Promise<MxRecord> {
@@ -71,10 +65,7 @@ export class SMTPClient {
         const hostname = await this.getClientHostName()
         const code = await this.sendCommand(`HELO ${hostname}`)
         if (code !== SMTPResponseCode.OK) {
-            throw new SMTPClientError(
-                SMTPClientErrorCode.ClientInitiationFailed,
-                'HELO command failed.',
-            )
+            throw new SMTPClientError(SMTPClientErrorCode.ClientInitiationFailed, 'HELO command failed.')
         }
     }
 
@@ -111,20 +102,14 @@ export class SMTPClient {
     private async getClientHostName(): Promise<string> {
         const addressInfo = this.socketClient.getAddressInfo()
         if (addressInfo == null) {
-            throw new SMTPClientError(
-                SMTPClientErrorCode.NoPTR,
-                'The socket local address doesn\'t have a PTR!',
-            )
+            throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }
 
         const addrArpa = ipToArpa(addressInfo)
         const rDNS = await resolvePtr(addrArpa)
 
         if (rDNS.length < 1) {
-            throw new SMTPClientError(
-                SMTPClientErrorCode.NoPTR,
-                'The socket local address doesn\'t have a PTR!',
-            )
+            throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }
 
         return rDNS[0]

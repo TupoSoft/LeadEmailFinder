@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "start:debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register source/index.ts",
     "start:dev": "node --trace-sync-io --trace-warnings -r ts-node/register source/index.ts",
     "start:prod": "node -r ts-node/register source/index.ts",
     "lint": "ts-standard",
