@@ -61,11 +61,11 @@ app.get('/findLead', authenticate, log, validateFindLead, (req: Request, res: Re
 })
 
 app.get('/ping', log, (_, res: Response) => {
-    res.status(httpConstants.HTTP_STATUS_OK).json({ reply: 'PONG' })
+    res.send('PONG')
 })
 
 app.get('/', log, (_: Request, res: Response) => {
-    res.send('Hello World!')
+    res.send('Welcome to the Lead Email Finder main page!')
 })
 
 app.listen(port, () => {
