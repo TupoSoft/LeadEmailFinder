@@ -13,8 +13,6 @@ FROM node:${NODE_VERSION}-alpine
 
 RUN apk add --no-cache curl wget bind-tools
 
-RUN echo ${NODE_ENV}
-
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm@${PNPM_VERSION}
@@ -43,4 +41,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD pnpm run start:debug
+CMD pnpm run start:prod
