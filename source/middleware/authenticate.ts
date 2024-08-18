@@ -19,6 +19,6 @@ export default function authenticate(req: Request, res: Response, next: NextFunc
     const authHeader = req.headers.authorization
     const token = authHeader?.split(' ')[1]
 
-    if ((token == null) || !tokens[token]) res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).send('Unauthorized')
+    if (token == null || !tokens[token]) res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).send('Unauthorized')
     else next()
 }
