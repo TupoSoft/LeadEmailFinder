@@ -11,6 +11,7 @@ services:
       - 8.8.4.4
       - 2001:4860:4860::8888
       - 2001:4860:4860::8844
+    scale: 2
     healthcheck:
       test: curl -f http://localhost:3000/ping
       interval: 30s
@@ -20,6 +21,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.<unique_router_name>.rule=Host(`dev.leademailfinder.com`) && PathPrefix(`/`)"
+      - traefik.http.routers.<unique_router_name>.entryPoints=http
   
   redis:
     image: redis:alpine
