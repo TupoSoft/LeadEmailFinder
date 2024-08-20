@@ -21,9 +21,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.<unique_router_name>.rule=Host(`dev.leademailfinder.com`) && PathPrefix(`/`)"
+      - traefik.http.routers.<unique_router_name>.entryPoints=http
+  
   redis:
     image: redis:alpine
     healthcheck:
