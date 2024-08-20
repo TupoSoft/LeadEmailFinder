@@ -5,17 +5,28 @@ import { SMTPResponseCode } from './smtp-response-code'
 import { SMTPClientError } from './smtp-client-error'
 import type { MxRecord } from 'node:dns'
 import type { ProxyData } from '../proxy'
+import { promiseWithTimeout } from '../util/timeout'
+
+const SMTP_PORT = 25
+const SESSION_INITIATION_TIMEOUT = 30 * 1000
+const GREETING_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
+const MAIL_FROM_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
+const RCPT_TO_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
+const QUIT_TIMEOUT = 10 * 1000
 
 const enum SMTPClientErrorCode {
     SessionInitiationFailed,
+    SessionInitiationRejected,
     ClientInitiationFailed,
     NoPTR,
     UnknownErrorCode,
+    OperationTimeoutOut,
 }
 
 interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
     proxy?: ProxyData
+    timeoutMs?: number
 }
 
 export class SMTPClient {
@@ -36,16 +47,12 @@ export class SMTPClient {
 
         for (const mxRecord of mxRecords) {
             try {
-                await this.socketClient.connect({
-                    host: mxRecord.exchange,
-                    port: 25,
-                    keepAlive: true,
+                await this.tryToConnect(
+                    mxRecord.exchange,
+                    SMTP_PORT,
+                    options.timeoutMs ?? SESSION_INITIATION_TIMEOUT,
                     proxy,
-                })
-                const code = await this.readSmtpResponse()
-                if (code === SMTPResponseCode.ServiceReady) {
-                    return mxRecord
-                }
+                )
             } catch (error: unknown) {
                 if (error instanceof Error) {
                     console.error(
@@ -63,7 +70,11 @@ export class SMTPClient {
 
     async helo(): Promise<void> {
         const hostname = await this.getClientHostName()
-        const code = await this.sendCommand(`HELO ${hostname}`)
+        const code = await promiseWithTimeout(
+            this.sendCommand(`HELO ${hostname}`),
+            GREETING_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
         if (code !== SMTPResponseCode.OK) {
             throw new SMTPClientError(SMTPClientErrorCode.ClientInitiationFailed, 'HELO command failed.')
         }
@@ -72,21 +83,49 @@ export class SMTPClient {
     async mailFrom(): Promise<SMTPResponseCode> {
         const domain = getDomainFromSubdomain(await this.getClientHostName())
         const email = `john@${domain}`
-        return await this.sendCommand(`MAIL FROM: <${email}>`)
+        return await promiseWithTimeout(
+            this.sendCommand(`MAIL FROM: <${email}>`),
+            MAIL_FROM_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
     }
 
     async rcptTo(email: string): Promise<SMTPResponseCode> {
-        return await this.sendCommand(`RCPT TO: <${email}>`)
+        return await promiseWithTimeout(
+            this.sendCommand(`RCPT TO: <${email}>`),
+            RCPT_TO_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
     }
 
     async quit(): Promise<SMTPResponseCode> {
-        const code = await this.sendCommand('QUIT')
+        const code = await promiseWithTimeout(
+            this.sendCommand('QUIT'),
+            QUIT_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
         this.socketClient.end()
         return code
     }
 
     isReady(): boolean {
         return this.socketClient.getReadyState() === 'open'
+    }
+
+    private async tryToConnect(host: string, port: number, timeoutMs: number, proxy?: ProxyData): Promise<void> {
+        await this.socketClient.connect({
+            host,
+            port,
+            keepAlive: true,
+            proxy,
+        })
+        const code = await this.readSmtpResponse()
+        if (code !== SMTPResponseCode.ServiceReady) {
+            throw new SMTPClientError(
+                SMTPClientErrorCode.SessionInitiationRejected,
+                `Host ${host}:${port} rejected the SMTP session.`,
+            )
+        }
     }
 
     private async sendCommand(command: string): Promise<SMTPResponseCode> {
