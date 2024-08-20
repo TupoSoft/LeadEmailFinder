@@ -11,10 +11,18 @@ services:
       - 8.8.4.4
       - 2001:4860:4860::8888
       - 2001:4860:4860::8844
-    ports:
-      - "3000:3000"
+    scale: 2
+    healthcheck:
+      test: curl -f http://localhost:3000/ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   redis:
     image: redis:alpine
+    healthcheck:
+      test: redis-cli ping
