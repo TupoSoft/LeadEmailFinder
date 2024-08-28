@@ -5,18 +5,28 @@ import { SMTPResponseCode } from './smtp-response-code'
 import { SMTPClientError } from './smtp-client-error'
 import type { MxRecord } from 'node:dns'
 import type { ProxyData } from '../proxy'
+import { promiseWithTimeout } from '../util/timeout'
 
 const enum SMTPClientErrorCode {
     SessionInitiationFailed,
+    SessionInitiationRejected,
     ClientInitiationFailed,
     NoPTR,
     UnknownErrorCode,
+    OperationTimeoutOut,
 }
 
 interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
     proxy?: ProxyData
 }
+
+const SMTP_PORT = 25
+// const SESSION_INITIATION_TIMEOUT = 30 * 1000
+const GREETING_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
+const MAIL_FROM_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
+const RCPT_TO_TIMEOUT = 10 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
+const QUIT_TIMEOUT = 10 * 1000
 
 export class SMTPClient {
     constructor(private readonly socketClient: PromisifiedSocket = new PromisifiedSocket()) {}
@@ -31,6 +41,11 @@ export class SMTPClient {
         throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown error code: ' + responseCode)
     }
 
+    private static isLastLine(line: string): boolean {
+        const regex = /^\d{3} /
+        return regex.test(line)
+    }
+
     async connect(options: SMTPClientConnectOpts): Promise<MxRecord> {
         const { mxRecords, proxy } = options
 
@@ -38,7 +53,7 @@ export class SMTPClient {
             try {
                 await this.socketClient.connect({
                     host: mxRecord.exchange,
-                    port: 25,
+                    port: SMTP_PORT,
                     keepAlive: true,
                     proxy,
                 })
@@ -63,7 +78,11 @@ export class SMTPClient {
 
     async helo(): Promise<void> {
         const hostname = await this.getClientHostName()
-        const code = await this.sendCommand(`HELO ${hostname}`)
+        const code = await promiseWithTimeout(
+            this.sendCommand(`HELO ${hostname}`),
+            GREETING_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
         if (code !== SMTPResponseCode.OK) {
             throw new SMTPClientError(SMTPClientErrorCode.ClientInitiationFailed, 'HELO command failed.')
         }
@@ -72,15 +91,27 @@ export class SMTPClient {
     async mailFrom(): Promise<SMTPResponseCode> {
         const domain = getDomainFromSubdomain(await this.getClientHostName())
         const email = `john@${domain}`
-        return await this.sendCommand(`MAIL FROM: <${email}>`)
+        return await promiseWithTimeout(
+            this.sendCommand(`MAIL FROM: <${email}>`),
+            MAIL_FROM_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
     }
 
     async rcptTo(email: string): Promise<SMTPResponseCode> {
-        return await this.sendCommand(`RCPT TO: <${email}>`)
+        return await promiseWithTimeout(
+            this.sendCommand(`RCPT TO: <${email}>`),
+            RCPT_TO_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
     }
 
     async quit(): Promise<SMTPResponseCode> {
-        const code = await this.sendCommand('QUIT')
+        const code = await promiseWithTimeout(
+            this.sendCommand('QUIT'),
+            QUIT_TIMEOUT,
+            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+        )
         this.socketClient.end()
         return code
     }
@@ -95,8 +126,17 @@ export class SMTPClient {
     }
 
     private async readSmtpResponse(): Promise<SMTPResponseCode> {
-        const response = await this.socketClient.read()
-        return SMTPClient.getSmtpResponseCode(response)
+        while (true) {
+            const response = await this.socketClient.read()
+            const lines = response.split('\r\n')
+
+            for (const currentLine of lines) {
+                const line = currentLine
+                if (SMTPClient.isLastLine(line)) {
+                    return SMTPClient.getSmtpResponseCode(line)
+                }
+            }
+        }
     }
 
     private async getClientHostName(): Promise<string> {
