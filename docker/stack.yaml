@@ -1,0 +1,40 @@
+services:
+  verifier:
+    image: kyrylokupin/email-verifier-node:latest
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "http://localhost:3000/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 4
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 265M
+
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - type: bind
+        source: /mnt/redis
+        target: /data
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning

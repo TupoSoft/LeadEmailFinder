@@ -1,7 +1,7 @@
 services:
   verifier:
     build:
-      context: .
+      context: ..
     dns:
       - 1.1.1.1
       - 8.8.8.8
