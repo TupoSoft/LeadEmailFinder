@@ -41,4 +41,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD pnpm run start:prod
+CMD ["pnpm", "run", "start:prod"]
