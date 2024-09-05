@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs'
+import path from 'node:path'
 
 export interface ProxyData {
     host: string
@@ -7,17 +8,14 @@ export interface ProxyData {
     password?: string
 }
 
-const filePath = 'source/config/proxies.json'
+const filePath = path.join(__dirname, '../config/proxies.json')
 
 function loadProxiesFromFile(filePath: string): string[] {
     const data = readFileSync(filePath, 'ascii')
     return JSON.parse(data) as string[]
 }
 
-export function generateAuthTokenFromCredentials(
-    user: string,
-    password: string,
-): string {
+export function generateAuthTokenFromCredentials(user: string, password: string): string {
     return Buffer.from(`${user}:${password}`).toString('base64')
 }
 

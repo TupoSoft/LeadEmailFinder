@@ -1,8 +1,9 @@
 import { readFileSync } from 'fs'
 import type { NextFunction, Request, Response } from 'express'
 import { constants as httpConstants } from 'http2'
+import path from 'node:path'
 
-const tokensFilePath = 'source/config/tokens.json'
+const tokensFilePath = path.join(__dirname, '../../config/tokens.json')
 
 function readTokens(): Record<string, boolean> {
     try {

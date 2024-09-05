@@ -36,18 +36,18 @@ export async function mimecastLogin(username: string): Promise<MimecastLoginResu
         Referer: 'https://login.mimecast.com/u/login/?gta=apps',
         'x-mc-strict': 'nopendo',
         'x-mc-app-id': '4941cc2e-85e5-4988-af50-688b03a29f96',
-        'sec-ch-ua-platform': '"Android"',
+        'sec-ch-ua-platform': '"Android"'
     }
 
     try {
         const { data } = await axios.post<MimecastResponse, AxiosResponse<MimecastResponse>, MimecastData>('https://login-us.mimecast.com/u/proxy/api/login/discover-authentication', {
             data: [
                 {
-                    emailAddress: username,
-                },
-            ],
+                    emailAddress: username
+                }
+            ]
         }, {
-            headers,
+            headers
         })
 
         const { authenticate } = data.data[0]

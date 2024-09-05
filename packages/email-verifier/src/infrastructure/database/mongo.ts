@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-export async function connect(): Promise<void> {
+export async function mongoConnect(): Promise<void> {
     try {
         await mongoose.connect('mongodb://root:example@mongo/verifier')
         console.log('MongoDB connected')

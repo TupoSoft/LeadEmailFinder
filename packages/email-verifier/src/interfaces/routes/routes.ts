@@ -1,12 +1,12 @@
 import { type Request, type Response, Router } from 'express'
 import { MongoEmailVerificationRepository } from '../../infrastructure/repositories/MongoEmailVerificationRepository'
 import { VerifyEmail } from '../../application/use-cases/VerifyEmail'
-import defaultProxyRotator from '../../proxy'
+import defaultProxyRotator from '../../util/proxy'
 import { EmailVerificationController } from '../controllers/EmailVerificationController'
 import { authenticate, log, validate } from '../middleware'
 import { query } from 'express-validator'
 
-const router = Router()
+const router: Router = Router()
 
 const emailVerificationRepository = new MongoEmailVerificationRepository()
 const proxyRotator = defaultProxyRotator
@@ -22,3 +22,13 @@ router.get(
         void emailVerificationController.verify(req, res)
     },
 )
+
+router.get('/ping', log, (_, res: Response) => {
+    res.send('PONG')
+})
+
+router.get('/', log, (_: Request, res: Response) => {
+    res.send('Hello World!')
+})
+
+export default router

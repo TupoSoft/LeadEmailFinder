@@ -25,8 +25,11 @@ WORKDIR /usr/src/app
 # into this layer.
 RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=bind,source=pnpm-lock.yaml,target=pnpm-lock.yaml \
+    --mount=type=bind,source=pnpm-workspace.yaml,target=pnpm-workspace.yaml \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm -w --frozen-lockfile i
+
+RUN pnpm build && pnpm -r i
 
 # Run the application as a non-root user.
 USER node
@@ -41,4 +44,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD ["pnpm", "run", "start:prod"]
+CMD ["pnpm", "start:prod"]

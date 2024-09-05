@@ -1,6 +1,5 @@
 import { type AddressInfo, Socket, type SocketConstructorOpts, type TcpSocketConnectOpts } from 'net'
 import type { SocketReadyState } from 'node:net'
-import { generateAuthTokenFromCredentials, type ProxyData } from '../proxy'
 
 interface PromisifiedSocketConstructorOpts extends SocketConstructorOpts {
     timeout?: number
@@ -8,6 +7,13 @@ interface PromisifiedSocketConstructorOpts extends SocketConstructorOpts {
 
 interface PromisifiedSocketConnectOpts extends TcpSocketConnectOpts {
     proxy?: ProxyData
+}
+
+export interface ProxyData {
+    host: string
+    port: number
+    user?: string
+    password?: string
 }
 
 const enum PromisifiedSocketErrorCode {
@@ -39,6 +45,10 @@ export class PromisifiedSocket {
         this.client.setTimeout(
             options?.timeout != null ? options.timeout : PromisifiedSocket.PROMISIFIED_SOCKET_DEFAULT_TIMEOUT,
         )
+    }
+
+    private static generateAuthTokenFromCredentials(user: string, password: string): string {
+        return Buffer.from(`${user}:${password}`).toString('base64')
     }
 
     async connect(options: PromisifiedSocketConnectOpts): Promise<void> {
@@ -101,7 +111,7 @@ export class PromisifiedSocket {
                     `CONNECT ${targetHost}:${targetPort} HTTP/1.1\r\n` +
                     `Host: ${targetHost}:${targetPort}\r\n` +
                     (user != null && password != null
-                        ? `Proxy-Authorization: Basic ${generateAuthTokenFromCredentials(user, password)}\r\n`
+                        ? `Proxy-Authorization: Basic ${PromisifiedSocket.generateAuthTokenFromCredentials(user, password)}\r\n`
                         : '') +
                     '\r\n'
 
