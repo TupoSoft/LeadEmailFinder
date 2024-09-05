@@ -7,6 +7,7 @@ import { matchedData, oneOf, query, validationResult } from 'express-validator'
 import { authenticate, log } from './middleware'
 import { EmailFormatManager } from './email/email-format'
 import Redis from 'ioredis'
+import { connect } from './infrastructure/database/mongo'
 
 const { PORT } = process.env
 
@@ -15,6 +16,7 @@ const port = PORT ?? 3000
 const redis = new Redis({
     host: 'redis',
 })
+
 const emailFormatManager = new EmailFormatManager(redis)
 const emailVerifier = new EmailVerifier(rotator)
 const leadEmailFinder = new LeadEmailFinder(rotator, emailFormatManager)
@@ -84,6 +86,11 @@ app.get('/', log, (_: Request, res: Response) => {
     res.send('Welcome to the Lead Email Finder main page!')
 })
 
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`)
-})
+async function main(): Promise<void> {
+    await connect()
+    app.listen(port, () => {
+        console.log(`Server is running on port ${port}`)
+    })
+}
+
+void main()

@@ -1,33 +1,15 @@
-import type { MxRecord } from 'node:dns'
-
 import { SMTPClient, SMTPClientError, SMTPResponseCode } from '../smtp'
 import { generateRandomString } from '../util'
 import type { ProxyRotator } from '../proxy'
 import { getMxRecords } from '../dns'
-import { CatchAllStatus, DeliveryStatus } from './enums'
-
-export const enum SMTPVerificationError {
-    NoMxRecords,
-    SenderIdentificationFailed,
-    CatchAll,
-}
-
-interface VerificationData {
-    email: string
-    localPart: string
-    domain: string
-    error: SMTPVerificationError | null
-    targetExchange?: MxRecord
-    verifiedAt: number
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
-}
+import { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../domain/enums'
+import type { EmailVerification } from '../domain/entities/EmailVerification'
 
 export class EmailVerifier {
     constructor(private readonly proxyRotator: ProxyRotator) {}
 
-    async verify(email: string): Promise<VerificationData> {
-        const data: VerificationData = {
+    async verify(email: string): Promise<EmailVerification> {
+        const data: EmailVerification = {
             deliveryStatus: DeliveryStatus.NotProcessed,
             catchAll: CatchAllStatus.Unknown,
             domain: '',
