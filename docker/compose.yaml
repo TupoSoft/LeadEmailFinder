@@ -2,6 +2,7 @@ services:
   verifier:
     build:
       context: ..
+      dockerfile: ./docker/Dockerfile
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -28,10 +29,12 @@ services:
     image: mongo
     restart: unless-stopped
     environment:
+      MONGO_INITDB_DATABASE: verifier
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
     volumes:
       - mongo-data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
 
   mongo-express:
     image: mongo-express
@@ -46,18 +49,5 @@ services:
     depends_on:
       - mongo
 
-  redis:
-    image: redis:alpine
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-
 volumes:
   mongo-data:
-  redis-data:

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import type { VerifyEmail } from '../../application/use-cases/VerifyEmail'
+import type { VerifyEmail } from '../../application/use-cases'
 import { matchedData, validationResult } from 'express-validator'
 import { constants as httpConstants } from 'http2'
 

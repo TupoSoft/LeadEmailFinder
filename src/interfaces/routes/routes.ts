@@ -1,10 +1,10 @@
 import { type Request, type Response, Router } from 'express'
 import { MongoEmailVerificationRepository } from '../../infrastructure/repositories/MongoEmailVerificationRepository'
-import { VerifyEmail } from '../../application/use-cases/VerifyEmail'
 import defaultProxyRotator from '../../util/proxy'
 import { EmailVerificationController } from '../controllers/EmailVerificationController'
 import { authenticate, log, validate } from '../middleware'
 import { query } from 'express-validator'
+import { VerifyEmail } from '../../application/use-cases'
 
 const router: Router = Router()
 

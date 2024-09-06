@@ -1,10 +1,11 @@
 {
     "extends": "@tsconfig/recommended/tsconfig.json",
     "compilerOptions": {
+        "outDir": "dist",
         "declaration": true,
         "noImplicitAny": true,
         "useUnknownInCatchVariables": true
     },
-    "include": ["packages/*/src"],
+    "include": ["src"],
     "exclude": ["node_modules", "dist"]
 }

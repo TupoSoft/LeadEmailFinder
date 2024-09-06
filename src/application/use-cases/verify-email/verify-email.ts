@@ -1,11 +1,13 @@
-import type { EmailVerificationRepository } from '../../domain/repositories/EmailVerificationRepository'
-import type { EmailVerification } from '../../domain/entities/EmailVerification'
-import type { ProxyRotator } from '../../util/proxy'
-import { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../../domain/enums'
-import { SMTPClient, SMTPClientError, SMTPResponseCode } from '@kk/smtp'
-import { generateRandomString } from '../../util/random'
+import type { EmailVerificationRepository } from '../../../domain/repositories/EmailVerificationRepository'
+import type { EmailVerification } from '../../../domain/entities/EmailVerification'
+import type { ProxyRotator } from '../../../util/proxy'
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
+import { SMTPResponseCode } from './smtp-response-code'
+import { SMTPClient } from './smtp-client'
+import { SMTPClientError } from './smtp-client-error'
+import { generateRandomString } from '../../../util/random'
+import { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../../../domain/enums'
 
 export class VerifyEmail {
     constructor(
@@ -32,7 +34,6 @@ export class VerifyEmail {
             catchAll: CatchAllStatus.Unknown,
             domain: '',
             localPart: '',
-            error: null,
             email,
             verifiedAt: new Date(),
         }
@@ -51,7 +52,9 @@ export class VerifyEmail {
         const nextProxy = this.proxyRotator.getRandomProxy()
 
         try {
-            await activeConnection.connect({ mxRecords, proxy: nextProxy })
+            const mxRecord = await activeConnection.connect({ mxRecords, proxy: nextProxy })
+            data.targetExchange = mxRecord.exchange
+
             await activeConnection.helo()
 
             let code = await activeConnection.mailFrom()
