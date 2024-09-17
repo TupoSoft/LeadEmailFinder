@@ -34,4 +34,4 @@ jobs:
 
       # Optional: Verify the image was pushed
       - name: Docker image info
-        run: docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/my-image:latest
+        run: docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/email-verifier-node:latest
