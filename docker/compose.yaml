@@ -2,39 +2,61 @@ services:
   verifier:
     build:
       context: ..
+      dockerfile: ./docker/Dockerfile
     dns:
       - 1.1.1.1
       - 8.8.8.8
     ports:
       - "3000:3000"
-    depends_on:
-      - redis
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
+    environment:
+      MONGO_URL_FILE: /run/secrets/mongo_url
+    depends_on:
+      mongo:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: 1.0
+          cpus: "1.0"
           memory: 512M
         reservations:
-          cpus: 0.5
+          cpus: "0.5"
           memory: 265M
+    secrets:
+      - mongo_url
 
-  redis:
-    image: redis:alpine
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    volumes:
-      - redis-data:/data
+  mongo:
+    image: mongo:latest
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')"
+    environment:
+      MONGO_INITDB_DATABASE: verifier
+      MONGO_URL_FILE: /run/secrets/mongo_url
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+    ports:
+      - "27017:27017"
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+      - mongo_url
+    volumes:
+      - ./scripts/initdb.js:/docker-entrypoint-initdb.d/initdb.js:ro
+      - mongo-data:/data/db
+
+secrets:
+  mongo_root_username:
+    file: ./secrets/mongo_root_username.txt
+  mongo_root_password:
+    file: ./secrets/mongo_root_password.txt
+  mongo_url:
+    file: ./secrets/mongo_url.txt
 
 volumes:
-  redis-data:
+  mongo-data:

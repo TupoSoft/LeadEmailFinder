@@ -1,13 +1,11 @@
 {
-  "extends": "@tsconfig/recommended/tsconfig.json",
-  "compilerOptions": {
-    "sourceMap": true,
-    "outDir": "dist",
-    "noImplicitAny": true,
-    "useUnknownInCatchVariables": true
-  },
-  "include": [
-    "source",
-    "test"
-  ]
+    "extends": "@tsconfig/recommended/tsconfig.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "declaration": true,
+        "noImplicitAny": true,
+        "useUnknownInCatchVariables": true
+    },
+    "include": ["src"],
+    "exclude": ["node_modules", "dist"]
 }
