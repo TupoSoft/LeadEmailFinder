@@ -8,46 +8,55 @@ services:
       - 8.8.8.8
     ports:
       - "3000:3000"
-    depends_on:
-      - redis
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/ping" ]
       interval: 30s
       timeout: 10s
       retries: 3
+    environment:
+      MONGO_URL_FILE: /run/secrets/mongo_url
+    depends_on:
+      mongo:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          cpus: 1.0
+          cpus: "1.0"
           memory: 512M
         reservations:
-          cpus: 0.5
+          cpus: "0.5"
           memory: 265M
+    secrets:
+      - mongo_url
 
   mongo:
-    image: mongo
+    image: mongo:latest
     restart: unless-stopped
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')"
     environment:
       MONGO_INITDB_DATABASE: verifier
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-    volumes:
-      - mongo-data:/data/db
-      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-
-  mongo-express:
-    image: mongo-express
-    restart: always
+      MONGO_URL_FILE: /run/secrets/mongo_url
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     ports:
-      - 8081:8081
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017
-      ME_CONFIG_BASICAUTH: false
-    depends_on:
-      - mongo
+      - "27017:27017"
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+      - mongo_url
+    volumes:
+      - ./scripts/initdb.js:/docker-entrypoint-initdb.d/initdb.js:ro
+      - mongo-data:/data/db
+
+secrets:
+  mongo_root_username:
+    file: ./secrets/mongo_root_username.txt
+  mongo_root_password:
+    file: ./secrets/mongo_root_password.txt
+  mongo_url:
+    file: ./secrets/mongo_url.txt
 
 volumes:
   mongo-data:
