@@ -29,6 +29,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
+          context: ./docker
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/email-verifier-node:latest
 
