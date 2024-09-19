@@ -30,4 +30,4 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/email-verifier-node:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/email-verifier-node:${{ github.sha }}
