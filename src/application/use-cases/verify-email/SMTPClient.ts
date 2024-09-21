@@ -1,10 +1,10 @@
 import { resolvePtr } from 'node:dns/promises'
-import { SMTPResponseCode } from './smtp-response-code'
-import { SMTPClientError } from './smtp-client-error'
+import { SMTPResponseCode } from './SMTPResponseCode'
+import { SMTPClientError } from './SMTPClientError'
 import type { MxRecord } from 'node:dns'
-import { PromisifiedSocket, type ProxyData } from './promisified-socket'
-import { getDomainFromSubdomain, ipToArpa } from './dns'
-import { promiseWithTimeout } from './timeout'
+import { PromisifiedSocket, type ProxyData } from './PromisifiedSocket'
+import { getDomainFromSubdomain, ipToArpa } from './DNS'
+import { promiseWithTimeout } from './Timeout'
 
 const enum SMTPClientErrorCode {
     SessionInitiationFailed,

@@ -3,16 +3,18 @@ import type { EmailVerification } from '../../../domain/entities/EmailVerificati
 import type { ProxyRotator } from '../../../util/proxy'
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
-import { SMTPResponseCode } from './smtp-response-code'
-import { SMTPClient } from './smtp-client'
-import { SMTPClientError } from './smtp-client-error'
+import { SMTPResponseCode } from './SMTPResponseCode'
+import { SMTPClient } from './SMTPClient'
+import { SMTPClientError } from './SMTPClientError'
 import { generateRandomString } from '../../../util/random'
 import { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../../../domain/enums'
+import type { CatchAllVerifier } from './CatchAllVerifier'
 
 export class VerifyEmail {
     constructor(
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly proxyRotator: ProxyRotator,
+        private readonly catchAllVerifier: CatchAllVerifier,
     ) {}
 
     private static async getMxRecords(domain: string): Promise<MxRecord[]> {
@@ -29,18 +31,17 @@ export class VerifyEmail {
     }
 
     async execute(email: string): Promise<EmailVerification> {
+        const [localPart, domain] = email.split('@')
+
         const data: EmailVerification = {
-            deliveryStatus: DeliveryStatus.NotProcessed,
+            deliveryStatus: DeliveryStatus.Unknown,
             catchAll: CatchAllStatus.Unknown,
-            domain: '',
-            localPart: '',
+            source: 'None',
+            domain,
+            localPart,
             email,
             verifiedAt: new Date(),
         }
-
-        const [localPart, domain] = email.split('@')
-        data.localPart = localPart
-        data.domain = domain
 
         const mxRecords = await VerifyEmail.getMxRecords(data.domain)
         if (mxRecords.length < 0) {
@@ -66,7 +67,7 @@ export class VerifyEmail {
             code = await activeConnection.rcptTo(generateRandomString(5) + email)
             if (code === SMTPResponseCode.OK) {
                 data.catchAll = CatchAllStatus.Enabled
-                data.deliveryStatus = DeliveryStatus.Accepted
+                data.deliveryStatus = DeliveryStatus.Unknown
                 return data
             } else {
                 data.catchAll = CatchAllStatus.Disabled
@@ -78,6 +79,7 @@ export class VerifyEmail {
                 data.deliveryStatus = DeliveryStatus.Rejected
             } else {
                 data.deliveryStatus = DeliveryStatus.Accepted
+                data.source = 'SMTP'
             }
         } catch (error) {
             if (error instanceof SMTPClientError) {

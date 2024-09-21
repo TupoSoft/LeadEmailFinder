@@ -57,7 +57,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
                     ? emailVerification.catchAll === CatchAllStatus.Enabled
                     : undefined,
             deliverable:
-                emailVerification.deliveryStatus !== DeliveryStatus.NotProcessed
+                emailVerification.deliveryStatus !== DeliveryStatus.Unknown
                     ? emailVerification.deliveryStatus === DeliveryStatus.Accepted
                     : undefined,
             targetExchange: emailVerification.targetExchange,
@@ -85,7 +85,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
     private static deliverableToDeliveryStatus(deliverable?: boolean): DeliveryStatus {
         if (deliverable === undefined) {
-            return DeliveryStatus.NotProcessed
+            return DeliveryStatus.Unknown
         } else {
             return deliverable ? DeliveryStatus.Accepted : DeliveryStatus.Rejected
         }
