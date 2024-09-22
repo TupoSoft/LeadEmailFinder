@@ -1,5 +1,5 @@
 ### GET request to find emails
-GET http://localhost:3000/verify?email=kyrylo.kupin@gmail.com
+GET http://localhost:3000/verify?email=andres.vidal@cbre.com
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Accept: application/json
 
