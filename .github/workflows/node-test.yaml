@@ -1,12 +1,13 @@
 name: Node.js Test Runner
 
 on:
-  push:
+  push: &push
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+    paths:
+      - '**/*.ts'
+      - '**/*.js'
+  pull_request: *push
 
 jobs:
   test:
