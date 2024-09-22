@@ -1,12 +1,18 @@
-import type { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../enums'
+import type { CatchAllStatus, DeliveryStatus } from '../enums'
+import type { CatchAllVerificationSource } from '../../application/use-cases/verify-email/CatchAllVerifier'
+
+export type EmailVerificationSource = CatchAllVerificationSource | 'SMTP'
 
 export interface EmailVerification {
-    email: string
-    localPart: string
+    catchAll: CatchAllStatus
+    deliveryStatus: DeliveryStatus
     domain: string
-    error?: SMTPVerificationError
+    email: string
+    error?: string
+    localPart: string
+    mxDomain?: string
+    source?: EmailVerificationSource
     targetExchange?: string
     verifiedAt: Date
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
+    success: boolean
 }

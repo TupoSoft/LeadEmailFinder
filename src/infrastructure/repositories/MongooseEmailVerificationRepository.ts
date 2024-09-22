@@ -1,6 +1,6 @@
 import type { EmailVerificationRepository } from '../../domain/repositories/EmailVerificationRepository'
 import { model, Schema } from 'mongoose'
-import type { EmailVerification } from '../../domain/entities/EmailVerification'
+import type { EmailVerification, EmailVerificationSource } from '../../domain/entities/EmailVerification'
 import { CatchAllStatus, DeliveryStatus } from '../../domain/enums'
 
 interface EmailVerificationSchema {
@@ -12,6 +12,8 @@ interface EmailVerificationSchema {
     targetExchange?: string
     verifiedAt: Date
     error?: string
+    success: boolean
+    source?: EmailVerificationSource
 }
 
 const emailVerificationSchema = new Schema<EmailVerificationSchema>({
@@ -41,13 +43,24 @@ const emailVerificationSchema = new Schema<EmailVerificationSchema>({
         type: Date,
         default: Date.now,
     },
+    source: {
+        type: String,
+        default: 'None',
+        required: true,
+    },
+    success: {
+        type: Boolean,
+        required: true,
+    },
 })
 
 const EmailVerificationModel = model('EmailVerification', emailVerificationSchema)
 
-export class MongoEmailVerificationRepository implements EmailVerificationRepository {
+export class MongooseEmailVerificationRepository implements EmailVerificationRepository {
     private static entityToDataModel(emailVerification: EmailVerification): EmailVerificationSchema {
         return {
+            source: emailVerification.source,
+            success: emailVerification.success,
             domain: emailVerification.domain,
             email: emailVerification.email,
             localPart: emailVerification.localPart,
@@ -57,7 +70,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
                     ? emailVerification.catchAll === CatchAllStatus.Enabled
                     : undefined,
             deliverable:
-                emailVerification.deliveryStatus !== DeliveryStatus.NotProcessed
+                emailVerification.deliveryStatus !== DeliveryStatus.Unknown
                     ? emailVerification.deliveryStatus === DeliveryStatus.Accepted
                     : undefined,
             targetExchange: emailVerification.targetExchange,
@@ -66,6 +79,8 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
     private static dataModelToEntity(emailVerificationSchema: EmailVerificationSchema): EmailVerification {
         return {
+            source: emailVerificationSchema.source,
+            success: emailVerificationSchema.success,
             catchAll: this.booleanToCatchAllStatus(emailVerificationSchema.catchAll),
             deliveryStatus: this.deliverableToDeliveryStatus(emailVerificationSchema.deliverable),
             domain: emailVerificationSchema.domain,
@@ -84,20 +99,23 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     }
 
     private static deliverableToDeliveryStatus(deliverable?: boolean): DeliveryStatus {
+        console.log('test')
         if (deliverable === undefined) {
-            return DeliveryStatus.NotProcessed
+            return DeliveryStatus.Unknown
         } else {
             return deliverable ? DeliveryStatus.Accepted : DeliveryStatus.Rejected
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async findById(id: string): Promise<EmailVerification | null> {
         const dataModel = await EmailVerificationModel.findById(id).exec()
-        return dataModel !== null ? MongoEmailVerificationRepository.dataModelToEntity(dataModel) : null
+        return dataModel !== null ? MongooseEmailVerificationRepository.dataModelToEntity(dataModel) : null
     }
 
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async save(emailVerification: EmailVerification): Promise<void> {
-        const dataModel = MongoEmailVerificationRepository.entityToDataModel(emailVerification)
+        const dataModel = MongooseEmailVerificationRepository.entityToDataModel(emailVerification)
         const newEmailVerification = new EmailVerificationModel(dataModel)
         await newEmailVerification.save()
     }

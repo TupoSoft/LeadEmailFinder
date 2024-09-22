@@ -1,18 +1,38 @@
 import { resolvePtr } from 'node:dns/promises'
-import { SMTPResponseCode } from './smtp-response-code'
-import { SMTPClientError } from './smtp-client-error'
+import { SMTPResponseCode } from './SMTPResponseCode'
 import type { MxRecord } from 'node:dns'
-import { PromisifiedSocket, type ProxyData } from './promisified-socket'
-import { getDomainFromSubdomain, ipToArpa } from './dns'
-import { promiseWithTimeout } from './timeout'
+import { PromisifiedSocket, type ProxyData } from './PromisifiedSocket'
+import { getDomainFromSubdomain, ipToArpa } from './DNS'
+import { promiseWithTimeout } from './Timeout'
 
-const enum SMTPClientErrorCode {
+export const enum SMTPClientErrorCode {
     SessionInitiationFailed,
-    SessionInitiationRejected,
     ClientInitiationFailed,
     NoPTR,
     UnknownErrorCode,
     OperationTimeoutOut,
+    SenderAddressRejected,
+    RecipientAddressRejected,
+}
+
+export class SMTPClientError extends Error {
+    name = 'SMTPClientError'
+
+    constructor(
+        readonly code: number,
+        message?: string,
+    ) {
+        super(message)
+        this.code = code
+    }
+}
+
+export class SMTPSessionInitiationFailedError extends SMTPClientError {
+    name = 'SMTPSessionInitiationFailedError'
+
+    constructor(readonly mxRecords: MxRecord[]) {
+        super(SMTPClientErrorCode.SessionInitiationFailed, 'None of MX records accepted connection.')
+    }
 }
 
 interface SMTPClientConnectOpts {
@@ -62,17 +82,12 @@ export class SMTPClient {
                 }
             } catch (error: unknown) {
                 if (error instanceof Error) {
-                    console.error(
-                        `Failed to connect to MX record ${mxRecord.exchange} with priority ${mxRecord.priority}: ${error.message}`,
-                    )
+                    console.error(error.message)
                 }
             }
         }
 
-        throw new SMTPClientError(
-            SMTPClientErrorCode.SessionInitiationFailed,
-            'None of MX records accepted connection.',
-        )
+        throw new SMTPSessionInitiationFailedError(mxRecords)
     }
 
     async helo(): Promise<void> {
@@ -87,32 +102,39 @@ export class SMTPClient {
         }
     }
 
-    async mailFrom(): Promise<SMTPResponseCode> {
+    async mailFrom(): Promise<void> {
         const domain = getDomainFromSubdomain(await this.getClientHostName())
         const email = `john@${domain}`
-        return await promiseWithTimeout(
+        const code = await promiseWithTimeout(
             this.sendCommand(`MAIL FROM: <${email}>`),
             MAIL_FROM_TIMEOUT,
             new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
         )
+
+        if (code !== SMTPResponseCode.OK) {
+            throw new SMTPClientError(SMTPClientErrorCode.SenderAddressRejected, 'MAIL FROM failed.')
+        }
     }
 
-    async rcptTo(email: string): Promise<SMTPResponseCode> {
-        return await promiseWithTimeout(
+    async rcptTo(email: string): Promise<void> {
+        const code = await promiseWithTimeout(
             this.sendCommand(`RCPT TO: <${email}>`),
             RCPT_TO_TIMEOUT,
             new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
         )
+
+        if (code !== SMTPResponseCode.OK) {
+            throw new SMTPClientError(SMTPClientErrorCode.RecipientAddressRejected, 'RCPT TO failed.')
+        }
     }
 
-    async quit(): Promise<SMTPResponseCode> {
-        const code = await promiseWithTimeout(
+    async quit(): Promise<void> {
+        await promiseWithTimeout(
             this.sendCommand('QUIT'),
             QUIT_TIMEOUT,
             new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
         )
         this.socketClient.end()
-        return code
     }
 
     isReady(): boolean {

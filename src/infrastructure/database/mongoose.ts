@@ -1,7 +1,8 @@
 import { readFile } from 'fs/promises'
 import mongoose from 'mongoose'
+import { randomBytes } from 'node:crypto'
 
-export async function mongoConnect(): Promise<void> {
+export async function mongooseConnect(): Promise<void> {
     try {
         const { MONGO_URL_FILE: mongoUrlFile } = process.env
 
@@ -17,4 +18,16 @@ export async function mongoConnect(): Promise<void> {
         console.error('MongoDB connection error:', error)
         process.exit(1)
     }
+}
+
+export async function generateObjectIdAsync(): Promise<mongoose.Types.ObjectId> {
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+        randomBytes(12, (err, buf) => {
+            if (err !== null) reject(err)
+            else resolve(buf)
+        })
+    })
+
+    console.log(buffer.toString('hex'))
+    return new mongoose.Types.ObjectId(buffer.toString('hex'))
 }
