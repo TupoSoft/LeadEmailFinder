@@ -1,6 +1,6 @@
 import type { EmailVerificationRepository } from '../../domain/repositories/EmailVerificationRepository'
 import { model, Schema } from 'mongoose'
-import type { EmailVerification } from '../../domain/entities/EmailVerification'
+import type { EmailVerification, EmailVerificationSource } from '../../domain/entities/EmailVerification'
 import { CatchAllStatus, DeliveryStatus } from '../../domain/enums'
 
 interface EmailVerificationSchema {
@@ -12,6 +12,8 @@ interface EmailVerificationSchema {
     targetExchange?: string
     verifiedAt: Date
     error?: string
+    success: boolean
+    source?: EmailVerificationSource
 }
 
 const emailVerificationSchema = new Schema<EmailVerificationSchema>({
@@ -41,6 +43,15 @@ const emailVerificationSchema = new Schema<EmailVerificationSchema>({
         type: Date,
         default: Date.now,
     },
+    source: {
+        type: String,
+        default: 'None',
+        required: true,
+    },
+    success: {
+        type: Boolean,
+        required: true,
+    },
 })
 
 const EmailVerificationModel = model('EmailVerification', emailVerificationSchema)
@@ -48,6 +59,8 @@ const EmailVerificationModel = model('EmailVerification', emailVerificationSchem
 export class MongooseEmailVerificationRepository implements EmailVerificationRepository {
     private static entityToDataModel(emailVerification: EmailVerification): EmailVerificationSchema {
         return {
+            source: emailVerification.source,
+            success: emailVerification.success,
             domain: emailVerification.domain,
             email: emailVerification.email,
             localPart: emailVerification.localPart,
@@ -66,7 +79,8 @@ export class MongooseEmailVerificationRepository implements EmailVerificationRep
 
     private static dataModelToEntity(emailVerificationSchema: EmailVerificationSchema): EmailVerification {
         return {
-            success: false,
+            source: emailVerificationSchema.source,
+            success: emailVerificationSchema.success,
             catchAll: this.booleanToCatchAllStatus(emailVerificationSchema.catchAll),
             deliveryStatus: this.deliverableToDeliveryStatus(emailVerificationSchema.deliverable),
             domain: emailVerificationSchema.domain,
