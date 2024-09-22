@@ -45,7 +45,7 @@ const emailVerificationSchema = new Schema<EmailVerificationSchema>({
 
 const EmailVerificationModel = model('EmailVerification', emailVerificationSchema)
 
-export class MongoEmailVerificationRepository implements EmailVerificationRepository {
+export class MongooseEmailVerificationRepository implements EmailVerificationRepository {
     private static entityToDataModel(emailVerification: EmailVerification): EmailVerificationSchema {
         return {
             domain: emailVerification.domain,
@@ -66,6 +66,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
     private static dataModelToEntity(emailVerificationSchema: EmailVerificationSchema): EmailVerification {
         return {
+            success: false,
             catchAll: this.booleanToCatchAllStatus(emailVerificationSchema.catchAll),
             deliveryStatus: this.deliverableToDeliveryStatus(emailVerificationSchema.deliverable),
             domain: emailVerificationSchema.domain,
@@ -91,13 +92,15 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async findById(id: string): Promise<EmailVerification | null> {
         const dataModel = await EmailVerificationModel.findById(id).exec()
-        return dataModel !== null ? MongoEmailVerificationRepository.dataModelToEntity(dataModel) : null
+        return dataModel !== null ? MongooseEmailVerificationRepository.dataModelToEntity(dataModel) : null
     }
 
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async save(emailVerification: EmailVerification): Promise<void> {
-        const dataModel = MongoEmailVerificationRepository.entityToDataModel(emailVerification)
+        const dataModel = MongooseEmailVerificationRepository.entityToDataModel(emailVerification)
         const newEmailVerification = new EmailVerificationModel(dataModel)
         await newEmailVerification.save()
     }

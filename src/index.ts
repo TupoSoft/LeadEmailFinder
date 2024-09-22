@@ -1,5 +1,5 @@
 import express from 'express'
-import { mongoConnect } from './infrastructure/database/mongo'
+import { mongooseConnect } from './infrastructure/database/mongoose'
 import routes from './interfaces/routes/routes'
 import axios from 'axios'
 
@@ -18,7 +18,7 @@ const { PORT } = process.env
 const port = PORT ?? 3000
 
 async function main(): Promise<void> {
-    await mongoConnect()
+    await mongooseConnect()
     express()
         .disable('x-powered-by')
         .use(routes)

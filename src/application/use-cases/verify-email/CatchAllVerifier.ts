@@ -39,16 +39,28 @@ export type CatchAllVerificationSource =
     | 'MimecastLogin'
     | 'OfficeApps'
     | 'LinkedInLogin'
+    | 'None'
 
 export interface CatchAllVerificationResult {
     source: CatchAllVerificationSource
-    exists: boolean
+    success: boolean
+}
+
+export class CatchAllVerificationError extends Error {
+    constructor(readonly result: CatchAllVerificationResult) {
+        super(`${result.source} verification failed`)
+    }
 }
 
 export class CatchAllVerifier {
     constructor(private readonly httpClient: HttpClient) {}
 
-    async microsoftGetCreds(email: string): Promise<boolean> {
+    async microsoftGetCreds(email: string): Promise<CatchAllVerificationResult> {
+        const result: CatchAllVerificationResult = {
+            success: false,
+            source: 'MicrosoftGetCredentialType',
+        }
+
         const headers = {
             Accept: 'application/json',
             'Accept-Language': 'en-GB,en;q=0.9,ru-RU;q=0.8,ru;q=0.7,en-US;q=0.6,de;q=0.5',
@@ -97,13 +109,21 @@ export class CatchAllVerifier {
                 },
             )
 
-            return [0, 5, 6].includes(IfExistsResult)
-        } catch (error: unknown) {
-            return false
-        }
+            if ([0, 5, 6].includes(IfExistsResult)) {
+                result.success = true
+                return result
+            }
+        } catch (error: unknown) {}
+
+        throw new CatchAllVerificationError(result)
     }
 
-    async microsoftLogin(email: string): Promise<boolean> {
+    async microsoftLogin(email: string): Promise<CatchAllVerificationResult> {
+        const result: CatchAllVerificationResult = {
+            success: false,
+            source: 'MicrosoftLogin',
+        }
+
         const headers = {
             'User-Agent': 'Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.12026; Pro',
             Accept: 'application/json',
@@ -135,17 +155,22 @@ export class CatchAllVerifier {
                     } = response
 
                     if (errorCodes.some(value => acceptableErrorCodes.has(value))) {
-                        return true
+                        result.success = true
+                        return result
                     }
                 }
             }
         }
 
-        return false
+        throw new CatchAllVerificationError(result)
     }
 
-    async mimecastLogin(username: string): Promise<boolean> {
+    async mimecastLogin(username: string): Promise<CatchAllVerificationResult> {
         const countryCodes = ['us', 'uk']
+        const result: CatchAllVerificationResult = {
+            success: false,
+            source: 'MimecastLogin',
+        }
 
         const headers = {
             'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="100", "Google Chrome";v="100"',
@@ -197,25 +222,27 @@ export class CatchAllVerifier {
                                     }
                                 }
 
-                                reject(new Error('No matching auth types.'))
+                                reject(new CatchAllVerificationError(result))
                             },
                             _ => {
-                                reject(new Error('Requests failed.'))
+                                reject(new CatchAllVerificationError(result))
                             },
                         )
                 }),
             )
         }
 
-        try {
-            await Promise.any(promises)
-            return true
-        } catch (error: unknown) {
-            return false
-        }
+        await Promise.any(promises)
+        result.success = true
+        return result
     }
 
-    async officeapps(email: string): Promise<boolean> {
+    async officeapps(email: string): Promise<CatchAllVerificationResult> {
+        const result: CatchAllVerificationResult = {
+            success: false,
+            source: 'OfficeApps',
+        }
+
         const invalidResponses = ['OrgId,Placeholder', 'Neither', 'Error', 'Throttled']
 
         try {
@@ -226,15 +253,18 @@ export class CatchAllVerifier {
                 },
             )
 
-            return !invalidResponses.includes(response)
-        } catch (error: unknown) {
-            return false
-        }
+            if (!invalidResponses.includes(response)) {
+                result.success = true
+                return result
+            }
+        } catch (error: unknown) {}
+
+        throw new CatchAllVerificationError(result)
     }
 
     async linkedinLogin(email: string): Promise<CatchAllVerificationResult> {
         const result: CatchAllVerificationResult = {
-            exists: false,
+            success: false,
             source: 'LinkedInLogin',
         }
 
@@ -267,10 +297,28 @@ export class CatchAllVerifier {
             })
         } catch (error) {
             if (error instanceof AxiosError && error.status === 400) {
-                result.exists = true
+                result.success = true
+                return result
             }
         }
 
-        return result
+        throw new CatchAllVerificationError(result)
+    }
+
+    async tryAll(email: string): Promise<CatchAllVerificationResult> {
+        try {
+            return await Promise.any([
+                this.mimecastLogin(email),
+                this.officeapps(email),
+                this.microsoftLogin(email),
+                this.linkedinLogin(email),
+                this.microsoftGetCreds(email),
+            ])
+        } catch (error) {
+            throw new CatchAllVerificationError({
+                source: 'None',
+                success: false,
+            })
+        }
     }
 }

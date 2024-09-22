@@ -1,14 +1,12 @@
 import type { EmailVerificationRepository } from '../../../domain/repositories/EmailVerificationRepository'
 import type { EmailVerification } from '../../../domain/entities/EmailVerification'
 import type { ProxyRotator } from '../../../util/proxy'
+import { SMTPClient, SMTPClientError, SMTPSessionInitiationFailedError } from './SMTPClient'
+import { CatchAllStatus, DeliveryStatus } from '../../../domain/enums'
+import type { CatchAllVerifier } from './CatchAllVerifier'
+
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
-import { SMTPResponseCode } from './SMTPResponseCode'
-import { SMTPClient } from './SMTPClient'
-import { SMTPClientError } from './SMTPClientError'
-import { generateRandomString } from '../../../util/random'
-import { CatchAllStatus, DeliveryStatus, SMTPVerificationError } from '../../../domain/enums'
-import type { CatchAllVerifier } from './CatchAllVerifier'
 
 export class VerifyEmail {
     constructor(
@@ -18,16 +16,27 @@ export class VerifyEmail {
     ) {}
 
     private static async getMxRecords(domain: string): Promise<MxRecord[]> {
-        try {
-            const mxRecords = await resolveMx(domain)
-            mxRecords.sort((a, b) => {
-                return a.priority - b.priority
-            })
-            return mxRecords
-        } catch (error: unknown) {
-            console.debug(`Failed to get MX records for domain: ${domain}`)
-            return []
+        const mxRecords = await resolveMx(domain)
+        mxRecords.sort((a, b) => {
+            return a.priority - b.priority
+        })
+        return mxRecords
+    }
+
+    private static getSecondLevelDomainSplit(domain: string): string | undefined {
+        const parts = domain.split('.')
+        if (parts.length < 2) return
+        return parts.slice(-2).join('.')
+    }
+
+    private static appendRandomPrefixToEmail(email: string): string {
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+        let result = ''
+        for (let i = 0; i < 5; i++) {
+            const randomIndex = Math.floor(Math.random() * characters.length)
+            result += characters[randomIndex]
         }
+        return result + email
     }
 
     async execute(email: string): Promise<EmailVerification> {
@@ -35,6 +44,7 @@ export class VerifyEmail {
 
         const data: EmailVerification = {
             deliveryStatus: DeliveryStatus.Unknown,
+            success: false,
             catchAll: CatchAllStatus.Unknown,
             source: 'None',
             domain,
@@ -43,59 +53,61 @@ export class VerifyEmail {
             verifiedAt: new Date(),
         }
 
-        const mxRecords = await VerifyEmail.getMxRecords(data.domain)
-        if (mxRecords.length < 0) {
-            data.error = SMTPVerificationError.NoMxRecords
-            return data
-        }
-
-        const activeConnection: SMTPClient = new SMTPClient()
+        const client: SMTPClient = new SMTPClient()
         const nextProxy = this.proxyRotator.getRandomProxy()
 
         try {
-            const mxRecord = await activeConnection.connect({ mxRecords, proxy: nextProxy })
+            const mxRecords = await VerifyEmail.getMxRecords(data.domain)
+            const mxRecord = await client.connect({ mxRecords, proxy: nextProxy })
             data.targetExchange = mxRecord.exchange
+            data.mxDomain = VerifyEmail.getSecondLevelDomainSplit(mxRecord.exchange)
 
-            await activeConnection.helo()
+            await client.helo()
+            await client.mailFrom()
 
-            let code = await activeConnection.mailFrom()
-            if (code !== SMTPResponseCode.OK) {
-                data.error = SMTPVerificationError.SenderIdentificationFailed
-                return data
-            }
+            data.catchAll = await client.rcptTo(VerifyEmail.appendRandomPrefixToEmail(email)).then(
+                _ => CatchAllStatus.Enabled,
+                _ => CatchAllStatus.Disabled,
+            )
 
-            code = await activeConnection.rcptTo(generateRandomString(5) + email)
-            if (code === SMTPResponseCode.OK) {
-                data.catchAll = CatchAllStatus.Enabled
-                data.deliveryStatus = DeliveryStatus.Unknown
-                return data
-            } else {
-                data.catchAll = CatchAllStatus.Disabled
-            }
+            if (data.catchAll === CatchAllStatus.Disabled) {
+                data.deliveryStatus = await client.rcptTo(email).then(
+                    _ => DeliveryStatus.Accepted,
+                    _ => DeliveryStatus.Rejected,
+                )
 
-            code = await activeConnection.rcptTo(email)
-            data.verifiedAt = new Date()
-            if (code !== SMTPResponseCode.OK) {
-                data.deliveryStatus = DeliveryStatus.Rejected
-            } else {
-                data.deliveryStatus = DeliveryStatus.Accepted
                 data.source = 'SMTP'
+            } else {
+                data.deliveryStatus = DeliveryStatus.Unknown
             }
+
+            if (data.deliveryStatus === DeliveryStatus.Accepted) {
+                data.success = true
+            }
+
+            await client.quit()
         } catch (error) {
             if (error instanceof SMTPClientError) {
-                data.error = error.code
-            } else if (error instanceof Error) {
-                throw error
-            }
-        } finally {
-            if (activeConnection.isReady()) {
-                const code = await activeConnection?.quit()
-                if (code !== SMTPResponseCode.ServiceClosingTransmissionChannel) {
-                    console.debug('Service failed to close the transmission channel.')
+                if (error instanceof SMTPSessionInitiationFailedError) {
+                    const [mxRecord] = error.mxRecords
+                    data.targetExchange = mxRecord.exchange
                 }
+
+                data.error = error.name
             }
         }
 
+        if (data.catchAll === CatchAllStatus.Enabled || data.deliveryStatus === DeliveryStatus.Unknown) {
+            await this.catchAllVerifier
+                .tryAll(email)
+                .then(({ success, source }) => {
+                    data.source = source
+                    data.success = success
+                })
+                .catch()
+        }
+
+        data.verifiedAt = new Date()
         await this.emailVerificationRepository.save(data)
 
         return data

@@ -1,8 +1,15 @@
 import { beforeEach, describe, it, mock } from 'node:test'
 import assert from 'node:assert'
-import { CatchAllVerifier, type MicrosoftError, type MimecastResponse } from './CatchAllVerifier'
-import { AxiosHttpClient } from '../../../infrastructure/AxiosHttpClient'
 import axios, { AxiosError } from 'axios'
+
+import {
+    CatchAllVerificationError,
+    type CatchAllVerificationResult,
+    CatchAllVerifier,
+    type MicrosoftError,
+    type MimecastResponse,
+} from './CatchAllVerifier'
+import { AxiosHttpClient } from '../../../infrastructure/AxiosHttpClient'
 
 const axiosHttpClient = new AxiosHttpClient(axios)
 const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
@@ -26,7 +33,10 @@ void describe('CatchAllVerifier', async () => {
             })
 
             const result = await catchAllVerifier.microsoftGetCreds('hello@example.com')
-            assert.strictEqual(result, true)
+            assert.deepStrictEqual(result, {
+                success: true,
+                source: 'MicrosoftGetCredentialType',
+            })
         })
 
         await it('unhappy case', async () => {
@@ -37,8 +47,15 @@ void describe('CatchAllVerifier', async () => {
                 }
             })
 
-            const result = await catchAllVerifier.microsoftGetCreds('hello@example.com')
-            assert.strictEqual(result, false)
+            await assert.rejects(
+                async () => {
+                    await catchAllVerifier.microsoftGetCreds('hello@example.com')
+                },
+                new CatchAllVerificationError({
+                    success: false,
+                    source: 'MicrosoftGetCredentialType',
+                }),
+            )
         })
     })
 
@@ -54,7 +71,10 @@ void describe('CatchAllVerifier', async () => {
             })
 
             const result = await catchAllVerifier.microsoftLogin('hello@example.com')
-            assert.strictEqual(result, true)
+            assert.deepStrictEqual(result, {
+                success: true,
+                source: 'MicrosoftLogin',
+            })
         })
 
         await it('unhappy case', async () => {
@@ -67,8 +87,13 @@ void describe('CatchAllVerifier', async () => {
                 })
             }, 0)
 
-            const result = await catchAllVerifier.microsoftLogin('hello@example.com')
-            assert.strictEqual(result, false)
+            await assert.rejects(
+                async () => await catchAllVerifier.microsoftLogin('hello@example.com'),
+                new CatchAllVerificationError({
+                    success: false,
+                    source: 'MicrosoftLogin',
+                }),
+            )
         })
     })
 
@@ -101,16 +126,17 @@ void describe('CatchAllVerifier', async () => {
             // @ts-expect-error mock
             mockedPost.mock.mockImplementationOnce(async () => invalidResponse, 1)
 
-            const result = await catchAllVerifier.mimecastLogin('hello@example.com')
-            assert.strictEqual(result, true)
+            assert.deepStrictEqual(await catchAllVerifier.mimecastLogin('hello@example.com'), {
+                success: true,
+                source: 'MimecastLogin',
+            })
         })
 
         await it('unhappy case', async () => {
             // @ts-expect-error mock
             mockedPost.mock.mockImplementation(async () => invalidResponse)
 
-            const result = await catchAllVerifier.mimecastLogin('hello@example.com')
-            assert.strictEqual(result, false)
+            await assert.rejects(async () => await catchAllVerifier.mimecastLogin('hello@example.com'), AggregateError)
         })
     })
 
@@ -120,15 +146,51 @@ void describe('CatchAllVerifier', async () => {
             mockedGet.mock.mockImplementationOnce(async () => 'MSAccount')
 
             const result = await catchAllVerifier.officeapps('hello@example.com')
-            assert.strictEqual(result, true)
+            assert.deepStrictEqual(result, {
+                success: true,
+                source: 'OfficeApps',
+            })
         })
 
         await it('unhappy case', async () => {
             // @ts-expect-error mock
             mockedGet.mock.mockImplementationOnce(async () => 'Neither')
 
-            const result = await catchAllVerifier.officeapps('hello@example.com')
-            assert.strictEqual(result, false)
+            await assert.rejects(
+                async () => await catchAllVerifier.officeapps('hello@example.com'),
+                new CatchAllVerificationError({
+                    success: false,
+                    source: 'OfficeApps',
+                }),
+            )
+        })
+    })
+
+    await describe('linkedin', async () => {
+        await it('happy case', async () => {
+            mockedPost.mock.mockImplementationOnce(async () => {
+                const error = new AxiosError()
+                error.status = 400
+                throw error
+            })
+
+            const actual = await catchAllVerifier.linkedinLogin('hello@example.com')
+            const expected: CatchAllVerificationResult = {
+                success: true,
+                source: 'LinkedInLogin',
+            }
+
+            assert.deepStrictEqual(actual, expected)
+        })
+
+        await it('unhappy case', async () => {
+            await assert.rejects(
+                async () => await catchAllVerifier.linkedinLogin('hello@example.com'),
+                new CatchAllVerificationError({
+                    source: 'LinkedInLogin',
+                    success: false,
+                }),
+            )
         })
     })
 })

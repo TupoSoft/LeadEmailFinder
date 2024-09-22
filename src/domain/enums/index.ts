@@ -10,9 +10,3 @@ export const enum CatchAllStatus {
     Disabled = 'disabled',
     Unknown = 'unknown',
 }
-
-export const enum SMTPVerificationError {
-    NoMxRecords,
-    SenderIdentificationFailed,
-    CatchAll,
-}

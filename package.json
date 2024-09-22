@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc",
         "clean": "tsc --build --clean && rm -r dist",
-        "start:debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register packages/email-verifier/source/index.ts",
+        "start:debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src/index.ts",
         "start:dev": "node --trace-sync-io --trace-warnings -r ts-node/register src/index.ts",
         "start:prod": "node dist/index.js",
         "test": "glob -c \"node -r ts-node/register --test\" src/**/*.test.ts",
