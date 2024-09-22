@@ -85,6 +85,7 @@ export class MongooseEmailVerificationRepository implements EmailVerificationRep
     }
 
     private static deliverableToDeliveryStatus(deliverable?: boolean): DeliveryStatus {
+        console.log('test')
         if (deliverable === undefined) {
             return DeliveryStatus.Unknown
         } else {
