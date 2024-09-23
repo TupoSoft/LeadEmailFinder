@@ -104,7 +104,7 @@ export class VerifyEmail {
                     data.source = source
                     data.success = success
                 })
-                .catch()
+                .catch(reason => { console.error(reason); })
         }
 
         data.verifiedAt = new Date()
