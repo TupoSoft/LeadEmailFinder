@@ -1,7 +1,7 @@
 import { resolvePtr } from 'node:dns/promises'
 import { SMTPResponseCode } from './SMTPResponseCode'
 import type { MxRecord } from 'node:dns'
-import { PromisifiedSocket, type ProxyData } from './PromisifiedSocket'
+import { PromisifiedSocket } from './PromisifiedSocket'
 import { getDomainFromSubdomain, ipToArpa } from './DNS'
 import { promiseWithTimeout } from './Timeout'
 
@@ -37,7 +37,6 @@ export class SMTPSessionInitiationFailedError extends SMTPClientError {
 
 interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
-    proxy?: ProxyData
 }
 
 const SMTP_PORT = 25
@@ -66,7 +65,7 @@ export class SMTPClient {
     }
 
     async connect(options: SMTPClientConnectOpts): Promise<MxRecord> {
-        const { mxRecords, proxy } = options
+        const { mxRecords } = options
 
         for (const mxRecord of mxRecords) {
             try {
@@ -74,7 +73,6 @@ export class SMTPClient {
                     host: mxRecord.exchange,
                     port: SMTP_PORT,
                     keepAlive: true,
-                    proxy,
                 })
                 const code = await this.readSmtpResponse()
                 if (code === SMTPResponseCode.ServiceReady) {
@@ -138,7 +136,7 @@ export class SMTPClient {
     }
 
     isReady(): boolean {
-        return this.socketClient.getReadyState() === 'open'
+        return this.socketClient.readyState === 'open'
     }
 
     private async sendCommand(command: string): Promise<SMTPResponseCode> {
@@ -161,7 +159,7 @@ export class SMTPClient {
     }
 
     private async getClientHostName(): Promise<string> {
-        const addressInfo = this.socketClient.getAddressInfo()
+        const addressInfo = this.socketClient.address
         if (addressInfo == null) {
             throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }

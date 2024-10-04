@@ -7,6 +7,7 @@ import type { CatchAllVerifier } from './CatchAllVerifier'
 
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
+import { ProxySocket } from './ProxySocket'
 
 export class VerifyEmail {
     constructor(
@@ -53,12 +54,14 @@ export class VerifyEmail {
             verifiedAt: new Date(),
         }
 
-        const client: SMTPClient = new SMTPClient()
-        const nextProxy = this.proxyRotator.getRandomProxy()
+        const socket: ProxySocket = new ProxySocket({
+            proxy: this.proxyRotator.getRandomProxy(),
+        })
+        const client: SMTPClient = new SMTPClient(socket)
 
         try {
             const mxRecords = await VerifyEmail.getMxRecords(data.domain)
-            const mxRecord = await client.connect({ mxRecords, proxy: nextProxy })
+            const mxRecord = await client.connect({ mxRecords })
             data.targetExchange = mxRecord.exchange
             data.mxDomain = VerifyEmail.getSecondLevelDomainSplit(mxRecord.exchange)
 
@@ -104,7 +107,9 @@ export class VerifyEmail {
                     data.source = source
                     data.success = success
                 })
-                .catch(reason => { console.error(reason); })
+                .catch(reason => {
+                    console.error(reason)
+                })
         }
 
         data.verifiedAt = new Date()
