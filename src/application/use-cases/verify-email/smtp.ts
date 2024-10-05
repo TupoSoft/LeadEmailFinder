@@ -1,9 +1,41 @@
 import { resolvePtr } from 'node:dns/promises'
-import { SMTPResponseCode } from './SMTPResponseCode'
 import type { MxRecord } from 'node:dns'
-import { PromisifiedSocket } from './PromisifiedSocket'
-import { getDomainFromSubdomain, ipToArpa } from './DNS'
-import { promiseWithTimeout } from './Timeout'
+import { getDomainFromSubdomain, ipToArpa } from './dns'
+import { promiseWithTimeout } from './timeout'
+import type { MySocket } from './my-socket'
+
+export enum SMTPResponseCode {
+    ServiceReady = 220,
+    ServiceClosingTransmissionChannel = 221,
+    OK = 250,
+    MailActionOK = 251,
+    ReadyForMoreInfo = 354,
+    TemporaryFailure = 421,
+    MailboxUnavailable = 450,
+    ProcessingAborted = 451,
+    InsufficientStorage = 452,
+    SyntaxError = 500,
+    CommandNotImplemented = 502,
+    BadSequence = 503,
+    NotAuthorized = 530,
+    MailboxNotFound = 550,
+    UserNotLocal = 551,
+    Unavailable = 552,
+    UnknownError = 553,
+    TransactionFailed = 554,
+}
+
+export interface SMTPClientConnectOpts {
+    mxRecords: MxRecord[]
+}
+
+export interface SMTPClient {
+    connect: (options: SMTPClientConnectOpts) => Promise<MxRecord>
+    helo: () => Promise<void>
+    mailFrom: () => Promise<void>
+    rcptTo: (email: string) => Promise<void>
+    quit: () => Promise<void>
+}
 
 export const enum SMTPClientErrorCode {
     SessionInitiationFailed,
@@ -35,10 +67,6 @@ export class SMTPSessionInitiationFailedError extends SMTPClientError {
     }
 }
 
-interface SMTPClientConnectOpts {
-    mxRecords: MxRecord[]
-}
-
 const SMTP_PORT = 25
 // const SESSION_INITIATION_TIMEOUT = 30 * 1000
 const GREETING_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
@@ -46,8 +74,8 @@ const MAIL_FROM_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html
 const RCPT_TO_TIMEOUT = 10 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
 const QUIT_TIMEOUT = 10 * 1000
 
-export class SMTPClient {
-    constructor(private readonly socketClient: PromisifiedSocket = new PromisifiedSocket()) {}
+export class SMTPClientImpl implements SMTPClient {
+    constructor(private readonly socketClient: MySocket) {}
 
     private static getSmtpResponseCode(response: string): SMTPResponseCode {
         const responseCode = Number(response.substring(0, 3))
@@ -132,11 +160,8 @@ export class SMTPClient {
             QUIT_TIMEOUT,
             new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
         )
-        this.socketClient.end()
-    }
 
-    isReady(): boolean {
-        return this.socketClient.readyState === 'open'
+        await this.socketClient.end()
     }
 
     private async sendCommand(command: string): Promise<SMTPResponseCode> {
@@ -151,8 +176,8 @@ export class SMTPClient {
 
             for (const currentLine of lines) {
                 const line = currentLine
-                if (SMTPClient.isLastLine(line)) {
-                    return SMTPClient.getSmtpResponseCode(line)
+                if (SMTPClientImpl.isLastLine(line)) {
+                    return SMTPClientImpl.getSmtpResponseCode(line)
                 }
             }
         }
@@ -172,5 +197,17 @@ export class SMTPClient {
         }
 
         return rDNS[0]
+    }
+}
+
+export interface SMTPClientPool {
+    getInstance: () => SMTPClient
+}
+
+export class SMTPClientPoolImpl implements SMTPClientPool {
+    constructor(private readonly socket: MySocket) {}
+
+    getInstance: () => SMTPClient = (): SMTPClient => {
+        return new SMTPClientImpl(this.socket)
     }
 }

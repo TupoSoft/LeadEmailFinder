@@ -8,7 +8,7 @@ import {
     CatchAllVerifier,
     type MicrosoftError,
     type MimecastResponse,
-} from './CatchAllVerifier'
+} from './catch-all'
 import { AxiosHttpClient } from '../../../infrastructure/AxiosHttpClient'
 
 const axiosHttpClient = new AxiosHttpClient(axios)
