@@ -1,1 +1,1 @@
-export { VerifyEmail } from './VerifyEmail'
+export { VerifyEmail } from './verify-email'

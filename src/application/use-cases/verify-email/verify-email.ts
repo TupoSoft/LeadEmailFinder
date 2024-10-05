@@ -1,19 +1,17 @@
 import type { EmailVerificationRepository } from '../../../domain/repositories/EmailVerificationRepository'
 import type { EmailVerification } from '../../../domain/entities/EmailVerification'
-import type { ProxyRotator } from '../../../util/proxy'
-import { SMTPClient, SMTPClientError, SMTPSessionInitiationFailedError } from './SMTPClient'
+import { type SMTPClient, SMTPClientError, type SMTPClientPool, SMTPSessionInitiationFailedError } from './smtp'
 import { CatchAllStatus, DeliveryStatus } from '../../../domain/enums'
-import type { CatchAllVerifier } from './CatchAllVerifier'
+import type { CatchAllVerifier } from './catch-all'
 
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
-import { ProxySocket } from './ProxySocket'
 
 export class VerifyEmail {
     constructor(
         private readonly emailVerificationRepository: EmailVerificationRepository,
-        private readonly proxyRotator: ProxyRotator,
         private readonly catchAllVerifier: CatchAllVerifier,
+        private readonly smtpClientPool: SMTPClientPool,
     ) {}
 
     private static async getMxRecords(domain: string): Promise<MxRecord[]> {
@@ -54,10 +52,7 @@ export class VerifyEmail {
             verifiedAt: new Date(),
         }
 
-        const socket: ProxySocket = new ProxySocket({
-            proxy: this.proxyRotator.getRandomProxy(),
-        })
-        const client: SMTPClient = new SMTPClient(socket)
+        const client: SMTPClient = this.smtpClientPool.getInstance()
 
         try {
             const mxRecords = await VerifyEmail.getMxRecords(data.domain)

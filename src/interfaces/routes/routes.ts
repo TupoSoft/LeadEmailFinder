@@ -5,30 +5,36 @@ import { EmailVerificationController } from '../controllers/EmailVerificationCon
 import { authenticate, log, validate } from '../middleware'
 import { query } from 'express-validator'
 import { VerifyEmail } from '../../application/use-cases'
-import { CatchAllVerifier } from '../../application/use-cases/verify-email/CatchAllVerifier'
+import { CatchAllVerifier } from '../../application/use-cases/verify-email/catch-all'
 import { AxiosHttpClient } from '../../infrastructure/AxiosHttpClient'
 import axios from 'axios'
+import { SMTPClientPoolImpl } from '../../application/use-cases/verify-email/smtp'
+import { PromisifiedSocket } from '../../application/use-cases/verify-email/my-socket'
+import { ProxySocketConnector } from '../../application/use-cases/verify-email/socket-connector'
 
 const router: Router = Router()
 
 const emailVerificationRepository = new MongooseEmailVerificationRepository()
 const proxyRotator = defaultProxyRotator
-const httpClient = new AxiosHttpClient(
-    axios.create({
-        proxy: {
-            auth: {
-                username: 'lum-customer-c_7ac16cb1-zone-salesar_simple_links',
-                password: '28gpq8rxnx1m',
-            },
-            host: 'zproxy.lum-superproxy.io',
-            port: 22225,
-            protocol: 'http',
+const axiosInstance = axios.create({
+    proxy: {
+        auth: {
+            username: 'lum-customer-c_7ac16cb1-zone-salesar_simple_links',
+            password: '28gpq8rxnx1m',
         },
-        timeout: 30000,
-    }),
-)
+        host: 'zproxy.lum-superproxy.io',
+        port: 22225,
+        protocol: 'http',
+    },
+    timeout: 30000,
+})
+
+const httpClient = new AxiosHttpClient(axiosInstance)
+const proxySocketConnector = new ProxySocketConnector(proxyRotator.getRandomProxy())
+const promisifiedSocket = new PromisifiedSocket(proxySocketConnector)
+const smtpClientPoolImpl = new SMTPClientPoolImpl(promisifiedSocket)
 const catchAllVerifier = new CatchAllVerifier(httpClient)
-const verifyEmail = new VerifyEmail(emailVerificationRepository, proxyRotator, catchAllVerifier)
+const verifyEmail = new VerifyEmail(emailVerificationRepository, catchAllVerifier, smtpClientPoolImpl)
 const emailVerificationController = new EmailVerificationController(verifyEmail)
 
 router.get(
