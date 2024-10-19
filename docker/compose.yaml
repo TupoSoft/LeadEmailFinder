@@ -16,6 +16,7 @@ services:
       retries: 3
     environment:
       MONGO_URL_FILE: /run/secrets/mongo_url
+      PROXY_FILE: /run/secrets/proxies
     depends_on:
       mongo:
         condition: service_healthy
@@ -29,6 +30,7 @@ services:
           memory: 265M
     secrets:
       - mongo_url
+      - proxies
 
   mongo:
     image: mongo:latest
@@ -57,6 +59,8 @@ secrets:
     file: ./secrets/mongo_root_password.txt
   mongo_url:
     file: ./secrets/mongo_url.txt
+  proxies:
+    file: ./secrets/proxies.json
 
 volumes:
   mongo-data:

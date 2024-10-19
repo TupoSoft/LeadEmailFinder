@@ -1,5 +1,5 @@
 import type { CatchAllStatus, DeliveryStatus } from '../enums'
-import type { CatchAllVerificationSource } from '../../application/use-cases/verify-email/catch-all'
+import type { CatchAllVerificationSource } from '../../catch-all'
 
 export type EmailVerificationSource = CatchAllVerificationSource | 'SMTP'
 

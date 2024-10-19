@@ -1,7 +1,7 @@
-import type { EmailVerificationRepository } from '../../domain/repositories/EmailVerificationRepository'
+import type { EmailVerificationRepository } from './email-verification-repository'
 import { model, Schema } from 'mongoose'
-import type { EmailVerification, EmailVerificationSource } from '../../domain/entities/EmailVerification'
-import { CatchAllStatus, DeliveryStatus } from '../../domain/enums'
+import type { EmailVerification, EmailVerificationSource } from '../domain/entities/EmailVerification'
+import { CatchAllStatus, DeliveryStatus } from '../domain/enums'
 
 interface EmailVerificationSchema {
     deliverable?: boolean

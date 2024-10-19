@@ -1,5 +1,10 @@
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import type { HttpClient } from '../application/interfaces/HttpClient'
+
+export interface HttpClient {
+    get: <T>(url: string, config?: object) => Promise<T>
+
+    post: <ResponseData, RequestData>(url: string, data: RequestData, config?: object) => Promise<ResponseData>
+}
 
 export class AxiosHttpClient implements HttpClient {
     constructor(private readonly axios: AxiosInstance) {}
