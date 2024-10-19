@@ -4,6 +4,7 @@ const log = (req: Request, res: Response, next: NextFunction): void => {
     const start = Date.now()
 
     console.log(`[${new Date().toISOString()}] Request Body:`, req.body)
+    console.log(`[${new Date().toISOString()}] Request Params:`, req.params)
 
     const originalSend = res.send
     const originalJson = res.json

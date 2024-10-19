@@ -3,13 +3,13 @@ import type { NextFunction, Request, Response } from 'express'
 import { constants as httpConstants } from 'http2'
 import path from 'node:path'
 
-const tokensFilePath = path.join(__dirname, '../../config/tokens.json')
+const tokensFilePath = path.join('src/config/tokens.json')
 
 function readTokens(): Record<string, boolean> {
     try {
         return JSON.parse(readFileSync(tokensFilePath, { encoding: 'ascii' }))
-    } catch (_) {
-        console.debug('Failed to read the file with API tokens.')
+    } catch (error) {
+        console.debug('Failed to read the file with API tokens: ', error)
         process.exit(1)
     }
 }

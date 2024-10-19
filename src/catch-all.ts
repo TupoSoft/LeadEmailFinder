@@ -1,4 +1,4 @@
-import type { HttpClient } from '../../interfaces/HttpClient'
+import type { HttpClient } from './http-client'
 import { AxiosError, type AxiosRequestConfig } from 'axios'
 
 export interface MicrosoftGetCredsResponseData {

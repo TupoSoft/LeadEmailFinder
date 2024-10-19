@@ -1,17 +1,17 @@
-import type { EmailVerificationRepository } from '../../../domain/repositories/EmailVerificationRepository'
-import type { EmailVerification } from '../../../domain/entities/EmailVerification'
-import { type SMTPClient, SMTPClientError, type SMTPClientPool, SMTPSessionInitiationFailedError } from './smtp'
-import { CatchAllStatus, DeliveryStatus } from '../../../domain/enums'
+import type { EmailVerificationRepository } from './repositories/email-verification-repository'
+import type { EmailVerification } from './domain/entities/EmailVerification'
+import { type SMTPClient, SMTPClientError, type SMTPClientFactory, SMTPSessionInitiationFailedError } from './smtp'
+import { CatchAllStatus, DeliveryStatus } from './domain/enums'
 import type { CatchAllVerifier } from './catch-all'
 
 import type { MxRecord } from 'node:dns'
 import { resolveMx } from 'node:dns/promises'
 
-export class VerifyEmail {
+export class EmailVerificationService {
     constructor(
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly catchAllVerifier: CatchAllVerifier,
-        private readonly smtpClientPool: SMTPClientPool,
+        private readonly smtpClientFactory: SMTPClientFactory,
     ) {}
 
     private static async getMxRecords(domain: string): Promise<MxRecord[]> {
@@ -38,7 +38,7 @@ export class VerifyEmail {
         return result + email
     }
 
-    async execute(email: string): Promise<EmailVerification> {
+    async verifyEmail(email: string): Promise<EmailVerification> {
         const [localPart, domain] = email.split('@')
 
         const data: EmailVerification = {
@@ -52,18 +52,18 @@ export class VerifyEmail {
             verifiedAt: new Date(),
         }
 
-        const client: SMTPClient = this.smtpClientPool.getInstance()
+        const client: SMTPClient = this.smtpClientFactory.getInstance()
 
         try {
-            const mxRecords = await VerifyEmail.getMxRecords(data.domain)
+            const mxRecords = await EmailVerificationService.getMxRecords(data.domain)
             const mxRecord = await client.connect({ mxRecords })
             data.targetExchange = mxRecord.exchange
-            data.mxDomain = VerifyEmail.getSecondLevelDomainSplit(mxRecord.exchange)
+            data.mxDomain = EmailVerificationService.getSecondLevelDomainSplit(mxRecord.exchange)
 
             await client.helo()
             await client.mailFrom()
 
-            data.catchAll = await client.rcptTo(VerifyEmail.appendRandomPrefixToEmail(email)).then(
+            data.catchAll = await client.rcptTo(EmailVerificationService.appendRandomPrefixToEmail(email)).then(
                 _ => CatchAllStatus.Enabled,
                 _ => CatchAllStatus.Disabled,
             )
@@ -111,5 +111,9 @@ export class VerifyEmail {
         await this.emailVerificationRepository.save(data)
 
         return data
+    }
+
+    async verifyEmails(emails: string[]): Promise<EmailVerification[]> {
+        return await Promise.all(emails.map(this.verifyEmail.bind(this)))
     }
 }

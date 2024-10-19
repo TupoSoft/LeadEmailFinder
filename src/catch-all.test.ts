@@ -9,9 +9,15 @@ import {
     type MicrosoftError,
     type MimecastResponse,
 } from './catch-all'
-import { AxiosHttpClient } from '../../../infrastructure/AxiosHttpClient'
+import { AxiosHttpClient } from './http-client'
+import { ProxyRepositoryImpl } from './proxy'
 
-const axiosHttpClient = new AxiosHttpClient(axios)
+const proxyRepository = new ProxyRepositoryImpl({})
+const axiosInstance = axios.create({
+    proxy: proxyRepository.getByName('http'),
+    timeout: 30000,
+})
+const axiosHttpClient = new AxiosHttpClient(axiosInstance)
 const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
 void describe('CatchAllVerifier', async () => {

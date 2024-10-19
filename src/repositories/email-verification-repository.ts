@@ -1,4 +1,4 @@
-import type { EmailVerification } from '../entities/EmailVerification'
+import type { EmailVerification } from '../domain/entities/EmailVerification'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerification) => Promise<void>

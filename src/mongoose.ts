@@ -1,6 +1,5 @@
 import { readFile } from 'fs/promises'
 import mongoose from 'mongoose'
-import { randomBytes } from 'node:crypto'
 
 export async function mongooseConnect(): Promise<void> {
     try {
@@ -20,14 +19,14 @@ export async function mongooseConnect(): Promise<void> {
     }
 }
 
-export async function generateObjectIdAsync(): Promise<mongoose.Types.ObjectId> {
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
-        randomBytes(12, (err, buf) => {
-            if (err !== null) reject(err)
-            else resolve(buf)
-        })
-    })
-
-    console.log(buffer.toString('hex'))
-    return new mongoose.Types.ObjectId(buffer.toString('hex'))
-}
+// export async function generateObjectIdAsync(): Promise<mongoose.Types.ObjectId> {
+//     const buffer = await new Promise<Buffer>((resolve, reject) => {
+//         randomBytes(12, (err, buf) => {
+//             if (err !== null) reject(err)
+//             else resolve(buf)
+//         })
+//     })
+//
+//     console.log(buffer.toString('hex'))
+//     return new mongoose.Types.ObjectId(buffer.toString('hex'))
+// }

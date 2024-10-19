@@ -2,7 +2,8 @@ import { resolvePtr } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
 import { getDomainFromSubdomain, ipToArpa } from './dns'
 import { promiseWithTimeout } from './timeout'
-import type { MySocket } from './my-socket'
+import { type MySocket, PromisifiedSocket } from './my-socket'
+import type { SocketConnector } from './socket-connector'
 
 export enum SMTPResponseCode {
     ServiceReady = 220,
@@ -200,14 +201,14 @@ export class SMTPClientImpl implements SMTPClient {
     }
 }
 
-export interface SMTPClientPool {
+export interface SMTPClientFactory {
     getInstance: () => SMTPClient
 }
 
-export class SMTPClientPoolImpl implements SMTPClientPool {
-    constructor(private readonly socket: MySocket) {}
+export class SMTPClientFactoryImpl implements SMTPClientFactory {
+    constructor(private readonly socketConnector: SocketConnector) {}
 
     getInstance: () => SMTPClient = (): SMTPClient => {
-        return new SMTPClientImpl(this.socket)
+        return new SMTPClientImpl(new PromisifiedSocket(this.socketConnector))
     }
 }
