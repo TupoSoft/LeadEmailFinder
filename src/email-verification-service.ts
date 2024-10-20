@@ -1,52 +1,26 @@
 import type { EmailVerificationRepository } from './repositories/email-verification-repository'
-import type { EmailVerification } from './domain/entities/EmailVerification'
+import type { Domain, EmailVerification } from './entities'
 import { type SMTPClient, SMTPClientError, type SMTPClientFactory, SMTPSessionInitiationFailedError } from './smtp'
-import { CatchAllStatus, DeliveryStatus } from './domain/enums'
 import type { CatchAllVerifier } from './catch-all'
-
-import type { MxRecord } from 'node:dns'
-import { resolveMx } from 'node:dns/promises'
+import { getMxRecords, getSecondLevelDomainSplit } from './dns-util'
+import { appendRandomPrefix } from './string-util'
+import { DomainNotFoundError, type DomainRepository } from './repositories/domain-repository'
 
 export class EmailVerificationService {
     constructor(
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly catchAllVerifier: CatchAllVerifier,
         private readonly smtpClientFactory: SMTPClientFactory,
+        private readonly domainRepository: DomainRepository,
     ) {}
 
-    private static async getMxRecords(domain: string): Promise<MxRecord[]> {
-        const mxRecords = await resolveMx(domain)
-        mxRecords.sort((a, b) => {
-            return a.priority - b.priority
-        })
-        return mxRecords
-    }
-
-    private static getSecondLevelDomainSplit(domain: string): string | undefined {
-        const parts = domain.split('.')
-        if (parts.length < 2) return
-        return parts.slice(-2).join('.')
-    }
-
-    private static appendRandomPrefixToEmail(email: string): string {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-        let result = ''
-        for (let i = 0; i < 5; i++) {
-            const randomIndex = Math.floor(Math.random() * characters.length)
-            result += characters[randomIndex]
-        }
-        return result + email
-    }
-
     async verifyEmail(email: string): Promise<EmailVerification> {
-        const [localPart, domain] = email.split('@')
+        const [localPart, domainName] = email.split('@')
 
-        const data: EmailVerification = {
-            deliveryStatus: DeliveryStatus.Unknown,
+        const emailVerification: EmailVerification = {
             success: false,
-            catchAll: CatchAllStatus.Unknown,
             source: 'None',
-            domain,
+            domain: domainName,
             localPart,
             email,
             verifiedAt: new Date(),
@@ -55,62 +29,76 @@ export class EmailVerificationService {
         const client: SMTPClient = this.smtpClientFactory.getInstance()
 
         try {
-            const mxRecords = await EmailVerificationService.getMxRecords(data.domain)
+            const domain = await this.domainRepository.findByName(domainName).catch(reason => {
+                if (reason instanceof DomainNotFoundError) {
+                    const newDomainData: Domain = {
+                        name: domainName,
+                        emailFormats: [],
+                        createdAt: new Date(),
+                    }
+
+                    return newDomainData
+                } else if (reason instanceof Error) {
+                    throw reason
+                } else {
+                    throw new Error('Unexpected error while fetching the domain data: ' + reason)
+                }
+            })
+
+            const mxRecords = domain.mxRecords ?? (await getMxRecords(emailVerification.domain))
             const mxRecord = await client.connect({ mxRecords })
-            data.targetExchange = mxRecord.exchange
-            data.mxDomain = EmailVerificationService.getSecondLevelDomainSplit(mxRecord.exchange)
+            emailVerification.targetExchange = mxRecord.exchange
+            emailVerification.mxDomain = getSecondLevelDomainSplit(mxRecord.exchange)
 
             await client.helo()
             await client.mailFrom()
 
-            data.catchAll = await client.rcptTo(EmailVerificationService.appendRandomPrefixToEmail(email)).then(
-                _ => CatchAllStatus.Enabled,
-                _ => CatchAllStatus.Disabled,
-            )
+            const catchAllEnabled =
+                domain.catchAllEnabled ??
+                (await client.rcptTo(appendRandomPrefix(email)).then(
+                    _ => true,
+                    _ => false,
+                ))
 
-            if (data.catchAll === CatchAllStatus.Disabled) {
-                data.deliveryStatus = await client.rcptTo(email).then(
-                    _ => DeliveryStatus.Accepted,
-                    _ => DeliveryStatus.Rejected,
+            if (!catchAllEnabled) {
+                emailVerification.success = await client.rcptTo(email).then(
+                    _ => true,
+                    _ => false,
                 )
 
-                data.source = 'SMTP'
-            } else {
-                data.deliveryStatus = DeliveryStatus.Unknown
+                emailVerification.source = 'SMTP'
             }
 
-            if (data.deliveryStatus === DeliveryStatus.Accepted) {
-                data.success = true
-            }
-
+            await this.domainRepository.save({ ...domain, mxRecords, catchAllEnabled })
             await client.quit()
         } catch (error) {
             if (error instanceof SMTPClientError) {
                 if (error instanceof SMTPSessionInitiationFailedError) {
                     const [mxRecord] = error.mxRecords
-                    data.targetExchange = mxRecord.exchange
+                    emailVerification.targetExchange = mxRecord.exchange
                 }
 
-                data.error = error.name
+                emailVerification.error = error.name
             }
         }
 
-        if (data.catchAll === CatchAllStatus.Enabled || data.deliveryStatus === DeliveryStatus.Unknown) {
+        if (!emailVerification.success && emailVerification.source === 'None') {
             await this.catchAllVerifier
                 .tryAll(email)
                 .then(({ success, source }) => {
-                    data.source = source
-                    data.success = success
+                    emailVerification.source = source
+                    emailVerification.success = success
                 })
                 .catch(reason => {
                     console.error(reason)
                 })
         }
 
-        data.verifiedAt = new Date()
-        await this.emailVerificationRepository.save(data)
+        emailVerification.verifiedAt = new Date()
 
-        return data
+        await this.emailVerificationRepository.save(emailVerification)
+
+        return emailVerification
     }
 
     async verifyEmails(emails: string[]): Promise<EmailVerification[]> {

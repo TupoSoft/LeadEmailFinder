@@ -1,5 +1,5 @@
 import express from 'express'
-import { mongooseConnect } from './mongoose'
+import { mongoConnect, mongooseConnect } from './database-util'
 import { EmailVerificationRouter } from './email-verification-router'
 import { MongooseEmailVerificationRepository } from './repositories/mongoose-email-verification-repository'
 import defaultProxyRotator from './util/proxy'
@@ -11,12 +11,16 @@ import { CatchAllVerifier } from './catch-all'
 import { EmailVerificationControllerImpl } from './email-verification-controller'
 import { AxiosHttpClient } from './http-client'
 import { EmailVerificationService } from './email-verification-service'
+import { MongoDomainRepository } from './repositories/domain-repository'
 
 const { PORT } = process.env
 
 const port = PORT ?? 3000
 
 async function main(): Promise<void> {
+    const db = await mongoConnect()
+
+    const mongoDomainRepository = new MongoDomainRepository(db)
     const mongooseEmailVerificationRepository = new MongooseEmailVerificationRepository()
     const proxyRotator = defaultProxyRotator
     const proxies = await getProxiesFromFile()
@@ -34,6 +38,7 @@ async function main(): Promise<void> {
         mongooseEmailVerificationRepository,
         catchAllVerifier,
         smtpClientFactory,
+        mongoDomainRepository,
     )
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(emailVerificationController)

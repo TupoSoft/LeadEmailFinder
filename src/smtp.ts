@@ -1,6 +1,6 @@
 import { resolvePtr } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
-import { getDomainFromSubdomain, ipToArpa } from './dns'
+import { getDomainFromSubdomain, ipToArpa } from './dns-util'
 import { promiseWithTimeout } from './timeout'
 import { type MySocket, PromisifiedSocket } from './my-socket'
 import type { SocketConnector } from './socket-connector'

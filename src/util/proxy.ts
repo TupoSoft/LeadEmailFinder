@@ -15,10 +15,6 @@ function loadProxiesFromFile(filePath: string): string[] {
     return JSON.parse(data) as string[]
 }
 
-export function generateAuthTokenFromCredentials(user: string, password: string): string {
-    return Buffer.from(`${user}:${password}`).toString('base64')
-}
-
 export class ProxyRotator {
     private readonly proxies: ProxyData[] = []
 
