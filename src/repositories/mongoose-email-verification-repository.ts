@@ -1,7 +1,6 @@
 import type { EmailVerificationRepository } from './email-verification-repository'
 import { model, Schema } from 'mongoose'
-import type { EmailVerification, EmailVerificationSource } from '../domain/entities/EmailVerification'
-import { CatchAllStatus, DeliveryStatus } from '../domain/enums'
+import type { EmailVerification, EmailVerificationSource } from '../entities'
 
 interface EmailVerificationSchema {
     deliverable?: boolean
@@ -65,14 +64,6 @@ export class MongooseEmailVerificationRepository implements EmailVerificationRep
             email: emailVerification.email,
             localPart: emailVerification.localPart,
             verifiedAt: emailVerification.verifiedAt,
-            catchAll:
-                emailVerification.catchAll !== CatchAllStatus.Unknown
-                    ? emailVerification.catchAll === CatchAllStatus.Enabled
-                    : undefined,
-            deliverable:
-                emailVerification.deliveryStatus !== DeliveryStatus.Unknown
-                    ? emailVerification.deliveryStatus === DeliveryStatus.Accepted
-                    : undefined,
             targetExchange: emailVerification.targetExchange,
         }
     }
@@ -81,29 +72,10 @@ export class MongooseEmailVerificationRepository implements EmailVerificationRep
         return {
             source: emailVerificationSchema.source,
             success: emailVerificationSchema.success,
-            catchAll: this.booleanToCatchAllStatus(emailVerificationSchema.catchAll),
-            deliveryStatus: this.deliverableToDeliveryStatus(emailVerificationSchema.deliverable),
             domain: emailVerificationSchema.domain,
             email: emailVerificationSchema.email,
             localPart: emailVerificationSchema.localPart,
             verifiedAt: emailVerificationSchema.verifiedAt,
-        }
-    }
-
-    private static booleanToCatchAllStatus(catchAll?: boolean): CatchAllStatus {
-        if (catchAll === undefined) {
-            return CatchAllStatus.Unknown
-        } else {
-            return catchAll ? CatchAllStatus.Enabled : CatchAllStatus.Disabled
-        }
-    }
-
-    private static deliverableToDeliveryStatus(deliverable?: boolean): DeliveryStatus {
-        console.log('test')
-        if (deliverable === undefined) {
-            return DeliveryStatus.Unknown
-        } else {
-            return deliverable ? DeliveryStatus.Accepted : DeliveryStatus.Rejected
         }
     }
 

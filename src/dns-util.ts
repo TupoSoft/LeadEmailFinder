@@ -1,5 +1,7 @@
 import type { AddressInfo } from 'node:net'
 import { Address6 } from 'ip-address'
+import type { MxRecord } from 'node:dns'
+import { resolveMx } from 'node:dns/promises'
 
 export function getDomainFromSubdomain(subdomain: string): string {
     return subdomain.split('.').slice(-2).join('.')
@@ -28,4 +30,18 @@ export function ipv6ToArpa(ipv6: string): string {
 
     // Append the domain
     return `${dottedDigits}.ip6.arpa`
+}
+
+export async function getMxRecords(domain: string): Promise<MxRecord[]> {
+    const mxRecords = await resolveMx(domain)
+    mxRecords.sort((a, b) => {
+        return a.priority - b.priority
+    })
+    return mxRecords
+}
+
+export function getSecondLevelDomainSplit(domain: string): string | undefined {
+    const parts = domain.split('.')
+    if (parts.length < 2) return
+    return parts.slice(-2).join('.')
 }
