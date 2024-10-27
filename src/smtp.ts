@@ -7,23 +7,7 @@ import type { SocketConnector } from './socket-connector'
 
 export enum SMTPResponseCode {
     ServiceReady = 220,
-    ServiceClosingTransmissionChannel = 221,
     OK = 250,
-    MailActionOK = 251,
-    ReadyForMoreInfo = 354,
-    TemporaryFailure = 421,
-    MailboxUnavailable = 450,
-    ProcessingAborted = 451,
-    InsufficientStorage = 452,
-    SyntaxError = 500,
-    CommandNotImplemented = 502,
-    BadSequence = 503,
-    NotAuthorized = 530,
-    MailboxNotFound = 550,
-    UserNotLocal = 551,
-    Unavailable = 552,
-    UnknownError = 553,
-    TransactionFailed = 554,
 }
 
 export interface SMTPClientConnectOpts {
@@ -69,7 +53,7 @@ export class SMTPSessionInitiationFailedError extends SMTPClientError {
 }
 
 const SMTP_PORT = 25
-// const SESSION_INITIATION_TIMEOUT = 30 * 1000
+const SESSION_INITIATION_TIMEOUT = 5 * 1000
 const GREETING_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
 const MAIL_FROM_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
 const RCPT_TO_TIMEOUT = 10 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
@@ -103,13 +87,19 @@ export class SMTPClientImpl implements SMTPClient {
                     port: SMTP_PORT,
                     keepAlive: true,
                 })
-                const code = await this.readSmtpResponse()
+
+                const code = await promiseWithTimeout(
+                    this.readSmtpResponse(),
+                    SESSION_INITIATION_TIMEOUT,
+                    new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
+                )
+
                 if (code === SMTPResponseCode.ServiceReady) {
                     return mxRecord
                 }
             } catch (error: unknown) {
                 if (error instanceof Error) {
-                    console.error(error.message)
+                    console.error(error)
                 }
             }
         }
