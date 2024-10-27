@@ -9,22 +9,28 @@ export interface EmailVerification {
     error?: string
     localPart: string
     mxDomain?: string
-    source?: EmailVerificationSource
+    source: EmailVerificationSource
     success: boolean
     targetExchange?: string
-    verifiedAt: Date
+    verifiedAt?: Date
 }
 
 export interface EmailFormat {
-    format: string
-    usageCount: number
+    name: string
+    count: number
 }
 
 export interface Domain {
     name: string
-    catchAllEnabled?: boolean
     emailFormats: EmailFormat[]
+    catchAllEnabled?: boolean
     mxRecords?: MxRecord[]
-    createdAt: Date
+    createdAt?: Date
     updatedAt?: Date
+}
+
+export interface Lead {
+    firstName: string
+    lastName: string
+    domain: string
 }

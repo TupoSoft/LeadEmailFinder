@@ -1,5 +1,5 @@
 ### Verify a single email
-GET http://localhost:3000/verify?email=kyrylo.kupin@gmail.com
+GET http://localhost:3000/verify?email=john.doe
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Accept: application/json
 
@@ -10,16 +10,31 @@ Content-Type: application/json
 
 {
   "emails": [
-    "vortiz@wdef.com",
-    "dkiely@thesunchronicle.com",
-    "michael.duff@kcbd.com",
-    "jasmine.garcia@wrdw.com",
-    "bmoore@butlereagle.com",
-    "wreed@wcbi.com",
-    "erik@neurosciencenews.com",
-    "muzik1205@gmail.com",
-    "igor@generect.com"
+    "kyrylo.kupin@gmail.com",
+    "kkupin@gmail.com",
+    "kupin@gmail.com"
   ]
+}
+
+### Find lead
+POST http://localhost:3000/findLead
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+
+{
+  "firstName": "andrii",
+  "lastName": "kolpakov",
+  "domain": "generect.com"
+}
+
+### Post a domain
+POST http://localhost:3000/domain
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+
+{
+  "name": "tuposoft.com",
+  "catchAllEnabled": false
 }
 
 ### Ping

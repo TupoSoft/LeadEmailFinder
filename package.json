@@ -1,7 +1,7 @@
 {
     "private": true,
     "name": "@kk/email-verifier",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Email Verifier",
     "scripts": {
         "build": "tsc",
