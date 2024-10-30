@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express'
 import type { EmailVerificationController } from './email-verification-controller'
 import { authenticate, log, validate } from './middleware'
-import { body, query } from 'express-validator'
+import { body, oneOf } from 'express-validator'
 
 export class EmailVerificationRouter {
     constructor(
@@ -10,19 +10,39 @@ export class EmailVerificationRouter {
     ) {}
 
     init(): void {
-        this.router.get(
-            '/verify',
+        this.router.post(
+            '/verifyEmail',
             authenticate,
             log,
-            validate([query('email').isEmail().notEmpty().escape()]),
+            validate([
+                body('email')
+                    .isString()
+                    .withMessage('The email should be a string')
+                    .notEmpty()
+                    .withMessage('Email should not be empty')
+                    .isEmail()
+                    .withMessage('Invalid email address')
+                    .escape(),
+            ]),
             this.emailVerificationController.verifyEmail.bind(this.emailVerificationController),
         )
 
         this.router.post(
-            '/verify',
+            '/verifyEmails',
             authenticate,
             log,
-            validate([body('emails').isArray({ min: 1 })]),
+            validate([
+                body('emails').isArray({ min: 1 }).withMessage('Must be a non-empty array of emails'),
+                body('emails.*')
+                    .isString()
+                    .withMessage('Email should be a string')
+                    .bail()
+                    .notEmpty()
+                    .withMessage('Email cannot be empty')
+                    .bail()
+                    .isEmail()
+                    .withMessage('Invalid email address'),
+            ]),
             this.emailVerificationController.verifyEmails.bind(this.emailVerificationController),
         )
 
@@ -30,8 +50,22 @@ export class EmailVerificationRouter {
             '/findLead',
             authenticate,
             log,
-            validate([body(['firstName', 'lastName', 'domain']).isString().notEmpty()]),
+            validate([
+                body(['domain']).isString().notEmpty(),
+                oneOf([body('firstName').isString().notEmpty(), body('lastName').isString().notEmpty()]),
+            ]),
             this.emailVerificationController.findLead.bind(this.emailVerificationController),
+        )
+
+        this.router.post(
+            '/findLeads',
+            authenticate,
+            log,
+            validate([
+                body('leads').isArray({ min: 1 }),
+                body(['leads.*.firstName', 'leads.*.lastName', 'leads.*.domain']).isString().notEmpty(),
+            ]),
+            this.emailVerificationController.findLeads.bind(this.emailVerificationController),
         )
 
         this.router.get('/ping', log, (_, res: Response) => {

@@ -1,10 +1,14 @@
 ### Verify a single email
-GET http://localhost:3000/verify?email=john.doe
+POST http://localhost:3000/verifyEmail
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
-Accept: application/json
+Content-Type: application/json
+
+{
+  "email": "kyrylo@gmail.com"
+}
 
 ### Verify multiple emails
-POST http://localhost:3000/verify
+POST http://localhost:3000/verifyEmails
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
@@ -22,9 +26,29 @@ Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508a
 Content-Type: application/json
 
 {
-  "firstName": "john",
-  "lastName": "doe",
+  "firstName": "kyrylo",
+  "lastName": "kupin",
   "domain": "gmail.com"
+}
+
+### Find leads
+POST http://localhost:3000/findLeads
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+
+{
+  "leads": [
+    {
+      "firstName": "john",
+      "lastName": "doe",
+      "domain": "gmail.com"
+    },
+    {
+      "firstName": "jane",
+      "lastName": "doe",
+      "domain": "gmail.com"
+    }
+  ]
 }
 
 ### Post a domain
@@ -33,7 +57,7 @@ Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508a
 Content-Type: application/json
 
 {
-  "name": "tuposoft.com",
+  "name": "gmail.com",
   "catchAllEnabled": false
 }
 

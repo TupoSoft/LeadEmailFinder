@@ -7,6 +7,7 @@ export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
     verifyEmails: (req: Request, res: Response, next: NextFunction) => void
     findLead: (req: Request, res: Response, next: NextFunction) => void
+    findLeads: (req: Request, res: Response, next: NextFunction) => void
 }
 
 export class EmailVerificationControllerImpl implements EmailVerificationController {
@@ -37,6 +38,16 @@ export class EmailVerificationControllerImpl implements EmailVerificationControl
     findLead(req: Request, res: Response, next: NextFunction): void {
         const lead: Lead = matchedData(req)
         this.emailVerificationService.findLead(lead).then(
+            value => res.json(value),
+            reason => {
+                next(reason)
+            },
+        )
+    }
+
+    findLeads(req: Request, res: Response, next: NextFunction): void {
+        const { leads } = matchedData(req)
+        this.emailVerificationService.findLeads(leads as Lead[]).then(
             value => res.json(value),
             reason => {
                 next(reason)

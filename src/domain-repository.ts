@@ -1,11 +1,11 @@
 import type { MxRecord } from 'node:dns'
 import type { Collection, Db } from 'mongodb'
-import type { Domain, EmailFormat } from './entities'
+import type { Domain, EmailPatternUsage } from './entities'
 
 interface DomainSchema {
     _id: string
     catchAllEnabled?: boolean
-    emailFormats: EmailFormat[]
+    emailPatternUsage: EmailPatternUsage[]
     mxRecords?: MxRecord[]
     createdAt?: Date
     updatedAt?: Date
@@ -50,12 +50,12 @@ export class MongoDomainRepository implements DomainRepository {
 
     incrementEmailFormat: (name: string, format: string) => Promise<void> = async (
         name: string,
-        format: string,
+        pattern: string,
     ): Promise<void> => {
         const { matchedCount, modifiedCount } = await this.collection.updateOne(
             { _id: name },
-            { $inc: { 'emailFormats.$[format].count': 1 } },
-            { arrayFilters: [{ 'format.name': format }], upsert: true },
+            { $inc: { 'emailPatternUsage.$[element].usageCount': 1 } },
+            { arrayFilters: [{ 'element.pattern': pattern }], upsert: true },
         )
 
         if (matchedCount === 0 || modifiedCount === 0) {
@@ -63,7 +63,7 @@ export class MongoDomainRepository implements DomainRepository {
                 { _id: name },
                 {
                     $push: {
-                        emailFormats: { name: format, count: 1 },
+                        emailPatternUsage: { pattern, usageCount: 1 },
                     },
                 },
             )

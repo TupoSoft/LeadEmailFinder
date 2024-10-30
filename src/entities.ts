@@ -4,25 +4,26 @@ import type { MxRecord } from 'node:dns'
 export type EmailVerificationSource = CatchAllVerificationSource | 'SMTP'
 
 export interface EmailVerification {
-    domain: string
     email: string
-    error?: string
+    domain: string
     localPart: string
+    format?: string
+    error?: string
     mxDomain?: string
-    source: EmailVerificationSource
-    success: boolean
+    sources: EmailVerificationSource[]
+    exists: boolean
     targetExchange?: string
     verifiedAt?: Date
 }
 
-export interface EmailFormat {
-    name: string
-    count: number
+export interface EmailPatternUsage {
+    pattern: string
+    usageCount: number
 }
 
 export interface Domain {
     name: string
-    emailFormats: EmailFormat[]
+    emailPatternUsage: EmailPatternUsage[]
     catchAllEnabled?: boolean
     mxRecords?: MxRecord[]
     createdAt?: Date
@@ -30,7 +31,7 @@ export interface Domain {
 }
 
 export interface Lead {
-    firstName: string
-    lastName: string
+    firstName?: string
+    lastName?: string
     domain: string
 }

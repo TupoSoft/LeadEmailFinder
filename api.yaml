@@ -1,4 +1,4 @@
-openapi: 3.1.1
+openapi: 3.1.0
 info:
   title: Lead Email Finder
   description: Lead Email Finder
@@ -9,19 +9,18 @@ servers:
   - url: 'https://p1.leademailfinder.com'
     description: production
 paths:
-  /verify?email={email}:
-    get:
+  /verifyEmail:
+    post:
       tags:
         - email
       description: Verify a single email.
-      parameters:
-        - name: email
-          in: path
-          description: The email to verify.
-          required: true
-          allowEmptyValue: false
-          schema:
-            type: string
+      requestBody:
+        description: Verify a single email
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequestBody'
+
       responses:
         200:
           description: The email was successfully verified.
@@ -35,8 +34,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationFailed'
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
   schemas:
+    VerifyEmailRequestBody:
+      type: object
+      properties:
+        email:
+          type: string
+          required: true
+          example: john.doe@gmail.com
+      required:
+        - email
+
     ValidationFailed:
       description: The client sent a bad request.
       type: object
@@ -125,3 +140,6 @@ components:
         - email
         - source
         - success
+
+security:
+  - bearerAuth: [ ]
