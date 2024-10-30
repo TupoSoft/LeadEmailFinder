@@ -28,7 +28,7 @@ Content-Type: application/json
 {
   "firstName": "kyrylo",
   "lastName": "kupin",
-  "domain": "lotusflare.com"
+  "domain": "gmail.com"
 }
 
 ### Find leads
@@ -57,7 +57,7 @@ Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508a
 Content-Type: application/json
 
 {
-  "name": "tuposoft.com",
+  "name": "gmail.com",
   "catchAllEnabled": false
 }
 
