@@ -1,6 +1,9 @@
 import { readFile } from 'fs/promises'
-import mongoose from 'mongoose'
-import { type Db, MongoClient } from 'mongodb'
+import { type Db, MongoClient, ObjectId } from 'mongodb'
+import { randomBytes } from 'node:crypto'
+import { promisify } from 'node:util'
+
+const randomBytesAsync = promisify(randomBytes)
 
 async function getMongoUrl(): Promise<string> {
     try {
@@ -18,37 +21,17 @@ async function getMongoUrl(): Promise<string> {
     }
 }
 
-export async function mongooseConnect(): Promise<void> {
-    try {
-        const mongoUrl = await getMongoUrl()
-        await mongoose.connect(mongoUrl)
-        console.log('MongoDB connected')
-    } catch (error) {
-        console.error('MongoDB connection error:', error)
-        process.exit(1)
-    }
-}
-
 export async function mongoConnect(): Promise<Db> {
     try {
         const mongoUrl = await getMongoUrl()
         const mongoClient = new MongoClient(mongoUrl)
-        await mongoClient.connect()
-        return mongoClient.db()
+        return await mongoClient.connect().then(mongoClient => mongoClient.db())
     } catch (error) {
         console.error('MongoDB connection error:', error)
         process.exit(1)
     }
 }
 
-// export async function generateObjectIdAsync(): Promise<mongoose.Types.ObjectId> {
-//     const buffer = await new Promise<Buffer>((resolve, reject) => {
-//         randomBytes(12, (err, buf) => {
-//             if (err !== null) reject(err)
-//             else resolve(buf)
-//         })
-//     })
-//
-//     console.log(buffer.toString('hex'))
-//     return new mongoose.Types.ObjectId(buffer.toString('hex'))
-// }
+export async function generateObjectIdAsync(): Promise<ObjectId> {
+    return await randomBytesAsync(12).then(buffer => new ObjectId(buffer.toString('hex')))
+}

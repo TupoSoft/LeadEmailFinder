@@ -8,7 +8,7 @@ import type { DomainRepository } from './domain-repository'
 import { getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './email-verification-util'
 
 interface FindLeadResult extends Lead {
-    emails: string[]
+    emails: EmailVerification[]
 }
 
 export class EmailVerificationService {
@@ -37,22 +37,28 @@ export class EmailVerificationService {
         const domain = await this.getDomain(lead.domain)
 
         const allEmailFormats = getAllEmailFormats()
-        const emailFormats = mergeEmailFormats(domain.emailFormats, allEmailFormats)
+        const emailFormats = mergeEmailFormats(domain.emailPatternUsage, allEmailFormats)
 
-        for (const { name: format } of emailFormats) {
-            const email = formats[format]
-            const result = await this.verifyEmailInternal({ email, format, domain })
+        for (const { pattern: format } of emailFormats) {
+            const email = formats.get(format)
+            if (email !== undefined) {
+                const result = await this.verifyEmailInternal({ email, format, domain })
 
-            if (result.success) {
-                findLeadResult.emails.push(result.email)
+                if (result.exists) {
+                    findLeadResult.emails.push(result)
 
-                if (format !== '{first}') {
-                    return findLeadResult
+                    if (format !== '{first}') {
+                        return findLeadResult
+                    }
                 }
             }
         }
 
         return findLeadResult
+    }
+
+    async findLeads(leads: Lead[]): Promise<FindLeadResult[]> {
+        return await Promise.all(leads.map(this.findLead.bind(this)))
     }
 
     private async verifyEmailInternal(input: {
@@ -64,11 +70,12 @@ export class EmailVerificationService {
         const [localPart, domainName] = email.split('@')
 
         const emailVerification: EmailVerification = {
-            success: false,
-            source: 'None',
+            exists: false,
+            sources: [],
             domain: domainName,
             localPart,
             email,
+            format,
         }
 
         const previouslyVerified = await this.emailVerificationRepository.findByEmail(email).then(
@@ -97,12 +104,12 @@ export class EmailVerificationService {
                 ))
 
             if (!catchAllEnabled) {
-                emailVerification.success = await client.rcptTo(email).then(
+                emailVerification.exists = await client.rcptTo(email).then(
                     _ => true,
                     _ => false,
                 )
 
-                emailVerification.source = 'SMTP'
+                emailVerification.sources.push('SMTP')
             }
 
             await this.domainRepository.save({ ...domainData, mxRecords, catchAllEnabled })
@@ -118,21 +125,22 @@ export class EmailVerificationService {
             }
         }
 
-        if (!emailVerification.success && emailVerification.source === 'None') {
+        if (!emailVerification.exists && emailVerification.sources.length === 0) {
             await this.catchAllVerifier
                 .tryAll(email)
                 .then(({ success, source }) => {
-                    emailVerification.source = source
-                    emailVerification.success = success
+                    emailVerification.sources.push(source)
+                    emailVerification.exists = success
                 })
                 .catch(reason => {
                     console.error(reason)
                 })
         }
 
-        if (emailVerification.success && format !== undefined && !previouslyVerified) {
+        if (emailVerification.exists && format !== undefined && !previouslyVerified) {
             await this.domainRepository.incrementEmailFormat(domainName, format)
         }
+
         await this.emailVerificationRepository.save(emailVerification)
 
         return emailVerification
@@ -141,8 +149,7 @@ export class EmailVerificationService {
     private async getDomain(name: string): Promise<Domain> {
         return await this.domainRepository.findByName(name).catch(_ => {
             const domain: Domain = {
-                createdAt: new Date(),
-                emailFormats: [],
+                emailPatternUsage: [],
                 name,
             }
 

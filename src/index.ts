@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { mongoConnect, mongooseConnect } from './database-util'
+import { mongoConnect } from './database-util'
 import { EmailVerificationRouter } from './email-verification-router'
 import defaultProxyRotator from './util/proxy'
 import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
@@ -11,7 +11,7 @@ import { EmailVerificationControllerImpl } from './email-verification-controller
 import { AxiosHttpClient } from './http-client'
 import { EmailVerificationService } from './email-verification-service'
 import { MongoDomainRepository } from './domain-repository'
-import { MongooseEmailVerificationRepository } from './email-verification-repository'
+import { MongoEmailVerificationRepository } from './email-verification-repository'
 import { constants as httpConstants } from 'http2'
 import { DomainService } from './domain-service'
 import { DomainControllerImpl } from './domain-controller'
@@ -44,9 +44,9 @@ async function main(): Promise<void> {
     const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
-    const mongooseEmailVerificationRepository = new MongooseEmailVerificationRepository()
+    const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
-        mongooseEmailVerificationRepository,
+        mongoEmailVerificationRepository,
         catchAllVerifier,
         smtpClientFactory,
         mongoDomainRepository,
@@ -55,7 +55,6 @@ async function main(): Promise<void> {
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
-    await mongooseConnect()
     express()
         .disable('x-powered-by')
         .use(express.json())

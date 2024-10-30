@@ -1,5 +1,6 @@
 import type { EmailVerification, EmailVerificationSource } from './entities'
-import { Error, model, Schema } from 'mongoose'
+import { type Collection, type Db, ObjectId } from 'mongodb'
+import { generateObjectIdAsync } from './database-util'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerification) => Promise<void>
@@ -8,49 +9,16 @@ export interface EmailVerificationRepository {
 }
 
 interface EmailVerificationSchema {
+    _id?: ObjectId
     email: string
     domain: string
     localPart: string
+    format?: string
     targetExchange?: string
     verifiedAt?: Date
-    success: boolean
-    source?: EmailVerificationSource
+    exists: boolean
+    sources: EmailVerificationSource[]
 }
-
-const emailVerificationSchema = new Schema<EmailVerificationSchema>({
-    email: {
-        type: String,
-        required: true,
-        index: true,
-    },
-    domain: {
-        type: String,
-        required: true,
-    },
-    localPart: {
-        type: String,
-        required: true,
-    },
-    targetExchange: {
-        type: String,
-        required: true,
-    },
-    verifiedAt: {
-        type: Date,
-        default: Date.now,
-    },
-    source: {
-        type: String,
-        default: 'None',
-        required: true,
-    },
-    success: {
-        type: Boolean,
-        required: true,
-    },
-})
-
-const EmailVerificationModel = model('EmailVerification', emailVerificationSchema)
 
 export class EmailVerificationNotFoundError extends Error {
     constructor(fieldName: string, fieldValue: string) {
@@ -58,47 +26,27 @@ export class EmailVerificationNotFoundError extends Error {
     }
 }
 
-export class MongooseEmailVerificationRepository implements EmailVerificationRepository {
-    private static entityToDataModel(emailVerification: EmailVerification): EmailVerificationSchema {
-        return {
-            source: emailVerification.source,
-            success: emailVerification.success,
-            domain: emailVerification.domain,
-            email: emailVerification.email,
-            localPart: emailVerification.localPart,
-            targetExchange: emailVerification.targetExchange,
-        }
+export class MongoEmailVerificationRepository implements EmailVerificationRepository {
+    private readonly collection: Collection<EmailVerificationSchema>
+
+    constructor(db: Db) {
+        this.collection = db.collection('emailVerifications')
+        void this.collection.createIndex({ email: 1 })
     }
 
-    private static dataModelToEntity(emailVerificationSchema: EmailVerificationSchema): EmailVerification {
-        return {
-            source: emailVerificationSchema.source,
-            success: emailVerificationSchema.success,
-            domain: emailVerificationSchema.domain,
-            email: emailVerificationSchema.email,
-            localPart: emailVerificationSchema.localPart,
-            verifiedAt: emailVerificationSchema.verifiedAt,
-        }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     findByEmail: (email: string) => Promise<EmailVerification> = async (email: string): Promise<EmailVerification> => {
-        const dataModel = await EmailVerificationModel.findOne({ email }).exec()
+        const dataModel = await this.collection.findOne({ email })
         if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
-        return MongooseEmailVerificationRepository.dataModelToEntity(dataModel)
+        return dataModel
     }
 
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async findById(id: string): Promise<EmailVerification> {
-        const dataModel = await EmailVerificationModel.findById(id).exec()
+        const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
         if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
-        return MongooseEmailVerificationRepository.dataModelToEntity(dataModel)
+        return dataModel
     }
 
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     async save(emailVerification: EmailVerification): Promise<void> {
-        const dataModel = MongooseEmailVerificationRepository.entityToDataModel(emailVerification)
-        const newEmailVerification = new EmailVerificationModel(dataModel)
-        await newEmailVerification.save()
+        await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
     }
 }
