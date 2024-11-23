@@ -1,14 +1,18 @@
 import { resolvePtr } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
-import { getDomainFromSubdomain, ipToArpa } from './dns-util'
-import { promiseWithTimeout } from './timeout'
-import { type MySocket, PromisifiedSocket } from './my-socket'
-import type { SocketConnector } from './socket-connector'
-
-export enum SMTPResponseCode {
-    ServiceReady = 220,
-    OK = 250,
-}
+import { getDomainFromSubdomain, ipToArpa } from '../dns-util'
+import { promiseWithTimeout } from '../timeout'
+import type { MySocket } from '../my-socket'
+import { SMTPClientError, SMTPClientErrorCode, SMTPSessionInitiationFailedError } from './errors'
+import {
+    GREETING_TIMEOUT,
+    MAIL_FROM_TIMEOUT,
+    QUIT_TIMEOUT,
+    RCPT_TO_TIMEOUT,
+    SESSION_INITIATION_TIMEOUT,
+    SMTP_PORT,
+} from './constants'
+import { SMTPResponseCode } from './enums'
 
 export interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
@@ -22,43 +26,6 @@ export interface SMTPClient {
     quit: () => Promise<void>
 }
 
-export const enum SMTPClientErrorCode {
-    SessionInitiationFailed,
-    ClientInitiationFailed,
-    NoPTR,
-    UnknownErrorCode,
-    OperationTimeoutOut,
-    SenderAddressRejected,
-    RecipientAddressRejected,
-}
-
-export class SMTPClientError extends Error {
-    name = 'SMTPClientError'
-
-    constructor(
-        readonly code: number,
-        message?: string,
-    ) {
-        super(message)
-        this.code = code
-    }
-}
-
-export class SMTPSessionInitiationFailedError extends SMTPClientError {
-    name = 'SMTPSessionInitiationFailedError'
-
-    constructor(readonly mxRecords: MxRecord[]) {
-        super(SMTPClientErrorCode.SessionInitiationFailed, 'None of MX records accepted connection.')
-    }
-}
-
-const SMTP_PORT = 25
-const SESSION_INITIATION_TIMEOUT = 5 * 1000
-const GREETING_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
-const MAIL_FROM_TIMEOUT = 5 * 60 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
-const RCPT_TO_TIMEOUT = 10 * 1000 // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
-const QUIT_TIMEOUT = 10 * 1000
-
 export class SMTPClientImpl implements SMTPClient {
     constructor(private readonly socketClient: MySocket) {}
 
@@ -69,7 +36,7 @@ export class SMTPClientImpl implements SMTPClient {
             return responseCode as SMTPResponseCode
         }
 
-        throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown error code: ' + responseCode)
+        throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown code: ' + responseCode)
     }
 
     private static isLastLine(line: string): boolean {
@@ -188,17 +155,5 @@ export class SMTPClientImpl implements SMTPClient {
         }
 
         return rDNS[0]
-    }
-}
-
-export interface SMTPClientFactory {
-    getInstance: () => SMTPClient
-}
-
-export class SMTPClientFactoryImpl implements SMTPClientFactory {
-    constructor(private readonly socketConnector: SocketConnector) {}
-
-    getInstance: () => SMTPClient = (): SMTPClient => {
-        return new SMTPClientImpl(new PromisifiedSocket(this.socketConnector))
     }
 }

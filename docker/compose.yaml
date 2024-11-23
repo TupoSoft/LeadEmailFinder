@@ -3,6 +3,13 @@ services:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
+    develop:
+      watch:
+        - action: sync+restart
+          path: ../src
+          target: /app/src
+        - action: rebuild
+          path: ../package.json
     dns:
       - 1.1.1.1
       - 8.8.8.8
