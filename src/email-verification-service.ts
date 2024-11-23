@@ -1,11 +1,13 @@
 import type { EmailVerificationRepository } from './email-verification-repository'
 import type { Domain, EmailVerification, Lead } from './entities'
-import { type SMTPClient, SMTPClientError, type SMTPClientFactory, SMTPSessionInitiationFailedError } from './smtp'
 import type { CatchAllVerifier } from './catch-all'
 import { getMxRecords, getSecondLevelDomainSplit } from './dns-util'
 import { appendRandomPrefix } from './string-util'
 import type { DomainRepository } from './domain-repository'
 import { getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './email-verification-util'
+import type { SMTPClientFactory } from './smtp/client-factory'
+import { SMTPClientError, SMTPSessionInitiationFailedError } from './smtp/errors'
+import type { SMTPClient } from './smtp/client'
 
 interface FindLeadResult extends Lead {
     emails: EmailVerification[]

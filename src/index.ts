@@ -5,7 +5,6 @@ import defaultProxyRotator from './util/proxy'
 import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
 import { ProxySocketConnector } from './socket-connector'
-import { SMTPClientFactoryImpl } from './smtp'
 import { CatchAllVerifier } from './catch-all'
 import { EmailVerificationControllerImpl } from './email-verification-controller'
 import { AxiosHttpClient } from './http-client'
@@ -16,6 +15,7 @@ import { constants as httpConstants } from 'http2'
 import { DomainService } from './domain-service'
 import { DomainControllerImpl } from './domain-controller'
 import { DomainRouter } from './domain-router'
+import { SMTPClientFactoryImpl } from './smtp/client-factory'
 
 const { PORT } = process.env
 
