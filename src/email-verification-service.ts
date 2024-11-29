@@ -5,9 +5,7 @@ import { getMxRecords, getSecondLevelDomainSplit } from './dns-util'
 import { appendRandomPrefix } from './string-util'
 import type { DomainRepository } from './domain-repository'
 import { getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './email-verification-util'
-import type { SMTPClientFactory } from './smtp/client-factory'
-import { SMTPClientError, SMTPSessionInitiationFailedError } from './smtp/errors'
-import type { SMTPClient } from './smtp/client'
+import { type SMTPClient, SMTPClientError, type SMTPClientFactory, SMTPSessionInitiationFailedError } from './smtp'
 
 interface FindLeadResult extends Lead {
     emails: EmailVerification[]

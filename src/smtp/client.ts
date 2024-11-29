@@ -1,6 +1,5 @@
-import { resolvePtr } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
-import { getDomainFromSubdomain, ipToArpa } from '../dns-util'
+import { getDomainFromSubdomain } from '../dns-util'
 import { promiseWithTimeout } from '../timeout'
 import type { MySocket } from '../my-socket'
 import { SMTPClientError, SMTPClientErrorCode, SMTPSessionInitiationFailedError } from './errors'
@@ -13,6 +12,8 @@ import {
     SMTP_PORT,
 } from './constants'
 import { SMTPResponseCode } from './enums'
+import { getSmtpResponseCode, isLastLine } from './util'
+import type { DNSCache } from '../dns'
 
 export interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
@@ -27,22 +28,10 @@ export interface SMTPClient {
 }
 
 export class SMTPClientImpl implements SMTPClient {
-    constructor(private readonly socketClient: MySocket) {}
-
-    private static getSmtpResponseCode(response: string): SMTPResponseCode {
-        const responseCode = Number(response.substring(0, 3))
-
-        if (Object.values(SMTPResponseCode).includes(responseCode)) {
-            return responseCode as SMTPResponseCode
-        }
-
-        throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown code: ' + responseCode)
-    }
-
-    private static isLastLine(line: string): boolean {
-        const regex = /^\d{3} /
-        return regex.test(line)
-    }
+    constructor(
+        private readonly socketClient: MySocket,
+        private readonly dnsCache: DNSCache,
+    ) {}
 
     async connect(options: SMTPClientConnectOpts): Promise<MxRecord> {
         const { mxRecords } = options
@@ -134,8 +123,8 @@ export class SMTPClientImpl implements SMTPClient {
 
             for (const currentLine of lines) {
                 const line = currentLine
-                if (SMTPClientImpl.isLastLine(line)) {
-                    return SMTPClientImpl.getSmtpResponseCode(line)
+                if (isLastLine(line)) {
+                    return getSmtpResponseCode(line)
                 }
             }
         }
@@ -147,8 +136,7 @@ export class SMTPClientImpl implements SMTPClient {
             throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }
 
-        const addrArpa = ipToArpa(addressInfo)
-        const rDNS = await resolvePtr(addrArpa)
+        const rDNS = await this.dnsCache.resolve(addressInfo.address, 'PTR')
 
         if (rDNS.length < 1) {
             throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")

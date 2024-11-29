@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express'
 import type { EmailVerificationController } from './email-verification-controller'
-import { authenticate, log, validate } from './middleware'
 import { body, oneOf } from 'express-validator'
+import { authenticate, log, validate } from './middleware'
 
 export class EmailVerificationRouter {
     constructor(

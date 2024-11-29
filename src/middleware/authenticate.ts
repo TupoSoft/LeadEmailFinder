@@ -16,7 +16,7 @@ function readTokens(): Record<string, boolean> {
 
 const tokens = readTokens()
 
-export default function authenticate(req: Request, res: Response, next: NextFunction): void {
+export function authenticate(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization
     const token = authHeader?.split(' ')[1]
 

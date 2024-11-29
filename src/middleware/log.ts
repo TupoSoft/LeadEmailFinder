@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
 
-const log = (req: Request, res: Response, next: NextFunction): void => {
+export const log = (req: Request, res: Response, next: NextFunction): void => {
     const start = Date.now()
 
     console.log(`[${new Date().toISOString()}] Request Body:`, req.body)
@@ -29,5 +29,3 @@ const log = (req: Request, res: Response, next: NextFunction): void => {
 
     next()
 }
-
-export default log
