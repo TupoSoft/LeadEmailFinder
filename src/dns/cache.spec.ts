@@ -1,22 +1,31 @@
-import { DNSCacheImpl } from './cache' // Adjust the path as needed
-import type { Redis } from 'ioredis'
+/* eslint-disable @typescript-eslint/unbound-method */
+
+import { DNSCacheImpl } from './cache'
+import { Redis } from 'ioredis'
 import { resolveMx, reverse } from 'node:dns/promises'
-import { describe, expect, it, jest } from '@jest/globals'
+import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { type DNSTypeMap, fetchMxRecords, fetchRecords } from './util'
-import { afterEach } from 'node:test'
 
 jest.mock('node:dns/promises', () => ({
     resolveMx: jest.fn(),
     reverse: jest.fn(),
 }))
 
-describe('DNSCacheImpl', () => {
-    const redisClient = {
+jest.mock('node:console', () => ({
+    log: jest.fn(),
+}))
+
+jest.mock('ioredis', () => ({
+    Redis: jest.fn().mockImplementation(() => ({
         get: jest.fn(),
         set: jest.fn(),
-    } as unknown as jest.Mocked<Redis>
+    })),
+}))
 
-    const dnsCache = new DNSCacheImpl(redisClient, 3600)
+describe('DNSCacheImpl', () => {
+    const redisClient = new Redis() as jest.Mocked<Redis>
+
+    const dnsCache = new DNSCacheImpl(redisClient as Redis, 3600)
 
     const resolveMxMock = resolveMx as jest.Mock<typeof resolveMx>
 
@@ -33,7 +42,7 @@ describe('DNSCacheImpl', () => {
 
             const result = await dnsCache.resolve('example.com', 'MX')
 
-            expect(redisClient.get.bind(redisClient)).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
+            expect(redisClient.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
             expect(result).toEqual(cachedMXRecords)
         })
 
@@ -46,9 +55,9 @@ describe('DNSCacheImpl', () => {
 
             const result = await dnsCache.resolve('example.com', 'MX')
 
-            expect(redisClient.get.bind(redisClient)).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
+            expect(redisClient.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
             expect(resolveMx).toHaveBeenCalledWith('example.com')
-            expect(redisClient.set.bind(redisClient)).toHaveBeenCalledWith(
+            expect(redisClient.set).toHaveBeenCalledWith(
                 'DNS_CACHE:MX:example.com',
                 JSON.stringify(mxRecords),
                 'EX',
@@ -66,9 +75,9 @@ describe('DNSCacheImpl', () => {
 
             const result = await dnsCache.resolve('192.0.2.1', 'PTR')
 
-            expect(redisClient.get.bind(redisClient)).toHaveBeenCalledWith('DNS_CACHE:PTR:192.0.2.1')
+            expect(redisClient.get).toHaveBeenCalledWith('DNS_CACHE:PTR:192.0.2.1')
             expect(reverse).toHaveBeenCalledWith('192.0.2.1')
-            expect(redisClient.set.bind(redisClient)).toHaveBeenCalledWith(
+            expect(redisClient.set).toHaveBeenCalledWith(
                 'DNS_CACHE:PTR:192.0.2.1',
                 JSON.stringify(ptrRecords),
                 'EX',
@@ -83,20 +92,20 @@ describe('DNSCacheImpl', () => {
             const cachedData = [{ exchange: 'mail.example.com', priority: 10 }]
             redisClient.get.mockResolvedValueOnce(JSON.stringify(cachedData))
 
-            // @ts-expect-error testing
+            // @ts-expect-error testing private method
             const result = await dnsCache.getCachedRecords('example.com', 'MX')
 
-            expect(redisClient.get.bind(redisClient)).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
+            expect(redisClient.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
             expect(result).toEqual(cachedData)
         })
 
         it('should return null if no cached data is present', async () => {
             redisClient.get.mockResolvedValueOnce(null)
 
-            // @ts-expect-error testing
+            // @ts-expect-error testing private method
             const result = await dnsCache.getCachedRecords('example.com', 'MX')
 
-            expect(redisClient.get.bind(redisClient)).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
+            expect(redisClient.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
             expect(result).toBeNull()
         })
     })
@@ -106,10 +115,10 @@ describe('DNSCacheImpl', () => {
             const records = [{ exchange: 'mail.example.com', priority: 10 }]
             redisClient.set.mockResolvedValueOnce('OK')
 
-            // @ts-expect-error testing
+            // @ts-expect-error testing private method
             await dnsCache.cacheRecords('example.com', 'MX', records)
 
-            expect(redisClient.set.bind(redisClient)).toHaveBeenCalledWith(
+            expect(redisClient.set).toHaveBeenCalledWith(
                 'DNS_CACHE:MX:example.com',
                 JSON.stringify(records),
                 'EX',
