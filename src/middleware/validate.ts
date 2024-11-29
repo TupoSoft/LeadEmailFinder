@@ -3,7 +3,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import { constants as httpConstants } from 'http2'
 import type { Middleware } from 'express-validator/lib/base'
 
-export default function (validationChain: Array<ValidationChain | (Middleware & ContextRunner)>): RequestHandler[] {
+export function validate(validationChain: Array<ValidationChain | (Middleware & ContextRunner)>): RequestHandler[] {
     return [
         ...validationChain,
         async function (req: Request, res: Response, next: NextFunction) {

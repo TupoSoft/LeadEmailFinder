@@ -15,7 +15,9 @@ import { constants as httpConstants } from 'http2'
 import { DomainService } from './domain-service'
 import { DomainControllerImpl } from './domain-controller'
 import { DomainRouter } from './domain-router'
-import { SMTPClientFactoryImpl } from './smtp/client-factory'
+import { SMTPClientFactoryImpl } from './smtp'
+import { DNSCacheImpl } from './dns'
+import { Redis } from 'ioredis'
 
 const { PORT } = process.env
 
@@ -39,9 +41,13 @@ async function main(): Promise<void> {
         timeout: 30000,
     })
 
+    const redis = new Redis({
+        host: 'redis',
+    })
+    const dnsCache = new DNSCacheImpl(redis)
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
     const proxySocketConnector = new ProxySocketConnector(proxyRotator.getRandomProxy())
-    const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector)
+    const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector, dnsCache)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)

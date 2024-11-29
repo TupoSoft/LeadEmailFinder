@@ -5,7 +5,8 @@
         "outDir": "dist",
         "declaration": true,
         "noImplicitAny": true,
-        "useUnknownInCatchVariables": true
+        "useUnknownInCatchVariables": true,
+        "removeComments": true
     },
     "include": ["src"],
     "exclude": ["node_modules", "dist"]

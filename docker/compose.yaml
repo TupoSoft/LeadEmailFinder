@@ -27,6 +27,8 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -58,6 +60,15 @@ services:
     volumes:
       - ./scripts/initdb.js:/docker-entrypoint-initdb.d/initdb.js:ro
       - mongo-data:/data/db
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    healthcheck:
+      test: "[ $$(redis-cli ping) = 'PONG' ]"
+      interval: 1s
+      timeout: 3s
+      retries: 5
 
 secrets:
   mongo_root_username:
