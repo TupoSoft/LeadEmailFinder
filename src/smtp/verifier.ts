@@ -4,6 +4,7 @@ import type { SMTPClient } from './client'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
+import { SMTPClientError } from './errors'
 
 export interface SMTPVerifier {
     verify: (email: string) => Promise<SMTPVerificationResult>
@@ -36,15 +37,21 @@ export class SMTPVerifierImpl implements SMTPVerifier {
                 existingCatchAllStatus ??
                 (await client.rcptTo(appendRandomPrefix(email)).then(
                     _ => true,
-                    _ => false,
+                    reason => {
+                        if (reason instanceof SMTPClientError) {
+                            return false
+                        } else {
+                            return undefined
+                        }
+                    },
                 ))
             smtpVerificationResult.catchAllStatus = catchAllStatus
 
-            if (existingCatchAllStatus === undefined) {
+            if (existingCatchAllStatus === undefined && catchAllStatus !== undefined) {
                 await this.catchAllCache.setCatchAllStatusForDomain(domainName, catchAllStatus)
             }
 
-            if (!catchAllStatus) {
+            if (catchAllStatus === false) {
                 smtpVerificationResult.exists = await client.rcptTo(email).then(
                     _ => true,
                     _ => false,
