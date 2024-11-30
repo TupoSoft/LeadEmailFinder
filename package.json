@@ -6,9 +6,9 @@
     "scripts": {
         "build": "tsc",
         "clean": "tsc --build --clean && rm -r dist",
-        "start:debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
-        "start:dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
-        "start:prod": "node dist",
+        "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
+        "prod": "node dist",
         "test": "jest"
     },
     "keywords": [
