@@ -45,11 +45,11 @@ export class EmailVerificationRouter {
         )
 
         this.router.get('/ping', log, (_, res: Response) => {
-            res.send('PONG')
+            res.json('PONG')
         })
 
         this.router.get('/', log, (_: Request, res: Response) => {
-            res.send('Hello World!')
+            res.json('Hello World!')
         })
     }
 }

@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
 import { dbFactory } from './database-util'
 import {
+    CatchAllVerifier,
     EmailVerificationControllerImpl,
     EmailVerificationRouter,
     EmailVerificationService,
@@ -11,7 +12,6 @@ import defaultProxyRotator from './util/proxy'
 import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
 import { ProxySocketConnector } from './socket-connector'
-import { CatchAllVerifier } from './email-verification/catch-all-verifier'
 import { AxiosHttpClient } from './http-client'
 import { MongoDomainRepository } from './domain-repository'
 import { constants as httpConstants } from 'http2'
@@ -22,6 +22,7 @@ import { SMTPClientFactoryImpl, SMTPVerifierImpl } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { Redis } from 'ioredis'
 import { log } from './middleware'
+import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
 
 const { PORT } = process.env
 
@@ -30,7 +31,12 @@ const port = PORT ?? 3000
 async function main(): Promise<void> {
     const router = Router()
     router.use(log)
+
     const db = await dbFactory()
+
+    const redis = new Redis({
+        host: 'redis',
+    })
 
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
@@ -46,9 +52,6 @@ async function main(): Promise<void> {
         timeout: 30000,
     })
 
-    const redis = new Redis({
-        host: 'redis',
-    })
     const dnsCache = new DNSCacheImpl(redis)
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
     const proxySocketConnector = new ProxySocketConnector(proxyRotator.getRandomProxy())
@@ -63,9 +66,15 @@ async function main(): Promise<void> {
         catchAllVerifier,
         smtpVerifier,
     )
+
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
+
+    const findLeadService = new FindLeadService(emailVerificationService, domainService)
+    const findLeadController = new FindLeadControllerImpl(findLeadService)
+    const findLeadRouter = new FindLeadRouter(router, findLeadController)
+    findLeadRouter.init()
 
     express()
         .disable('x-powered-by')

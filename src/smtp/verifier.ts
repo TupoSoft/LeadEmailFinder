@@ -1,7 +1,6 @@
 import type { SMTPClientFactory } from './client-factory'
-import type { DNSCache } from '../dns'
+import { type DNSCache, getSecondLevelDomain } from '../dns'
 import type { SMTPClient } from './client'
-import { getSecondLevelDomainSplit } from '../dns-util'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
@@ -27,7 +26,7 @@ export class SMTPVerifierImpl implements SMTPVerifier {
             const mxRecords = await this.dnsCache.resolve(domainName, 'MX')
             const mxRecord = await client.connect({ mxRecords })
             smtpVerificationResult.targetExchange = mxRecord.exchange
-            smtpVerificationResult.mxDomain = getSecondLevelDomainSplit(mxRecord.exchange)
+            smtpVerificationResult.mxDomain = getSecondLevelDomain(mxRecord.exchange)
 
             await client.helo()
             await client.mailFrom()

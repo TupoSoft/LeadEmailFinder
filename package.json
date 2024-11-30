@@ -43,7 +43,8 @@
         "express-validator": "^7.2.0",
         "ioredis": "^5.4.1",
         "ip-address": "^9.0.5",
-        "mongodb": "^6.11.0"
+        "mongodb": "^6.11.0",
+        "tldts": "^6.1.65"
     },
     "jest": {
         "preset": "ts-jest",
