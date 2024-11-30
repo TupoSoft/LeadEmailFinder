@@ -14,7 +14,7 @@ Content-Type: application/json
 
 {
   "emails": [
-    "kyrylo.kupin@gmail.com",
+    "john.doe@gmail.com",
     "jdoe@gmail.com",
     "doe@gmail.com"
   ]

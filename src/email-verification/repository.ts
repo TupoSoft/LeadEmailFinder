@@ -54,23 +54,9 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 }
 
 export class MockEmailVerificationRepository implements EmailVerificationRepository {
-    private emailVerification: EmailVerificationResult = {
-        email: '',
-        domain: '',
-        localPart: '',
-        sources: [],
-        exists: false,
-    }
+    findById!: (id: string) => Promise<EmailVerificationResult>
 
-    findById: (id: string) => Promise<EmailVerificationResult> = async () => {
-        return this.emailVerification
-    }
+    findByEmail!: (email: string) => Promise<EmailVerificationResult>
 
-    findByEmail: (email: string) => Promise<EmailVerificationResult> = async () => {
-        return this.emailVerification
-    }
-
-    save: (emailVerification: EmailVerificationResult) => Promise<void> = async emailVerification => {
-        this.emailVerification = emailVerification
-    }
+    save!: (emailVerification: EmailVerificationResult) => Promise<void>
 }
