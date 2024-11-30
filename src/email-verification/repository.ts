@@ -1,11 +1,11 @@
-import type { EmailVerification, EmailVerificationSource } from './entities'
 import { type Collection, type Db, ObjectId } from 'mongodb'
-import { generateObjectIdAsync } from './database-util'
+import { generateObjectIdAsync } from '../database-util'
+import type { EmailVerificationResult, EmailVerificationSource } from './dto'
 
 export interface EmailVerificationRepository {
-    save: (emailVerification: EmailVerification) => Promise<void>
-    findById: (id: string) => Promise<EmailVerification>
-    findByEmail: (email: string) => Promise<EmailVerification>
+    save: (emailVerification: EmailVerificationResult) => Promise<void>
+    findById: (id: string) => Promise<EmailVerificationResult>
+    findByEmail: (email: string) => Promise<EmailVerificationResult>
 }
 
 interface EmailVerificationSchema {
@@ -34,19 +34,29 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         void this.collection.createIndex({ email: 1 })
     }
 
-    findByEmail: (email: string) => Promise<EmailVerification> = async (email: string): Promise<EmailVerification> => {
+    findByEmail: (email: string) => Promise<EmailVerificationResult> = async (
+        email: string,
+    ): Promise<EmailVerificationResult> => {
         const dataModel = await this.collection.findOne({ email })
         if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
         return dataModel
     }
 
-    async findById(id: string): Promise<EmailVerification> {
+    async findById(id: string): Promise<EmailVerificationResult> {
         const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
         if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
         return dataModel
     }
 
-    async save(emailVerification: EmailVerification): Promise<void> {
+    async save(emailVerification: EmailVerificationResult): Promise<void> {
         await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
     }
+}
+
+export class MockEmailVerificationRepository implements EmailVerificationRepository {
+    findById!: (id: string) => Promise<EmailVerificationResult>
+
+    findByEmail!: (email: string) => Promise<EmailVerificationResult>
+
+    save!: (emailVerification: EmailVerificationResult) => Promise<void>
 }

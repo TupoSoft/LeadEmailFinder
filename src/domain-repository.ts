@@ -1,6 +1,7 @@
 import type { MxRecord } from 'node:dns'
 import type { Collection, Db } from 'mongodb'
-import type { Domain, EmailPatternUsage } from './entities'
+import type { Domain } from './entities'
+import type { EmailPatternUsage } from './find-lead'
 
 interface DomainSchema {
     _id: string

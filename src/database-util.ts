@@ -21,7 +21,7 @@ async function getMongoUrl(): Promise<string> {
     }
 }
 
-export async function mongoConnect(): Promise<Db> {
+export async function dbFactory(): Promise<Db> {
     try {
         const mongoUrl = await getMongoUrl()
         const mongoClient = new MongoClient(mongoUrl)

@@ -1,5 +1,6 @@
 import { resolveMx, reverse } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
+import { getDomain } from 'tldts'
 
 export interface DNSTypeMap {
     MX: MxRecord[]
@@ -20,4 +21,13 @@ export async function fetchRecords<T extends keyof DNSTypeMap>(name: string, typ
     }
 
     return (await recordTypeToFunctionMap[type](name)) as DNSTypeMap[T]
+}
+
+export function getSecondLevelDomain(domain: string): string | undefined {
+    const parsed = getDomain(domain)
+    return parsed ?? undefined
+}
+
+export function getDomainFromSubdomain(subdomain: string): string {
+    return subdomain.split('.').slice(-2).join('.')
 }

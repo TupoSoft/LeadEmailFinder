@@ -7,4 +7,8 @@ export class DomainService {
     async create(domain: Domain): Promise<void> {
         await this.domainRepository.save(domain)
     }
+
+    async get(name: string): Promise<Domain> {
+        return await this.domainRepository.findByName(name)
+    }
 }

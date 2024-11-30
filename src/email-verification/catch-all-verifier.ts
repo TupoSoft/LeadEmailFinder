@@ -1,4 +1,4 @@
-import type { HttpClient } from './http-client'
+import type { HttpClient } from '../http-client'
 import { AxiosError, type AxiosRequestConfig } from 'axios'
 
 export interface MicrosoftGetCredsResponseData {
@@ -52,7 +52,21 @@ export class CatchAllVerificationError extends Error {
     }
 }
 
-export class CatchAllVerifier {
+export interface ICatchAllVerifier {
+    microsoftGetCreds: (email: string) => Promise<CatchAllVerificationResult>
+
+    microsoftLogin: (email: string) => Promise<CatchAllVerificationResult>
+
+    mimecastLogin: (username: string) => Promise<CatchAllVerificationResult>
+
+    officeapps: (email: string) => Promise<CatchAllVerificationResult>
+
+    linkedinLogin: (email: string) => Promise<CatchAllVerificationResult>
+
+    tryAll: (email: string) => Promise<CatchAllVerificationResult>
+}
+
+export class CatchAllVerifier implements ICatchAllVerifier {
     constructor(private readonly httpClient: HttpClient) {}
 
     async microsoftGetCreds(email: string): Promise<CatchAllVerificationResult> {
@@ -321,4 +335,13 @@ export class CatchAllVerifier {
             })
         }
     }
+}
+
+export class MockCatchAllVerifier implements ICatchAllVerifier {
+    microsoftGetCreds!: (email: string) => Promise<CatchAllVerificationResult>
+    microsoftLogin!: (email: string) => Promise<CatchAllVerificationResult>
+    mimecastLogin!: (username: string) => Promise<CatchAllVerificationResult>
+    officeapps!: (email: string) => Promise<CatchAllVerificationResult>
+    linkedinLogin!: (email: string) => Promise<CatchAllVerificationResult>
+    tryAll!: (email: string) => Promise<CatchAllVerificationResult>
 }

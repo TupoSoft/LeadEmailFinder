@@ -1,13 +1,10 @@
 import type { NextFunction, Request, Response } from 'express'
 import { matchedData } from 'express-validator'
-import type { EmailVerificationService } from './email-verification-service'
-import type { Lead } from './entities'
+import type { EmailVerificationService } from './service'
 
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
     verifyEmails: (req: Request, res: Response, next: NextFunction) => void
-    findLead: (req: Request, res: Response, next: NextFunction) => void
-    findLeads: (req: Request, res: Response, next: NextFunction) => void
 }
 
 export class EmailVerificationControllerImpl implements EmailVerificationController {
@@ -16,7 +13,7 @@ export class EmailVerificationControllerImpl implements EmailVerificationControl
     verifyEmail(req: Request, res: Response, next: NextFunction): void {
         const data = matchedData(req)
         const email = data.email as string
-        this.emailVerificationService.verifyEmail(email).then(
+        this.emailVerificationService.verifyEmail({ email }).then(
             verificationData => res.json(verificationData),
             reason => {
                 next(reason)
@@ -27,27 +24,7 @@ export class EmailVerificationControllerImpl implements EmailVerificationControl
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
         const data = matchedData(req)
         const emails = data.emails as string[]
-        this.emailVerificationService.verifyEmails(emails).then(
-            value => res.json(value),
-            reason => {
-                next(reason)
-            },
-        )
-    }
-
-    findLead(req: Request, res: Response, next: NextFunction): void {
-        const lead: Lead = matchedData(req)
-        this.emailVerificationService.findLead(lead).then(
-            value => res.json(value),
-            reason => {
-                next(reason)
-            },
-        )
-    }
-
-    findLeads(req: Request, res: Response, next: NextFunction): void {
-        const { leads } = matchedData(req)
-        this.emailVerificationService.findLeads(leads as Lead[]).then(
+        this.emailVerificationService.verifyEmails(emails.map(email => ({ email }))).then(
             value => res.json(value),
             reason => {
                 next(reason)

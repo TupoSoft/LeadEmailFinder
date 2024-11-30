@@ -1,5 +1,4 @@
 import type { MxRecord } from 'node:dns'
-import { getDomainFromSubdomain } from '../dns-util'
 import { promiseWithTimeout } from '../timeout'
 import type { MySocket } from '../my-socket'
 import { SMTPClientError, SMTPClientErrorCode, SMTPSessionInitiationFailedError } from './errors'
@@ -14,6 +13,7 @@ import {
 import { SMTPResponseCode } from './enums'
 import { getSmtpResponseCode, isLastLine } from './util'
 import type { DNSCache } from '../dns'
+import { getDomainFromSubdomain } from '../dns'
 
 export interface SMTPClientConnectOpts {
     mxRecords: MxRecord[]
