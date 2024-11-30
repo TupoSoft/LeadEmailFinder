@@ -1,23 +1,27 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { mongoConnect } from './database-util'
-import { EmailVerificationRouter } from './email-verification-router'
+import { dbFactory } from './database-util'
+import {
+    EmailVerificationControllerImpl,
+    EmailVerificationRouter,
+    EmailVerificationService,
+    MongoEmailVerificationRepository,
+    RedisCatchAllCache,
+} from './email-verification'
 import defaultProxyRotator from './util/proxy'
 import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
 import { ProxySocketConnector } from './socket-connector'
-import { CatchAllVerifier } from './catch-all'
-import { EmailVerificationControllerImpl } from './email-verification-controller'
+import { CatchAllVerifier } from './email-verification/catch-all-verifier'
 import { AxiosHttpClient } from './http-client'
-import { EmailVerificationService } from './email-verification-service'
 import { MongoDomainRepository } from './domain-repository'
-import { MongoEmailVerificationRepository } from './email-verification-repository'
 import { constants as httpConstants } from 'http2'
 import { DomainService } from './domain-service'
 import { DomainControllerImpl } from './domain-controller'
 import { DomainRouter } from './domain-router'
-import { SMTPClientFactoryImpl } from './smtp'
+import { SMTPClientFactoryImpl, SMTPVerifierImpl } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { Redis } from 'ioredis'
+import { log } from './middleware'
 
 const { PORT } = process.env
 
@@ -25,7 +29,8 @@ const port = PORT ?? 3000
 
 async function main(): Promise<void> {
     const router = Router()
-    const db = await mongoConnect()
+    router.use(log)
+    const db = await dbFactory()
 
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
@@ -50,12 +55,13 @@ async function main(): Promise<void> {
     const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector, dnsCache)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
+    const catchAllCache = new RedisCatchAllCache(redis)
+    const smtpVerifier = new SMTPVerifierImpl(smtpClientFactory, dnsCache, catchAllCache)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,
         catchAllVerifier,
-        smtpClientFactory,
-        mongoDomainRepository,
+        smtpVerifier,
     )
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)

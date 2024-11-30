@@ -1,4 +1,4 @@
-import type { EmailPatternUsage, Lead } from './entities'
+import type { EmailPatternUsage, Lead } from './dto'
 
 const firstNamePatterns = ['{first}', '{f}']
 

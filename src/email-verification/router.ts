@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express'
-import type { EmailVerificationController } from './email-verification-controller'
-import { body, oneOf } from 'express-validator'
-import { authenticate, log, validate } from './middleware'
+import type { EmailVerificationController } from './controller'
+import { body } from 'express-validator'
+import { authenticate, log, validate } from '../middleware'
 
 export class EmailVerificationRouter {
     constructor(
@@ -13,7 +13,6 @@ export class EmailVerificationRouter {
         this.router.post(
             '/verifyEmail',
             authenticate,
-            log,
             validate([
                 body('email')
                     .isString()
@@ -30,7 +29,6 @@ export class EmailVerificationRouter {
         this.router.post(
             '/verifyEmails',
             authenticate,
-            log,
             validate([
                 body('emails').isArray({ min: 1 }).withMessage('Must be a non-empty array of emails'),
                 body('emails.*')
@@ -44,28 +42,6 @@ export class EmailVerificationRouter {
                     .withMessage('Invalid email address'),
             ]),
             this.emailVerificationController.verifyEmails.bind(this.emailVerificationController),
-        )
-
-        this.router.post(
-            '/findLead',
-            authenticate,
-            log,
-            validate([
-                body(['domain']).isString().notEmpty(),
-                oneOf([body('firstName').isString().notEmpty(), body('lastName').isString().notEmpty()]),
-            ]),
-            this.emailVerificationController.findLead.bind(this.emailVerificationController),
-        )
-
-        this.router.post(
-            '/findLeads',
-            authenticate,
-            log,
-            validate([
-                body('leads').isArray({ min: 1 }),
-                body(['leads.*.firstName', 'leads.*.lastName', 'leads.*.domain']).isString().notEmpty(),
-            ]),
-            this.emailVerificationController.findLeads.bind(this.emailVerificationController),
         )
 
         this.router.get('/ping', log, (_, res: Response) => {
