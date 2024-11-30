@@ -9,7 +9,7 @@ import type { EmailVerificationResult } from './dto'
 describe('EmailVerificationService', () => {
     const emailVerificationRepositoryMock =
         new MockEmailVerificationRepository() as jest.Mocked<MockEmailVerificationRepository>
-    jest.spyOn(emailVerificationRepositoryMock, 'save')
+    emailVerificationRepositoryMock.save = jest.fn()
 
     const catchAllVerifierMock = new MockCatchAllVerifier() as jest.Mocked<MockCatchAllVerifier>
     catchAllVerifierMock.tryAll = jest.fn()
