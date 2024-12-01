@@ -24,13 +24,13 @@ jobs:
       - name: Setup PNPM
         uses: pnpm/action-setup@v2
         with:
-          version: 9.11.0
+          version: latest
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
@@ -40,7 +40,7 @@ jobs:
 
   build-push:
     runs-on: ubuntu-latest
-#    if: github.event_name == 'push'
+    if: github.event_name == 'push'
     needs: test
     permissions:
       packages: write
