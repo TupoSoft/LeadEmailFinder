@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
-import type { DomainService } from './domain-service'
+import type { DomainService } from './service'
 import { matchedData } from 'express-validator'
-import type { Domain } from './entities'
+import type { Domain } from './dto'
 
 export interface DomainController {
     create: (req: Request, res: Response, next: NextFunction) => void

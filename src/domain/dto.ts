@@ -1,5 +1,5 @@
+import type { EmailPatternUsage } from '../find-lead'
 import type { MxRecord } from 'node:dns'
-import type { EmailPatternUsage } from './find-lead'
 
 export interface Domain {
     name: string
