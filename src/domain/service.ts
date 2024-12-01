@@ -1,5 +1,5 @@
-import type { DomainRepository } from './domain-repository'
-import type { Domain } from './entities'
+import type { DomainRepository } from './repository'
+import type { Domain } from './dto'
 
 export class DomainService {
     constructor(private readonly domainRepository: DomainRepository) {}

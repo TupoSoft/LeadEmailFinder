@@ -1,7 +1,7 @@
 import type { FindLeadResult, Lead } from './dto'
 import { getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import type { EmailVerificationService } from '../email-verification'
-import type { DomainService } from '../domain-service'
+import type { DomainService } from '../domain'
 
 export class FindLeadService {
     constructor(

@@ -1,6 +1,6 @@
 import type { Router } from 'express'
-import type { DomainController } from './domain-controller'
-import { authenticate, log, validate } from './middleware'
+import type { DomainController } from './controller'
+import { authenticate, log, validate } from '../middleware'
 import { body } from 'express-validator'
 
 export class DomainRouter {
