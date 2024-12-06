@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 
-import { Redis } from 'ioredis' // Replace with your Redis client if different
+import { Redis } from 'ioredis'
 import {
     ATOMIC_INCR_SCRIPT,
     RedisConnectionLimiter,
