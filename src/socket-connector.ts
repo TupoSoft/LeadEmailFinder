@@ -4,6 +4,7 @@ import { type IncomingMessage, request, type RequestOptions } from 'node:http'
 export interface ProxyOpts {
     host: string
     port: number
+    type: 'http' | 'socks5'
     user?: string
     password?: string
 }

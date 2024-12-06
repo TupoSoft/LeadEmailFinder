@@ -1,6 +1,6 @@
 import type { MxRecord } from 'node:dns'
 import { promiseWithTimeout } from '../timeout'
-import type { MySocket } from '../my-socket'
+import type { SocketClient } from '../socket-client'
 import { SMTPClientError, SMTPClientErrorCode, SMTPSessionInitiationFailedError } from './errors'
 import {
     GREETING_TIMEOUT,
@@ -29,7 +29,7 @@ export interface SMTPClient {
 
 export class SMTPClientImpl implements SMTPClient {
     constructor(
-        private readonly socketClient: MySocket,
+        private readonly socketClient: SocketClient,
         private readonly dnsCache: DNSCache,
     ) {}
 
@@ -131,7 +131,7 @@ export class SMTPClientImpl implements SMTPClient {
     }
 
     private async getClientHostName(): Promise<string> {
-        const addressInfo = this.socketClient.address
+        const addressInfo = this.socketClient.addressInfo
         if (addressInfo == null) {
             throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }

@@ -1,5 +1,5 @@
 import type { SocketConnector } from '../socket-connector'
-import { PromisifiedSocket } from '../my-socket'
+import { PromisifiedSocketClient } from '../socket-client'
 import { type SMTPClient, SMTPClientImpl } from './client'
 import type { DNSCache } from '../dns'
 
@@ -14,6 +14,6 @@ export class SMTPClientFactoryImpl implements SMTPClientFactory {
     ) {}
 
     getInstance: () => SMTPClient = (): SMTPClient => {
-        return new SMTPClientImpl(new PromisifiedSocket(this.socketConnector), this.dnsCache)
+        return new SMTPClientImpl(new PromisifiedSocketClient(this.socketConnector), this.dnsCache)
     }
 }

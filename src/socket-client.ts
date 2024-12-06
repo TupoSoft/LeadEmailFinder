@@ -1,6 +1,6 @@
-import type { AddressInfo, Socket } from 'net'
+import { type AddressInfo, Socket } from 'net'
 import type { SocketReadyState, TcpNetConnectOpts, TcpSocketConnectOpts } from 'node:net'
-import type { SocketConnector } from './socket-connector'
+import type { ProxyOpts, SocketConnector } from './socket-connector'
 
 const enum PromisifiedSocketErrorCode {
     WriteFailed,
@@ -20,8 +20,8 @@ class MySocketError extends Error {}
 
 class MySocketFailedToEndError extends MySocketError {}
 
-export interface MySocket {
-    address: AddressInfo | undefined
+export interface SocketClient {
+    addressInfo: AddressInfo | undefined
     readyState: SocketReadyState
     connect: (options: TcpNetConnectOpts) => Promise<void>
     write: (message: string) => Promise<void>
@@ -29,21 +29,33 @@ export interface MySocket {
     end: () => Promise<void>
 }
 
-export class PromisifiedSocket implements MySocket {
+export type SocketClientConnectOpts = TcpSocketConnectOpts & {
+    proxy: ProxyOpts
+}
+
+export class PromisifiedSocketClient implements SocketClient {
     private client: Socket | undefined
 
-    constructor(private readonly socketConnector: SocketConnector) {}
+    constructor(private readonly socket: Socket = new Socket()) {}
 
-    get address(): AddressInfo | undefined {
-        return this.socketConnector.address
+    get addressInfo(): AddressInfo | undefined {
+        return this.socket.address() as AddressInfo
     }
 
     get readyState(): SocketReadyState {
         return this.client?.readyState ?? 'closed'
     }
 
-    async connect(options: TcpSocketConnectOpts): Promise<void> {
+    async connect(options: SocketClientConnectOpts): Promise<void> {
+        if (options.proxy !== undefined) {
+
+        }
+
         this.client = await this.socketConnector.connect(options)
+    }
+
+    private async connectThroughProxy(): Promise<void> {
+
     }
 
     async write(message: string): Promise<void> {
