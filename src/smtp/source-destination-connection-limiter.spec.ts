@@ -3,9 +3,9 @@
 import { Redis } from 'ioredis' // Replace with your Redis client if different
 import {
     ATOMIC_INCR_SCRIPT,
-    RedisSourceDestinationConnectionLimiter,
+    RedisConnectionLimiter,
     REDIS_KEY, ATOMIC_DECR_SCRIPT
-} from './source-destination-connection-limiter'
+} from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 
 jest.useFakeTimers()
@@ -20,11 +20,11 @@ jest.mock('ioredis', () => ({
     })),
 }))
 
-describe('RedisSourceDestinationConnectionLimiter', () => {
+describe('RedisConnectionLimiter', () => {
     const redisClient = new Redis() as jest.Mocked<Redis>
     const maxConnections = 3
     const ttlSeconds = 60
-    const connectionLimiter = new RedisSourceDestinationConnectionLimiter(redisClient, REDIS_KEY, maxConnections, ttlSeconds)
+    const connectionLimiter = new RedisConnectionLimiter(redisClient, REDIS_KEY, maxConnections, ttlSeconds)
 
     afterEach(() => {
         jest.clearAllMocks()

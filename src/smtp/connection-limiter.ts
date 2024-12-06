@@ -28,13 +28,13 @@ export const ATOMIC_DECR_SCRIPT = `
     end
 `
 
-export interface SourceDestinationConnectionLimiter {
+export interface ConnectionLimiter {
     acquire: (source: string, destination: string) => Promise<void>
 
     release: (source: string, destination: string) => Promise<void>
 }
 
-export class RedisSourceDestinationConnectionLimiter implements SourceDestinationConnectionLimiter {
+export class RedisConnectionLimiter implements ConnectionLimiter {
     constructor(
         private readonly redisClient: Redis,
         private readonly redisKey = REDIS_KEY,
