@@ -20,7 +20,7 @@ jest.mock('ioredis', () => ({
     })),
 }))
 
-describe('RedisSourceHostConnectionManager', () => {
+describe('RedisSourceDestinationConnectionLimiter', () => {
     const redisClient = new Redis() as jest.Mocked<Redis>
     const maxConnections = 3
     const ttlSeconds = 60
