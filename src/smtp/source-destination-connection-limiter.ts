@@ -53,7 +53,7 @@ export class RedisSourceDestinationConnectionLimiter implements SourceDestinatio
                     key,
                     this.maxConnections,
                     this.ttlSeconds,
-                )
+                ) as number
 
                 if (result === 1) {
                     console.info(`${source}:${destination} incremented`)
@@ -74,7 +74,7 @@ export class RedisSourceDestinationConnectionLimiter implements SourceDestinatio
         const key = this.getKey(source, destination)
 
         try {
-            const result = (await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds)) as number
+            const result = await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds) as number
 
             if (result === 1) {
                 console.info(`${source}:${destination} decremented`)
