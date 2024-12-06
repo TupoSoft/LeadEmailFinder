@@ -42,10 +42,14 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         private readonly ttlSeconds = 60,
     ) {}
 
-    async acquire(source: string, destination: string): Promise<void> {
+    async acquire(source: string, destination: string, signal?: AbortSignal): Promise<void> {
         const key = this.getKey(source, destination)
 
         while (true) {
+            if (signal?.aborted === true) {
+                throw new Error('Acquisition aborted')
+            }
+
             try {
                 const result = await this.redisClient.eval(
                     ATOMIC_INCR_SCRIPT,

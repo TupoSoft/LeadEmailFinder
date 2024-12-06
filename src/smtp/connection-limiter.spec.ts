@@ -54,6 +54,23 @@ describe('RedisConnectionLimiter', () => {
             await expect(acquirePromise).resolves.not.toThrow()
             expect(redisClient.eval).toHaveBeenCalledTimes(2)
         })
+
+        it('should abort pending acquisitions', async () => {
+            redisClient.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0)
+            const abortController = new AbortController()
+
+            const acquisitions = [
+                connectionLimiter.acquire(source, destination, abortController.signal),
+                connectionLimiter.acquire(source, destination, abortController.signal)
+            ]
+
+            const firstAcquisitionPromise = Promise.any(acquisitions)
+            const allAcquisitionPromises = Promise.all(acquisitions)
+            abortController.abort('Acquisition')
+
+            await expect(firstAcquisitionPromise).resolves.not.toThrow()
+            await expect(allAcquisitionPromises).rejects.toThrowError(new Error('Acquisition aborted'))
+        })
     })
 
     describe('release', () => {
