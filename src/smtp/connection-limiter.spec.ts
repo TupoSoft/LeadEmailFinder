@@ -66,9 +66,11 @@ describe('RedisConnectionLimiter', () => {
 
             const firstAcquisitionPromise = Promise.any(acquisitions)
             const allAcquisitionPromises = Promise.all(acquisitions)
-            abortController.abort('Acquisition')
 
             await expect(firstAcquisitionPromise).resolves.not.toThrow()
+
+            abortController.abort('Acquisition')
+
             await expect(allAcquisitionPromises).rejects.toThrowError(new Error('Acquisition aborted'))
         })
     })
