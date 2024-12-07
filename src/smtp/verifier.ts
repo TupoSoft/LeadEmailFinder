@@ -4,67 +4,101 @@ import type { SMTPClient } from './client'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
-import { SMTPClientError } from './errors'
+import { SMTPClientError, SMTPVerificationAborted } from './errors'
+import { ok } from 'node:assert'
 
-export interface SMTPVerifier {
-    verify: (email: string) => Promise<SMTPVerificationResult>
+export interface SMTPVerifyOptions {
+    email: string
+    abortSignal?: AbortSignal
 }
 
-export class SMTPVerifierImpl implements SMTPVerifier {
+export interface ISMTPVerifier {
+    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
+}
+
+function handleError(error: Error): void {
+    if (error instanceof SMTPVerificationAborted) {
+        throw error
+    }
+}
+
+export class SMTPVerifier implements ISMTPVerifier {
     constructor(
         private readonly smtpClientFactory: SMTPClientFactory,
         private readonly dnsCache: DNSCache,
         private readonly catchAllCache: CatchAllCache,
     ) {}
 
-    verify: (email: string) => Promise<SMTPVerificationResult> = async email => {
+    private static async getNewCatchAllStatus(client: SMTPClient, domain: string): Promise<boolean | undefined> {
+        try {
+            await client.rcptTo(appendRandomPrefix(`danilo@${domain}`))
+            return true
+        } catch (error) {
+            if (error instanceof SMTPClientError) {
+                return false
+            } else {
+                return undefined
+            }
+        }
+    }
+
+    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async opts => {
         const smtpVerificationResult: SMTPVerificationResult = {}
+        const { email, abortSignal } = opts
 
         const [, domainName] = email.split('@')
         const client: SMTPClient = this.smtpClientFactory.getInstance()
 
         try {
+            if (abortSignal !== undefined) {
+                abortSignal.onabort = () => {
+                    throw new SMTPVerificationAborted(email)
+                }
+            }
+
             const mxRecords = await this.dnsCache.resolve(domainName, 'MX')
-            const mxRecord = await client.connect({ mxRecords })
-            smtpVerificationResult.targetExchange = mxRecord.exchange
-            smtpVerificationResult.mxDomain = getSecondLevelDomain(mxRecord.exchange)
+            const { exchange } = await client.connect({ mxRecords })
+            smtpVerificationResult.targetExchange = exchange
+            smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
             await client.helo()
             await client.mailFrom()
 
-            const existingCatchAllStatus = await this.catchAllCache.getCatchAllStatusForDomain(domainName)
-            const catchAllStatus =
-                existingCatchAllStatus ??
-                (await client.rcptTo(appendRandomPrefix(email)).then(
-                    _ => true,
-                    reason => {
-                        if (reason instanceof SMTPClientError) {
-                            return false
-                        } else {
-                            return undefined
-                        }
-                    },
-                ))
-            smtpVerificationResult.catchAllStatus = catchAllStatus
+            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domainName)
 
-            if (existingCatchAllStatus === undefined && catchAllStatus !== undefined) {
-                await this.catchAllCache.setCatchAllStatusForDomain(domainName, catchAllStatus)
-            }
-
-            if (catchAllStatus === false) {
+            if (smtpVerificationResult.catchAllStatus === false) {
                 smtpVerificationResult.exists = await client.rcptTo(email).then(
                     _ => true,
-                    _ => false,
+                    (_: unknown) => false,
                 )
             }
 
             await client.quit()
-        } catch (error) {}
+        } catch (error) {
+            ok(error instanceof Error)
+            handleError(error)
+        }
 
         return smtpVerificationResult
     }
+
+    private async getCatchAllStatus(client: SMTPClient, domain: string): Promise<boolean | undefined> {
+        const existingCatchAllStatus = await this.catchAllCache.getCatchAllStatusForDomain(domain)
+
+        if (existingCatchAllStatus !== undefined) {
+            return existingCatchAllStatus
+        } else {
+            const catchAllStatus = await SMTPVerifier.getNewCatchAllStatus(client, domain)
+
+            if (catchAllStatus !== undefined) {
+                await this.catchAllCache.setCatchAllStatusForDomain(domain, catchAllStatus)
+            }
+
+            return catchAllStatus
+        }
+    }
 }
 
-export class MockSMTPVerifier implements SMTPVerifier {
-    verify!: (email: string) => Promise<SMTPVerificationResult>
+export class MockSMTPVerifier implements ISMTPVerifier {
+    verify!: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
 }

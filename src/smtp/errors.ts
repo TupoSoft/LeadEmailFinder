@@ -18,7 +18,6 @@ export class SMTPClientError extends Error {
         message?: string,
     ) {
         super(message)
-        this.code = code
     }
 }
 
@@ -27,5 +26,13 @@ export class SMTPSessionInitiationFailedError extends SMTPClientError {
 
     constructor(readonly mxRecords: MxRecord[]) {
         super(SMTPClientErrorCode.SessionInitiationFailed, 'None of MX records accepted connection.')
+    }
+}
+
+export class SMTPVerificationAborted extends Error {
+    name = 'SMTPVerificationAborted'
+
+    constructor(email: string) {
+        super(`SMTP verification has been aborted for email ${email}`)
     }
 }

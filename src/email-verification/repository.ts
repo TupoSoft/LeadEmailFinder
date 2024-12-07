@@ -1,5 +1,5 @@
 import { type Collection, type Db, ObjectId } from 'mongodb'
-import { generateObjectIdAsync } from '../database-util'
+import { generateObjectIdAsync } from '../util/mongo'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
 
 export interface EmailVerificationRepository {

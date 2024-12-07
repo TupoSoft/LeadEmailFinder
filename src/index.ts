@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { dbFactory } from './database-util'
+import { dbFactory } from './util/mongo'
 import {
     CatchAllVerifier,
     EmailVerificationControllerImpl,
@@ -11,19 +11,18 @@ import {
 import defaultProxyRotator from './util/proxy'
 import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
-import { ProxySocketConnector } from './socket-connector'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { constants as httpConstants } from 'http2'
-import { SMTPClientFactoryImpl, SMTPVerifierImpl } from './smtp'
+import { SMTPClientFactoryImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { Redis } from 'ioredis'
 import { log } from './middleware'
 import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
 
-const { PORT } = process.env
-
-const port = PORT ?? 3000
+const { env } = process
+const DEFAULT_PORT = 3000
+const { PORT = DEFAULT_PORT } = env
 
 async function main(): Promise<void> {
     const router = Router()
@@ -56,7 +55,7 @@ async function main(): Promise<void> {
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
     const catchAllCache = new RedisCatchAllCache(redis)
-    const smtpVerifier = new SMTPVerifierImpl(smtpClientFactory, dnsCache, catchAllCache)
+    const smtpVerifier = new SMTPVerifier(smtpClientFactory, dnsCache, catchAllCache)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,
@@ -81,8 +80,8 @@ async function main(): Promise<void> {
             console.error('The error has occurred: ', err)
             res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
         })
-        .listen(port, () => {
-            console.log(`Server is running on port ${port}`)
+        .listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`)
         })
 }
 

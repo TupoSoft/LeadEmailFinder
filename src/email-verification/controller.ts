@@ -11,22 +11,20 @@ export class EmailVerificationControllerImpl implements EmailVerificationControl
     constructor(private readonly emailVerificationService: EmailVerificationService) {}
 
     verifyEmail(req: Request, res: Response, next: NextFunction): void {
-        const data = matchedData(req)
-        const email = data.email as string
+        const { email } = matchedData<{ email: string }>(req)
         this.emailVerificationService.verifyEmail({ email }).then(
             verificationData => res.json(verificationData),
-            reason => {
+            (reason: unknown) => {
                 next(reason)
             },
         )
     }
 
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
-        const data = matchedData(req)
-        const emails = data.emails as string[]
+        const { emails } = matchedData<{ emails: string[] }>(req)
         this.emailVerificationService.verifyEmails(emails.map(email => ({ email }))).then(
             value => res.json(value),
-            reason => {
+            (reason: unknown) => {
                 next(reason)
             },
         )

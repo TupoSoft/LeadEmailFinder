@@ -1,52 +1,66 @@
 import type { EmailVerificationRepository } from './repository'
-import type { SMTPVerifier } from '../smtp'
+import type { ISMTPVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { ICatchAllVerifier } from './catch-all-verifier'
+
+export interface VerifyOptions {
+    abortSignal?: AbortSignal
+    throwIfNonexistent?: boolean
+}
 
 export class EmailVerificationService {
     constructor(
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly catchAllVerifier: ICatchAllVerifier,
-        private readonly smtpVerifier: SMTPVerifier,
+        private readonly smtpVerifier: ISMTPVerifier,
     ) {}
 
-    async verifyEmail(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
+    async verifyEmail(
+        emailVerificationRequest: EmailVerificationRequest,
+        opts?: VerifyOptions,
+    ): Promise<EmailVerificationResult> {
         const { email, format } = emailVerificationRequest
-        const [localPart, domainName] = email.split('@')
+        const { abortSignal, throwIfNonexistent } = opts ?? {}
+
+        const [localPart, domain] = email.split('@')
 
         const emailVerification: EmailVerificationResult = {
             exists: false,
             sources: [],
-            domain: domainName,
+            domain,
             localPart,
             email,
             format,
         }
 
-        const { exists, catchAllStatus, targetExchange, mxDomain } = await this.smtpVerifier.verify(email)
-        if (catchAllStatus !== undefined && !catchAllStatus && exists !== undefined) {
-            emailVerification.exists = exists
-            emailVerification.targetExchange = targetExchange
-            emailVerification.mxDomain = mxDomain
-            emailVerification.sources.push('SMTP')
-        } else {
-            await this.catchAllVerifier
-                .tryAll(email)
-                .then(({ success, source }) => {
-                    emailVerification.sources.push(source)
-                    emailVerification.exists = success
-                })
-                .catch(reason => {
-                    console.error(reason)
-                })
-        }
+        try {
+            const { exists, catchAllStatus, targetExchange, mxDomain } = await this.smtpVerifier.verify({
+                email,
+                abortSignal,
+            })
 
-        await this.emailVerificationRepository.save(emailVerification)
+            if (catchAllStatus !== undefined && !catchAllStatus && exists !== undefined) {
+                emailVerification.exists = exists
+                emailVerification.targetExchange = targetExchange
+                emailVerification.mxDomain = mxDomain
+                emailVerification.sources.push('SMTP')
+            } else {
+                const { source, success } = await this.catchAllVerifier.tryAll(email)
+                emailVerification.sources.push(source)
+                emailVerification.exists = success
+            }
+
+            await this.emailVerificationRepository.save(emailVerification)
+        } catch (error) {}
+
+        if (throwIfNonexistent === true && !emailVerification.exists) {
+            throw new Error(`The email ${email} doesn't exist`)
+        }
 
         return emailVerification
     }
 
     async verifyEmails(emailVerificationRequests: EmailVerificationRequest[]): Promise<EmailVerificationResult[]> {
-        return await Promise.all(emailVerificationRequests.map(this.verifyEmail.bind(this)))
+        return await Promise.all(emailVerificationRequests.map(async request => await this.verifyEmail(request)))
     }
 }
