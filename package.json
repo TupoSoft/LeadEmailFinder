@@ -28,14 +28,12 @@
         "@types/eslint__js": "^8.42.3",
         "@types/express": "^4.17.21",
         "@types/node": "^22.10.1",
-        "@types/supertest": "^6.0.2",
         "eslint": "^9.16.0",
         "eslint-config-love": "^110.0.0",
         "glob": "^11.0.0",
         "jest": "^29.7.0",
         "pnpm": "^9.14.4",
         "prettier": "^3.4.1",
-        "supertest": "^7.0.0",
         "ts-jest": "^29.2.5",
         "ts-node": "^10.9.2",
         "typescript": "^5.7.2",
@@ -48,9 +46,7 @@
         "ioredis": "^5.4.1",
         "ip-address": "^9.0.5",
         "mongodb": "^6.11.0",
-        "socks": "^2.8.3",
-        "tldts": "^6.1.65",
-        "zod": "^3.23.8"
+        "tldts": "^6.1.65"
     },
     "jest": {
         "preset": "ts-jest",
