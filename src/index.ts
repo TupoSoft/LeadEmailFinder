@@ -8,17 +8,20 @@ import {
     MongoEmailVerificationRepository,
     RedisCatchAllCache,
 } from './email-verification'
-import defaultProxyRotator from './util/proxy'
-import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { constants as httpConstants } from 'http2'
-import { SMTPClientFactoryImpl, SMTPVerifier } from './smtp'
+import { SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { Redis } from 'ioredis'
 import { log } from './middleware'
 import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
+import { ProxyService } from './proxy'
+import { MongoProxyRepository } from './proxy/mongo-repository'
+import { RedisConnectionLimiter } from './smtp/connection-limiter'
+import { ProxyController } from './proxy/controller'
+import { ProxyRouter } from './proxy/router'
 
 const { env } = process
 const DEFAULT_PORT = 3000
@@ -40,22 +43,21 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController)
     domainRouter.init()
 
-    const proxyRotator = defaultProxyRotator
-    const proxies = await getProxiesFromFile()
-    const proxyRepository = new ProxyRepositoryImpl(proxies)
-    const axiosInstance = axios.create({
-        proxy: proxyRepository.getByName('http'),
-        timeout: 30000,
-    })
+    const axiosInstance = axios.create({})
 
     const dnsCache = new DNSCacheImpl(redis)
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
-    const proxySocketConnector = new ProxySocketConnector(proxyRotator.getRandomProxy())
-    const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector, dnsCache)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
+    const proxyRepository = new MongoProxyRepository(db)
+    const proxyService = new ProxyService(proxyRepository)
+    const proxyController = new ProxyController(proxyService)
+    const proxyRouter = new ProxyRouter(router, proxyController)
+    proxyRouter.init()
+
     const catchAllCache = new RedisCatchAllCache(redis)
-    const smtpVerifier = new SMTPVerifier(smtpClientFactory, dnsCache, catchAllCache)
+    const connectionLimiter = new RedisConnectionLimiter(redis)
+    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, connectionLimiter)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,

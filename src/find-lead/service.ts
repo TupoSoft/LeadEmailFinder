@@ -30,7 +30,15 @@ export class FindLeadService {
             for (const { pattern: format } of emailFormats) {
                 const email = formats.get(format)
                 if (email !== undefined) {
-                    verifications.push(this.emailVerificationService.verifyEmail({ email, format }, { throwIfNonexistent: true, abortSignal: signal }))
+                    verifications.push(
+                        this.emailVerificationService.verifyEmail(
+                            {
+                                email,
+                                format,
+                            },
+                            { throwIfNonexistent: true, abortSignal: signal },
+                        ),
+                    )
                 }
             }
 

@@ -29,7 +29,7 @@ export const ATOMIC_DECR_SCRIPT = `
 `
 
 export interface ConnectionLimiter {
-    acquire: (source: string, destination: string) => Promise<void>
+    acquire: (source: string, destination: string, signal?: AbortSignal) => Promise<void>
 
     release: (source: string, destination: string) => Promise<void>
 }
@@ -39,7 +39,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         private readonly redisClient: Redis,
         private readonly redisKey = REDIS_KEY,
         private readonly maxConnections = 1,
-        private readonly ttlSeconds = 60,
+        private readonly ttlSeconds = 30,
     ) {}
 
     async acquire(source: string, destination: string, signal?: AbortSignal): Promise<void> {
@@ -51,13 +51,13 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
             }
 
             try {
-                const result = await this.redisClient.eval(
+                const result = (await this.redisClient.eval(
                     ATOMIC_INCR_SCRIPT,
                     1,
                     key,
                     this.maxConnections,
                     this.ttlSeconds,
-                ) as number
+                )) as number
 
                 if (result === 1) {
                     console.info(`${source}:${destination} incremented`)
@@ -65,7 +65,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
                 }
 
                 console.info(`${source} is waiting to connect to ${destination}`)
-                await new Promise(resolve => setTimeout(resolve, 100))
+                await new Promise(resolve => setTimeout(resolve, 1000))
             } catch (error) {
                 ok(error instanceof Error)
                 console.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
@@ -78,7 +78,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         const key = this.getKey(source, destination)
 
         try {
-            const result = await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds) as number
+            const result = (await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds)) as number
 
             if (result === 1) {
                 console.info(`${source}:${destination} decremented`)

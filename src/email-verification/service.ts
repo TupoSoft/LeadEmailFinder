@@ -51,9 +51,11 @@ export class EmailVerificationService {
             }
 
             await this.emailVerificationRepository.save(emailVerification)
-        } catch (error) {}
+        } catch (error) {
+            console.error(error)
+        }
 
-        if (throwIfNonexistent === true && !emailVerification.exists) {
+        if (throwIfNonexistent && !emailVerification.exists) {
             throw new Error(`The email ${email} doesn't exist`)
         }
 

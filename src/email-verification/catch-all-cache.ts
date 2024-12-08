@@ -26,14 +26,11 @@ export class RedisCatchAllCache implements CatchAllCache {
 
         try {
             const key = this.getKey(domain)
-            const OK = await this.redis.set(key, JSON.stringify(status))
-            if (OK === 'OK') return
+            await this.redis.set(key, JSON.stringify(status))
         } catch (error) {
             ok(error instanceof Error, new Error(errorMessage))
             throw error
         }
-
-        throw new Error(errorMessage)
     }
 
     private getKey(domain: string): string {

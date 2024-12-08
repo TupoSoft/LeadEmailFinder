@@ -1,11 +1,12 @@
-import type { SMTPClientFactory } from './client-factory'
 import { type DNSCache, getSecondLevelDomain } from '../dns'
-import type { SMTPClient } from './client'
+import { type ISMTPClient, SMTPClient } from './client'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
 import { SMTPClientError, SMTPVerificationAborted } from './errors'
 import { ok } from 'node:assert'
+import type { ProxyService } from '../proxy'
+import type { ConnectionLimiter } from './connection-limiter'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -24,12 +25,13 @@ function handleError(error: Error): void {
 
 export class SMTPVerifier implements ISMTPVerifier {
     constructor(
-        private readonly smtpClientFactory: SMTPClientFactory,
         private readonly dnsCache: DNSCache,
         private readonly catchAllCache: CatchAllCache,
+        private readonly proxyService: ProxyService,
+        private readonly connectionLimiter: ConnectionLimiter,
     ) {}
 
-    private static async getNewCatchAllStatus(client: SMTPClient, domain: string): Promise<boolean | undefined> {
+    private static async getNewCatchAllStatus(client: ISMTPClient, domain: string): Promise<boolean | undefined> {
         try {
             await client.rcptTo(appendRandomPrefix(`danilo@${domain}`))
             return true
@@ -46,18 +48,32 @@ export class SMTPVerifier implements ISMTPVerifier {
         const smtpVerificationResult: SMTPVerificationResult = {}
         const { email, abortSignal } = opts
 
+        if (abortSignal !== undefined) {
+            abortSignal.onabort = () => {
+                abortController.abort()
+                throw new SMTPVerificationAborted(email)
+            }
+        }
+
         const [, domainName] = email.split('@')
-        const client: SMTPClient = this.smtpClientFactory.getInstance()
+
+        const proxies = await this.proxyService.getAll()
+        const abortController = new AbortController()
+        const client = new SMTPClient(this.dnsCache, this.connectionLimiter)
+        const connectPromises = proxies.map(
+            async proxy =>
+                await client.connect({
+                    proxy,
+                    domain: domainName,
+                    abortSignal: abortController.signal,
+                }),
+        )
+
+        const exchange = await Promise.any(connectPromises)
+
+        await Promise.allSettled(connectPromises)
 
         try {
-            if (abortSignal !== undefined) {
-                abortSignal.onabort = () => {
-                    throw new SMTPVerificationAborted(email)
-                }
-            }
-
-            const mxRecords = await this.dnsCache.resolve(domainName, 'MX')
-            const { exchange } = await client.connect({ mxRecords })
             smtpVerificationResult.targetExchange = exchange
             smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
@@ -72,17 +88,17 @@ export class SMTPVerifier implements ISMTPVerifier {
                     (_: unknown) => false,
                 )
             }
-
-            await client.quit()
         } catch (error) {
             ok(error instanceof Error)
             handleError(error)
+        } finally {
+            await client.quit()
         }
 
         return smtpVerificationResult
     }
 
-    private async getCatchAllStatus(client: SMTPClient, domain: string): Promise<boolean | undefined> {
+    private async getCatchAllStatus(client: ISMTPClient, domain: string): Promise<boolean | undefined> {
         const existingCatchAllStatus = await this.catchAllCache.getCatchAllStatusForDomain(domain)
 
         if (existingCatchAllStatus !== undefined) {
