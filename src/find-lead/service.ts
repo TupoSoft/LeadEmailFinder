@@ -53,7 +53,9 @@ export class FindLeadService {
                     findLeadResult.emails.push(settledVerificationPromise.value)
                 }
             }
-        } catch (error) {}
+        } catch (error) {
+            console.error('Error in findLead: ', error)
+        }
 
         return findLeadResult
     }
