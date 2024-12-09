@@ -55,7 +55,7 @@ export class EmailVerificationService {
             console.error(error)
         }
 
-        if (throwIfNonexistent && !emailVerification.exists) {
+        if (throwIfNonexistent === true && !emailVerification.exists) {
             throw new Error(`The email ${email} doesn't exist`)
         }
 

@@ -65,7 +65,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
                 }
 
                 console.info(`${source} is waiting to connect to ${destination}`)
-                await new Promise(resolve => setTimeout(resolve, 1000))
+                await new Promise(resolve => setTimeout(resolve, 100))
             } catch (error) {
                 ok(error instanceof Error)
                 console.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)

@@ -8,8 +8,7 @@ import type { ConnectionLimiter } from './connection-limiter'
 import type { Proxy } from '../proxy'
 import { ok } from 'node:assert'
 import { Socket } from 'net'
-import { connect, connectThroughProxy } from '../socket/connect-strategies'
-import { SMTPCommandHandler } from '../socket/socket-wrapper'
+import { SocketWrapper } from '../socket/socket-wrapper'
 
 export interface SMTPClientConnectOpts {
     domain: string
@@ -25,8 +24,7 @@ interface AttemptConnectionOptions {
 }
 
 interface AttemptConnectionResult {
-    socket: Socket
-    smtpCommandHandler: SMTPCommandHandler
+    socketWrapper: SocketWrapper
     source: string
     exchange: string
 }
@@ -44,9 +42,9 @@ export class SMTPClient implements ISMTPClient {
 
     private targetExchange: string | undefined
 
-    private client: Socket | undefined
+    private readonly client: Socket | undefined
 
-    private smtpCommandHandler: SMTPCommandHandler | undefined
+    private socketWrapper: SocketWrapper | undefined
 
     constructor(
         private readonly dnsCache: DNSCache,
@@ -76,11 +74,10 @@ export class SMTPClient implements ISMTPClient {
                     }),
             )
 
-            const { socket, smtpCommandHandler, exchange } = await Promise.any(attemptConnectionPromises)
+            const { socketWrapper, exchange } = await Promise.any(attemptConnectionPromises)
 
             if (this.client === undefined) {
-                this.client = socket
-                this.smtpCommandHandler = smtpCommandHandler
+                this.socketWrapper = socketWrapper
                 this.address = proxy != null ? proxy.host : 'localhost'
                 this.targetExchange = exchange
             }
@@ -88,14 +85,6 @@ export class SMTPClient implements ISMTPClient {
             try {
                 abortController.abort()
             } catch (error) {}
-
-            const settledAttemptConnectionPromises = await Promise.allSettled(attemptConnectionPromises)
-
-            const fulfilledAttemptConnectionPromises = settledAttemptConnectionPromises
-                .filter(value => value.status === 'fulfilled')
-                .filter(({ value }) => value.exchange !== exchange)
-
-            await this.closeFulfilledConnections(fulfilledAttemptConnectionPromises)
 
             return exchange
         } catch (error) {
@@ -159,56 +148,24 @@ export class SMTPClient implements ISMTPClient {
         this.client?.end()
     }
 
-    private async closeFulfilledConnections(
-        promiseSettledResults: Array<
-            Exclude<
-                PromiseSettledResult<AttemptConnectionResult>,
-                {
-                    status: 'rejected'
-                }
-            >
-        >,
-    ): Promise<void> {
-        if (promiseSettledResults.length === 0) return
-
-        const closeFulfilledConnectionPromises = promiseSettledResults.map(async settledResult => {
-            await this.closeFulfilledConnection(settledResult)
-        })
-
-        await Promise.any(closeFulfilledConnectionPromises)
-    }
-
-    private async closeFulfilledConnection(
-        promiseSettledResult: Exclude<PromiseSettledResult<AttemptConnectionResult>, { status: 'rejected' }>,
-    ): Promise<void> {
-        const { value: attemptConnectionResult } = promiseSettledResult
-        const { socket, exchange, source } = attemptConnectionResult
-        await this.connectionLimiter.release(source, exchange)
-        socket.end()
-    }
-
     private async attemptConnection(options: AttemptConnectionOptions): Promise<AttemptConnectionResult> {
         const { exchange, port, abortSignal, proxy } = options
         const source = proxy != null ? proxy.host : 'localhost'
 
+        const socket = new Socket()
+        const socketWrapper = new SocketWrapper(socket)
+
         try {
             await this.connectionLimiter.acquire(source, exchange, abortSignal)
 
-            const socket = new Socket()
+            abortSignal?.throwIfAborted()
+            await socketWrapper.connect({
+                host: exchange,
+                port,
+                proxy,
+            })
 
-            if (proxy !== undefined) {
-                await connectThroughProxy({
-                    socket,
-                    host: exchange,
-                    port,
-                    proxy,
-                })
-            } else {
-                await connect({ socket, host: exchange, port })
-            }
-
-            const smtpCommandHandler = new SMTPCommandHandler(socket)
-            const serviceReadyPromise = smtpCommandHandler.getResponseCode()
+            const serviceReadyPromise = socketWrapper.getResponseCode()
 
             abortSignal?.throwIfAborted()
             const code = await serviceReadyPromise
@@ -216,12 +173,12 @@ export class SMTPClient implements ISMTPClient {
             ok(code === SMTPResponseCode.ServiceReady, new Error(`${exchange} is not ready, code: ${code}`))
 
             return {
-                socket,
-                smtpCommandHandler,
+                socketWrapper,
                 source,
                 exchange,
             }
         } catch (error) {
+            socketWrapper.end()
             await this.connectionLimiter.release(source, exchange)
 
             ok(error instanceof Error)
@@ -245,7 +202,7 @@ export class SMTPClient implements ISMTPClient {
     }
 
     private async sendCommand(command: string): Promise<SMTPResponseCode> {
-        ok(this.smtpCommandHandler != null, 'The client is not connected')
-        return await this.smtpCommandHandler.sendCommand(command)
+        ok(this.socketWrapper != null, 'The client is not connected')
+        return await this.socketWrapper.sendCommand(command)
     }
 }
