@@ -16,16 +16,15 @@ export class FindLeadService {
         }
 
         try {
-            const domain = await this.domainService.get(lead.domain)
+            // const domain = await this.domainService.get(lead.domain)
 
             const formats = getFormatToEmailMapForLead(lead)
 
             const allEmailFormats = getAllEmailFormats()
-            const emailFormats = mergeEmailFormats(domain.emailPatternUsage, allEmailFormats)
+            const emailFormats = mergeEmailFormats([], allEmailFormats)
 
             const abortController = new AbortController()
             const { signal } = abortController
-
             const verifications: Array<Promise<EmailVerificationResult>> = []
             for (const { pattern: format } of emailFormats) {
                 const email = formats.get(format)
@@ -43,9 +42,10 @@ export class FindLeadService {
             }
 
             const firstPositiveVerificationResult = await Promise.any(verifications)
-            findLeadResult.emails.push(firstPositiveVerificationResult)
 
             abortController.abort()
+
+            findLeadResult.emails.push(firstPositiveVerificationResult)
 
             const settledVerificationPromises = await Promise.allSettled(verifications)
             for (const settledVerificationPromise of settledVerificationPromises) {

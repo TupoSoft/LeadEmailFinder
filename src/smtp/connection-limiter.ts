@@ -29,47 +29,50 @@ export const ATOMIC_DECR_SCRIPT = `
 `
 
 export interface ConnectionLimiter {
-    acquire: (source: string, destination: string, signal?: AbortSignal) => Promise<void>
+    acquire: (source: string, destination: string, signal?: AbortSignal) => Promise<boolean>
 
     release: (source: string, destination: string) => Promise<void>
 }
 
 export class RedisConnectionLimiter implements ConnectionLimiter {
+    private static readonly DEFAULT_MAX_CONNECTIONS = 1
+    private static readonly DEFAULT_TTL_SECONDS = 30
+    private static readonly NUM_KEYS = 1
+    private static readonly EVAL_SUCCESS = 1
+    private static readonly ACQUIRE_WAIT_MS = 100
+
     constructor(
         private readonly redisClient: Redis,
         private readonly redisKey = REDIS_KEY,
-        private readonly maxConnections = 1,
-        private readonly ttlSeconds = 30,
+        private readonly maxConnections = RedisConnectionLimiter.DEFAULT_MAX_CONNECTIONS,
+        private readonly ttlSeconds = RedisConnectionLimiter.DEFAULT_TTL_SECONDS,
     ) {}
 
-    async acquire(source: string, destination: string, signal?: AbortSignal): Promise<void> {
+    async acquire(source: string, destination: string, signal?: AbortSignal): Promise<boolean> {
         const key = this.getKey(source, destination)
 
         while (true) {
-            if (signal?.aborted === true) {
-                throw new Error('Acquisition aborted')
-            }
-
             try {
-                const result = (await this.redisClient.eval(
+                if (signal?.aborted === true) return false
+
+                const result = await this.redisClient.eval(
                     ATOMIC_INCR_SCRIPT,
-                    1,
+                    RedisConnectionLimiter.NUM_KEYS,
                     key,
                     this.maxConnections,
                     this.ttlSeconds,
-                )) as number
+                )
 
-                if (result === 1) {
+                if (result === RedisConnectionLimiter.EVAL_SUCCESS) {
                     console.info(`${source}:${destination} incremented`)
-                    return
+                    return true
                 }
 
-                console.info(`${source} is waiting to connect to ${destination}`)
-                await new Promise(resolve => setTimeout(resolve, 100))
+                await new Promise(resolve => setTimeout(resolve, RedisConnectionLimiter.ACQUIRE_WAIT_MS))
             } catch (error) {
                 ok(error instanceof Error)
                 console.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
-                throw error
+                return false
             }
         }
     }
@@ -78,11 +81,17 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         const key = this.getKey(source, destination)
 
         try {
-            const result = (await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds)) as number
+            const result = await this.redisClient.eval(
+                ATOMIC_DECR_SCRIPT,
+                RedisConnectionLimiter.NUM_KEYS,
+                key,
+                this.ttlSeconds,
+            )
 
-            if (result === 1) {
+            if (result === RedisConnectionLimiter.EVAL_SUCCESS) {
                 console.info(`${source}:${destination} decremented`)
             } else {
+                console.info(`${source}:${destination} not decremented (key might have expired)`)
                 console.info(`${source}:${destination} not decremented (key might have expired)`)
             }
         } catch (error) {

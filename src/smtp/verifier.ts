@@ -3,24 +3,18 @@ import { type ISMTPClient, SMTPClient } from './client'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
-import { SMTPClientError, SMTPVerificationAborted } from './errors'
+import { SMTPClientError } from './errors'
 import { ok } from 'node:assert'
 import type { ProxyService } from '../proxy'
 import type { ConnectionLimiter } from './connection-limiter'
 
 export interface SMTPVerifyOptions {
     email: string
-    abortSignal?: AbortSignal
+    signal?: AbortSignal
 }
 
 export interface ISMTPVerifier {
     verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
-}
-
-function handleError(error: Error): void {
-    if (error instanceof SMTPVerificationAborted) {
-        throw error
-    }
 }
 
 export class SMTPVerifier implements ISMTPVerifier {
@@ -46,34 +40,28 @@ export class SMTPVerifier implements ISMTPVerifier {
 
     verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async opts => {
         const smtpVerificationResult: SMTPVerificationResult = {}
-        const { email, abortSignal } = opts
-
-        if (abortSignal !== undefined) {
-            abortSignal.onabort = () => {
-                abortController.abort()
-                throw new SMTPVerificationAborted(email)
-            }
-        }
+        const { email, signal } = opts
 
         const [, domainName] = email.split('@')
 
-        const proxies = await this.proxyService.getAll()
-        const abortController = new AbortController()
         const client = new SMTPClient(this.dnsCache, this.connectionLimiter)
-        const connectPromises = proxies.map(
-            async proxy =>
-                await client.connect({
-                    proxy,
-                    domain: domainName,
-                    abortSignal: abortController.signal,
-                }),
-        )
-
-        const exchange = await Promise.any(connectPromises)
-
-        await Promise.allSettled(connectPromises)
 
         try {
+            signal?.throwIfAborted()
+
+            const proxies = await this.proxyService.getAll()
+
+            const connectPromises = proxies.map(
+                async proxy =>
+                    await client.connect({
+                        proxy,
+                        domain: domainName,
+                        signal,
+                    }),
+            )
+
+            const exchange = await Promise.any(connectPromises)
+
             smtpVerificationResult.targetExchange = exchange
             smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
@@ -89,8 +77,9 @@ export class SMTPVerifier implements ISMTPVerifier {
                 )
             }
         } catch (error) {
+            console.error(`Error in SMTPVerifier.verify: `, error)
             ok(error instanceof Error)
-            handleError(error)
+            throw error
         } finally {
             await client.quit()
         }

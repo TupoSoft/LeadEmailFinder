@@ -7,13 +7,12 @@ import { getDomainFromSubdomain } from '../dns'
 import type { ConnectionLimiter } from './connection-limiter'
 import type { Proxy } from '../proxy'
 import { ok } from 'node:assert'
-import { Socket } from 'net'
 import { SocketWrapper } from '../socket/socket-wrapper'
 
 export interface SMTPClientConnectOpts {
     domain: string
     proxy?: Proxy
-    abortSignal?: AbortSignal
+    signal?: AbortSignal
 }
 
 interface AttemptConnectionOptions {
@@ -42,8 +41,6 @@ export class SMTPClient implements ISMTPClient {
 
     private targetExchange: string | undefined
 
-    private readonly client: Socket | undefined
-
     private socketWrapper: SocketWrapper | undefined
 
     constructor(
@@ -52,40 +49,46 @@ export class SMTPClient implements ISMTPClient {
     ) {}
 
     connect: (options: SMTPClientConnectOpts) => Promise<string> = async options => {
-        const { domain, proxy, abortSignal } = options
+        const { domain, proxy, signal } = options
 
         try {
-            abortSignal?.addEventListener('abort', () => {
-                abortController.abort()
-            })
+            signal?.throwIfAborted()
 
             const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-            const abortController = new AbortController()
+            const exchanges = mxRecords.map(({ exchange }) => exchange)
+            const exchangeAbortControllerMap = new Map<string, AbortController>(
+                exchanges.map(exchange => [exchange, new AbortController()]),
+            )
 
-            const attemptConnectionPromises = mxRecords.map(
-                async ({ exchange }) =>
-                    await this.attemptConnection({
+            const attemptConnectionPromises: Array<Promise<AttemptConnectionResult>> = []
+
+            for (const [exchange, { signal }] of exchangeAbortControllerMap) {
+                attemptConnectionPromises.push(
+                    this.attemptConnection({
                         exchange,
                         port: SMTP_PORT,
                         proxy,
-                        signal: abortController.signal,
+                        signal,
                     }),
-            )
-
-            const { socketWrapper, exchange } = await Promise.any(attemptConnectionPromises)
-
-            if (this.client === undefined) {
-                this.socketWrapper = socketWrapper
-                this.address = proxy != null ? proxy.host : 'localhost'
-                this.targetExchange = exchange
+                )
             }
 
-            abortController.abort()
+            const { socketWrapper, exchange: winner } = await Promise.any(attemptConnectionPromises)
 
-            return exchange
+            this.socketWrapper = socketWrapper
+            this.address = proxy != null ? proxy.host : 'localhost'
+            this.targetExchange = winner
+
+            exchangeAbortControllerMap.delete(winner)
+
+            for (const [, controller] of exchangeAbortControllerMap) {
+                controller.abort()
+            }
+
+            return winner
         } catch (error) {
-            ok(error instanceof Error)
             console.error('Error in SMTPClient.connect', error)
+            ok(error instanceof Error)
             throw error
         }
     }
@@ -130,40 +133,24 @@ export class SMTPClient implements ISMTPClient {
     }
 
     async quit(): Promise<void> {
-        ok(this.address != null)
-        ok(this.targetExchange != null)
-
-        await this.connectionLimiter.release(this.address, this.targetExchange)
-
         await promiseWithTimeout(
             this.sendCommand('QUIT'),
             QUIT_TIMEOUT,
             new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
         )
 
-        this.client?.end()
+        this.socketWrapper?.end()
     }
 
     private async attemptConnection(options: AttemptConnectionOptions): Promise<AttemptConnectionResult> {
         const { exchange, port, signal, proxy } = options
         const source = proxy != null ? proxy.host : 'localhost'
 
-        const abortController = new AbortController()
-        const { signal: socketSignal } = abortController
-
-        const socket = new Socket({
-            signal: socketSignal,
-        })
-        const socketWrapper = new SocketWrapper(socket)
-
-        const onSocketAborted = (): void => {
-            abortController.abort()
-        }
-
-        signal?.addEventListener('abort', onSocketAborted)
-
         try {
-            await this.connectionLimiter.acquire(source, exchange, signal)
+            const socketWrapper = new SocketWrapper({
+                signal,
+                connectionLimiter: this.connectionLimiter,
+            })
 
             await socketWrapper.connect({
                 host: exchange,
@@ -177,18 +164,14 @@ export class SMTPClient implements ISMTPClient {
 
             ok(code === SMTPResponseCode.ServiceReady, new Error(`${exchange} is not ready, code: ${code}`))
 
-            signal?.removeEventListener('abort', onSocketAborted)
-
             return {
                 socketWrapper,
                 source,
                 exchange,
             }
         } catch (error) {
-            await this.connectionLimiter.release(source, exchange)
-
             ok(error instanceof Error)
-            console.error(error)
+            console.error('Error in attempt connection: ', error)
             throw error
         }
     }

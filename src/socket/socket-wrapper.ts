@@ -1,15 +1,15 @@
 import { SMTP_RESPONSE_REGEX } from '../smtp/constants'
 import type { SMTPResponseCode } from '../smtp/enums'
 import { getSmtpResponseCode } from '../smtp/util'
-import type { Socket } from 'net'
-import type { ConnectOptions, ConnectThroughProxyOptions } from './connect-strategies'
-import { type IncomingMessage, request, type RequestOptions } from 'node:http'
-import { ok } from 'node:assert'
-import { constants } from 'node:http2'
+import { Socket } from 'net'
 import type { Proxy } from '../proxy'
+import { connectThroughProxy, directConnect } from './connect-strategies'
+import type { ConnectionLimiter } from '../smtp/connection-limiter'
 
-function generateAuthTokenFromCredentials(user: string, password: string): string {
-    return Buffer.from(`${user}:${password}`).toString('base64')
+export interface SocketWrapperConstructorOptions {
+    socket?: Socket
+    signal?: AbortSignal
+    connectionLimiter: ConnectionLimiter
 }
 
 export interface SocketWrapperConnectOptions {
@@ -19,21 +19,52 @@ export interface SocketWrapperConnectOptions {
 }
 
 export class SocketWrapper {
+    private address: string | undefined
+
+    private targetExchange: string | undefined
+
     private buffer = ''
 
     private currentResponse: string[] = []
 
     private readonly commandQueue: Array<(response: string) => void> = []
 
-    constructor(private readonly socket: Socket) {}
+    private readonly socket: Socket
+
+    private readonly signal: AbortSignal | undefined
+
+    private readonly connectionLimiter: ConnectionLimiter
+
+    constructor(options: SocketWrapperConstructorOptions) {
+        const { socket, signal, connectionLimiter } = options
+
+        this.connectionLimiter = connectionLimiter
+        this.signal = signal
+        this.socket = socket ?? new Socket({ signal })
+        this.socket.on('data', this.onData.bind(this))
+        this.socket.on('close', () => {
+            if (this.address != null && this.targetExchange != null) {
+                void this.connectionLimiter.release(this.address, this.targetExchange)
+            }
+            console.error('The socket is closed')
+        })
+    }
 
     async connect(options: SocketWrapperConnectOptions): Promise<void> {
-        const { proxy } = options
+        const { proxy, host } = options
+
+        this.address = proxy != null ? proxy.host : 'localhost'
+
+        const locked = await this.connectionLimiter.acquire(this.address, host, this.signal)
+
+        if (locked) {
+            this.targetExchange = host
+        }
 
         if (proxy !== undefined) {
-            await this.connectThroughHttpProxy({ ...options, proxy })
+            await connectThroughProxy({ ...options, proxy, socket: this.socket })
         } else {
-            await this.directConnect(options)
+            await directConnect({ ...options, socket: this.socket })
         }
     }
 
@@ -62,106 +93,6 @@ export class SocketWrapper {
 
     end(): void {
         this.socket.end()
-    }
-
-    private async directConnect(options: ConnectOptions): Promise<void> {
-        const { host, port } = options
-
-        await new Promise<void>((resolve, reject) => {
-            const errorListener = (err: Error): void => {
-                this.socket.removeListener('error', connectListener)
-                reject(err)
-            }
-
-            const connectListener = (): void => {
-                this.socket.removeListener('error', errorListener)
-                resolve()
-            }
-
-            this.socket.connect(
-                {
-                    port,
-                    host,
-                },
-                connectListener,
-            )
-
-            this.socket.once('error', errorListener)
-        })
-    }
-
-    private async connectThroughHttpProxy(options: ConnectThroughProxyOptions): Promise<void> {
-        const { host, port, proxy } = options
-        const { host: proxyHost, port: proxyPort, user, password } = proxy
-        const path = `${host}:${port}`
-
-        await new Promise<void>((resolve, reject) => {
-            const requestOptions: RequestOptions = {
-                host: proxyHost,
-                port: proxyPort,
-                method: 'CONNECT',
-                path,
-                headers: {},
-                createConnection: (options, oncreate) => {
-                    const { host, port } = options
-
-                    ok(typeof host === 'string')
-                    ok(typeof port === 'number')
-
-                    this.socket.connect(
-                        {
-                            host,
-                            port,
-                        },
-                        () => {
-                            oncreate(null, this.socket)
-                        },
-                    )
-
-                    this.socket.once('error', error => {
-                        oncreate(error, this.socket)
-                    })
-
-                    return this.socket
-                },
-            }
-
-            ok(requestOptions.headers !== undefined, 'The headers object cannot be empty')
-
-            if (user !== undefined && password !== undefined) {
-                requestOptions.headers['Proxy-Authorization'] =
-                    'Basic ' + generateAuthTokenFromCredentials(user, password)
-            }
-
-            const req = request(requestOptions)
-
-            const connectListener = (res: IncomingMessage, socket: Socket): void => {
-                this.socket.on('data', this.onData.bind(this))
-
-                if (res.statusCode !== constants.HTTP_STATUS_OK) {
-                    reject(
-                        new Error(
-                            `Failed to connect through proxy. Status code: ${res.statusCode}, message: ${res.statusMessage}`,
-                        ),
-                    )
-                } else {
-                    resolve()
-                }
-
-                req.removeListener('error', errorListener)
-            }
-
-            const errorListener = (err: Error): void => {
-                console.debug(`Error: ${err.message}`)
-                req.removeListener('connect', connectListener)
-                reject(new Error(err.message))
-            }
-
-            req.once('error', errorListener)
-            req.once('connect', connectListener)
-
-            req.end()
-        })
     }
 
     private onData(buffer: Buffer): void {

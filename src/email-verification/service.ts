@@ -36,7 +36,7 @@ export class EmailVerificationService {
         try {
             const { exists, catchAllStatus, targetExchange, mxDomain } = await this.smtpVerifier.verify({
                 email,
-                abortSignal,
+                signal: abortSignal,
             })
 
             if (catchAllStatus !== undefined && !catchAllStatus && exists !== undefined) {
@@ -52,7 +52,7 @@ export class EmailVerificationService {
 
             await this.emailVerificationRepository.save(emailVerification)
         } catch (error) {
-            console.error(error)
+            console.error(`Error in verifyEmail: `, error)
         }
 
         if (throwIfNonexistent === true && !emailVerification.exists) {

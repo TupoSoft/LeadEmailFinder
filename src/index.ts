@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()
 
-    express()
+    const server = express()
         .disable('x-powered-by')
         .use(express.json())
         .use(router)
@@ -85,6 +85,19 @@ async function main(): Promise<void> {
         .listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`)
         })
+
+    const onTerminationSignal = (): void => {
+        server.close(err => {
+            if (err !== undefined) {
+                console.error(`Server closed with error: ${err}`)
+            } else {
+                console.error(`Server gracefully shutdown`)
+            }
+        })
+    }
+
+    process.on('SIGINT', onTerminationSignal)
+    process.on('SIGTERM', onTerminationSignal)
 }
 
 void main()
