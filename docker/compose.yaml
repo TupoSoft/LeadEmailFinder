@@ -50,12 +50,14 @@ services:
       - mongo_root_password
       - mongo_url
     volumes:
-      - ./scripts/initdb.js:/docker-entrypoint-initdb.d/initdb.js:ro
+      - ./scripts:/docker-entrypoint-initdb.d
       - mongo-data:/data/db
 
   redis:
     image: redis:alpine
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     healthcheck:
       test: "[ $$(redis-cli ping) = 'PONG' ]"
       interval: 1s
