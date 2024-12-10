@@ -1,7 +1,8 @@
 const { readFileSync } = require('fs')
 const { URL } = require('url')
 
-const { MONGO_URL_FILE: mongoUrlFilePath } = process.env
+const { env } = process
+const { MONGO_URL_FILE: mongoUrlFilePath } = env
 
 if (mongoUrlFilePath === undefined) {
     console.error(`The MONGO_URL_FILE variable is undefined.`)
