@@ -3,13 +3,13 @@ name: Node.js Test Runner
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - '**/*.ts'
       - '**/*.js'
   pull_request:
     branches:
-      - main
+      - master
     paths:
       - '**/*.ts'
       - '**/*.js'
