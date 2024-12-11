@@ -1,6 +1,7 @@
 import type { Router } from 'express'
 import type { IProxyController } from './controller'
-import { authenticate } from '../middleware'
+import { authenticate, validateRequest } from '../middleware'
+import { createProxySchema } from './validation'
 
 export class ProxyRouter {
     public static readonly PATH = '/proxy'
@@ -12,6 +13,11 @@ export class ProxyRouter {
 
     init(): void {
         this.router.get(ProxyRouter.PATH, authenticate, this.proxyController.getAll)
-        this.router.post(ProxyRouter.PATH, authenticate, this.proxyController.create)
+        this.router.post(
+            ProxyRouter.PATH,
+            authenticate,
+            validateRequest(createProxySchema, 'body'),
+            this.proxyController.create,
+        )
     }
 }

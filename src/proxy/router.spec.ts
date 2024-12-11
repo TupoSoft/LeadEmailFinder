@@ -61,10 +61,10 @@ describe('ProxyRouter', () => {
     })
 
     describe('POST /proxy', () => {
-        it('should return HTTP_CREATED', async () => {
-            const { id, ...proxyWithoutId } = proxy
-            const proxyFvo: ProxyFVO = proxyWithoutId as ProxyFVO
+        const { id, ...proxyWithoutId } = proxy
+        const proxyFvo: ProxyFVO = proxyWithoutId as ProxyFVO
 
+        it('should return HTTP_CREATED', async () => {
             mockProxyService.create.mockResolvedValueOnce(proxy)
 
             await request(app)
@@ -76,6 +76,18 @@ describe('ProxyRouter', () => {
                 .expect(constants.HTTP_STATUS_CREATED)
 
             expect(mockProxyService.create).toHaveBeenCalledWith(proxyFvo)
+        })
+
+        it('should return HTTP_BAD_REQUEST when validation fails', async () => {
+            await request(app)
+                .post(ProxyRouter.PATH)
+                .send({
+                    type: 'socks5',
+                    port: PROXY_PORT,
+                })
+                .set('Content-Type', 'application/json')
+                .expect('Content-Type', /json/)
+                .expect(constants.HTTP_STATUS_BAD_REQUEST)
         })
     })
 })

@@ -43,6 +43,9 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      # A comma-separated string of proxies to insert on startup,
+      # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
+      PROXIES: ${PROXIES}
     ports:
       - "27017:27017"
     secrets:
