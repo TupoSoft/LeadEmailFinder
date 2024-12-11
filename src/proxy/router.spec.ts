@@ -19,7 +19,7 @@ jest.mock('../middleware/authenticate', () => ({
 
 export class MockProxyService implements IProxyService {
     getAll: () => Promise<Proxy[]> = jest.fn<typeof MockProxyService.prototype.getAll>()
-    create: (proxy: Proxy) => Promise<Proxy> = jest.fn<typeof MockProxyService.prototype.create>()
+    create: (proxy: ProxyFVO) => Promise<Proxy> = jest.fn<typeof MockProxyService.prototype.create>()
 }
 
 describe('ProxyRouter', () => {
