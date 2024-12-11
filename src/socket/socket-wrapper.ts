@@ -6,12 +6,6 @@ import type { Proxy } from '../proxy'
 import { connectThroughProxy, directConnect } from './connect-strategies'
 import type { ConnectionLimiter } from '../smtp/connection-limiter'
 
-export interface SocketWrapperConstructorOptions {
-    socket?: Socket
-    signal?: AbortSignal
-    connectionLimiter: ConnectionLimiter
-}
-
 export interface SocketWrapperConnectOptions {
     host: string
     port: number
@@ -29,18 +23,11 @@ export class SocketWrapper {
 
     private readonly commandQueue: Array<(response: string) => void> = []
 
-    private readonly socket: Socket
-
-    private readonly signal: AbortSignal | undefined
-
-    private readonly connectionLimiter: ConnectionLimiter
-
-    constructor(options: SocketWrapperConstructorOptions) {
-        const { socket, signal, connectionLimiter } = options
-
-        this.connectionLimiter = connectionLimiter
-        this.signal = signal
-        this.socket = socket ?? new Socket({ signal })
+    constructor(
+        private readonly connectionLimiter: ConnectionLimiter,
+        private readonly signal?: AbortSignal,
+        private readonly socket: Socket = new Socket({ signal }),
+    ) {
         this.socket.on('data', this.onData.bind(this))
         this.socket.on('close', () => {
             if (this.address != null && this.targetExchange != null) {
