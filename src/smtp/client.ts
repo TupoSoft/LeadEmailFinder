@@ -8,10 +8,11 @@ import type { ConnectionLimiter } from './connection-limiter'
 import type { Proxy } from '../proxy'
 import { ok } from 'node:assert'
 import { SocketWrapper } from '../socket/socket-wrapper'
+import { isEmptyArray } from '../common/type-guards'
+import { FIRST_ARRAY_ELEMENT_INDEX } from '../common/constants'
 
 export interface SMTPClientConnectOpts {
     domain: string
-    proxy?: Proxy
     signal?: AbortSignal
 }
 
@@ -37,19 +38,20 @@ export interface ISMTPClient {
 }
 
 export class SMTPClient implements ISMTPClient {
-    private address: string | undefined
-
-    private targetExchange: string | undefined
+    readonly hostname: string | undefined
 
     private socketWrapper: SocketWrapper | undefined
 
     constructor(
         private readonly dnsCache: DNSCache,
         private readonly connectionLimiter: ConnectionLimiter,
-    ) {}
+        private readonly proxy?: Proxy,
+    ) {
+        this.hostname = proxy != null ? proxy.host : 'localhost'
+    }
 
     connect: (options: SMTPClientConnectOpts) => Promise<string> = async options => {
-        const { domain, proxy, signal } = options
+        const { domain, signal } = options
 
         try {
             signal?.throwIfAborted()
@@ -67,7 +69,7 @@ export class SMTPClient implements ISMTPClient {
                     this.attemptConnection({
                         exchange,
                         port: SMTP_PORT,
-                        proxy,
+                        proxy: this.proxy,
                         signal,
                     }),
                 )
@@ -76,8 +78,6 @@ export class SMTPClient implements ISMTPClient {
             const { socketWrapper, exchange: winner } = await Promise.any(attemptConnectionPromises)
 
             this.socketWrapper = socketWrapper
-            this.address = proxy != null ? proxy.host : 'localhost'
-            this.targetExchange = winner
 
             exchangeAbortControllerMap.delete(winner)
 
@@ -147,10 +147,7 @@ export class SMTPClient implements ISMTPClient {
         const source = proxy != null ? proxy.host : 'localhost'
 
         try {
-            const socketWrapper = new SocketWrapper({
-                signal,
-                connectionLimiter: this.connectionLimiter,
-            })
+            const socketWrapper = new SocketWrapper(this.connectionLimiter, signal)
 
             await socketWrapper.connect({
                 host: exchange,
@@ -177,17 +174,17 @@ export class SMTPClient implements ISMTPClient {
     }
 
     private async getClientHostName(): Promise<string> {
-        const { address } = this
+        const { hostname } = this
 
-        ok(address !== undefined, 'The socket is not connected')
+        ok(hostname !== undefined, 'The socket is not connected')
 
-        const rDNS = await this.dnsCache.resolve(address, 'PTR')
+        const rDNS = await this.dnsCache.resolve(hostname, 'PTR')
 
-        if (rDNS.length < 1) {
+        if (isEmptyArray(rDNS)) {
             throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
         }
 
-        return rDNS[0]
+        return rDNS[FIRST_ARRAY_ELEMENT_INDEX]
     }
 
     private async sendCommand(command: string): Promise<SMTPResponseCode> {
