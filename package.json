@@ -48,7 +48,8 @@
         "ioredis": "^5.4.1",
         "ip-address": "^9.0.5",
         "mongodb": "^6.11.0",
-        "tldts": "^6.1.65"
+        "tldts": "^6.1.65",
+        "zod": "^3.24.1"
     },
     "jest": {
         "preset": "ts-jest",
