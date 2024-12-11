@@ -73,6 +73,8 @@ async function main(): Promise<void> {
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()
 
+    console.log('Poop')
+
     express()
         .disable('x-powered-by')
         .use(express.json())
