@@ -3,7 +3,7 @@ import type { IProxyController } from './controller'
 import { authenticate } from '../middleware'
 
 export class ProxyRouter {
-    private static readonly PATH = '/proxy'
+    public static readonly PATH = '/proxy'
 
     constructor(
         private readonly router: Router,

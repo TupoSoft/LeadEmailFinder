@@ -11,25 +11,21 @@ export interface IProxyController {
 export class ProxyController implements IProxyController {
     constructor(private readonly proxyService: IProxyService) {}
 
-    create: (req: Request<unknown, unknown, Proxy>, res: Response, next: NextFunction) => void = (
-        req,
-        res,
-        next: NextFunction,
-    ): void => {
-        const { body: proxy } = req
+    create: (req: Request<unknown, unknown, Proxy>, res: Response, next: NextFunction) => void = (req, res): void => {
+        const { body } = req
 
         this.proxyService
-            .create(proxy)
-            .then(res.json)
+            .create(body)
+            .then(proxy => res.status(constants.HTTP_STATUS_CREATED).json(proxy))
             .catch((reason: unknown) => {
                 res.status(constants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json(reason)
             })
     }
 
-    getAll: (req: Request, res: Response, next: NextFunction) => void = (req, res, next) => {
+    getAll: (req: Request, res: Response, next: NextFunction) => void = (req, res) => {
         this.proxyService
             .getAll()
-            .then(res.json)
+            .then(proxies => res.json(proxies))
             .catch((reason: unknown) => {
                 res.status(constants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json(reason)
             })
