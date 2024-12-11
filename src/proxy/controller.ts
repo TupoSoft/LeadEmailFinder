@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import type { IProxyService } from './service'
 import { constants } from 'node:http2'
 import type { Proxy } from './repository'
+import type { ProxyFVO } from './dto'
 
 export interface IProxyController {
     getAll: (req: Request, res: Response, next: NextFunction) => void
@@ -11,7 +12,10 @@ export interface IProxyController {
 export class ProxyController implements IProxyController {
     constructor(private readonly proxyService: IProxyService) {}
 
-    create: (req: Request<unknown, unknown, Proxy>, res: Response, next: NextFunction) => void = (req, res): void => {
+    create: (req: Request<unknown, unknown, ProxyFVO>, res: Response, next: NextFunction) => void = (
+        req,
+        res,
+    ): void => {
         const { body } = req
 
         this.proxyService

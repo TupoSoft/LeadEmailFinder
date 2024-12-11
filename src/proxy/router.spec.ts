@@ -9,6 +9,7 @@ import type { Proxy } from './repository'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import type { authenticate } from '../middleware'
+import type { ProxyFVO } from './dto'
 
 jest.mock('../middleware/authenticate', () => ({
     authenticate: jest.fn<typeof authenticate>().mockImplementation((req, res, next) => {
@@ -62,7 +63,7 @@ describe('ProxyRouter', () => {
     describe('POST /proxy', () => {
         it('should return HTTP_CREATED', async () => {
             const { id, ...proxyWithoutId } = proxy
-            const proxyFvo: Omit<Proxy, 'id'> = proxyWithoutId
+            const proxyFvo: ProxyFVO = proxyWithoutId as ProxyFVO
 
             mockProxyService.create.mockResolvedValueOnce(proxy)
 

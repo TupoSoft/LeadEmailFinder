@@ -1,7 +1,7 @@
 export type ProxyType = 'http' | 'socks4' | 'socks5'
 
 export interface Proxy {
-    id?: string
+    id: string
     type: ProxyType
     host: string
     port: number

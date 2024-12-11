@@ -1,6 +1,7 @@
 import { type Collection, type Db, ObjectId, type WithId } from 'mongodb'
 import { generateObjectIdAsync } from '../util/mongo'
 import type { Proxy, ProxyRepository } from './repository'
+import type { ProxyFVO, ProxyMVO } from './dto'
 
 export type ProxySchema = WithId<Omit<Proxy, 'id'>>
 
@@ -30,12 +31,12 @@ export class MongoProxyRepository implements ProxyRepository {
         return result != null ? convertSchemaToEntity(result) : result
     }
 
-    save: (proxy: Proxy) => Promise<Proxy> = async (proxy: Proxy) => {
+    save: (proxy: ProxyFVO) => Promise<Proxy> = async (proxy: ProxyFVO): Promise<Proxy> => {
         const { insertedId } = await this.collection.insertOne({ ...proxy, _id: await generateObjectIdAsync() })
-        return { id: insertedId.toHexString(), ...proxy }
+        return { ...proxy, id: insertedId.toHexString() }
     }
 
-    update: (id: string, proxy: Partial<Proxy>) => Promise<Proxy | null> = async (id, proxy) => {
+    update: (id: string, proxy: ProxyMVO) => Promise<Proxy | null> = async (id, proxy) => {
         const proxySchema = await this.collection.findOneAndUpdate(
             { _id: new ObjectId(id) },
             { $set: proxy },
