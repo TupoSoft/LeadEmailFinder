@@ -23,11 +23,14 @@ const firstNameLastNamePatterns = [
     ...lastNamePatterns,
 ]
 
+export const deprioritizedEmailFormats = new Set(['{first}', '{last}'])
+
 export function getAllEmailFormats(): EmailPatternUsage[] {
     const emailFormatToCount: EmailPatternUsage[] = []
+    const INITIAL_USAGE_COUNT = 0
 
     for (const pattern of firstNameLastNamePatterns) {
-        emailFormatToCount.push({ pattern, usageCount: 0 })
+        emailFormatToCount.push({ pattern, usageCount: INITIAL_USAGE_COUNT })
     }
 
     return emailFormatToCount
@@ -56,6 +59,7 @@ export function mergeEmailFormats(arr1: EmailPatternUsage[], arr2: EmailPatternU
 }
 
 export function getFormatToEmailMapForLead(lead: Lead): Map<string, string> {
+    const FIRST_CHAR_POS = 0
     const { firstName, lastName, domain } = lead
 
     if (firstName !== undefined && lastName !== undefined) {
@@ -65,8 +69,8 @@ export function getFormatToEmailMapForLead(lead: Lead): Map<string, string> {
                 format
                     .replace('{first}', firstName)
                     .replace('{last}', lastName)
-                    .replace('{f}', firstName.charAt(0))
-                    .replace('{l}', lastName.charAt(0)) +
+                    .replace('{f}', firstName.charAt(FIRST_CHAR_POS))
+                    .replace('{l}', lastName.charAt(FIRST_CHAR_POS)) +
                     '@' +
                     domain,
             ]),
@@ -75,14 +79,14 @@ export function getFormatToEmailMapForLead(lead: Lead): Map<string, string> {
         return new Map(
             firstNamePatterns.map(format => [
                 format,
-                format.replace('{first}', firstName).replace('{f}', firstName.charAt(0)) + '@' + domain,
+                format.replace('{first}', firstName).replace('{f}', firstName.charAt(FIRST_CHAR_POS)) + '@' + domain,
             ]),
         )
     } else if (lastName !== undefined) {
         return new Map(
             lastNamePatterns.map(format => [
                 format,
-                format.replace('{last}', lastName).replace('{l}', lastName.charAt(0)) + '@' + domain,
+                format.replace('{last}', lastName).replace('{l}', lastName.charAt(FIRST_CHAR_POS)) + '@' + domain,
             ]),
         )
     } else {
