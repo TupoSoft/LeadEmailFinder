@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { type Collection, type Db, type FindCursor, ObjectId, type WithId } from 'mongodb'
 import type { Proxy } from './repository'
 import { MongoProxyRepository, type ProxySchema } from './mongo-repository'
+import type { ProxyFVO } from './dto'
 
 describe('MongoProxyRepository', () => {
     const dbMock = {
@@ -21,7 +22,7 @@ describe('MongoProxyRepository', () => {
 
     const PROXY_PORT = 33333
 
-    const proxy: Proxy = {
+    const proxyFvo: ProxyFVO = {
         type: 'http',
         host: 'example.com',
         port: PROXY_PORT,
@@ -33,7 +34,7 @@ describe('MongoProxyRepository', () => {
 
     const proxySchema: ProxySchema = {
         _id: new ObjectId(id),
-        ...proxy,
+        ...proxyFvo,
     }
 
     afterEach(() => {
@@ -51,38 +52,38 @@ describe('MongoProxyRepository', () => {
             } as unknown as FindCursor<WithId<Proxy>>)
 
             const result = await mongoProxyRepository.getAll()
-            expect(result).toEqual([{ ...proxy, id }])
+            expect(result).toEqual([{ ...proxyFvo, id }])
         })
     })
 
     describe('getById', () => {
-        it('should return a proxy', async () => {
+        it('should return a proxyFvo', async () => {
             collection.findOne.mockResolvedValueOnce(proxySchema)
 
             const proxy = await mongoProxyRepository.getById(id)
             expect(proxy).toEqual({ ...proxy, id })
         })
 
-        it('should return null when there is no such proxy', async () => {
+        it('should return null when there is no such proxyFvo', async () => {
             collection.findOne.mockResolvedValueOnce(null)
             await expect(mongoProxyRepository.getById(id)).resolves.toBe(null)
         })
     })
 
     describe('save', () => {
-        it('should return a proxy with ID', async () => {
+        it('should return a proxyFvo with ID', async () => {
             collection.insertOne.mockResolvedValueOnce({ insertedId: new ObjectId(id), acknowledged: true })
-            const proxyWithId = await mongoProxyRepository.save(proxy)
-            expect(proxyWithId).toEqual({ ...proxy, id })
+            const proxyWithId = await mongoProxyRepository.save(proxyFvo)
+            expect(proxyWithId).toEqual({ ...proxyFvo, id })
         })
     })
 
     describe('update', () => {
         const newPassword = 'newPassword'
 
-        it('should return an updated proxy', async () => {
+        it('should return an updated proxyFvo', async () => {
             const proxySchemaWithNewPassword: ProxySchema = { ...proxySchema, password: newPassword }
-            const proxyWithNewPassword: Proxy = { ...proxy, password: newPassword }
+            const proxyWithNewPassword: Proxy = { ...proxyFvo, id, password: newPassword }
 
             collection.findOneAndUpdate.mockResolvedValueOnce(proxySchemaWithNewPassword)
 
@@ -92,7 +93,7 @@ describe('MongoProxyRepository', () => {
             })
         })
 
-        it('should return null if there is no proxy with ID', async () => {
+        it('should return null if there is no proxyFvo with ID', async () => {
             collection.findOneAndUpdate.mockResolvedValueOnce(null)
             await expect(mongoProxyRepository.update(id, { password: newPassword })).resolves.toBe(null)
         })
