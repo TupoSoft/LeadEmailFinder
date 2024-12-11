@@ -41,6 +41,7 @@
         "typescript-eslint": "^8.16.0"
     },
     "dependencies": {
+        "@types/supertest": "^6.0.2",
         "axios": "^1.7.8",
         "express": "^4.21.1",
         "express-validator": "^7.2.0",
