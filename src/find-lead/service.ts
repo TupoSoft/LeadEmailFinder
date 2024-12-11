@@ -1,13 +1,9 @@
 import type { FindLeadResult, Lead } from './dto'
-import { getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
+import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
-import type { DomainService } from '../domain'
 
 export class FindLeadService {
-    constructor(
-        private readonly emailVerificationService: EmailVerificationService,
-        private readonly domainService: DomainService,
-    ) {}
+    constructor(private readonly emailVerificationService: EmailVerificationService) {}
 
     async findLead(lead: Lead): Promise<FindLeadResult> {
         const findLeadResult: FindLeadResult = {
@@ -16,8 +12,6 @@ export class FindLeadService {
         }
 
         try {
-            // const domain = await this.domainService.get(lead.domain)
-
             const formats = getFormatToEmailMapForLead(lead)
 
             const allEmailFormats = getAllEmailFormats()
@@ -25,11 +19,11 @@ export class FindLeadService {
 
             const abortController = new AbortController()
             const { signal } = abortController
-            const verifications: Array<Promise<EmailVerificationResult>> = []
+            const verificationResultPromises: Array<Promise<EmailVerificationResult>> = []
             for (const { pattern: format } of emailFormats) {
                 const email = formats.get(format)
                 if (email !== undefined) {
-                    verifications.push(
+                    verificationResultPromises.push(
                         this.emailVerificationService.verifyEmail(
                             {
                                 email,
@@ -41,17 +35,28 @@ export class FindLeadService {
                 }
             }
 
-            const firstPositiveVerificationResult = await Promise.any(verifications)
-
-            abortController.abort()
-
+            const firstPositiveVerificationResult = await Promise.any(verificationResultPromises)
             findLeadResult.emails.push(firstPositiveVerificationResult)
 
-            const settledVerificationPromises = await Promise.allSettled(verifications)
-            for (const settledVerificationPromise of settledVerificationPromises) {
-                if (settledVerificationPromise.status === 'fulfilled') {
-                    findLeadResult.emails.push(settledVerificationPromise.value)
+            const { format } = firstPositiveVerificationResult
+
+            const settleVerificationPromises = async (): Promise<void> => {
+                const settledVerificationPromises = await Promise.allSettled(verificationResultPromises)
+                for (const settledVerificationPromise of settledVerificationPromises) {
+                    if (settledVerificationPromise.status === 'fulfilled') {
+                        findLeadResult.emails.push(settledVerificationPromise.value)
+                    }
                 }
+            }
+
+            if (format !== undefined && !deprioritizedEmailFormats.has(format)) {
+                abortController.abort()
+
+                void settleVerificationPromises()
+
+                return findLeadResult
+            } else {
+                await settleVerificationPromises()
             }
         } catch (error) {
             console.error('Error in findLead: ', error)
