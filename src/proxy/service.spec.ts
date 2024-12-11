@@ -4,12 +4,13 @@ import { describe, expect, it, jest } from '@jest/globals'
 import { ProxyService } from './service'
 import type { Proxy, ProxyRepository } from './repository'
 import type { MongoProxyRepository } from './mongo-repository'
+import type { ProxyFVO, ProxyMVO } from './dto'
 
 export class MockProxyRepository implements ProxyRepository {
     getAll: () => Promise<Proxy[]> = jest.fn<typeof MongoProxyRepository.prototype.getAll>()
     getById: (id: string) => Promise<Proxy | null> = jest.fn<typeof MongoProxyRepository.prototype.getById>()
-    save: (proxy: Proxy) => Promise<Proxy> = jest.fn<typeof MongoProxyRepository.prototype.save>()
-    update: (id: string, proxy: Partial<Proxy>) => Promise<Proxy | null> =
+    save: (proxy: ProxyFVO) => Promise<Proxy> = jest.fn<typeof MongoProxyRepository.prototype.save>()
+    update: (id: string, proxy: ProxyMVO) => Promise<Proxy | null> =
         jest.fn<typeof MongoProxyRepository.prototype.update>()
 }
 
