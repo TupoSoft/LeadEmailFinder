@@ -44,23 +44,34 @@ export class SMTPVerifier implements ISMTPVerifier {
 
         const [, domainName] = email.split('@')
 
-        const client = new SMTPClient(this.dnsCache, this.connectionLimiter)
-
         try {
             signal?.throwIfAborted()
 
             const proxies = await this.proxyService.getAll()
 
-            const connectPromises = proxies.map(
-                async proxy =>
-                    await client.connect({
-                        proxy,
-                        domain: domainName,
-                        signal,
-                    }),
-            )
+            const clients = proxies.map(proxy => new SMTPClient(this.dnsCache, this.connectionLimiter, proxy))
+            const connectPromises = clients.map(async client => {
+                const exchange = await client.connect({
+                    domain: domainName,
+                })
 
-            const exchange = await Promise.any(connectPromises)
+                return { client, exchange }
+            })
+
+            const { client, exchange } = await Promise.any(connectPromises)
+
+            void Promise.allSettled(connectPromises).then(connectPromisesSettled => {
+                for (const settledConnectPromiseResult of connectPromisesSettled) {
+                    if (settledConnectPromiseResult.status === 'fulfilled') {
+                        const { value } = settledConnectPromiseResult
+                        const { client: loser } = value
+
+                        if (loser !== client) {
+                            void loser.quit()
+                        }
+                    }
+                }
+            })
 
             smtpVerificationResult.targetExchange = exchange
             smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
@@ -76,12 +87,12 @@ export class SMTPVerifier implements ISMTPVerifier {
                     (_: unknown) => false,
                 )
             }
+
+            void client.quit()
         } catch (error) {
             console.error(`Error in SMTPVerifier.verify: `, error)
             ok(error instanceof Error)
             throw error
-        } finally {
-            await client.quit()
         }
 
         return smtpVerificationResult
