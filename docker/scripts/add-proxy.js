@@ -3,9 +3,9 @@ const { PROXIES } = env
 
 const proxyUrlArray = PROXIES.split(',').map(proxy => new URL(proxy))
 
-const proxyDocuments = proxyUrlArray.map(({ protocol, host, port, username, password }) => ({
+const proxyDocuments = proxyUrlArray.map(({ protocol, hostname, port, username, password }) => ({
     type: protocol.replace(':', ''),
-    host,
+    host: hostname,
     port: Number(port),
     user: username,
     password,
