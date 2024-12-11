@@ -15,8 +15,14 @@ on:
       - '**/*.js'
 
 jobs:
+  assert_diff_within_limit:
+    uses: TupoSoft/GitHubActions/.github/workflows/check-pr-lines.yml@master
+    with:
+      max_lines: 500
+
   test:
     runs-on: ubuntu-latest
+    needs: assert_diff_within_limit
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
