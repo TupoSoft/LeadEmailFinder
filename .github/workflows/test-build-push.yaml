@@ -19,7 +19,8 @@ jobs:
     uses: TupoSoft/GitHubActions/.github/workflows/check-pr-lines.yml@master
     with:
       max_lines: 500
-
+    secrets: inherit
+  
   test:
     runs-on: ubuntu-latest
     needs: assert_diff_within_limit
