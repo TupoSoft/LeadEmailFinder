@@ -21,7 +21,6 @@ jobs:
       max_lines: 500
     permissions:
       contents: read
-      issues: write
       pull-requests: write
     secrets: inherit
   
