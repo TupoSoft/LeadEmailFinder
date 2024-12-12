@@ -7,7 +7,6 @@
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
 ARG NODE_VERSION=lts
-ARG PNPM_VERSION=9.14.4
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -15,7 +14,7 @@ RUN apk add --no-cache curl wget bind-tools
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm@${PNPM_VERSION}
+    npm install -g pnpm
 
 WORKDIR /app
 

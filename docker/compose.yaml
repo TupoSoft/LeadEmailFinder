@@ -29,14 +29,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 265M
     secrets:
       - mongo_url
       - proxies
@@ -51,6 +43,9 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      # A comma-separated string of proxies to insert on startup,
+      # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
+      PROXIES: ${PROXIES}
     ports:
       - "27017:27017"
     secrets:
@@ -58,12 +53,14 @@ services:
       - mongo_root_password
       - mongo_url
     volumes:
-      - ./scripts/initdb.js:/docker-entrypoint-initdb.d/initdb.js:ro
+      - ./scripts:/docker-entrypoint-initdb.d
       - mongo-data:/data/db
 
   redis:
     image: redis:alpine
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     healthcheck:
       test: "[ $$(redis-cli ping) = 'PONG' ]"
       interval: 1s
