@@ -1,6 +1,6 @@
 import { type Collection, type Db, ObjectId } from 'mongodb'
-import { generateObjectIdAsync } from '../util/mongo'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
+import { generateObjectIdAsync } from '../util/mongo'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerificationResult) => Promise<void>
