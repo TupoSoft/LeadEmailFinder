@@ -1,194 +1,51 @@
-import { promiseWithTimeout } from '../timeout'
-import { SMTPClientError, SMTPClientErrorCode } from './errors'
-import { GREETING_TIMEOUT, MAIL_FROM_TIMEOUT, QUIT_TIMEOUT, RCPT_TO_TIMEOUT, SMTP_PORT } from './constants'
-import { SMTPResponseCode } from './enums'
-import type { DNSCache } from '../dns'
-import { getDomainFromSubdomain } from '../dns'
-import type { ConnectionLimiter } from './connection-limiter'
-import type { Proxy } from '../proxy'
+import { SmtpError } from './errors'
+import { SMTP_RESPONSE_REGEX } from './constants'
+import { SmtpResponseCode } from './enums'
 import { ok } from 'node:assert'
-import { SocketWrapper } from '../socket/socket-wrapper'
-import { isEmptyArray } from '../common/type-guards'
-import { FIRST_ARRAY_ELEMENT_INDEX } from '../common/constants'
-
-export interface SMTPClientConnectOpts {
-    domain: string
-    signal?: AbortSignal
-}
-
-interface AttemptConnectionOptions {
-    exchange: string
-    port: number
-    proxy?: Proxy
-    signal?: AbortSignal
-}
-
-interface AttemptConnectionResult {
-    socketWrapper: SocketWrapper
-    source: string
-    exchange: string
-}
+import type { Socket } from 'node:net'
+import { readUntil, write } from '../stream'
+import { parseSmtpResponse } from './util'
 
 export interface ISMTPClient {
-    connect: (options: SMTPClientConnectOpts) => Promise<string>
-    helo: () => Promise<void>
-    mailFrom: () => Promise<void>
-    rcptTo: (email: string) => Promise<void>
+    helo: (hostname: string) => Promise<void>
+    mailFrom: (senderEmail: string) => Promise<void>
+    rcptTo: (receiverEmail: string) => Promise<void>
     quit: () => Promise<void>
 }
 
 export class SMTPClient implements ISMTPClient {
-    readonly hostname: string | undefined
+    constructor(private readonly socket: Socket) {}
 
-    private socketWrapper: SocketWrapper | undefined
-
-    constructor(
-        private readonly dnsCache: DNSCache,
-        private readonly connectionLimiter: ConnectionLimiter,
-        private readonly proxy?: Proxy,
-    ) {
-        this.hostname = proxy != null ? proxy.host : 'localhost'
+    async helo(hostname: string): Promise<void> {
+        await this.sendCommand(`HELO ${hostname}`)
     }
 
-    connect: (options: SMTPClientConnectOpts) => Promise<string> = async options => {
-        const { domain, signal } = options
-
-        try {
-            signal?.throwIfAborted()
-
-            const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-            const exchanges = mxRecords.map(({ exchange }) => exchange)
-            const exchangeAbortControllerMap = new Map<string, AbortController>(
-                exchanges.map(exchange => [exchange, new AbortController()]),
-            )
-
-            const attemptConnectionPromises: Array<Promise<AttemptConnectionResult>> = []
-
-            for (const [exchange, { signal }] of exchangeAbortControllerMap) {
-                attemptConnectionPromises.push(
-                    this.attemptConnection({
-                        exchange,
-                        port: SMTP_PORT,
-                        proxy: this.proxy,
-                        signal,
-                    }),
-                )
-            }
-
-            const { socketWrapper, exchange: winner } = await Promise.any(attemptConnectionPromises)
-
-            this.socketWrapper = socketWrapper
-
-            exchangeAbortControllerMap.delete(winner)
-
-            for (const [, controller] of exchangeAbortControllerMap) {
-                controller.abort()
-            }
-
-            return winner
-        } catch (error) {
-            console.error('Error in SMTPClient.connect', error)
-            ok(error instanceof Error)
-            throw error
-        }
+    async mailFrom(senderEmail: string): Promise<void> {
+        await this.sendCommand(`MAIL FROM: <${senderEmail}>`)
     }
 
-    async helo(): Promise<void> {
-        const hostname = await this.getClientHostName()
-        const code = await promiseWithTimeout(
-            this.sendCommand(`HELO ${hostname}`),
-            GREETING_TIMEOUT,
-            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
-        )
-
-        if (code !== SMTPResponseCode.OK) {
-            throw new SMTPClientError(SMTPClientErrorCode.ClientInitiationFailed, 'HELO command failed.')
-        }
-    }
-
-    async mailFrom(): Promise<void> {
-        const domain = getDomainFromSubdomain(await this.getClientHostName())
-        const email = `john@${domain}`
-        const code = await promiseWithTimeout(
-            this.sendCommand(`MAIL FROM: <${email}>`),
-            MAIL_FROM_TIMEOUT,
-            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
-        )
-
-        if (code !== SMTPResponseCode.OK) {
-            throw new SMTPClientError(SMTPClientErrorCode.SenderAddressRejected, 'MAIL FROM failed.')
-        }
-    }
-
-    async rcptTo(email: string): Promise<void> {
-        const code = await promiseWithTimeout(
-            this.sendCommand(`RCPT TO: <${email}>`),
-            RCPT_TO_TIMEOUT,
-            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
-        )
-
-        if (code !== SMTPResponseCode.OK) {
-            throw new SMTPClientError(SMTPClientErrorCode.RecipientAddressRejected, 'RCPT TO failed.')
-        }
+    async rcptTo(receiverEmail: string): Promise<void> {
+        await this.sendCommand(`RCPT TO: <${receiverEmail}>`)
     }
 
     async quit(): Promise<void> {
-        await promiseWithTimeout(
-            this.sendCommand('QUIT'),
-            QUIT_TIMEOUT,
-            new SMTPClientError(SMTPClientErrorCode.OperationTimeoutOut),
-        )
+        await this.sendCommand('QUIT')
 
-        this.socketWrapper?.end()
+        this.socket.end()
     }
 
-    private async attemptConnection(options: AttemptConnectionOptions): Promise<AttemptConnectionResult> {
-        const { exchange, port, signal, proxy } = options
-        const source = proxy != null ? proxy.host : 'localhost'
+    private async sendCommand(command: string): Promise<void> {
+        await write(this.socket, `${command}\r\n`)
+        const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
+        const responseLines = response.split('\r\n')
+        const lastLine = responseLines.pop()
 
-        try {
-            const socketWrapper = new SocketWrapper(this.connectionLimiter, signal)
+        ok(lastLine !== undefined, `Malformed response: ${response}`)
 
-            await socketWrapper.connect({
-                host: exchange,
-                port,
-                proxy,
-            })
+        const { code, enhancedCode, message } = parseSmtpResponse(lastLine)
 
-            const serviceReadyPromise = socketWrapper.getResponseCode()
-
-            const code = await serviceReadyPromise
-
-            ok(code === SMTPResponseCode.ServiceReady, new Error(`${exchange} is not ready, code: ${code}`))
-
-            return {
-                socketWrapper,
-                source,
-                exchange,
-            }
-        } catch (error) {
-            ok(error instanceof Error)
-            console.error('Error in attempt connection: ', error)
-            throw error
+        if (code > SmtpResponseCode.OK) {
+            throw new SmtpError(code, enhancedCode, message)
         }
-    }
-
-    private async getClientHostName(): Promise<string> {
-        const { hostname } = this
-
-        ok(hostname !== undefined, 'The socket is not connected')
-
-        const rDNS = await this.dnsCache.resolve(hostname, 'PTR')
-
-        if (isEmptyArray(rDNS)) {
-            throw new SMTPClientError(SMTPClientErrorCode.NoPTR, "The socket local address doesn't have a PTR!")
-        }
-
-        return rDNS[FIRST_ARRAY_ELEMENT_INDEX]
-    }
-
-    private async sendCommand(command: string): Promise<SMTPResponseCode> {
-        ok(this.socketWrapper != null, 'The client is not connected')
-        return await this.socketWrapper.sendCommand(command)
     }
 }

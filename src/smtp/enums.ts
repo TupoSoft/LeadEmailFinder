@@ -1,4 +1,4 @@
-export enum SMTPResponseCode {
+export const enum SmtpResponseCode {
     ServiceReady = 220,
     ServiceClosingTransmissionChannel = 221,
     OK = 250,

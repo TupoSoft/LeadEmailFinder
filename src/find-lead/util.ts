@@ -1,8 +1,8 @@
 import type { EmailPatternUsage, Lead } from './dto'
 
-const firstNamePatterns = ['{first}', '{f}']
+const firstNamePatterns = ['{first}']
 
-const lastNamePatterns = ['{last}', '{l}']
+const lastNamePatterns = ['{last}']
 
 const firstNameLastNamePatterns = [
     '{first}.{last}',

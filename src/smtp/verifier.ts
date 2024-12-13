@@ -3,14 +3,17 @@ import { type ISMTPClient, SMTPClient } from './client'
 import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
-import { SMTPClientError } from './errors'
+import { SmtpError } from './errors'
 import { ok } from 'node:assert'
-import type { ProxyService } from '../proxy'
+import type { Proxy, ProxyService } from '../proxy'
 import type { ConnectionLimiter } from './connection-limiter'
+import type { Socket } from 'node:net'
+import { connect } from '../socket/connect'
+import { SMTP_PORT } from './constants'
+import { isNativeError } from 'node:util/types'
 
 export interface SMTPVerifyOptions {
     email: string
-    signal?: AbortSignal
 }
 
 export interface ISMTPVerifier {
@@ -30,7 +33,7 @@ export class SMTPVerifier implements ISMTPVerifier {
             await client.rcptTo(appendRandomPrefix(`danilo@${domain}`))
             return true
         } catch (error) {
-            if (error instanceof SMTPClientError) {
+            if (error instanceof SmtpError) {
                 return false
             } else {
                 return undefined
@@ -40,46 +43,32 @@ export class SMTPVerifier implements ISMTPVerifier {
 
     verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async opts => {
         const smtpVerificationResult: SMTPVerificationResult = {}
-        const { email, signal } = opts
+        const { email } = opts
 
-        const [, domainName] = email.split('@')
+        const [, domain] = email.split('@')
 
         try {
-            signal?.throwIfAborted()
+            const socket = await this.getSocket(domain)
 
-            const proxies = await this.proxyService.getAll()
+            const client = new SMTPClient(socket)
 
-            const clients = proxies.map(proxy => new SMTPClient(this.dnsCache, this.connectionLimiter, proxy))
-            const connectPromises = clients.map(async client => {
-                const exchange = await client.connect({
-                    domain: domainName,
-                })
+            ok(socket.remoteAddress !== undefined, new Error('The socket is not connected'))
 
-                return { client, exchange }
-            })
+            const hostnames = await this.dnsCache.resolve(socket.remoteAddress, 'PTR')
+            const [clientHostname] = hostnames
 
-            const { client, exchange } = await Promise.any(connectPromises)
+            await client.helo(clientHostname)
 
-            void Promise.allSettled(connectPromises).then(connectPromisesSettled => {
-                for (const settledConnectPromiseResult of connectPromisesSettled) {
-                    if (settledConnectPromiseResult.status === 'fulfilled') {
-                        const { value } = settledConnectPromiseResult
-                        const { client: loser } = value
+            const clientDomain = getSecondLevelDomain(clientHostname)
 
-                        if (loser !== client) {
-                            void loser.quit()
-                        }
-                    }
-                }
-            })
+            ok(clientDomain !== undefined, new Error(`Invalid client domain: ${clientDomain}`))
 
-            smtpVerificationResult.targetExchange = exchange
-            smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
+            const senderUsername = 'danilo'
+            const senderEmail = `${senderUsername}@${clientDomain}`
 
-            await client.helo()
-            await client.mailFrom()
+            await client.mailFrom(senderEmail)
 
-            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domainName)
+            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domain)
 
             if (smtpVerificationResult.catchAllStatus === false) {
                 smtpVerificationResult.exists = await client.rcptTo(email).then(
@@ -90,12 +79,68 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             void client.quit()
         } catch (error) {
+            ok(isNativeError(error))
             console.error(`Error in SMTPVerifier.verify: `, error)
-            ok(error instanceof Error)
             throw error
         }
 
         return smtpVerificationResult
+    }
+
+    private async getSocket(domain: string): Promise<Socket> {
+        try {
+            const mxRecords = await this.dnsCache.resolve(domain, 'MX')
+            const proxies = await this.proxyService.getAll()
+
+            for (const { exchange } of mxRecords) {
+                const connectPromises: Array<Promise<Socket>> = []
+                const proxyHostnameAbortControllerMap = new Map<string, AbortController>()
+
+                for (const proxy of proxies) {
+                    const abortController = new AbortController()
+                    proxyHostnameAbortControllerMap.set(proxy.host, abortController)
+                    connectPromises.push(this.tryToConnect(exchange, proxy))
+                }
+
+                try {
+                    const socket = await Promise.any(connectPromises)
+
+                    ok(socket.remoteAddress !== undefined, new Error('The socket is not connected'))
+                    proxyHostnameAbortControllerMap.delete(socket.remoteAddress)
+
+                    for (const [, abortController] of proxyHostnameAbortControllerMap) {
+                        abortController.abort()
+                    }
+
+                    return socket
+                } catch (error) {
+                    ok(isNativeError(error))
+                    console.error(error.message)
+                }
+            }
+        } catch (error) {
+            ok(isNativeError(error))
+            console.error(error.message)
+        }
+
+        throw new Error(`Failed to connect to an exchange server for the domain ${domain}`)
+    }
+
+    private async tryToConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<Socket> {
+        await this.connectionLimiter.acquire(proxy.host, exchange)
+
+        const socket = await connect({
+            host: exchange,
+            port: SMTP_PORT,
+            proxy,
+            signal,
+        })
+
+        socket.once('close', () => {
+            void this.connectionLimiter.release(proxy.host, exchange)
+        })
+
+        return socket
     }
 
     private async getCatchAllStatus(client: ISMTPClient, domain: string): Promise<boolean | undefined> {
