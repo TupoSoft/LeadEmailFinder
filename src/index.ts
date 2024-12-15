@@ -26,6 +26,7 @@ import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
+import { SmtpClientFactoryImpl } from './smtp/client-factory'
 
 const { env } = process
 const DEFAULT_PORT = 3000
@@ -66,8 +67,9 @@ async function main(): Promise<void> {
     proxyRouter.init()
 
     const catchAllCache = new RedisCatchAllCache(redis)
-    const connectionLimiter = new RedisConnectionLimiter(redis)
-    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, connectionLimiter, logger)
+    const connectionLimiter = new RedisConnectionLimiter(redis, logger)
+    const smtpClientFactory = new SmtpClientFactoryImpl(connectionLimiter, logger)
+    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, smtpClientFactory)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,

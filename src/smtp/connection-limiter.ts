@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis'
 import { setTimeout } from 'node:timers'
 import { ok } from 'node:assert'
-import console from 'node:console'
+import type { Logger } from '../logging'
 
 export const REDIS_KEY = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
 
@@ -52,6 +52,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
 
     constructor(
         private readonly redisClient: Redis,
+        private readonly logger: Logger,
         private readonly redisKey = REDIS_KEY,
         private readonly maxConnections = RedisConnectionLimiter.DEFAULT_MAX_CONNECTIONS,
         private readonly ttlSeconds = RedisConnectionLimiter.DEFAULT_TTL_SECONDS,
@@ -74,14 +75,15 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
                 )
 
                 if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
-                    console.info(`${source}:${destination} incremented`)
+                    this.logger.info(`${source}:${destination} incremented`)
                     return true
                 }
 
                 await new Promise(resolve => setTimeout(resolve, RedisConnectionLimiter.ACQUIRE_WAIT_MS))
             } catch (error) {
                 ok(error instanceof Error)
-                console.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
+                this.logger.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
+
                 return false
             }
         }
@@ -100,14 +102,14 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
             )
 
             if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
-                console.info(`${source}:${destination} decremented`)
+                this.logger.info(`${source}:${destination} decremented`)
             } else {
-                console.info(`${source}:${destination} not decremented (key might have expired)`)
-                console.info(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.info(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.info(`${source}:${destination} not decremented (key might have expired)`)
             }
         } catch (error) {
             ok(error instanceof Error)
-            console.error(`Error releasing connection for ${source}:${destination}: ${error.message}`)
+            this.logger.error(`Error releasing connection for ${source}:${destination}: ${error.message}`)
             throw error
         }
     }
