@@ -16,9 +16,9 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "curl", "http://localhost:3000/ping" ]
-      interval: 30s
+    healthcheck: &healthcheck
+      test: curl http://localhost:3000/ping
+      interval: 10s
       timeout: 10s
       retries: 3
     environment:
@@ -37,6 +37,7 @@ services:
     image: mongo:latest
     restart: unless-stopped
     healthcheck:
+      <<: *healthcheck
       test: mongosh --eval "db.adminCommand('ping')"
     environment:
       MONGO_INITDB_DATABASE: verifier
@@ -62,10 +63,8 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: "[ $$(redis-cli ping) = 'PONG' ]"
-      interval: 1s
-      timeout: 3s
-      retries: 5
+      <<: *healthcheck
+      test: "[ `redis-cli ping` = 'PONG' ]"
 
 secrets:
   mongo_root_username:

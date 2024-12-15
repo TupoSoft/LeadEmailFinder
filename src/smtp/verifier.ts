@@ -20,6 +20,11 @@ export interface ISMTPVerifier {
     verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
 }
 
+interface TryToConnectResult {
+    socket: Socket
+    exchange: string
+}
+
 export class SMTPVerifier implements ISMTPVerifier {
     constructor(
         private readonly dnsCache: DNSCache,
@@ -90,59 +95,71 @@ export class SMTPVerifier implements ISMTPVerifier {
     }
 
     private async getSocket(domain: string): Promise<Socket> {
-        try {
-            const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-            const proxies = await this.proxyService.getAll()
+        const mxRecords = await this.dnsCache.resolve(domain, 'MX')
+        const proxies = await this.proxyService.getAll()
 
-            for (const { exchange } of mxRecords) {
-                const connectPromises: Array<Promise<Socket>> = []
-                const proxyHostnameAbortControllerMap = new Map<string, AbortController>()
-
-                for (const proxy of proxies) {
-                    const abortController = new AbortController()
-                    proxyHostnameAbortControllerMap.set(proxy.host, abortController)
-                    connectPromises.push(this.tryToConnect(exchange, proxy))
-                }
-
-                try {
-                    const socket = await Promise.any(connectPromises)
-
-                    ok(socket.remoteAddress !== undefined, new Error('The socket is not connected'))
-                    proxyHostnameAbortControllerMap.delete(socket.remoteAddress)
-
-                    for (const [, abortController] of proxyHostnameAbortControllerMap) {
-                        abortController.abort()
-                    }
-
-                    return socket
-                } catch (error) {
-                    ok(isNativeError(error))
-                    console.error(error.message)
-                }
+        const connectPromises: Array<Promise<TryToConnectResult>> = []
+        const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
+        for (const { exchange } of mxRecords) {
+            for (const proxy of proxies) {
+                const abortController = new AbortController()
+                exchangeProxyAbortControllerMap.set(`${exchange}-${proxy.host}`, abortController)
+                connectPromises.push(this.tryToConnect(exchange, proxy, abortController.signal))
             }
+        }
+
+        try {
+            const { socket, exchange } = await Promise.any(connectPromises)
+
+            ok(socket.remoteAddress !== undefined, new Error('The socket is not connected'))
+            exchangeProxyAbortControllerMap.delete(`${exchange}-${socket.remoteAddress}`)
+
+            for (const [, abortController] of exchangeProxyAbortControllerMap) {
+                abortController.abort()
+            }
+
+            void Promise.allSettled(connectPromises)
+
+            return socket
         } catch (error) {
             ok(isNativeError(error))
             console.error(error.message)
+            throw error
         }
-
-        throw new Error(`Failed to connect to an exchange server for the domain ${domain}`)
     }
 
-    private async tryToConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<Socket> {
-        await this.connectionLimiter.acquire(proxy.host, exchange)
+    private async tryToConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<TryToConnectResult> {
+        const locked = await this.connectionLimiter.acquire(proxy.host, exchange, signal)
 
-        const socket = await connect({
-            host: exchange,
-            port: SMTP_PORT,
-            proxy,
-            signal,
-        })
+        const onClose = (): void => {
+            if (locked) {
+                void this.connectionLimiter.release(proxy.host, exchange)
+            }
+        }
 
-        socket.once('close', () => {
-            void this.connectionLimiter.release(proxy.host, exchange)
-        })
+        signal?.addEventListener('abort', onClose)
 
-        return socket
+        try {
+            const socket = await connect({
+                host: exchange,
+                port: SMTP_PORT,
+                proxy,
+                signal,
+            })
+
+            socket.once('close', onClose)
+
+            return { socket, exchange }
+        } catch (error) {
+            ok(isNativeError(error))
+
+            if (error instanceof DOMException) {
+                console.error('Aborted')
+                onClose()
+            }
+
+            throw error
+        }
     }
 
     private async getCatchAllStatus(client: ISMTPClient, domain: string): Promise<boolean | undefined> {

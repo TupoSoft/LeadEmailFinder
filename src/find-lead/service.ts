@@ -17,8 +17,6 @@ export class FindLeadService {
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats([], allEmailFormats)
 
-            const abortController = new AbortController()
-            const { signal } = abortController
             const verificationResultPromises: Array<Promise<EmailVerificationResult>> = []
             for (const { pattern: format } of emailFormats) {
                 const email = formats.get(format)
@@ -29,7 +27,7 @@ export class FindLeadService {
                                 email,
                                 format,
                             },
-                            { throwIfNonexistent: true, abortSignal: signal },
+                            { throwIfNonexistent: true },
                         ),
                     )
                 }
@@ -50,8 +48,6 @@ export class FindLeadService {
             }
 
             if (format !== undefined && !deprioritizedEmailFormats.has(format)) {
-                abortController.abort()
-
                 void settleVerificationPromises()
 
                 return findLeadResult

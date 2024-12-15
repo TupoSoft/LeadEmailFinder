@@ -6,11 +6,16 @@ import console from 'node:console'
 export const REDIS_KEY = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
 
 export const ATOMIC_INCR_SCRIPT = `
-    local current = redis.call('GET', KEYS[1])
-    local limit = tonumber(ARGV[1])
-    if not current or tonumber(current) < limit then
-        redis.call('INCR', KEYS[1])
-        redis.call('EXPIRE', KEYS[1], ARGV[2])
+    local proxy = KEYS[1]
+    local exchange = ARGV[1]
+    local limit = tonumber(ARGV[2])
+    local ttl = tonumber(ARGV[3])
+    local result = redis.call('HMGET', proxy, exchange)
+    local count = result[1]
+    
+    if not count or tonumber(count) < limit then
+        redis.call('HINCRBY', proxy, exchange, 1)
+        redis.call('EXPIRE', proxy, ttl)
         return 1
     else
         return 0
@@ -18,10 +23,13 @@ export const ATOMIC_INCR_SCRIPT = `
 `
 
 export const ATOMIC_DECR_SCRIPT = `
-    local current = redis.call('GET', KEYS[1])
-    if current and tonumber(current) > 0 then
-        redis.call('DECR', KEYS[1])
-        redis.call('EXPIRE', KEYS[1], ARGV[1])
+    local proxy, exchange, ttl = KEYS[1], ARGV[1], tonumber(ARGV[2])
+    local result = redis.call('HMGET', proxy, exchange)
+    local count = result[1]
+    
+    if count and tonumber(count) > 0 then
+        redis.call('HINCRBY', proxy, exchange, -1)
+        redis.call('EXPIRE', proxy, ttl)
         return 1
     else
         return 0
@@ -39,7 +47,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
     public static readonly LOCK_FAILURE = 0
     public static readonly DEFAULT_MAX_CONNECTIONS = 1
     public static readonly ACQUIRE_WAIT_MS = 100
-    public static readonly DEFAULT_TTL_SECONDS = 30
+    public static readonly DEFAULT_TTL_SECONDS = 300
     public static readonly NUM_KEYS = 1
 
     constructor(
@@ -50,7 +58,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
     ) {}
 
     async acquire(source: string, destination: string, signal?: AbortSignal): Promise<boolean> {
-        const key = this.getKey(source, destination)
+        const key = this.getKey(source)
 
         while (true) {
             try {
@@ -60,6 +68,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
                     ATOMIC_INCR_SCRIPT,
                     RedisConnectionLimiter.NUM_KEYS,
                     key,
+                    destination,
                     this.maxConnections,
                     this.ttlSeconds,
                 )
@@ -79,13 +88,14 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
     }
 
     async release(source: string, destination: string): Promise<void> {
-        const key = this.getKey(source, destination)
+        const key = this.getKey(source)
 
         try {
             const result = await this.redisClient.eval(
                 ATOMIC_DECR_SCRIPT,
                 RedisConnectionLimiter.NUM_KEYS,
                 key,
+                destination,
                 this.ttlSeconds,
             )
 
@@ -102,7 +112,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         }
     }
 
-    private getKey(source: string, destination: string): string {
-        return `${this.redisKey}:${source}-${destination}`
+    private getKey(source: string): string {
+        return `${this.redisKey}:${source}`
     }
 }

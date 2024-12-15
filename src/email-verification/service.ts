@@ -4,7 +4,6 @@ import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { ICatchAllVerifier } from './catch-all-verifier'
 
 export interface VerifyOptions {
-    abortSignal?: AbortSignal
     throwIfNonexistent?: boolean
 }
 
@@ -20,7 +19,7 @@ export class EmailVerificationService {
         opts?: VerifyOptions,
     ): Promise<EmailVerificationResult> {
         const { email, format } = emailVerificationRequest
-        const { abortSignal, throwIfNonexistent } = opts ?? {}
+        const { throwIfNonexistent } = opts ?? {}
 
         const [localPart, domain] = email.split('@')
 
@@ -36,7 +35,6 @@ export class EmailVerificationService {
         try {
             const { exists, catchAllStatus, targetExchange, mxDomain } = await this.smtpVerifier.verify({
                 email,
-                signal: abortSignal,
             })
 
             if (catchAllStatus !== undefined && !catchAllStatus && exists !== undefined) {
