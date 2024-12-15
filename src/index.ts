@@ -22,12 +22,22 @@ import { MongoProxyRepository } from './proxy/mongo-repository'
 import { RedisConnectionLimiter } from './smtp/connection-limiter'
 import { ProxyController } from './proxy/controller'
 import { ProxyRouter } from './proxy/router'
+import pinoFactory from 'pino'
+import pinoHttp from 'pino-http'
+import { PinoLogger } from './logging'
+import { ok } from 'node:assert'
 
 const { env } = process
 const DEFAULT_PORT = 3000
 const { PORT = DEFAULT_PORT } = env
 
 async function main(): Promise<void> {
+    const pino = pinoFactory()
+    const logger = new PinoLogger(pino)
+    const pinoLoggingMiddleware = pinoHttp({
+        logger: pino,
+    })
+
     const router = Router()
     router.use(log)
 
@@ -57,7 +67,7 @@ async function main(): Promise<void> {
 
     const catchAllCache = new RedisCatchAllCache(redis)
     const connectionLimiter = new RedisConnectionLimiter(redis)
-    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, connectionLimiter)
+    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, connectionLimiter, logger)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,
@@ -76,22 +86,24 @@ async function main(): Promise<void> {
 
     const server = express()
         .disable('x-powered-by')
+        .use(pinoLoggingMiddleware)
         .use(express.json())
         .use(router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-            console.error('The error has occurred: ', err)
+            ok(err instanceof Error)
+            logger.error(`The error has occurred: ${err}`)
             res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
         })
         .listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`)
+            logger.info(`Server is running on port ${PORT}`)
         })
 
     const onTerminationSignal = (): void => {
         server.close(err => {
             if (err !== undefined) {
-                console.error(`Server closed with error: ${err}`)
+                logger.error(`Server closed with error: ${err}`)
             } else {
-                console.error(`Server gracefully shutdown`)
+                logger.error(`Shutting the server down gracefully`)
             }
         })
     }

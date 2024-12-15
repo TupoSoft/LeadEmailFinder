@@ -6,6 +6,7 @@ import type { Socket } from 'node:net'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
 import type { SmtpResponse } from './dto'
+import type { Logger } from '../logging'
 
 export interface ISMTPClient {
     helo: (hostname: string) => Promise<void>
@@ -17,7 +18,10 @@ export interface ISMTPClient {
 }
 
 export class SMTPClient implements ISMTPClient {
-    constructor(private readonly socket: Socket) {}
+    constructor(
+        private readonly socket: Socket,
+        private readonly logger: Logger,
+    ) {}
 
     isReady: () => Promise<void> = async () => {
         const { code, enhancedCode, message } = await this.readResponse()
@@ -47,6 +51,8 @@ export class SMTPClient implements ISMTPClient {
 
     private async readResponse(): Promise<SmtpResponse> {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
+        this.logger.debug(`Response: ${response}`)
+
         const responseLines = response.split('\r\n')
 
         responseLines.pop()
@@ -65,6 +71,8 @@ export class SMTPClient implements ISMTPClient {
     }
 
     private async sendCommand(command: string): Promise<void> {
+        this.logger.debug(`Sending command: ${command}`)
+
         await write(this.socket, `${command}\r\n`)
         await this.readResponse()
     }

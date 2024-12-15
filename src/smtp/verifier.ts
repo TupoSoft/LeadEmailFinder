@@ -11,6 +11,7 @@ import type { Socket } from 'node:net'
 import { connect } from '../socket/connect'
 import { SMTP_PORT } from './constants'
 import { isNativeError } from 'node:util/types'
+import type { Logger } from '../logging'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -31,6 +32,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         private readonly catchAllCache: CatchAllCache,
         private readonly proxyService: ProxyService,
         private readonly connectionLimiter: ConnectionLimiter,
+        private readonly logger: Logger,
     ) {}
 
     private static async getNewCatchAllStatus(client: ISMTPClient, domain: string): Promise<boolean | undefined> {
@@ -55,7 +57,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         try {
             const socket = await this.getSocket(domain)
 
-            const client = new SMTPClient(socket)
+            const client = new SMTPClient(socket, this.logger)
 
             await client.isReady()
 
