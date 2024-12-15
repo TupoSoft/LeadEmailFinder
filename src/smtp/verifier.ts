@@ -52,6 +52,8 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             const client = new SMTPClient(socket)
 
+            await client.isReady()
+
             ok(socket.remoteAddress !== undefined, new Error('The socket is not connected'))
 
             const hostnames = await this.dnsCache.resolve(socket.remoteAddress, 'PTR')

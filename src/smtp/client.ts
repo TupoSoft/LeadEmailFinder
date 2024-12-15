@@ -5,16 +5,27 @@ import { ok } from 'node:assert'
 import type { Socket } from 'node:net'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
+import type { SmtpResponse } from './dto'
 
 export interface ISMTPClient {
     helo: (hostname: string) => Promise<void>
     mailFrom: (senderEmail: string) => Promise<void>
     rcptTo: (receiverEmail: string) => Promise<void>
     quit: () => Promise<void>
+
+    isReady: () => Promise<void>
 }
 
 export class SMTPClient implements ISMTPClient {
     constructor(private readonly socket: Socket) {}
+
+    isReady: () => Promise<void> = async () => {
+        const { code, enhancedCode, message } = await this.readResponse()
+
+        if (code !== SmtpResponseCode.ServiceReady) {
+            throw new SmtpError(code, enhancedCode, message)
+        }
+    }
 
     async helo(hostname: string): Promise<void> {
         await this.sendCommand(`HELO ${hostname}`)
@@ -34,18 +45,27 @@ export class SMTPClient implements ISMTPClient {
         this.socket.end()
     }
 
-    private async sendCommand(command: string): Promise<void> {
-        await write(this.socket, `${command}\r\n`)
+    private async readResponse(): Promise<SmtpResponse> {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
         const responseLines = response.split('\r\n')
+
+        responseLines.pop()
         const lastLine = responseLines.pop()
 
         ok(lastLine !== undefined, `Malformed response: ${response}`)
 
-        const { code, enhancedCode, message } = parseSmtpResponse(lastLine)
+        const smtpResponse = parseSmtpResponse(lastLine)
+        const { code, enhancedCode, message } = smtpResponse
 
         if (code > SmtpResponseCode.OK) {
             throw new SmtpError(code, enhancedCode, message)
         }
+
+        return smtpResponse
+    }
+
+    private async sendCommand(command: string): Promise<void> {
+        await write(this.socket, `${command}\r\n`)
+        await this.readResponse()
     }
 }
