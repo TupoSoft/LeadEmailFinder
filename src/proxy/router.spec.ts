@@ -5,11 +5,11 @@ import { ProxyRouter } from './router'
 import { ProxyController } from './controller'
 import express, { Router } from 'express'
 import type { IProxyService } from './service'
-import type { Proxy } from './repository'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import type { authenticate } from '../middleware'
-import type { ProxyFVO } from './dto'
+import type { ProxyFvo } from './dto'
+import type { Proxy } from './repository'
 
 jest.mock('../middleware/authenticate', () => ({
     authenticate: jest.fn<typeof authenticate>().mockImplementation((req, res, next) => {
@@ -18,8 +18,8 @@ jest.mock('../middleware/authenticate', () => ({
 }))
 
 export class MockProxyService implements IProxyService {
-    getAll: () => Promise<Proxy[]> = jest.fn<typeof MockProxyService.prototype.getAll>()
-    create: (proxy: ProxyFVO) => Promise<Proxy> = jest.fn<typeof MockProxyService.prototype.create>()
+    getAll: () => Promise<ProxyFvo[]> = jest.fn<typeof MockProxyService.prototype.getAll>()
+    create: (proxy: ProxyFvo) => Promise<ProxyFvo> = jest.fn<typeof MockProxyService.prototype.create>()
 }
 
 describe('ProxyRouter', () => {
@@ -62,7 +62,7 @@ describe('ProxyRouter', () => {
 
     describe('POST /proxy', () => {
         const { id, ...proxyWithoutId } = proxy
-        const proxyFvo: ProxyFVO = proxyWithoutId as ProxyFVO
+        const proxyFvo: ProxyFvo = proxyWithoutId
 
         it('should return HTTP_CREATED', async () => {
             mockProxyService.create.mockResolvedValueOnce(proxy)
