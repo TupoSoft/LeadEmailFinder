@@ -13,8 +13,8 @@ export async function readUntil(readable: Readable, matchPattern: RegExp | strin
             if (matchArray !== null) {
                 const [firstMatch] = matchArray
 
-                const firstMatchLastIndex = buffer.lastIndexOf(firstMatch)
-                const matchedData = buffer.slice(FIRST_ARRAY_ELEMENT_INDEX, firstMatchLastIndex)
+                const firstMatchLastIndex = buffer.indexOf(firstMatch)
+                const matchedData = buffer.slice(FIRST_ARRAY_ELEMENT_INDEX, firstMatchLastIndex + firstMatch.length)
                 const unmatchedData = buffer.slice(firstMatchLastIndex + firstMatch.length)
 
                 readable.off('data', onData)
