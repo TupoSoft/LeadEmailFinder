@@ -1,5 +1,5 @@
-export function isEmptyArray(value: unknown): value is [] {
-    const EMPTY_ARRAY_LENGTH = 0x00
+import { EMPTY_ARRAY_LENGTH } from './constants'
 
+export function isEmptyArray(value: unknown): value is [] {
     return Array.isArray(value) && value.length === EMPTY_ARRAY_LENGTH
 }

@@ -27,9 +27,9 @@ import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
+import { DEFAULT_PORT } from './common/constants'
 
 const { env } = process
-const DEFAULT_PORT = 3000
 const { PORT = DEFAULT_PORT } = env
 
 async function main(): Promise<void> {
