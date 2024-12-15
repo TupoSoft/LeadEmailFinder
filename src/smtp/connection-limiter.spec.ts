@@ -3,27 +3,25 @@
 import { Redis } from 'ioredis'
 import { ATOMIC_DECR_SCRIPT, ATOMIC_INCR_SCRIPT, REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
+import { PinoLogger } from '../logging'
+import pinoFactory from 'pino'
+import Mocked = jest.Mocked
 
 jest.useFakeTimers()
 
-jest.mock('node:console', () => ({
-    info: jest.fn(),
-}))
-
-jest.mock('ioredis', () => ({
-    Redis: jest.fn().mockImplementation(() => ({
-        eval: jest.fn<typeof Redis.prototype.eval>(),
-    })),
-}))
+jest.mock('pino')
+jest.mock('../logging')
 
 describe('RedisConnectionLimiter', () => {
     const { LOCK_FAILURE, LOCK_SUCCESS, NUM_KEYS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
 
+    const pino = pinoFactory()
+    const logger = new PinoLogger(pino) as Mocked<PinoLogger>
     const redisClient = new Redis() as jest.Mocked<Redis>
     const maxConnections = 3
     const ttlSeconds = 60
 
-    const connectionLimiter = new RedisConnectionLimiter(redisClient, REDIS_KEY, maxConnections, ttlSeconds)
+    const connectionLimiter = new RedisConnectionLimiter(redisClient, logger, REDIS_KEY, maxConnections, ttlSeconds)
 
     afterEach(() => {
         jest.clearAllMocks()
@@ -31,14 +29,21 @@ describe('RedisConnectionLimiter', () => {
 
     const source = '192.168.0.1'
     const destination = 'example.com'
-    const key = `${REDIS_KEY}:${source}-${destination}`
+    const key = `${REDIS_KEY}:${source}`
 
     describe('acquire', () => {
         it('should acquire a connection if below maxConnectionsPerSourceHost', async () => {
             redisClient.eval.mockResolvedValue(LOCK_SUCCESS)
 
             await expect(connectionLimiter.acquire(source, destination)).resolves.not.toThrow()
-            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_INCR_SCRIPT, NUM_KEYS, key, maxConnections, ttlSeconds)
+            expect(redisClient.eval).toHaveBeenCalledWith(
+                ATOMIC_INCR_SCRIPT,
+                NUM_KEYS,
+                key,
+                destination,
+                maxConnections,
+                ttlSeconds,
+            )
         })
 
         it('should retry acquiring a connection if maxConnectionsPerSourceHost is reached', async () => {
@@ -80,7 +85,7 @@ describe('RedisConnectionLimiter', () => {
 
             await connectionLimiter.release(source, destination)
 
-            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, ttlSeconds)
+            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, destination, ttlSeconds)
         })
 
         it('should not set negative connections', async () => {
@@ -88,7 +93,7 @@ describe('RedisConnectionLimiter', () => {
 
             await connectionLimiter.release(source, destination)
 
-            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, ttlSeconds)
+            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, destination, ttlSeconds)
         })
 
         it('should handle missing key gracefully', async () => {
@@ -96,7 +101,7 @@ describe('RedisConnectionLimiter', () => {
 
             await connectionLimiter.release('', '')
 
-            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, `${REDIS_KEY}:-`, ttlSeconds)
+            expect(redisClient.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, `${REDIS_KEY}:`, '', ttlSeconds)
         })
     })
 
@@ -104,7 +109,7 @@ describe('RedisConnectionLimiter', () => {
         it('should generate the correct key', () => {
             // @ts-expect-error testing
             const key = connectionLimiter.getKey(source, destination)
-            expect(key).toBe(`${REDIS_KEY}:${source}-${destination}`)
+            expect(key).toBe(`${REDIS_KEY}:${source}`)
         })
     })
 })

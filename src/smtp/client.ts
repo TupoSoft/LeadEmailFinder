@@ -77,8 +77,6 @@ export class SmtpClientImpl implements SmtpClient {
             }
         }
 
-        signal?.addEventListener('abort', onClose)
-
         try {
             this.socket = await connect({
                 host: exchange,
