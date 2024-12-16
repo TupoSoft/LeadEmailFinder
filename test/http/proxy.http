@@ -10,8 +10,8 @@ Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508a
 
 {
   "type": "http",
-  "host": "23.254.226.185",
-  "port": 3128,
-  "password": "RadOnfiNoRmO",
-  "user": "verifier"
+  "host": "example.com",
+  "port": 3333,
+  "password": "password",
+  "user": "example"
 }
