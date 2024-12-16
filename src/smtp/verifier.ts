@@ -44,9 +44,9 @@ export class SMTPVerifier implements ISMTPVerifier {
 
         const [, domain] = email.split('@')
 
-        try {
-            const client = await this.getSmtpClient(domain)
+        const client = await this.getSmtpClient(domain)
 
+        try {
             await client.isReady()
 
             const hostnames = await this.dnsCache.resolve(client.hostname, 'PTR')
@@ -71,12 +71,12 @@ export class SMTPVerifier implements ISMTPVerifier {
                     (_: unknown) => false,
                 )
             }
-
-            void client.quit()
         } catch (error) {
             ok(isNativeError(error))
             console.error(`Error in SMTPVerifier.verify: `, error)
             throw error
+        } finally {
+            void client.quit()
         }
 
         return smtpVerificationResult

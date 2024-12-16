@@ -36,6 +36,11 @@ export interface SmtpClient {
 export class SmtpClientImpl implements SmtpClient {
     private socket?: Socket
 
+    constructor(
+        private readonly connectionLimiter: ConnectionLimiter,
+        private readonly logger: Logger,
+    ) {}
+
     private _exchange?: string
 
     get exchange(): string {
@@ -59,11 +64,6 @@ export class SmtpClientImpl implements SmtpClient {
     private set hostname(value: string) {
         this._hostname = value
     }
-
-    constructor(
-        private readonly connectionLimiter: ConnectionLimiter,
-        private readonly logger: Logger,
-    ) {}
 
     connect: (options: SmtpClientConnectOptions) => Promise<void> = async options => {
         const { exchange, port = SMTP_PORT, proxy, signal } = options
@@ -118,9 +118,13 @@ export class SmtpClientImpl implements SmtpClient {
     }
 
     async quit(): Promise<void> {
-        await this.sendCommand('QUIT')
+        ok(this.socket !== undefined, new Error('The client is no connected'))
 
-        this.socket?.end()
+        if (this.socket.readyState !== 'closed') {
+            await this.sendCommand('QUIT')
+        }
+
+        this.socket.end()
     }
 
     private async readResponse(): Promise<SmtpResponse> {
