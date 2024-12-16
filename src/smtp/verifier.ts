@@ -1,6 +1,5 @@
 import { type DNSCache, getSecondLevelDomain } from '../dns'
 import type { SmtpClient } from './client'
-import { appendRandomPrefix } from '../string-util'
 import type { SMTPVerificationResult } from './dto'
 import type { CatchAllCache } from '../email-verification'
 import { SmtpError } from './errors'
@@ -8,6 +7,7 @@ import { ok } from 'node:assert'
 import type { Proxy, ProxyService } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import type { SmtpClientFactory } from './client-factory'
+import { appendRandomPrefix } from '../util/string'
 
 export interface SMTPVerifyOptions {
     email: string

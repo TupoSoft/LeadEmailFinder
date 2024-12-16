@@ -7,7 +7,7 @@ export async function promiseWithTimeout<T>(promise: Promise<T>, timeoutMs: numb
         }, timeoutMs)
 
         promise
-            .catch(reason => {
+            .catch((reason: unknown) => {
                 if (reason instanceof Error) {
                     reject(reason)
                 }
