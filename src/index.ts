@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { dbFactory } from './database-util'
+import { dbFactory } from './util/mongo'
 import {
     CatchAllVerifier,
     EmailVerificationControllerImpl,
@@ -9,7 +9,6 @@ import {
     RedisCatchAllCache,
 } from './email-verification'
 import defaultProxyRotator from './util/proxy'
-import { getProxiesFromFile, ProxyRepositoryImpl } from './proxy'
 import axios from 'axios'
 import { ProxySocketConnector } from './socket-connector'
 import { AxiosHttpClient } from './http-client'
@@ -42,10 +41,7 @@ async function main(): Promise<void> {
     domainRouter.init()
 
     const proxyRotator = defaultProxyRotator
-    const proxies = await getProxiesFromFile()
-    const proxyRepository = new ProxyRepositoryImpl(proxies)
     const axiosInstance = axios.create({
-        proxy: proxyRepository.getByName('http'),
         timeout: 30000,
     })
 
