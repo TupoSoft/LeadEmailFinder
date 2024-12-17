@@ -1,18 +1,12 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { describe, expect, it, jest } from '@jest/globals'
 import { Redis } from 'ioredis'
 import { RedisCatchAllCache } from './catch-all-cache'
-
-jest.mock('ioredis', () => ({
-    Redis: jest.fn().mockImplementation(() => ({
-        get: jest.fn(),
-        set: jest.fn(),
-    })),
-}))
+import Mocked = jest.Mocked
 
 describe('CatchAllCache', () => {
-    const redisMock = new Redis() as jest.Mocked<Redis>
+    const redisMock = new Redis() as Mocked<Redis>
     const catchAllCache = new RedisCatchAllCache(redisMock)
 
     const domain = 'example.com'
