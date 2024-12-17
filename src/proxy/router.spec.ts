@@ -1,33 +1,29 @@
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- test */
-
 import { describe, expect, it, jest } from '@jest/globals'
 import { ProxyRouter } from './router'
 import { ProxyController } from './controller'
 import express, { Router } from 'express'
-import type { IProxyService } from './service'
 import request from 'supertest'
 import { constants } from 'node:http2'
-import type { authenticate } from '../middleware'
 import type { ProxyFvo } from './dto'
 import type { Proxy } from './repository'
+import { ProxyService } from './service'
+import { MongoProxyRepository } from './mongo-repository'
+import { MongoClient } from 'mongodb'
+import Mocked = jest.Mocked
 
-jest.mock('../middleware/authenticate', () => ({
-    authenticate: jest.fn<typeof authenticate>().mockImplementation((req, res, next) => {
-        next()
-    }),
-}))
-
-export class MockProxyService implements IProxyService {
-    getAll: () => Promise<ProxyFvo[]> = jest.fn<typeof MockProxyService.prototype.getAll>()
-    create: (proxy: ProxyFvo) => Promise<ProxyFvo> = jest.fn<typeof MockProxyService.prototype.create>()
-}
+jest.mock('../middleware/authenticate')
+jest.mock('./mongo-repository')
+jest.mock('./service')
 
 describe('ProxyRouter', () => {
     const app = express()
-
     const expressRouter = Router()
-    const mockProxyService = new MockProxyService() as jest.Mocked<MockProxyService>
-    const proxyController = new ProxyController(mockProxyService)
+    const mongoClient = new MongoClient('mongodb://localhost:27017')
+    const db = mongoClient.db()
+    const mongoProxyRepository = new MongoProxyRepository(db)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- testing
+    const proxyService = new ProxyService(mongoProxyRepository) as Mocked<ProxyService>
+    const proxyController = new ProxyController(proxyService)
     const proxyRouter = new ProxyRouter(expressRouter, proxyController)
     proxyRouter.init()
 
@@ -48,7 +44,7 @@ describe('ProxyRouter', () => {
     describe('GET /proxy', () => {
         it('should return HTTP_OK', async () => {
             const allProxies = [proxy]
-            mockProxyService.getAll.mockResolvedValueOnce(allProxies)
+            proxyService.getAll.mockResolvedValueOnce(allProxies)
 
             await request(app)
                 .get(ProxyRouter.PATH)
@@ -56,7 +52,7 @@ describe('ProxyRouter', () => {
                 .expect(allProxies)
                 .expect(constants.HTTP_STATUS_OK)
 
-            expect(mockProxyService.getAll).toHaveBeenCalled()
+            expect(proxyService.getAll).toHaveBeenCalled()
         })
     })
 
@@ -65,7 +61,7 @@ describe('ProxyRouter', () => {
         const proxyFvo: ProxyFvo = proxyWithoutId
 
         it('should return HTTP_CREATED', async () => {
-            mockProxyService.create.mockResolvedValueOnce(proxy)
+            proxyService.create.mockResolvedValueOnce(proxy)
 
             await request(app)
                 .post(ProxyRouter.PATH)
@@ -75,7 +71,7 @@ describe('ProxyRouter', () => {
                 .expect(proxy)
                 .expect(constants.HTTP_STATUS_CREATED)
 
-            expect(mockProxyService.create).toHaveBeenCalledWith(proxyFvo)
+            expect(proxyService.create).toHaveBeenCalledWith(proxyFvo)
         })
 
         it('should return HTTP_BAD_REQUEST when validation fails', async () => {
