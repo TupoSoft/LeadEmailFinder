@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
-    const findLeadService = new FindLeadService(emailVerificationService)
+    const findLeadService = new FindLeadService(emailVerificationService, logger)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()

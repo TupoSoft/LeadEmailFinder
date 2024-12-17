@@ -75,7 +75,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
                 )
 
                 if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
-                    this.logger.info(`${source}:${destination} incremented`)
+                    this.logger.debug(`${source}:${destination} incremented`)
                     return true
                 }
 
@@ -102,10 +102,10 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
             )
 
             if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
-                this.logger.info(`${source}:${destination} decremented`)
+                this.logger.debug(`${source}:${destination} decremented`)
             } else {
-                this.logger.info(`${source}:${destination} not decremented (key might have expired)`)
-                this.logger.info(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.debug(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.debug(`${source}:${destination} not decremented (key might have expired)`)
             }
         } catch (error) {
             ok(error instanceof Error)

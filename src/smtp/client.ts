@@ -1,5 +1,5 @@
 import { SmtpError } from './errors'
-import { SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
+import { DEFAULT_SMTP_CLIENT_TIMEOUT, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
 import { SmtpResponseCode } from './enums'
 import { ok } from 'node:assert'
 import type { Socket } from 'node:net'
@@ -9,13 +9,14 @@ import type { SmtpResponse } from './dto'
 import type { Logger } from '../logging'
 import type { Proxy } from '../proxy'
 import type { ConnectionLimiter } from './connection-limiter'
-import { hostname } from 'node:os'
+import { hostname as osHostname } from 'node:os'
 import { connect } from '../socket/connect'
 import { isNativeError } from 'node:util/types'
 
 export interface SmtpClientConnectOptions {
     exchange: string
     port?: number
+    timeout?: number
     proxy?: Proxy
     signal?: AbortSignal
 }
@@ -38,7 +39,7 @@ export class SmtpClientImpl implements SmtpClient {
 
     constructor(
         private readonly connectionLimiter: ConnectionLimiter,
-        private readonly logger: Logger,
+        private logger: Logger,
     ) {}
 
     private _exchange?: string
@@ -66,14 +67,14 @@ export class SmtpClientImpl implements SmtpClient {
     }
 
     connect: (options: SmtpClientConnectOptions) => Promise<void> = async options => {
-        const { exchange, port = SMTP_PORT, proxy, signal } = options
-        const source = proxy != null ? proxy.host : hostname()
+        const { exchange, port = SMTP_PORT, proxy, signal, timeout = DEFAULT_SMTP_CLIENT_TIMEOUT } = options
+        const hostname = proxy != null ? proxy.host : osHostname()
 
-        const locked = await this.connectionLimiter.acquire(source, exchange, signal)
+        const locked = await this.connectionLimiter.acquire(hostname, exchange, signal)
 
         const onClose = (): void => {
             if (locked) {
-                void this.connectionLimiter.release(source, exchange)
+                void this.connectionLimiter.release(hostname, exchange)
             }
         }
 
@@ -83,12 +84,22 @@ export class SmtpClientImpl implements SmtpClient {
                 port,
                 proxy,
                 signal,
+                timeout,
+            })
+
+            this.logger = this.logger.child({
+                source: hostname,
+                exchange,
+            })
+
+            this.socket.once('close', onClose)
+            this.socket.once('timeout', () => {
+                this.logger.debug(`Socket timed out`)
+                this.socket?.end()
             })
 
             this.exchange = exchange
-            this.hostname = source
-
-            this.socket.once('close', onClose)
+            this.hostname = hostname
         } catch (error) {
             onClose()
 
@@ -124,7 +135,7 @@ export class SmtpClientImpl implements SmtpClient {
             await this.sendCommand('QUIT')
         }
 
-        this.socket.end()
+        this.socket.end('QUIT')
     }
 
     private async readResponse(): Promise<SmtpResponse> {
