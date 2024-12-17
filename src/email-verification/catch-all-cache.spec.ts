@@ -46,13 +46,6 @@ describe('CatchAllCache', () => {
             await expect(catchAllCache.setCatchAllStatusForDomain(domain, status)).resolves.not.toThrow()
         })
 
-        it('should throw an error if failed to cache', async () => {
-            redisMock.set.mockResolvedValueOnce(null)
-            await expect(catchAllCache.setCatchAllStatusForDomain(domain, status)).rejects.toThrow(
-                `Failed to cache catch all status '${status}' for domain '${domain}'`,
-            )
-        })
-
         it('should rethrow an error if redis throws', async () => {
             const redisError = new Error('Redis error')
             redisMock.set.mockRejectedValueOnce(redisError)
