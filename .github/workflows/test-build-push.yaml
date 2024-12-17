@@ -2,8 +2,8 @@ name: Node.js Test Runner
 
 on:
   push:
-    branches:
-      - master
+    #    branches:
+    #      - master
     paths:
       - '**/*.ts'
       - '**/*.js'
