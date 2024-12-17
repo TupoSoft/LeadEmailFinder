@@ -1,7 +1,14 @@
-import type { Redis } from 'ioredis'
+import type { Redis, Result } from 'ioredis'
 import { setTimeout } from 'node:timers'
 import { ok } from 'node:assert'
 import type { Logger } from '../logging'
+
+declare module 'ioredis' {
+    interface RedisCommander<Context> {
+        incrementConnection: (key: string, target: string, limit: number, ttl: number) => Result<number, Context>
+        decrementConnection: (key: string, target: string, ttl: number) => Result<number, Context>
+    }
+}
 
 export const REDIS_KEY = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
 
@@ -51,12 +58,24 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
     public static readonly NUM_KEYS = 1
 
     constructor(
-        private readonly redisClient: Redis,
+        private readonly redis: Redis,
         private readonly logger: Logger,
         private readonly redisKey = REDIS_KEY,
         private readonly maxConnections = RedisConnectionLimiter.DEFAULT_MAX_CONNECTIONS,
         private readonly ttlSeconds = RedisConnectionLimiter.DEFAULT_TTL_SECONDS,
-    ) {}
+    ) {
+        this.redis.defineCommand('incrementConnection', {
+            lua: ATOMIC_INCR_SCRIPT,
+            readOnly: true,
+            numberOfKeys: RedisConnectionLimiter.NUM_KEYS,
+        })
+
+        this.redis.defineCommand('decrementConnection', {
+            lua: ATOMIC_DECR_SCRIPT,
+            readOnly: true,
+            numberOfKeys: RedisConnectionLimiter.NUM_KEYS,
+        })
+    }
 
     async acquire(source: string, destination: string, signal?: AbortSignal): Promise<boolean> {
         const key = this.getKey(source)
@@ -65,9 +84,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
             try {
                 if (signal?.aborted === true) return false
 
-                const result = await this.redisClient.eval(
-                    ATOMIC_INCR_SCRIPT,
-                    RedisConnectionLimiter.NUM_KEYS,
+                const result = await this.redis.incrementConnection(
                     key,
                     destination,
                     this.maxConnections,
@@ -93,13 +110,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         const key = this.getKey(source)
 
         try {
-            const result = await this.redisClient.eval(
-                ATOMIC_DECR_SCRIPT,
-                RedisConnectionLimiter.NUM_KEYS,
-                key,
-                destination,
-                this.ttlSeconds,
-            )
+            const result = await this.redis.decrementConnection(key, destination, this.ttlSeconds)
 
             if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
                 this.logger.debug(`${source}:${destination} decremented`)

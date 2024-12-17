@@ -33,7 +33,9 @@ const { env } = process
 const { PORT = DEFAULT_PORT } = env
 
 async function main(): Promise<void> {
-    const pino = pinoFactory()
+    const pino = pinoFactory({
+        level: 'debug',
+    })
     const logger = new PinoLogger(pino)
     const pinoLoggingMiddleware = pinoHttp({
         logger: pino,
