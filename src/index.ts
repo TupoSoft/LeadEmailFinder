@@ -14,7 +14,6 @@ import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepositor
 import { constants as httpConstants } from 'http2'
 import { SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
-import { Redis } from 'ioredis'
 import { log } from './middleware'
 import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
 import { ProxyService } from './proxy'
@@ -28,6 +27,7 @@ import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
 import { DEFAULT_PORT } from './common/constants'
+import { getRedis } from './util/redis'
 
 const { env } = process
 const { PORT = DEFAULT_PORT } = env
@@ -44,9 +44,7 @@ async function main(): Promise<void> {
 
     const db = await dbFactory()
 
-    const redis = new Redis({
-        host: 'redis',
-    })
+    const redis = await getRedis()
 
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
