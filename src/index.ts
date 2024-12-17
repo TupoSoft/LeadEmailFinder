@@ -84,8 +84,6 @@ async function main(): Promise<void> {
         .listen(port, () => {
             console.log(`Server is running on port ${port}`)
         })
-
-    console.log('poop')
 }
 
 void main()

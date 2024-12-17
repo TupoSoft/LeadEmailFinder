@@ -2,8 +2,8 @@ name: Node.js Test Runner
 
 on:
   push:
-    #    branches:
-    #      - master
+    branches:
+      - master
     paths:
       - '**/*.ts'
       - '**/*.js'
@@ -52,7 +52,7 @@ jobs:
 
   build-push:
     runs-on: ubuntu-latest
-    #    if: github.event_name == 'push'
+    if: github.event_name == 'push'
     needs: test
     permissions:
       packages: write
