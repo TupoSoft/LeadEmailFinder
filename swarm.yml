@@ -21,6 +21,10 @@ services:
       - mongo_url
       - source: redis-config
         target: redis-config.json
+    networks:
+      - default
+      - redis_default
+      - mongo_default
 
 secrets:
   mongo_url:
