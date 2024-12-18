@@ -1,14 +1,7 @@
-import type { Redis, Result } from 'ioredis'
+import type { Redis } from 'ioredis'
 import { setTimeout } from 'node:timers'
 import { ok } from 'node:assert'
 import type { Logger } from '../logging'
-
-declare module 'ioredis' {
-    interface RedisCommander<Context> {
-        incrementConnection: (key: string, target: string, limit: number, ttl: number) => Result<number, Context>
-        decrementConnection: (key: string, target: string, ttl: number) => Result<number, Context>
-    }
-}
 
 export const REDIS_KEY = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
 

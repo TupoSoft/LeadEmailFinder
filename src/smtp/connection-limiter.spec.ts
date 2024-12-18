@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-type-assertion -- test */
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- test */
 
 import { Redis } from 'ioredis'
-import { ATOMIC_DECR_SCRIPT, ATOMIC_INCR_SCRIPT, REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
+import { REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { PinoLogger } from '../logging'
 import pinoFactory from 'pino'
@@ -13,7 +13,7 @@ jest.mock('pino')
 jest.mock('../logging')
 
 describe('RedisConnectionLimiter', () => {
-    const { LOCK_FAILURE, LOCK_SUCCESS, NUM_KEYS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
+    const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
 
     const pino = pinoFactory()
     const logger = new PinoLogger(pino) as Mocked<PinoLogger>
@@ -33,34 +33,27 @@ describe('RedisConnectionLimiter', () => {
 
     describe('acquire', () => {
         it('should acquire a connection if below maxConnectionsPerSourceHost', async () => {
-            redis.eval.mockResolvedValue(LOCK_SUCCESS)
+            redis.incrementConnection.mockResolvedValue(LOCK_SUCCESS)
 
             await expect(connectionLimiter.acquire(source, destination)).resolves.not.toThrow()
-            expect(redis.eval).toHaveBeenCalledWith(
-                ATOMIC_INCR_SCRIPT,
-                NUM_KEYS,
-                key,
-                destination,
-                maxConnections,
-                ttlSeconds,
-            )
+            expect(redis.incrementConnection).toHaveBeenCalledWith(key, destination, maxConnections, ttlSeconds)
         })
 
         it('should retry acquiring a connection if maxConnectionsPerSourceHost is reached', async () => {
             const CALLED_TIMES = 2
 
-            redis.eval.mockResolvedValueOnce(LOCK_FAILURE).mockResolvedValueOnce(LOCK_SUCCESS)
+            redis.incrementConnection.mockResolvedValueOnce(LOCK_FAILURE).mockResolvedValueOnce(LOCK_SUCCESS)
 
             const acquirePromise = connectionLimiter.acquire(source, destination)
             jest.advanceTimersByTime(ACQUIRE_WAIT_MS)
             await acquirePromise
 
             await expect(acquirePromise).resolves.not.toThrow()
-            expect(redis.eval).toHaveBeenCalledTimes(CALLED_TIMES)
+            expect(redis.incrementConnection).toHaveBeenCalledTimes(CALLED_TIMES)
         })
 
         it('should abort pending acquisitions', async () => {
-            redis.eval.mockResolvedValueOnce(LOCK_SUCCESS).mockResolvedValueOnce(LOCK_FAILURE)
+            redis.incrementConnection.mockResolvedValueOnce(LOCK_SUCCESS).mockResolvedValueOnce(LOCK_FAILURE)
             const abortController = new AbortController()
 
             const acquisitions = [
@@ -81,27 +74,27 @@ describe('RedisConnectionLimiter', () => {
 
     describe('release', () => {
         it('should release a connection if there are active connections', async () => {
-            redis.eval.mockResolvedValue(LOCK_SUCCESS)
+            redis.decrementConnection.mockResolvedValue(LOCK_SUCCESS)
 
             await connectionLimiter.release(source, destination)
 
-            expect(redis.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, destination, ttlSeconds)
+            expect(redis.decrementConnection).toHaveBeenCalledWith(key, destination, ttlSeconds)
         })
 
         it('should not set negative connections', async () => {
-            redis.eval.mockResolvedValue(LOCK_FAILURE)
+            redis.decrementConnection.mockResolvedValue(LOCK_FAILURE)
 
             await connectionLimiter.release(source, destination)
 
-            expect(redis.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, key, destination, ttlSeconds)
+            expect(redis.decrementConnection).toHaveBeenCalledWith(key, destination, ttlSeconds)
         })
 
         it('should handle missing key gracefully', async () => {
-            redis.eval.mockResolvedValue(LOCK_FAILURE)
+            redis.decrementConnection.mockResolvedValue(LOCK_FAILURE)
 
             await connectionLimiter.release('', '')
 
-            expect(redis.eval).toHaveBeenCalledWith(ATOMIC_DECR_SCRIPT, NUM_KEYS, `${REDIS_KEY}:`, '', ttlSeconds)
+            expect(redis.decrementConnection).toHaveBeenCalledWith(`${REDIS_KEY}:`, '', ttlSeconds)
         })
     })
 
