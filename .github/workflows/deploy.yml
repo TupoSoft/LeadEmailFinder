@@ -38,4 +38,4 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy stack to Docker Swarm
-        run: docker stack deploy --with-registry-auth -d false -c swarm.yml email
+        run: docker stack deploy --with-registry-auth --detach=false -c swarm.yml email
