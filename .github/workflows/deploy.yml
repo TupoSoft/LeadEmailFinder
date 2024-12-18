@@ -1,0 +1,41 @@
+name: Deploy to Docker Swarm
+
+on:
+  push:
+    paths:
+      - swarm.yml
+  pull_request:
+    paths:
+      - swarm.yml
+
+jobs:
+  #  test
+  deploy:
+    name: Deploy to Docker Swarm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOCKER_SWARM_CLUSTER_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo -e "Host *\n\tStrictHostKeyChecking no\n\tUserKnownHostsFile=/dev/null" >> ~/.ssh/config
+
+      - name: Create Docker Context
+        run: |
+          docker context create remote-swarm --docker "host=${{ secrets.DOCKER_SWARM_CLUSTER_HOST }}"
+          docker context use remote-swarm
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v3
+        with:
+          registry: https://ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy stack to Docker Swarm
+        run: docker stack deploy --with-registry-auth --detach=false -c swarm.yml email
