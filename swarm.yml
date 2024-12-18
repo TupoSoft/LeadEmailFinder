@@ -16,7 +16,8 @@ services:
       REDIS_CONFIG_FILE_PATH: /run/secrets/redis-config.json
       MONGO_URL_FILE: /run/secrets/mongo_url
     deploy:
-      mode: global
+      mode: replicated
+      replicas: 8
     secrets:
       - mongo_url
       - source: redis-config
