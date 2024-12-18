@@ -27,7 +27,3 @@ export function getSecondLevelDomain(domain: string): string | undefined {
     const parsed = getDomain(domain)
     return parsed ?? undefined
 }
-
-export function getDomainFromSubdomain(subdomain: string): string {
-    return subdomain.split('.').slice(-2).join('.')
-}

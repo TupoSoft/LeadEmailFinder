@@ -1,5 +1,6 @@
 import type { HttpClient } from '../http-client'
 import { AxiosError, type AxiosRequestConfig } from 'axios'
+import { constants } from 'node:http2'
 
 export interface MicrosoftGetCredsResponseData {
     IfExistsResult: number
@@ -114,7 +115,7 @@ export class CatchAllVerifier implements ICatchAllVerifier {
         }
 
         try {
-            const { IfExistsResult } = await this.httpClient.post<MicrosoftGetCredsResponseData, typeof jsonData>(
+            const { IfExistsResult } = await this.httpClient.post<MicrosoftGetCredsResponseData>(
                 'https://login.microsoftonline.com/common/GetCredentialType',
                 jsonData,
                 {
@@ -217,10 +218,11 @@ export class CatchAllVerifier implements ICatchAllVerifier {
             promises.push(
                 new Promise<void>((resolve, reject) => {
                     this.httpClient
-                        .post<
-                            MimecastResponse,
-                            MimecastData
-                        >(`https://login-${countryCode}.mimecast.com/u/proxy/api/login/discover-authentication`, body, config)
+                        .post<MimecastResponse>(
+                            `https://login-${countryCode}.mimecast.com/u/proxy/api/login/discover-authentication`,
+                            body,
+                            config,
+                        )
                         .then(
                             value => {
                                 const {
@@ -238,7 +240,7 @@ export class CatchAllVerifier implements ICatchAllVerifier {
 
                                 reject(new CatchAllVerificationError(result))
                             },
-                            _ => {
+                            (_: unknown) => {
                                 reject(new CatchAllVerificationError(result))
                             },
                         )
@@ -262,9 +264,6 @@ export class CatchAllVerifier implements ICatchAllVerifier {
         try {
             const response = await this.httpClient.get<string>(
                 'https://odc.officeapps.live.com/odc/emailhrd/getidp?hm=0&emailAddress=' + email,
-                {
-                    timeout: 30000,
-                },
             )
 
             if (!invalidResponses.includes(response)) {
@@ -310,7 +309,7 @@ export class CatchAllVerifier implements ICatchAllVerifier {
                 headers,
             })
         } catch (error) {
-            if (error instanceof AxiosError && error.status === 400) {
+            if (error instanceof AxiosError && error.status === constants.HTTP_STATUS_BAD_REQUEST) {
                 result.success = true
                 return result
             }

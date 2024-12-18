@@ -1,17 +1,18 @@
-import { SMTPResponseCode } from './enums'
-import { SMTPClientError, SMTPClientErrorCode } from './errors'
+import type { SmtpResponse } from './dto'
 
-export function getSmtpResponseCode(response: string): SMTPResponseCode {
-    const responseCode = Number(response.substring(0, 3))
+export function parseSmtpResponse(rawResponse: string): SmtpResponse {
+    const regex = /^(\d{3})(?:[ -](\d\.\d\.\d))? (.+)$/
+    const match = regex.exec(rawResponse)
 
-    if (Object.values(SMTPResponseCode).includes(responseCode)) {
-        return responseCode as SMTPResponseCode
+    if (match == null) {
+        throw new Error(`Invalid SMTP response: "${rawResponse}"`)
     }
 
-    throw new SMTPClientError(SMTPClientErrorCode.UnknownErrorCode, 'Unknown code: ' + responseCode)
-}
+    const [, code, enhancedCode, message] = match
 
-export function isLastLine(line: string): boolean {
-    const regex = /^\d{3} /
-    return regex.test(line)
+    return {
+        code: parseInt(code, 10),
+        enhancedCode: enhancedCode !== '' ? enhancedCode : undefined,
+        message: message.trim(),
+    }
 }

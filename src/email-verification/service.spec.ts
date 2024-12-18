@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
+
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationService } from './service'
 import { MockEmailVerificationRepository } from './repository'
@@ -57,7 +59,7 @@ describe('EmailVerificationService', () => {
         const result = await emailVerificationService.verifyEmail({ email })
 
         expect(result).toEqual(expectedEmailVerificationResult)
-        expect(smtpVerifierMock.verify).toHaveBeenCalledWith(email)
+        expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
         expect(catchAllVerifierMock.tryAll).not.toHaveBeenCalled()
         expect(emailVerificationRepositoryMock.save).toHaveBeenCalledWith(expectedEmailVerificationResult)
     })
@@ -71,7 +73,7 @@ describe('EmailVerificationService', () => {
         const result = await emailVerificationService.verifyEmail({ email })
 
         expect(result).toEqual(expectedResult)
-        expect(smtpVerifierMock.verify).toHaveBeenCalledWith(email)
+        expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
         expect(catchAllVerifierMock.tryAll).not.toHaveBeenCalled()
         expect(emailVerificationRepositoryMock.save).toHaveBeenCalledWith(expectedResult)
     })

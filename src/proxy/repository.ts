@@ -1,4 +1,4 @@
-import type { ProxyFVO, ProxyMVO } from './dto'
+import type { ProxyFvo, ProxyMvo } from './dto'
 
 export type ProxyType = 'http' | 'socks4' | 'socks5'
 
@@ -14,6 +14,6 @@ export interface Proxy {
 export interface ProxyRepository {
     getAll: () => Promise<Proxy[]>
     getById: (id: string) => Promise<Proxy | null>
-    save: (proxy: ProxyFVO) => Promise<Proxy>
-    update: (id: string, proxy: ProxyMVO) => Promise<Proxy | null>
+    save: (proxy: ProxyFvo) => Promise<Proxy>
+    update: (id: string, proxy: ProxyMvo) => Promise<Proxy | null>
 }

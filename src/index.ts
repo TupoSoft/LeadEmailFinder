@@ -8,31 +8,45 @@ import {
     MongoEmailVerificationRepository,
     RedisCatchAllCache,
 } from './email-verification'
-import defaultProxyRotator from './util/proxy'
 import axios from 'axios'
-import { ProxySocketConnector } from './socket-connector'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { constants as httpConstants } from 'http2'
-import { SMTPClientFactoryImpl, SMTPVerifierImpl } from './smtp'
+import { SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
-import { Redis } from 'ioredis'
 import { log } from './middleware'
 import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
+import { ProxyService } from './proxy'
+import { MongoProxyRepository } from './proxy/mongo-repository'
+import { RedisConnectionLimiter } from './smtp/connection-limiter'
+import { ProxyController } from './proxy/controller'
+import { ProxyRouter } from './proxy/router'
+import pinoFactory from 'pino'
+import pinoHttp from 'pino-http'
+import { PinoLogger } from './logging'
+import { ok } from 'node:assert'
+import { SmtpClientFactoryImpl } from './smtp/client-factory'
+import { DEFAULT_PORT } from './common/constants'
+import { getRedis } from './util/redis'
 
-const { PORT } = process.env
-
-const port = PORT ?? 3000
+const { env } = process
+const { PORT = DEFAULT_PORT } = env
 
 async function main(): Promise<void> {
+    const pino = pinoFactory({
+        level: 'debug',
+    })
+    const logger = new PinoLogger(pino)
+    const pinoLoggingMiddleware = pinoHttp({
+        logger: pino,
+    })
+
     const router = Router()
     router.use(log)
 
     const db = await dbFactory()
 
-    const redis = new Redis({
-        host: 'redis',
-    })
+    const redis = await getRedis()
 
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
@@ -40,19 +54,22 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController)
     domainRouter.init()
 
-    const proxyRotator = defaultProxyRotator
-    const axiosInstance = axios.create({
-        timeout: 30000,
-    })
+    const axiosInstance = axios.create({})
 
     const dnsCache = new DNSCacheImpl(redis)
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
-    const proxySocketConnector = new ProxySocketConnector(proxyRotator.getRandomProxy())
-    const smtpClientFactory = new SMTPClientFactoryImpl(proxySocketConnector, dnsCache)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
+    const proxyRepository = new MongoProxyRepository(db)
+    const proxyService = new ProxyService(proxyRepository)
+    const proxyController = new ProxyController(proxyService)
+    const proxyRouter = new ProxyRouter(router, proxyController)
+    proxyRouter.init()
+
     const catchAllCache = new RedisCatchAllCache(redis)
-    const smtpVerifier = new SMTPVerifierImpl(smtpClientFactory, dnsCache, catchAllCache)
+    const connectionLimiter = new RedisConnectionLimiter(redis, logger)
+    const smtpClientFactory = new SmtpClientFactoryImpl(connectionLimiter, logger)
+    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, smtpClientFactory)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,
@@ -64,22 +81,37 @@ async function main(): Promise<void> {
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
-    const findLeadService = new FindLeadService(emailVerificationService, domainService)
+    const findLeadService = new FindLeadService(emailVerificationService, logger)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()
 
-    express()
+    const server = express()
         .disable('x-powered-by')
+        .use(pinoLoggingMiddleware)
         .use(express.json())
         .use(router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-            console.error('The error has occurred: ', err)
+            ok(err instanceof Error)
+            logger.error(`The error has occurred: ${err}`)
             res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
         })
-        .listen(port, () => {
-            console.log(`Server is running on port ${port}`)
+        .listen(PORT, () => {
+            logger.info(`Server is running on port ${PORT}`)
         })
+
+    const onTerminationSignal = (): void => {
+        server.close(err => {
+            if (err !== undefined) {
+                logger.error(`Server closed with error: ${err}`)
+            } else {
+                logger.error(`Shutting the server down gracefully`)
+            }
+        })
+    }
+
+    process.on('SIGINT', onTerminationSignal)
+    process.on('SIGTERM', onTerminationSignal)
 }
 
 void main()

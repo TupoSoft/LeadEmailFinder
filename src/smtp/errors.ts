@@ -1,5 +1,3 @@
-import type { MxRecord } from 'node:dns'
-
 export const enum SMTPClientErrorCode {
     SessionInitiationFailed,
     ClientInitiationFailed,
@@ -10,22 +8,12 @@ export const enum SMTPClientErrorCode {
     RecipientAddressRejected,
 }
 
-export class SMTPClientError extends Error {
-    name = 'SMTPClientError'
-
+export class SmtpError extends Error {
     constructor(
         readonly code: number,
-        message?: string,
+        readonly enhancedCode = '',
+        message: string,
     ) {
         super(message)
-        this.code = code
-    }
-}
-
-export class SMTPSessionInitiationFailedError extends SMTPClientError {
-    name = 'SMTPSessionInitiationFailedError'
-
-    constructor(readonly mxRecords: MxRecord[]) {
-        super(SMTPClientErrorCode.SessionInitiationFailed, 'None of MX records accepted connection.')
     }
 }

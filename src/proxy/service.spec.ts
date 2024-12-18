@@ -2,20 +2,17 @@
 
 import { describe, expect, it, jest } from '@jest/globals'
 import { ProxyService } from './service'
-import type { Proxy, ProxyRepository } from './repository'
-import type { MongoProxyRepository } from './mongo-repository'
-import type { ProxyFVO, ProxyMVO } from './dto'
+import { MongoProxyRepository } from './mongo-repository'
+import { MongoClient } from 'mongodb'
+import Mocked = jest.Mocked
+import type { Proxy } from './repository'
 
-export class MockProxyRepository implements ProxyRepository {
-    getAll: () => Promise<Proxy[]> = jest.fn<typeof MongoProxyRepository.prototype.getAll>()
-    getById: (id: string) => Promise<Proxy | null> = jest.fn<typeof MongoProxyRepository.prototype.getById>()
-    save: (proxy: ProxyFVO) => Promise<Proxy> = jest.fn<typeof MongoProxyRepository.prototype.save>()
-    update: (id: string, proxy: ProxyMVO) => Promise<Proxy | null> =
-        jest.fn<typeof MongoProxyRepository.prototype.update>()
-}
+jest.mock('./mongo-repository')
 
 describe('ProxyService', () => {
-    const proxyRepository = new MockProxyRepository() as jest.Mocked<MockProxyRepository>
+    const mongoClient = new MongoClient('mongodb://localhost:27017')
+    const db = mongoClient.db()
+    const proxyRepository = new MongoProxyRepository(db) as Mocked<MongoProxyRepository>
     const proxyService = new ProxyService(proxyRepository)
 
     const port = 3333

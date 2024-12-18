@@ -21,19 +21,13 @@ export interface DomainRepository {
 function domainEntityToDomainSchema(domain: Domain): DomainSchema {
     const { name: _id, ...domainSchema } = domain
 
-    return {
-        _id,
-        ...domainSchema,
-    }
+    return { _id, ...domainSchema }
 }
 
 function domainSchemaToDomainEntity(domainSchema: DomainSchema): Domain {
     const { _id: name, ...domain } = domainSchema
 
-    return {
-        name,
-        ...domain,
-    }
+    return { name, ...domain }
 }
 
 export class DomainNotFoundError extends Error {
@@ -53,18 +47,21 @@ export class MongoDomainRepository implements DomainRepository {
         name: string,
         pattern: string,
     ): Promise<void> => {
+        const NO_MATCHES = 0x00
+        const INC_VALUE = 0x01
+
         const { matchedCount, modifiedCount } = await this.collection.updateOne(
             { _id: name },
-            { $inc: { 'emailPatternUsage.$[element].usageCount': 1 } },
+            { $inc: { 'emailPatternUsage.$[element].usageCount': INC_VALUE } },
             { arrayFilters: [{ 'element.pattern': pattern }], upsert: true },
         )
 
-        if (matchedCount === 0 || modifiedCount === 0) {
+        if (matchedCount === NO_MATCHES || modifiedCount === NO_MATCHES) {
             await this.collection.updateOne(
                 { _id: name },
                 {
                     $push: {
-                        emailPatternUsage: { pattern, usageCount: 1 },
+                        emailPatternUsage: { pattern, usageCount: INC_VALUE },
                     },
                 },
             )

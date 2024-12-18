@@ -1,16 +1,21 @@
 import type { Redis } from 'ioredis'
 import { setTimeout } from 'node:timers'
 import { ok } from 'node:assert'
-import console from 'node:console'
+import type { Logger } from '../logging'
 
 export const REDIS_KEY = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
 
 export const ATOMIC_INCR_SCRIPT = `
-    local current = redis.call('GET', KEYS[1])
-    local limit = tonumber(ARGV[1])
-    if not current or tonumber(current) < limit then
-        redis.call('INCR', KEYS[1])
-        redis.call('EXPIRE', KEYS[1], ARGV[2])
+    local proxy = KEYS[1]
+    local exchange = ARGV[1]
+    local limit = tonumber(ARGV[2])
+    local ttl = tonumber(ARGV[3])
+    local result = redis.call('HMGET', proxy, exchange)
+    local count = result[1]
+    
+    if not count or tonumber(count) < limit then
+        redis.call('HINCRBY', proxy, exchange, 1)
+        redis.call('EXPIRE', proxy, ttl)
         return 1
     else
         return 0
@@ -18,10 +23,13 @@ export const ATOMIC_INCR_SCRIPT = `
 `
 
 export const ATOMIC_DECR_SCRIPT = `
-    local current = redis.call('GET', KEYS[1])
-    if current and tonumber(current) > 0 then
-        redis.call('DECR', KEYS[1])
-        redis.call('EXPIRE', KEYS[1], ARGV[1])
+    local proxy, exchange, ttl = KEYS[1], ARGV[1], tonumber(ARGV[2])
+    local result = redis.call('HMGET', proxy, exchange)
+    local count = result[1]
+    
+    if count and tonumber(count) > 0 then
+        redis.call('HINCRBY', proxy, exchange, -1)
+        redis.call('EXPIRE', proxy, ttl)
         return 1
     else
         return 0
@@ -29,70 +37,88 @@ export const ATOMIC_DECR_SCRIPT = `
 `
 
 export interface ConnectionLimiter {
-    acquire: (source: string, destination: string) => Promise<void>
+    acquire: (source: string, destination: string, signal?: AbortSignal) => Promise<boolean>
 
     release: (source: string, destination: string) => Promise<void>
 }
 
 export class RedisConnectionLimiter implements ConnectionLimiter {
-    constructor(
-        private readonly redisClient: Redis,
-        private readonly redisKey = REDIS_KEY,
-        private readonly maxConnections = 1,
-        private readonly ttlSeconds = 60,
-    ) {}
+    public static readonly LOCK_SUCCESS = 1
+    public static readonly LOCK_FAILURE = 0
+    public static readonly DEFAULT_MAX_CONNECTIONS = 1
+    public static readonly ACQUIRE_WAIT_MS = 100
+    public static readonly DEFAULT_TTL_SECONDS = 300
+    public static readonly NUM_KEYS = 1
 
-    async acquire(source: string, destination: string, signal?: AbortSignal): Promise<void> {
-        const key = this.getKey(source, destination)
+    constructor(
+        private readonly redis: Redis,
+        private readonly logger: Logger,
+        private readonly redisKey = REDIS_KEY,
+        private readonly maxConnections = RedisConnectionLimiter.DEFAULT_MAX_CONNECTIONS,
+        private readonly ttlSeconds = RedisConnectionLimiter.DEFAULT_TTL_SECONDS,
+    ) {
+        this.redis.defineCommand('incrementConnection', {
+            lua: ATOMIC_INCR_SCRIPT,
+            readOnly: true,
+            numberOfKeys: RedisConnectionLimiter.NUM_KEYS,
+        })
+
+        this.redis.defineCommand('decrementConnection', {
+            lua: ATOMIC_DECR_SCRIPT,
+            readOnly: true,
+            numberOfKeys: RedisConnectionLimiter.NUM_KEYS,
+        })
+    }
+
+    async acquire(source: string, destination: string, signal?: AbortSignal): Promise<boolean> {
+        const key = this.getKey(source)
 
         while (true) {
-            if (signal?.aborted === true) {
-                throw new Error('Acquisition aborted')
-            }
-
             try {
-                const result = await this.redisClient.eval(
-                    ATOMIC_INCR_SCRIPT,
-                    1,
+                if (signal?.aborted === true) return false
+
+                const result = await this.redis.incrementConnection(
                     key,
+                    destination,
                     this.maxConnections,
                     this.ttlSeconds,
-                ) as number
+                )
 
-                if (result === 1) {
-                    console.info(`${source}:${destination} incremented`)
-                    return
+                if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
+                    this.logger.debug(`${source}:${destination} incremented`)
+                    return true
                 }
 
-                console.info(`${source} is waiting to connect to ${destination}`)
-                await new Promise(resolve => setTimeout(resolve, 100))
+                await new Promise(resolve => setTimeout(resolve, RedisConnectionLimiter.ACQUIRE_WAIT_MS))
             } catch (error) {
                 ok(error instanceof Error)
-                console.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
-                throw error
+                this.logger.error(`Error acquiring connection for ${source}:${destination}: ${error.message}`)
+
+                return false
             }
         }
     }
 
     async release(source: string, destination: string): Promise<void> {
-        const key = this.getKey(source, destination)
+        const key = this.getKey(source)
 
         try {
-            const result = await this.redisClient.eval(ATOMIC_DECR_SCRIPT, 1, key, this.ttlSeconds) as number
+            const result = await this.redis.decrementConnection(key, destination, this.ttlSeconds)
 
-            if (result === 1) {
-                console.info(`${source}:${destination} decremented`)
+            if (result === RedisConnectionLimiter.LOCK_SUCCESS) {
+                this.logger.debug(`${source}:${destination} decremented`)
             } else {
-                console.info(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.debug(`${source}:${destination} not decremented (key might have expired)`)
+                this.logger.debug(`${source}:${destination} not decremented (key might have expired)`)
             }
         } catch (error) {
             ok(error instanceof Error)
-            console.error(`Error releasing connection for ${source}:${destination}: ${error.message}`)
+            this.logger.error(`Error releasing connection for ${source}:${destination}: ${error.message}`)
             throw error
         }
     }
 
-    private getKey(source: string, destination: string): string {
-        return `${this.redisKey}:${source}-${destination}`
+    private getKey(source: string): string {
+        return `${this.redisKey}:${source}`
     }
 }

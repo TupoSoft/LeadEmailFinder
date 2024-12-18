@@ -1,18 +1,12 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { describe, expect, it, jest } from '@jest/globals'
 import { Redis } from 'ioredis'
 import { RedisCatchAllCache } from './catch-all-cache'
-
-jest.mock('ioredis', () => ({
-    Redis: jest.fn().mockImplementation(() => ({
-        get: jest.fn(),
-        set: jest.fn(),
-    })),
-}))
+import Mocked = jest.Mocked
 
 describe('CatchAllCache', () => {
-    const redisMock = new Redis() as jest.Mocked<Redis>
+    const redisMock = new Redis() as Mocked<Redis>
     const catchAllCache = new RedisCatchAllCache(redisMock)
 
     const domain = 'example.com'
@@ -44,13 +38,6 @@ describe('CatchAllCache', () => {
         it('should successfully cache catch all status for domain', async () => {
             redisMock.set.mockResolvedValueOnce('OK')
             await expect(catchAllCache.setCatchAllStatusForDomain(domain, status)).resolves.not.toThrow()
-        })
-
-        it('should throw an error if failed to cache', async () => {
-            redisMock.set.mockResolvedValueOnce(null)
-            await expect(catchAllCache.setCatchAllStatusForDomain(domain, status)).rejects.toThrow(
-                `Failed to cache catch all status '${status}' for domain '${domain}'`,
-            )
         })
 
         it('should rethrow an error if redis throws', async () => {

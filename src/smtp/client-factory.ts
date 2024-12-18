@@ -1,19 +1,16 @@
-import type { SocketConnector } from '../socket-connector'
-import { PromisifiedSocket } from '../my-socket'
-import { type SMTPClient, SMTPClientImpl } from './client'
-import type { DNSCache } from '../dns'
+import { type SmtpClient, SmtpClientImpl } from './client'
+import type { ConnectionLimiter } from './connection-limiter'
+import type { Logger } from '../logging'
 
-export interface SMTPClientFactory {
-    getInstance: () => SMTPClient
+export interface SmtpClientFactory {
+    getClient: () => SmtpClient
 }
 
-export class SMTPClientFactoryImpl implements SMTPClientFactory {
+export class SmtpClientFactoryImpl implements SmtpClientFactory {
     constructor(
-        private readonly socketConnector: SocketConnector,
-        private readonly dnsCache: DNSCache,
+        private readonly connectionLimiter: ConnectionLimiter,
+        private readonly logger: Logger,
     ) {}
 
-    getInstance: () => SMTPClient = (): SMTPClient => {
-        return new SMTPClientImpl(new PromisifiedSocket(this.socketConnector), this.dnsCache)
-    }
+    getClient: () => SmtpClient = () => new SmtpClientImpl(this.connectionLimiter, this.logger)
 }

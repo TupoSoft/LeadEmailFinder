@@ -1,0 +1,17 @@
+### GET
+GET http://localhost:3000/proxy
+Content-Type: application/json
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+
+### POST
+POST http://localhost:3000/proxy
+Content-Type: application/json
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+
+{
+  "type": "http",
+  "host": "example.com",
+  "port": 3333,
+  "password": "password",
+  "user": "example"
+}
