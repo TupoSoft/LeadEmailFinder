@@ -2,8 +2,6 @@ name: Deploy to Docker Swarm
 
 on:
   push:
-    #    branches:
-    #      - master
     paths:
       - swarm.yml
 
