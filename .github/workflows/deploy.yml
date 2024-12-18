@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - swarm.yaml
+      - swarm.yml
 
 jobs:
   deploy:
@@ -37,7 +37,7 @@ jobs:
 
       - name: Deploy stack to Docker Swarm
         run: |
-          docker stack deploy --with-registry-auth -c swarm.yaml danilo
+          docker stack deploy --with-registry-auth -c swarm.yml verifier_v2
         env:
           ADMIN_TELEGRAM_IDS: ${{ secrets.ADMIN_TELEGRAM_IDS }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
