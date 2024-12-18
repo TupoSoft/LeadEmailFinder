@@ -2,14 +2,12 @@ name: Deploy to Docker Swarm
 
 on:
   push:
-    paths:
-      - swarm.yml
-  pull_request:
+    branches:
+      - master
     paths:
       - swarm.yml
 
 jobs:
-  #  test
   deploy:
     name: Deploy to Docker Swarm
     runs-on: ubuntu-latest
