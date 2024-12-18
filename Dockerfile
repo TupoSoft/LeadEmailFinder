@@ -6,8 +6,7 @@
 
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
-ARG NODE_VERSION=20.16.0
-ARG PNPM_VERSION=9.7.0
+ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -15,9 +14,9 @@ RUN apk add --no-cache curl wget bind-tools
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm@${PNPM_VERSION}
+    npm install -g pnpm
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.local/share/pnpm/store to speed up subsequent builds.
@@ -41,4 +40,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD ["pnpm", "start:dev"]
+CMD ["pnpm", "dev"]
