@@ -1,4 +1,4 @@
-name: Node.js Test Runner
+name: Test, Build, Push
 
 on:
   push:
