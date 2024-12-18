@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - swarm.yml
+  pull_request:
+    paths:
+      - swarm.yml
 
 jobs:
   #  test
