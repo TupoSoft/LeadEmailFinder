@@ -8,6 +8,7 @@ import type { Proxy, ProxyService } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import type { SmtpClientFactory } from './client-factory'
 import { appendRandomPrefix } from '../util/string'
+import { promiseWithTimeout } from '../util/timeout'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -47,7 +48,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         const client = await this.getSmtpClient(domain)
 
         try {
-            await client.isReady()
+            await promiseWithTimeout(client.isReady(), 5000, new Error(`Timeout: ${email}`))
 
             const hostnames = await this.dnsCache.resolve(client.hostname, 'PTR')
             const [clientHostname] = hostnames
@@ -71,12 +72,14 @@ export class SMTPVerifier implements ISMTPVerifier {
                     (_: unknown) => false,
                 )
             }
+
+            await client.quit()
         } catch (error) {
             ok(isNativeError(error))
             console.error(`Error in SMTPVerifier.verify: `, error)
             throw error
         } finally {
-            void client.quit()
+            client.end()
         }
 
         return smtpVerificationResult

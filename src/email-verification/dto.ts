@@ -13,7 +13,7 @@ export interface EmailVerificationResult {
     error?: string
     mxDomain?: string
     sources: EmailVerificationSource[]
-    exists: boolean
+    exists: boolean | null
     targetExchange?: string
     verifiedAt?: Date
 }

@@ -54,7 +54,7 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
     public static readonly LOCK_FAILURE = 0
     public static readonly DEFAULT_MAX_CONNECTIONS = 1
     public static readonly ACQUIRE_WAIT_MS = 100
-    public static readonly DEFAULT_TTL_SECONDS = 300
+    public static readonly DEFAULT_TTL_SECONDS = 60
     public static readonly NUM_KEYS = 1
 
     constructor(
