@@ -12,6 +12,7 @@ import type { ConnectionLimiter } from './connection-limiter'
 import { hostname as osHostname } from 'node:os'
 import { connect } from '../socket/connect'
 import { isNativeError } from 'node:util/types'
+import { randomUUID } from 'node:crypto'
 
 export interface SmtpClientConnectOptions {
     exchange: string
@@ -30,6 +31,7 @@ export interface SmtpClient {
     mailFrom: (senderEmail: string) => Promise<void>
     rcptTo: (receiverEmail: string) => Promise<void>
     quit: () => Promise<void>
+    end: () => void
 
     isReady: () => Promise<void>
 }
@@ -88,6 +90,7 @@ export class SmtpClientImpl implements SmtpClient {
             })
 
             this.logger = this.logger.child({
+                id: randomUUID(),
                 source: hostname,
                 exchange,
             })
@@ -134,8 +137,10 @@ export class SmtpClientImpl implements SmtpClient {
         if (this.socket.readyState !== 'closed') {
             await this.sendCommand('QUIT')
         }
+    }
 
-        this.socket.end('QUIT')
+    end(): void {
+        this.socket?.end()
     }
 
     private async readResponse(): Promise<SmtpResponse> {

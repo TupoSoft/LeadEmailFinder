@@ -24,7 +24,7 @@ export class EmailVerificationService {
         const [localPart, domain] = email.split('@')
 
         const emailVerification: EmailVerificationResult = {
-            exists: false,
+            exists: null,
             sources: [],
             domain,
             localPart,
@@ -53,7 +53,7 @@ export class EmailVerificationService {
             console.error(`Error in verifyEmail: `, error)
         }
 
-        if (throwIfNonexistent === true && !emailVerification.exists) {
+        if (throwIfNonexistent === true && emailVerification.exists !== true) {
             throw new Error(`The email ${email} doesn't exist`)
         }
 

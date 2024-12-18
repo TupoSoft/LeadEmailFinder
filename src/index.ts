@@ -54,7 +54,9 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController)
     domainRouter.init()
 
-    const axiosInstance = axios.create({})
+    const axiosInstance = axios.create({
+        timeout: 10000,
+    })
 
     const dnsCache = new DNSCacheImpl(redis)
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
