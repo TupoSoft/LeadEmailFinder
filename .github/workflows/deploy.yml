@@ -8,6 +8,7 @@ on:
       - swarm.yml
 
 jobs:
+  #  test
   deploy:
     name: Deploy to Docker Swarm
     runs-on: ubuntu-latest
