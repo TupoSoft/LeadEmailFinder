@@ -36,12 +36,4 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy stack to Docker Swarm
-        run: |
-          docker stack deploy --with-registry-auth -c swarm.yml verifier_v2
-        env:
-          ADMIN_TELEGRAM_IDS: ${{ secrets.ADMIN_TELEGRAM_IDS }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
-          GITHUB_ORG: ${{ vars.GH_ORG }}
-          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+        run: docker stack deploy --with-registry-auth -c swarm.yml verifier_v2
