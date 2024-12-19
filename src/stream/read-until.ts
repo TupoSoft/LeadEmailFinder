@@ -55,6 +55,10 @@ export async function readUntil(
             resolve(buffer)
         }
 
+        if (readable.isPaused()) {
+            readable.resume()
+        }
+        
         readable.on('data', onData)
         readable.on('error', onError)
         readable.on('end', onEnd)
