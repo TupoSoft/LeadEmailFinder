@@ -11,13 +11,17 @@ export async function readUntil(
         let buffer = ''
         const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
 
+        const cleanup = (): void => {
+            readable.off('data', onData)
+            readable.off('error', onError)
+            readable.off('end', onEnd)
+        }
+
         const onData = (chunk: Buffer): void => {
             buffer += chunk.toString()
 
             if (buffer.length > maxBufferSize) {
-                readable.off('data', onData)
-                readable.off('error', onError)
-                readable.off('end', onEnd)
+                cleanup()
                 reject(new Error('Buffer exceeded maximum allowed size.'))
                 return
             }
@@ -31,9 +35,7 @@ export async function readUntil(
                 const matchedData = buffer.slice(FIRST_ARRAY_ELEMENT_INDEX, firstMatchLastIndex + firstMatch.length)
                 const unmatchedData = buffer.slice(firstMatchLastIndex + firstMatch.length)
 
-                readable.off('data', onData)
-                readable.off('error', onError)
-                readable.off('end', onEnd)
+                cleanup()
 
                 readable.pause()
                 readable.unshift(unmatchedData)
@@ -43,22 +45,19 @@ export async function readUntil(
         }
 
         const onError = (err: Error): void => {
-            readable.off('data', onData)
-            readable.off('error', onError)
-            readable.off('end', onEnd)
+            cleanup()
             reject(new Error(`Stream error: ${err.message}`))
         }
 
         const onEnd = (): void => {
-            readable.off('data', onData)
-            readable.off('error', onError)
+            cleanup()
             resolve(buffer)
         }
 
         if (readable.isPaused()) {
             readable.resume()
         }
-        
+
         readable.on('data', onData)
         readable.on('error', onError)
         readable.on('end', onEnd)
