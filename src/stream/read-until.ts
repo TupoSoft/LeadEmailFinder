@@ -1,13 +1,26 @@
 import type { Readable } from 'node:stream'
 import { FIRST_ARRAY_ELEMENT_INDEX } from '../common/constants'
+import { KILOBYTE } from './constants'
 
-export async function readUntil(readable: Readable, matchPattern: RegExp | string): Promise<string> {
+export async function readUntil(
+    readable: Readable,
+    matchPattern: RegExp | string,
+    maxBufferSize = KILOBYTE,
+): Promise<string> {
     return await new Promise((resolve, reject) => {
         let buffer = ''
         const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
 
         const onData = (chunk: Buffer): void => {
             buffer += chunk.toString()
+
+            if (buffer.length > maxBufferSize) {
+                readable.off('data', onData)
+                readable.off('error', onError)
+                reject(new Error('Buffer exceeded maximum allowed size.'))
+                return
+            }
+
             const matchArray = buffer.match(pattern)
 
             if (matchArray !== null) {
@@ -19,7 +32,9 @@ export async function readUntil(readable: Readable, matchPattern: RegExp | strin
 
                 readable.off('data', onData)
                 readable.off('error', onError)
+                readable.off('end', onEnd)
 
+                readable.pause()
                 readable.unshift(unmatchedData)
 
                 resolve(matchedData)
@@ -29,10 +44,18 @@ export async function readUntil(readable: Readable, matchPattern: RegExp | strin
         const onError = (err: Error): void => {
             readable.off('data', onData)
             readable.off('error', onError)
-            reject(err)
+            readable.off('end', onEnd)
+            reject(new Error(`Stream error: ${err.message}`))
+        }
+
+        const onEnd = (): void => {
+            readable.off('data', onData)
+            readable.off('error', onError)
+            resolve(buffer)
         }
 
         readable.on('data', onData)
         readable.on('error', onError)
+        readable.on('end', onEnd)
     })
 }
