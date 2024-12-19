@@ -52,7 +52,7 @@ describe('readUntil', () => {
         const stream = Readable.from(['a'.repeat(KILOBYTE), 'b'.repeat(KILOBYTE)])
         const pattern = /c/
 
-        await expect(readUntil(stream, pattern, KILOBYTE)).rejects.toThrow('Buffer exceeded maximum allowed size.')
+        await expect(readUntil(stream, pattern)).rejects.toThrow('Buffer exceeded maximum allowed size.')
     })
 
     it('should handle empty streams gracefully', async () => {
