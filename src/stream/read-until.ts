@@ -17,6 +17,7 @@ export async function readUntil(
             if (buffer.length > maxBufferSize) {
                 readable.off('data', onData)
                 readable.off('error', onError)
+                readable.off('end', onEnd)
                 reject(new Error('Buffer exceeded maximum allowed size.'))
                 return
             }
