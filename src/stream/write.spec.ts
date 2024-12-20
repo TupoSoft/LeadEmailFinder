@@ -45,7 +45,7 @@ describe('write', () => {
 
     it('should reject if the stream is writableEnded', async () => {
         const stream = new Writable()
-        Object.defineProperty(stream, 'writableEnded', { value: true })
+        stream.end()
 
         await expect(write(stream, 'test data')).rejects.toThrow('Stream is already closed or ended.')
     })
