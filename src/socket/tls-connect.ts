@@ -10,15 +10,18 @@ export async function tlsConnectAsync(
     arg3?: ConnectionOptions,
 ): Promise<TLSSocket> {
     return await new Promise<TLSSocket>((resolve, reject) => {
-        const onSecureConnect = (): void => {
+        const cleanup = (): void => {
+            socket.off('secureConnect', onSecureConnect)
             socket.off('error', onError)
+        }
 
+        const onSecureConnect = (): void => {
+            cleanup()
             resolve(socket)
         }
 
         const onError = (err: Error): void => {
-            socket.off('secureConnect', onSecureConnect)
-
+            cleanup()
             reject(err)
         }
 
