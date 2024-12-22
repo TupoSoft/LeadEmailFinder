@@ -33,7 +33,6 @@ services:
       - redis.json
     secrets:
       - mongo_url
-      - proxies
 
   mongo:
     image: mongo:latest
@@ -79,8 +78,6 @@ secrets:
     file: ./secrets/mongo_root_password.txt
   mongo_url:
     file: ./secrets/mongo_url.txt
-  proxies:
-    file: ./secrets/proxies.json
 
 volumes:
   mongo-data:
