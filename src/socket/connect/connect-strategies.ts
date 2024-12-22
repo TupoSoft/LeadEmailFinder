@@ -5,7 +5,7 @@ import { connectViaSocks4Proxy } from './socks4-connect'
 import { connectViaSocks5Proxy } from './socks5-connect'
 import type { ConnectOptions } from './connect'
 import { createConnectionAsync } from '../create-connection-async'
-import { tlsConnectAsync } from '../tlsConnect'
+import { tlsConnectAsync } from '../tls-connect'
 
 export interface ConnectThroughProxyOptions extends ConnectOptions {
     proxy: Proxy
