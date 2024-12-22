@@ -5,9 +5,9 @@ export async function tlsConnectAsync(options: ConnectionOptions): Promise<TLSSo
 export async function tlsConnectAsync(port: number, options?: ConnectionOptions): Promise<TLSSocket>
 export async function tlsConnectAsync(port: number, host?: string, options?: ConnectionOptions): Promise<TLSSocket>
 export async function tlsConnectAsync(
-    arg1: ConnectionOptions | number,
-    arg2?: ConnectionOptions | string,
-    arg3?: ConnectionOptions,
+    param1: ConnectionOptions | number,
+    param2?: ConnectionOptions | string,
+    param3?: ConnectionOptions,
 ): Promise<TLSSocket> {
     return await new Promise<TLSSocket>((resolve, reject) => {
         const cleanup = (): void => {
@@ -26,14 +26,14 @@ export async function tlsConnectAsync(
         }
 
         const createSocket = (): TLSSocket => {
-            if (typeof arg1 === 'number') {
-                if (isStringOrUndefined(arg2)) {
-                    return connect(arg1, arg2, arg3, onSecureConnect)
+            if (typeof param1 === 'number') {
+                if (isStringOrUndefined(param2)) {
+                    return connect(param1, param2, param3, onSecureConnect)
                 } else {
-                    return connect(arg1, arg2, onSecureConnect)
+                    return connect(param1, param2, onSecureConnect)
                 }
-            } else if (isTlsConnectionOptions(arg1)) {
-                return connect(arg1, onSecureConnect)
+            } else if (isTlsConnectionOptions(param1)) {
+                return connect(param1, onSecureConnect)
             } else {
                 throw new Error(`Arguments don't match any of the function signatures`)
             }
