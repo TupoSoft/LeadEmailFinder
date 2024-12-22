@@ -1,6 +1,6 @@
 import type { ProxyFvo, ProxyMvo } from './dto'
 
-export type ProxyType = 'http' | 'socks4' | 'socks5'
+export type ProxyType = 'http' | 'https' | 'socks4' | 'socks5'
 
 export interface Proxy {
     id: string
