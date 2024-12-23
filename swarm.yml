@@ -23,6 +23,7 @@ services:
       - mongo_url
       - source: redis-config
         target: redis-config.json
+      - tokens.json
     networks:
       - default
       - redis_default
