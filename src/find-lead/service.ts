@@ -64,7 +64,7 @@ export class FindLeadService {
     }
 
     async findSynonyms(domain: string): Promise<string[]> {
-        return this.findSynonyms(domain)
+        return await this.findSynonyms(domain)
     }
 
     private async findEmailForFormats(lead: Lead, formatUsages: EmailPatternUsage[]): Promise<EmailVerificationResult> {
