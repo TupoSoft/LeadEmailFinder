@@ -35,7 +35,7 @@ export class FindLeadControllerImpl implements FindLeadController {
     }
 
     findSynonyms(req: Request, res: Response, next: NextFunction): void {
-        const { domain } = matchedData(req)
+        const { domain } = matchedData<{ domain: string }>(req)
         this.findLeadService.findSynonyms(domain).then(
             value => res.json(value),
             reason => {

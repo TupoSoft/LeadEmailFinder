@@ -66,3 +66,11 @@ GET http://localhost:3000/ping
 
 ### Hello World!
 GET http://localhost:3000
+
+### Find synonyms
+POST http://localhost:3000/findSynonyms
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+{
+  "domain": "google.com"
+}

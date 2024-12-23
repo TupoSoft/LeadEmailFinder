@@ -31,7 +31,7 @@ export class FindLeadRouter {
         )
 
         // For testing purposes
-        this.router.get(
+        this.router.post(
             '/findSynonyms',
             authenticate,
             validate([
