@@ -30,6 +30,16 @@ export class FindLeadRouter {
             this.findLeadController.findLeads.bind(this.findLeadController),
         )
 
+        // For testing purposes
+        this.router.get(
+            '/findSynonyms',
+            authenticate,
+            validate([
+                body('domain').isString().notEmpty(),
+            ]),
+            this.findLeadController.findSynonyms.bind(this.findLeadController),
+        )
+
         this.router.get('/ping', log, (_, res: Response) => {
             res.send('PONG')
         })
