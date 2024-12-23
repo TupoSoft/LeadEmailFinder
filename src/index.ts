@@ -28,6 +28,7 @@ import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
 import { DEFAULT_PORT } from './common/constants'
 import { getRedis } from './util/redis'
+import { HTMLSynonymFinder } from './domain/synonym-finder'
 
 const { env } = process
 const { PORT = DEFAULT_PORT } = env
@@ -81,9 +82,10 @@ async function main(): Promise<void> {
 
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
+    const htmlSynonymFinder = new HTMLSynonymFinder()
     emailVerificationRouter.init()
 
-    const findLeadService = new FindLeadService(emailVerificationService, logger)
+    const findLeadService = new FindLeadService(emailVerificationService, logger, htmlSynonymFinder)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()
