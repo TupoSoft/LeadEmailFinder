@@ -26,8 +26,9 @@ import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
-import { DEFAULT_PORT } from './common/constants'
+import { DEFAULT_PORT, EXIT_FAILURE, EXIT_SUCCESS } from './common/constants'
 import { getRedis } from './util/redis'
+import { isNativeError } from 'node:util/types'
 
 const { env } = process
 const { PORT = DEFAULT_PORT } = env
@@ -107,7 +108,7 @@ async function main(): Promise<void> {
             if (err !== undefined) {
                 logger.error(`Server closed with error: ${err}`)
             } else {
-                logger.error(`Shutting the server down gracefully`)
+                logger.error(`Shutting down the server gracefully`)
             }
         })
     }
@@ -116,4 +117,13 @@ async function main(): Promise<void> {
     process.on('SIGTERM', onTerminationSignal)
 }
 
-void main()
+main().then(
+    () => process.exit(EXIT_SUCCESS),
+    (reason: unknown) => {
+        if (isNativeError(reason)) {
+            console.error(`The main function exited with error: ${reason}`)
+        }
+
+        process.exit(EXIT_FAILURE)
+    },
+)

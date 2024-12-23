@@ -7,12 +7,14 @@ on:
     paths:
       - '**/*.ts'
       - '**/*.js'
+      - Dockerfile
   pull_request:
     branches:
       - master
     paths:
       - '**/*.ts'
       - '**/*.js'
+      - Dockerfile
   workflow_dispatch:
 
 jobs:

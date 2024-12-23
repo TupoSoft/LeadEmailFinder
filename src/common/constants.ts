@@ -1,4 +1,5 @@
 export const DEFAULT_PORT = 3000
+export const EXIT_SUCCESS = 0x00
 export const EXIT_FAILURE = 0x01
 export const ZERO = 0x00
 export const EMPTY_ARRAY_LENGTH = ZERO
