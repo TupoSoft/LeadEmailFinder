@@ -8,10 +8,11 @@ function generateAuthTokenFromCredentials(user: string, password: string): strin
 
 export async function connectThroughHttpProxy(options: ConnectThroughProxyOptions): Promise<Socket> {
     const { host, port, signal, proxy } = options
-    const { host: proxyHost, port: proxyPort, user, password } = proxy
+    const { type, host: proxyHost, port: proxyPort, user, password } = proxy
     const path = `${host}:${port}`
 
     const socket = await directConnect({
+        secure: type === 'https',
         host: proxyHost,
         port: proxyPort,
         signal,

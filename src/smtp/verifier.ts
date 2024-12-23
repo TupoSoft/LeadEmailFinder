@@ -9,6 +9,8 @@ import { isNativeError } from 'node:util/types'
 import type { SmtpClientFactory } from './client-factory'
 import { appendRandomPrefix } from '../util/string'
 import { promiseWithTimeout } from '../util/timeout'
+import { isIP } from 'node:net'
+import { ZERO } from '../common/constants'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -50,7 +52,8 @@ export class SMTPVerifier implements ISMTPVerifier {
         try {
             await promiseWithTimeout(client.isReady(), 5000, new Error(`Timeout: ${email}`))
 
-            const hostnames = await this.dnsCache.resolve(client.hostname, 'PTR')
+            const hostnames =
+                isIP(client.hostname) !== ZERO ? await this.dnsCache.resolve(client.hostname, 'PTR') : [client.hostname]
             const [clientHostname] = hostnames
 
             await client.helo(clientHostname)

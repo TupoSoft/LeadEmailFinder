@@ -5,16 +5,20 @@ import { connectViaSocks4Proxy } from './socks4-connect'
 import { connectViaSocks5Proxy } from './socks5-connect'
 import type { ConnectOptions } from './connect'
 import { createConnectionAsync } from '../create-connection-async'
+import { tlsConnectAsync } from '../tls-connect'
 
 export interface ConnectThroughProxyOptions extends ConnectOptions {
     proxy: Proxy
 }
 
 export async function connectThroughProxy(options: ConnectThroughProxyOptions): Promise<Socket> {
-    const { proxy } = options
+    const {
+        proxy: { type },
+    } = options
 
-    switch (proxy.type) {
+    switch (type) {
         case 'http':
+        case 'https':
             return await connectThroughHttpProxy(options)
         case 'socks4':
             return await connectViaSocks4Proxy(options)
@@ -24,11 +28,13 @@ export async function connectThroughProxy(options: ConnectThroughProxyOptions): 
 }
 
 export async function directConnect(options: ConnectOptions): Promise<Socket> {
-    const { host, port, signal } = options
+    const { host, port, signal, secure } = options
 
-    return await createConnectionAsync({
+    const socket = await createConnectionAsync({
         host,
         port,
         signal,
     })
+
+    return secure === true ? await tlsConnectAsync({ socket }) : socket
 }

@@ -5,6 +5,7 @@ import type { Proxy } from '../../proxy'
 export interface ConnectOptions {
     host: string
     port: number
+    secure?: boolean
     timeout?: number
     proxy?: Proxy
     signal?: AbortSignal

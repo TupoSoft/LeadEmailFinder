@@ -1,26 +1,6 @@
 import type { NetConnectOpts, Socket } from 'node:net'
 import { createConnection } from 'net'
-import { ok } from 'node:assert'
-
-function isStringOrUndefined(value: unknown): value is string | undefined {
-    return typeof value === 'undefined' || typeof value === 'string'
-}
-
-export function isNetConnectOpts(value: unknown): value is NetConnectOpts {
-    try {
-        ok(value != null)
-        ok(typeof value === 'object')
-
-        const hasPort = 'port' in value && typeof value.port === 'number'
-        const hasPath = 'path' in value && typeof value.path === 'string'
-
-        ok(hasPort || hasPath)
-    } catch (error) {
-        return false
-    }
-
-    return true
-}
+import { isNetConnectOpts, isStringOrUndefined } from './type-guards'
 
 export async function createConnectionAsync(path: string | NetConnectOpts): Promise<Socket>
 export async function createConnectionAsync(port: number, host?: string): Promise<Socket>
