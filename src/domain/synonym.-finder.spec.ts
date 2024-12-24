@@ -1,5 +1,5 @@
 import { HTMLSynonymFinder } from './synonym-finder';
-import type { HttpClient } from '../http-client'; // Adjust the path as necessary
+import type { HttpClient } from '../http-client';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 describe('HTMLSynonymFinder', () => {
