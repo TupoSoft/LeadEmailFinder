@@ -1,16 +1,13 @@
-import axios from 'axios'
-import { load } from 'cheerio'
+import { load } from 'cheerio';
+import type { HttpClient } from '../http-client';
 
 export interface SynonymFinder {
-    findSynonymDomains: (domain: string) => Promise<string[]>
+    findSynonymDomains: (domain: string) => Promise<string[]>;
 }
 
 export class HTMLSynonymFinder implements SynonymFinder {
-    /**
-     * Fetches the homepage, extracts domains,
-     * looks for 'Contact'/'Privacy' links and fetches them,
-     * extracts domains from those pages, and returns all unique domains.
-     */
+    constructor(private readonly httpClient: HttpClient) {}
+
     public async findSynonymDomains(domain: string): Promise<string[]> {
         const foundDomains = new Set<string>();
 
@@ -32,21 +29,16 @@ export class HTMLSynonymFinder implements SynonymFinder {
 
         return Array.from(foundDomains);
     }
-    
+
     private async fetchHTML(url: string): Promise<string | null> {
         try {
-            const response = await axios.get(url);
-            if (response.status < 200 || response.status >= 300) {
-                return null;
-            }
-
-            return response.data;
+            const data = await this.httpClient.get<string>(url);
+            return data;
         } catch (error) {
             return null;
         }
     }
-        
-    
+
     private extractDomains(html: string, domainSet: Set<string>): void {
         const emailRegex = /[A-Za-z0-9._%+\-]+@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})/gi;
         const matches = html.matchAll(emailRegex);
@@ -56,19 +48,19 @@ export class HTMLSynonymFinder implements SynonymFinder {
                 domainSet.add(match[1].toLowerCase());
             }
         }
-    }      
+    }
 
     private async findRelevantLinks(html: string, baseUrl: string): Promise<string[]> {
         const $ = load(html);
 
         const links = $('a')
-        .filter((_i, el) => {
-            const text = $(el).text().toLowerCase();
-            return text.includes('contact') || text.includes('privacy');
-        })
-        .map((_i, el) => $(el).attr('href'))
-        .get()
-        .filter((href: string | undefined): href is string => !!href);
+            .filter((_i, el) => {
+                const text = $(el).text().toLowerCase();
+                return text.includes('contact') || text.includes('privacy');
+            })
+            .map((_i, el) => $(el).attr('href'))
+            .get()
+            .filter((href: string | undefined): href is string => !!href);
 
         const base = new URL(baseUrl);
         const absoluteLinks = links.map(link => new URL(link, base).toString());

@@ -82,7 +82,7 @@ async function main(): Promise<void> {
 
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
-    const htmlSynonymFinder = new HTMLSynonymFinder()
+    const htmlSynonymFinder = new HTMLSynonymFinder(axiosHttpClient)
     emailVerificationRouter.init()
 
     const findLeadService = new FindLeadService(emailVerificationService, logger, htmlSynonymFinder)
