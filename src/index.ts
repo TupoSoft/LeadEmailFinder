@@ -26,7 +26,7 @@ import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
-import { DEFAULT_PORT, EXIT_FAILURE, EXIT_SUCCESS } from './common/constants'
+import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { HTMLSynonymFinder } from './domain/synonym-finder'
 import { isNativeError } from 'node:util/types'
@@ -120,7 +120,9 @@ async function main(): Promise<void> {
 }
 
 main().then(
-    () => process.exit(EXIT_SUCCESS),
+    () => {
+        console.debug('The app is up and running')
+    },
     (reason: unknown) => {
         if (isNativeError(reason)) {
             console.error(`The main function exited with error: ${reason}`)
