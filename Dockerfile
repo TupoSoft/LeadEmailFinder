@@ -39,7 +39,6 @@ RUN --mount=type=cache,target=/root/.npm \
 
 WORKDIR /app
 
-# Add node_modules/.bin to the PATH
 ENV PATH="/app/node_modules/.bin:$PATH"
 
 COPY package.json .
