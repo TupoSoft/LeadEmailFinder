@@ -39,6 +39,8 @@ RUN --mount=type=cache,target=/root/.npm \
 
 WORKDIR /app
 
+ENV PATH="/app/node_modules/.bin:$PATH"
+
 COPY package.json .
 COPY pnpm-lock.yaml .
 

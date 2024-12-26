@@ -48,12 +48,14 @@ export class SMTPVerifier implements ISMTPVerifier {
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
+        const { hostname, exchange } = client
+        smtpVerificationResult.targetExchange = exchange
+        smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
         try {
             await promiseWithTimeout(client.isReady(), 5000, new Error(`Timeout: ${email}`))
 
-            const hostnames =
-                isIP(client.hostname) !== ZERO ? await this.dnsCache.resolve(client.hostname, 'PTR') : [client.hostname]
+            const hostnames = isIP(hostname) !== ZERO ? await this.dnsCache.resolve(hostname, 'PTR') : [hostname]
             const [clientHostname] = hostnames
 
             await client.helo(clientHostname)
