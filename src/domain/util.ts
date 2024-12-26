@@ -1,18 +1,20 @@
-import { SECOND_ARRAY_ELEMENT_INDEX } from '../common/constants'
 import { load } from 'cheerio'
 
-export function extractDomains(html: string, domainSet: Set<string>): void {
+export function extractDomains(html: string): string[] {
     const emailRegex = /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi;
     const matches = html.matchAll(emailRegex);
 
+    const domains: string[] = [];
     for (const match of matches) {
-        if (match[SECOND_ARRAY_ELEMENT_INDEX] !== "") {
-            domainSet.add(match[SECOND_ARRAY_ELEMENT_INDEX].toLowerCase());
+        const [, domain] = match
+        if (domain !== "") {
+            domains.push(domain.toLowerCase());
         }
     }
+    return domains;
 }
 
-export async function findRelevantLinks(html: string, baseUrl: string): Promise<string[]> {
+export function findRelevantLinks(html: string, baseUrl: string): string[] {
     const $ = load(html);
 
     const links = $('a')

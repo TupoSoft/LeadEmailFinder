@@ -4,4 +4,3 @@ export const EXIT_SUCCESS = ZERO
 export const EXIT_FAILURE = 0x01
 export const EMPTY_ARRAY_LENGTH = ZERO
 export const FIRST_ARRAY_ELEMENT_INDEX = ZERO
-export const SECOND_ARRAY_ELEMENT_INDEX = 0x01

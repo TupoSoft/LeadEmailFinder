@@ -16,16 +16,21 @@ export class HTMLSynonymFinder implements SynonymFinder {
             throw new Error(`No website found or failed to fetch domain: ${domain}`)
         }
 
-        extractDomains(homepageHTML, foundDomains)
+        const domainsFromHome = extractDomains(homepageHTML)
+        domainsFromHome.forEach(d => foundDomains.add(d))
 
-        const relevantLinks = await findRelevantLinks(homepageHTML, domain)
+        const relevantLinks = findRelevantLinks(homepageHTML, domain)
 
-        for (const link of relevantLinks) {
+        const fetchPromises = relevantLinks.map(async (link) => {
             const pageHTML = await this.fetchHTML(link)
             if (pageHTML != null) {
-                extractDomains(pageHTML, foundDomains)
+                return extractDomains(pageHTML)
             }
-        }
+            return []
+        })
+
+        const results = await Promise.all(fetchPromises)
+        results.flat().forEach(d => foundDomains.add(d))
 
         return Array.from(foundDomains)
     }
