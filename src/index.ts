@@ -25,7 +25,7 @@ import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
-import { SmtpClientFactoryImpl } from './smtp/client-factory'
+import { SmtpClientCreatorImpl } from './smtp/client-creator'
 import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
 
     const catchAllCache = new RedisCatchAllCache(redis)
     const connectionLimiter = new RedisConnectionLimiter(redis, logger)
-    const smtpClientFactory = new SmtpClientFactoryImpl(connectionLimiter, logger)
+    const smtpClientFactory = new SmtpClientCreatorImpl(connectionLimiter, logger)
     const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, smtpClientFactory)
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     const emailVerificationService = new EmailVerificationService(
