@@ -76,4 +76,11 @@ describe('HTMLSynonymFinder', () => {
             .rejects
             .toThrow('No website found or failed to fetch domain: https://unreachable.com');
     });
+
+    it('should return an empty array if badly formatted email', async () => {
+        httpClientMock.get.mockResolvedValueOnce('<html lang="en"><body> My email is: igor@ tuposoft.com</body></html>');
+
+        const results = await finder.findSynonymDomains('https://fakeurl.com');
+        expect(results).toEqual([]);
+    });
 });

@@ -7,9 +7,7 @@ export function extractDomains(html: string): string[] {
     const domains: string[] = [];
     for (const match of matches) {
         const [, domain] = match
-        if (domain !== "") {
-            domains.push(domain.toLowerCase());
-        }
+        domains.push(domain.toLowerCase());
     }
     return domains;
 }
