@@ -1,7 +1,6 @@
-import type { SmtpClient } from './client'
+import { type SmtpClient, type SmtpClientConstructorOptions, SmtpClientImpl } from './client'
 import type { ConnectionLimiter } from './connection-limiter'
 import type { Logger } from '../logging'
-import { type SmtpClientConstructorOptions, SmtpClientImpl } from './client-impl'
 
 export interface SmtpClientCreator {
     create: (options: SmtpClientConstructorOptions) => SmtpClient
