@@ -7,11 +7,11 @@ function isTimeUnit(value: string): value is TimeUnit {
 }
 
 export function parseTimeString(timeStr: string): number {
-    const MILLIS_IN_SECOND = 1000
     const SECONDS_IN_MINUTE = 60
     const MINUTES_IN_HOUR = SECONDS_IN_MINUTE
     const HOURS_IN_DAY = 24
 
+    const MILLIS_IN_SECOND = 1000
     const MILLIS_IN_MINUTE = SECONDS_IN_MINUTE * MILLIS_IN_SECOND
     const MILLIS_IN_HOUR = MINUTES_IN_HOUR * MILLIS_IN_MINUTE
     const MILLIS_IN_DAY = HOURS_IN_DAY * MILLIS_IN_HOUR
