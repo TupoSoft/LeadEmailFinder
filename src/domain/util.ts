@@ -7,7 +7,7 @@ export function extractDomains(html: string): string[] {
 
     const domains: string[] = [];
     for (const match of matches) {
-        const [username, domain] = match
+        const [, domain] = match
         const parsed = parse(domain, {
             validateHostname: true,
         })
