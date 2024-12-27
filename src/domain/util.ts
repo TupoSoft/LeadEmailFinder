@@ -1,4 +1,5 @@
 import { load } from 'cheerio'
+import { parse } from 'tldts'
 
 export function extractDomains(html: string): string[] {
     const emailRegex = /[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi;
@@ -6,8 +7,13 @@ export function extractDomains(html: string): string[] {
 
     const domains: string[] = [];
     for (const match of matches) {
-        const [, domain] = match
-        domains.push(domain.toLowerCase());
+        const [username, domain] = match
+        const parsed = parse(domain, {
+            validateHostname: true,
+        })
+        if (parsed.isIcann !== false || parsed.isIp !== false || parsed.isPrivate !== false) {
+            domains.push(domain.toLowerCase());
+        }
     }
     return domains;
 }
