@@ -11,7 +11,7 @@ export function extractDomains(html: string): string[] {
         const parsed = parse(domain, {
             validateHostname: true,
         })
-        if (parsed.isIcann !== false || parsed.isIp !== false || parsed.isPrivate !== false) {
+        if (parsed.isIcann === true) {
             domains.push(domain.toLowerCase());
         }
     }
