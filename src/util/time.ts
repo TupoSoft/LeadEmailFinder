@@ -31,5 +31,5 @@ export function parseTimeString(timeStr: string): number {
 
     ok(isTimeUnit(unit), 'Invalid time unit')
 
-    return Number(value) * UNITS[unit]
+    return parseInt(value, 10) * UNITS[unit]
 }
