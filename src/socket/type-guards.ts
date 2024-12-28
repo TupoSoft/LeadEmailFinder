@@ -38,5 +38,5 @@ export function isString(value: unknown): value is string {
 }
 
 export function isStringOrUndefined(value: unknown): value is string | undefined {
-    return isString(value) || typeof value === 'string'
+    return typeof value === 'undefined' || isString(value)
 }
