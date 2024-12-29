@@ -1,10 +1,10 @@
 import type { User } from './entity'
 
-export class UserNotFoundError extends Error {
+export class UserNotFoundError<K extends keyof User> extends Error {
     name = 'UserNotFoundError'
 
-    constructor(property: keyof User, value: string) {
-        super(`There is no user with ${property} ${value}`)
+    constructor(property: K, value: User[K]) {
+        super(`There is no user with ${property} ${value.toString()}`)
     }
 }
 
