@@ -19,11 +19,13 @@ describe('MongoUserRepository', () => {
     const email = 'danilo@asw.eu'
     const password = 'odeseneradi2024'
     const createdAt = _id.getTimestamp()
+    const updatedAt = createdAt
 
     const userSchema: UserSchema = {
         _id,
         email,
         password,
+        updatedAt,
     }
 
     const user: User = {
@@ -31,6 +33,7 @@ describe('MongoUserRepository', () => {
         email,
         password,
         createdAt,
+        updatedAt,
     }
 
     describe('findAll', () => {
