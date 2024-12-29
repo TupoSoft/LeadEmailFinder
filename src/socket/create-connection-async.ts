@@ -5,19 +5,22 @@ import { isNetConnectOpts, isStringOrUndefined } from './type-guards'
 export async function createConnectionAsync(path: string | NetConnectOpts): Promise<Socket>
 export async function createConnectionAsync(port: number, host?: string): Promise<Socket>
 export async function createConnectionAsync(
-    param1: number | string | NetConnectOpts,
+    param1: NetConnectOpts | string | number,
     param2?: string,
 ): Promise<Socket> {
     return await new Promise<Socket>((resolve, reject) => {
-        const onConnect = (): void => {
+        const cleanup = (): void => {
+            socket.off('connect', onConnect)
             socket.off('error', onError)
+        }
 
+        const onConnect = (): void => {
+            cleanup()
             resolve(socket)
         }
 
         const onError = (err: Error): void => {
-            socket.off('connect', onConnect)
-
+            cleanup()
             reject(err)
         }
 
