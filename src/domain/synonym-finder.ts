@@ -12,9 +12,6 @@ export class HTMLSynonymFinder implements SynonymFinder {
         const foundDomains = new Set<string>()
 
         const homepageHTML = await this.httpClient.get<string>(domain)
-        if (homepageHTML === '') {
-            throw new Error(`No website found or failed to fetch domain: ${domain}`)
-        }
 
         const domainsFromHome = extractDomains(homepageHTML)
         domainsFromHome.forEach(d => foundDomains.add(d))

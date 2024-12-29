@@ -28,7 +28,6 @@ import { ok } from 'node:assert'
 import { SmtpClientFactoryImpl } from './smtp/client-factory'
 import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
-import { HTMLSynonymFinder } from './domain/synonym-finder'
 import { isNativeError } from 'node:util/types'
 
 const { env } = process
@@ -83,10 +82,9 @@ async function main(): Promise<void> {
 
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
-    const htmlSynonymFinder = new HTMLSynonymFinder(axiosHttpClient)
     emailVerificationRouter.init()
 
-    const findLeadService = new FindLeadService(emailVerificationService, logger, htmlSynonymFinder)
+    const findLeadService = new FindLeadService(emailVerificationService, logger)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()

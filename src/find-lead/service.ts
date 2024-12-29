@@ -5,13 +5,11 @@ import type { Logger } from '../logging'
 import { NO_USAGES } from './constants'
 import { ok } from 'node:assert'
 import { isEmptyArray } from '../common/type-guards'
-import { HTMLSynonymFinder } from '../domain/synonym-finder'
 
 export class FindLeadService {
     constructor(
         private readonly emailVerificationService: EmailVerificationService,
         private readonly logger: Logger,
-        private readonly synonymFinder: HTMLSynonymFinder, 
     ) {}
 
     async findLead(lead: Lead): Promise<FindLeadResult> {
@@ -61,18 +59,6 @@ export class FindLeadService {
 
     async findLeads(leads: Lead[]): Promise<FindLeadResult[]> {
         return await Promise.all(leads.map(this.findLead.bind(this)))
-    }
-
-    async findSynonyms(domain: string): Promise<string[]> {
-        let findSynonymsResult: string[] = []
-        
-        try {
-            findSynonymsResult =  await this.synonymFinder.findSynonymDomains(domain)
-        } catch (error) {
-            this.logger.error(`Error in findSynonyms: ${JSON.stringify(error)}`)
-        }
-    
-        return findSynonymsResult
     }
 
     private async findEmailForFormats(lead: Lead, formatUsages: EmailPatternUsage[]): Promise<EmailVerificationResult> {

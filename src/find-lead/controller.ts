@@ -6,9 +6,6 @@ import type { FindLeadService } from './service'
 export interface FindLeadController {
     findLead: (req: Request, res: Response, next: NextFunction) => void
     findLeads: (req: Request, res: Response, next: NextFunction) => void
-
-    // For testing purposes
-    findSynonyms: (req: Request, res: Response, next: NextFunction) => void
 }
 
 export class FindLeadControllerImpl implements FindLeadController {
@@ -31,16 +28,6 @@ export class FindLeadControllerImpl implements FindLeadController {
             reason => {
                 next(reason)
             },
-        )
-    }
-
-    findSynonyms(req: Request, res: Response, next: NextFunction): void {
-        const { domain } = matchedData<{ domain: string }>(req)
-        this.findLeadService.findSynonyms(domain).then(
-            value => res.json(value),
-            reason => {
-                next(reason)
-            }
         )
     }
 }
