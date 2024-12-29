@@ -14,7 +14,7 @@ const collection = {
     findOne: jest.fn<typeof Collection.prototype.findOne>(),
     insertOne: jest.fn<typeof Collection.prototype.insertOne>(),
     findOneAndUpdate: jest.fn<typeof Collection.prototype.findOneAndUpdate>(),
-    findOneAndDelete: jest.fn<typeof Collection.prototype.findOneAndDelete>(),
+    deleteOne: jest.fn<typeof Collection.prototype.deleteOne>(),
 }
 
 export const Db: () => MongoDb = jest.fn<typeof Db.prototype>().mockImplementation(() => ({

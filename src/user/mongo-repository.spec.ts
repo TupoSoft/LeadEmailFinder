@@ -103,12 +103,18 @@ describe('MongoUserRepository', () => {
 
     describe('delete', () => {
         it('should delete the user', async () => {
-            collection.findOneAndDelete.mockResolvedValueOnce(userSchema)
+            const deletedCount = 1
+            const acknowledged = true
+
+            collection.deleteOne.mockResolvedValueOnce({ deletedCount, acknowledged })
             await expect(mongoUserRepository.delete(id)).resolves.not.toThrow()
         })
 
-        it('should throw the UserNotFoundError', async () => {
-            collection.findOneAndDelete.mockResolvedValueOnce(null)
+        it('should throw the UserNotFoundError when the deletedCount is not greater than zero', async () => {
+            const deletedCount = 0
+            const acknowledged = true
+
+            collection.deleteOne.mockResolvedValueOnce({ deletedCount, acknowledged })
             await expect(mongoUserRepository.delete(id)).rejects.toThrow(new UserNotFoundError('id', user.id))
         })
     })
