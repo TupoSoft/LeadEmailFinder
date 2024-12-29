@@ -43,7 +43,7 @@ export class MongoUserRepository implements UserRepository {
     async update(id: string, user: UpdateUserDto): Promise<User> {
         const userSchema = await this.collection.findOneAndUpdate(
             { _id: new ObjectId(id) },
-            { $set: user },
+            { $set: { ...user, updatedAt: new Date() } },
             { returnDocument: 'after' },
         )
 
@@ -53,12 +53,23 @@ export class MongoUserRepository implements UserRepository {
     }
 
     async create(createUserDto: CreateUserDto): Promise<User> {
+        const _id = await generateObjectIdAsync()
         const { insertedId } = await this.collection.insertOne({
             ...createUserDto,
-            _id: await generateObjectIdAsync(),
+            _id,
+            updatedAt: _id.getTimestamp(),
         })
 
-        return { ...createUserDto, id: insertedId.toHexString(), createdAt: insertedId.getTimestamp() }
+        const id = insertedId.toHexString()
+        const createdAt = insertedId.getTimestamp()
+        const updatedAt = createdAt
+
+        return {
+            id,
+            createdAt,
+            updatedAt,
+            ...createUserDto,
+        }
     }
 
     async delete(id: string): Promise<void> {
