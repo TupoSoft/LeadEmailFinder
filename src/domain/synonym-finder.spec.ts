@@ -69,12 +69,11 @@ describe('HTMLSynonymFinder', () => {
         expect(results.length).toBe(expectedLength);
     });
 
-    it('should throw an error if homepage cannot be fetched', async () => {
+    it('should return empty array if homepage cannot be fetched', async () => {
         httpClientMock.get.mockRejectedValueOnce(new Error('Network Error'));
 
-        await expect(finder.findSynonymDomains('https://unreachable.com'))
-            .rejects
-            .toThrow('No website found or failed to fetch domain: https://unreachable.com');
+        const results = await finder.findSynonymDomains('https://unreachable.com');
+        expect(results).toEqual([]);
     });
 
     it('should return an empty array if badly formatted email', async () => {
