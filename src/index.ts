@@ -29,6 +29,7 @@ import { SmtpClientCreatorImpl } from './smtp/client-creator'
 import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
+import { HTMLSynonymFinder } from './domain/synonym-finder'
 
 const { env } = process
 const { PORT = DEFAULT_PORT } = env
@@ -84,7 +85,8 @@ async function main(): Promise<void> {
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
-    const findLeadService = new FindLeadService(emailVerificationService, logger)
+    const htmlSynonymFinder = new HTMLSynonymFinder(axiosHttpClient)
+    const findLeadService = new FindLeadService(emailVerificationService, htmlSynonymFinder, logger)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)
     findLeadRouter.init()

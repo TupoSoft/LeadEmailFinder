@@ -1,14 +1,21 @@
 import type { EmailPatternUsage, FindLeadResult, Lead } from './dto'
-import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
+import {
+    deprioritizedEmailFormats,
+    getAllEmailFormats,
+    getFormatToEmailMapForLead,
+    mergeEmailFormats
+} from './util'
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
 import type { Logger } from '../logging'
 import { NO_USAGES } from './constants'
 import { ok } from 'node:assert'
 import { isEmptyArray } from '../common/type-guards'
+import type { HTMLSynonymFinder} from '../domain/synonym-finder'
 
 export class FindLeadService {
     constructor(
         private readonly emailVerificationService: EmailVerificationService,
+        private readonly htmlSynonymFinder: HTMLSynonymFinder,
         private readonly logger: Logger,
     ) {}
 
@@ -27,8 +34,11 @@ export class FindLeadService {
             const p1 = emailFormats.filter(({ pattern }) => !deprioritizedEmailFormats.has(pattern))
             const p2 = emailFormats.filter(({ pattern }) => deprioritizedEmailFormats.has(pattern))
 
+            const domains = [lead.domain]
+            domains.push(...await this.htmlSynonymFinder.findSynonymDomains(lead.domain))
+
             try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p0)
+                const emailVerificationResult = await this.findEmailForFormats(lead, domains, p0)
                 findLeadResult.emails.push(emailVerificationResult)
                 return findLeadResult
             } catch (error) {
@@ -36,7 +46,7 @@ export class FindLeadService {
             }
 
             try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p1)
+                const emailVerificationResult = await this.findEmailForFormats(lead, domains, p1)
                 findLeadResult.emails.push(emailVerificationResult)
                 return findLeadResult
             } catch (error) {
@@ -44,7 +54,7 @@ export class FindLeadService {
             }
 
             try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p2)
+                const emailVerificationResult = await this.findEmailForFormats(lead, domains, p2)
                 findLeadResult.emails.push(emailVerificationResult)
                 return findLeadResult
             } catch (error) {
@@ -61,7 +71,7 @@ export class FindLeadService {
         return await Promise.all(leads.map(this.findLead.bind(this)))
     }
 
-    private async findEmailForFormats(lead: Lead, formatUsages: EmailPatternUsage[]): Promise<EmailVerificationResult> {
+    private async findEmailForFormats(lead: Lead, domains: string[], formatUsages: EmailPatternUsage[]): Promise<EmailVerificationResult> {
         const verificationResultPromises = this.getVerificationResultPromises(lead, formatUsages)
         ok(!isEmptyArray(verificationResultPromises))
 
