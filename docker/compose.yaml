@@ -2,7 +2,7 @@ services:
   verifier:
     build:
       context: ..
-      dockerfile: ./Dockerfile
+      dockerfile: ./docker/Dockerfile
     develop:
       watch:
         - action: sync+restart

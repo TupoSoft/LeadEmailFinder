@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import { type ConnectThroughProxyOptions, directConnect } from './connect-strategies'
-import { readBytes, write } from '../../stream'
+import { readBytes, write } from '../stream'
 
 export async function connectViaSocks4Proxy(options: ConnectThroughProxyOptions): Promise<Socket> {
     const SOCKS_VERSION = 0x04

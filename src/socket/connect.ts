@@ -1,10 +1,11 @@
 import type { Socket } from 'node:net'
 import { connectThroughProxy, directConnect } from './connect-strategies'
-import type { Proxy } from '../../proxy'
+import type { Proxy } from '../proxy'
 
 export interface ConnectOptions {
     host: string
     port: number
+    socket?: Socket
     secure?: boolean
     timeout?: number
     proxy?: Proxy
