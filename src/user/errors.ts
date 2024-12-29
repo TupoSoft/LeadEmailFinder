@@ -4,7 +4,7 @@ export class UserNotFoundError extends Error {
     name = 'UserNotFoundError'
 
     constructor(property: keyof User, value: string) {
-        super(`The user ${property} with value ${value} does not exist`)
+        super(`There is no user with ${property} ${value}`)
     }
 }
 
