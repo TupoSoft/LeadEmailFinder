@@ -11,8 +11,8 @@ export class HTMLSynonymFinder implements SynonymFinder {
     public async findSynonymDomains(domain: string): Promise<string[]> {
         const foundDomains = new Set<string>()
 
-        const homepageHTML = await this.fetchHTML(domain)
-        if (homepageHTML == null) {
+        const homepageHTML = await this.httpClient.get<string>(domain)
+        if (homepageHTML === '') {
             throw new Error(`No website found or failed to fetch domain: ${domain}`)
         }
 
@@ -22,8 +22,8 @@ export class HTMLSynonymFinder implements SynonymFinder {
         const relevantLinks = findRelevantLinks(homepageHTML, domain)
 
         const fetchPromises = relevantLinks.map(async link =>
-            await this.fetchHTML(link).then(
-                pageHTML => (pageHTML != null) ? extractDomains(pageHTML) : []
+            await this.httpClient.get<string>(link).then(
+                pageHTML => extractDomains(pageHTML)
             )
         )
 
@@ -35,13 +35,5 @@ export class HTMLSynonymFinder implements SynonymFinder {
         })
 
         return Array.from(foundDomains)
-    }
-
-    private async fetchHTML(url: string): Promise<string | null> {
-        try {
-            return await this.httpClient.get<string>(url)
-        } catch (error) {
-            return null
-        }
     }
 }
