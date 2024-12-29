@@ -21,16 +21,18 @@ export class HTMLSynonymFinder implements SynonymFinder {
 
         const relevantLinks = findRelevantLinks(homepageHTML, domain)
 
-        const fetchPromises = relevantLinks.map(async (link) => {
-            const pageHTML = await this.fetchHTML(link)
-            if (pageHTML != null) {
-                return extractDomains(pageHTML)
-            }
-            return []
-        })
+        const fetchPromises = relevantLinks.map(async link =>
+            await this.fetchHTML(link).then(
+                pageHTML => (pageHTML != null) ? extractDomains(pageHTML) : []
+            )
+        )
 
-        const results = await Promise.all(fetchPromises)
-        results.flat().forEach(d => foundDomains.add(d))
+        const results = await Promise.allSettled(fetchPromises)
+        results.forEach(result => {
+            if (result.status === 'fulfilled') {
+                result.value.forEach(d => foundDomains.add(d))
+            }
+        })
 
         return Array.from(foundDomains)
     }
