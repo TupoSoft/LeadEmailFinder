@@ -4,8 +4,10 @@ import type { UserRepository } from './repository'
 import { type Collection, type Db, ObjectId } from 'mongodb'
 import { generateObjectIdAsync } from '../util/mongo'
 import { ZERO } from '../common/constants'
+import { ok } from 'node:assert'
+import { UserNotDeletedError, UserNotFoundError } from './errors'
 
-type UserSchema = Omit<User, 'id' | 'createdAt'> & {
+export type UserSchema = Omit<User, 'id' | 'createdAt'> & {
     _id: ObjectId
 }
 
@@ -26,24 +28,28 @@ export class MongoUserRepository implements UserRepository {
         return userSchemas.map(convertSchemaToEntity)
     }
 
-    async findById(id: string): Promise<User | null> {
+    async findById(id: string): Promise<User> {
         const userSchema = await this.collection.findOne({ _id: new ObjectId(id) })
-        return userSchema != null ? convertSchemaToEntity(userSchema) : userSchema
+        ok(userSchema !== null, new UserNotFoundError('id', id))
+        return convertSchemaToEntity(userSchema)
     }
 
-    async findByEmail(email: string): Promise<User | null> {
+    async findByEmail(email: string): Promise<User> {
         const userSchema = await this.collection.findOne({ email })
-        return userSchema != null ? convertSchemaToEntity(userSchema) : userSchema
+        ok(userSchema !== null, new UserNotFoundError('email', email))
+        return convertSchemaToEntity(userSchema)
     }
 
-    async update(id: string, user: UpdateUserDto): Promise<User | null> {
+    async update(id: string, user: UpdateUserDto): Promise<User> {
         const userSchema = await this.collection.findOneAndUpdate(
             { _id: new ObjectId(id) },
             { $set: user },
             { returnDocument: 'after' },
         )
 
-        return userSchema != null ? convertSchemaToEntity(userSchema) : null
+        ok(userSchema !== null, new UserNotFoundError('id', id))
+
+        return convertSchemaToEntity(userSchema)
     }
 
     async create(createUserDto: CreateUserDto): Promise<User> {
@@ -55,8 +61,8 @@ export class MongoUserRepository implements UserRepository {
         return { ...createUserDto, id: insertedId.toHexString(), createdAt: insertedId.getTimestamp() }
     }
 
-    async delete(id: string): Promise<boolean> {
+    async delete(id: string): Promise<void> {
         const { deletedCount } = await this.collection.deleteOne({ _id: new ObjectId(id) })
-        return deletedCount > ZERO
+        ok(deletedCount > ZERO, new UserNotDeletedError(id))
     }
 }
