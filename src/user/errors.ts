@@ -7,11 +7,3 @@ export class UserNotFoundError<K extends keyof User> extends Error {
         super(`There is no user with ${property} ${value.toString()}`)
     }
 }
-
-export class UserNotDeletedError extends Error {
-    name = 'UserNotDeletedError'
-
-    constructor(id: string) {
-        super(`The deletion of user ${id} failed`)
-    }
-}

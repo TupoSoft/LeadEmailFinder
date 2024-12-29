@@ -3,9 +3,8 @@ import type { User } from './entity'
 import type { UserRepository } from './repository'
 import { type Collection, type Db, ObjectId } from 'mongodb'
 import { generateObjectIdAsync } from '../util/mongo'
-import { ZERO } from '../common/constants'
 import { ok } from 'node:assert'
-import { UserNotDeletedError, UserNotFoundError } from './errors'
+import { UserNotFoundError } from './errors'
 
 export type UserSchema = Omit<User, 'id' | 'createdAt'> & {
     _id: ObjectId
@@ -62,7 +61,7 @@ export class MongoUserRepository implements UserRepository {
     }
 
     async delete(id: string): Promise<void> {
-        const { deletedCount } = await this.collection.deleteOne({ _id: new ObjectId(id) })
-        ok(deletedCount > ZERO, new UserNotDeletedError(id))
+        const userSchema = await this.collection.findOneAndDelete({ _id: new ObjectId(id) })
+        ok(userSchema !== null, new UserNotFoundError('id', id))
     }
 }
