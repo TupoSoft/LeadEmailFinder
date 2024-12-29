@@ -1,12 +1,15 @@
-const MILLIS_IN_SECOND = 1000
-const DEFAULT_SMTP_CLIENT_SOCKET_TIMEOUT_SECONDS = 60
+import { parseTimeString } from '../util/time'
+import type { SmtpClientTimeoutConfig } from './client'
 
 export const SMTP_PORT = 25
-export const DEFAULT_SMTP_CLIENT_TIMEOUT = DEFAULT_SMTP_CLIENT_SOCKET_TIMEOUT_SECONDS * MILLIS_IN_SECOND
-export const SESSION_INITIATION_TIMEOUT = 10 * MILLIS_IN_SECOND
-export const GREETING_TIMEOUT = 5 * 60 * MILLIS_IN_SECOND // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
-export const MAIL_FROM_TIMEOUT = 5 * 60 * MILLIS_IN_SECOND // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
-export const RCPT_TO_TIMEOUT = 10 * MILLIS_IN_SECOND // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
-export const QUIT_TIMEOUT = 10 * MILLIS_IN_SECOND
-
+export const DEFAULT_SMTP_CLIENT_TIMEOUT = parseTimeString('1m')
+export const DEFAULT_GREETING_TIMEOUT = parseTimeString('5m') // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.1
+export const DEFAULT_MAIL_TIMEOUT = parseTimeString('5m') // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
+export const DEFAULT_RCPT_TIMEOUT = parseTimeString('5m') // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
 export const SMTP_RESPONSE_REGEX = /^[0-9]{3} (?:.|\s)*$/m
+
+export const DEFAULT_TIMEOUT_CONFIG: Readonly<Required<SmtpClientTimeoutConfig>> = {
+    greeting: DEFAULT_GREETING_TIMEOUT,
+    mail: DEFAULT_MAIL_TIMEOUT,
+    rcpt: DEFAULT_RCPT_TIMEOUT,
+}

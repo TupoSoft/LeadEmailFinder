@@ -1,121 +1,128 @@
-import { SmtpError } from './errors'
-import { DEFAULT_SMTP_CLIENT_TIMEOUT, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
+import { Socket } from 'node:net'
+import type { Proxy } from '../proxy'
+import type { Logger } from '../logging'
+import type { ConnectionLimiter } from './connection-limiter'
+import { randomUUID } from 'node:crypto'
+import { DEFAULT_SMTP_CLIENT_TIMEOUT, DEFAULT_TIMEOUT_CONFIG, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
+import { hostname as osHostname } from 'os'
+import { promiseWithTimeout } from '../util/timeout'
+import { SmtpClientTimeoutError, SmtpError } from './errors'
 import { SmtpResponseCode } from './enums'
 import { ok } from 'node:assert'
-import type { Socket } from 'node:net'
+import { isNativeError } from 'node:util/types'
+import type { SmtpResponse } from './dto'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
-import type { SmtpResponse } from './dto'
-import type { Logger } from '../logging'
-import type { Proxy } from '../proxy'
-import type { ConnectionLimiter } from './connection-limiter'
-import { hostname as osHostname } from 'node:os'
-import { connect } from '../socket/connect'
-import { isNativeError } from 'node:util/types'
-import { randomUUID } from 'node:crypto'
+import { connect } from '../socket'
 
-export interface SmtpClientConnectOptions {
-    exchange: string
-    port?: number
-    timeout?: number
-    proxy?: Proxy
-    signal?: AbortSignal
+export interface SmtpClientTimeoutConfig {
+    greeting?: number
+    mail?: number
+    rcpt?: number
 }
 
 export interface SmtpClient {
     exchange: string
+    port: number
     hostname: string
 
-    connect: (options: SmtpClientConnectOptions) => Promise<void>
+    connect: () => Promise<void>
     helo: (hostname: string) => Promise<void>
     mailFrom: (senderEmail: string) => Promise<void>
     rcptTo: (receiverEmail: string) => Promise<void>
     quit: () => Promise<void>
     end: () => void
+}
 
-    isReady: () => Promise<void>
+export interface SmtpClientConstructorOptions {
+    host: string
+    port?: number
+    proxy?: Proxy
+    timeouts?: SmtpClientTimeoutConfig
+    signal?: AbortSignal
+    socket?: Socket
+    logger?: Logger
 }
 
 export class SmtpClientImpl implements SmtpClient {
-    private socket?: Socket
+    public readonly exchange: string
+    public readonly port: number
+
+    public readonly hostname: string
+
+    private readonly id: string
+    private readonly timeouts: Required<SmtpClientTimeoutConfig>
+    private readonly socket: Socket
+
+    private readonly proxy?: Proxy
+    private readonly signal?: AbortSignal
+    private readonly logger?: Logger
 
     constructor(
+        options: SmtpClientConstructorOptions,
         private readonly connectionLimiter: ConnectionLimiter,
-        private logger: Logger,
-    ) {}
+    ) {
+        const { host, port, proxy, timeouts, signal, logger, socket } = options
 
-    private _exchange?: string
-
-    get exchange(): string {
-        ok(this._exchange !== undefined, new Error('The client is no connected'))
-
-        return this._exchange
+        this.id = randomUUID()
+        this.exchange = host
+        this.port = port ?? SMTP_PORT
+        this.proxy = proxy
+        this.signal = signal
+        this.hostname = proxy != null ? proxy.host : osHostname()
+        this.timeouts = Object.assign(timeouts ?? {}, DEFAULT_TIMEOUT_CONFIG)
+        this.logger = logger?.child({
+            id: this.id,
+            source: this.hostname,
+            exchange: this.exchange,
+        })
+        this.socket =
+            socket ??
+            new Socket({
+                signal,
+            })
     }
 
-    private set exchange(exchange: string) {
-        this._exchange = exchange
-    }
+    connect: () => Promise<void> = async () => {
+        const { exchange, port, proxy, signal } = this
 
-    private _hostname?: string
-
-    get hostname(): string {
-        ok(this._hostname !== undefined, new Error('The client is no connected'))
-
-        return this._hostname
-    }
-
-    private set hostname(value: string) {
-        this._hostname = value
-    }
-
-    connect: (options: SmtpClientConnectOptions) => Promise<void> = async options => {
-        const { exchange, port = SMTP_PORT, proxy, signal, timeout = DEFAULT_SMTP_CLIENT_TIMEOUT } = options
-        const hostname = proxy != null ? proxy.host : osHostname()
-
-        const locked = await this.connectionLimiter.acquire(hostname, exchange, signal)
+        const locked = await this.connectionLimiter.acquire(this.hostname, this.exchange, signal)
 
         const onClose = (): void => {
             if (locked) {
-                void this.connectionLimiter.release(hostname, exchange)
+                void this.connectionLimiter.release(this.hostname, this.exchange)
             }
         }
 
         try {
-            this.socket = await connect({
+            await connect({
                 host: exchange,
                 port,
                 proxy,
                 signal,
-                timeout,
-            })
-
-            this.logger = this.logger.child({
-                id: randomUUID(),
-                source: hostname,
-                exchange,
+                timeout: DEFAULT_SMTP_CLIENT_TIMEOUT,
+                socket: this.socket,
             })
 
             this.socket.once('close', onClose)
             this.socket.once('timeout', () => {
-                this.logger.debug(`Socket timed out`)
-                this.socket?.end()
+                this.logger?.debug(`Socket timed out`)
+                this.socket.end()
             })
 
-            this.exchange = exchange
-            this.hostname = hostname
+            const { code, enhancedCode, message } = await promiseWithTimeout(
+                this.readResponse(),
+                this.timeouts.greeting,
+                new SmtpClientTimeoutError(this.id),
+            )
+
+            if (code !== SmtpResponseCode.ServiceReady) {
+                throw new SmtpError(code, enhancedCode, message)
+            }
         } catch (error) {
             onClose()
-
             ok(isNativeError(error))
             throw error
-        }
-    }
-
-    isReady: () => Promise<void> = async () => {
-        const { code, enhancedCode, message } = await this.readResponse()
-
-        if (code !== SmtpResponseCode.ServiceReady) {
-            throw new SmtpError(code, enhancedCode, message)
         }
     }
 
@@ -123,31 +130,27 @@ export class SmtpClientImpl implements SmtpClient {
         await this.sendCommand(`HELO ${hostname}`)
     }
 
-    async mailFrom(senderEmail: string): Promise<void> {
-        await this.sendCommand(`MAIL FROM: <${senderEmail}>`)
+    async mailFrom(email: string): Promise<void> {
+        await this.sendCommandWithTimeout(`MAIL FROM: <${email}>`, this.timeouts.mail)
     }
 
-    async rcptTo(receiverEmail: string): Promise<void> {
-        await this.sendCommand(`RCPT TO: <${receiverEmail}>`)
+    async rcptTo(email: string): Promise<void> {
+        await this.sendCommandWithTimeout(`RCPT TO: <${email}>`, this.timeouts.rcpt)
     }
 
     async quit(): Promise<void> {
-        ok(this.socket !== undefined, new Error('The client is no connected'))
-
         if (this.socket.readyState !== 'closed') {
             await this.sendCommand('QUIT')
         }
     }
 
     end(): void {
-        this.socket?.end()
+        this.socket.end()
     }
 
     private async readResponse(): Promise<SmtpResponse> {
-        ok(this.socket !== undefined, new Error('The client is no connected'))
-
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
-        this.logger.debug(`Response: ${response}`)
+        this.logger?.debug(`Response: ${response}`)
 
         const responseLines = response.split('\r\n')
 
@@ -167,11 +170,13 @@ export class SmtpClientImpl implements SmtpClient {
     }
 
     private async sendCommand(command: string): Promise<void> {
-        ok(this.socket !== undefined, new Error('The client is no connected'))
-
-        this.logger.debug(`Sending command: ${command}`)
+        this.logger?.debug(`Sending command: ${command}`)
 
         await write(this.socket, `${command}\r\n`)
         await this.readResponse()
+    }
+
+    private async sendCommandWithTimeout(command: string, timeout: number): Promise<void> {
+        await promiseWithTimeout(this.sendCommand(command), timeout, new SmtpClientTimeoutError(this.id))
     }
 }

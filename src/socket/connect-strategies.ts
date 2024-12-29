@@ -1,11 +1,12 @@
-import type { Proxy } from '../../proxy'
 import type { Socket } from 'node:net'
 import { connectThroughHttpProxy } from './http-proxy-connect'
 import { connectViaSocks4Proxy } from './socks4-connect'
 import { connectViaSocks5Proxy } from './socks5-connect'
 import type { ConnectOptions } from './connect'
-import { createConnectionAsync } from '../create-connection-async'
-import { tlsConnectAsync } from '../tls-connect'
+import type { Proxy } from '../proxy'
+import { createConnectionAsync } from './create-connection-async'
+import { tlsConnectAsync } from './tls-connect'
+import { connectAsync } from './connect-async'
 
 export interface ConnectThroughProxyOptions extends ConnectOptions {
     proxy: Proxy
@@ -28,13 +29,18 @@ export async function connectThroughProxy(options: ConnectThroughProxyOptions): 
 }
 
 export async function directConnect(options: ConnectOptions): Promise<Socket> {
-    const { host, port, signal, secure } = options
+    const { host, port, socket: existingSocket, signal, secure } = options
 
-    const socket = await createConnectionAsync({
+    const netConnectOptions = {
         host,
         port,
         signal,
-    })
+    }
+
+    const socket =
+        existingSocket !== undefined
+            ? await connectAsync(existingSocket, netConnectOptions)
+            : await createConnectionAsync(netConnectOptions)
 
     return secure === true ? await tlsConnectAsync({ socket }) : socket
 }
