@@ -17,9 +17,6 @@ importers:
       cheerio:
         specifier: ^1.0.0
         version: 1.0.0
-      corepack:
-        specifier: ^0.30.0
-        version: 0.30.0
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -1002,11 +999,6 @@ packages:
 
   cookiejar@2.1.4:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
-
-  corepack@0.30.0:
-    resolution: {integrity: sha512-3SAVNBTaKpq9DPyM9m8dfrSRDF5B5TAs4obZWUtvsc1YnGF03IEJNo0dILPYcGpb3K+hcSWQsLKveGifX7hmLw==}
-    engines: {node: ^18.17.1 || >=20.10.0}
-    hasBin: true
 
   create-jest@29.7.0:
     resolution: {integrity: sha512-Adz2bdH0Vq3F53KEMJOoftQFutWCukm6J24wbPWRO4k1kMY7gS7ds/uoJkNuV8wDCtWWnuwGcJwpWcih+zEW1Q==}
@@ -4069,8 +4061,6 @@ snapshots:
 
   cookiejar@2.1.4: {}
 
-  corepack@0.30.0: {}
-
   create-jest@29.7.0(@types/node@22.10.1)(ts-node@10.9.2(@types/node@22.10.1)(typescript@5.7.2)):
     dependencies:
       '@jest/types': 29.6.3
@@ -4224,6 +4214,7 @@ snapshots:
   encodeurl@1.0.2: {}
 
   encodeurl@2.0.0: {}
+
 
   encoding-sniffer@0.2.0:
     dependencies:
