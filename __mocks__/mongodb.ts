@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals'
-import type { MongoClient as Client, Db as MongoDb, Collection, FindCursor as MongoFindCursor } from 'mongodb'
+import type { Collection, Db as MongoDb, FindCursor as MongoFindCursor, MongoClient as Client } from 'mongodb'
 
 const findCursor = {
     toArray: jest.fn<typeof FindCursor.prototype.toArray>(),
@@ -14,6 +14,7 @@ const collection = {
     findOne: jest.fn<typeof Collection.prototype.findOne>(),
     insertOne: jest.fn<typeof Collection.prototype.insertOne>(),
     findOneAndUpdate: jest.fn<typeof Collection.prototype.findOneAndUpdate>(),
+    deleteOne: jest.fn<typeof Collection.prototype.deleteOne>(),
 }
 
 export const Db: () => MongoDb = jest.fn<typeof Db.prototype>().mockImplementation(() => ({
