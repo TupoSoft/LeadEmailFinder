@@ -6,9 +6,8 @@ import { SmtpError } from './errors'
 import { ok } from 'node:assert'
 import type { Proxy, ProxyService } from '../proxy'
 import { isNativeError } from 'node:util/types'
-import type { SmtpClientFactory } from './client-factory'
+import type { SmtpClientCreator } from './client-creator'
 import { appendRandomPrefix } from '../util/string'
-import { promiseWithTimeout } from '../util/timeout'
 import { isIP } from 'node:net'
 import { ZERO } from '../common/constants'
 
@@ -25,7 +24,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         private readonly dnsCache: DNSCache,
         private readonly catchAllCache: CatchAllCache,
         private readonly proxyService: ProxyService,
-        private readonly smtpClientFactory: SmtpClientFactory,
+        private readonly smtpClientCreator: SmtpClientCreator,
     ) {}
 
     private static async getNewCatchAllStatus(client: SmtpClient, domain: string): Promise<boolean | undefined> {
@@ -48,12 +47,12 @@ export class SMTPVerifier implements ISMTPVerifier {
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
+        const { hostname, exchange } = client
+        smtpVerificationResult.targetExchange = exchange
+        smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
         try {
-            await promiseWithTimeout(client.isReady(), 5000, new Error(`Timeout: ${email}`))
-
-            const hostnames =
-                isIP(client.hostname) !== ZERO ? await this.dnsCache.resolve(client.hostname, 'PTR') : [client.hostname]
+            const hostnames = isIP(hostname) !== ZERO ? await this.dnsCache.resolve(hostname, 'PTR') : [hostname]
             const [clientHostname] = hostnames
 
             await client.helo(clientHostname)
@@ -124,13 +123,13 @@ export class SMTPVerifier implements ISMTPVerifier {
 
     private async tryToConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<SmtpClient> {
         try {
-            const client = this.smtpClientFactory.getClient()
-
-            await client.connect({
-                exchange,
+            const client = this.smtpClientCreator.create({
+                host: exchange,
                 proxy,
                 signal,
             })
+
+            await client.connect()
 
             return client
         } catch (error) {

@@ -33,6 +33,10 @@ export function isTlsConnectionOptions(value: unknown): value is ConnectionOptio
     return true
 }
 
+export function isString(value: unknown): value is string {
+    return typeof value === 'string'
+}
+
 export function isStringOrUndefined(value: unknown): value is string | undefined {
-    return typeof value === 'undefined' || typeof value === 'string'
+    return typeof value === 'undefined' || isString(value)
 }

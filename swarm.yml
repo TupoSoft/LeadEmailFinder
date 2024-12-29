@@ -2,19 +2,23 @@ version: '3.9'
 
 services:
   finder:
-    image: ghcr.io/tuposoft/leademailfinder:f41f062c2c7a71f32c6239056e782416cfbcb196
+    image: ghcr.io/tuposoft/leademailfinder:02aed1f3aff0569ac88377200fb0ffd026b76c76
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    command: sh -c "pnpm start | pino-gelf log"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/ping" ]
-      interval: 10s
+      interval: 1m30s
       timeout: 10s
       retries: 3
+      start_period: 30s
     environment:
       REDIS_CONFIG_FILE_PATH: /run/secrets/redis-config.json
+      AUTH_TOKENS_FILE_PATH: /run/secrets/tokens.json
       MONGO_URL_FILE: /run/secrets/mongo_url
+      PINO_GELF_HOST: graylog.eu.tuposoft.internal
     deploy:
       mode: replicated
       replicas: 8
@@ -22,15 +26,19 @@ services:
       - mongo_url
       - source: redis-config
         target: redis-config.json
+      - tokens.json
     networks:
       - default
       - redis_default
       - mongo_default
+      - graylog_graylog
 
 secrets:
   mongo_url:
     external: true
   redis-config:
+    external: true
+  tokens.json:
     external: true
 
 networks:
@@ -38,4 +46,6 @@ networks:
   mongo_default:
     external: true
   redis_default:
+    external: true
+  graylog_graylog:
     external: true

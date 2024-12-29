@@ -1,10 +1,8 @@
 import { readFileSync } from 'fs'
 import type { NextFunction, Request, Response } from 'express'
 import { constants as httpConstants } from 'http2'
-import path from 'node:path'
 import { ok } from 'node:assert'
-
-const tokensFilePath = path.join('src/config/tokens.json')
+import { EXIT_FAILURE } from '../common/constants'
 
 function isRecordStringBoolean(value: unknown): value is Record<string, boolean> {
     if (typeof value !== 'object' || value === null) {
@@ -15,13 +13,17 @@ function isRecordStringBoolean(value: unknown): value is Record<string, boolean>
 }
 
 function readTokens(): Record<string, boolean> {
+    const { env } = process
+    const { AUTH_TOKENS_FILE_PATH } = env
+
     try {
-        const tokens: unknown = JSON.parse(readFileSync(tokensFilePath, { encoding: 'ascii' }))
+        ok(AUTH_TOKENS_FILE_PATH !== undefined, 'The environment variable AUTH_TOKENS_FILE_PATH is required')
+        const tokens: unknown = JSON.parse(readFileSync(AUTH_TOKENS_FILE_PATH, { encoding: 'ascii' }))
         ok(isRecordStringBoolean(tokens), 'Invalid tokens file, should be Record<string, boolean>')
         return tokens
     } catch (error) {
         console.debug('Failed to read the file with API tokens: ', error)
-        process.exit(1)
+        process.exit(EXIT_FAILURE)
     }
 }
 
@@ -40,5 +42,5 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
         }
     }
 
-    res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).send('Unauthorized')
+    res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).json('Unauthorized')
 }

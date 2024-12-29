@@ -1,16 +1,7 @@
 # syntax=docker/dockerfile:1
-
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
-
 ARG NODE_VERSION=lts
 
-FROM node:${NODE_VERSION}-alpine
-
-RUN apk add --no-cache curl wget bind-tools
+FROM node:${NODE_VERSION}-alpine AS builder
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
@@ -27,17 +18,40 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --frozen-lockfile i
 
-# Run the application as a non-root user.
-USER node
-
 # Copy the rest of the source files into the image.
 COPY . .
 
-# Debug
-EXPOSE 9229
+# Build the application.
+RUN pnpm build
 
-# Expose the port that the application listens on.
+FROM node:${NODE_VERSION}-alpine
+
+# Container dependencies
+RUN apk add --no-cache \
+    # curl is for the healthcheck
+    curl \
+    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
+    bind-tools
+
+# Install pnpm.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g pnpm
+
+WORKDIR /app
+
+ENV PATH="/app/node_modules/.bin:$PATH"
+
+COPY package.json .
+COPY pnpm-lock.yaml .
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm --frozen-lockfile -P i
+
+USER node
+
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 3000
 
 # Run the application.
-CMD ["pnpm", "dev"]
+CMD ["pnpm", "start"]

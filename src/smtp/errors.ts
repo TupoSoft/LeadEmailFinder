@@ -1,13 +1,3 @@
-export const enum SMTPClientErrorCode {
-    SessionInitiationFailed,
-    ClientInitiationFailed,
-    NoPTR,
-    UnknownErrorCode,
-    OperationTimeoutOut,
-    SenderAddressRejected,
-    RecipientAddressRejected,
-}
-
 export class SmtpError extends Error {
     constructor(
         readonly code: number,
@@ -15,5 +5,11 @@ export class SmtpError extends Error {
         message: string,
     ) {
         super(message)
+    }
+}
+
+export class SmtpClientTimeoutError extends Error {
+    constructor(id: string) {
+        super(`The client ${id} timed out`)
     }
 }

@@ -23,16 +23,17 @@ services:
       retries: 3
     environment:
       MONGO_URL_FILE: /run/secrets/mongo_url
-      REDIS_CONFIG_FILE_PATH: /redis.json
+      REDIS_CONFIG_FILE_PATH: /run/secrets/redis.json
+      AUTH_TOKENS_FILE_PATH: /run/secrets/tokens.json
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
-    configs:
-      - redis.json
     secrets:
       - mongo_url
+      - redis.json
+      - tokens.json
 
   mongo:
     image: mongo:latest
@@ -67,10 +68,6 @@ services:
       <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
 
-configs:
-  redis.json:
-    file: configs/redis.json
-
 secrets:
   mongo_root_username:
     file: ./secrets/mongo_root_username.txt
@@ -78,6 +75,10 @@ secrets:
     file: ./secrets/mongo_root_password.txt
   mongo_url:
     file: ./secrets/mongo_url.txt
+  redis.json:
+    file: secrets/redis.json
+  tokens.json:
+    file: secrets/tokens.json
 
 volumes:
   mongo-data:

@@ -5,10 +5,10 @@
     "description": "Lead Email Finder",
     "scripts": {
         "build": "tsc",
-        "clean": "tsc --build --clean && rm -r dist",
-        "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "start": "node dist",
         "dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
-        "prod": "node dist",
+        "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "clean": "tsc --build --clean && rm -r dist",
         "test": "jest"
     },
     "keywords": [
@@ -43,6 +43,7 @@
     "dependencies": {
         "@types/supertest": "^6.0.2",
         "axios": "^1.7.8",
+        "cheerio": "^1.0.0",
         "dotenv": "^16.4.7",
         "express": "^4.21.1",
         "express-validator": "^7.2.0",
@@ -50,6 +51,7 @@
         "ip-address": "^9.0.5",
         "mongodb": "^6.11.0",
         "pino": "^9.5.0",
+        "pino-gelf": "^2.2.0",
         "pino-http": "^10.3.0",
         "tldts": "^6.1.65",
         "zod": "^3.24.1"

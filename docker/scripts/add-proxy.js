@@ -1,20 +1,34 @@
 const { env } = process
 const { PROXIES } = env
 
-const proxyUrlArray = PROXIES.split(',').map(proxy => new URL(proxy))
+if (!PROXIES) {
+    console.info(`There are no proxies to insert. Please set the PROXIES environment variable. Exiting the script.`)
+    quit()
+}
 
-const proxyDocuments = proxyUrlArray.map(({ protocol, hostname, port, username, password }) => ({
-    type: protocol.replace(':', ''),
-    host: hostname,
-    port: Number(port),
-    user: username,
-    password,
-}))
+const proxyUrlArray = PROXIES.split(',').map(proxy => {
+    try {
+        return new URL(proxy)
+    } catch (error) {
+        console.error(error)
+        return null
+    }
+})
+
+const proxyDocuments = proxyUrlArray
+    .filter(value => value !== null)
+    .map(({ protocol, hostname, port, username, password }) => ({
+        type: protocol.replace(':', ''),
+        host: hostname,
+        port: Number(port),
+        user: username,
+        password,
+    }))
 
 try {
     db.proxy.insertMany(proxyDocuments)
 } catch (err) {
-    print(`Failed to insert proxies: `, err)
+    console.error(`Failed to insert proxies: `, err)
 }
 
-print(`Proxies were successfully inserted.`)
+console.info(`Proxies were successfully inserted.`)
