@@ -31,12 +31,13 @@ import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
 
 const { env } = process
-const { PORT = DEFAULT_PORT } = env
+const { PORT = DEFAULT_PORT, NODE_ENV } = env
 
 async function main(): Promise<void> {
     const pino = pinoFactory({
-        level: 'debug',
+        level: NODE_ENV === 'development' ? 'debug' : 'info',
     })
+
     const logger = new PinoLogger(pino)
     const pinoLoggingMiddleware = pinoHttp({
         logger: pino,
@@ -55,12 +56,10 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController)
     domainRouter.init()
 
-    const axiosInstance = axios.create({
-        timeout: 10000,
-    })
+    const axiosInstance = axios.create()
+    const axiosHttpClient = new AxiosHttpClient(axiosInstance)
 
     const dnsCache = new DNSCacheImpl(redis)
-    const axiosHttpClient = new AxiosHttpClient(axiosInstance)
     const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
     const proxyRepository = new MongoProxyRepository(db)

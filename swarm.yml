@@ -15,6 +15,7 @@ services:
       retries: 3
       start_period: 30s
     environment:
+      NODE_ENV: production
       REDIS_CONFIG_FILE_PATH: /run/secrets/redis-config.json
       AUTH_TOKENS_FILE_PATH: /run/secrets/tokens.json
       MONGO_URL_FILE: /run/secrets/mongo_url
