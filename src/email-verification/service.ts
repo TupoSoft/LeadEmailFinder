@@ -2,6 +2,8 @@ import type { EmailVerificationRepository } from './repository'
 import type { ISMTPVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { ICatchAllVerifier } from './catch-all-verifier'
+import { isDisposableDomain } from './disposable-domains'
+import { isFreeDomain } from './free-domains'
 
 export interface VerifyOptions {
     throwIfNonexistent?: boolean
@@ -23,6 +25,9 @@ export class EmailVerificationService {
 
         const [localPart, domain] = email.split('@')
 
+        const isDisposable = isDisposableDomain(domain)
+        const isFree = isFreeDomain(domain)
+
         const emailVerification: EmailVerificationResult = {
             exists: null,
             sources: [],
@@ -30,6 +35,8 @@ export class EmailVerificationService {
             localPart,
             email,
             format,
+            isDisposable,
+            isFree,
         }
 
         try {

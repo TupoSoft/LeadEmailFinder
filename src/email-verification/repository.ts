@@ -17,6 +17,8 @@ interface EmailVerificationSchema {
     targetExchange?: string
     verifiedAt?: Date
     exists: boolean | null
+    isDisposable: boolean,
+    isFree: boolean,
     sources: EmailVerificationSource[]
 }
 

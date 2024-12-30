@@ -15,6 +15,8 @@ export interface EmailVerificationResult {
     sources: EmailVerificationSource[]
     exists: boolean | null
     targetExchange?: string
+    isDisposable: boolean,
+    isFree: boolean,
     verifiedAt?: Date
 }
 

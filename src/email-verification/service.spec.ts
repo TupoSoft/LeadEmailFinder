@@ -31,6 +31,8 @@ describe('EmailVerificationService', () => {
     const mxDomain = 'example.com'
     const exists = true
     const catchAllStatus = false
+    const isDisposable = false
+    const isFree = false
 
     const smtpVerificationResult: SMTPVerificationResult = {
         exists,
@@ -47,6 +49,8 @@ describe('EmailVerificationService', () => {
         sources: ['SMTP'],
         exists,
         mxDomain,
+        isDisposable,
+        isFree,
     }
 
     afterEach(() => {

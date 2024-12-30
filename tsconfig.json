@@ -4,8 +4,13 @@
         "outDir": "dist",
         "noImplicitAny": true,
         "useUnknownInCatchVariables": true,
-        "removeComments": true
+        "removeComments": true,
+        "resolveJsonModule": true
     },
-    "include": ["src/user"],
+    "include": [
+        "src/user",
+        "src/email-verification/disposable-email-providers-json.d.ts",
+        "src/email-verification/free-email-providers-json.d.ts"
+    ],
     "files": ["src/index.ts"]
 }
