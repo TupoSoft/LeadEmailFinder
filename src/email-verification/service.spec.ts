@@ -32,7 +32,7 @@ describe('EmailVerificationService', () => {
     const exists = true
     const catchAllStatus = false
     const isDisposable = false
-    const isFree = false
+    const isFree = true
 
     const smtpVerificationResult: SMTPVerificationResult = {
         exists,
