@@ -114,35 +114,26 @@ async function main(): Promise<void> {
             }
         })
 
-        mongoClient.close().then(
-            () => {
-                logger.info('MongoDB connection closed')
-            },
-            (reason: unknown) => {
-                const errorMessage = 'Failed to close MongoDB connection'
+        const onSuccessfulClose =
+            (name: string): (() => void) =>
+            (): void => {
+                logger.info(`${name} connection closed`)
+            }
+
+        const onUnsuccessfulClose =
+            (name: string): ((reason: unknown) => void) =>
+            (reason): void => {
+                const errorMessage = `Failed to close ${name} connection`
 
                 if (isNativeError(reason)) {
                     logger.error(`${errorMessage}: ${reason}`)
                 } else {
                     logger.error(errorMessage)
                 }
-            },
-        )
+            }
 
-        redis.quit().then(
-            () => {
-                logger.info('Redis connection closed')
-            },
-            (reason: unknown) => {
-                const errorMessage = 'Failed to close Redis connection'
-
-                if (isNativeError(reason)) {
-                    logger.error(`${errorMessage}: ${reason}`)
-                } else {
-                    logger.error(errorMessage)
-                }
-            },
-        )
+        mongoClient.close().then(onSuccessfulClose('MongoDB'), onUnsuccessfulClose('MongoDB'))
+        redis.quit().then(onSuccessfulClose('Redis'), onUnsuccessfulClose('Redis'))
     }
 
     process.on('SIGINT', onTerminationSignal)
