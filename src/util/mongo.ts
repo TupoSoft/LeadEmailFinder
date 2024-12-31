@@ -1,8 +1,10 @@
 import { readFile } from 'fs/promises'
-import { type Db, MongoClient, ObjectId } from 'mongodb'
+import { MongoClient, ObjectId } from 'mongodb'
 import { randomBytes } from 'node:crypto'
 import { promisify } from 'node:util'
 import { EXIT_FAILURE } from '../common/constants'
+
+export const DESCENDING = -1
 
 const randomBytesAsync = promisify(randomBytes)
 
@@ -23,11 +25,11 @@ async function getMongoUrl(): Promise<string> {
     }
 }
 
-export async function dbFactory(): Promise<Db> {
+export async function getMongoClient(): Promise<MongoClient> {
     try {
         const mongoUrl = await getMongoUrl()
         const mongoClient = new MongoClient(mongoUrl)
-        return await mongoClient.connect().then(mongoClient => mongoClient.db())
+        return await mongoClient.connect()
     } catch (error) {
         console.error('MongoDB connection error:', error)
         process.exit(EXIT_FAILURE)

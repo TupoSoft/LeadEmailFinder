@@ -9,8 +9,3 @@ export interface Lead {
 export interface FindLeadResult extends Lead {
     emails: EmailVerificationResult[]
 }
-
-export interface EmailPatternUsage {
-    pattern: string
-    usageCount: number
-}

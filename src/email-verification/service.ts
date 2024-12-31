@@ -2,6 +2,7 @@ import type { EmailVerificationRepository } from './repository'
 import type { ISMTPVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { ICatchAllVerifier } from './catch-all-verifier'
+import type { EmailPatternUsage } from '../domain'
 
 export interface VerifyOptions {
     throwIfNonexistent?: boolean
@@ -62,5 +63,9 @@ export class EmailVerificationService {
 
     async verifyEmails(emailVerificationRequests: EmailVerificationRequest[]): Promise<EmailVerificationResult[]> {
         return await Promise.all(emailVerificationRequests.map(async request => await this.verifyEmail(request)))
+    }
+
+    async aggregateEmailPatternUsage(domain: string): Promise<EmailPatternUsage[]> {
+        return await this.emailVerificationRepository.aggregateEmailPatternUsage(domain)
     }
 }

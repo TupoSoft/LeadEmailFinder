@@ -1,15 +1,8 @@
-import type { MxRecord } from 'node:dns'
 import type { Collection, Db } from 'mongodb'
-import type { EmailPatternUsage } from '../find-lead'
-import type { Domain } from './dto'
+import type { Domain } from './entity'
 
-interface DomainSchema {
+type DomainSchema = Omit<Domain, 'name'> & {
     _id: string
-    catchAllEnabled?: boolean
-    emailPatternUsage: EmailPatternUsage[]
-    mxRecords?: MxRecord[]
-    createdAt?: Date
-    updatedAt?: Date
 }
 
 export interface DomainRepository {

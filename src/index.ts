@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { dbFactory } from './util/mongo'
+import { getMongoClient } from './util/mongo'
 import {
     CatchAllVerifier,
     EmailVerificationControllerImpl,
@@ -46,7 +46,8 @@ async function main(): Promise<void> {
     const router = Router()
     router.use(log)
 
-    const db = await dbFactory()
+    const mongoClient = await getMongoClient()
+    const db = mongoClient.db()
 
     const redis = await getRedis()
 
@@ -72,13 +73,15 @@ async function main(): Promise<void> {
     const connectionLimiter = new RedisConnectionLimiter(redis, logger)
     const smtpClientFactory = new SmtpClientCreatorImpl(connectionLimiter, logger)
     const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, smtpClientFactory)
+
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
+    await mongoEmailVerificationRepository.init()
+
     const emailVerificationService = new EmailVerificationService(
         mongoEmailVerificationRepository,
         catchAllVerifier,
         smtpVerifier,
     )
-
     const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
@@ -107,9 +110,39 @@ async function main(): Promise<void> {
             if (err !== undefined) {
                 logger.error(`Server closed with error: ${err}`)
             } else {
-                logger.error(`Shutting down the server gracefully`)
+                logger.info(`Shutting down the server gracefully`)
             }
         })
+
+        mongoClient.close().then(
+            () => {
+                logger.info('MongoDB connection closed')
+            },
+            (reason: unknown) => {
+                const errorMessage = 'Failed to close MongoDB connection'
+
+                if (isNativeError(reason)) {
+                    logger.error(`${errorMessage}: ${reason}`)
+                } else {
+                    logger.error(errorMessage)
+                }
+            },
+        )
+
+        redis.quit().then(
+            () => {
+                logger.info('Redis connection closed')
+            },
+            (reason: unknown) => {
+                const errorMessage = 'Failed to close Redis connection'
+
+                if (isNativeError(reason)) {
+                    logger.error(`${errorMessage}: ${reason}`)
+                } else {
+                    logger.error(errorMessage)
+                }
+            },
+        )
     }
 
     process.on('SIGINT', onTerminationSignal)
