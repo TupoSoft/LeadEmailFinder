@@ -83,7 +83,7 @@ async function main(): Promise<void> {
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
 
-    const smtpEmailVerifier = new SmtpEmailVerifier(smtpVerifier)
+    const smtpEmailVerifier = new SmtpEmailVerifier(smtpVerifier, logger)
     const catchAllEmailVerifierDecorator = new CatchAllEmailVerifierDecorator(
         smtpEmailVerifier,
         catchAllVerifier,
