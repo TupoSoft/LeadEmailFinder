@@ -14,15 +14,14 @@ export class FindLeadService {
     ) {}
 
     async findLead(lead: Lead): Promise<FindLeadResult> {
+        const { domain } = lead
         const findLeadResult: FindLeadResult = {
             ...lead,
             emails: [],
         }
 
         try {
-            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(
-                lead.domain,
-            )
+            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(domain)
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
             const p0 = emailFormats.filter(
