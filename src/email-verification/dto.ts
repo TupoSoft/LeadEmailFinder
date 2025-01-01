@@ -10,7 +10,6 @@ export interface EmailVerificationResult {
     domain: string
     localPart: string
     format?: string
-    error?: string
     mxDomain?: string
     sources: EmailVerificationSource[]
     exists: boolean | null

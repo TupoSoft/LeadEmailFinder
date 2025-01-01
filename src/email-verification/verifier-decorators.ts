@@ -14,12 +14,11 @@ export class CatchAllEmailVerifierDecorator implements EmailVerifier {
 
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult> =
         async emailVerificationRequest => {
-            const { email } = emailVerificationRequest
-
             const emailVerificationResult = await this.emailVerifier.verify(emailVerificationRequest)
+            const { email, exists } = emailVerificationResult
 
             try {
-                if (emailVerificationResult.exists === null) {
+                if (exists === null) {
                     const { source, success } = await this.catchAllVerifier.tryAll(email)
                     emailVerificationResult.sources.push(source)
                     emailVerificationResult.exists = success
@@ -38,7 +37,7 @@ export class CatchAllEmailVerifierDecorator implements EmailVerifier {
         }
 }
 
-export class ThrowIfNonexistentEmailVerifierDecorator implements EmailVerifier {
+export class ThrowableEmailVerifierDecorator implements EmailVerifier {
     constructor(private readonly emailVerifier: EmailVerifier) {}
 
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult> =

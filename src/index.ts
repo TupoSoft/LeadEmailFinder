@@ -33,7 +33,7 @@ import { isNativeError } from 'node:util/types'
 import {
     CatchAllEmailVerifierDecorator,
     PersistenceEmailVerifierDecorator,
-    ThrowIfNonexistentEmailVerifierDecorator,
+    ThrowableEmailVerifierDecorator,
 } from './email-verification/verifier-decorators'
 
 const { env } = process
@@ -97,11 +97,9 @@ async function main(): Promise<void> {
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
-    const throwIfNonexistentEmailVerifierDecorator = new ThrowIfNonexistentEmailVerifierDecorator(
-        persistenceEmailVerifierDecorator,
-    )
+    const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
     const emailVerificationService = new EmailVerificationService(
-        throwIfNonexistentEmailVerifierDecorator,
+        throwableEmailVerifierDecorator,
         mongoEmailVerificationRepository,
     )
     const findLeadService = new FindLeadService(emailVerificationService, logger)
