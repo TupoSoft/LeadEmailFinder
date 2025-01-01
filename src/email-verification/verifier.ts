@@ -40,7 +40,7 @@ export class SmtpEmailVerifier implements EmailVerifier {
             }
         } catch (error) {
             ok(isNativeError(error), 'Malformed error in SmtpEmailVerifier.verify')
-            this.logger.error(`Error in SmtpEmailVerifier.verify: ${error}`)
+            this.logger.error(`Error in SmtpEmailVerifier.verify: ${error.message}`)
         }
 
         return emailVerification

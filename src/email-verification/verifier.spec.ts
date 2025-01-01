@@ -7,6 +7,8 @@ import { MockCatchAllVerifier } from './catch-all-verifier'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResult } from './dto'
+import { PinoLogger } from '../logging'
+import pino from 'pino'
 
 describe('EmailVerificationService', () => {
     const emailVerificationRepositoryMock =
@@ -19,7 +21,8 @@ describe('EmailVerificationService', () => {
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerificationService = new SmtpEmailVerifier(smtpVerifierMock)
+    const logger = new PinoLogger(pino())
+    const emailVerificationService = new SmtpEmailVerifier(smtpVerifierMock, logger)
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
