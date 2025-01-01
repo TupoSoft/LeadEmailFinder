@@ -1,11 +1,13 @@
-import { type Collection, type Db, ObjectId } from 'mongodb'
+import { type Db, ObjectId } from 'mongodb'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
-import { generateObjectIdAsync } from '../util/mongo'
+import { DESCENDING, generateObjectIdAsync } from '../util/mongo'
+import type { EmailPatternUsage } from '../domain'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerificationResult) => Promise<void>
     findById: (id: string) => Promise<EmailVerificationResult>
     findByEmail: (email: string) => Promise<EmailVerificationResult>
+    aggregateEmailPatternUsage: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
 interface EmailVerificationSchema {
@@ -27,11 +29,15 @@ export class EmailVerificationNotFoundError extends Error {
 }
 
 export class MongoEmailVerificationRepository implements EmailVerificationRepository {
-    private readonly collection: Collection<EmailVerificationSchema>
+    private readonly collection
 
     constructor(db: Db) {
-        this.collection = db.collection('emailVerifications')
-        void this.collection.createIndex({ email: 1 })
+        this.collection = db.collection<EmailVerificationSchema>('emailVerifications')
+    }
+
+    async init(): Promise<void> {
+        await this.collection.createIndex('email')
+        await this.collection.createIndex(['domain', 'format'])
     }
 
     findByEmail: (email: string) => Promise<EmailVerificationResult> = async (
@@ -51,9 +57,63 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     async save(emailVerification: EmailVerificationResult): Promise<void> {
         await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
     }
+
+    aggregateEmailPatternUsage: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>
+        await this.collection
+            .aggregate<EmailPatternUsage>([
+                {
+                    $match: {
+                        domain,
+                        format: {
+                            $ne: null,
+                        },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$email',
+                        latestEntry: {
+                            $last: '$$ROOT',
+                        },
+                    },
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: '$latestEntry',
+                    },
+                },
+                {
+                    $match: {
+                        exists: true,
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$format',
+                        usageCount: {
+                            $count: {},
+                        },
+                    },
+                },
+                {
+                    $sort: {
+                        usageCount: DESCENDING,
+                    },
+                },
+                {
+                    $project: {
+                        _id: false,
+                        pattern: '$_id',
+                        usageCount: true,
+                    },
+                },
+            ])
+            .toArray()
 }
 
 export class MockEmailVerificationRepository implements EmailVerificationRepository {
+    aggregateEmailPatternUsage!: (domain: string) => Promise<EmailPatternUsage[]>
+
     findById!: (id: string) => Promise<EmailVerificationResult>
 
     findByEmail!: (email: string) => Promise<EmailVerificationResult>

@@ -1,10 +1,11 @@
-import type { EmailPatternUsage, FindLeadResult, Lead } from './dto'
+import type { FindLeadResult, Lead } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
 import type { Logger } from '../logging'
 import { NO_USAGES } from './constants'
 import { ok } from 'node:assert'
 import { isEmptyArray } from '../common/type-guards'
+import type { EmailPatternUsage } from '../domain'
 
 export class FindLeadService {
     constructor(
@@ -19,8 +20,9 @@ export class FindLeadService {
         }
 
         try {
+            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsage(lead.domain)
             const allEmailFormats = getAllEmailFormats()
-            const emailFormats = mergeEmailFormats([], allEmailFormats)
+            const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
             const p0 = emailFormats.filter(
                 ({ pattern, usageCount }) => usageCount > NO_USAGES && !deprioritizedEmailFormats.has(pattern),
             )
