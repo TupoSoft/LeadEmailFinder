@@ -2,11 +2,11 @@ import express, { type NextFunction, type Request, type Response, Router } from 
 import { getMongoClient } from './util/mongo'
 import {
     CatchAllVerifier,
-    EmailVerificationControllerImpl,
     EmailVerificationRouter,
-    EmailVerificationService,
+    ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
     RedisCatchAllCache,
+    SmtpEmailVerifier,
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
@@ -29,6 +29,12 @@ import { SmtpClientCreatorImpl } from './smtp/client-creator'
 import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
+import {
+    CatchAllEmailVerifierDecorator,
+    PersistenceEmailVerifierDecorator,
+    ThrowIfNonexistentEmailVerifierDecorator,
+} from './email-verification/verifier-decorators'
+import { EmailVerificationService } from './email-verification/service'
 
 const { env } = process
 const { PORT = DEFAULT_PORT, NODE_ENV } = env
@@ -77,15 +83,27 @@ async function main(): Promise<void> {
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
 
-    const emailVerificationService = new EmailVerificationService(
-        mongoEmailVerificationRepository,
+    const smtpEmailVerifier = new SmtpEmailVerifier(smtpVerifier)
+    const catchAllEmailVerifierDecorator = new CatchAllEmailVerifierDecorator(
+        smtpEmailVerifier,
         catchAllVerifier,
-        smtpVerifier,
+        logger,
     )
-    const emailVerificationController = new EmailVerificationControllerImpl(emailVerificationService)
+    const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
+        catchAllEmailVerifierDecorator,
+        mongoEmailVerificationRepository,
+    )
+    const emailVerificationController = new ExpressEmailVerificationController(persistenceEmailVerifierDecorator)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
     emailVerificationRouter.init()
 
+    const throwIfNonexistentEmailVerifierDecorator = new ThrowIfNonexistentEmailVerifierDecorator(
+        persistenceEmailVerifierDecorator,
+    )
+    const emailVerificationService = new EmailVerificationService(
+        throwIfNonexistentEmailVerifierDecorator,
+        mongoEmailVerificationRepository,
+    )
     const findLeadService = new FindLeadService(emailVerificationService, logger)
     const findLeadController = new FindLeadControllerImpl(findLeadService)
     const findLeadRouter = new FindLeadRouter(router, findLeadController)

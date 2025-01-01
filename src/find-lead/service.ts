@@ -1,10 +1,11 @@
 import type { FindLeadResult, Lead } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
-import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
+import type { EmailVerificationResult } from '../email-verification'
 import type { Logger } from '../logging'
 import { NO_USAGES } from './constants'
 import { ok } from 'node:assert'
 import { isEmptyArray } from '../common/type-guards'
+import type { EmailVerificationService } from '../email-verification/service'
 import type { EmailPatternUsage } from '../domain'
 
 export class FindLeadService {
@@ -20,7 +21,9 @@ export class FindLeadService {
         }
 
         try {
-            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsage(lead.domain)
+            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(
+                lead.domain,
+            )
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
             const p0 = emailFormats.filter(
@@ -86,13 +89,10 @@ export class FindLeadService {
             const email = formats.get(format)
             if (email !== undefined) {
                 verificationResultPromises.push(
-                    this.emailVerificationService.verifyEmail(
-                        {
-                            email,
-                            format,
-                        },
-                        { throwIfNonexistent: true },
-                    ),
+                    this.emailVerificationService.verify({
+                        email,
+                        format,
+                    }),
                 )
             }
         }

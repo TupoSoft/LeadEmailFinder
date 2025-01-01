@@ -7,7 +7,7 @@ export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerificationResult) => Promise<void>
     findById: (id: string) => Promise<EmailVerificationResult>
     findByEmail: (email: string) => Promise<EmailVerificationResult>
-    aggregateEmailPatternUsage: (domain: string) => Promise<EmailPatternUsage[]>
+    aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
 interface EmailVerificationSchema {
@@ -58,7 +58,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
     }
 
-    aggregateEmailPatternUsage: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>
+    aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>
         await this.collection
             .aggregate<EmailPatternUsage>([
                 {
@@ -112,7 +112,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 }
 
 export class MockEmailVerificationRepository implements EmailVerificationRepository {
-    aggregateEmailPatternUsage!: (domain: string) => Promise<EmailPatternUsage[]>
+    aggregateEmailPatternUsageForDomain!: (domain: string) => Promise<EmailPatternUsage[]>
 
     findById!: (id: string) => Promise<EmailVerificationResult>
 

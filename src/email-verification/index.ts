@@ -1,6 +1,6 @@
 export * from './controller'
 export * from './router'
-export * from './service'
+export * from './verifier'
 export * from './repository'
 export * from './catch-all-cache'
 export * from './catch-all-verifier'
