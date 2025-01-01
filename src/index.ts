@@ -3,6 +3,7 @@ import { getMongoClient } from './util/mongo'
 import {
     CatchAllVerifier,
     EmailVerificationRouter,
+    EmailVerificationService,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
     RedisCatchAllCache,
@@ -34,7 +35,6 @@ import {
     PersistenceEmailVerifierDecorator,
     ThrowIfNonexistentEmailVerifierDecorator,
 } from './email-verification/verifier-decorators'
-import { EmailVerificationService } from './email-verification/service'
 
 const { env } = process
 const { PORT = DEFAULT_PORT, NODE_ENV } = env
