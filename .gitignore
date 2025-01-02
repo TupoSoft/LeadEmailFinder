@@ -133,3 +133,5 @@ dist
 
 # Dev
 **/dev
+
+scripts/*.json
