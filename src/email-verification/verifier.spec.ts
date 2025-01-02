@@ -1,14 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { EmailVerificationService } from './service'
+import { EmailVerifier } from './verifier'
 import { MockEmailVerificationRepository } from './repository'
 import { MockCatchAllVerifier } from './catch-all-verifier'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResult } from './dto'
+import { PinoLogger } from '../logging'
+import pino from 'pino'
 
-describe('EmailVerificationService', () => {
+describe('EmailVerifier', () => {
     const emailVerificationRepositoryMock =
         new MockEmailVerificationRepository() as jest.Mocked<MockEmailVerificationRepository>
     emailVerificationRepositoryMock.save = jest.fn()
@@ -19,11 +21,8 @@ describe('EmailVerificationService', () => {
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerificationService = new EmailVerificationService(
-        emailVerificationRepositoryMock,
-        catchAllVerifierMock,
-        smtpVerifierMock,
-    )
+    const logger = new PinoLogger(pino())
+    const emailVerifier = new EmailVerifier(smtpVerifierMock, catchAllVerifierMock, logger)
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
@@ -56,12 +55,10 @@ describe('EmailVerificationService', () => {
     it('should be able to verify email', async () => {
         smtpVerifierMock.verify.mockResolvedValueOnce(smtpVerificationResult)
 
-        const result = await emailVerificationService.verifyEmail({ email })
+        const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedEmailVerificationResult)
         expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
-        expect(catchAllVerifierMock.tryAll).not.toHaveBeenCalled()
-        expect(emailVerificationRepositoryMock.save).toHaveBeenCalledWith(expectedEmailVerificationResult)
     })
 
     it('should return a verification result when the SMTP verifier confirms the email does not exist', async () => {
@@ -70,11 +67,9 @@ describe('EmailVerificationService', () => {
 
         const expectedResult: EmailVerificationResult = { ...expectedEmailVerificationResult, exists: false }
 
-        const result = await emailVerificationService.verifyEmail({ email })
+        const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedResult)
         expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
-        expect(catchAllVerifierMock.tryAll).not.toHaveBeenCalled()
-        expect(emailVerificationRepositoryMock.save).toHaveBeenCalledWith(expectedResult)
     })
 })

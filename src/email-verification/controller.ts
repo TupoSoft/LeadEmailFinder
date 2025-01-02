@@ -7,12 +7,12 @@ export interface EmailVerificationController {
     verifyEmails: (req: Request, res: Response, next: NextFunction) => void
 }
 
-export class EmailVerificationControllerImpl implements EmailVerificationController {
+export class ExpressEmailVerificationController implements EmailVerificationController {
     constructor(private readonly emailVerificationService: EmailVerificationService) {}
 
     verifyEmail(req: Request, res: Response, next: NextFunction): void {
         const { email } = matchedData<{ email: string }>(req)
-        this.emailVerificationService.verifyEmail({ email }).then(
+        this.emailVerificationService.verify({ email }).then(
             verificationData => res.json(verificationData),
             (reason: unknown) => {
                 next(reason)
@@ -22,7 +22,7 @@ export class EmailVerificationControllerImpl implements EmailVerificationControl
 
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
         const { emails } = matchedData<{ emails: string[] }>(req)
-        this.emailVerificationService.verifyEmails(emails.map(email => ({ email }))).then(
+        Promise.all(emails.map(async email => await this.emailVerificationService.verify({ email }))).then(
             value => res.json(value),
             (reason: unknown) => {
                 next(reason)

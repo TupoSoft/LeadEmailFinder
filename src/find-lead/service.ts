@@ -14,13 +14,14 @@ export class FindLeadService {
     ) {}
 
     async findLead(lead: Lead): Promise<FindLeadResult> {
+        const { domain } = lead
         const findLeadResult: FindLeadResult = {
             ...lead,
             emails: [],
         }
 
         try {
-            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsage(lead.domain)
+            const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(domain)
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
             const p0 = emailFormats.filter(
@@ -86,13 +87,10 @@ export class FindLeadService {
             const email = formats.get(format)
             if (email !== undefined) {
                 verificationResultPromises.push(
-                    this.emailVerificationService.verifyEmail(
-                        {
-                            email,
-                            format,
-                        },
-                        { throwIfNonexistent: true },
-                    ),
+                    this.emailVerificationService.verify({
+                        email,
+                        format,
+                    }),
                 )
             }
         }
