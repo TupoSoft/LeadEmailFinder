@@ -10,7 +10,7 @@ import type { EmailVerificationResult } from './dto'
 import { PinoLogger } from '../logging'
 import pino from 'pino'
 
-describe('EmailVerificationService', () => {
+describe('EmailVerifier', () => {
     const emailVerificationRepositoryMock =
         new MockEmailVerificationRepository() as jest.Mocked<MockEmailVerificationRepository>
     emailVerificationRepositoryMock.save = jest.fn()
@@ -22,7 +22,7 @@ describe('EmailVerificationService', () => {
     smtpVerifierMock.verify = jest.fn()
 
     const logger = new PinoLogger(pino())
-    const emailVerificationService = new EmailVerifier(smtpVerifierMock, catchAllVerifierMock, logger)
+    const emailVerifier = new EmailVerifier(smtpVerifierMock, catchAllVerifierMock, logger)
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
@@ -55,7 +55,7 @@ describe('EmailVerificationService', () => {
     it('should be able to verify email', async () => {
         smtpVerifierMock.verify.mockResolvedValueOnce(smtpVerificationResult)
 
-        const result = await emailVerificationService.verify({ email })
+        const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedEmailVerificationResult)
         expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
@@ -67,7 +67,7 @@ describe('EmailVerificationService', () => {
 
         const expectedResult: EmailVerificationResult = { ...expectedEmailVerificationResult, exists: false }
 
-        const result = await emailVerificationService.verify({ email })
+        const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedResult)
         expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
