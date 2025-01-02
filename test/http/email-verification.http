@@ -4,7 +4,7 @@ Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508a
 Content-Type: application/json
 
 {
-  "email": "kyrylo.kupin@gmail.com"
+  "email": "maximilian.vogl@dbag.com"
 }
 
 ### Verify multiple emails
@@ -36,28 +36,15 @@ POST http://localhost:3000/api/v0/lead/find/bulk
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
-{
-  "leads": [
-    {
-      "firstName": "john",
-      "lastName": "doe",
-      "domain": "gmail.com"
-    },
-    {
-      "firstName": "jane",
-      "lastName": "doe",
-      "domain": "gmail.com"
-    }
-  ]
-}
+< C:\Users\kyryl\Downloads\email_leads_1000.json
 
 ### Bulk status
-GET http://localhost:3000/api/v0/lead/find/bulk/6/status
+GET http://localhost:3000/api/v0/lead/find/bulk/9/status
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
-### Bulk status
-GET http://localhost:3000/api/v0/lead/find/bulk/6
+### Bulk result
+GET http://localhost:3000/api/v0/lead/find/bulk/9
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 

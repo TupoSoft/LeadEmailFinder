@@ -69,6 +69,14 @@ services:
       <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
 
+  bullboard:
+    image: venatum/bull-board:latest
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "4000:3000"
+
 secrets:
   mongo_root_username:
     file: ./secrets/mongo_root_username.txt
