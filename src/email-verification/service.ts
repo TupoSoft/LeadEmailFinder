@@ -1,11 +1,11 @@
-import type { EmailVerifier } from './verifier'
+import type { IEmailVerifier } from './verifier'
 import type { EmailVerificationRepository } from './repository'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailPatternUsage } from '../domain'
 
 export class EmailVerificationService {
     constructor(
-        private readonly emailVerifier: EmailVerifier,
+        private readonly emailVerifier: IEmailVerifier,
         private readonly emailVerificationRepository: EmailVerificationRepository,
     ) {}
 

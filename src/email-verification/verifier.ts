@@ -3,16 +3,24 @@ import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { Logger } from '../logging'
 import { isNativeError } from 'node:util/types'
 import { ok } from 'node:assert'
+import type { SMTPVerificationResult } from '../smtp/dto'
+import type { ICatchAllVerifier } from './catch-all-verifier'
 
-export interface EmailVerifier {
+export interface IEmailVerifier {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
 }
 
-export class SmtpEmailVerifier implements EmailVerifier {
+export class EmailVerifier implements IEmailVerifier {
     constructor(
         private readonly smtpVerifier: ISMTPVerifier,
+        private readonly catchAllVerifier: ICatchAllVerifier,
         private readonly logger: Logger,
     ) {}
+
+    private static isSuccessful(smtpVerificationResult: SMTPVerificationResult): boolean {
+        const { catchAllStatus, exists } = smtpVerificationResult
+        return catchAllStatus !== undefined && !catchAllStatus && exists !== undefined
+    }
 
     async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
         const { email, format } = emailVerificationRequest
@@ -28,15 +36,23 @@ export class SmtpEmailVerifier implements EmailVerifier {
         }
 
         try {
-            const { exists, catchAllStatus, targetExchange, mxDomain } = await this.smtpVerifier.verify({
+            const smtpVerificationResult = await this.smtpVerifier.verify({
                 email,
             })
 
-            if (catchAllStatus !== undefined && !catchAllStatus && exists !== undefined) {
+            if (EmailVerifier.isSuccessful(smtpVerificationResult)) {
+                const { exists, targetExchange, mxDomain } = smtpVerificationResult
+
+                ok(exists !== undefined, 'exists cannot be undefined when the SMTP verification is successful')
+
                 emailVerification.exists = exists
                 emailVerification.targetExchange = targetExchange
                 emailVerification.mxDomain = mxDomain
                 emailVerification.sources.push('SMTP')
+            } else {
+                const { source, success } = await this.catchAllVerifier.tryAll(email)
+                emailVerification.sources.push(source)
+                emailVerification.exists = success
             }
         } catch (error) {
             ok(isNativeError(error), 'Malformed error in SmtpEmailVerifier.verify')
