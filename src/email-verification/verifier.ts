@@ -31,7 +31,7 @@ export class EmailVerifier implements IEmailVerifier {
         }
 
         const { exists, targetExchange, mxDomain } = await this.verifyViaSmtp(email)
-        if (exists === true) {
+        if (exists !== undefined) {
             emailVerification.exists = exists
             emailVerification.targetExchange = targetExchange
             emailVerification.mxDomain = mxDomain
