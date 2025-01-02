@@ -100,7 +100,7 @@ async function main(): Promise<void> {
     )
     const leadFinder = new LeadFinder(findLeadEmailVerificationService, logger)
     const leadQueue = new LeadQueue(redis)
-    const leadQueueWorker = new LeadQueueWorker(redis)
+    const leadQueueWorker = new LeadQueueWorker(redis, leadFinder)
     const leadService = new LeadService(leadFinder, leadQueue)
     const leadController = new LeadController(leadService)
     const leadRouter = new LeadRouter(router, leadController)

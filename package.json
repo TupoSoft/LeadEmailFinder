@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc",
         "start": "node dist",
-        "dev": "node --loader ts-node/esm --trace-sync-io --trace-warnings -r ts-node/register src",
+        "dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
         "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest"
