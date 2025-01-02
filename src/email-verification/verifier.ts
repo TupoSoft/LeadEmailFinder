@@ -17,11 +17,6 @@ export class EmailVerifier implements IEmailVerifier {
         private readonly logger: Logger,
     ) {}
 
-    private static isSuccessful(smtpVerificationResult: SMTPVerificationResult): boolean {
-        const { catchAllStatus, exists } = smtpVerificationResult
-        return catchAllStatus !== undefined && !catchAllStatus && exists !== undefined
-    }
-
     async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
         const { email, format } = emailVerificationRequest
         const [localPart, domain] = email.split('@')
@@ -35,13 +30,8 @@ export class EmailVerifier implements IEmailVerifier {
             format,
         }
 
-        const smtpVerificationResult = await this.verifyViaSmtp(email)
-
-        if (EmailVerifier.isSuccessful(smtpVerificationResult)) {
-            const { exists, targetExchange, mxDomain } = smtpVerificationResult
-
-            ok(exists !== undefined)
-
+        const { exists, targetExchange, mxDomain } = await this.verifyViaSmtp(email)
+        if (exists === true) {
             emailVerification.exists = exists
             emailVerification.targetExchange = targetExchange
             emailVerification.mxDomain = mxDomain
