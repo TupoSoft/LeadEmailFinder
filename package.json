@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc",
         "start": "node dist",
-        "dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
+        "dev": "node --loader ts-node/esm --trace-sync-io --trace-warnings -r ts-node/register src",
         "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest"
@@ -43,6 +43,7 @@
     "dependencies": {
         "@types/supertest": "^6.0.2",
         "axios": "^1.7.8",
+        "bullmq": "^5.34.6",
         "cheerio": "^1.0.0",
         "dotenv": "^16.4.7",
         "express": "^4.21.1",

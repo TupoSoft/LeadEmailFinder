@@ -9,3 +9,13 @@ export interface Lead {
 export interface FindLeadResult extends Lead {
     emails: EmailVerificationResult[]
 }
+
+export interface FindBulkResponse {
+    message: string
+    taskId: string
+    monitorUrl: string
+}
+
+export interface FindBulkStatusResponse {
+    status: string
+}

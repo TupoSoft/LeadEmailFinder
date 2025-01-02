@@ -1,4 +1,4 @@
-import type { Request, Response, Router } from 'express'
+import type { Response, Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body } from 'express-validator'
 import { authenticate, log, validate } from '../middleware'
@@ -11,7 +11,7 @@ export class EmailVerificationRouter {
 
     init(): void {
         this.router.post(
-            '/verifyEmail',
+            '/email/verify',
             authenticate,
             validate([
                 body('email')
@@ -27,7 +27,7 @@ export class EmailVerificationRouter {
         )
 
         this.router.post(
-            '/verifyEmails',
+            '/email/verify/bulk',
             authenticate,
             validate([
                 body('emails').isArray({ min: 1 }).withMessage('Must be a non-empty array of emails'),
@@ -46,10 +46,6 @@ export class EmailVerificationRouter {
 
         this.router.get('/ping', log, (_, res: Response) => {
             res.json('PONG')
-        })
-
-        this.router.get('/', log, (_: Request, res: Response) => {
-            res.json('Hello World!')
         })
     }
 }
