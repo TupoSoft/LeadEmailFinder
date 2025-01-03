@@ -1,11 +1,11 @@
 import { describe, it } from '@jest/globals'
-import { AUTH_LOGIN_ROUTE, AUTH_LOGOUT_ROUTE, AUTH_REGISTER_ROUTE } from './constants'
+import { AUTH_LOGIN_ROUTE, AUTH_LOGOUT_ROUTE, AUTH_REGISTER_ROUTE, AUTH_ROUTE } from './constants'
 import express, { Router } from 'express'
 import { AuthRouter } from './router'
 import request from 'supertest'
 import { constants } from 'node:http2'
 
-describe('AuthRouter', () => {
+describe(AUTH_ROUTE, () => {
     const app = express()
     const expressRouter = Router()
     const authRouter = new AuthRouter(expressRouter)
