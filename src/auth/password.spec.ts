@@ -1,5 +1,5 @@
 import { compare, hash } from './password'
-import { describe, expect, it } from '@jest/globals' // Adjust the import path as needed
+import { describe, expect, it } from '@jest/globals'
 
 describe('Password Utilities', () => {
     describe('hash', () => {
@@ -7,7 +7,6 @@ describe('Password Utilities', () => {
             const password = 'securePassword123!'
             const saltedHash = await hash(password)
 
-            // Ensure the result contains the salt and hash separated by a colon
             expect(saltedHash).toMatch(/^[a-f0-9]+:[a-f0-9]+$/)
 
             const [salt, hashPart] = saltedHash.split(':')
