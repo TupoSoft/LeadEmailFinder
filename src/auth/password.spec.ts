@@ -10,8 +10,8 @@ describe('Password Utilities', () => {
             expect(saltedHash).toMatch(/^[a-f0-9]+:[a-f0-9]+$/)
 
             const [salt, hashPart] = saltedHash.split(':')
-            expect(Buffer.from(salt, 'hex')).toHaveLength(16) // 16 bytes of salt
-            expect(Buffer.from(hashPart, 'hex')).toHaveLength(64) // 64 bytes of hash
+            expect(Buffer.from(salt, 'hex')).toHaveLength(16)
+            expect(Buffer.from(hashPart, 'hex')).toHaveLength(64)
         })
 
         it('should throw an error if password is empty', async () => {
