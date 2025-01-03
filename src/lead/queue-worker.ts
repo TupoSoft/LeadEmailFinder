@@ -1,18 +1,19 @@
 import type { Redis } from 'ioredis'
 import { Worker } from 'bullmq'
-import { LEAD_QUEUE_NAME } from './constants'
-import type { FindLeadBulkDataType, FindLeadBulkResultType, LeadQueueNameType } from './queue'
+import { SERVICE_NAME } from './constants'
+import type { LeadQueueJobDataType, LeadQueueNameType, LeadQueueResultType } from './queue'
 import type { LeadFinder } from './finder'
 import type { FindLeadResult } from './dto'
 
 const PERCENTAGE = 100
+const CONCURRENCY = 50
 
 export class LeadQueueWorker {
     private readonly worker
 
     constructor(connection: Redis, leadFinder: LeadFinder) {
-        this.worker = new Worker<FindLeadBulkDataType, FindLeadBulkResultType, LeadQueueNameType>(
-            LEAD_QUEUE_NAME,
+        this.worker = new Worker<LeadQueueJobDataType, LeadQueueResultType, LeadQueueNameType>(
+            SERVICE_NAME,
             async job => {
                 const {
                     data: { leads },
@@ -29,6 +30,7 @@ export class LeadQueueWorker {
             },
             {
                 connection,
+                concurrency: CONCURRENCY,
                 autorun: false,
             },
         )

@@ -15,7 +15,6 @@ import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepositor
 import { constants as httpConstants } from 'http2'
 import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
-import { log } from './middleware'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter, LeadService } from './lead'
 import { MongoProxyRepository, ProxyService } from './proxy'
 import { ProxyController } from './proxy/controller'
@@ -24,7 +23,7 @@ import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
-import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
+import { API_PREFIX, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import {
@@ -32,9 +31,7 @@ import {
     ThrowableEmailVerifierDecorator,
 } from './email-verification/verifier-decorators'
 import { LeadQueueWorker } from './lead/queue-worker'
-
-const { env } = process
-const { PORT = DEFAULT_PORT, NODE_ENV } = env
+import { NODE_ENV, PORT } from './common/env'
 
 async function main(): Promise<void> {
     const pino = pinoFactory({
@@ -47,7 +44,6 @@ async function main(): Promise<void> {
     })
 
     const router = Router()
-    router.use(log)
 
     const mongoClient = await getMongoClient()
     const db = mongoClient.db()
@@ -111,7 +107,7 @@ async function main(): Promise<void> {
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use('/api/v0', router)
+        .use(API_PREFIX, router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
             logger.error(`The error has occurred: ${err}`)

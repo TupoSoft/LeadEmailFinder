@@ -1,6 +1,6 @@
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
 import type { Logger } from '../logging'
-import type { FindLeadResult, Lead } from './dto'
+import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import { NO_USAGES } from './constants'
 import type { EmailPatternUsage } from '../domain'
@@ -13,7 +13,7 @@ export class LeadFinder {
         private readonly logger: Logger,
     ) {}
 
-    async findLead(lead: Lead): Promise<FindLeadResult> {
+    async findLead(lead: FindLeadRequest): Promise<FindLeadResult> {
         const { domain } = lead
         const findLeadResult: FindLeadResult = {
             ...lead,
@@ -60,8 +60,11 @@ export class LeadFinder {
         return findLeadResult
     }
 
-    private async findEmailForFormats(lead: Lead, formatUsages: EmailPatternUsage[]): Promise<EmailVerificationResult> {
-        const verificationResultPromises = this.getVerificationResultPromises(lead, formatUsages)
+    private async findEmailForFormats(
+        findLeadRequest: FindLeadRequest,
+        formatUsages: EmailPatternUsage[],
+    ): Promise<EmailVerificationResult> {
+        const verificationResultPromises = this.getVerificationResultPromises(findLeadRequest, formatUsages)
         ok(!isEmptyArray(verificationResultPromises))
 
         const firstPositiveVerificationResult = await Promise.any(verificationResultPromises)
@@ -72,10 +75,10 @@ export class LeadFinder {
     }
 
     private getVerificationResultPromises(
-        lead: Lead,
+        findLeadRequest: FindLeadRequest,
         emailPatternUsages: EmailPatternUsage[],
     ): Array<Promise<EmailVerificationResult>> {
-        const formats = getFormatToEmailMapForLead(lead)
+        const formats = getFormatToEmailMapForLead(findLeadRequest)
 
         const verificationResultPromises: Array<Promise<EmailVerificationResult>> = []
 

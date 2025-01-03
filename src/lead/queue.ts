@@ -1,14 +1,14 @@
 import type { Redis } from 'ioredis'
 import { Queue } from 'bullmq'
-import type { FindLeadResult, Lead } from './dto'
+import type { FindLeadRequest, FindLeadResult } from './dto'
 import { ok } from 'node:assert'
-import { LEAD_QUEUE_NAME } from './constants'
+import { SERVICE_NAME } from './constants'
 
-export interface FindLeadBulkDataType {
-    leads: Lead[]
+export interface LeadQueueJobDataType {
+    leads: FindLeadRequest[]
 }
 
-export interface FindLeadBulkResultType {
+export interface LeadQueueResultType {
     findLeadResults: FindLeadResult[]
 }
 
@@ -18,12 +18,12 @@ export class LeadQueue {
     private readonly queue
 
     constructor(connection: Redis) {
-        this.queue = new Queue<FindLeadBulkDataType, FindLeadBulkResultType, LeadQueueNameType>(LEAD_QUEUE_NAME, {
+        this.queue = new Queue<LeadQueueJobDataType, LeadQueueResultType, LeadQueueNameType>(SERVICE_NAME, {
             connection,
         })
     }
 
-    async addJob(name: LeadQueueNameType, data: FindLeadBulkDataType): Promise<string> {
+    async addJob(name: LeadQueueNameType, data: LeadQueueJobDataType): Promise<string> {
         const { id } = await this.queue.add(name, data)
         ok(id !== undefined, new Error('The job ID is undefined'))
         return id
@@ -35,7 +35,7 @@ export class LeadQueue {
         return await job.getState()
     }
 
-    async getResult(id: string): Promise<FindLeadBulkResultType> {
+    async getResult(id: string): Promise<LeadQueueResultType> {
         const job = await this.queue.getJob(id)
         ok(job !== undefined, new Error(`The job ${id} does not exist`))
         return job.returnvalue

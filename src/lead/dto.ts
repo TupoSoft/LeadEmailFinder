@@ -1,12 +1,11 @@
 import type { EmailVerificationResult } from '../email-verification'
 
-export interface Lead {
-    firstName?: string
-    lastName?: string
-    domain: string
-}
+export type FindLeadRequest = { domain: string } & (
+    | { firstName: string; lastName?: string }
+    | { firstName?: string; lastName: string }
+)
 
-export interface FindLeadResult extends Lead {
+export type FindLeadResult = FindLeadRequest & {
     emails: EmailVerificationResult[]
 }
 

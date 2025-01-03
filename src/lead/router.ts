@@ -1,7 +1,13 @@
 import type { Request, Response, Router } from 'express'
-import { authenticate, log, validate } from '../middleware'
-import { body, oneOf } from 'express-validator'
+import { authenticate, validateRequest } from '../middleware'
 import type { LeadController } from './controller'
+import {
+    FIND_LEAD_BULK_RESULT_ROUTE,
+    FIND_LEAD_BULK_ROUTE,
+    FIND_LEAD_BULK_STATUS_ROUTE,
+    FIND_LEAD_ROUTE,
+} from './constants'
+import { findLeadBulkRequestBodySchema, findLeadRequestBodySchema } from './validation'
 
 export class LeadRouter {
     constructor(
@@ -11,42 +17,36 @@ export class LeadRouter {
 
     init(): void {
         this.router.post(
-            '/lead/find',
+            FIND_LEAD_ROUTE,
             authenticate,
-            validate([
-                body(['domain']).isString().notEmpty(),
-                oneOf([body('firstName').isString().notEmpty(), body('lastName').isString().notEmpty()]),
-            ]),
+            validateRequest(findLeadRequestBodySchema, 'body'),
             this.leadController.find.bind(this.leadController),
         )
 
         this.router.post(
-            '/lead/find/bulk',
+            FIND_LEAD_BULK_ROUTE,
             authenticate,
-            validate([
-                body('leads').isArray({ min: 1 }),
-                body(['leads.*.firstName', 'leads.*.lastName', 'leads.*.domain']).isString().notEmpty(),
-            ]),
+            validateRequest(findLeadBulkRequestBodySchema, 'body'),
             this.leadController.findBulk.bind(this.leadController),
         )
 
         this.router.get(
-            '/lead/find/bulk/:id/status',
+            FIND_LEAD_BULK_STATUS_ROUTE,
             authenticate,
             this.leadController.findBulkStatus.bind(this.leadController),
         )
 
         this.router.get(
-            '/lead/find/bulk/:id',
+            FIND_LEAD_BULK_RESULT_ROUTE,
             authenticate,
             this.leadController.getFindBulkResult.bind(this.leadController),
         )
 
-        this.router.get('/ping', log, (_req, res: Response) => {
+        this.router.get('/ping', (_req, res: Response) => {
             res.send('PONG')
         })
 
-        this.router.get('/', log, (_req: Request, res: Response) => {
+        this.router.get('/', (_req: Request, res: Response) => {
             res.send('Hello World!')
         })
     }

@@ -1,6 +1,8 @@
-import type { FindBulkResponse, FindBulkStatusResponse, FindLeadResult, Lead } from './dto'
+import type { FindBulkResponse, FindBulkStatusResponse, FindLeadRequest, FindLeadResult } from './dto'
 import type { LeadFinder } from './finder'
-import type { FindLeadBulkResultType, LeadQueue } from './queue'
+import type { LeadQueue, LeadQueueResultType } from './queue'
+import { API_PREFIX } from '../common/constants'
+import { FIND_LEAD_BULK_STATUS_ROUTE } from './constants'
 
 export class LeadService {
     constructor(
@@ -8,17 +10,17 @@ export class LeadService {
         private readonly leadQueue: LeadQueue,
     ) {}
 
-    async find(lead: Lead): Promise<FindLeadResult> {
+    async find(lead: FindLeadRequest): Promise<FindLeadResult> {
         return await this.leadFinder.findLead(lead)
     }
 
-    async findBulk(leads: Lead[]): Promise<FindBulkResponse> {
+    async findBulk(leads: FindLeadRequest[]): Promise<FindBulkResponse> {
         const taskId = await this.leadQueue.addJob('findBulk', { leads })
 
         return {
             taskId,
             message: 'Request accepted. Starting to find leads.',
-            monitorUrl: `https://leademailfinder.com/api/v0/lead/find/bulk/${taskId}/status`,
+            monitorUrl: `${API_PREFIX}${FIND_LEAD_BULK_STATUS_ROUTE.replace(':id', taskId)}`,
         }
     }
 
@@ -30,7 +32,7 @@ export class LeadService {
         }
     }
 
-    async getFindBulkResult(id: string): Promise<FindLeadBulkResultType> {
+    async getFindBulkResult(id: string): Promise<LeadQueueResultType> {
         return await this.leadQueue.getResult(id)
     }
 }

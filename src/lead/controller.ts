@@ -1,14 +1,14 @@
 import type { NextFunction, Request, Response } from 'express'
-import { matchedData } from 'express-validator'
-import type { Lead } from './dto'
 import type { LeadService } from './service'
 import { constants } from 'node:http2'
+import type { FindLeadRequest } from './dto'
 
 export class LeadController {
     constructor(private readonly findLeadService: LeadService) {}
 
-    find(req: Request, res: Response, next: NextFunction): void {
-        const lead = matchedData<Lead>(req)
+    find(req: Request<unknown, unknown, FindLeadRequest>, res: Response, next: NextFunction): void {
+        const { body: lead } = req
+
         this.findLeadService.find(lead).then(
             value => res.json(value),
             (reason: unknown) => {
@@ -17,12 +17,15 @@ export class LeadController {
         )
     }
 
-    findBulk(req: Request, res: Response, next: NextFunction): void {
-        const { leads } = matchedData<{ leads: Lead[] }>(req)
+    findBulk(req: Request<unknown, unknown, FindLeadRequest[]>, res: Response, next: NextFunction): void {
+        const { body: leads } = req
         const { HTTP_STATUS_ACCEPTED } = constants
 
         this.findLeadService.findBulk(leads).then(
-            value => res.status(HTTP_STATUS_ACCEPTED).json(value),
+            value => {
+                value.monitorUrl = `${req.protocol}://${req.headers.host}${value.monitorUrl}`
+                res.status(HTTP_STATUS_ACCEPTED).json(value)
+            },
             (reason: unknown) => {
                 next(reason)
             },
