@@ -1,5 +1,6 @@
 import { compare, hash } from './password'
 import { describe, expect, it } from '@jest/globals'
+import { KEYLEN, SALT_LENGTH } from '../constants'
 
 describe('Password Utilities', () => {
     describe('hash', () => {
@@ -10,8 +11,8 @@ describe('Password Utilities', () => {
             expect(saltedHash).toMatch(/^[a-f0-9]+:[a-f0-9]+$/)
 
             const [salt, hashPart] = saltedHash.split(':')
-            expect(Buffer.from(salt, 'hex')).toHaveLength(16)
-            expect(Buffer.from(hashPart, 'hex')).toHaveLength(64)
+            expect(Buffer.from(salt, 'hex')).toHaveLength(SALT_LENGTH)
+            expect(Buffer.from(hashPart, 'hex')).toHaveLength(KEYLEN)
         })
 
         it('should throw an error if password is empty', async () => {

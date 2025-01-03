@@ -1,6 +1,6 @@
-import { UserService } from '../user'
-import { RegistrationData } from './dto'
-import { hash } from './password'
+import type { UserService } from '../user'
+import type { RegistrationData } from './dto'
+import { hash } from './util/password'
 
 export class AuthService {
     constructor(private readonly userService: UserService) {}
