@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import type { Router } from 'express'
 import { AUTH_LOGIN_ROUTE, AUTH_LOGOUT_ROUTE, AUTH_REGISTER_ROUTE } from './constants'
 import { constants } from 'node:http2'
 
