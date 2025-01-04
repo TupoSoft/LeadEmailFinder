@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@types/supertest':
-        specifier: ^6.0.2
-        version: 6.0.2
       axios:
         specifier: ^1.7.8
         version: 1.7.8
@@ -72,6 +69,9 @@ importers:
       '@types/node':
         specifier: ^22.10.1
         version: 22.10.1
+      '@types/supertest':
+        specifier: ^6.0.2
+        version: 6.0.2
       eslint:
         specifier: ^9.16.0
         version: 9.16.0
