@@ -43,6 +43,7 @@
     "dependencies": {
         "@types/supertest": "^6.0.2",
         "axios": "^1.7.8",
+        "bullmq": "^5.34.6",
         "cheerio": "^1.0.0",
         "dotenv": "^16.4.7",
         "express": "^4.21.1",
