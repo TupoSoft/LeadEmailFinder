@@ -1,8 +1,15 @@
 ### Registration
+
 POST http://localhost:3000/api/v0/auth/register
 Content-Type: application/json
 
 {
-  "email": "danilo@google.com",
-  "password": "OdeSeNikadaNeRadi"
+  "email": "{{$random.email}}",
+  "password": "{{$random.internet.password}}"
 }
+
+> {%
+    client.test('Success', () => {
+        client.assert(response.status === 201, 'Response status is not 201')
+    })
+%}
