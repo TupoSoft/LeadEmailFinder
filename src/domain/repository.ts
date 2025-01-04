@@ -44,13 +44,6 @@ export class MongoDomainRepository implements DomainRepository {
     async save(domain: Domain): Promise<void> {
         const { _id, ...domainSchema } = domainEntityToDomainSchema(domain)
 
-        if (!domainSchema.isFree) {
-            domainSchema.isFree = false
-        }
-        if (!domainSchema.isDisposable) {
-            domainSchema.isDisposable = false
-        }
-
         await this.collection.updateOne(
             { _id },
             {
