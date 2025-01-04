@@ -1,11 +1,25 @@
 @host = localhost:3000
 
-### Validation failure
+### Validation failure when there is no password
 POST {{host}}/api/v0/auth/register
 Content-Type: application/json
 
 {
   "email": "{{$random.internet.safeEmailAddress}}"
+}
+
+> {%
+    client.test('Validation should fail', () => {
+        client.assert(response.status === 400, 'Response status is not 400')
+    })
+%}
+
+### Validation failure when there is no email
+POST {{host}}/api/v0/auth/register
+Content-Type: application/json
+
+{
+  "password": "{{$random.internet.password}}"
 }
 
 > {%
