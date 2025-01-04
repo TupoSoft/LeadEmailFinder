@@ -19,7 +19,11 @@
         "verification",
         "SMTP"
     ],
-    "author": "Kyrylo Kupin",
+    "author": {
+        "email": "contact@tuposoft.com",
+        "name": "TupoSoft",
+        "url": "https://tuposoft.com"
+    },
     "license": "UNLICENSED",
     "devDependencies": {
         "@eslint/js": "^9.15.0",
