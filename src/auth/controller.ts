@@ -1,11 +1,11 @@
-import type { AuthService } from './service'
+import type { IAuthService } from './service'
 import type { NextFunction, Request, Response } from 'express'
 import type { RegistrationData } from './dto'
 import { constants } from 'node:http2'
 import { UserAlreadyExistsError } from '../user/errors'
 
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
+    constructor(private readonly authService: IAuthService) {}
 
     register(req: Request<object, object, RegistrationData>, res: Response, next: NextFunction): void {
         const { body: registrationData } = req

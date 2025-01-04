@@ -5,8 +5,7 @@ import { AuthRouter } from './router'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { AuthController } from './controller'
-import { AuthService } from './service'
-import type { IUserService } from '../user'
+import type { IAuthService } from './service'
 import type { RegistrationData } from './dto'
 import { UserAlreadyExistsError } from '../user/errors'
 import Mocked = jest.Mocked
@@ -16,10 +15,9 @@ jest.mock('../middleware/authenticate')
 describe(AUTH_ROUTE, () => {
     const app = express()
     const expressRouter = Router()
-    const userService: Mocked<IUserService> = {
-        createUser: jest.fn<typeof userService.createUser>(),
+    const authService: Mocked<IAuthService> = {
+        register: jest.fn<typeof authService.register>(),
     }
-    const authService = new AuthService(userService)
     const authController = new AuthController(authService)
     const authRouter = new AuthRouter(expressRouter, authController)
     authRouter.init()
@@ -45,6 +43,8 @@ describe(AUTH_ROUTE, () => {
         }
 
         it('should return HTTP_CREATED', async () => {
+            authService.register.mockResolvedValueOnce()
+
             await request(app)
                 .post(AUTH_REGISTER_ROUTE)
                 .send(registrationData)
@@ -58,7 +58,7 @@ describe(AUTH_ROUTE, () => {
         it('should return HTTP_CONFLICT when the email is in the DB', async () => {
             const userAlreadyExistsError = new UserAlreadyExistsError(email)
             const { message } = userAlreadyExistsError
-            userService.createUser.mockRejectedValueOnce(userAlreadyExistsError)
+            authService.register.mockRejectedValueOnce(userAlreadyExistsError)
 
             await request(app)
                 .post(AUTH_REGISTER_ROUTE)

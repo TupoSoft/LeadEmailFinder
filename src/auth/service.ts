@@ -2,7 +2,11 @@ import type { IUserService } from '../user'
 import type { RegistrationData } from './dto'
 import { hash } from './util/password'
 
-export class AuthService {
+export interface IAuthService {
+    register: (registrationData: RegistrationData) => Promise<void>
+}
+
+export class AuthService implements IAuthService {
     constructor(private readonly userService: IUserService) {}
 
     async register(registrationData: RegistrationData): Promise<void> {
