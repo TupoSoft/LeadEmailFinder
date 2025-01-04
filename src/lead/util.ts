@@ -1,4 +1,4 @@
-import type { Lead } from './dto'
+import type { FindLeadRequest } from './dto'
 import type { EmailPatternUsage } from '../domain'
 
 const firstNamePatterns = ['{first}']
@@ -59,7 +59,7 @@ export function mergeEmailFormats(arr1: EmailPatternUsage[], arr2: EmailPatternU
     return Array.from(formatMap.values()).sort((a, b) => b.usageCount - a.usageCount)
 }
 
-export function getFormatToEmailMapForLead(lead: Lead): Map<string, string> {
+export function getFormatToEmailMapForLead(lead: FindLeadRequest): Map<string, string> {
     const FIRST_CHAR_POS = 0
     const { firstName, lastName, domain } = lead
 
