@@ -23,6 +23,10 @@ export class MongoUserRepository implements UserRepository {
         this.collection = db.collection('users')
     }
 
+    async createIndices(): Promise<void> {
+        await this.collection.createIndex('email', { unique: true })
+    }
+
     async findAll(): Promise<User[]> {
         const userSchemas = await this.collection.find().toArray()
         return userSchemas.map(convertSchemaToEntity)
