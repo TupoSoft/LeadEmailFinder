@@ -1,6 +1,7 @@
-### Registration
+@host = localhost:3000
 
-POST http://localhost:3000/api/v0/auth/register
+### Registration
+POST {{host}}/api/v0/auth/register
 Content-Type: application/json
 
 {
