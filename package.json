@@ -24,7 +24,6 @@
         "name": "TupoSoft",
         "url": "https://tuposoft.com"
     },
-    "license": "UNLICENSED",
     "devDependencies": {
         "@eslint/js": "^9.15.0",
         "@jest/globals": "^29.7.0",
