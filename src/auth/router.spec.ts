@@ -37,9 +37,10 @@ describe(AUTH_ROUTE, () => {
 
     describe(AUTH_REGISTER_ROUTE, () => {
         const email = 'danilo@microsoft.com'
+        const password = 'odeseneradi'
         const registrationData: RegistrationData = {
             email,
-            password: 'odeseneradi',
+            password,
         }
 
         it('should return HTTP_CREATED', async () => {
@@ -69,6 +70,27 @@ describe(AUTH_ROUTE, () => {
                 .expect({ message })
                 .expect(constants.HTTP_STATUS_CONFLICT)
         })
+
+        const invalidEmail = 'danilo'
+        const validationCases: { description: string; requestBody: Partial<RegistrationData>; message: string }[] = [
+            { description: 'email is missing', requestBody: { password }, message: 'Email is required' },
+            { description: 'password is missing', requestBody: { email }, message: 'Password is required' },
+            { description: 'email is invalid', requestBody: { email: invalidEmail }, message: 'Invalid email address' },
+        ]
+
+        it.each(validationCases)(
+            'should return HTTP_STATUS_BAD_REQUEST when $description',
+            async ({ requestBody, message }) => {
+                await request(app)
+                    .post(AUTH_REGISTER_ROUTE)
+                    .send(requestBody)
+                    .set('Content-Type', 'application/json')
+                    .set('Accept', 'application/json')
+                    .expect('Content-Type', /json/)
+                    .expect({ message })
+                    .expect(constants.HTTP_STATUS_BAD_REQUEST)
+            },
+        )
     })
 
     describe(AUTH_LOGOUT_ROUTE, () => {
