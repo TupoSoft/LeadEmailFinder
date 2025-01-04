@@ -17,7 +17,7 @@ services:
       - "3000:3000"
     restart: unless-stopped
     healthcheck: &healthcheck
-      test: curl http://localhost:3000/ping
+      test: curl http://localhost:3000/api/v0/ping
       interval: 10s
       timeout: 10s
       retries: 3
@@ -68,6 +68,14 @@ services:
     healthcheck:
       <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
+
+  bullboard:
+    image: venatum/bull-board:latest
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "4000:3000"
 
 secrets:
   mongo_root_username:

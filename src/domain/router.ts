@@ -1,7 +1,8 @@
 import type { Router } from 'express'
 import type { DomainController } from './controller'
-import { authenticate, log, validate } from '../middleware'
+import { authenticate, validate } from '../middleware'
 import { body } from 'express-validator'
+import { ZERO } from '../common/constants'
 
 export class DomainRouter {
     constructor(
@@ -13,15 +14,14 @@ export class DomainRouter {
         this.router.post(
             '/domain',
             authenticate,
-            log,
             validate([
                 body('name').isString().notEmpty(),
                 body('emailFormats').isArray().optional().default([]),
                 body('emailFormats.*.name').isString().notEmpty(),
-                body('emailFormats.*.count').isInt({ min: 0 }),
+                body('emailFormats.*.count').isInt({ min: ZERO }),
                 body('catchAllEnabled').isBoolean().optional(),
                 body('mxRecords').isArray().optional(),
-                body('mxRecords.*.priority').isInt({ min: 0 }),
+                body('mxRecords.*.priority').isInt({ min: ZERO }),
                 body('mxRecords.*.exchange').isString().notEmpty(),
             ]),
             this.domainController.create.bind(this.domainController),
