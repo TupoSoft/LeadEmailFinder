@@ -13,30 +13,25 @@ import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { constants as httpConstants } from 'http2'
-import { SMTPVerifier } from './smtp'
+import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
-import { log } from './middleware'
-import { FindLeadControllerImpl, FindLeadRouter, FindLeadService } from './find-lead'
-import { ProxyService } from './proxy'
-import { MongoProxyRepository } from './proxy/mongo-repository'
-import { RedisConnectionLimiter } from './smtp/connection-limiter'
+import { LeadController, LeadFinder, LeadQueue, LeadRouter, LeadService } from './lead'
+import { MongoProxyRepository, ProxyService } from './proxy'
 import { ProxyController } from './proxy/controller'
 import { ProxyRouter } from './proxy/router'
 import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
-import { SmtpClientCreatorImpl } from './smtp/client-creator'
-import { DEFAULT_PORT, EXIT_FAILURE } from './common/constants'
+import { API_PREFIX, EXIT_FAILURE } from './common/constants'
 import { getRedis } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import {
     PersistenceEmailVerifierDecorator,
     ThrowableEmailVerifierDecorator,
 } from './email-verification/verifier-decorators'
-
-const { env } = process
-const { PORT = DEFAULT_PORT, NODE_ENV } = env
+import { LeadQueueWorker } from './lead/queue-worker'
+import { NODE_ENV, PORT } from './common/env'
 
 async function main(): Promise<void> {
     const pino = pinoFactory({
@@ -49,7 +44,6 @@ async function main(): Promise<void> {
     })
 
     const router = Router()
-    router.use(log)
 
     const mongoClient = await getMongoClient()
     const db = mongoClient.db()
@@ -100,16 +94,20 @@ async function main(): Promise<void> {
         throwableEmailVerifierDecorator,
         mongoEmailVerificationRepository,
     )
-    const findLeadService = new FindLeadService(findLeadEmailVerificationService, logger)
-    const findLeadController = new FindLeadControllerImpl(findLeadService)
-    const findLeadRouter = new FindLeadRouter(router, findLeadController)
-    findLeadRouter.init()
+    const leadFinder = new LeadFinder(findLeadEmailVerificationService, logger)
+    const leadQueue = new LeadQueue(redis)
+    const leadQueueWorker = new LeadQueueWorker(redis, leadFinder)
+    const leadService = new LeadService(leadFinder, leadQueue)
+    const leadController = new LeadController(leadService)
+    const leadRouter = new LeadRouter(router, leadController)
+    void leadQueueWorker.run()
+    leadRouter.init()
 
     const server = express()
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use(router)
+        .use(API_PREFIX, router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
             logger.error(`The error has occurred: ${err}`)

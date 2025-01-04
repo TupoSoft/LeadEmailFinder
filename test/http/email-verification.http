@@ -1,5 +1,5 @@
 ### Verify a single email
-POST http://localhost:3000/verifyEmail
+POST http://localhost:3000/api/v0/emails/verify
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
@@ -8,7 +8,7 @@ Content-Type: application/json
 }
 
 ### Verify multiple emails
-POST http://localhost:3000/verifyEmails
+POST http://localhost:3000/api/v0/emails/verify/bulk
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
@@ -21,7 +21,7 @@ Content-Type: application/json
 }
 
 ### Find lead
-POST http://localhost:3000/findLead
+POST http://localhost:3000/api/v0/leads/search
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
@@ -32,24 +32,32 @@ Content-Type: application/json
 }
 
 ### Find leads
-POST http://localhost:3000/findLeads
+POST http://localhost:3000/api/v0/leads/search/bulk
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 Content-Type: application/json
 
-{
-  "leads": [
-    {
-      "firstName": "john",
-      "lastName": "doe",
-      "domain": "gmail.com"
-    },
-    {
-      "firstName": "jane",
-      "lastName": "doe",
-      "domain": "gmail.com"
-    }
-  ]
-}
+[
+  {
+    "firstName": "john",
+    "lastName": "doe",
+    "domain": "gmail.com"
+  },
+  {
+    "firstName": "jane",
+    "lastName": "doe",
+    "domain": "gmail.com"
+  }
+]
+
+### Bulk status
+GET http://localhost:3000/api/v0/leads/search/bulk/9/status
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+
+### Bulk result
+GET http://localhost:3000/api/v0/leads/search/bulk/9
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
 
 ### Post a domain
 POST http://localhost:3000/domain
@@ -62,7 +70,7 @@ Content-Type: application/json
 }
 
 ### Ping
-GET http://localhost:3000/ping
+GET http://localhost:3000/api/v0/ping
 
 ### Hello World!
 GET http://localhost:3000
