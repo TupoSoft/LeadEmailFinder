@@ -12,7 +12,11 @@ function isRecordStringBoolean(value: unknown): value is Record<string, boolean>
     return Object.entries(value).every(([key, val]) => typeof key === 'string' && typeof val === 'boolean')
 }
 
-export class AuthMiddleware {
+export interface IAuthMiddleware {
+    authenticate: (req: Request, res: Response, next: NextFunction) => void
+}
+
+export class AuthMiddleware implements IAuthMiddleware {
     private readonly tokens
 
     constructor(

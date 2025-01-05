@@ -1,6 +1,6 @@
 import type { Router } from 'express'
 import type { IProxyController } from './controller'
-import { type AuthMiddleware, validateRequest } from '../middleware'
+import { type IAuthMiddleware, validateRequest } from '../middleware'
 import { createProxySchema } from './validation'
 
 export class ProxyRouter {
@@ -9,7 +9,7 @@ export class ProxyRouter {
     constructor(
         private readonly router: Router,
         private readonly proxyController: IProxyController,
-        private readonly authMiddleware: AuthMiddleware,
+        private readonly authMiddleware: IAuthMiddleware,
     ) {}
 
     init(): void {
