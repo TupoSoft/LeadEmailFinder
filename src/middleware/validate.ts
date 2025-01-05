@@ -27,9 +27,12 @@ export const validateRequest =
             next()
         } catch (err) {
             if (err instanceof ZodError) {
+                const {
+                    errors: [{ message }],
+                } = err
+
                 res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
-                    message: 'Validation Error',
-                    errors: err.errors,
+                    message,
                 })
             } else {
                 next(err)

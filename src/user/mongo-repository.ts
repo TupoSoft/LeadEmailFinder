@@ -1,11 +1,12 @@
 import type { CreateUserDto, UpdateUserDto } from './dto'
 import type { User } from './entity'
 import type { UserRepository } from './repository'
-import { type Collection, type Db, ObjectId } from 'mongodb'
+import { type Collection, type Db, MongoServerError, ObjectId } from 'mongodb'
 import { generateObjectIdAsync } from '../util/mongo'
 import { ok } from 'node:assert'
-import { UserNotFoundError } from './errors'
+import { UserAlreadyExistsError, UserNotFoundError } from './errors'
 import { ZERO } from '../common/constants'
+import { isNativeError } from 'node:util/types'
 
 export type UserSchema = Omit<User, 'id' | 'createdAt'> & {
     _id: ObjectId
@@ -17,10 +18,16 @@ function convertSchemaToEntity(userSchema: UserSchema): User {
 }
 
 export class MongoUserRepository implements UserRepository {
+    private static readonly DUPLICATE_KEY_ERROR_CODE = 11000
+
     private readonly collection: Collection<UserSchema>
 
     constructor(db: Db) {
         this.collection = db.collection('users')
+    }
+
+    async createIndices(): Promise<void> {
+        await this.collection.createIndex('email', { unique: true })
     }
 
     async findAll(): Promise<User[]> {
@@ -54,7 +61,8 @@ export class MongoUserRepository implements UserRepository {
 
     async create(createUserDto: CreateUserDto): Promise<User> {
         const _id = await generateObjectIdAsync()
-        const { insertedId } = await this.collection.insertOne({
+
+        const insertedId = await this.insertOne({
             ...createUserDto,
             _id,
             updatedAt: _id.getTimestamp(),
@@ -75,5 +83,25 @@ export class MongoUserRepository implements UserRepository {
     async delete(id: string): Promise<void> {
         const { deletedCount } = await this.collection.deleteOne({ _id: new ObjectId(id) })
         ok(deletedCount > ZERO, new UserNotFoundError('id', id))
+    }
+
+    private async insertOne(userSchema: UserSchema): Promise<ObjectId> {
+        const { email } = userSchema
+
+        try {
+            const { insertedId } = await this.collection.insertOne(userSchema)
+            return insertedId
+        } catch (error) {
+            if (error instanceof MongoServerError) {
+                const { code } = error
+
+                if (code === MongoUserRepository.DUPLICATE_KEY_ERROR_CODE) {
+                    throw new UserAlreadyExistsError(email)
+                }
+            }
+
+            ok(isNativeError(error), String(error))
+            throw error
+        }
     }
 }
