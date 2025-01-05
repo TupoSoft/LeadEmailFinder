@@ -68,7 +68,7 @@ export function signJwt(payload: JwtPayload): string {
     const encodedPayload = base64UrlEncode(JSON.stringify(payload))
     const data = `${encodedHeader}.${encodedPayload}`
 
-    const signature = base64UrlEncode(createHmac('sha256', JWT_HS256_SECRET).update(data).digest('base64'))
+    const signature = createHmac('sha256', JWT_HS256_SECRET).update(data).digest('base64url')
 
     return `${encodedHeader}.${encodedPayload}.${signature}`
 }

@@ -6,11 +6,13 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { AuthController } from './controller'
 import type { IAuthService } from './service'
-import type { AuthData } from './dto'
+import type { AuthData, LoginResult } from './dto'
 import { UserAlreadyExistsError } from '../user/errors'
+import { InvalidAuthDataError } from './errors'
 import Mocked = jest.Mocked
 
 jest.mock('../middleware/authenticate')
+jest.mock('./util/password')
 
 describe(AUTH_ROUTE, () => {
     const app = express()
@@ -26,30 +28,51 @@ describe(AUTH_ROUTE, () => {
     app.use(express.json())
     app.use(expressRouter)
 
+    const email = 'danilo@microsoft.com'
+    const password = 'odeseneradi'
+    const authData: AuthData = {
+        email,
+        password,
+    }
+
     describe(AUTH_LOGIN_ROUTE, () => {
+        const token = 'header.payload.signature'
+        const loginResult: LoginResult = {
+            token,
+        }
+
         it('should return HTTP_OK', async () => {
+            authService.login.mockResolvedValueOnce(loginResult)
+
             await request(app)
                 .post(AUTH_LOGIN_ROUTE)
+                .send(authData)
                 .expect('Content-Type', /json/)
-                .expect({ message: 'Logged in' })
+                .expect(loginResult)
                 .expect(constants.HTTP_STATUS_OK)
+        })
+
+        it('should return HTTP_UNAUTHORIZED when the password does not match', async () => {
+            const error = new InvalidAuthDataError()
+            const { message } = error
+            authService.login.mockRejectedValueOnce(error)
+
+            await request(app)
+                .post(AUTH_LOGIN_ROUTE)
+                .send(authData)
+                .expect('Content-Type', /json/)
+                .expect({ message })
+                .expect(constants.HTTP_STATUS_UNAUTHORIZED)
         })
     })
 
     describe(AUTH_REGISTER_ROUTE, () => {
-        const email = 'danilo@microsoft.com'
-        const password = 'odeseneradi'
-        const registrationData: AuthData = {
-            email,
-            password,
-        }
-
         it('should return HTTP_CREATED', async () => {
             authService.register.mockResolvedValueOnce()
 
             await request(app)
                 .post(AUTH_REGISTER_ROUTE)
-                .send(registrationData)
+                .send(authData)
                 .set('Content-Type', 'application/json')
                 .set('Accept', 'application/json')
                 .expect('Content-Type', /json/)
@@ -64,7 +87,7 @@ describe(AUTH_ROUTE, () => {
 
             await request(app)
                 .post(AUTH_REGISTER_ROUTE)
-                .send(registrationData)
+                .send(authData)
                 .set('Content-Type', 'application/json')
                 .set('Accept', 'application/json')
                 .expect('Content-Type', /json/)
