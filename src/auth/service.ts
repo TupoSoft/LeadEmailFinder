@@ -6,7 +6,7 @@ import type { User } from '../user/entity'
 import { UserNotFoundError } from '../user/errors'
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
-import { signJwt } from './util/jwt'
+import type { JwtService } from './jwt'
 
 export interface IAuthService {
     register: (registrationData: AuthData) => Promise<void>
@@ -14,7 +14,10 @@ export interface IAuthService {
 }
 
 export class AuthService implements IAuthService {
-    constructor(private readonly userService: IUserService) {}
+    constructor(
+        private readonly userService: IUserService,
+        private readonly jwtService: JwtService,
+    ) {}
 
     private static async checkPassword(password: string, saltedHash: string): Promise<boolean> {
         try {
@@ -33,7 +36,7 @@ export class AuthService implements IAuthService {
             throw new InvalidAuthDataError()
         }
 
-        const token = signJwt({ sub: user.id })
+        const token = this.jwtService.signJwt({ sub: user.id })
 
         return { token }
     }

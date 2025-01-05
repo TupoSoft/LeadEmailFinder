@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express'
 import { constants as httpConstants } from 'http2'
 import { ok } from 'node:assert'
-import { EXIT_FAILURE } from '../common/constants'
-import { AUTH_TOKENS } from '../common/env'
+import { type ConfigService, type Environment, EXIT_FAILURE } from '../common'
+import type { Logger } from '../logging'
 
 function isRecordStringBoolean(value: unknown): value is Record<string, boolean> {
     if (typeof value !== 'object' || value === null) {
@@ -12,31 +12,41 @@ function isRecordStringBoolean(value: unknown): value is Record<string, boolean>
     return Object.entries(value).every(([key, val]) => typeof key === 'string' && typeof val === 'boolean')
 }
 
-function readTokens(): Record<string, boolean> {
-    try {
-        const tokens: unknown = JSON.parse(AUTH_TOKENS)
-        ok(isRecordStringBoolean(tokens), 'Invalid tokens file, should be Record<string, boolean>')
-        return tokens
-    } catch (error) {
-        console.debug('Failed to read the file with API tokens: ', error)
-        process.exit(EXIT_FAILURE)
+export class AuthMiddleware {
+    private readonly tokens
+
+    constructor(
+        private readonly config: ConfigService<Environment>,
+        private readonly logger: Logger,
+    ) {
+        this.tokens = this.readTokens()
     }
-}
 
-const tokens = readTokens()
+    authenticate(req: Request, res: Response, next: NextFunction): void {
+        const { headers } = req
+        const { authorization } = headers
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
-    const { headers } = req
-    const { authorization } = headers
+        if (authorization !== undefined) {
+            const [, token] = authorization.split(' ')
 
-    if (authorization !== undefined) {
-        const [, token] = authorization.split(' ')
+            if (this.tokens[token]) {
+                next()
+                return
+            }
+        }
 
-        if (tokens[token]) {
-            next()
-            return
+        res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).json('Unauthorized')
+    }
+
+    private readTokens(): Record<string, boolean> {
+        try {
+            const authTokens = this.config.get('AUTH_TOKENS')
+            const tokens: unknown = JSON.parse(authTokens)
+            ok(isRecordStringBoolean(tokens), 'Invalid tokens file, should be Record<string, boolean>')
+            return tokens
+        } catch (error) {
+            this.logger.error(`Failed to read the file with API tokens: ${String(error)}`)
+            process.exit(EXIT_FAILURE)
         }
     }
-
-    res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).json('Unauthorized')
 }

@@ -1,11 +1,26 @@
 @host = localhost:3000
 
-### Registration Successful
+### Login Failure
 < {%
     client.global.set('email', $random.internet.safeEmailAddress)
     client.global.set('password', $random.internet.password)
 %}
 
+POST {{host}}/api/v0/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test('Unauthorized', () => {
+        client.assert(response.status === 401, 'Response status is not 201')
+    })
+%}
+
+### Registration Successful
 POST {{host}}/api/v0/auth/register
 Content-Type: application/json
 

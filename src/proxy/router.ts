@@ -1,6 +1,6 @@
 import type { Router } from 'express'
 import type { IProxyController } from './controller'
-import { authenticate, validateRequest } from '../middleware'
+import { type AuthMiddleware, validateRequest } from '../middleware'
 import { createProxySchema } from './validation'
 
 export class ProxyRouter {
@@ -9,13 +9,18 @@ export class ProxyRouter {
     constructor(
         private readonly router: Router,
         private readonly proxyController: IProxyController,
+        private readonly authMiddleware: AuthMiddleware,
     ) {}
 
     init(): void {
-        this.router.get(ProxyRouter.PATH, authenticate, this.proxyController.getAll)
+        this.router.get(
+            ProxyRouter.PATH,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
+            this.proxyController.getAll,
+        )
         this.router.post(
             ProxyRouter.PATH,
-            authenticate,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
             validateRequest(createProxySchema, 'body'),
             this.proxyController.create,
         )

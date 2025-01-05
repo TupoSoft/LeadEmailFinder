@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
-import { getMongoClient } from './util/mongo'
+import { MongoClientCreator } from './util/mongo'
 import {
     CatchAllVerifier,
     EmailVerificationRouter,
@@ -23,23 +23,27 @@ import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
 import { ok } from 'node:assert'
-import { API_PREFIX, EXIT_FAILURE } from './common/constants'
-import { getRedis } from './util/redis'
+import { API_PREFIX, ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
+import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import {
     PersistenceEmailVerifierDecorator,
     ThrowableEmailVerifierDecorator,
 } from './email-verification/verifier-decorators'
 import { LeadQueueWorker } from './lead/queue-worker'
-import { NODE_ENV, PORT } from './common/env'
 import { AuthRouter } from './auth/router'
 import { AuthController } from './auth/controller'
 import { AuthService } from './auth/service'
 import { MongoUserRepository, UserService } from './user'
+import { AuthMiddleware } from './middleware'
+import { JwtService } from './auth/jwt'
 
 async function main(): Promise<void> {
+    const environment = await parseEnv()
+    const configService = new ConfigService<Environment>(environment)
+
     const pino = pinoFactory({
-        level: NODE_ENV === 'development' ? 'debug' : 'info',
+        level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
     })
 
     const logger = new PinoLogger(pino)
@@ -48,25 +52,32 @@ async function main(): Promise<void> {
     })
 
     const router = Router()
-
-    const mongoClient = await getMongoClient()
+    const mongoClientCreator = new MongoClientCreator(configService, logger)
+    const mongoClient = await mongoClientCreator.create()
     const db = mongoClient.db()
 
-    const redis = getRedis()
+    const redisCreator = new RedisCreator(configService, logger)
+    const redis = redisCreator.create()
 
     const mongoUserRepository = new MongoUserRepository(db)
     const userService = new UserService(mongoUserRepository)
     await mongoUserRepository.createIndices()
 
-    const authService = new AuthService(userService)
+    const jwtService = new JwtService({
+        issuer: configService.get('JWT_ISSUER'),
+        audience: configService.get('JWT_AUDIENCE'),
+        secret: configService.get('JWT_HS256_SECRET'),
+    })
+    const authService = new AuthService(userService, jwtService)
     const authController = new AuthController(authService)
     const authRouter = new AuthRouter(router, authController)
     authRouter.init()
 
+    const authMiddleware = new AuthMiddleware(configService, logger)
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
     const domainController = new DomainControllerImpl(domainService)
-    const domainRouter = new DomainRouter(router, domainController)
+    const domainRouter = new DomainRouter(router, domainController, authMiddleware)
     domainRouter.init()
 
     const axiosInstance = axios.create()
@@ -78,7 +89,7 @@ async function main(): Promise<void> {
     const proxyRepository = new MongoProxyRepository(db)
     const proxyService = new ProxyService(proxyRepository)
     const proxyController = new ProxyController(proxyService)
-    const proxyRouter = new ProxyRouter(router, proxyController)
+    const proxyRouter = new ProxyRouter(router, proxyController, authMiddleware)
     proxyRouter.init()
 
     const catchAllCache = new RedisCatchAllCache(redis)
@@ -99,7 +110,7 @@ async function main(): Promise<void> {
         mongoEmailVerificationRepository,
     )
     const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
-    const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController)
+    const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController, authMiddleware)
     emailVerificationRouter.init()
 
     const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
@@ -112,10 +123,11 @@ async function main(): Promise<void> {
     const leadQueueWorker = new LeadQueueWorker(redis, leadFinder)
     const leadService = new LeadService(leadFinder, leadQueue)
     const leadController = new LeadController(leadService)
-    const leadRouter = new LeadRouter(router, leadController)
+    const leadRouter = new LeadRouter(router, leadController, authMiddleware)
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
@@ -126,8 +138,8 @@ async function main(): Promise<void> {
             logger.error(`The error has occurred: ${err}`)
             res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
         })
-        .listen(PORT, () => {
-            logger.info(`Server is running on port ${PORT}`)
+        .listen(port, () => {
+            logger.info(`Server is running on port ${port}`)
         })
 
     const onTerminationSignal = (): void => {
