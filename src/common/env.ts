@@ -1,19 +1,12 @@
 import { z, type ZodType, type ZodTypeDef } from 'zod'
 import { env } from 'node:process'
-import { readFileSync } from 'fs'
 import { DEFAULT_PORT } from './constants'
+import { readFile } from 'node:fs/promises'
 
 const STRING_MIN_LENGTH = 1
 const JWT_HS256_SECRET_MIN_LENGTH = 32
 
 const stringWithMinLength = z.string().min(STRING_MIN_LENGTH)
-
-for (const [key, value] of Object.entries(env)) {
-    if (key.endsWith('_FILE') && value !== undefined) {
-        const keyWithoutFile = key.replace('_FILE', '')
-        env[keyWithoutFile] = readFileSync(value, 'utf8')
-    }
-}
 
 export interface Environment {
     NODE_ENV: 'development' | 'production' | 'test'
@@ -37,6 +30,16 @@ const envSchema = z.object({
     AUTH_TOKENS: stringWithMinLength,
 }) satisfies ZodType<Environment, ZodTypeDef, Partial<Environment>>
 
+async function loadSecrets(): Promise<void> {
+    for (const [key, value] of Object.entries(env)) {
+        if (key.endsWith('_FILE') && value !== undefined) {
+            const keyWithoutFile = key.replace('_FILE', '')
+            env[keyWithoutFile] = await readFile(value, 'utf8')
+        }
+    }
+}
+
 export async function parseEnv(): Promise<Environment> {
+    await loadSecrets()
     return await envSchema.parseAsync(process.env)
 }
