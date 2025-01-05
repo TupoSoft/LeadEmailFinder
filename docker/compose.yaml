@@ -47,8 +47,8 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
-      DISPOSABLE_DOMAINS_FILE: /run/secrets/disposable-email-providers.json
-      FREE_DOMAINS_FILE: /run/secrets/free-email-providers.json
+      DISPOSABLE_DOMAINS_FILE: /disposable-email-providers.json
+      FREE_DOMAINS_FILE: /free-email-providers.json
       # A comma-separated string of proxies to insert on startup,
       # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
       PROXIES: ${PROXIES}
@@ -58,6 +58,7 @@ services:
       - mongo_root_username
       - mongo_root_password
       - mongo_url
+    configs:
       - disposable-email-providers.json
       - free-email-providers.json
     volumes:
@@ -92,10 +93,12 @@ secrets:
     file: secrets/redis.json
   tokens.json:
     file: secrets/tokens.json
+
+configs:
   disposable-email-providers.json:
-    file: config/disposable-email-providers.json
+    file: data/disposable-email-providers.json
   free-email-providers.json:
-    file: config/free-email-providers.json
+    file: data/free-email-providers.json
 
 volumes:
   mongo-data:

@@ -1,25 +1,17 @@
 const { readFileSync } = require('fs')
 const { URL } = require('url')
+const { ok } = require('node:assert')
 
 const { env } = process
 const { MONGO_URL_FILE: mongoUrlFilePath } = env
 const { DISPOSABLE_DOMAINS_FILE: disposableDomainsFilePath } = env
 const { FREE_DOMAINS_FILE: freeDomainsFilePath } = env
 
-if (mongoUrlFilePath === undefined) {
-    console.error(`The MONGO_URL_FILE variable is undefined.`)
-    process.exit(1)
-}
+const isNonEmptyString = (val) => typeof val === 'string' && !!val
 
-if (disposableDomainsFilePath === undefined) {
-    console.error(`The DISPOSABLE_DOMAINS_FILE variable is undefined.`)
-    process.exit(1)
-}
-
-if (freeDomainsFilePath === undefined) {
-    console.error(`The FREE_DOMAINS_FILE variable is undefined.`)
-    process.exit(1)
-}
+ok(isNonEmptyString(mongoUrlFilePath), 'MONGO_URL_FILE must be a non-empty string')
+ok(isNonEmptyString(disposableDomainsFilePath), 'DISPOSABLE_DOMAINS_FILE must be a non-empty string')
+ok(isNonEmptyString(freeDomainsFilePath), 'FREE_DOMAINS_FILE must be a non-empty string')
 
 const mongoUrlFile = readFileSync(mongoUrlFilePath, 'utf-8')
 const mongoUrl = new URL(mongoUrlFile)
@@ -29,16 +21,10 @@ const disposableDomainsFile = readFileSync(disposableDomainsFilePath, 'utf-8')
 const freeDomainsFile = readFileSync(freeDomainsFilePath, 'utf-8')
 
 const disposableDomains = JSON.parse(disposableDomainsFile)
-if (!Array.isArray(disposableDomains)) {
-    console.log(`disposableDomains is not an array`)
-    process.exit(1)
-}
-
 const freeDomains = JSON.parse(freeDomainsFile)
-if (!Array.isArray(freeDomains)) {
-    console.log(`freeDomains is not an array`)
-    process.exit(1)
-}
+
+ok(Array.isArray(disposableDomains), 'disposableDomains must be an array')
+ok(Array.isArray(freeDomains), 'freeDomains must be an array')
 
 const disposableDocuments = disposableDomains
     .filter(value => value !== null)

@@ -15,8 +15,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          lfs: true  # This ensures Git LFS files are pulled
 
       - name: Configure SSH key
         run: |
