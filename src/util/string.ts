@@ -1,3 +1,5 @@
+import { ZERO } from '../common/constants'
+
 export function appendRandomPrefix(str: string): string {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     let result = ''
@@ -6,4 +8,8 @@ export function appendRandomPrefix(str: string): string {
         result += characters[randomIndex]
     }
     return result + str
+}
+
+export function isEmptyString(str: string): boolean {
+    return str.length === ZERO
 }
