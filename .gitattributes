@@ -1,0 +1,2 @@
+docker/config/disposable-email-providers.json filter=lfs diff=lfs merge=lfs -text
+docker/config/free-email-providers.json filter=lfs diff=lfs merge=lfs -text
