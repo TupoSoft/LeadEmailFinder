@@ -32,6 +32,10 @@ import {
 } from './email-verification/verifier-decorators'
 import { LeadQueueWorker } from './lead/queue-worker'
 import { NODE_ENV, PORT } from './common/env'
+import { AuthRouter } from './auth/router'
+import { AuthController } from './auth/controller'
+import { AuthService } from './auth/service'
+import { MongoUserRepository, UserService } from './user'
 
 async function main(): Promise<void> {
     const pino = pinoFactory({
@@ -49,6 +53,15 @@ async function main(): Promise<void> {
     const db = mongoClient.db()
 
     const redis = await getRedis()
+
+    const mongoUserRepository = new MongoUserRepository(db)
+    const userService = new UserService(mongoUserRepository)
+    await mongoUserRepository.createIndices()
+
+    const authService = new AuthService(userService)
+    const authController = new AuthController(authService)
+    const authRouter = new AuthRouter(router, authController)
+    authRouter.init()
 
     const mongoDomainRepository = new MongoDomainRepository(db)
     const domainService = new DomainService(mongoDomainRepository)
