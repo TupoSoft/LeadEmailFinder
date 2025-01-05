@@ -1,34 +1,16 @@
-import { readFile } from 'fs/promises'
 import { MongoClient, ObjectId } from 'mongodb'
 import { randomBytes } from 'node:crypto'
 import { promisify } from 'node:util'
 import { EXIT_FAILURE } from '../common/constants'
+import { MONGO_URL } from '../common/env'
 
 export const DESCENDING = -1
 
 const randomBytesAsync = promisify(randomBytes)
 
-async function getMongoUrl(): Promise<string> {
-    try {
-        const { env } = process
-        const { MONGO_URL_FILE: mongoUrlFile } = env
-
-        if (mongoUrlFile === undefined) {
-            console.error(`The MONGO_URL_FILE variable is undefined.`)
-            process.exit(EXIT_FAILURE)
-        }
-
-        return await readFile(mongoUrlFile, 'utf-8')
-    } catch (error) {
-        console.error(error)
-        process.exit(EXIT_FAILURE)
-    }
-}
-
 export async function getMongoClient(): Promise<MongoClient> {
     try {
-        const mongoUrl = await getMongoUrl()
-        const mongoClient = new MongoClient(mongoUrl)
+        const mongoClient = new MongoClient(MONGO_URL)
         return await mongoClient.connect()
     } catch (error) {
         console.error('MongoDB connection error:', error)

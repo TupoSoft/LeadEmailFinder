@@ -1,8 +1,8 @@
-import { readFileSync } from 'fs'
 import type { NextFunction, Request, Response } from 'express'
 import { constants as httpConstants } from 'http2'
 import { ok } from 'node:assert'
 import { EXIT_FAILURE } from '../common/constants'
+import { AUTH_TOKENS } from '../common/env'
 
 function isRecordStringBoolean(value: unknown): value is Record<string, boolean> {
     if (typeof value !== 'object' || value === null) {
@@ -13,12 +13,8 @@ function isRecordStringBoolean(value: unknown): value is Record<string, boolean>
 }
 
 function readTokens(): Record<string, boolean> {
-    const { env } = process
-    const { AUTH_TOKENS_FILE_PATH } = env
-
     try {
-        ok(AUTH_TOKENS_FILE_PATH !== undefined, 'The environment variable AUTH_TOKENS_FILE_PATH is required')
-        const tokens: unknown = JSON.parse(readFileSync(AUTH_TOKENS_FILE_PATH, { encoding: 'ascii' }))
+        const tokens: unknown = JSON.parse(AUTH_TOKENS)
         ok(isRecordStringBoolean(tokens), 'Invalid tokens file, should be Record<string, boolean>')
         return tokens
     } catch (error) {

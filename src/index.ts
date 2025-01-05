@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     const mongoClient = await getMongoClient()
     const db = mongoClient.db()
 
-    const redis = await getRedis()
+    const redis = getRedis()
 
     const mongoUserRepository = new MongoUserRepository(db)
     const userService = new UserService(mongoUserRepository)

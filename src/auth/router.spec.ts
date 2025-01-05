@@ -6,7 +6,7 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { AuthController } from './controller'
 import type { IAuthService } from './service'
-import type { RegistrationData } from './dto'
+import type { AuthData } from './dto'
 import { UserAlreadyExistsError } from '../user/errors'
 import Mocked = jest.Mocked
 
@@ -17,6 +17,7 @@ describe(AUTH_ROUTE, () => {
     const expressRouter = Router()
     const authService: Mocked<IAuthService> = {
         register: jest.fn<typeof authService.register>(),
+        login: jest.fn<typeof authService.login>(),
     }
     const authController = new AuthController(authService)
     const authRouter = new AuthRouter(expressRouter, authController)
@@ -38,7 +39,7 @@ describe(AUTH_ROUTE, () => {
     describe(AUTH_REGISTER_ROUTE, () => {
         const email = 'danilo@microsoft.com'
         const password = 'odeseneradi'
-        const registrationData: RegistrationData = {
+        const registrationData: AuthData = {
             email,
             password,
         }
@@ -72,7 +73,11 @@ describe(AUTH_ROUTE, () => {
         })
 
         const invalidEmail = 'danilo'
-        const validationCases: { description: string; requestBody: Partial<RegistrationData>; message: string }[] = [
+        const validationCases: Array<{
+            description: string
+            requestBody: Partial<AuthData>
+            message: string
+        }> = [
             { description: 'email is missing', requestBody: { password }, message: 'Email is required' },
             { description: 'password is missing', requestBody: { email }, message: 'Password is required' },
             { description: 'email is invalid', requestBody: { email: invalidEmail }, message: 'Invalid email address' },

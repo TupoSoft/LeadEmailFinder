@@ -6,5 +6,6 @@
         "useUnknownInCatchVariables": true,
         "removeComments": true
     },
+    "include": ["src/auth"],
     "files": ["src/index.ts"]
 }

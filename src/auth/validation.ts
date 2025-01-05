@@ -1,8 +1,8 @@
 import { z, type ZodType } from 'zod'
-import type { RegistrationData } from './dto'
+import type { AuthData } from './dto'
 import { EMAIL_MINIMUM_LENGTH, PASSWORD_MINIMUM_LENGTH } from './constants'
 
-export const registrationRequestBodySchema = z.object({
+export const authRequestBodySchema = z.object({
     email: z
         .string({ message: 'Email is required' })
         .min(EMAIL_MINIMUM_LENGTH, { message: 'Email must be at least 3 characters' })
@@ -14,4 +14,4 @@ export const registrationRequestBodySchema = z.object({
         })
         .min(PASSWORD_MINIMUM_LENGTH, { message: 'Password must be at least 8 characters' })
         .nonempty({ message: 'Password cannot be empty' }),
-}) satisfies ZodType<RegistrationData>
+}) satisfies ZodType<AuthData>
