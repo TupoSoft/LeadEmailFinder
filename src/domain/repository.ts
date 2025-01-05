@@ -43,7 +43,6 @@ export class MongoDomainRepository implements DomainRepository {
 
     async save(domain: Domain): Promise<void> {
         const { _id, ...domainSchema } = domainEntityToDomainSchema(domain)
-
         await this.collection.updateOne(
             { _id },
             {
