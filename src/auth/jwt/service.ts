@@ -66,7 +66,7 @@ export class JwtService {
         const [encodedHeader, encodedPayload, receivedSignature] = tokenParts
         const data = `${encodedHeader}.${encodedPayload}`
 
-        const signature = base64UrlEncode(createHmac('sha256', this.secret).update(data).digest('base64'))
+        const signature = createHmac('sha256', this.secret).update(data).digest('base64url')
 
         if (signature !== receivedSignature) {
             throw new Error('Invalid signature')
