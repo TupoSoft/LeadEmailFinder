@@ -47,7 +47,7 @@ export class JwtService {
         payload.iss ??= this.issuer
         payload.aud ??= this.audience
         payload.iat ??= Math.floor(Date.now() / parseTimeString('1s'))
-        payload.exp ??= payload.iat + parseTimeString(this.expiration)
+        payload.exp ??= payload.iat + parseTimeString(this.expiration) / parseTimeString('1s')
 
         const encodedHeader = base64UrlEncode(JSON.stringify(header))
         const encodedPayload = base64UrlEncode(JSON.stringify(payload))
