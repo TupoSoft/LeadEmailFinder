@@ -20,19 +20,22 @@ export interface JwtServiceConstructorOptions {
     secret: string
     issuer: string
     audience: string
+    expiration: string
 }
 
 export class JwtService {
     private readonly secret
     private readonly issuer
     private readonly audience
+    private readonly expiration
 
     constructor(options: JwtServiceConstructorOptions) {
-        const { secret, issuer, audience } = options
+        const { secret, issuer, audience, expiration } = options
 
         this.secret = secret
         this.issuer = issuer
         this.audience = audience
+        this.expiration = expiration
     }
 
     signJwt(payload: JwtPayload): string {
@@ -44,7 +47,7 @@ export class JwtService {
         payload.iss ??= this.issuer
         payload.aud ??= this.audience
         payload.iat ??= Math.floor(Date.now() / parseTimeString('1s'))
-        payload.exp ??= payload.iat + parseTimeString('1h')
+        payload.exp ??= payload.iat + parseTimeString(this.expiration)
 
         const encodedHeader = base64UrlEncode(JSON.stringify(header))
         const encodedPayload = base64UrlEncode(JSON.stringify(payload))

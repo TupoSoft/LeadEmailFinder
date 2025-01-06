@@ -67,6 +67,7 @@ async function main(): Promise<void> {
         issuer: configService.get('JWT_ISSUER'),
         audience: configService.get('JWT_AUDIENCE'),
         secret: configService.get('JWT_HS256_SECRET'),
+        expiration: configService.get('JWT_EXPIRATION'),
     })
     const authService = new AuthService(userService, jwtService)
     const authController = new AuthController(authService)
