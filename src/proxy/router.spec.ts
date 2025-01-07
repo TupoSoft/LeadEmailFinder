@@ -6,9 +6,8 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import type { ProxyFvo } from './dto'
 import type { Proxy } from './repository'
-import { ProxyService } from './service'
-import { MongoProxyRepository } from './mongo-repository'
-import { MongoClient } from 'mongodb'
+import { IProxyService } from './service'
+import { IAuthMiddleware } from '../middleware'
 import Mocked = jest.Mocked
 
 jest.mock('../middleware/authenticate')
@@ -18,13 +17,18 @@ jest.mock('./service')
 describe('ProxyRouter', () => {
     const app = express()
     const expressRouter = Router()
-    const mongoClient = new MongoClient('mongodb://localhost:27017')
-    const db = mongoClient.db()
-    const mongoProxyRepository = new MongoProxyRepository(db)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- testing
-    const proxyService = new ProxyService(mongoProxyRepository) as Mocked<ProxyService>
+    const proxyService: Mocked<IProxyService> = {
+        create: jest.fn(),
+        getAll: jest.fn(),
+    }
+    const authMiddleware: Mocked<IAuthMiddleware> = {
+        authenticate: jest.fn((_req, _res, next) => {
+            next()
+        }),
+    }
+
     const proxyController = new ProxyController(proxyService)
-    const proxyRouter = new ProxyRouter(expressRouter, proxyController)
+    const proxyRouter = new ProxyRouter(expressRouter, proxyController, authMiddleware)
     proxyRouter.init()
 
     app.use(express.json())

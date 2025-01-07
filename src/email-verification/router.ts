@@ -1,7 +1,7 @@
 import type { Response, Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body } from 'express-validator'
-import { authenticate, validate } from '../middleware'
+import { type AuthMiddleware, validate } from '../middleware'
 
 const MIN_LENGTH = 1
 
@@ -9,12 +9,13 @@ export class EmailVerificationRouter {
     constructor(
         private readonly router: Router,
         private readonly emailVerificationController: EmailVerificationController,
+        private readonly authMiddleware: AuthMiddleware,
     ) {}
 
     init(): void {
         this.router.post(
             '/emails/verify',
-            authenticate,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 body('email')
                     .isString()
@@ -30,7 +31,7 @@ export class EmailVerificationRouter {
 
         this.router.post(
             '/emails/verify/bulk',
-            authenticate,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 body('emails').isArray({ min: MIN_LENGTH }).withMessage('Must be a non-empty array of emails'),
                 body('emails.*')

@@ -1,19 +1,20 @@
 import type { Router } from 'express'
 import type { DomainController } from './controller'
-import { authenticate, validate } from '../middleware'
+import { type AuthMiddleware, validate } from '../middleware'
 import { body } from 'express-validator'
-import { ZERO } from '../common/constants'
+import { ZERO } from '../common'
 
 export class DomainRouter {
     constructor(
         private readonly router: Router,
         private readonly domainController: DomainController,
+        private readonly authMiddleware: AuthMiddleware,
     ) {}
 
     init(): void {
         this.router.post(
             '/domain',
-            authenticate,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 body('name').isString().notEmpty(),
                 body('emailFormats').isArray().optional().default([]),

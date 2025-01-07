@@ -2,7 +2,7 @@ import type { Router } from 'express'
 import { AUTH_LOGIN_ROUTE, AUTH_LOGOUT_ROUTE, AUTH_REGISTER_ROUTE } from './constants'
 import type { AuthController } from './controller'
 import { validateRequest } from '../middleware'
-import { registrationRequestBodySchema } from './validation'
+import { authRequestBodySchema } from './validation'
 
 export class AuthRouter {
     constructor(
@@ -11,13 +11,15 @@ export class AuthRouter {
     ) {}
 
     init(): void {
-        this.router.post(AUTH_LOGIN_ROUTE, (_req, res) => {
-            res.json({ message: 'Logged in' })
-        })
+        this.router.post(
+            AUTH_LOGIN_ROUTE,
+            validateRequest(authRequestBodySchema, 'body'),
+            this.authController.login.bind(this.authController),
+        )
 
         this.router.post(
             AUTH_REGISTER_ROUTE,
-            validateRequest(registrationRequestBodySchema, 'body'),
+            validateRequest(authRequestBodySchema, 'body'),
             this.authController.register.bind(this.authController),
         )
 
