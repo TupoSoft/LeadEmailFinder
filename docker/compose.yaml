@@ -22,10 +22,10 @@ services:
       timeout: 10s
       retries: 3
     environment:
-      NODE_ENV: ${NODE_ENV}
       MONGO_URL_FILE: /run/secrets/mongo_url
-      REDIS_CONFIG_FILE_PATH: /run/secrets/redis.json
-      AUTH_TOKENS_FILE_PATH: /run/secrets/tokens.json
+      REDIS_CONFIG_FILE: /run/secrets/redis.json
+      AUTH_TOKENS_FILE: /run/secrets/tokens.json
+    env_file: .env
     depends_on:
       mongo:
         condition: service_healthy

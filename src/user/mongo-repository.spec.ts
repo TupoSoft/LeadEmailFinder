@@ -8,6 +8,8 @@ import { UserNotFoundError } from './errors'
 import type { CreateUserDto, UpdateUserDto } from './dto'
 import Mocked = jest.Mocked
 
+jest.mock('../common/env')
+
 describe('MongoUserRepository', () => {
     const mongoClient = new MongoClient('mongodb://localhost:27017')
     const db = mongoClient.db()

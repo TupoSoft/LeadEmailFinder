@@ -1,24 +1,47 @@
-import { z } from 'zod'
+import { z, type ZodType, type ZodTypeDef } from 'zod'
 import { env } from 'node:process'
-import { DEFAULT_PORT, EXIT_FAILURE } from './constants'
+import { DEFAULT_PORT } from './constants'
+import { readFile } from 'node:fs/promises'
 
-const MIN_LENGTH = 1
+const STRING_MIN_LENGTH = 1
+const JWT_HS256_SECRET_MIN_LENGTH = 32
 
-const stringZodReadonly = z.string().min(MIN_LENGTH).readonly()
-const numberArrayZod = z.string().transform(Number).readonly()
+const stringWithMinLength = z.string().min(STRING_MIN_LENGTH)
 
-const envSchema = z.object({
-    NODE_ENV: stringZodReadonly,
-    PORT: numberArrayZod.default(String(DEFAULT_PORT)),
-})
-
-const parsedEnv = envSchema.safeParse(env)
-
-if (!parsedEnv.success) {
-    console.error('Invalid environment variables:', parsedEnv.error.format())
-    process.exit(EXIT_FAILURE)
+export interface Environment {
+    NODE_ENV: 'development' | 'production' | 'test'
+    PORT: number
+    JWT_HS256_SECRET: string
+    JWT_ISSUER: string
+    JWT_AUDIENCE: string
+    JWT_EXPIRATION: string
+    MONGO_URL: string
+    REDIS_CONFIG: string
+    AUTH_TOKENS: string
 }
 
-export const {
-    data: { NODE_ENV, PORT },
-} = parsedEnv
+const envSchema = z.object({
+    NODE_ENV: z.enum(['development', 'production', 'test']),
+    PORT: z.coerce.number().default(DEFAULT_PORT),
+    JWT_HS256_SECRET: z.string().min(JWT_HS256_SECRET_MIN_LENGTH).readonly(),
+    JWT_ISSUER: stringWithMinLength,
+    JWT_AUDIENCE: stringWithMinLength,
+    JWT_EXPIRATION: stringWithMinLength.default('1h'),
+    MONGO_URL: stringWithMinLength,
+    REDIS_CONFIG: stringWithMinLength,
+    AUTH_TOKENS: stringWithMinLength,
+}) satisfies ZodType<Environment, ZodTypeDef, Partial<Environment>>
+
+async function loadSecrets(): Promise<void> {
+    for (const [key, value] of Object.entries(env)) {
+        if (key.endsWith('_FILE') && value !== undefined) {
+            const keyWithoutFile = key.replace('_FILE', '')
+            env[keyWithoutFile] = await readFile(value, 'utf8')
+        }
+    }
+}
+
+export async function parseEnv(): Promise<Environment> {
+    await loadSecrets()
+    return await envSchema.parseAsync(process.env)
+}
