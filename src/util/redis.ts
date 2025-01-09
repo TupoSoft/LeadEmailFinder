@@ -1,7 +1,81 @@
-import { Redis, type RedisOptions } from 'ioredis'
+import { Redis, type RedisOptions, type SentinelAddress } from 'ioredis'
 import type { ConfigService, Environment } from '../common'
 import { EXIT_FAILURE } from '../common'
 import type { Logger } from '../logging'
+import { ok } from 'node:assert'
+
+const REDIS_DEFAULT_DB_INDEX = 0
+const REDIS_DEFAULT_PORT = 6379
+const REDIS_SENTINEL_DEFAULT_PORT = 26379
+const REDIS_SENTINEL_URL_REGEX =
+    /(?:(?<scheme>[\w+-]+):\/\/)?(?:(?:(?<username>[^:@]+):)?(?<password>[^@]+)@)?(?<hosts>[^/?#]+)(?:\/(?<database>\d+))?(?:\?(?<query>.*))?/
+
+export function parseRedisStandaloneUrl(redisUri: string): RedisOptions {
+    const { hostname, port, username, password, pathname } = new URL(redisUri)
+
+    const options = {
+        host: hostname,
+        port: port !== '' ? parseInt(port, 10) : REDIS_DEFAULT_PORT,
+        db: pathname !== '' ? parseInt(pathname.replace('/', ''), 10) : REDIS_DEFAULT_DB_INDEX,
+        username: username !== '' ? username : undefined,
+        password: password !== '' ? password : undefined,
+    }
+
+    ok(!isNaN(options.db), `Invalid Redis database index in path: ${pathname}`)
+
+    return options
+}
+
+export function parseRedisSentinelUrl(redisUrl: string): RedisOptions {
+    const match = REDIS_SENTINEL_URL_REGEX.exec(redisUrl)
+    ok(match !== null, `Invalid Redis Sentinel URL: ${redisUrl}`)
+
+    const { groups } = match
+    ok(groups !== undefined, 'Invalid RegExp')
+
+    const { username, password, hosts, database, query } = groups
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: fix and remove this comment
+    const db = database !== undefined ? parseInt(database) : undefined
+
+    const sentinels: SentinelAddress[] = hosts.split(',').map(value => {
+        const [hostname, sentinelPort = String(REDIS_SENTINEL_DEFAULT_PORT)] = value.split(':') as Array<
+            string | undefined
+        >
+        ok(hostname !== undefined, 'Hostname cannot be undefined')
+        ok(hostname !== '', 'Hostname cannot be empty')
+
+        const port = parseInt(sentinelPort)
+        ok(!isNaN(port), `Invalid port: ${sentinelPort}, not a number`)
+
+        return {
+            host: hostname,
+            port,
+        }
+    })
+
+    const searchParams = new URLSearchParams(query)
+    const sentinelMasterId = searchParams.get('sentinelMasterId')
+    ok(sentinelMasterId !== null, 'Sentinel Master ID is missing')
+
+    return {
+        name: sentinelMasterId,
+        sentinels,
+        username,
+        password,
+        sentinelPassword: password,
+        db,
+    }
+}
+
+export function parseRedisUrl(redisUrl: string): RedisOptions {
+    if (redisUrl.startsWith('redis://')) {
+        return parseRedisStandaloneUrl(redisUrl)
+    } else if (redisUrl.startsWith('redis-sentinel://')) {
+        return parseRedisSentinelUrl(redisUrl)
+    } else {
+        throw new Error(`Invalid redis URI`)
+    }
+}
 
 export class RedisCreator {
     constructor(
@@ -11,10 +85,12 @@ export class RedisCreator {
 
     create(): Redis {
         try {
-            const redisConfig = this.configService.get('REDIS_CONFIG')
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- TODO: add a type guard
-            const config = JSON.parse(redisConfig) as RedisOptions
-            return new Redis(config)
+            const redisUrl = this.configService.get('REDIS_URL')
+            const redisOptions = parseRedisUrl(redisUrl)
+            return new Redis({
+                ...redisOptions,
+                maxRetriesPerRequest: null, // for BullMQ
+            })
         } catch (error) {
             this.logger.error(`Failed to initialize redis: ${String(error)}`)
             process.exit(EXIT_FAILURE)
