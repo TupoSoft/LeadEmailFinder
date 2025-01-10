@@ -41,7 +41,7 @@ describe('Redis URL Parsing', () => {
         it('should parse a valid sentinel Redis URI', () => {
             const name = 'mymaster'
             const password = 'odjeseneradi'
-            const redisUri = `redis-sentinel://${password}@redis_sentinel_1,redis_sentinel_2,redis_sentinel_3?sentinelMasterId=${name}`
+            const redisUri = `redis-sentinel://${password}@redis_sentinel_1,redis_sentinel_2,redis_sentinel_3?name=${name}`
             const result = parseRedisSentinelUrl(redisUri)
             expect(result).toEqual({
                 name,
@@ -56,7 +56,7 @@ describe('Redis URL Parsing', () => {
         })
 
         it('should default to sentinel port 26379 if not specified', () => {
-            const redisUri = 'redis-sentinel://localhost?sentinelMasterId=mymaster'
+            const redisUri = 'redis-sentinel://localhost?name=mymaster'
             const result = parseRedisSentinelUrl(redisUri)
             expect(result).toEqual({
                 name: 'mymaster',
@@ -64,18 +64,18 @@ describe('Redis URL Parsing', () => {
             })
         })
 
-        it('should throw an error if sentinelMasterId is missing', () => {
+        it('should throw an error if name is missing', () => {
             const redisUri = 'redis-sentinel://localhost:26379'
-            expect(() => parseRedisSentinelUrl(redisUri)).toThrow('Sentinel Master ID is missing')
+            expect(() => parseRedisSentinelUrl(redisUri)).toThrow('The master group name is missing')
         })
 
         it('should throw an error for invalid sentinel host', () => {
-            const redisUri = 'redis-sentinel://:26379?sentinelMasterId=mymaster'
+            const redisUri = 'redis-sentinel://:26379?name=mymaster'
             expect(() => parseRedisSentinelUrl(redisUri)).toThrow('Hostname cannot be empty')
         })
 
         it('should throw an error for invalid sentinel port', () => {
-            const redisUri = 'redis-sentinel://localhost:invalid_port?sentinelMasterId=mymaster'
+            const redisUri = 'redis-sentinel://localhost:invalid_port?name=mymaster'
             expect(() => parseRedisSentinelUrl(redisUri)).toThrow(`Invalid port: invalid_port, not a number`)
         })
     })
@@ -92,7 +92,7 @@ describe('Redis URL Parsing', () => {
         })
 
         it('should parse a sentinel Redis URI', () => {
-            const redisUri = 'redis-sentinel://localhost:26379?sentinelMasterId=mymaster'
+            const redisUri = 'redis-sentinel://localhost:26379?name=mymaster'
             const result = parseRedisUrl(redisUri)
             expect(result).toEqual({
                 name: 'mymaster',
