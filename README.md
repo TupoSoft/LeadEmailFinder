@@ -80,5 +80,3 @@ To run the application in debugging mode:
 Once running, connect your preferred debugging client using the Node.js Inspector protocol. Detailed instructions for
 setting up a client can be found in
 the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
-
-###                     
