@@ -44,13 +44,14 @@ e.g., `http://login:password@example.com:3333`.
 To configure this:
 
 1. Create a `.env` file in the `docker` directory.
-2. Add the following line:
+2. Add the following configuration, replacing the example URLs with your own:
 
   ```dotenv
   PROXIES=http://login:password@example.com:3333,http://login2:password2@example2.com:3333
   ```
 
-These proxies will be inserted into the database when containers start.
+These proxies will be automatically inserted into the database when the containers start, making them available for the
+application.
 
 ### Running the Application
 
@@ -80,4 +81,4 @@ Once running, connect your preferred debugging client using the Node.js Inspecto
 setting up a client can be found in
 the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
 
-###                   
+###                     
