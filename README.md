@@ -9,6 +9,7 @@ Lead Email Finder is an API for finding email addresses.
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
 - [Development](#development)
+    - [Environment Variables](#environment-variables)
     - [Running the Application](#running-the-application)
     - [Debugging the Application](#debugging-the-application)
 
@@ -34,6 +35,22 @@ Clone this repository:
 ```
 
 ## Development
+
+### Environment Variables
+
+For the API to work, you must set the `PROXIES` environment variable to a comma-separated string of proxies,
+e.g., `http://login:password@example.com:3333`.
+
+To configure this:
+
+1. Create a `.env` file in the `docker` directory.
+2. Add the following line:
+
+  ```dotenv
+  PROXIES=http://login:password@example.com:3333,http://login2:password2@example2.com:3333
+  ```
+
+These proxies will be inserted into the database when containers start.
 
 ### Running the Application
 
@@ -62,3 +79,5 @@ To run the application in debugging mode:
 Once running, connect your preferred debugging client using the Node.js Inspector protocol. Detailed instructions for
 setting up a client can be found in
 the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
+
+###                   
