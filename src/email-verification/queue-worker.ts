@@ -3,9 +3,7 @@ import { Worker } from 'bullmq'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { IEmailVerifier } from './verifier'
 import { RESOURCE } from './constants'
-
-const PERCENTAGE = 100
-const CONCURRENCY = 50
+import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
 
 export class EmailVerificationQueueWorker {
     private readonly worker
@@ -29,7 +27,7 @@ export class EmailVerificationQueueWorker {
             },
             {
                 connection,
-                concurrency: CONCURRENCY,
+                concurrency: QUEUE_WORKER_CONCURRENCY,
                 autorun: false,
             },
         )

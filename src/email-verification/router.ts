@@ -1,4 +1,4 @@
-import type { Response, Router } from 'express'
+import type { Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body } from 'express-validator'
 import { type AuthMiddleware, validate } from '../middleware'
@@ -64,9 +64,5 @@ export class EmailVerificationRouter {
             this.authMiddleware.authenticate.bind(this.authMiddleware),
             this.emailVerificationController.getVerifyBulkResults.bind(this.emailVerificationController),
         )
-
-        this.router.get('/ping', (_, res: Response) => {
-            res.json('PONG')
-        })
     }
 }
