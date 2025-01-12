@@ -36,7 +36,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
         const { params } = req
         const { id } = params
 
-        this.emailVerificationService.findBulkStatus(id).then(
+        this.emailVerificationService.getVerifyBulkStatus(id).then(
             value => res.json(value),
             (reason: unknown) => {
                 next(reason)
@@ -48,7 +48,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
         const { params } = req
         const { id } = params
 
-        this.emailVerificationService.getFindBulkResult(id).then(
+        this.emailVerificationService.getVerifyBulkResult(id).then(
             value => res.json(value),
             (reason: unknown) => {
                 next(reason)

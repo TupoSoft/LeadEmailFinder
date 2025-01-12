@@ -32,7 +32,7 @@ export class EmailVerificationService {
         }
     }
 
-    async findBulkStatus(id: string): Promise<VerifyEmailBulkStatusResponse> {
+    async getVerifyBulkStatus(id: string): Promise<VerifyEmailBulkStatusResponse> {
         const status = await this.emailVerificationQueue.getStatus(id)
 
         return {
@@ -40,7 +40,7 @@ export class EmailVerificationService {
         }
     }
 
-    async getFindBulkResult(id: string): Promise<EmailVerificationResult[]> {
+    async getVerifyBulkResult(id: string): Promise<EmailVerificationResult[]> {
         return await this.emailVerificationQueue.getResult(id)
     }
 
