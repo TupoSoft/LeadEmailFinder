@@ -37,6 +37,8 @@ import { AuthService } from './auth/service'
 import { MongoUserRepository, UserService } from './user'
 import { AuthMiddleware } from './middleware'
 import { JwtService } from './auth/jwt'
+import { EmailVerificationQueue } from './email-verification/queue'
+import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -106,18 +108,23 @@ async function main(): Promise<void> {
         smtpEmailVerifier,
         mongoEmailVerificationRepository,
     )
+    const emailVerificationQueue = new EmailVerificationQueue(redis)
+    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, persistenceEmailVerifierDecorator)
     const emailVerificationService = new EmailVerificationService(
         persistenceEmailVerifierDecorator,
         mongoEmailVerificationRepository,
+        emailVerificationQueue,
     )
     const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController, authMiddleware)
+    void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
     const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
     const findLeadEmailVerificationService = new EmailVerificationService(
         throwableEmailVerifierDecorator,
         mongoEmailVerificationRepository,
+        emailVerificationQueue,
     )
     const leadFinder = new LeadFinder(findLeadEmailVerificationService, logger)
     const leadQueue = new LeadQueue(redis)

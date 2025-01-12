@@ -4,8 +4,8 @@ import { SERVICE_NAME } from './constants'
 import type { LeadQueueJobDataType, LeadQueueNameType, LeadQueueResultType } from './queue'
 import type { LeadFinder } from './finder'
 import type { FindLeadResult } from './dto'
+import { PERCENTAGE } from '../common'
 
-const PERCENTAGE = 100
 const CONCURRENCY = 50
 
 export class LeadQueueWorker {

@@ -5,6 +5,8 @@ import type { EmailVerificationService } from './service'
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
     verifyEmails: (req: Request, res: Response, next: NextFunction) => void
+    getVerifyBulkStatus: (req: Request, res: Response, next: NextFunction) => void
+    getVerifyBulkResults: (req: Request, res: Response, next: NextFunction) => void
 }
 
 export class ExpressEmailVerificationController implements EmailVerificationController {
@@ -22,7 +24,31 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
 
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
         const { emails } = matchedData<{ emails: string[] }>(req)
-        Promise.all(emails.map(async email => await this.emailVerificationService.verify({ email }))).then(
+        this.emailVerificationService.verifyBulk(emails).then(
+            value => res.json(value),
+            (reason: unknown) => {
+                next(reason)
+            },
+        )
+    }
+
+    getVerifyBulkStatus(req: Request, res: Response, next: NextFunction): void {
+        const { params } = req
+        const { id } = params
+
+        this.emailVerificationService.findBulkStatus(id).then(
+            value => res.json(value),
+            (reason: unknown) => {
+                next(reason)
+            },
+        )
+    }
+
+    getVerifyBulkResults(req: Request, res: Response, next: NextFunction): void {
+        const { params } = req
+        const { id } = params
+
+        this.emailVerificationService.getFindBulkResult(id).then(
             value => res.json(value),
             (reason: unknown) => {
                 next(reason)
