@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { matchedData } from 'express-validator'
 import type { EmailVerificationService } from './service'
+import { constants } from 'node:http2'
 
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
@@ -24,8 +25,13 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
 
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
         const { emails } = matchedData<{ emails: string[] }>(req)
+        const { HTTP_STATUS_ACCEPTED } = constants
+
         this.emailVerificationService.verifyBulk(emails).then(
-            value => res.json(value),
+            value => {
+                value.monitorUrl = `${req.protocol}://${req.headers.host}${value.monitorUrl}`
+                res.status(HTTP_STATUS_ACCEPTED).json(value)
+            },
             (reason: unknown) => {
                 next(reason)
             },
