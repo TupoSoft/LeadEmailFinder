@@ -3,6 +3,7 @@ import type { EmailVerificationResult } from './dto'
 import { Queue } from 'bullmq'
 import { RESOURCE } from './constants'
 import { ok } from 'node:assert'
+import { JobNotFoundError } from './errors'
 
 type DataType = string[]
 
@@ -27,13 +28,13 @@ export class EmailVerificationQueue {
 
     async getStatus(id: string): Promise<string> {
         const job = await this.queue.getJob(id)
-        ok(job !== undefined, new Error(`The job ${id} does not exist`))
+        ok(job !== undefined, new JobNotFoundError(id))
         return await job.getState()
     }
 
     async getResult(id: string): Promise<ResultType> {
         const job = await this.queue.getJob(id)
-        ok(job !== undefined, new Error(`The job ${id} does not exist`))
+        ok(job !== undefined, new JobNotFoundError(id))
         return job.returnvalue
     }
 }

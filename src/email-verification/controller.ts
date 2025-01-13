@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { matchedData } from 'express-validator'
 import type { IEmailVerificationService } from './service'
 import { constants } from 'node:http2'
+import { JobNotFoundError } from './errors'
 
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
@@ -13,12 +14,21 @@ export interface EmailVerificationController {
 export class ExpressEmailVerificationController implements EmailVerificationController {
     constructor(private readonly emailVerificationService: IEmailVerificationService) {}
 
+    private static handleError(error: unknown, _req: Request, res: Response, next: NextFunction): void {
+        if (error instanceof JobNotFoundError) {
+            const { message } = error
+            res.status(constants.HTTP_STATUS_NOT_FOUND).json({ message })
+        } else {
+            next(error)
+        }
+    }
+
     verifyEmail(req: Request, res: Response, next: NextFunction): void {
         const { email } = matchedData<{ email: string }>(req)
         this.emailVerificationService.verify({ email }).then(
             verificationData => res.json(verificationData),
             (reason: unknown) => {
-                next(reason)
+                ExpressEmailVerificationController.handleError(reason, req, res, next)
             },
         )
     }
@@ -33,7 +43,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
                 res.status(HTTP_STATUS_ACCEPTED).json(value)
             },
             (reason: unknown) => {
-                next(reason)
+                ExpressEmailVerificationController.handleError(reason, req, res, next)
             },
         )
     }
@@ -45,7 +55,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
         this.emailVerificationService.getVerifyBulkStatus(id).then(
             value => res.json(value),
             (reason: unknown) => {
-                next(reason)
+                ExpressEmailVerificationController.handleError(reason, req, res, next)
             },
         )
     }
@@ -57,7 +67,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
         this.emailVerificationService.getVerifyBulkResult(id).then(
             value => res.json(value),
             (reason: unknown) => {
-                next(reason)
+                ExpressEmailVerificationController.handleError(reason, req, res, next)
             },
         )
     }

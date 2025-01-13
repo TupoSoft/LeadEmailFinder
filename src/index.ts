@@ -144,7 +144,7 @@ async function main(): Promise<void> {
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
             logger.error(`The error has occurred: ${err}`)
-            res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
+            res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({ message: 'Something went wrong' })
         })
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
