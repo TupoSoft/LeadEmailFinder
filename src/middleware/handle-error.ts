@@ -6,6 +6,7 @@ export default function handleError(error: unknown, _req: Request, res: Response
     if (error instanceof HttpError) {
         const { status, message } = error
         res.status(status).json({ message })
+        return
     }
 
     res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({ message: 'Unexpected error' })
