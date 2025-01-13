@@ -1,4 +1,4 @@
-import type { Request, Response, Router } from 'express'
+import type { Response, Router } from 'express'
 import { type AuthMiddleware, validateRequest } from '../middleware'
 import type { LeadController } from './controller'
 import {
@@ -45,10 +45,6 @@ export class LeadRouter {
 
         this.router.get('/ping', (_req, res: Response) => {
             res.send('PONG')
-        })
-
-        this.router.get('/', (_req: Request, res: Response) => {
-            res.send('Hello World!')
         })
     }
 }

@@ -18,3 +18,13 @@ export interface EmailVerificationResult {
 }
 
 export type EmailVerificationSource = CatchAllVerificationSource | 'SMTP'
+
+export interface VerifyEmailBulkResponse {
+    message: string
+    taskId: string
+    monitorUrl: string
+}
+
+export interface VerifyEmailBulkStatusResponse {
+    status: string
+}

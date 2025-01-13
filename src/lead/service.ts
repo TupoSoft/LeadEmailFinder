@@ -1,7 +1,7 @@
 import type { FindBulkResponse, FindBulkStatusResponse, FindLeadRequest, FindLeadResult } from './dto'
 import type { LeadFinder } from './finder'
 import type { LeadQueue, LeadQueueResultType } from './queue'
-import { API_PREFIX } from '../common/constants'
+import { API_PREFIX } from '../common'
 import { FIND_LEAD_BULK_STATUS_ROUTE } from './constants'
 
 export class LeadService {
