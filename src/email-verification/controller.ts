@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
 import { matchedData } from 'express-validator'
-import type { EmailVerificationService } from './service'
+import type { IEmailVerificationService } from './service'
 import { constants } from 'node:http2'
 
 export interface EmailVerificationController {
@@ -11,7 +11,7 @@ export interface EmailVerificationController {
 }
 
 export class ExpressEmailVerificationController implements EmailVerificationController {
-    constructor(private readonly emailVerificationService: EmailVerificationService) {}
+    constructor(private readonly emailVerificationService: IEmailVerificationService) {}
 
     verifyEmail(req: Request, res: Response, next: NextFunction): void {
         const { email } = matchedData<{ email: string }>(req)

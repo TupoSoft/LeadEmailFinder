@@ -1,7 +1,7 @@
 import type { Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body } from 'express-validator'
-import { type AuthMiddleware, validate } from '../middleware'
+import { type IAuthMiddleware, validate } from '../middleware'
 import {
     VERIFY_EMAIL_BULK_RESULT_ROUTE,
     VERIFY_EMAIL_BULK_ROUTE,
@@ -15,7 +15,7 @@ export class EmailVerificationRouter {
     constructor(
         private readonly router: Router,
         private readonly emailVerificationController: EmailVerificationController,
-        private readonly authMiddleware: AuthMiddleware,
+        private readonly authMiddleware: IAuthMiddleware,
     ) {}
 
     init(): void {

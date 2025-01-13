@@ -11,7 +11,17 @@ import type { EmailVerificationQueue } from './queue'
 import { API_PREFIX } from '../common'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 
-export class EmailVerificationService {
+export interface IEmailVerificationService {
+    verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
+
+    verifyBulk: (emails: string[]) => Promise<VerifyEmailBulkResponse>
+
+    getVerifyBulkStatus: (id: string) => Promise<VerifyEmailBulkStatusResponse>
+
+    getVerifyBulkResult: (id: string) => Promise<EmailVerificationResult[]>
+}
+
+export class EmailVerificationService implements IEmailVerificationService {
     constructor(
         private readonly emailVerifier: IEmailVerifier,
         private readonly emailVerificationRepository: EmailVerificationRepository,
