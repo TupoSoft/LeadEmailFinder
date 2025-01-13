@@ -1,13 +1,13 @@
 import { constants } from 'node:http2'
 
 export class HttpError extends Error {
-    private readonly status
+    readonly status
 
     constructor(status: number, message: string) {
         super(message)
 
-        this.name = 'HttpError'
         this.status = status
+        this.name = 'HttpError'
     }
 
     static BadRequest(message: string): HttpError {
@@ -16,5 +16,9 @@ export class HttpError extends Error {
 
     static NotFound(message: string): HttpError {
         return new HttpError(constants.HTTP_STATUS_NOT_FOUND, message)
+    }
+
+    static Unauthorized(message: string): HttpError {
+        return new HttpError(constants.HTTP_STATUS_UNAUTHORIZED, message)
     }
 }

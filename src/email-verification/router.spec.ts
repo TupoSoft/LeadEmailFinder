@@ -15,6 +15,7 @@ import { EmailVerificationResult, VerifyEmailBulkResponse } from './dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
+import handleError from '../middleware/handle-error'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -43,6 +44,7 @@ describe(EMAIL_ROUTE, () => {
 
     app.use(express.json())
     app.use(expressRouter)
+    app.use(handleError)
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')

@@ -1,4 +1,4 @@
-import express, { type NextFunction, type Request, type Response, Router } from 'express'
+import express, { Router } from 'express'
 import { MongoClientCreator } from './util/mongo'
 import {
     CatchAllVerifier,
@@ -12,7 +12,6 @@ import {
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
-import { constants as httpConstants } from 'http2'
 import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter, LeadService } from './lead'
@@ -22,7 +21,6 @@ import { ProxyRouter } from './proxy/router'
 import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
-import { ok } from 'node:assert'
 import { API_PREFIX, ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
@@ -41,6 +39,7 @@ import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 import { Queue } from 'bullmq'
 import { RESOURCE as EMAILS } from './email-verification/constants'
+import handleError from './middleware/handle-error'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -143,11 +142,7 @@ async function main(): Promise<void> {
         .use(pinoLoggingMiddleware)
         .use(express.json())
         .use(API_PREFIX, router)
-        .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-            ok(err instanceof Error)
-            logger.error(`The error has occurred: ${err}`)
-            res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({ message: 'Something went wrong' })
-        })
+        .use(handleError)
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
         })
