@@ -39,6 +39,8 @@ import { AuthMiddleware } from './middleware'
 import { JwtService } from './auth/jwt'
 import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
+import { Queue } from 'bullmq'
+import { RESOURCE as EMAILS } from './email-verification/constants'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -108,7 +110,7 @@ async function main(): Promise<void> {
         smtpEmailVerifier,
         mongoEmailVerificationRepository,
     )
-    const emailVerificationQueue = new EmailVerificationQueue(redis)
+    const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
     const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, persistenceEmailVerifierDecorator)
     const emailVerificationService = new EmailVerificationService(
         persistenceEmailVerifierDecorator,
