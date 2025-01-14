@@ -1,7 +1,6 @@
 import type { ZodOpenApiOperationObject, ZodOpenApiPathsObject, ZodOpenApiResponseObject } from 'zod-openapi'
 import {
     verifyEmailBulkRequestBody,
-    verifyEmailBulkResponseBody,
     verifyEmailBulkResultResponseBody,
     verifyEmailRequestBody,
     verifyEmailResponseBody,
@@ -48,7 +47,7 @@ const verifyEmailBulkOkResponse: ZodOpenApiResponseObject = {
     description: 'Successfully verified emails',
     content: {
         'application/json': {
-            schema: verifyEmailBulkResponseBody,
+            schema: bulkOkResponseBodySchema,
         },
     },
 }
