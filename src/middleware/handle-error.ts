@@ -1,8 +1,8 @@
-import type { Request, Response } from 'express'
+import type { NextFunction, Request, Response } from 'express'
 import { HttpError } from '../common'
 import { constants as httpConstants } from 'http2'
 
-export default function handleError(error: unknown, _req: Request, res: Response): void {
+export default function handleError(error: unknown, _req: Request, res: Response, _next: NextFunction): void {
     if (error instanceof HttpError) {
         const { status, message } = error
         res.status(status).json({ message })

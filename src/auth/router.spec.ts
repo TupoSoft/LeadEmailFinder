@@ -9,6 +9,7 @@ import type { IAuthService } from './service'
 import type { AuthData, LoginResult } from './dto'
 import { UserAlreadyExistsError } from '../user/errors'
 import { InvalidAuthDataError } from './errors'
+import handleError from '../middleware/handle-error'
 import Mocked = jest.Mocked
 
 jest.mock('../middleware/authenticate')
@@ -27,6 +28,7 @@ describe(AUTH_ROUTE, () => {
 
     app.use(express.json())
     app.use(expressRouter)
+    app.use(handleError)
 
     const email = 'danilo@microsoft.com'
     const password = 'odeseneradi'

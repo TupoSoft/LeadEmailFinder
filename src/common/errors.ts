@@ -21,4 +21,8 @@ export class HttpError extends Error {
     static Unauthorized(message: string): HttpError {
         return new HttpError(constants.HTTP_STATUS_UNAUTHORIZED, message)
     }
+
+    static Conflict(message: string): HttpError {
+        return new HttpError(constants.HTTP_STATUS_CONFLICT, message)
+    }
 }
