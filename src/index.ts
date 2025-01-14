@@ -146,6 +146,11 @@ async function main(): Promise<void> {
             title: 'Lead Email Finder',
             version: '0.3.0',
         },
+        servers: [
+            {
+                url: 'http://localhost:3000/api/v0',
+            },
+        ],
         tags: [leadTag],
         paths: {
             ...leadPaths,

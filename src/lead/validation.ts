@@ -39,4 +39,12 @@ export const findLeadBulkResponseBodySchema = z.object({
         .openapi({ example: `https://leademailfinder.com/api/v0/${FIND_LEAD_BULK_STATUS_ROUTE.replace(':id', '1')}` }),
 })
 
+export const findLeadBulkRequestParams = z.object({
+    id: z.string().nonempty().openapi({ example: '1' }),
+})
+
+export const findLeadBulkStatusResponseBodySchema = z.object({
+    status: z.string().nonempty().openapi({ example: 'completed' }),
+})
+
 export const findLeadBulkResultResponseBodySchema = z.array(findLeadResponseBodySchema)
