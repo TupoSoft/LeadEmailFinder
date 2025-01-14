@@ -61,10 +61,7 @@ services:
     volumes:
       - ./scripts:/docker-entrypoint-initdb.d
       - mongo-data:/data/db
-      - type: bind
-        source: ./data
-        target: /data
-        read_only: true
+      - ./data:/data:ro
 
   redis:
     image: redis:alpine
