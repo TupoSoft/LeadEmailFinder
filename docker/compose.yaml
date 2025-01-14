@@ -23,7 +23,7 @@ services:
       retries: 3
     environment:
       MONGO_URL_FILE: /run/secrets/mongo_url
-      REDIS_CONFIG_FILE: /run/secrets/redis.json
+      REDIS_URL_FILE: /run/secrets/redis_url
       AUTH_TOKENS_FILE: /run/secrets/tokens.json
     env_file: .env
     depends_on:
@@ -33,7 +33,7 @@ services:
         condition: service_healthy
     secrets:
       - mongo_url
-      - redis.json
+      - redis_url
       - tokens.json
 
   mongo:
@@ -82,13 +82,13 @@ services:
 
 secrets:
   mongo_root_username:
-    file: ./secrets/mongo_root_username.txt
+    file: secrets/mongo_root_username.txt
   mongo_root_password:
-    file: ./secrets/mongo_root_password.txt
+    file: secrets/mongo_root_password.txt
   mongo_url:
-    file: ./secrets/mongo_url.txt
-  redis.json:
-    file: secrets/redis.json
+    file: secrets/mongo_url.txt
+  redis_url:
+    file: secrets/redis_url.txt
   tokens.json:
     file: secrets/tokens.json
 

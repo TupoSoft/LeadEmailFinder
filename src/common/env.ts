@@ -16,7 +16,7 @@ export interface Environment {
     JWT_AUDIENCE: string
     JWT_EXPIRATION: string
     MONGO_URL: string
-    REDIS_CONFIG: string
+    REDIS_URL: string
     AUTH_TOKENS: string
 }
 
@@ -28,8 +28,8 @@ const envSchema = z.object({
     JWT_AUDIENCE: stringWithMinLength,
     JWT_EXPIRATION: stringWithMinLength.default('1h'),
     MONGO_URL: stringWithMinLength,
-    REDIS_CONFIG: stringWithMinLength,
     AUTH_TOKENS: stringWithMinLength,
+    REDIS_URL: stringWithMinLength,
 }) satisfies ZodType<Environment, ZodTypeDef, Partial<Environment>>
 
 async function loadSecrets(): Promise<void> {

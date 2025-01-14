@@ -5,9 +5,9 @@
     "description": "Lead Email Finder",
     "scripts": {
         "build": "tsc",
-        "start": "node dist",
-        "dev": "node --trace-sync-io --trace-warnings -r ts-node/register src",
-        "debug": "node --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "start": "node --env-file-if-exists=.env dist",
+        "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
+        "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest"
     },
@@ -27,7 +27,7 @@
     "devDependencies": {
         "@eslint/js": "^9.17.0",
         "@jest/globals": "^29.7.0",
-        "@tsconfig/node22": "^22.0.0",
+        "@tsconfig/node-lts": "^22.0.1",
         "@types/eslint__js": "^8.42.3",
         "@types/express": "^4.17.21",
         "@types/node": "^22.10.5",
