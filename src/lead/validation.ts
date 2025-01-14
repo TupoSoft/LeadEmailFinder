@@ -1,23 +1,30 @@
+import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
-import type { FindLeadRequest } from './dto'
-
-const MIN_LENGTH = 1
+import type { FindLeadRequest, FindLeadResult } from './dto'
+import { verifyEmailResponseBody } from '../email-verification/validation'
 
 export const findLeadRequestBodySchema = z.intersection(
-    z.object({ domain: z.string().min(MIN_LENGTH).readonly() }),
+    z.object({ domain: z.string().nonempty().openapi({ example: 'microsoft.com' }) }),
     z.union(
         [
             z.object({
-                firstName: z.string().min(MIN_LENGTH).readonly(),
-                lastName: z.string().min(MIN_LENGTH).readonly().optional(),
+                firstName: z.string().nonempty().openapi({ example: 'Danilo' }),
+                lastName: z.string().nonempty().optional().openapi({ example: 'Homic' }),
             }),
             z.object({
-                firstName: z.string().min(MIN_LENGTH).readonly().optional(),
-                lastName: z.string().min(MIN_LENGTH).readonly(),
+                firstName: z.string().nonempty().readonly().optional().openapi({ example: 'Danilo' }),
+                lastName: z.string().nonempty().readonly().openapi({ example: 'Homic' }),
             }),
         ],
         { errorMap: () => ({ message: 'Either first name or last name must be filled in.' }) },
     ),
 ) satisfies ZodType<FindLeadRequest>
+
+export const findLeadResponseBodySchema = z.intersection(
+    findLeadRequestBodySchema,
+    z.object({
+        emails: z.array(verifyEmailResponseBody),
+    }),
+) satisfies ZodType<FindLeadResult>
 
 export const findLeadBulkRequestBodySchema = z.array(findLeadRequestBodySchema)
