@@ -7,8 +7,6 @@ import {
 } from './constants'
 import {
     findLeadBulkRequestBodySchema,
-    findLeadBulkRequestParams,
-    findLeadBulkResponseBodySchema,
     findLeadBulkResultResponseBodySchema,
     findLeadBulkStatusResponseBodySchema,
     findLeadRequestBodySchema,
@@ -16,6 +14,7 @@ import {
 } from './validation'
 import { constants } from 'node:http2'
 import { z } from 'zod'
+import { bulkOkResponseBodySchema, bulkRequestParamsSchema } from '../common'
 
 export const leadTag = {
     name: 'leads',
@@ -87,7 +86,7 @@ export const leadPaths: ZodOpenApiPathsObject = {
                     description: 'Request accepted',
                     content: {
                         'application/json': {
-                            schema: findLeadBulkResponseBodySchema,
+                            schema: bulkOkResponseBodySchema,
                         },
                     },
                 },
@@ -123,7 +122,7 @@ export const leadPaths: ZodOpenApiPathsObject = {
             summary: 'Get the status of bulk lead search',
             description: 'Get the status of bulk lead search',
             requestParams: {
-                path: findLeadBulkRequestParams,
+                path: bulkRequestParamsSchema,
             },
             responses: {
                 [constants.HTTP_STATUS_OK]: {
@@ -153,7 +152,7 @@ export const leadPaths: ZodOpenApiPathsObject = {
             summary: 'Get the result of bulk lead search',
             description: 'Get the result of bulk lead search',
             requestParams: {
-                path: findLeadBulkRequestParams,
+                path: bulkRequestParamsSchema,
             },
             responses: {
                 [constants.HTTP_STATUS_OK]: {
