@@ -4,9 +4,7 @@ import { SERVICE_NAME } from './constants'
 import type { LeadQueueJobDataType, LeadQueueNameType, LeadQueueResultType } from './queue'
 import type { LeadFinder } from './finder'
 import type { FindLeadResult } from './dto'
-
-const PERCENTAGE = 100
-const CONCURRENCY = 50
+import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
 
 export class LeadQueueWorker {
     private readonly worker
@@ -30,7 +28,7 @@ export class LeadQueueWorker {
             },
             {
                 connection,
-                concurrency: CONCURRENCY,
+                concurrency: QUEUE_WORKER_CONCURRENCY,
                 autorun: false,
             },
         )

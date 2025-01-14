@@ -1,7 +1,13 @@
-import type { Response, Router } from 'express'
+import type { Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body } from 'express-validator'
-import { type AuthMiddleware, validate } from '../middleware'
+import { type IAuthMiddleware, validate } from '../middleware'
+import {
+    VERIFY_EMAIL_BULK_RESULT_ROUTE,
+    VERIFY_EMAIL_BULK_ROUTE,
+    VERIFY_EMAIL_BULK_STATUS_ROUTE,
+    VERIFY_EMAIL_ROUTE,
+} from './constants'
 
 const MIN_LENGTH = 1
 
@@ -9,12 +15,12 @@ export class EmailVerificationRouter {
     constructor(
         private readonly router: Router,
         private readonly emailVerificationController: EmailVerificationController,
-        private readonly authMiddleware: AuthMiddleware,
+        private readonly authMiddleware: IAuthMiddleware,
     ) {}
 
     init(): void {
         this.router.post(
-            '/emails/verify',
+            VERIFY_EMAIL_ROUTE,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 body('email')
@@ -30,7 +36,7 @@ export class EmailVerificationRouter {
         )
 
         this.router.post(
-            '/emails/verify/bulk',
+            VERIFY_EMAIL_BULK_ROUTE,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 body('emails').isArray({ min: MIN_LENGTH }).withMessage('Must be a non-empty array of emails'),
@@ -47,8 +53,16 @@ export class EmailVerificationRouter {
             this.emailVerificationController.verifyEmails.bind(this.emailVerificationController),
         )
 
-        this.router.get('/ping', (_, res: Response) => {
-            res.json('PONG')
-        })
+        this.router.get(
+            VERIFY_EMAIL_BULK_STATUS_ROUTE,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
+            this.emailVerificationController.getVerifyBulkStatus.bind(this.emailVerificationController),
+        )
+
+        this.router.get(
+            VERIFY_EMAIL_BULK_RESULT_ROUTE,
+            this.authMiddleware.authenticate.bind(this.authMiddleware),
+            this.emailVerificationController.getVerifyBulkResults.bind(this.emailVerificationController),
+        )
     }
 }

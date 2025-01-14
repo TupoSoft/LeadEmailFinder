@@ -37,6 +37,10 @@ import { AuthService } from './auth/service'
 import { MongoUserRepository, UserService } from './user'
 import { AuthMiddleware } from './middleware'
 import { JwtService } from './auth/jwt'
+import { EmailVerificationQueue } from './email-verification/queue'
+import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
+import { Queue } from 'bullmq'
+import { RESOURCE as EMAILS } from './email-verification/constants'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -106,18 +110,23 @@ async function main(): Promise<void> {
         smtpEmailVerifier,
         mongoEmailVerificationRepository,
     )
+    const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
+    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, persistenceEmailVerifierDecorator)
     const emailVerificationService = new EmailVerificationService(
         persistenceEmailVerifierDecorator,
         mongoEmailVerificationRepository,
+        emailVerificationQueue,
     )
     const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController, authMiddleware)
+    void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
     const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
     const findLeadEmailVerificationService = new EmailVerificationService(
         throwableEmailVerifierDecorator,
         mongoEmailVerificationRepository,
+        emailVerificationQueue,
     )
     const leadFinder = new LeadFinder(findLeadEmailVerificationService, logger)
     const leadQueue = new LeadQueue(redis)
@@ -137,7 +146,7 @@ async function main(): Promise<void> {
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
             logger.error(`The error has occurred: ${err}`)
-            res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).send('Something went wrong...')
+            res.status(httpConstants.HTTP_STATUS_INTERNAL_SERVER_ERROR).json({ message: 'Something went wrong' })
         })
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
