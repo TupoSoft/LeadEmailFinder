@@ -2,11 +2,17 @@ import type { ZodOpenApiOperationObject, ZodOpenApiPathsObject, ZodOpenApiRespon
 import {
     verifyEmailBulkRequestBody,
     verifyEmailBulkResponseBody,
+    verifyEmailBulkResultResponseBody,
     verifyEmailRequestBody,
     verifyEmailResponseBody,
 } from './validation'
 import { constants } from 'node:http2'
-import { VERIFY_EMAIL_BULK_ROUTE, VERIFY_EMAIL_BULK_STATUS_ROUTE, VERIFY_EMAIL_ROUTE } from './constants'
+import {
+    VERIFY_EMAIL_BULK_RESULT_ROUTE,
+    VERIFY_EMAIL_BULK_ROUTE,
+    VERIFY_EMAIL_BULK_STATUS_ROUTE,
+    VERIFY_EMAIL_ROUTE,
+} from './constants'
 import { bulkOkResponseBodySchema, bulkRequestParamsSchema } from '../common'
 
 export const emailTag = {
@@ -82,6 +88,26 @@ const verifyEmailBulkStatusOperation: ZodOpenApiOperationObject = {
     },
 }
 
+const verifyEmailBulkResultOkResponse: ZodOpenApiResponseObject = {
+    description: 'Success',
+    content: {
+        'application/json': {
+            schema: verifyEmailBulkResultResponseBody,
+        },
+    },
+}
+
+const verifyEmailBulkResultOperation: ZodOpenApiOperationObject = {
+    tags: [emailTag.name],
+    summary: 'Get the result of bulk email verification',
+    requestParams: {
+        path: bulkRequestParamsSchema,
+    },
+    responses: {
+        [constants.HTTP_STATUS_OK]: verifyEmailBulkResultOkResponse,
+    },
+}
+
 export const emailPaths: ZodOpenApiPathsObject = {
     [VERIFY_EMAIL_ROUTE]: {
         post: verifyEmailOperation,
@@ -91,5 +117,8 @@ export const emailPaths: ZodOpenApiPathsObject = {
     },
     [VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '{id}')]: {
         get: verifyEmailBulkStatusOperation,
+    },
+    [VERIFY_EMAIL_BULK_RESULT_ROUTE.replace(':id', '{id}')]: {
+        get: verifyEmailBulkResultOperation,
     },
 }

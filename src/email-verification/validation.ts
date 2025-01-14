@@ -41,3 +41,5 @@ export const verifyEmailBulkResponseBody = z.object({
             example: `https://leademailfinder.com${API_PREFIX}${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '1')}`,
         }),
 })
+
+export const verifyEmailBulkResultResponseBody = z.array(verifyEmailResponseBody)
