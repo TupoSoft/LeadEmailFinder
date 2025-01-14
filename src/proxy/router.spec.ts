@@ -6,8 +6,9 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import type { ProxyFvo } from './dto'
 import type { Proxy } from './repository'
-import { IProxyService } from './service'
-import { IAuthMiddleware } from '../middleware'
+import type { IProxyService } from './service'
+import type { IAuthMiddleware } from '../middleware'
+import handleError from '../middleware/handle-error'
 import Mocked = jest.Mocked
 
 jest.mock('../middleware/authenticate')
@@ -33,6 +34,7 @@ describe('ProxyRouter', () => {
 
     app.use(express.json())
     app.use(expressRouter)
+    app.use(handleError)
 
     const PROXY_PORT = 3333
 
