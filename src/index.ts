@@ -44,6 +44,7 @@ import { RESOURCE as EMAILS } from './email-verification/constants'
 import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
+import { emailPaths, emailTag } from './email-verification/openapi'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -151,8 +152,9 @@ async function main(): Promise<void> {
                 url: 'http://localhost:3000/api/v0',
             },
         ],
-        tags: [leadTag],
+        tags: [emailTag, leadTag],
         paths: {
+            ...emailPaths,
             ...leadPaths,
         },
     })
