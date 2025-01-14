@@ -28,7 +28,9 @@ export const verifyEmailResponseBody = z.object({
     exists: z.boolean().openapi({ example: false }),
 }) satisfies ZodType<EmailVerificationResult>
 
-export const verifyEmailBulkRequestBody = z.array(verifyEmailRequestBody)
+export const verifyEmailBulkRequestBody = z.object({
+    emails: z.array(email),
+})
 
 export const verifyEmailBulkResponseBody = z.object({
     taskId: z.string().nonempty().openapi({ example: '1' }),
