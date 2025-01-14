@@ -2,6 +2,7 @@ import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { verifyEmailResponseBody } from '../email-verification/validation'
+import { FIND_LEAD_BULK_STATUS_ROUTE } from './constants'
 
 export const findLeadRequestBodySchema = z.intersection(
     z.object({ domain: z.string().nonempty().openapi({ example: 'microsoft.com' }) }),
@@ -28,3 +29,14 @@ export const findLeadResponseBodySchema = z.intersection(
 ) satisfies ZodType<FindLeadResult>
 
 export const findLeadBulkRequestBodySchema = z.array(findLeadRequestBodySchema)
+
+export const findLeadBulkResponseBodySchema = z.object({
+    taskId: z.string().nonempty().openapi({ example: '1' }),
+    message: z.string().nonempty().openapi({ example: 'Request accepted. Starting to find leads.' }),
+    monitorUrl: z
+        .string()
+        .nonempty()
+        .openapi({ example: `https://leademailfinder.com/api/v0/${FIND_LEAD_BULK_STATUS_ROUTE.replace(':id', '1')}` }),
+})
+
+export const findLeadBulkResultResponseBodySchema = z.array(findLeadResponseBodySchema)

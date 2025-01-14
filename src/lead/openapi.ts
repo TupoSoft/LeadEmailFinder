@@ -1,6 +1,13 @@
 import type { ZodOpenApiPathsObject } from 'zod-openapi'
-import { FIND_LEAD_ROUTE } from './constants'
-import { findLeadRequestBodySchema, findLeadResponseBodySchema } from './validation'
+import { FIND_LEAD_BULK_ROUTE, FIND_LEAD_ROUTE } from './constants'
+import {
+    findLeadBulkRequestBodySchema,
+    findLeadBulkResponseBodySchema,
+    findLeadRequestBodySchema,
+    findLeadResponseBodySchema,
+} from './validation'
+import { constants } from 'node:http2'
+import { z } from 'zod'
 
 export const leadTag = {
     name: 'leads',
@@ -21,11 +28,81 @@ export const leadPaths: ZodOpenApiPathsObject = {
                 },
             },
             responses: {
-                '200': {
+                [constants.HTTP_STATUS_OK]: {
                     description: 'Successfully found',
                     content: {
                         'application/json': {
                             schema: findLeadResponseBodySchema,
+                        },
+                    },
+                },
+                [constants.HTTP_STATUS_BAD_REQUEST]: {
+                    description: 'Validation error',
+                    content: {
+                        'application/json': {
+                            schema: z.object({
+                                message: z
+                                    .string()
+                                    .nonempty()
+                                    .openapi({ example: 'The domain field should not be empty' }),
+                            }),
+                        },
+                    },
+                },
+                [constants.HTTP_STATUS_UNAUTHORIZED]: {
+                    description: 'Unauthorized',
+                    content: {
+                        'application/json': {
+                            schema: z.object({
+                                message: z.string().nonempty().openapi({ example: 'Unauthorized' }),
+                            }),
+                        },
+                    },
+                },
+            },
+        },
+    },
+    [FIND_LEAD_BULK_ROUTE]: {
+        post: {
+            tags: [leadTag.name],
+            summary: 'Find multiple leads',
+            description: 'Find multiple leads',
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: findLeadBulkRequestBodySchema,
+                    },
+                },
+            },
+            responses: {
+                [constants.HTTP_STATUS_ACCEPTED]: {
+                    description: 'Request accepted',
+                    content: {
+                        'application/json': {
+                            schema: findLeadBulkResponseBodySchema,
+                        },
+                    },
+                },
+                [constants.HTTP_STATUS_BAD_REQUEST]: {
+                    description: 'Validation error',
+                    content: {
+                        'application/json': {
+                            schema: z.object({
+                                message: z
+                                    .string()
+                                    .nonempty()
+                                    .openapi({ example: 'The domain field should not be empty' }),
+                            }),
+                        },
+                    },
+                },
+                [constants.HTTP_STATUS_UNAUTHORIZED]: {
+                    description: 'Unauthorized',
+                    content: {
+                        'application/json': {
+                            schema: z.object({
+                                message: z.string().nonempty().openapi({ example: 'Unauthorized' }),
+                            }),
                         },
                     },
                 },

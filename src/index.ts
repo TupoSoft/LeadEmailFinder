@@ -157,7 +157,7 @@ async function main(): Promise<void> {
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use('/openapi', serve, setup(swagger))
+        .use('/swagger', serve, setup(swagger))
         .use(API_PREFIX, router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
