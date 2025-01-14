@@ -141,6 +141,8 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const baseUrl = configService.get('BASE_URL')
+    const serverUrl = `${baseUrl}${API_PREFIX}`
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
@@ -149,7 +151,7 @@ async function main(): Promise<void> {
         },
         servers: [
             {
-                url: 'http://localhost:3000/api/v0',
+                url: serverUrl,
             },
         ],
         tags: [emailTag, leadTag],
@@ -157,6 +159,19 @@ async function main(): Promise<void> {
             ...emailPaths,
             ...leadPaths,
         },
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                },
+            },
+        },
+        security: [
+            {
+                bearerAuth: [],
+            },
+        ],
     })
 
     const port = configService.get('PORT')
