@@ -16,10 +16,10 @@ export function validate(validationChain: Array<ValidationChain | (Middleware & 
                 if (typeof firstError.msg === 'string') {
                     next(HttpError.BadRequest(firstError.msg))
                     return
-                } else {
-                    next(firstError)
-                    return
                 }
+
+                next(firstError)
+                return
             }
 
             next()
