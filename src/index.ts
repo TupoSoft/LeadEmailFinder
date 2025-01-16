@@ -41,6 +41,10 @@ import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 import { Queue } from 'bullmq'
 import { RESOURCE as EMAILS } from './email-verification/constants'
+import { createDocument } from 'zod-openapi'
+import { leadPaths, leadTag } from './lead/openapi'
+import { serve, setup } from 'swagger-ui-express'
+import { emailPaths, emailTag } from './email-verification/openapi'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -137,11 +141,45 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const baseUrl = configService.get('BASE_URL')
+    const serverUrl = `${baseUrl}${API_PREFIX}`
+    const swagger = createDocument({
+        openapi: '3.1.0',
+        info: {
+            title: 'Lead Email Finder',
+            version: '0.3.0',
+        },
+        servers: [
+            {
+                url: serverUrl,
+            },
+        ],
+        tags: [emailTag, leadTag],
+        paths: {
+            ...emailPaths,
+            ...leadPaths,
+        },
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                },
+            },
+        },
+        security: [
+            {
+                bearerAuth: [],
+            },
+        ],
+    })
+
     const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
+        .use('/swagger', serve, setup(swagger))
         .use(API_PREFIX, router)
         .use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
             ok(err instanceof Error)
