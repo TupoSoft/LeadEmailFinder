@@ -39,7 +39,7 @@ import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 import { Queue } from 'bullmq'
 import { RESOURCE as EMAILS } from './email-verification/constants'
-import handleError from './middleware/handle-error'
+import { ErrorMiddleware } from './middleware/handle-error'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -136,13 +136,14 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const errorMiddleware = new ErrorMiddleware(logger)
     const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
         .use(API_PREFIX, router)
-        .use(handleError)
+        .use(errorMiddleware.handleError.bind(errorMiddleware))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
         })

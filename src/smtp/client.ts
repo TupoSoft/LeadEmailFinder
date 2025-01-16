@@ -1,6 +1,6 @@
 import { Socket } from 'node:net'
 import type { Proxy } from '../proxy'
-import type { Logger } from '../logging'
+import type { ExtensibleLogger } from '../logging'
 import type { ConnectionLimiter } from './connection-limiter'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_SMTP_CLIENT_TIMEOUT, DEFAULT_TIMEOUT_CONFIG, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
@@ -41,7 +41,7 @@ export interface SmtpClientConstructorOptions {
     timeouts?: SmtpClientTimeoutConfig
     signal?: AbortSignal
     socket?: Socket
-    logger?: Logger
+    logger?: ExtensibleLogger
 }
 
 export class SmtpClientImpl implements SmtpClient {
@@ -56,14 +56,12 @@ export class SmtpClientImpl implements SmtpClient {
 
     private readonly proxy?: Proxy
     private readonly signal?: AbortSignal
-    private readonly logger?: Logger
+    private readonly logger?: ExtensibleLogger
 
     constructor(
-        options: SmtpClientConstructorOptions,
+        { host, port, proxy, timeouts, signal, logger, socket }: SmtpClientConstructorOptions,
         private readonly connectionLimiter: ConnectionLimiter,
     ) {
-        const { host, port, proxy, timeouts, signal, logger, socket } = options
-
         this.id = randomUUID()
         this.exchange = host
         this.port = port ?? SMTP_PORT

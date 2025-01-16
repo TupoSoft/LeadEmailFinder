@@ -1,3 +1,14 @@
+### Bad request
+POST http://localhost:3000/api/v0/emails/verify
+Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Content-Type: application/json
+
+> {%
+    client.test('should be BAD REQUEST', () => {
+        client.assert(response.status === 400)
+    })
+%}
+
 ### Verify a single email
 POST http://localhost:3000/api/v0/emails/verify
 Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
