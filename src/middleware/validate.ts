@@ -1,17 +1,25 @@
 import { type ContextRunner, type ValidationChain, validationResult } from 'express-validator'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
-import { constants as httpConstants } from 'http2'
 import type { Middleware } from 'express-validator/lib/base'
 import { ZodError, type ZodSchema } from 'zod'
+import { HttpError } from '../common'
 
 export function validate(validationChain: Array<ValidationChain | (Middleware & ContextRunner)>): RequestHandler[] {
     return [
         ...validationChain,
-        function (req: Request, res: Response, next: NextFunction) {
+        function (req: Request, _res: Response, next: NextFunction) {
             const result = validationResult(req)
 
             if (!result.isEmpty()) {
-                return res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({ errors: result.array() })
+                const [firstError] = result.array({ onlyFirstError: true })
+
+                if (typeof firstError.msg === 'string') {
+                    next(HttpError.BadRequest(firstError.msg))
+                    return
+                }
+
+                next(firstError)
+                return
             }
 
             next()
@@ -31,9 +39,7 @@ export const validateRequest =
                     errors: [{ message }],
                 } = err
 
-                res.status(httpConstants.HTTP_STATUS_BAD_REQUEST).json({
-                    message,
-                })
+                next(HttpError.BadRequest(message))
             } else {
                 next(err)
             }

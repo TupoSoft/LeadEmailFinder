@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
-import { constants as httpConstants } from 'http2'
 import { ok } from 'node:assert'
-import { type ConfigService, type Environment, EXIT_FAILURE } from '../common'
+import { type ConfigService, type Environment, EXIT_FAILURE, HttpError } from '../common'
 import type { Logger } from '../logging'
 
 function isRecordStringBoolean(value: unknown): value is Record<string, boolean> {
@@ -26,7 +25,7 @@ export class AuthMiddleware implements IAuthMiddleware {
         this.tokens = this.readTokens()
     }
 
-    authenticate(req: Request, res: Response, next: NextFunction): void {
+    authenticate(req: Request, _res: Response, next: NextFunction): void {
         const { headers } = req
         const { authorization } = headers
 
@@ -39,7 +38,7 @@ export class AuthMiddleware implements IAuthMiddleware {
             }
         }
 
-        res.status(httpConstants.HTTP_STATUS_UNAUTHORIZED).json('Unauthorized')
+        next(HttpError.Unauthorized('Unauthorized'))
     }
 
     private readTokens(): Record<string, boolean> {
