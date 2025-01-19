@@ -40,8 +40,3 @@ stop-debug:
 	$(COMPOSE_DEBUG) down -v
 
 restart-debug: stop-debug build-debug start-debug
-
-# Generic Commands
-clean:
-	docker system prune -f
-	docker volume prune -f
