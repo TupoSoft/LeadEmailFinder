@@ -1,5 +1,5 @@
-const { readFileSync } = require('fs')
-const { URL } = require('url')
+const { readFileSync } = require('node:fs')
+const { URL } = require('node:url')
 const { ok } = require('node:assert')
 
 const { env } = process
