@@ -3,6 +3,7 @@ import { matchedData } from 'express-validator'
 import type { IEmailVerificationService } from './service'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
+import { HttpError } from '../common'
 
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
@@ -14,10 +15,10 @@ export interface EmailVerificationController {
 export class ExpressEmailVerificationController implements EmailVerificationController {
     constructor(private readonly emailVerificationService: IEmailVerificationService) {}
 
-    private static handleError(error: unknown, _req: Request, res: Response, next: NextFunction): void {
+    private static handleError(error: unknown, _req: Request, _res: Response, next: NextFunction): void {
         if (error instanceof JobNotFoundError) {
             const { message } = error
-            res.status(constants.HTTP_STATUS_NOT_FOUND).json({ message })
+            next(HttpError.NotFound(message))
         } else {
             next(error)
         }

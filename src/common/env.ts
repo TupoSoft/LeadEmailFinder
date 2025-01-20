@@ -3,12 +3,12 @@ import { env } from 'node:process'
 import { DEFAULT_PORT } from './constants'
 import { readFile } from 'node:fs/promises'
 
-const STRING_MIN_LENGTH = 1
 const JWT_HS256_SECRET_MIN_LENGTH = 32
 
-const stringWithMinLength = z.string().min(STRING_MIN_LENGTH)
+const stringWithMinLength = z.string().nonempty()
 
 export interface Environment {
+    BASE_URL: string
     NODE_ENV: 'development' | 'production' | 'test'
     PORT: number
     JWT_HS256_SECRET: string
@@ -21,9 +21,10 @@ export interface Environment {
 }
 
 const envSchema = z.object({
+    BASE_URL: stringWithMinLength.url(),
     NODE_ENV: z.enum(['development', 'production', 'test']),
     PORT: z.coerce.number().default(DEFAULT_PORT),
-    JWT_HS256_SECRET: z.string().min(JWT_HS256_SECRET_MIN_LENGTH).readonly(),
+    JWT_HS256_SECRET: z.string().min(JWT_HS256_SECRET_MIN_LENGTH),
     JWT_ISSUER: stringWithMinLength,
     JWT_AUDIENCE: stringWithMinLength,
     JWT_EXPIRATION: stringWithMinLength.default('1h'),

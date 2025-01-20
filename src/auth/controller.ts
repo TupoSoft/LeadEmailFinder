@@ -4,6 +4,7 @@ import type { AuthData } from './dto'
 import { constants } from 'node:http2'
 import { UserAlreadyExistsError } from '../user/errors'
 import { InvalidAuthDataError } from './errors'
+import { HttpError } from '../common'
 
 export class AuthController {
     constructor(private readonly authService: IAuthService) {}
@@ -20,7 +21,7 @@ export class AuthController {
             (err: unknown) => {
                 if (err instanceof UserAlreadyExistsError) {
                     const { message } = err
-                    res.status(constants.HTTP_STATUS_CONFLICT).json({ message })
+                    next(HttpError.Conflict(message))
                 } else {
                     next(err)
                 }
@@ -37,7 +38,7 @@ export class AuthController {
             (err: unknown) => {
                 if (err instanceof InvalidAuthDataError) {
                     const { message } = err
-                    res.status(constants.HTTP_STATUS_UNAUTHORIZED).json({ message })
+                    next(HttpError.Unauthorized(message))
                 } else {
                     next(err)
                 }

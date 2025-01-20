@@ -7,14 +7,15 @@ import {
     VERIFY_EMAIL_ROUTE,
 } from './constants'
 import express, { Router } from 'express'
-import { IEmailVerificationService } from './service'
+import type { IEmailVerificationService } from './service'
 import { ExpressEmailVerificationController } from './controller'
 import { EmailVerificationRouter } from './router'
-import { IAuthMiddleware } from '../middleware'
-import { EmailVerificationResult, VerifyEmailBulkResponse } from './dto'
+import type { IAuthMiddleware } from '../middleware'
+import type { EmailVerificationResult, VerifyEmailBulkResponse } from './dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
+import { ErrorMiddleware } from '../middleware/handle-error'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -32,6 +33,7 @@ describe(EMAIL_ROUTE, () => {
             next()
         }),
     }
+    const errorMiddleware = new ErrorMiddleware(console)
 
     const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
     const emailVerificationRouter = new EmailVerificationRouter(
@@ -43,6 +45,7 @@ describe(EMAIL_ROUTE, () => {
 
     app.use(express.json())
     app.use(expressRouter)
+    app.use(errorMiddleware.handleError.bind(errorMiddleware))
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')

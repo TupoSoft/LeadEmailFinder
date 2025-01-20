@@ -5,5 +5,8 @@ export interface Logger {
     warn: Log
     error: Log
     debug: Log
-    child: (bindings: Record<string, unknown>) => Logger
+}
+
+export interface ExtensibleLogger extends Logger {
+    child: (bindings: Record<string, unknown>) => ExtensibleLogger
 }
