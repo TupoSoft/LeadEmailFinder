@@ -9,7 +9,7 @@ import { isNativeError } from 'node:util/types'
 import type { SmtpClientCreator } from './client-creator'
 import { appendRandomPrefix } from '../util/string'
 import { isIP } from 'node:net'
-import { ZERO } from '../common/constants'
+import { ZERO } from '../common'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -40,10 +40,8 @@ export class SMTPVerifier implements ISMTPVerifier {
         }
     }
 
-    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async opts => {
+    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async ({ email }) => {
         const smtpVerificationResult: SMTPVerificationResult = {}
-        const { email } = opts
-
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
