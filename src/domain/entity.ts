@@ -10,6 +10,8 @@ export interface Domain {
     emailPatternUsage: EmailPatternUsage[]
     catchAllEnabled?: boolean
     mxRecords?: MxRecord[]
+    isFree?: boolean
+    isDisposable?: boolean
     createdAt?: Date
     updatedAt?: Date
 }
