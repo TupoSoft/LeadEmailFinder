@@ -217,8 +217,6 @@ async function main(): Promise<void> {
         redis.quit().then(onSuccessfulClose('Redis'), onUnsuccessfulClose('Redis'))
     }
 
-    console.log('poop')
-
     process.on('SIGINT', onTerminationSignal)
     process.on('SIGTERM', onTerminationSignal)
 }
