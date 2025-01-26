@@ -29,27 +29,9 @@ jobs:
     secrets: inherit
   
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Run tests
-        run: pnpm test
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    permissions:
+      contents: read
 
   build-push:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
