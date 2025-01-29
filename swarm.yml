@@ -6,7 +6,7 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
-    command: sh -c "node dist | pino-gelf log"
+    command: sh -c "pnpm start | pino-gelf log"
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/ping" ]
       interval: 1m30s
