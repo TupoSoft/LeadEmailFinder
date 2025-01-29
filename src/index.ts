@@ -228,6 +228,8 @@ main().then(
     (reason: unknown) => {
         if (isNativeError(reason)) {
             console.error(`The main function exited with error: ${reason}`)
+        } else {
+            console.error('The main function exited with error: ', reason)
         }
 
         process.exit(EXIT_FAILURE)
