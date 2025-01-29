@@ -2,12 +2,11 @@ version: '3.9'
 
 services:
   finder:
-    image: ghcr.io/tuposoft/leademailfinder:02aed1f3aff0569ac88377200fb0ffd026b76c76
+    image: ghcr.io/tuposoft/leademailfinder:b7fd34a83e2d19bfed1fd2a97b3abdd2095cc661
     dns:
       - 1.1.1.1
       - 8.8.8.8
     command: sh -c "pnpm start | pino-gelf log"
-    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/ping" ]
       interval: 1m30s
@@ -16,18 +15,24 @@ services:
       start_period: 30s
     environment:
       NODE_ENV: production
-      REDIS_CONFIG_FILE_PATH: /run/secrets/redis-config.json
-      AUTH_TOKENS_FILE_PATH: /run/secrets/tokens.json
+      REDIS_URL_FILE: /run/secrets/redis_url
+      AUTH_TOKENS_FILE: /run/secrets/tokens.json
       MONGO_URL_FILE: /run/secrets/mongo_url
+      JWT_HS256_SECRET_FILE: /run/secrets/jwt_hs256_secret
       PINO_GELF_HOST: graylog.eu.tuposoft.internal
+      BASE_URL: https://p1.leademailfinder.com
+      JWT_ISSUER: LeadEmailFinder
+      JWT_AUDIENCE: LeadEmailFinder
     deploy:
       mode: replicated
-      replicas: 8
+      replicas: 4
     secrets:
       - mongo_url
       - source: redis-config
         target: redis-config.json
       - tokens.json
+      - redis_url
+      - jwt_hs256_secret
     networks:
       - default
       - redis_default
@@ -40,6 +45,10 @@ secrets:
   redis-config:
     external: true
   tokens.json:
+    external: true
+  redis_url:
+    external: true
+  jwt_hs256_secret:
     external: true
 
 networks:
