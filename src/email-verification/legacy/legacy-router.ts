@@ -1,8 +1,8 @@
 import type { Router } from 'express'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from '../constants'
 import { type IAuthMiddleware, validate } from '../../middleware'
-import { query } from 'express-validator'
 import type { LegacyEmailVerificationController } from './legacy-controller'
+import { query } from 'express-validator'
 
 export class LegacyEmailVerificationRouter {
     constructor(
@@ -15,7 +15,15 @@ export class LegacyEmailVerificationRouter {
         this.router.get(
             VERIFY_EMAIL_ROUTE_LEGACY,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
-            validate([query('email').isEmail().notEmpty().escape()]),
+            validate([
+                query('email')
+                    .isString()
+                    .withMessage('The email should be a string')
+                    .notEmpty()
+                    .withMessage('Email should not be empty')
+                    .isEmail()
+                    .withMessage('Invalid email address'),
+            ]),
             this.emailVerificationControllerOld.verify.bind(this.emailVerificationControllerOld),
         )
     }
