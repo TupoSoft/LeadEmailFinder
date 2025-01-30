@@ -1,4 +1,4 @@
-import { describe, it, jest } from '@jest/globals'
+import { afterEach, describe, it, jest } from '@jest/globals'
 import express, { Router } from 'express'
 import request from 'supertest'
 import { constants } from 'node:http2'
@@ -9,6 +9,7 @@ import type { EmailVerificationResult } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
+import { CatchAllStatus, DeliveryStatus } from './enums'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
@@ -42,6 +43,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')
+    const verifiedAt = new Date('2025-01-01')
 
     const verificationResult: EmailVerificationResult = {
         domain,
@@ -51,7 +53,12 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         email,
     }
 
+    afterEach(() => {
+        jest.clearAllTimers()
+    })
+
     it('should return HTTP_OK', async () => {
+        jest.useFakeTimers().setSystemTime(verifiedAt)
         emailVerificationService.verify.mockResolvedValueOnce(verificationResult)
 
         await request(app)
@@ -59,6 +66,16 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
             .query({ email })
             .expect('Content-Type', /json/)
             .expect(constants.HTTP_STATUS_OK)
+            .expect({
+                email,
+                localPart,
+                domain,
+                verifiedAt: verifiedAt.toISOString(),
+                deliveryStatus: DeliveryStatus.Rejected,
+                catchAll: CatchAllStatus.Disabled,
+            })
+
+        jest.useRealTimers()
     })
 
     it('should return HTTP_BAD_REQUEST', async () => {
