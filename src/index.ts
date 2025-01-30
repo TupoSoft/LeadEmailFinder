@@ -44,8 +44,8 @@ import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
 import { emailPaths, emailTag } from './email-verification/openapi'
-import { LegacyEmailVerificationController } from './email-verification/controller-old'
-import { LegacyEmailVerificationRouter } from './email-verification/router-old'
+import { LegacyEmailVerificationController } from './email-verification/legacy-controller'
+import { LegacyEmailVerificationRouter } from './email-verification/legacy-router'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()

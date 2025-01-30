@@ -2,7 +2,7 @@ import type { Router } from 'express'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
 import { type AuthMiddleware, validate } from '../middleware'
 import { query } from 'express-validator'
-import type { LegacyEmailVerificationController } from './controller-old'
+import type { LegacyEmailVerificationController } from './legacy-controller'
 
 export class LegacyEmailVerificationRouter {
     constructor(
