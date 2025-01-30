@@ -10,6 +10,7 @@ import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
 import { CatchAllStatus, DeliveryStatus } from './enums'
+import { HttpError } from '../../common'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
@@ -78,10 +79,22 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         jest.useRealTimers()
     })
 
-    it('should return HTTP_BAD_REQUEST', async () => {
+    it('should return HTTP_STATUS_BAD_REQUEST', async () => {
         await request(app)
             .get(VERIFY_EMAIL_ROUTE_LEGACY)
             .expect('Content-Type', /json/)
             .expect(constants.HTTP_STATUS_BAD_REQUEST)
+    })
+
+    it('should return HTTP_UNAUTHORIZED', async () => {
+        authMiddleware.authenticate.mockImplementationOnce((_req, _res, next) => {
+            next(HttpError.Unauthorized('Invalid token'))
+        })
+
+        await request(app)
+            .get(VERIFY_EMAIL_ROUTE_LEGACY)
+            .expect('Content-Type', /json/)
+            .expect(constants.HTTP_STATUS_UNAUTHORIZED)
+            .expect({ message: 'Invalid token' })
     })
 })
