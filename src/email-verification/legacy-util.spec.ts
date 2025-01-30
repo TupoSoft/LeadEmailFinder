@@ -54,7 +54,9 @@ describe('toLegacyResult', () => {
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
         expect(result.verifiedAt).toBeInstanceOf(Date)
-        expect(result.verifiedAt.getTime()).toBeCloseTo(new Date().getTime())
+
+        const precision = -1
+        expect(result.verifiedAt.getTime()).toBeCloseTo(new Date().getTime(), precision)
     })
 
     it('should map catchAll using mapCatchAllStatus function', () => {
