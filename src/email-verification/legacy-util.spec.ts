@@ -1,14 +1,15 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
 import type { EmailVerificationResult, EmailVerificationSource, LegacyEmailVerificationResult } from './dto'
+import { CatchAllStatus, DeliveryStatus } from './enums'
 
 describe('toLegacyResult', () => {
-    it('should map email, localPart, and domain correctly', () => {
+    it('should map correctly', () => {
         const input: EmailVerificationResult = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources: [],
+            sources: ['LinkedInLogin'],
             exists: true,
             targetExchange: 'exchange.example.com',
         }
@@ -18,21 +19,9 @@ describe('toLegacyResult', () => {
         expect(result.email).toBe('test@example.com')
         expect(result.localPart).toBe('test')
         expect(result.domain).toBe('example.com')
-    })
-
-    it('should map targetExchange correctly', () => {
-        const input: EmailVerificationResult = {
-            email: 'test@example.com',
-            localPart: 'test',
-            domain: 'example.com',
-            sources: [],
-            exists: true,
-            targetExchange: 'exchange.example.com',
-        }
-
-        const result: LegacyEmailVerificationResult = toLegacyResult(input)
-
         expect(result.targetExchange).toBe('exchange.example.com')
+        expect(result.deliveryStatus).toBe(DeliveryStatus.Accepted)
+        expect(result.catchAll).toBe(CatchAllStatus.Enabled)
     })
 
     it('should map verifiedAt to input value if provided', () => {
@@ -70,6 +59,7 @@ describe('toLegacyResult', () => {
 
     it('should map catchAll using mapCatchAllStatus function', () => {
         const sources: EmailVerificationSource[] = ['SMTP']
+
         const input: EmailVerificationResult = {
             email: 'test@example.com',
             localPart: 'test',
@@ -81,21 +71,6 @@ describe('toLegacyResult', () => {
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
-        expect(result.catchAll).toBeDefined()
-    })
-
-    it('should map deliveryStatus using mapDeliveryStatus function', () => {
-        const input: EmailVerificationResult = {
-            email: 'test@example.com',
-            localPart: 'test',
-            domain: 'example.com',
-            sources: [],
-            exists: true,
-            targetExchange: 'exchange.example.com',
-        }
-
-        const result: LegacyEmailVerificationResult = toLegacyResult(input)
-
-        expect(result.deliveryStatus).toBeDefined()
+        expect(result.catchAll).toBe(CatchAllStatus.Disabled)
     })
 })
