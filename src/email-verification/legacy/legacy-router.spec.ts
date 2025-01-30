@@ -10,7 +10,6 @@ import type { EmailVerificationResult } from '../dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import type { LegacyEmailVerificationResult } from './dto'
 import Mocked = jest.Mocked
 
 const verifiedAt = new Date('2022-01-01T00:00:00.000Z')
@@ -56,15 +55,6 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         email,
     }
 
-    const legacyVerificationResult: LegacyEmailVerificationResult = {
-        catchAll: CatchAllStatus.Disabled,
-        deliveryStatus: DeliveryStatus.Rejected,
-        verifiedAt,
-        email,
-        localPart,
-        domain,
-    }
-
     it('should return HTTP_OK', async () => {
         emailVerificationService.verify.mockResolvedValueOnce(verificationResult)
 
@@ -73,7 +63,14 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
             .query({ email })
             .expect('Content-Type', /json/)
             .expect(response => {
-                expect(response.body).toEqual(legacyVerificationResult)
+                expect(response.body).toEqual({
+                    catchAll: CatchAllStatus.Disabled,
+                    deliveryStatus: DeliveryStatus.Rejected,
+                    verifiedAt: verifiedAt.toISOString(),
+                    email,
+                    localPart,
+                    domain,
+                })
             })
             .expect(constants.HTTP_STATUS_OK)
     })
