@@ -1,6 +1,7 @@
-import type { EmailVerificationResult, EmailVerificationSource, LegacyEmailVerificationResult } from './dto'
+import type { LegacyEmailVerificationResult } from './dto'
+import { isEmptyArray } from '../../common'
+import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import { isEmptyArray } from '../common'
 
 function mapCatchAllStatus(sources: EmailVerificationSource[]): CatchAllStatus {
     if (isEmptyArray(sources)) {

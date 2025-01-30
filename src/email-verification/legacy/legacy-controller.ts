@@ -1,11 +1,11 @@
-import type { EmailVerificationService } from './service'
+import type { IEmailVerificationService } from '../service'
 import { matchedData, validationResult } from 'express-validator'
 import type { Request, Response } from 'express'
 import { constants } from 'node:http2'
 import { toLegacyResult } from './legacy-util'
 
 export class LegacyEmailVerificationController {
-    constructor(private readonly emailVerificationService: EmailVerificationService) {}
+    constructor(private readonly emailVerificationService: IEmailVerificationService) {}
 
     verify(req: Request, res: Response): void {
         const result = validationResult(req)

@@ -1,5 +1,4 @@
 import type { CatchAllVerificationSource } from './catch-all-verifier'
-import type { CatchAllStatus, DeliveryStatus } from './enums'
 
 export interface EmailVerificationRequest {
     email: string
@@ -28,14 +27,4 @@ export interface VerifyEmailBulkResponse {
 
 export interface VerifyEmailBulkStatusResponse {
     status: string
-}
-
-export interface LegacyEmailVerificationResult {
-    email: string
-    localPart: string
-    domain: string
-    targetExchange?: string
-    verifiedAt: Date
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
 }

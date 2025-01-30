@@ -1,7 +1,8 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
-import type { EmailVerificationResult, EmailVerificationSource, LegacyEmailVerificationResult } from './dto'
+import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
+import type { LegacyEmailVerificationResult } from './dto'
 
 describe('toLegacyResult', () => {
     it('should map correctly', () => {
