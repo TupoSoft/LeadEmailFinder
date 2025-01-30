@@ -1,5 +1,4 @@
 import { describe, it, jest } from '@jest/globals'
-import { VERIFY_EMAIL_ROUTE_LEGACY } from '../constants'
 import express, { Router } from 'express'
 import request from 'supertest'
 import { constants } from 'node:http2'
@@ -9,6 +8,7 @@ import type { IEmailVerificationService } from '../service'
 import type { EmailVerificationResult } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
+import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
