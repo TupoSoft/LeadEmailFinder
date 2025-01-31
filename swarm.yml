@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   finder:
-    image: ghcr.io/tuposoft/leademailfinder:b7fd34a83e2d19bfed1fd2a97b3abdd2095cc661
+    image: ghcr.io/tuposoft/leademailfinder:0549bf2e26f9beb52737f6011843c1ecbca463dc
     dns:
       - 1.1.1.1
       - 8.8.8.8
