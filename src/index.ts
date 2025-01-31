@@ -44,6 +44,7 @@ import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
 import { emailPaths, emailTag } from './email-verification/openapi'
+import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from './email-verification/legacy'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -125,6 +126,15 @@ async function main(): Promise<void> {
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
+    const legacyRouter = Router()
+    const legacyEmailVerificationController = new LegacyEmailVerificationController(emailVerificationService)
+    const legacyEmailVerificationRouter = new LegacyEmailVerificationRouter(
+        legacyRouter,
+        authMiddleware,
+        legacyEmailVerificationController,
+    )
+    legacyEmailVerificationRouter.init()
+
     const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
     const findLeadEmailVerificationService = new EmailVerificationService(
         throwableEmailVerifierDecorator,
@@ -181,6 +191,7 @@ async function main(): Promise<void> {
         .use(express.json())
         .use('/swagger', serve, setup(swagger))
         .use(API_PREFIX, router)
+        .use('/', legacyRouter)
         .use(errorMiddleware.handleError.bind(errorMiddleware))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
