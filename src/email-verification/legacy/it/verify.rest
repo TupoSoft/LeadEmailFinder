@@ -1,4 +1,4 @@
 ### Legacy Verify Email
-GET {{host}}/verifyEmail?email={{$random.email}}
+GET {{host}}/verify?email=kyrylo.kupin@gmail.com
 Authorization: Bearer {{token}}
 Content-Type: application/json
