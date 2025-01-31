@@ -1,5 +1,3 @@
-@host = localhost:3000
-
 ### Validation failure when there is no password
 POST {{host}}/api/v0/auth/register
 Content-Type: application/json

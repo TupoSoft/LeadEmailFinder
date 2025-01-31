@@ -1,5 +1,3 @@
-@host = localhost:3000
-
 ### Login Failure
 < {%
     client.global.set('email', $random.internet.safeEmailAddress)
