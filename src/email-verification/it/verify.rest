@@ -1,6 +1,6 @@
 ### Bad request
-POST http://localhost:3000/api/v0/emails/verify
-Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+POST {{host}}/api/v0/emails/verify
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 > {%
@@ -10,12 +10,12 @@ Content-Type: application/json
 %}
 
 ### Verify a single email
-POST http://localhost:3000/api/v0/emails/verify
-Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+POST {{host}}/api/v0/emails/verify
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "email": "{{$random.email}}"
+  "email": "kyrylo.kupin@gmail.com"
 }
 
 > {%
@@ -25,8 +25,8 @@ Content-Type: application/json
 %}
 
 ### Verify multiple emails
-POST http://localhost:3000/api/v0/emails/verify/bulk
-Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+POST {{host}}/api/v0/emails/verify/bulk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -52,7 +52,7 @@ Content-Type: application/json
 
 ### Get status
 GET {{monitorUrl}}
-Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 > {%
@@ -78,7 +78,7 @@ Content-Type: application/json
 %}
 
 GET {{resultUrl}}
-Authorization: Bearer ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 > {%
