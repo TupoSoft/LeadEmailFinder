@@ -54,7 +54,7 @@ jobs:
         run: |
           {
             echo 'apps<<EOF'
-            pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json
+            pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json | jq -r '.[].name' | jq -R . | jq -s .
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
@@ -81,10 +81,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm --filter ${{ matrix.app.name }} install
+        run: pnpm --filter ${{ matrix.app }} install
 
       - name: Run tests
-        run: pnpm --filter ${{ matrix.app.name }} test
+        run: pnpm --filter ${{ matrix.app }} test
 
   build-push:
     if: github.event_name == 'push'
@@ -119,9 +119,8 @@ jobs:
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
           
-          PATH=${{ matrix.app.path }}
-          DOCKERFILE="${PATH#*/LeadEmailFinder/LeadEmailFinder/}/Dockerfile"
-          echo "dockerfile=DOCKERFILE" >> $GITHUB_OUTPUT
+          DOCKERFILE="apps/${{ matrix.app }}/Dockerfile"
+          echo "dockerfile=$DOCKERFILE" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
