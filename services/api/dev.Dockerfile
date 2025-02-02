@@ -5,6 +5,8 @@ ARG NODE_VERSION=lts
 FROM node:${NODE_VERSION}-alpine AS base-stage
 ENV PNPM_HOME="/pnpm" \
     PATH="$PNPM_HOME:$PATH"
+# https://github.com/npm/cli/issues/8075
+ENV COREPACK_INTEGRITY_KEYS=0
 RUN apk add --no-cache curl wget bind-tools && corepack enable
 
 # Builder stage: Installs dependencies and builds the project.
@@ -12,7 +14,7 @@ FROM base-stage AS builder-stage
 WORKDIR /usr/src/app
 COPY . /usr/src/app
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-RUN pnpm deploy --filter=@tuposoft/lead-email-finder-api /api
+RUN pnpm deploy --filter=api /api
 
 # Runtime stage: Prepares the runtime environment.
 FROM base-stage AS runtime-stage
