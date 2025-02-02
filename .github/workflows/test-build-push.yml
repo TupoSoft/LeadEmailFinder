@@ -88,7 +88,7 @@ jobs:
 
   build-push:
     name: Build Push
-    needs: [ get-changed-apps, test ]
+    needs: [ get-changed-apps ]
     runs-on: ubuntu-latest
     strategy:
       matrix:
