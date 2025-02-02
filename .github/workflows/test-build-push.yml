@@ -117,10 +117,14 @@ jobs:
             TAGS="$TAGS,$PACKAGE:latest"
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          
+          PATH=${{ matrix.app.path }}
+          CONTEXT=`echo "$PATH" | sed 's#.*/LeadEmailFinder/LeadEmailFinder/##'`
+          echo "context=$CONTEXT" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.app.path }}
-          push: true
+          context: ${{ steps.prepare_tags.outputs.context }}
           tags: ${{ steps.prepare_tags.outputs.tags }}
+          push: true
