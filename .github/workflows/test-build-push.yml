@@ -52,9 +52,12 @@ jobs:
       - name: Get changed apps
         id: set-matrix
         run: |
-          apps=`pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json`
-          echo "apps=$apps" >> $GITHUB_OUTPUT
-  
+          {
+            echo 'apps<<EOF'
+            pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
   test:
     needs: get-changed-apps
     if: needs.get-changed-apps.outputs.apps != '[]'
