@@ -1,8 +1,9 @@
-import { createHmac } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { parseTimeString } from '../../util/time'
 import { ok } from 'node:assert'
 import { base64UrlDecode, base64UrlEncode } from './util'
 import { isJwtPayload } from './type-guards'
+import { REFRESH_TOKEN_LENGTH } from '../constants'
 
 export interface JwtPayload {
     sub?: string
@@ -21,6 +22,7 @@ export interface JwtServiceConstructorOptions {
     issuer: string
     audience: string
     expiration: string
+    refreshExpiration: string
 }
 
 export class JwtService {
@@ -28,17 +30,19 @@ export class JwtService {
     private readonly issuer
     private readonly audience
     private readonly expiration
+    private readonly refreshExpiration
 
     constructor(options: JwtServiceConstructorOptions) {
-        const { secret, issuer, audience, expiration } = options
+        const { secret, issuer, audience, expiration, refreshExpiration } = options
 
         this.secret = secret
         this.issuer = issuer
         this.audience = audience
         this.expiration = expiration
+        this.refreshExpiration = refreshExpiration
     }
 
-    signJwt(payload: JwtPayload): string {
+    private signJwt(payload: JwtPayload, expiresIn: string): string {
         const header = {
             alg: 'HS256',
             typ: 'JWT',
@@ -47,7 +51,7 @@ export class JwtService {
         payload.iss ??= this.issuer
         payload.aud ??= this.audience
         payload.iat ??= Math.floor(Date.now() / parseTimeString('1s'))
-        payload.exp ??= payload.iat + parseTimeString(this.expiration) / parseTimeString('1s')
+        payload.exp ??= payload.iat + parseTimeString(expiresIn) / parseTimeString('1s')
 
         const encodedHeader = base64UrlEncode(JSON.stringify(header))
         const encodedPayload = base64UrlEncode(JSON.stringify(payload))
@@ -58,11 +62,19 @@ export class JwtService {
         return `${encodedHeader}.${encodedPayload}.${signature}`
     }
 
+    signAccessToken(payload: JwtPayload): string {
+        return this.signJwt(payload, this.expiration)
+    }
+
+    signRefreshToken(payload: JwtPayload): string {
+        payload.jti = randomUUID()
+        return this.signJwt(payload, this.refreshExpiration)
+    }
+
     verifyJwt(token: string): JwtPayload {
         const tokenParts = token.split('.')
 
-        const jwtTokenPartsSize = 3
-        if (tokenParts.length !== jwtTokenPartsSize) {
+        if (tokenParts.length !== REFRESH_TOKEN_LENGTH) {
             throw new Error('Invalid token format')
         }
 
@@ -83,5 +95,13 @@ export class JwtService {
         }
 
         return payload
+    }
+
+    refreshAccessToken(refreshToken: string): string {
+        const payload = this.verifyJwt(refreshToken)
+
+        const { jti, exp, iat, ...accessTokenPayload } = payload
+
+        return this.signAccessToken(accessTokenPayload)
     }
 }
