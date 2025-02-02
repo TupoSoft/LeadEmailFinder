@@ -1,4 +1,4 @@
 ### Legacy Verify Email
-GET {{host}}/verifyEmail?email={{$random.email}}
+GET {{host}}/verify?email={{$random.email}}
 Authorization: Bearer {{token}}
 Content-Type: application/json
