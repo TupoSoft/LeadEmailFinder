@@ -2,10 +2,6 @@
     "private": true,
     "name": "monorepo",
     "description": "Lead Email Finder",
-    "packageManager": "pnpm@9.15.4",
-    "engines": {
-        "node": ">=22.0.0 <23"
-    },
     "keywords": [
         "lead",
         "email",
