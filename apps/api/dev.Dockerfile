@@ -1,29 +1,22 @@
 # syntax=docker/dockerfile:1
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
-
+# Base stage: Sets up Node.js and basic dependencies.
 ARG NODE_VERSION=lts
+FROM node:${NODE_VERSION}-alpine AS base-stage
+ENV PNPM_HOME="/pnpm" \
+    PATH="$PNPM_HOME:$PATH"
+RUN apk add --no-cache curl wget bind-tools && corepack enable
 
-FROM node:${NODE_VERSION}-alpine AS base
-
-RUN apk add --no-cache curl wget bind-tools
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
-
-FROM base AS build
-COPY . /usr/src/app
+# Builder stage: Installs dependencies and builds the project.
+FROM base-stage AS builder-stage
 WORKDIR /usr/src/app
+COPY . /usr/src/app
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm deploy --filter=@tuposoft/lead-email-finder-api /api
 
-FROM base AS api
-COPY --from=build /api /app
+# Runtime stage: Prepares the runtime environment.
+FROM base-stage AS runtime-stage
 WORKDIR /app
+COPY --from=builder-stage /api /app
 EXPOSE 3000
 CMD ["pnpm", "dev"]
