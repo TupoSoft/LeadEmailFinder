@@ -120,6 +120,7 @@ jobs:
           
           PATH=${{ matrix.app.path }}
           CONTEXT="${PATH#*/LeadEmailFinder/LeadEmailFinder/}"
+          apt install ls
           ls -la ./apps
           ls -la ./apps/api
           echo "context=$CONTEXT" >> $GITHUB_OUTPUT
@@ -127,6 +128,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/api
+          context: "{{defaultContext}}:apps/api"
           tags: ${{ steps.prepare_tags.outputs.tags }}
           push: true
