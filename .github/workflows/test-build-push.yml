@@ -87,6 +87,7 @@ jobs:
         run: pnpm --filter ${{ matrix.app.name }} test
 
   build-push:
+    if: github.event_name == 'push'
     name: Build Push
     needs: [ get-changed-apps, test ]
     runs-on: ubuntu-latest
@@ -119,12 +120,12 @@ jobs:
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
           
           PATH=${{ matrix.app.path }}
-          CONTEXT="${PATH#*/LeadEmailFinder/LeadEmailFinder/}"
-          echo "context=$CONTEXT" >> $GITHUB_OUTPUT
+          DOCKERFILE="${PATH#*/LeadEmailFinder/LeadEmailFinder/}/Dockerfile"
+          echo "dockerfile=DOCKERFILE" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          file: "${{ steps.prepare_tags.outputs.context }}/Dockerfile"
+          file: "${{ steps.prepare_tags.outputs.dockerfile }}"
           tags: ${{ steps.prepare_tags.outputs.tags }}
           push: true
