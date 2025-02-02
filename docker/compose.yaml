@@ -4,7 +4,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: apps/api/dev.Dockerfile
+      dockerfile: apps/api/Dockerfile
     develop:
       watch:
         - action: sync+restart
