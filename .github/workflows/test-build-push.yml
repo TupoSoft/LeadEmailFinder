@@ -126,6 +126,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ steps.prepare_tags.outputs.context }}
+          context: ./apps/api
           tags: ${{ steps.prepare_tags.outputs.tags }}
           push: true
