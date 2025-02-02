@@ -81,8 +81,8 @@ jobs:
         run: pnpm --filter ${{ matrix.service }} test
 
   build-push:
-    name: Build Push
     needs: [ get-changed-services, test ]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.get-changed-services.outputs.services != '[]'
     runs-on: ubuntu-latest
     strategy:
       matrix:
