@@ -87,10 +87,40 @@ jobs:
         run: pnpm --filter ${{ matrix.app.name }} test
 
   build-push:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Build Push
     needs: test
-    uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.get-changed-apps.outputs.apps) }}
     permissions:
       packages: write
       contents: read
-    secrets: inherit
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: https://ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare tags
+        id: prepare_tags
+        run: |
+          REPOSITORY=${{ github.repository }}
+          REPOSITORY=${REPOSITORY,,}
+          APP=${{ matrix.app.name }}
+          GITHUB_SHA=${{ github.sha }}
+          PACKAGE="ghcr.io/$REPOSITORY-$APP"
+          TAGS="$PACKAGE:$GITHUB_SHA"
+          if [ ${{ github.ref_name }} == "master" ]; then
+            TAGS="$TAGS,$PACKAGE:latest"
+          fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.app.path }}
+          push: true
+          tags: ${{ steps.prepare_tags.outputs.tags }}
