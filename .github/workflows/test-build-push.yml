@@ -109,9 +109,8 @@ jobs:
         run: |
           REPOSITORY=${{ github.repository }}
           REPOSITORY=${REPOSITORY,,}
-          APP=${{ matrix.app.name }}
           GITHUB_SHA=${{ github.sha }}
-          PACKAGE="ghcr.io/$REPOSITORY-$APP"
+          PACKAGE="ghcr.io/$REPOSITORY-${{ matrix.app }}"
           TAGS="$PACKAGE:$GITHUB_SHA"
           if [ ${{ github.ref_name }} == "master" ]; then
             TAGS="$TAGS,$PACKAGE:latest"
