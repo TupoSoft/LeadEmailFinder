@@ -27,9 +27,39 @@ jobs:
       contents: read
       pull-requests: write
     secrets: inherit
+
+  get-changed-apps:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set-matrix.outputs.apps }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Get changed apps
+        id: set-matrix
+        run: |
+          apps=`pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json`
+          echo -n 'apps=$apps' >> $GITHUB_OUTPUT
   
   test:
+    needs: get-changed-apps
+    if: needs.get-changed-apps.outputs.apps != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.get-changed-apps.outputs.apps) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,10 +76,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm --filter ${{ matrix.app.name }} install
 
       - name: Run tests
-        run: pnpm -r test
+        run: pnpm --filter ${{ matrix.app.name }} test
 
   build-push:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
