@@ -87,7 +87,6 @@ jobs:
         run: pnpm --filter ${{ matrix.app }} test
 
   build-push:
-    if: github.event_name == 'push'
     name: Build Push
     needs: [ get-changed-apps, test ]
     runs-on: ubuntu-latest
