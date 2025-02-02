@@ -28,10 +28,10 @@ jobs:
       pull-requests: write
     secrets: inherit
 
-  get-changed-apps:
+  get-changed-services:
     runs-on: ubuntu-latest
     outputs:
-      apps: ${{ steps.set-matrix.outputs.apps }}
+      services: ${{ steps.set-matrix.outputs.services }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,22 +49,22 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Get changed apps
+      - name: Get changed services
         id: set-matrix
         run: |
           {
-            echo 'apps<<EOF'
+            echo 'services<<EOF'
             pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json | jq -r '.[].name' | jq -R . | jq -s .
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
   test:
-    needs: get-changed-apps
-    if: needs.get-changed-apps.outputs.apps != '[]'
+    needs: get-changed-services
+    if: needs.get-changed-services.outputs.services != '[]'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: ${{ fromJSON(needs.get-changed-apps.outputs.apps) }}
+        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -81,18 +81,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm --filter ${{ matrix.app }} install
+        run: pnpm --filter ${{ matrix.service }} install
 
       - name: Run tests
-        run: pnpm --filter ${{ matrix.app }} test
+        run: pnpm --filter ${{ matrix.service }} test
 
   build-push:
     name: Build Push
-    needs: [ get-changed-apps, test ]
+    needs: [ get-changed-services, test ]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: ${{ fromJSON(needs.get-changed-apps.outputs.apps) }}
+        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
     permissions:
       packages: write
       contents: read
@@ -110,14 +110,14 @@ jobs:
           REPOSITORY=${{ github.repository }}
           REPOSITORY=${REPOSITORY,,}
           GITHUB_SHA=${{ github.sha }}
-          PACKAGE="ghcr.io/$REPOSITORY-${{ matrix.app }}"
+          PACKAGE="ghcr.io/$REPOSITORY-${{ matrix.service }}"
           TAGS="$PACKAGE:$GITHUB_SHA"
           if [ ${{ github.ref_name }} == "master" ]; then
             TAGS="$TAGS,$PACKAGE:latest"
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
           
-          DOCKERFILE="apps/${{ matrix.app }}/Dockerfile"
+          DOCKERFILE="services/${{ matrix.service }}/Dockerfile"
           echo "dockerfile=$DOCKERFILE" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
