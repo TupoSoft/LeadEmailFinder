@@ -51,7 +51,7 @@ jobs:
         id: set-matrix
         run: |
           apps=`pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json`
-          echo -n 'apps=$apps' >> $GITHUB_OUTPUT
+          echo "apps=$apps" >> $GITHUB_OUTPUT
   
   test:
     needs: get-changed-apps
