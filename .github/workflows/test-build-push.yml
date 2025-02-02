@@ -120,7 +120,8 @@ jobs:
           
           PATH=${{ matrix.app.path }}
           CONTEXT="${PATH#*/LeadEmailFinder/LeadEmailFinder/}"
-          pwd
+          ls -la ./apps
+          ls -la ./apps/api
           echo "context=$CONTEXT" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
