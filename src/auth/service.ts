@@ -11,6 +11,7 @@ import type { JwtService } from './jwt'
 export interface IAuthService {
     register: (registrationData: AuthData) => Promise<void>
     login: (authData: AuthData) => Promise<LoginResult>
+    refresh: (authData: AuthData) => string
 }
 
 export class AuthService implements IAuthService {
@@ -41,6 +42,11 @@ export class AuthService implements IAuthService {
         return { token }
     }
 
+    refresh(refreshToken: string): string {
+        const token = this.jwtService.refreshAccessToken(refreshToken)
+
+        return token
+    }
     async register(authData: AuthData): Promise<void> {
         const { email, password } = authData
         const hashedPassword = await hash(password)
