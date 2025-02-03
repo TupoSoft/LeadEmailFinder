@@ -45,4 +45,21 @@ export class AuthController {
             },
         )
     }
+
+    refresh(req: Request<object, object, AuthData>, res: Response, next: NextFunction): void {
+        const { body: authData } = req
+        this.authService.login(authData).then(
+            value => {
+                res.status(constants.HTTP_STATUS_OK).json(value)
+            },
+            (err: unknown) => {
+                if (err instanceof InvalidAuthDataError) {
+                    const { message } = err
+                    next(HttpError.Unauthorized(message))
+                } else {
+                    next(err)
+                }
+            },
+        )
+    }
 }
