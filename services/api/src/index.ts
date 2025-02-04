@@ -230,6 +230,8 @@ async function main(): Promise<void> {
 
     process.on('SIGINT', onTerminationSignal)
     process.on('SIGTERM', onTerminationSignal)
+
+    console.log('poop')
 }
 
 main().then(
