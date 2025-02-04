@@ -191,9 +191,9 @@ async function main(): Promise<void> {
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use('/', serve, setup(swagger))
         .use(API_PREFIX, router)
-        .use('/', legacyRouter)
+        .use(legacyRouter)
+        .use(serve, setup(swagger, { customSiteTitle: 'Lead Email Finder API' }))
         .use(errorMiddleware.handleError.bind(errorMiddleware))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
