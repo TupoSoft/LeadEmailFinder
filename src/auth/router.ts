@@ -30,7 +30,7 @@ export class AuthRouter {
         this.router.post(
             AUTH_REFRESH_ROUTE,
             validateRequest(authRequestBodySchema, 'body'),
-            this.authController.register.bind(this.authController),
+            this.authController.refresh.bind(this.authController),
         )
     }
 }

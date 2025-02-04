@@ -4,6 +4,7 @@ import { ok } from 'node:assert'
 import { base64UrlDecode, base64UrlEncode } from './util'
 import { isJwtPayload } from './type-guards'
 import { REFRESH_TOKEN_LENGTH } from '../constants'
+import { RefreshData } from '../dto'
 
 export interface JwtPayload {
     sub?: string
@@ -97,8 +98,8 @@ export class JwtService {
         return payload
     }
 
-    refreshAccessToken(refreshToken: string): string {
-        const payload = this.verifyJwt(refreshToken)
+    refreshAccessToken(refreshData: RefreshData): string {
+        const payload = this.verifyJwt(refreshData.token)
 
         const { jti, exp, iat, ...accessTokenPayload } = payload
 

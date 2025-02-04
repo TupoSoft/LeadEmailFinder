@@ -3,6 +3,10 @@ export interface AuthData {
     password: string
 }
 
+export interface RefreshData {
+    token: string
+}
+
 export interface LoginResult {
     token: string
 }

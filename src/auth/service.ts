@@ -1,5 +1,5 @@
 import type { IUserService } from '../user'
-import type { AuthData, LoginResult } from './dto'
+import type { AuthData, LoginResult, RefreshData } from './dto'
 import { compare, hash } from './util/password'
 import { InvalidAuthDataError } from './errors'
 import type { User } from '../user/entity'
@@ -11,7 +11,7 @@ import type { JwtService } from './jwt'
 export interface IAuthService {
     register: (registrationData: AuthData) => Promise<void>
     login: (authData: AuthData) => Promise<LoginResult>
-    refresh: (refreshToken: string) => string
+    refresh: (refreshData: RefreshData) => string
 }
 
 export class AuthService implements IAuthService {
@@ -42,8 +42,8 @@ export class AuthService implements IAuthService {
         return { token }
     }
 
-    refresh(refreshToken: string): string {
-        return this.jwtService.refreshAccessToken(refreshToken)
+    refresh(refreshData: RefreshData): string {
+        return await this.jwtService.refreshAccessToken(refreshData)
     }
 
     async register(authData: AuthData): Promise<void> {

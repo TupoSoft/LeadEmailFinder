@@ -1,6 +1,6 @@
 import type { IAuthService } from './service'
 import type { NextFunction, Request, Response } from 'express'
-import type { AuthData } from './dto'
+import type { AuthData, RefreshData } from './dto'
 import { constants } from 'node:http2'
 import { UserAlreadyExistsError } from '../user/errors'
 import { InvalidAuthDataError } from './errors'
@@ -46,20 +46,9 @@ export class AuthController {
         )
     }
 
-    refresh(req: Request<object, object, AuthData>, res: Response, next: NextFunction): void {
-        const { body: authData } = req
-        this.authService.login(authData).then(
-            value => {
-                res.status(constants.HTTP_STATUS_OK).json(value)
-            },
-            (err: unknown) => {
-                if (err instanceof InvalidAuthDataError) {
-                    const { message } = err
-                    next(HttpError.Unauthorized(message))
-                } else {
-                    next(err)
-                }
-            },
-        )
+    refresh(req: Request<object, object, RefreshData>, res: Response, next: NextFunction): void {
+        const { body: refreshData } = req
+        const token = this.authService.refresh(refreshData)
+        res.status(constants.HTTP_STATUS_OK).json(token)
     }
 }
