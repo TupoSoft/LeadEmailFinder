@@ -30,6 +30,7 @@ jobs:
 
   get-changed-services:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     outputs:
       services: ${{ steps.set-matrix.outputs.services }}
     steps:
