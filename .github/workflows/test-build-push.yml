@@ -46,11 +46,8 @@ jobs:
       - name: Get changed services
         id: set-matrix
         run: |
-          {
-            echo 'services<<EOF'
-            pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json | jq -r '.[].name' | jq -R . | jq -s .
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "...[origin/master]" || echo "...[HEAD~1]"`
+          pnpm ls --filter "$filter" --filter "!monorepo" --depth=-1 --json | jq -r ".[].name" | jq -R . | jq -cs . >> $GITHUB_OUTPUT
 
   test:
     needs: get-changed-services
