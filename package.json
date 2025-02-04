@@ -2,6 +2,7 @@
     "private": true,
     "name": "monorepo",
     "description": "Lead Email Finder",
+    "packageManager": "pnpm@9.15.5",
     "keywords": [
         "lead",
         "email",
