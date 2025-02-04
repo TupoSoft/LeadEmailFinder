@@ -1,0 +1,50 @@
+{
+    "private": true,
+    "name": "api",
+    "description": "Lead Email Finder API",
+    "scripts": {
+        "build": "tsc",
+        "start": "node --env-file-if-exists=.env dist",
+        "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
+        "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "clean": "tsc --build --clean && rm -r dist",
+        "test": "jest"
+    },
+    "author": {
+        "url": "https://tuposoft.com",
+        "email": "contact@tuposoft.com",
+        "name": "TupoSoft"
+    },
+    "devDependencies": {
+        "@jest/globals": "^29.7.0",
+        "@tsconfig/node-lts": "^22.0.1",
+        "@types/express": "^4.17.21",
+        "@types/node": "^22.10.5",
+        "@types/supertest": "^6.0.2",
+        "@types/swagger-ui-express": "^4.1.7",
+        "jest": "^29.7.0",
+        "supertest": "^7.0.0",
+        "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2"
+    },
+    "dependencies": {
+        "axios": "^1.7.9",
+        "bullmq": "^5.34.6",
+        "cheerio": "^1.0.0",
+        "express": "^4.21.2",
+        "express-validator": "^7.2.1",
+        "ioredis": "^5.4.2",
+        "mongodb": "^6.12.0",
+        "pino": "^9.6.0",
+        "pino-gelf": "^2.2.0",
+        "pino-http": "^10.3.0",
+        "swagger-ui-express": "^5.0.1",
+        "tldts": "^6.1.70",
+        "zod": "^3.24.1",
+        "zod-openapi": "^4.2.2"
+    },
+    "jest": {
+        "preset": "ts-jest",
+        "testEnvironment": "node"
+    }
+}

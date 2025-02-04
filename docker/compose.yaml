@@ -1,8 +1,10 @@
+name: Lead Email Finder
+
 services:
-  verifier:
+  api:
     build:
       context: ..
-      dockerfile: ./docker/Dockerfile
+      dockerfile: apps/api/Dockerfile
     develop:
       watch:
         - action: sync+restart
