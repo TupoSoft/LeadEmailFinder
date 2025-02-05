@@ -12,8 +12,7 @@ import {
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
 } from './constants'
-import { bulkOkResponseBodySchema, bulkRequestParamsSchema } from '../common'
-import { errorResponseBodySchema } from '../common/openapi'
+import { bulkOkResponseBodySchema, bulkRequestParamsSchema, errorResponseBodySchema } from '../common'
 
 export const emailTag = {
     name: 'emails',
