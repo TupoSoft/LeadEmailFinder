@@ -164,7 +164,7 @@ async function main(): Promise<void> {
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
-            title: 'Lead Email Finder',
+            title: 'Lead Email Finder API',
             version: '0.3.0',
         },
         servers: [
