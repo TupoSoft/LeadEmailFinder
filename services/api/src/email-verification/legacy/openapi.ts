@@ -6,7 +6,7 @@ import { errorResponseBodySchema } from '../../common'
 
 export const verifyTag = {
     name: 'verify',
-    description: 'Deprecated. Use /emails instead.',
+    description: 'This endpoint is going to be deprecated.',
 }
 
 const verifyEmailLegacyOkResponse: ZodOpenApiResponseObject = {
