@@ -27,9 +27,37 @@ jobs:
       contents: read
       pull-requests: write
     secrets: inherit
-  
-  test:
+
+  get-changed-services:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Get changed services
+        id: set-matrix
+        run: |
+          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "...[origin/${{ github.event.pull_request.base.ref }}]" || echo "...[HEAD~1]"`
+          services=`pnpm ls --filter "$filter" --filter "!monorepo" --depth=-1 --json | jq -r ".[].name" | jq -R . | jq -cs .`
+          echo "services=$services" >> $GITHUB_OUTPUT
+
+  test:
+    needs: get-changed-services
+    if: needs.get-changed-services.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,15 +74,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm --filter ${{ matrix.service }} install
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm --filter ${{ matrix.service }} test
 
   build-push:
+    needs: [ get-changed-services, test ]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.get-changed-services.outputs.services != '[]'
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: test
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
     permissions:
       packages: write
       contents: read
@@ -72,15 +103,19 @@ jobs:
           REPOSITORY=${{ github.repository }}
           REPOSITORY=${REPOSITORY,,}
           GITHUB_SHA=${{ github.sha }}
-          PACKAGE="ghcr.io/$REPOSITORY"
+          PACKAGE="ghcr.io/$REPOSITORY-${{ matrix.service }}"
           TAGS="$PACKAGE:$GITHUB_SHA"
           if [ ${{ github.ref_name }} == "master" ]; then
             TAGS="$TAGS,$PACKAGE:latest"
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          
+          DOCKERFILE="services/${{ matrix.service }}/Dockerfile"
+          echo "dockerfile=$DOCKERFILE" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          push: true
+          file: "${{ steps.prepare_tags.outputs.dockerfile }}"
           tags: ${{ steps.prepare_tags.outputs.tags }}
+          push: true
