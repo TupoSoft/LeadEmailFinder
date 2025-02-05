@@ -153,6 +153,14 @@ async function main(): Promise<void> {
 
     const baseUrl = configService.get('BASE_URL')
     const serverUrl = `${baseUrl}${API_PREFIX}`
+
+    const [{ get: legacyVerifyOperation }] = Object.values(legacyVerifyEmailPaths)
+    legacyVerifyOperation.servers = [
+        {
+            url: baseUrl,
+        },
+    ]
+
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
