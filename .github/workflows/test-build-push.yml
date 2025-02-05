@@ -30,6 +30,7 @@ jobs:
 
   get-changed-services:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     outputs:
       services: ${{ steps.set-matrix.outputs.services }}
     steps:
@@ -46,11 +47,9 @@ jobs:
       - name: Get changed services
         id: set-matrix
         run: |
-          {
-            echo 'services<<EOF'
-            pnpm list --filter '...[origin/master]' --filter '!monorepo' --depth=-1 --json | jq -r '.[].name' | jq -R . | jq -s .
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "...[origin/${{ github.event.pull_request.base.ref }}]" || echo "...[HEAD~1]"`
+          services=`pnpm ls --filter "$filter" --filter "!monorepo" --depth=-1 --json | jq -r ".[].name" | jq -R . | jq -cs .`
+          echo "services=$services" >> $GITHUB_OUTPUT
 
   test:
     needs: get-changed-services
