@@ -2,7 +2,7 @@ import type { ZodOpenApiOperationObject, ZodOpenApiResponseObject } from 'zod-op
 import { constants } from 'node:http2'
 import { legacyVerifyEmailRequestQueryParams, legacyVerifyEmailResponseBody } from './validation'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
-import { errorResponseBodySchema } from '../../common/openapi'
+import { errorResponseBodySchema } from '../../common'
 
 export const verifyTag = {
     name: 'verify',
