@@ -12,7 +12,7 @@ import {
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
 } from './constants'
-import { bulkOkResponseBodySchema, bulkRequestParamsSchema } from '../common'
+import { bulkOkResponseBodySchema, bulkRequestParamsSchema, errorResponseBodySchema } from '../common'
 
 export const emailTag = {
     name: 'emails',
@@ -40,6 +40,14 @@ const verifyEmailOperation: ZodOpenApiOperationObject = {
     },
     responses: {
         [constants.HTTP_STATUS_OK]: verifyEmailOkResponse,
+        [constants.HTTP_STATUS_BAD_REQUEST]: errorResponseBodySchema({
+            example: 'email must be a string',
+            description: 'Validation failed',
+        }),
+        [constants.HTTP_STATUS_UNAUTHORIZED]: errorResponseBodySchema({
+            example: 'Unauthorized',
+            description: 'Unauthorized',
+        }),
     },
 }
 
@@ -64,6 +72,14 @@ const verifyEmailBulkOperation: ZodOpenApiOperationObject = {
     },
     responses: {
         [constants.HTTP_STATUS_OK]: verifyEmailBulkOkResponse,
+        [constants.HTTP_STATUS_BAD_REQUEST]: errorResponseBodySchema({
+            example: 'Must be a non-empty array of emails',
+            description: 'Validation failed',
+        }),
+        [constants.HTTP_STATUS_UNAUTHORIZED]: errorResponseBodySchema({
+            example: 'Unauthorized',
+            description: 'Unauthorized',
+        }),
     },
 }
 

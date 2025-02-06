@@ -45,6 +45,7 @@ import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
 import { emailPaths, emailTag } from './email-verification/openapi'
 import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from './email-verification/legacy'
+import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -152,10 +153,18 @@ async function main(): Promise<void> {
 
     const baseUrl = configService.get('BASE_URL')
     const serverUrl = `${baseUrl}${API_PREFIX}`
+
+    const [{ get: legacyVerifyOperation }] = Object.values(legacyVerifyEmailPaths)
+    legacyVerifyOperation.servers = [
+        {
+            url: baseUrl,
+        },
+    ]
+
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
-            title: 'Lead Email Finder',
+            title: 'Lead Email Finder API',
             version: '0.3.0',
         },
         servers: [
@@ -163,10 +172,11 @@ async function main(): Promise<void> {
                 url: serverUrl,
             },
         ],
-        tags: [emailTag, leadTag],
+        tags: [emailTag, leadTag, verifyTag],
         paths: {
             ...emailPaths,
             ...leadPaths,
+            ...legacyVerifyEmailPaths,
         },
         components: {
             securitySchemes: {
@@ -189,9 +199,9 @@ async function main(): Promise<void> {
         .disable('x-powered-by')
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use('/swagger', serve, setup(swagger))
         .use(API_PREFIX, router)
-        .use('/', legacyRouter)
+        .use(legacyRouter)
+        .use(serve, setup(swagger, { customSiteTitle: 'Lead Email Finder API' }))
         .use(errorMiddleware.handleError.bind(errorMiddleware))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
