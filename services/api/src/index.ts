@@ -197,6 +197,7 @@ async function main(): Promise<void> {
     const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
+        .set('trust proxy', true)
         .use(pinoLoggingMiddleware)
         .use(express.json())
         .use(API_PREFIX, router)
