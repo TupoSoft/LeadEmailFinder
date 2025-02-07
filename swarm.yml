@@ -2,17 +2,17 @@ version: '3.9'
 
 services:
   finder:
-    image: ghcr.io/tuposoft/leademailfinder-api:62e66e9e4dad50cc6b5f9d910554f1f731df3e37
+    image: ghcr.io/tuposoft/leademailfinder:2a76ee8c28d417bd3056b49d61a37da41bde0142
     dns:
       - 1.1.1.1
       - 8.8.8.8
     command: sh -c "pnpm start | pino-gelf log"
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:3000/api/v0/ping" ]
-      interval: 1m30s
+      interval: 15s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 15s
     environment:
       NODE_ENV: production
       REDIS_URL_FILE: /run/secrets/redis_url
@@ -26,6 +26,14 @@ services:
     deploy:
       mode: replicated
       replicas: 4
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: start-first
+        failure_action: rollback
+        monitor: 15s
+      rollback_config:
+        order: start-first
     secrets:
       - mongo_url
       - source: redis-config

@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM node:lts-alpine AS base
 ENV PNPM_HOME="/pnpm"
+ENV PATH="/app/node_modules/.bin:$PATH"
 ENV PATH="$PNPM_HOME:$PATH"
 # https://github.com/npm/cli/issues/8075
 ENV COREPACK_INTEGRITY_KEYS=0
