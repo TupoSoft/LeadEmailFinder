@@ -93,3 +93,4 @@ jobs:
     permissions:
       packages: write
       contents: read
+    secrets: inherit
