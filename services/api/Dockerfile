@@ -5,7 +5,7 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 ENV PATH="$PNPM_HOME:$PATH"
 # https://github.com/npm/cli/issues/8075
 ENV COREPACK_INTEGRITY_KEYS=0
-RUN corepack enable
+RUN apk add --no-cache curl bind-tools && corepack enable
 
 FROM base AS build
 WORKDIR /usr/src/app
