@@ -1,0 +1,19 @@
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: A service to build
+        type: choice
+        required: true
+        options:
+          - api
+
+jobs:
+  build-push:
+    uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
+    with:
+      dockerfile: services/${{ inputs.service }}/Dockerfile
+      image-name: leademailfinder-${{ inputs.service }}
+    permissions:
+      packages: write
+      contents: read
