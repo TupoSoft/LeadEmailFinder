@@ -1,8 +1,10 @@
+name: Build and Push Service
+
 on:
   workflow_dispatch:
     inputs:
       service:
-        description: A service to build
+        description: Select the service to build
         type: choice
         required: true
         options:
