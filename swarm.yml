@@ -8,7 +8,7 @@ services:
       - 8.8.8.8
     command: sh -c "pnpm start | pino-gelf log"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:3000/api/v0/ping" ]
+      test: [ "CMD", "curl", "http://localhost:3000/v0/ping" ]
       interval: 15s
       timeout: 10s
       retries: 3
