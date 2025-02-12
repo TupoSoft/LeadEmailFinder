@@ -85,7 +85,7 @@ describe(EMAIL_ROUTE, () => {
             const result: VerifyEmailBulkResponse = {
                 taskId: '1',
                 message: 'Request accepted. Starting to find emails.',
-                monitorUrl: 'http://localhost:3000/api/v0/emails/verify/bulk/1/status',
+                monitorUrl: 'http://localhost:3000/emails/verify/bulk/1/status',
             }
 
             emailVerificationService.verifyBulk.mockResolvedValueOnce(result)
