@@ -19,7 +19,7 @@ services:
       - "3000:3000"
     restart: unless-stopped
     healthcheck: &healthcheck
-      test: curl http://localhost:3000/api/v0/ping
+      test: curl http://localhost:3000/ping
       interval: 10s
       timeout: 10s
       retries: 3

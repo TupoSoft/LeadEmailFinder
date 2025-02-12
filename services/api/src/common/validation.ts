@@ -1,6 +1,5 @@
 import 'zod-openapi/extend'
 import { z } from 'zod'
-import { API_PREFIX } from './constants'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from '../email-verification/constants'
 
 export const bulkRequestParamsSchema = z.object({
@@ -15,6 +14,6 @@ export const bulkOkResponseBodySchema = z.object({
         .nonempty()
         .url()
         .openapi({
-            example: `https://leademailfinder.com${API_PREFIX}${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '1')}`,
+            example: `https://leademailfinder.com${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '1')}`,
         }),
 })

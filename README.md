@@ -67,7 +67,7 @@ This will:
 
 - Start the application in a detached mode.
 
-Access the application API at http://localhost:3000/api/v0 (adjust the port if configured differently).
+Access the application API at http://localhost:3000 (adjust the port if configured differently).
 
 ### Debugging the Application
 

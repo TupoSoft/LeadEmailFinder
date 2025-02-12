@@ -1,5 +1,4 @@
 export const DEFAULT_PORT = 3000
-export const API_PREFIX = '/api/v0'
 
 export const ZERO = 0
 export const EXIT_FAILURE = 1
