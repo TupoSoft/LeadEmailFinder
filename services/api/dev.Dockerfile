@@ -7,7 +7,7 @@ ENV PNPM_HOME="/pnpm" \
     PATH="$PNPM_HOME:$PATH"
 # https://github.com/npm/cli/issues/8075
 ENV COREPACK_INTEGRITY_KEYS=0
-RUN apk add --no-cache curl wget bind-tools && corepack enable
+RUN apk add --no-cache curl bind-tools && corepack enable
 
 # Builder stage: Installs dependencies and builds the project.
 FROM base-stage AS builder-stage

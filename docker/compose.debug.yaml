@@ -1,5 +1,8 @@
 services:
-  verifier:
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/dev.Dockerfile
     ports:
       - "9229:9229"
     command: pnpm debug
