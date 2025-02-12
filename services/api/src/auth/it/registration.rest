@@ -1,5 +1,5 @@
 ### Validation failure when there is no password
-POST {{host}}{{api_prefix}}/auth/register
+POST {{host}}/auth/register
 Content-Type: application/json
 
 {
@@ -13,7 +13,7 @@ Content-Type: application/json
 %}
 
 ### Validation failure when there is no email
-POST {{host}}{{api_prefix}}/auth/register
+POST {{host}}/auth/register
 Content-Type: application/json
 
 {
@@ -31,7 +31,7 @@ Content-Type: application/json
     client.global.set('email', $random.internet.safeEmailAddress)
 %}
 
-POST {{host}}{{api_prefix}}/auth/register
+POST {{host}}/auth/register
 Content-Type: application/json
 
 {
@@ -46,7 +46,7 @@ Content-Type: application/json
 %}
 
 ### Registration should fail when the user exists
-POST {{host}}{{api_prefix}}/auth/register
+POST {{host}}/auth/register
 Content-Type: application/json
 
 {
