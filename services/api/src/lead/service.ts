@@ -1,7 +1,6 @@
 import type { FindBulkResponse, FindBulkStatusResponse, FindLeadRequest, FindLeadResult } from './dto'
 import type { LeadFinder } from './finder'
 import type { LeadQueue, LeadQueueResultType } from './queue'
-import { API_PREFIX } from '../common'
 import { FIND_LEAD_BULK_STATUS_ROUTE } from './constants'
 
 export class LeadService {
@@ -20,7 +19,7 @@ export class LeadService {
         return {
             taskId,
             message: 'Request accepted. Starting to find leads.',
-            monitorUrl: `${API_PREFIX}${FIND_LEAD_BULK_STATUS_ROUTE.replace(':id', taskId)}`,
+            monitorUrl: FIND_LEAD_BULK_STATUS_ROUTE.replace(':id', taskId),
         }
     }
 

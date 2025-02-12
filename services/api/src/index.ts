@@ -21,7 +21,7 @@ import { ProxyRouter } from './proxy/router'
 import pinoFactory from 'pino'
 import pinoHttp from 'pino-http'
 import { PinoLogger } from './logging'
-import { API_PREFIX, ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
+import { ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import {
@@ -152,15 +152,6 @@ async function main(): Promise<void> {
     leadRouter.init()
 
     const baseUrl = configService.get('BASE_URL')
-    const serverUrl = `${baseUrl}${API_PREFIX}`
-
-    const [{ get: legacyVerifyOperation }] = Object.values(legacyVerifyEmailPaths)
-    legacyVerifyOperation.servers = [
-        {
-            url: baseUrl,
-        },
-    ]
-
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
@@ -169,7 +160,7 @@ async function main(): Promise<void> {
         },
         servers: [
             {
-                url: serverUrl,
+                url: baseUrl,
             },
         ],
         tags: [emailTag, leadTag, verifyTag],
@@ -200,7 +191,7 @@ async function main(): Promise<void> {
         .set('trust proxy', true)
         .use(pinoLoggingMiddleware)
         .use(express.json())
-        .use(API_PREFIX, router)
+        .use(router)
         .use(legacyRouter)
         .use(serve, setup(swagger, { customSiteTitle: 'Lead Email Finder API' }))
         .use(errorMiddleware.handleError.bind(errorMiddleware))

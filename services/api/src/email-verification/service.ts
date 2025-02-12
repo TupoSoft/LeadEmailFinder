@@ -8,7 +8,6 @@ import type {
 } from './dto'
 import type { EmailPatternUsage } from '../domain'
 import type { EmailVerificationQueue } from './queue'
-import { API_PREFIX } from '../common'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 
 export interface IEmailVerificationService {
@@ -38,7 +37,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         return {
             taskId,
             message: 'Request accepted. Starting to find emails.',
-            monitorUrl: `${API_PREFIX}${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', taskId)}`,
+            monitorUrl: VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', taskId),
         }
     }
 
