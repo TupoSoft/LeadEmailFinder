@@ -3,20 +3,18 @@
 import { Redis } from 'ioredis'
 import { REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { PinoLogger } from '../logging'
-import pinoFactory from 'pino'
+import { PinoLogger } from 'logging'
 import Mocked = jest.Mocked
 
 jest.useFakeTimers()
 
 jest.mock('pino')
-jest.mock('../logging')
+jest.mock('logging')
 
 describe('RedisConnectionLimiter', () => {
     const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
 
-    const pino = pinoFactory()
-    const logger = new PinoLogger(pino) as Mocked<PinoLogger>
+    const logger = new PinoLogger() as Mocked<PinoLogger>
     const redis = new Redis() as jest.Mocked<Redis>
     const maxConnections = 3
     const ttlSeconds = 60

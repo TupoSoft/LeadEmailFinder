@@ -1,4 +1,3 @@
-import express, { Router } from 'express'
 import { MongoClientCreator } from './util/mongo'
 import {
     CatchAllVerifier,
@@ -7,20 +6,16 @@ import {
     EmailVerifier,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
-    RedisCatchAllCache,
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
-import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
+import { RedisCatchAllCache, RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter, LeadService } from './lead'
 import { MongoProxyRepository, ProxyService } from './proxy'
 import { ProxyController } from './proxy/controller'
 import { ProxyRouter } from './proxy/router'
-import pinoFactory from 'pino'
-import pinoHttp from 'pino-http'
-import { PinoLogger } from './logging'
 import { ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
@@ -46,18 +41,15 @@ import { serve, setup } from 'swagger-ui-express'
 import { emailPaths, emailTag } from './email-verification/openapi'
 import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from './email-verification/legacy'
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
+import { loggingMiddleware, PinoLogger } from 'logging'
+import express, { Router } from 'express'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
     const configService = new ConfigService<Environment>(environment)
 
-    const pino = pinoFactory({
+    const logger = new PinoLogger({
         level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
-    })
-
-    const logger = new PinoLogger(pino)
-    const pinoLoggingMiddleware = pinoHttp({
-        logger: pino,
     })
 
     const router = Router()
@@ -189,7 +181,11 @@ async function main(): Promise<void> {
     const server = express()
         .disable('x-powered-by')
         .set('trust proxy', true)
-        .use(pinoLoggingMiddleware)
+        .use(
+            loggingMiddleware({
+                level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
+            }),
+        )
         .use(express.json())
         .use(router)
         .use(legacyRouter)

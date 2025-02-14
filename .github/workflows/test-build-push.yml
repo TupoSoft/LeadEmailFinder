@@ -46,7 +46,7 @@ jobs:
       - name: Get changed services
         id: set-matrix
         run: |
-          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "...[origin/${{ github.event.pull_request.base.ref }}]" || echo "...[HEAD~1]"`
+          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "{services}[origin/${{ github.event.pull_request.base.ref }}]" || echo "{services}[HEAD~1]"`
           services=`pnpm ls --filter "$filter" --filter "!monorepo" --depth=-1 --json | jq -r ".[].name" | jq -R . | jq -cs .`
           echo "services=$services" >> $GITHUB_OUTPUT
 
@@ -73,7 +73,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm --filter ${{ matrix.service }} install
+        run: pnpm --filter "${{ matrix.service }}..." install
+
+      - name: Build packages
+        run: pnpm --filter "${{ matrix.service }}..." --filter "!${{ matrix.service }}" build
 
       - name: Run tests
         run: pnpm --filter ${{ matrix.service }} test

@@ -1,11 +1,11 @@
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
-import type { Logger } from '../logging'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import { NO_USAGES } from './constants'
 import type { EmailPatternUsage } from '../domain'
 import { ok } from 'node:assert'
-import { isEmptyArray } from '../common/type-guards'
+import { isEmptyArray } from '../common'
+import type { Logger } from 'logging'
 
 export class LeadFinder {
     constructor(

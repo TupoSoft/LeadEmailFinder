@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { HttpError } from '../common'
 import { constants as httpConstants } from 'http2'
-import type { Logger } from '../logging'
+import type { Logger } from 'logging'
 
 export class ErrorMiddleware {
     constructor(private readonly logger: Logger) {}

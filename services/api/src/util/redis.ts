@@ -1,8 +1,8 @@
 import { Redis, type RedisOptions, type SentinelAddress } from 'ioredis'
 import type { ConfigService, Environment } from '../common'
 import { EXIT_FAILURE } from '../common'
-import type { Logger } from '../logging'
 import { ok } from 'node:assert'
+import type { Logger } from 'logging'
 
 const REDIS_DEFAULT_DB_INDEX = 0
 const REDIS_DEFAULT_PORT = 6379

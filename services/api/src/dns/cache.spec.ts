@@ -1,15 +1,10 @@
-/* eslint-disable @typescript-eslint/unbound-method */
-
 import { DNSCacheImpl } from './cache'
 import { Redis } from 'ioredis'
 import { resolveMx, reverse } from 'node:dns/promises'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import type { DNSTypeMap } from './util'
 
-jest.mock('node:dns/promises', () => ({
-    resolveMx: jest.fn(),
-    reverse: jest.fn(),
-}))
+jest.mock('node:dns/promises')
 
 jest.mock('node:console', () => ({
     log: jest.fn(),

@@ -1,8 +1,12 @@
 import type { ExtensibleLogger } from './logger'
-import type { Logger as Pino } from 'pino'
+import { type Logger as Pino, type LoggerOptions, pino } from 'pino'
 
 export class PinoLogger implements ExtensibleLogger {
-    constructor(private readonly logger: Pino) {}
+    private readonly logger: Pino
+
+    constructor(options?: LoggerOptions) {
+        this.logger = pino(options)
+    }
 
     info: (message: string, meta?: Record<string, unknown>) => void = (message, meta) => {
         this.logger.info(meta, message)
