@@ -1,10 +1,10 @@
 import type { ISMTPVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
-import type { Logger } from '../logging'
 import { isNativeError } from 'node:util/types'
 import { ok } from 'node:assert'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { CatchAllVerificationResult, ICatchAllVerifier } from './catch-all-verifier'
+import type { Logger } from 'logging'
 
 export interface IEmailVerifier {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -56,7 +56,7 @@ export class EmailVerifier implements IEmailVerifier {
         } catch (error) {
             ok(isNativeError(error))
 
-            this.logger.error(`SMTP verification failed: ${error.message}`)
+            this.logger.error(`SMTP verification failed for email ${email}: ${error.message}`)
             return {}
         }
     }
@@ -67,7 +67,7 @@ export class EmailVerifier implements IEmailVerifier {
         } catch (error) {
             ok(isNativeError(error))
 
-            this.logger.error(`Catch-All verification failed: ${error.message}`)
+            this.logger.error(`Catch-All verification failed for email ${email}: ${error.message}`)
             return { source: 'None', success: false }
         }
     }

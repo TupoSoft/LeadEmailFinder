@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { promisify } from 'node:util'
 import type { ConfigService, Environment } from '../common'
 import { EXIT_FAILURE } from '../common'
-import type { Logger } from '../logging'
+import type { Logger } from 'logging'
 
 export const DESCENDING = -1
 

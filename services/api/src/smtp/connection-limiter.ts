@@ -1,7 +1,7 @@
 import type { Redis, Result } from 'ioredis'
 import { setTimeout } from 'node:timers'
 import { ok } from 'node:assert'
-import type { Logger } from '../logging'
+import type { Logger } from 'logging'
 
 declare module 'ioredis' {
     interface RedisCommander<Context> {

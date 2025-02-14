@@ -1,0 +1,22 @@
+{
+    "private": true,
+    "name": "logging",
+    "description": "Logging Library",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "pino": "^9.6.0",
+        "pino-http": "^10.3.0"
+    },
+    "jest": {
+        "preset": "ts-jest",
+        "testEnvironment": "node"
+    }
+}

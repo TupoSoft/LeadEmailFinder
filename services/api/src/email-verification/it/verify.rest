@@ -15,7 +15,7 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "email": "kyrylo.kupin@gmail.com"
+  "email": "michel.glezer@qualcommventures.com"
 }
 
 > {%

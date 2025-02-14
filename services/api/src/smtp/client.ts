@@ -1,6 +1,5 @@
 import { Socket } from 'node:net'
 import type { Proxy } from '../proxy'
-import type { ExtensibleLogger } from '../logging'
 import type { ConnectionLimiter } from './connection-limiter'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_SMTP_CLIENT_TIMEOUT, DEFAULT_TIMEOUT_CONFIG, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
@@ -14,6 +13,7 @@ import type { SmtpResponse } from './dto'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
 import { connect } from '../socket'
+import { ExtensibleLogger } from 'logging'
 
 export interface SmtpClientTimeoutConfig {
     greeting?: number

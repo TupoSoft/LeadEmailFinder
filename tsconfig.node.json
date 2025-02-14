@@ -1,0 +1,10 @@
+{
+    "extends": "@tsconfig/node-lts/tsconfig.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "noImplicitAny": true,
+        "useUnknownInCatchVariables": true,
+        "removeComments": true
+    },
+    "include": ["src/**/*.ts"]
+}
