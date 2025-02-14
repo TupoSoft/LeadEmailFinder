@@ -10,13 +10,9 @@
     },
     "keywords": [],
     "author": "",
-    "license": "ISC",
+    "license": "UNLICENSED",
     "dependencies": {
         "pino": "^9.6.0",
         "pino-http": "^10.3.0"
-    },
-    "jest": {
-        "preset": "ts-jest",
-        "testEnvironment": "node"
     }
 }

@@ -73,10 +73,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm --filter "${{ matrix.service }}..." install
 
       - name: Build packages
-        run: pnpm run -r build
+        run: pnpm --filter "${{ matrix.service }}..." --filter "!${{ matrix.service }}" build
 
       - name: Run tests
         run: pnpm --filter ${{ matrix.service }} test
