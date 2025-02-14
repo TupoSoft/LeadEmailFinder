@@ -3,7 +3,6 @@ import { Redis } from 'ioredis'
 import { resolveMx, reverse } from 'node:dns/promises'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import type { DNSTypeMap } from './util'
-import console from 'node:console'
 
 jest.mock('node:dns/promises')
 
@@ -22,12 +21,7 @@ jest.mock('ioredis', () => ({
 describe('DNSCacheImpl', () => {
     const redisClient = new Redis() as jest.Mocked<Redis>
 
-    const dnsCache = new DNSCacheImpl(
-        redisClient as Redis,
-        DNSCacheImpl.DEFAULT_TTL_SECONDS,
-        DNSCacheImpl.DEFAULT_CACHE_KEY_PREFIX,
-        console,
-    )
+    const dnsCache = new DNSCacheImpl(redisClient as Redis)
 
     const resolveMxMock = resolveMx as jest.Mock<typeof resolveMx>
 

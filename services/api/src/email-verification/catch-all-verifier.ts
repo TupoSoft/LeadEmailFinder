@@ -321,7 +321,7 @@ export class CatchAllVerifier implements ICatchAllVerifier {
     async tryAll(email: string): Promise<CatchAllVerificationResult> {
         try {
             return await Promise.any([
-                this.mimecastLogin(email),
+                // this.mimecastLogin(email),
                 this.officeapps(email),
                 this.microsoftLogin(email),
                 this.linkedinLogin(email),
