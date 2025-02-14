@@ -9,10 +9,13 @@ export interface DNSCache {
 }
 
 export class DNSCacheImpl implements DNSCache {
+    public static readonly DEFAULT_TTL_SECONDS = parseTimeString('1d')
+    public static readonly DEFAULT_CACHE_KEY_PREFIX = 'DNS_CACHE'
+
     constructor(
         private readonly redisClient: Redis,
-        private readonly ttlSeconds = parseTimeString('1d'),
-        private readonly cacheKeyPrefix = 'DNS_CACHE',
+        private readonly ttlSeconds = DNSCacheImpl.DEFAULT_TTL_SECONDS,
+        private readonly cacheKeyPrefix = DNSCacheImpl.DEFAULT_CACHE_KEY_PREFIX,
         private readonly logger: Logger = console,
     ) {}
 
