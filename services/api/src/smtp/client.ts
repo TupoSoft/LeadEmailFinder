@@ -120,6 +120,7 @@ export class SmtpClientImpl implements SmtpClient {
         } catch (error) {
             onClose()
             ok(isNativeError(error))
+            this.logger?.error(`Error in SMTPClient.connect: ${error.message}`)
             throw error
         }
     }
@@ -161,6 +162,12 @@ export class SmtpClientImpl implements SmtpClient {
         const { code, enhancedCode, message } = smtpResponse
 
         if (code > SmtpResponseCode.OK) {
+            this.logger?.error(`Error in SMTP response: ${message}`, {
+                smtpResponseCode: code,
+                smtpResponseEnhancedCode: enhancedCode,
+                smtpResponseMessage: message,
+            })
+
             throw new SmtpError(code, enhancedCode, message)
         }
 

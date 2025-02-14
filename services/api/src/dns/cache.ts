@@ -1,6 +1,8 @@
 import type { Redis } from 'ioredis'
 import { type DNSTypeMap, fetchRecords } from './util'
 import console from 'node:console'
+import type { Logger } from 'logging'
+import { parseTimeString } from '../util/time'
 
 export interface DNSCache {
     resolve: <T extends keyof DNSTypeMap>(name: string, type: T) => Promise<DNSTypeMap[T]>
@@ -9,8 +11,9 @@ export interface DNSCache {
 export class DNSCacheImpl implements DNSCache {
     constructor(
         private readonly redisClient: Redis,
-        private readonly ttlSeconds = 86400,
+        private readonly ttlSeconds = parseTimeString('1d'),
         private readonly cacheKeyPrefix = 'DNS_CACHE',
+        private readonly logger: Logger = console,
     ) {}
 
     async resolve<T extends keyof DNSTypeMap>(name: string, type: T): Promise<DNSTypeMap[T]> {
@@ -18,11 +21,11 @@ export class DNSCacheImpl implements DNSCache {
 
         const cachedRecords = await this.getCachedRecords<T>(name, type)
         if (cachedRecords != null) {
-            console.log(`Using cached ${type} records for ${name}`)
+            this.logger.debug(`Using cached ${type} records for ${name}`)
             return cachedRecords
         }
 
-        console.log(`Fetching ${type} records for ${name}`)
+        this.logger.debug(`Fetching ${type} records for ${name}`)
         const records = await fetchRecords(name, type)
 
         await this.cacheRecords(name, type, records)
