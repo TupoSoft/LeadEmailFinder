@@ -9,7 +9,7 @@ import Mocked = jest.Mocked
 jest.useFakeTimers()
 
 jest.mock('pino')
-jest.mock('../logging')
+jest.mock('logging')
 
 describe('RedisConnectionLimiter', () => {
     const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
