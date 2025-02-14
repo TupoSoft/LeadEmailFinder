@@ -7,6 +7,5 @@
         "removeComments": true,
         "declaration": true
     },
-    "include": ["src/**/*.ts"],
-    "exclude": ["src/**/__mocks__"]
+    "include": ["src/**/*.ts"]
 }
