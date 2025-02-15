@@ -82,7 +82,18 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController, authMiddleware)
     domainRouter.init()
 
-    const axiosInstance = axios.create()
+    const { port: proxyPort, hostname, username, password, protocol } = new URL(configService.get('HTTP_PROXY_URL'))
+    const axiosInstance = axios.create({
+        proxy: {
+            port: Number(proxyPort),
+            host: hostname,
+            auth: {
+                username,
+                password,
+            },
+            protocol,
+        },
+    })
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
 
     const dnsCache = new DNSCacheImpl(redis)
