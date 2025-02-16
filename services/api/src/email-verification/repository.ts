@@ -1,7 +1,8 @@
 import { type Db, ObjectId } from 'mongodb'
-import type { EmailVerificationResponse, EmailVerificationSource } from './dto'
+import type { EmailVerificationResponse } from './dto'
 import { DESCENDING, generateObjectIdAsync } from '../util/mongo'
 import type { EmailPatternUsage } from '../domain'
+import type { EmailVerificationResult } from './email-verifier'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerificationResponse) => Promise<void>
@@ -19,7 +20,7 @@ interface EmailVerificationSchema {
     targetExchange?: string
     verifiedAt?: Date
     exists: boolean | null
-    sources: EmailVerificationSource[]
+    sources: Record<string, EmailVerificationResult>
 }
 
 export class EmailVerificationNotFoundError extends Error {
@@ -45,13 +46,13 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     ): Promise<EmailVerificationResponse> => {
         const dataModel = await this.collection.findOne({ email })
         if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
-        return dataModel
+        return { ...dataModel, checkedAt: dataModel._id.getTimestamp().toISOString() }
     }
 
     async findById(id: string): Promise<EmailVerificationResponse> {
         const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
         if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
-        return dataModel
+        return { ...dataModel, checkedAt: dataModel._id.getTimestamp().toISOString() }
     }
 
     async save(emailVerification: EmailVerificationResponse): Promise<void> {

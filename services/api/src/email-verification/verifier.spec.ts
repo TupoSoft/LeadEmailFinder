@@ -2,20 +2,17 @@
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './verifier'
-import { MockEmailVerificationRepository } from './repository'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResponse } from './dto'
 
 describe('EmailVerifier', () => {
-    const emailVerificationRepositoryMock =
-        new MockEmailVerificationRepository() as jest.Mocked<MockEmailVerificationRepository>
-    emailVerificationRepositoryMock.save = jest.fn()
-
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
+    const emailVerifier = new EmailVerificationRunner({
+        mx: smtpVerifierMock,
+    })
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
@@ -25,20 +22,22 @@ describe('EmailVerifier', () => {
     const catchAllStatus = false
 
     const smtpVerificationResult: SMTPVerificationResult = {
+        success: true,
         exists,
-        catchAllStatus,
+        catchAll: catchAllStatus,
         mxDomain,
         targetExchange,
     }
 
     const expectedEmailVerificationResult: EmailVerificationResponse = {
+        checkedAt: '',
         email,
         domain,
         localPart,
-        targetExchange,
-        sources: ['mx'],
+        sources: {
+            mx: smtpVerificationResult,
+        },
         exists,
-        mxDomain,
     }
 
     afterEach(() => {

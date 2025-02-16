@@ -1,15 +1,13 @@
 import type { LegacyEmailVerificationResult } from './dto'
-import { isEmptyArray } from '../../common'
-import type { EmailVerificationResponse, EmailVerificationSource } from '../dto'
+import type { EmailVerificationResponse } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
+import type { SMTPVerificationResult } from '../../smtp/dto'
 
-function mapCatchAllStatus(sources: EmailVerificationSource[]): CatchAllStatus {
-    if (isEmptyArray(sources)) {
+function mapCatchAllStatus(catchAllStatus?: boolean): CatchAllStatus {
+    if (catchAllStatus === undefined) {
         return CatchAllStatus.Unknown
-    } else if (sources.includes('mx')) {
-        return CatchAllStatus.Disabled
     } else {
-        return CatchAllStatus.Enabled
+        return catchAllStatus ? CatchAllStatus.Enabled : CatchAllStatus.Disabled
     }
 }
 
@@ -29,16 +27,17 @@ export function toLegacyResult({
     domain,
     sources,
     exists,
-    targetExchange,
-    verifiedAt,
+    checkedAt,
 }: EmailVerificationResponse): LegacyEmailVerificationResult {
-    const catchAll = mapCatchAllStatus(sources)
+    const mxData = sources.mx as SMTPVerificationResult
+    const { catchAll, targetExchange } = mxData
+    const catchAll = mapCatchAllStatus(catchAll)
     const deliveryStatus = mapDeliveryStatus(exists)
 
     return {
         catchAll,
         deliveryStatus,
-        verifiedAt: verifiedAt ?? new Date(),
+        verifiedAt: checkedAt !== '' ? new Date(checkedAt) : new Date(),
         email,
         localPart,
         domain,

@@ -1,6 +1,5 @@
 import type { AxiosRequestConfig } from 'axios'
 import type { HttpClient } from '../../http-client'
-import type { EmailVerificationSource } from '../dto'
 import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export type Authenticate = 'Basic-Cloud' | 'Basic-Ad' | 'SAML' | 'JWT'
@@ -39,8 +38,6 @@ export class MimecastLogin implements EmailVerifier {
     }
 
     private static readonly EXPECTED_AUTH_TYPES = ['Basic-Ad', 'Basic-Cloud']
-
-    sourceName: EmailVerificationSource = 'mimecast'
 
     constructor(private readonly httpClient: HttpClient) {}
 

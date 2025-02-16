@@ -1,6 +1,5 @@
 import type { HttpClient } from '../../http-client'
 import { AxiosError } from 'axios'
-import type { EmailVerificationSource } from '../dto'
 import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export interface MicrosoftError {
@@ -31,8 +30,6 @@ export class MicrosoftLogin implements EmailVerifier {
         password: 'Password1',
         scope: 'openid',
     }
-
-    sourceName: EmailVerificationSource = 'outlook'
 
     constructor(private readonly httpClient: HttpClient) {}
 

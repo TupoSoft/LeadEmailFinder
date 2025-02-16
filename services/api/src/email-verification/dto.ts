@@ -1,4 +1,5 @@
 import type { EMAIL_VERIFICATION_SOURCES } from './constants'
+import type { EmailVerificationResult } from './email-verifier'
 
 export interface EmailVerificationRequest {
     email: string
@@ -10,11 +11,9 @@ export interface EmailVerificationResponse {
     domain: string
     localPart: string
     format?: string
-    mxDomain?: string
-    sources: EmailVerificationSource[]
+    sources: Record<string, EmailVerificationResult>
     exists: boolean | null
-    targetExchange?: string
-    verifiedAt?: Date
+    checkedAt: string
 }
 
 export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]

@@ -16,6 +16,7 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
+import type { SMTPVerificationResult } from '../smtp/dto'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -50,11 +51,18 @@ describe(EMAIL_ROUTE, () => {
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')
 
+    const smtpVerificationResult: SMTPVerificationResult = {
+        success: false,
+    }
+
     const verificationResult: EmailVerificationResponse = {
+        checkedAt: '',
         domain,
         exists: false,
         localPart,
-        sources: ['mx'],
+        sources: {
+            mx: smtpVerificationResult,
+        },
         email,
     }
 

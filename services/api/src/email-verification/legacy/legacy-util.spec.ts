@@ -1,18 +1,29 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
-import type { EmailVerificationResponse, EmailVerificationSource } from '../dto'
+import type { EmailVerificationResponse } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import type { LegacyEmailVerificationResult } from './dto'
+import type { SMTPVerificationResult } from '../../smtp/dto'
 
 describe('toLegacyResult', () => {
     it('should map correctly', () => {
+        const targetExchange = 'exchange.example.com'
+
+        const smtpVerificationResult: SMTPVerificationResult = {
+            success: true,
+            catchAll: true,
+            targetExchange,
+        }
+
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources: ['linkedin'],
+            sources: {
+                mx: smtpVerificationResult,
+            },
             exists: true,
-            targetExchange: 'exchange.example.com',
+            checkedAt: '',
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -26,30 +37,43 @@ describe('toLegacyResult', () => {
     })
 
     it('should map verifiedAt to input value if provided', () => {
+        const smtpVerificationResult: SMTPVerificationResult = {
+            success: true,
+            catchAll: true,
+        }
+
         const verifiedAt = new Date('2023-01-01')
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources: [],
+            sources: {
+                mx: smtpVerificationResult,
+            },
             exists: true,
-            targetExchange: 'exchange.example.com',
-            verifiedAt,
+            checkedAt: verifiedAt.toISOString(),
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
-        expect(result.verifiedAt).toBe(verifiedAt)
+        expect(result.verifiedAt).toStrictEqual(verifiedAt)
     })
 
     it('should default verifiedAt to current date if not provided', () => {
+        const smtpVerificationResult: SMTPVerificationResult = {
+            success: true,
+            catchAll: true,
+        }
+
         const input: EmailVerificationResponse = {
+            checkedAt: '',
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources: [],
+            sources: {
+                mx: smtpVerificationResult,
+            },
             exists: true,
-            targetExchange: 'exchange.example.com',
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -61,15 +85,20 @@ describe('toLegacyResult', () => {
     })
 
     it('should map catchAll using mapCatchAllStatus function', () => {
-        const sources: EmailVerificationSource[] = ['mx']
+        const smtpVerificationResult: SMTPVerificationResult = {
+            success: true,
+            catchAll: false,
+        }
 
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources,
+            sources: {
+                mx: smtpVerificationResult,
+            },
             exists: true,
-            targetExchange: 'exchange.example.com',
+            checkedAt: '',
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)

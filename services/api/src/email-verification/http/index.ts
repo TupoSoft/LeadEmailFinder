@@ -1,4 +1,3 @@
-export type * from './email-verifier'
 export * from './linkedin-login'
 export * from './microsoft-get-credential-type'
 export * from './microsoft-login'

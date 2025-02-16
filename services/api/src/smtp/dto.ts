@@ -3,7 +3,7 @@ import type { EmailVerificationResult } from '../email-verification'
 
 export interface SMTPVerificationResult extends EmailVerificationResult {
     exists?: boolean
-    catchAllStatus?: boolean
+    catchAll?: boolean
     targetExchange?: string
     mxDomain?: string
 }

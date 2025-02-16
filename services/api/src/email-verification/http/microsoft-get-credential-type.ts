@@ -1,5 +1,4 @@
 import type { HttpClient } from '../../http-client'
-import type { EmailVerificationSource } from '../dto'
 import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export interface MicrosoftGetCredsResponseData {
@@ -48,8 +47,6 @@ export class MicrosoftGetCredentialType implements EmailVerifier {
     }
 
     private static readonly EXISTS_RESULT = [0, 5, 6]
-
-    sourceName: EmailVerificationSource = 'microsoft_4'
 
     constructor(private readonly httpClient: HttpClient) {}
 

@@ -11,6 +11,7 @@ import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import { HttpError } from '../../common'
+import type { SMTPVerificationResult } from '../../smtp/dto'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
@@ -44,14 +45,22 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')
-    const verifiedAt = new Date('2025-01-01')
+    const checkedAt = new Date('2025-01-01')
+
+    const smtpVerificationResult: SMTPVerificationResult = {
+        success: false,
+        catchAll: false,
+    }
 
     const verificationResult: EmailVerificationResponse = {
         domain,
         exists: false,
         localPart,
-        sources: ['mx'],
+        sources: {
+            mx: smtpVerificationResult,
+        },
         email,
+        checkedAt: checkedAt.toISOString(),
     }
 
     afterEach(() => {
@@ -59,7 +68,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
     })
 
     it('should return HTTP_OK', async () => {
-        jest.useFakeTimers().setSystemTime(verifiedAt)
+        jest.useFakeTimers().setSystemTime(checkedAt)
         emailVerificationService.verify.mockResolvedValueOnce(verificationResult)
 
         await request(app)
@@ -71,7 +80,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
                 email,
                 localPart,
                 domain,
-                verifiedAt: verifiedAt.toISOString(),
+                verifiedAt: checkedAt.toISOString(),
                 deliveryStatus: DeliveryStatus.Rejected,
                 catchAll: CatchAllStatus.Disabled,
             })

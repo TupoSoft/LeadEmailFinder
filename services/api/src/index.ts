@@ -128,11 +128,13 @@ async function main(): Promise<void> {
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
-    const smtpEmailVerifier = new EmailVerificationRunner(
-        smtpVerifier,
-        [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
-        logger,
-    )
+    const smtpEmailVerifier = new EmailVerificationRunner({
+        mx: smtpVerifier,
+        outlook: microsoftLogin,
+        microsoft_4: microsoftGetCreds,
+        o365: officeApps,
+        linkedin: linkedinLogin,
+    })
     const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
         smtpEmailVerifier,
         mongoEmailVerificationRepository,
