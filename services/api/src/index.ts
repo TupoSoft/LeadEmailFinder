@@ -82,7 +82,13 @@ async function main(): Promise<void> {
     const domainRouter = new DomainRouter(router, domainController, authMiddleware)
     domainRouter.init()
 
-    const { port: proxyPort, hostname, username, password, protocol } = new URL(configService.get('HTTP_PROXY_URL'))
+    const {
+        port: proxyPort,
+        hostname,
+        username,
+        password,
+        protocol,
+    } = new URL(configService.get('CATCH_ALL_HTTP_PROXY_URL'))
     const axiosInstance = axios.create({
         proxy: {
             port: Number(proxyPort),
