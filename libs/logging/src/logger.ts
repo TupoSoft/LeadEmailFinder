@@ -1,4 +1,6 @@
-type Log = (message: string, meta?: Record<string, unknown>) => void
+export type LogMeta = Record<string, unknown>
+
+type Log = (message: string, meta?: LogMeta) => void
 
 export interface Logger {
     info: Log
@@ -8,5 +10,5 @@ export interface Logger {
 }
 
 export interface ExtensibleLogger extends Logger {
-    child: (bindings: Record<string, unknown>) => ExtensibleLogger
+    child: (bindings: LogMeta) => ExtensibleLogger
 }
