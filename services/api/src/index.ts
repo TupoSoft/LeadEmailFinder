@@ -41,8 +41,14 @@ import { emailPaths, emailTag } from './email-verification/openapi'
 import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from './email-verification/legacy'
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
-import express, { Router } from 'express'
+import express, { type NextFunction, type Request, type Response, Router } from 'express'
 import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps } from './email-verification/http'
+
+declare module 'express' {
+    interface Request {
+        swaggerDoc?: object
+    }
+}
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -167,18 +173,13 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
-    const baseUrl = configService.get('BASE_URL')
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
             title: 'Lead Email Finder API',
             version: '0.3.0',
         },
-        servers: [
-            {
-                url: baseUrl,
-            },
-        ],
+        servers: [],
         tags: [emailTag, leadTag, verifyTag],
         paths: {
             ...emailPaths,
@@ -209,12 +210,19 @@ async function main(): Promise<void> {
             loggingMiddleware({
                 level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
             }),
+            express.json(),
+            router,
+            legacyRouter,
+            (req: Request, _res: Response, next: NextFunction): void => {
+                const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
+                swagger.servers?.push({ url: `${req.protocol}://${host}` })
+                req.swaggerDoc = swagger
+                next()
+            },
+            serve,
+            setup(swagger, { customSiteTitle: 'Lead Email Finder API' }),
+            errorMiddleware.handleError.bind(errorMiddleware),
         )
-        .use(express.json())
-        .use(router)
-        .use(legacyRouter)
-        .use(serve, setup(swagger, { customSiteTitle: 'Lead Email Finder API' }))
-        .use(errorMiddleware.handleError.bind(errorMiddleware))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
         })
