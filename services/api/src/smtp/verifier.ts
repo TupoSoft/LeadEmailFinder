@@ -42,7 +42,7 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
 
         const client = await this.getSmtpClient(domain)
         const { hostname, exchange } = client
-        smtpVerificationResult.targetExchange = exchange
+        smtpVerificationResult.mxRecord = exchange
         smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
         try {
@@ -63,7 +63,7 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
             smtpVerificationResult.catchAll = await this.getCatchAllStatus(client, domain)
 
             if (smtpVerificationResult.catchAll === false) {
-                smtpVerificationResult.exists = await client.rcptTo(email).then(
+                smtpVerificationResult.success = await client.rcptTo(email).then(
                     _ => true,
                     (_: unknown) => false,
                 )

@@ -30,17 +30,17 @@ export function toLegacyResult({
     checkedAt,
 }: EmailVerificationResponse): LegacyEmailVerificationResult {
     const mxData = sources.mx as SMTPVerificationResult
-    const { catchAll, targetExchange } = mxData
-    const catchAll = mapCatchAllStatus(catchAll)
+    const { catchAll, mxRecord } = mxData
+    const catchAllStatus = mapCatchAllStatus(catchAll)
     const deliveryStatus = mapDeliveryStatus(exists)
 
     return {
-        catchAll,
+        catchAll: catchAllStatus,
         deliveryStatus,
         verifiedAt: checkedAt !== '' ? new Date(checkedAt) : new Date(),
         email,
         localPart,
         domain,
-        targetExchange,
+        targetExchange: mxRecord,
     }
 }

@@ -12,7 +12,7 @@ describe('toLegacyResult', () => {
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
             catchAll: true,
-            targetExchange,
+            mxRecord: targetExchange,
         }
 
         const input: EmailVerificationResponse = {

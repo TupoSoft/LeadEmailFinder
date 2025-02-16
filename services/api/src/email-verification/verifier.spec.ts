@@ -18,27 +18,29 @@ describe('EmailVerifier', () => {
     const [localPart, domain] = email.split('@')
     const targetExchange = 'mail.example.com'
     const mxDomain = 'example.com'
-    const exists = true
+    const success = true
     const catchAllStatus = false
+    const checkedAt = new Date('2023-01-01')
 
     const smtpVerificationResult: SMTPVerificationResult = {
-        success: true,
-        exists,
+        success,
         catchAll: catchAllStatus,
         mxDomain,
-        targetExchange,
+        mxRecord: targetExchange,
     }
 
     const expectedEmailVerificationResult: EmailVerificationResponse = {
-        checkedAt: '',
+        checkedAt: checkedAt.toISOString(),
         email,
         domain,
         localPart,
         sources: {
             mx: smtpVerificationResult,
         },
-        exists,
+        exists: success,
     }
+
+    jest.useFakeTimers().setSystemTime(checkedAt)
 
     afterEach(() => {
         jest.clearAllMocks()
@@ -50,18 +52,22 @@ describe('EmailVerifier', () => {
         const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedEmailVerificationResult)
-        expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
+        expect(smtpVerifierMock.verify).toHaveBeenCalledWith(email)
     })
 
     it('should return a verification result when the SMTP verifier confirms the email does not exist', async () => {
-        const smtpEmailDoesNotExist: SMTPVerificationResult = { ...smtpVerificationResult, exists: false }
+        const smtpEmailDoesNotExist: SMTPVerificationResult = { ...smtpVerificationResult, success: false }
         smtpVerifierMock.verify.mockResolvedValueOnce(smtpEmailDoesNotExist)
 
-        const expectedResult: EmailVerificationResponse = { ...expectedEmailVerificationResult, exists: false }
+        const expectedResult: EmailVerificationResponse = {
+            ...expectedEmailVerificationResult,
+            sources: { mx: smtpEmailDoesNotExist },
+            exists: false,
+        }
 
         const result = await emailVerifier.verify({ email })
 
         expect(result).toEqual(expectedResult)
-        expect(smtpVerifierMock.verify).toHaveBeenCalledWith({ email })
+        expect(smtpVerifierMock.verify).toHaveBeenCalledWith(email)
     })
 })
