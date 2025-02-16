@@ -1,7 +1,5 @@
-import type { ExtensibleLogger } from './logger'
+import type { ExtensibleLogger, LogMeta } from './logger'
 import { type Logger as Pino, type LoggerOptions, pino } from 'pino'
-
-type LogMeta = Record<string, unknown>
 
 export class PinoLogger implements ExtensibleLogger {
     private readonly logger: Pino
