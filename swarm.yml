@@ -20,7 +20,6 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       JWT_HS256_SECRET_FILE: /run/secrets/jwt_hs256_secret
       PINO_GELF_HOST: graylog.eu.tuposoft.internal
-      BASE_URL: https://api.leademailfinder.com
       JWT_ISSUER: LeadEmailFinder
       JWT_AUDIENCE: LeadEmailFinder
       CATCH_ALL_HTTP_PROXY_URL_FILE: /run/secrets/catch_all_http_proxy_url

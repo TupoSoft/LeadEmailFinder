@@ -54,7 +54,7 @@ describe(EMAIL_ROUTE, () => {
         domain,
         exists: false,
         localPart,
-        sources: ['SMTP'],
+        sources: ['mx'],
         email,
     }
 

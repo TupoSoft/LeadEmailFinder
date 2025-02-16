@@ -8,7 +8,6 @@ const JWT_HS256_SECRET_MIN_LENGTH = 32
 const stringWithMinLength = z.string().nonempty()
 
 export interface Environment {
-    BASE_URL: string
     NODE_ENV: 'development' | 'production' | 'test'
     PORT: number
     JWT_HS256_SECRET: string
@@ -22,7 +21,6 @@ export interface Environment {
 }
 
 const envSchema = z.object({
-    BASE_URL: stringWithMinLength.url(),
     NODE_ENV: z.enum(['development', 'production', 'test']),
     PORT: z.coerce.number().default(DEFAULT_PORT),
     JWT_HS256_SECRET: z.string().min(JWT_HS256_SECRET_MIN_LENGTH),

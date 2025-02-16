@@ -50,7 +50,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         domain,
         exists: false,
         localPart,
-        sources: ['SMTP'],
+        sources: ['mx'],
         email,
     }
 
