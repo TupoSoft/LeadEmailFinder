@@ -9,6 +9,40 @@ Content-Type: application/json
     })
 %}
 
+### Email exists
+POST {{host}}/emails/verify
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "kyrylo.kupin@gmail.com"
+}
+
+> {%
+    client.test('should be OK', () => {
+        client.assert(response.status === 200)
+        client.assert(response.body.exists === true)
+        client.assert(response.body.sources.includes('SMTP'))
+    })
+%}
+
+### Email exists, catch-all verification
+POST {{host}}/emails/verify
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "kyrylo.kupin@outlook.com"
+}
+
+> {%
+    client.test('should be OK', () => {
+        client.assert(response.status === 200)
+        client.assert(response.body.exists === true)
+        client.assert(response.body.sources.includes('OfficeApps'))
+    })
+%}
+
 ### Verify a single email
 POST {{host}}/emails/verify
 Authorization: Bearer {{token}}
