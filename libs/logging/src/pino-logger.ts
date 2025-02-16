@@ -11,6 +11,7 @@ export class PinoLogger implements ExtensibleLogger {
     info: (message: string, meta?: LogMeta) => void = (message, meta) => {
         this.logger.info(meta, message)
     }
+
     warn: (message: string, meta?: LogMeta) => void = (message, meta) => {
         this.logger.warn(meta, message)
     }
