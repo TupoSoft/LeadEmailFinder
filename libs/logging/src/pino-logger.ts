@@ -26,7 +26,6 @@ export class PinoLogger implements ExtensibleLogger {
 
     child: (bindings: LogMeta) => PinoLogger = bindings =>
         new PinoLogger({
-            ...this.logger,
             base: { ...this.logger.bindings(), ...bindings },
         })
 }
