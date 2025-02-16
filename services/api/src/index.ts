@@ -1,6 +1,5 @@
 import { MongoClientCreator } from './util/mongo'
 import {
-    CatchAllVerifier,
     EmailVerificationRouter,
     EmailVerificationService,
     EmailVerifier,
@@ -43,6 +42,7 @@ import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
 import express, { Router } from 'express'
+import { LinkedInLogin, MicrosoftGetCreds, MicrosoftLogin, OfficeApps } from './email-verification/http'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -86,7 +86,6 @@ async function main(): Promise<void> {
     const axiosHttpClient = new AxiosHttpClient(axiosInstance)
 
     const dnsCache = new DNSCacheImpl(redis)
-    const catchAllVerifier = new CatchAllVerifier(axiosHttpClient)
 
     const proxyRepository = new MongoProxyRepository(db)
     const proxyService = new ProxyService(proxyRepository)
@@ -102,7 +101,15 @@ async function main(): Promise<void> {
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
 
-    const smtpEmailVerifier = new EmailVerifier(smtpVerifier, catchAllVerifier, logger)
+    const microsoftLogin = new MicrosoftLogin(axiosHttpClient)
+    const microsoftGetCreds = new MicrosoftGetCreds(axiosHttpClient)
+    const officeApps = new OfficeApps(axiosHttpClient)
+    const linkedinLogin = new LinkedInLogin(axiosHttpClient)
+    const smtpEmailVerifier = new EmailVerifier(
+        smtpVerifier,
+        [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
+        logger,
+    )
     const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
         smtpEmailVerifier,
         mongoEmailVerificationRepository,

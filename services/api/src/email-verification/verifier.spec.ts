@@ -3,25 +3,19 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerifier } from './verifier'
 import { MockEmailVerificationRepository } from './repository'
-import { MockCatchAllVerifier } from './catch-all-verifier'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResult } from './dto'
-import { PinoLogger } from 'logging'
 
 describe('EmailVerifier', () => {
     const emailVerificationRepositoryMock =
         new MockEmailVerificationRepository() as jest.Mocked<MockEmailVerificationRepository>
     emailVerificationRepositoryMock.save = jest.fn()
 
-    const catchAllVerifierMock = new MockCatchAllVerifier() as jest.Mocked<MockCatchAllVerifier>
-    catchAllVerifierMock.tryAll = jest.fn()
-
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const logger = new PinoLogger()
-    const emailVerifier = new EmailVerifier(smtpVerifierMock, catchAllVerifierMock, logger)
+    const emailVerifier = new EmailVerifier(smtpVerifierMock, [])
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')

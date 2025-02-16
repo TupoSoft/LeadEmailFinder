@@ -1,4 +1,4 @@
-import type { CatchAllVerificationSource } from './catch-all-verifier'
+import type { EMAIL_VERIFICATION_SOURCES } from './constants'
 
 export interface EmailVerificationRequest {
     email: string
@@ -17,7 +17,7 @@ export interface EmailVerificationResult {
     verifiedAt?: Date
 }
 
-export type EmailVerificationSource = CatchAllVerificationSource | 'SMTP'
+export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]
 
 export interface VerifyEmailBulkResponse {
     message: string

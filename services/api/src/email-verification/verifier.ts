@@ -1,10 +1,12 @@
 import type { ISMTPVerifier } from '../smtp'
-import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
+import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificationSource } from './dto'
 import { isNativeError } from 'node:util/types'
 import { ok } from 'node:assert'
 import type { SMTPVerificationResult } from '../smtp/dto'
-import type { CatchAllVerificationResult, ICatchAllVerifier } from './catch-all-verifier'
 import type { Logger } from 'logging'
+import type { CatchAllEmailVerifier } from './http'
+import { isEmptyArray } from '../common'
+import { isEmailVerificationSource } from './type-guards'
 
 export interface IEmailVerifier {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -13,8 +15,8 @@ export interface IEmailVerifier {
 export class EmailVerifier implements IEmailVerifier {
     constructor(
         private readonly smtpVerifier: ISMTPVerifier,
-        private readonly catchAllVerifier: ICatchAllVerifier,
-        private readonly logger: Logger,
+        private readonly catchAllEmailVerifiers: CatchAllEmailVerifier[],
+        private readonly logger: Logger = console,
     ) {}
 
     async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
@@ -39,10 +41,10 @@ export class EmailVerifier implements IEmailVerifier {
             return emailVerification
         }
 
-        const { source, success } = await this.verifyViaHttp(email)
-        if (success) {
-            emailVerification.sources.push(source)
-            emailVerification.exists = success
+        const sources = await this.verifyViaHttp(email)
+        if (!isEmptyArray(sources)) {
+            emailVerification.sources.push(...sources)
+            emailVerification.exists = true
         }
 
         return emailVerification
@@ -61,14 +63,29 @@ export class EmailVerifier implements IEmailVerifier {
         }
     }
 
-    private async verifyViaHttp(email: string): Promise<CatchAllVerificationResult> {
-        try {
-            return await this.catchAllVerifier.tryAll(email)
-        } catch (error) {
-            ok(isNativeError(error))
+    private async verifyViaHttp(email: string): Promise<EmailVerificationSource[]> {
+        const sources: EmailVerificationSource[] = []
 
-            this.logger.error(`Catch-All verification failed for email ${email}: ${error.message}`)
-            return { source: 'None', success: false }
-        }
+        const promiseSettledResult = await Promise.allSettled(
+            this.catchAllEmailVerifiers.map(async httpVerifier => await httpVerifier.verify(email)),
+        )
+
+        promiseSettledResult.forEach((promiseSettledResultItem, index) => {
+            if (promiseSettledResultItem.status === 'fulfilled' && promiseSettledResultItem.value) {
+                const {
+                    catchAllEmailVerifiers: {
+                        [index]: {
+                            constructor: { name: source },
+                        },
+                    },
+                } = this
+
+                if (isEmailVerificationSource(source)) {
+                    sources.push(source)
+                }
+            }
+        })
+
+        return sources
     }
 }

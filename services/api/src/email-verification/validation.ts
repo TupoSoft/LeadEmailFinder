@@ -20,7 +20,6 @@ export const verifyEmailResponseBody = z.object({
             'MimecastLogin',
             'OfficeApps',
             'LinkedInLogin',
-            'None',
         ]),
     ),
     exists: z.boolean().openapi({ example: false }),
