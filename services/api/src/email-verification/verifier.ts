@@ -37,7 +37,7 @@ export class EmailVerifier implements IEmailVerifier {
             emailVerification.exists = exists
             emailVerification.targetExchange = targetExchange
             emailVerification.mxDomain = mxDomain
-            emailVerification.sources.push('SMTP')
+            emailVerification.sources.push('mx')
             return emailVerification
         }
 
@@ -74,14 +74,12 @@ export class EmailVerifier implements IEmailVerifier {
             if (promiseSettledResultItem.status === 'fulfilled' && promiseSettledResultItem.value) {
                 const {
                     catchAllEmailVerifiers: {
-                        [index]: {
-                            constructor: { name: source },
-                        },
+                        [index]: { sourceName },
                     },
                 } = this
 
-                if (isEmailVerificationSource(source)) {
-                    sources.push(source)
+                if (isEmailVerificationSource(sourceName)) {
+                    sources.push(sourceName)
                 }
             }
         })

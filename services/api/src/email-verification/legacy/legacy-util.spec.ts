@@ -10,7 +10,7 @@ describe('toLegacyResult', () => {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
-            sources: ['LinkedInLogin'],
+            sources: ['linkedin'],
             exists: true,
             targetExchange: 'exchange.example.com',
         }
@@ -61,7 +61,7 @@ describe('toLegacyResult', () => {
     })
 
     it('should map catchAll using mapCatchAllStatus function', () => {
-        const sources: EmailVerificationSource[] = ['SMTP']
+        const sources: EmailVerificationSource[] = ['mx']
 
         const input: EmailVerificationResult = {
             email: 'test@example.com',

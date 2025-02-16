@@ -1,11 +1,12 @@
 import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
+import type { EmailVerificationSource } from '../dto'
 
 export interface MicrosoftGetCredsResponseData {
     IfExistsResult: number
 }
 
-export class MicrosoftGetCreds implements CatchAllEmailVerifier {
+export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
     private static readonly URL = 'https://login.microsoftonline.com/common/GetCredentialType'
 
     private static readonly HEADERS = {
@@ -48,6 +49,8 @@ export class MicrosoftGetCreds implements CatchAllEmailVerifier {
 
     private static readonly EXISTS_RESULT = [0, 5, 6]
 
+    sourceName: EmailVerificationSource = 'microsoft_4'
+
     constructor(private readonly httpClient: HttpClient) {}
 
     verify: (email: string) => Promise<boolean> = async email => {
@@ -57,7 +60,7 @@ export class MicrosoftGetCreds implements CatchAllEmailVerifier {
             PARAMS: params,
             HEADERS: headers,
             EXISTS_RESULT: existsResult,
-        } = MicrosoftGetCreds
+        } = MicrosoftGetCredentialType
 
         data.username = email
 

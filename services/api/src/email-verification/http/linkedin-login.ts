@@ -2,6 +2,7 @@ import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import { AxiosError } from 'axios'
 import { constants } from 'node:http2'
 import type { HttpClient } from '../../http-client'
+import type { EmailVerificationSource } from '../dto'
 
 export class LinkedInLogin implements CatchAllEmailVerifier {
     private static readonly URL = 'https://www.linkedin.com/checkpoint/rp/request-password-reset-submit'
@@ -28,6 +29,8 @@ export class LinkedInLogin implements CatchAllEmailVerifier {
         fp_data: 'default',
         apfc: {},
     }
+
+    sourceName: EmailVerificationSource = 'linkedin'
 
     constructor(private readonly httpClient: HttpClient) {}
 

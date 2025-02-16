@@ -5,11 +5,4 @@ export const VERIFY_EMAIL_BULK_ROUTE = `${VERIFY_EMAIL_ROUTE}/bulk`
 export const VERIFY_EMAIL_BULK_RESULT_ROUTE = `${VERIFY_EMAIL_BULK_ROUTE}/:id`
 export const VERIFY_EMAIL_BULK_STATUS_ROUTE = `${VERIFY_EMAIL_BULK_RESULT_ROUTE}/status`
 
-export const EMAIL_VERIFICATION_SOURCES = [
-    'SMTP',
-    'MicrosoftGetCredentialType',
-    'MicrosoftLogin',
-    'MimecastLogin',
-    'OfficeApps',
-    'LinkedInLogin',
-] as const
+export const EMAIL_VERIFICATION_SOURCES = ['mx', 'microsoft_4', 'outlook', 'mimecast', 'o365', 'linkedin'] as const

@@ -36,7 +36,7 @@ describe('EmailVerifier', () => {
         domain,
         localPart,
         targetExchange,
-        sources: ['SMTP'],
+        sources: ['mx'],
         exists,
         mxDomain,
     }

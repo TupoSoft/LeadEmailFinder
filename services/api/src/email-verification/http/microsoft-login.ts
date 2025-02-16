@@ -1,6 +1,7 @@
 import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
 import { AxiosError } from 'axios'
+import type { EmailVerificationSource } from '../dto'
 
 export interface MicrosoftError {
     error: string
@@ -30,6 +31,8 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
         password: 'Password1',
         scope: 'openid',
     }
+
+    sourceName: EmailVerificationSource = 'outlook'
 
     constructor(private readonly httpClient: HttpClient) {}
 

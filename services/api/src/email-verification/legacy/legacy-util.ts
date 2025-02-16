@@ -6,7 +6,7 @@ import { CatchAllStatus, DeliveryStatus } from './enums'
 function mapCatchAllStatus(sources: EmailVerificationSource[]): CatchAllStatus {
     if (isEmptyArray(sources)) {
         return CatchAllStatus.Unknown
-    } else if (sources.includes('SMTP')) {
+    } else if (sources.includes('mx')) {
         return CatchAllStatus.Disabled
     } else {
         return CatchAllStatus.Enabled

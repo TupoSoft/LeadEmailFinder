@@ -42,7 +42,7 @@ import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
 import express, { Router } from 'express'
-import { LinkedInLogin, MicrosoftGetCreds, MicrosoftLogin, OfficeApps } from './email-verification/http'
+import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps } from './email-verification/http'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
     await mongoEmailVerificationRepository.init()
 
     const microsoftLogin = new MicrosoftLogin(axiosHttpClient)
-    const microsoftGetCreds = new MicrosoftGetCreds(axiosHttpClient)
+    const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
     const smtpEmailVerifier = new EmailVerifier(
