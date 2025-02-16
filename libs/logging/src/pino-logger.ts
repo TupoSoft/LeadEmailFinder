@@ -23,8 +23,9 @@ export class PinoLogger implements ExtensibleLogger {
         this.logger.debug(meta, message)
     }
 
-    child: (bindings: Record<string, unknown>) => PinoLogger = bindings => {
-        const childLogger = this.logger.child(bindings)
-        return new PinoLogger(childLogger)
-    }
+    child: (bindings: Record<string, unknown>) => PinoLogger = bindings =>
+        new PinoLogger({
+            ...this.logger,
+            base: { ...this.logger.bindings(), ...bindings },
+        })
 }

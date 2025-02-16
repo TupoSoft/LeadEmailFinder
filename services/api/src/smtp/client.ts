@@ -165,7 +165,6 @@ export class SmtpClientImpl implements SmtpClient {
             this.logger?.error(`Error in SMTP response: ${message}`, {
                 smtpResponseCode: code,
                 smtpResponseEnhancedCode: enhancedCode,
-                smtpResponseMessage: message,
             })
 
             throw new SmtpError(code, enhancedCode, message)
