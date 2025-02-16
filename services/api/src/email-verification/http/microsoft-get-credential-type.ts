@@ -1,12 +1,12 @@
-import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
 import type { EmailVerificationSource } from '../dto'
+import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export interface MicrosoftGetCredsResponseData {
     IfExistsResult: number
 }
 
-export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
+export class MicrosoftGetCredentialType implements EmailVerifier {
     private static readonly URL = 'https://login.microsoftonline.com/common/GetCredentialType'
 
     private static readonly HEADERS = {
@@ -53,7 +53,11 @@ export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
 
     constructor(private readonly httpClient: HttpClient) {}
 
-    verify: (email: string) => Promise<boolean> = async email => {
+    verify: (email: string) => Promise<EmailVerificationResult> = async email => {
+        const result: EmailVerificationResult = {
+            success: false,
+        }
+
         const {
             URL: url,
             DATA: data,
@@ -71,10 +75,10 @@ export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
             })
 
             if (existsResult.includes(IfExistsResult)) {
-                return true
+                result.success = true
             }
         } catch (error: unknown) {}
 
-        return false
+        return result
     }
 }

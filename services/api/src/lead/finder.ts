@@ -1,4 +1,4 @@
-import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
+import type { EmailVerificationResponse, EmailVerificationService } from '../email-verification'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
 import { NO_USAGES } from './constants'
@@ -63,7 +63,7 @@ export class LeadFinder {
     private async findEmailForFormats(
         findLeadRequest: FindLeadRequest,
         formatUsages: EmailPatternUsage[],
-    ): Promise<EmailVerificationResult> {
+    ): Promise<EmailVerificationResponse> {
         const verificationResultPromises = this.getVerificationResultPromises(findLeadRequest, formatUsages)
         ok(!isEmptyArray(verificationResultPromises))
 
@@ -77,10 +77,10 @@ export class LeadFinder {
     private getVerificationResultPromises(
         findLeadRequest: FindLeadRequest,
         emailPatternUsages: EmailPatternUsage[],
-    ): Array<Promise<EmailVerificationResult>> {
+    ): Array<Promise<EmailVerificationResponse>> {
         const formats = getFormatToEmailMapForLead(findLeadRequest)
 
-        const verificationResultPromises: Array<Promise<EmailVerificationResult>> = []
+        const verificationResultPromises: Array<Promise<EmailVerificationResponse>> = []
 
         for (const { pattern: format } of emailPatternUsages) {
             const email = formats.get(format)

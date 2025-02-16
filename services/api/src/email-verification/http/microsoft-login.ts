@@ -1,7 +1,7 @@
-import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
 import { AxiosError } from 'axios'
 import type { EmailVerificationSource } from '../dto'
+import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export interface MicrosoftError {
     error: string
@@ -13,7 +13,7 @@ export interface MicrosoftError {
     error_uri: string
 }
 
-export class MicrosoftLogin implements CatchAllEmailVerifier {
+export class MicrosoftLogin implements EmailVerifier {
     private static readonly URL = 'https://login.microsoft.com/common/oauth2/token'
 
     private static readonly HEADERS = {
@@ -36,7 +36,11 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
 
     constructor(private readonly httpClient: HttpClient) {}
 
-    verify: (email: string) => Promise<boolean> = async email => {
+    verify: (email: string) => Promise<EmailVerificationResult> = async email => {
+        const result: EmailVerificationResult = {
+            success: false,
+        }
+
         const { URL: url, HEADERS: headers, BODY: body } = MicrosoftLogin
         body.username = email
 
@@ -55,12 +59,12 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
                     } = response
 
                     if (errorCodes.some(value => acceptableErrorCodes.has(value))) {
-                        return true
+                        result.success = true
                     }
                 }
             }
         }
 
-        return false
+        return result
     }
 }

@@ -1,6 +1,6 @@
 import type { LegacyEmailVerificationResult } from './dto'
 import { isEmptyArray } from '../../common'
-import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
+import type { EmailVerificationResponse, EmailVerificationSource } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 
 function mapCatchAllStatus(sources: EmailVerificationSource[]): CatchAllStatus {
@@ -31,7 +31,7 @@ export function toLegacyResult({
     exists,
     targetExchange,
     verifiedAt,
-}: EmailVerificationResult): LegacyEmailVerificationResult {
+}: EmailVerificationResponse): LegacyEmailVerificationResult {
     const catchAll = mapCatchAllStatus(sources)
     const deliveryStatus = mapDeliveryStatus(exists)
 

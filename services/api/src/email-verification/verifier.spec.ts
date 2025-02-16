@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { EmailVerifier } from './verifier'
+import { EmailVerificationRunner } from './verifier'
 import { MockEmailVerificationRepository } from './repository'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
-import type { EmailVerificationResult } from './dto'
+import type { EmailVerificationResponse } from './dto'
 
 describe('EmailVerifier', () => {
     const emailVerificationRepositoryMock =
@@ -15,7 +15,7 @@ describe('EmailVerifier', () => {
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerifier = new EmailVerifier(smtpVerifierMock, [])
+    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
@@ -31,7 +31,7 @@ describe('EmailVerifier', () => {
         targetExchange,
     }
 
-    const expectedEmailVerificationResult: EmailVerificationResult = {
+    const expectedEmailVerificationResult: EmailVerificationResponse = {
         email,
         domain,
         localPart,
@@ -58,7 +58,7 @@ describe('EmailVerifier', () => {
         const smtpEmailDoesNotExist: SMTPVerificationResult = { ...smtpVerificationResult, exists: false }
         smtpVerifierMock.verify.mockResolvedValueOnce(smtpEmailDoesNotExist)
 
-        const expectedResult: EmailVerificationResult = { ...expectedEmailVerificationResult, exists: false }
+        const expectedResult: EmailVerificationResponse = { ...expectedEmailVerificationResult, exists: false }
 
         const result = await emailVerifier.verify({ email })
 

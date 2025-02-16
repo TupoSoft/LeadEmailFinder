@@ -1,7 +1,7 @@
-import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { AxiosRequestConfig } from 'axios'
 import type { HttpClient } from '../../http-client'
 import type { EmailVerificationSource } from '../dto'
+import type { EmailVerificationResult, EmailVerifier } from '../email-verifier'
 
 export type Authenticate = 'Basic-Cloud' | 'Basic-Ad' | 'SAML' | 'JWT'
 
@@ -21,7 +21,7 @@ export interface MimecastData {
     ]
 }
 
-export class MimecastLogin implements CatchAllEmailVerifier {
+export class MimecastLogin implements EmailVerifier {
     private static readonly URL = 'https://login-{countryCode}.mimecast.com/u/proxy/api/login/discover-authentication'
 
     private static readonly HEADERS = {
@@ -44,7 +44,11 @@ export class MimecastLogin implements CatchAllEmailVerifier {
 
     constructor(private readonly httpClient: HttpClient) {}
 
-    verify: (email: string) => Promise<boolean> = async email => {
+    verify: (email: string) => Promise<EmailVerificationResult> = async email => {
+        const result: EmailVerificationResult = {
+            success: false,
+        }
+
         const { URL: url, HEADERS: headers, EXPECTED_AUTH_TYPES: expectedAuthTypes } = MimecastLogin
 
         const countryCodes = ['us', 'uk']
@@ -68,7 +72,7 @@ export class MimecastLogin implements CatchAllEmailVerifier {
 
             for (const authType of authTypes) {
                 if (expectedAuthTypes.includes(authType)) {
-                    return true
+                    result.success = true
                 }
             }
 
@@ -79,6 +83,6 @@ export class MimecastLogin implements CatchAllEmailVerifier {
             return await Promise.any(promises)
         } catch (error) {}
 
-        return false
+        return result
     }
 }

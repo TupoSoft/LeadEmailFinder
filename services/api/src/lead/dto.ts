@@ -1,4 +1,4 @@
-import type { EmailVerificationResult } from '../email-verification'
+import type { EmailVerificationResponse } from '../email-verification'
 
 export type FindLeadRequest = { domain: string } & (
     | { firstName: string; lastName?: string }
@@ -6,7 +6,7 @@ export type FindLeadRequest = { domain: string } & (
 )
 
 export type FindLeadResult = FindLeadRequest & {
-    emails: EmailVerificationResult[]
+    emails: EmailVerificationResponse[]
 }
 
 export interface FindBulkResponse {

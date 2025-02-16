@@ -1,6 +1,6 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
-import type { EmailVerificationResult } from './dto'
+import type { EmailVerificationResponse } from './dto'
 
 const email = z.string().email().openapi({ example: 'danilo@microsoft.com' })
 
@@ -14,7 +14,7 @@ export const verifyEmailResponseBody = z.object({
     domain: z.string().nonempty().openapi({ example: 'microsoft.com' }),
     sources: z.array(z.enum(['mx', 'microsoft_4', 'outlook', 'mimecast', 'o365', 'linkedin'])),
     exists: z.boolean().openapi({ example: false }),
-}) satisfies ZodType<EmailVerificationResult>
+}) satisfies ZodType<EmailVerificationResponse>
 
 export const verifyEmailBulkRequestBody = z.object({
     emails: z.array(email),

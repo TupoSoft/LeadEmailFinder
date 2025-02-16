@@ -1,8 +1,8 @@
-import type { IEmailVerifier } from './verifier'
+import type { IEmailVerificationRunner } from './verifier'
 import type { EmailVerificationRepository } from './repository'
 import type {
     EmailVerificationRequest,
-    EmailVerificationResult,
+    EmailVerificationResponse,
     VerifyEmailBulkResponse,
     VerifyEmailBulkStatusResponse,
 } from './dto'
@@ -11,23 +11,23 @@ import type { EmailVerificationQueue } from './queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 
 export interface IEmailVerificationService {
-    verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
+    verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResponse>
 
     verifyBulk: (emails: string[]) => Promise<VerifyEmailBulkResponse>
 
     getVerifyBulkStatus: (id: string) => Promise<VerifyEmailBulkStatusResponse>
 
-    getVerifyBulkResult: (id: string) => Promise<EmailVerificationResult[]>
+    getVerifyBulkResult: (id: string) => Promise<EmailVerificationResponse[]>
 }
 
 export class EmailVerificationService implements IEmailVerificationService {
     constructor(
-        private readonly emailVerifier: IEmailVerifier,
+        private readonly emailVerifier: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly emailVerificationQueue: EmailVerificationQueue,
     ) {}
 
-    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
+    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResponse> {
         return await this.emailVerifier.verify(emailVerificationRequest)
     }
 
@@ -49,7 +49,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         }
     }
 
-    async getVerifyBulkResult(id: string): Promise<EmailVerificationResult[]> {
+    async getVerifyBulkResult(id: string): Promise<EmailVerificationResponse[]> {
         return await this.emailVerificationQueue.getResult(id)
     }
 

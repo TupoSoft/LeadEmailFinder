@@ -1,6 +1,7 @@
 import type { SmtpResponseCode } from './enums'
+import type { EmailVerificationResult } from '../email-verification'
 
-export interface SMTPVerificationResult {
+export interface SMTPVerificationResult extends EmailVerificationResult {
     exists?: boolean
     catchAllStatus?: boolean
     targetExchange?: string

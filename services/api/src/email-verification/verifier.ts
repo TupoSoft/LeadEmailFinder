@@ -1,29 +1,29 @@
 import type { ISMTPVerifier } from '../smtp'
-import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificationSource } from './dto'
+import type { EmailVerificationRequest, EmailVerificationResponse, EmailVerificationSource } from './dto'
 import { isNativeError } from 'node:util/types'
 import { ok } from 'node:assert'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { Logger } from 'logging'
-import type { CatchAllEmailVerifier } from './http'
+import type { EmailVerifier } from './http'
 import { isEmptyArray } from '../common'
 import { isEmailVerificationSource } from './type-guards'
 
-export interface IEmailVerifier {
-    verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
+export interface IEmailVerificationRunner {
+    verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResponse>
 }
 
-export class EmailVerifier implements IEmailVerifier {
+export class EmailVerificationRunner implements IEmailVerificationRunner {
     constructor(
         private readonly smtpVerifier: ISMTPVerifier,
-        private readonly catchAllEmailVerifiers: CatchAllEmailVerifier[],
+        private readonly catchAllEmailVerifiers: EmailVerifier[],
         private readonly logger: Logger = console,
     ) {}
 
-    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
+    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResponse> {
         const { email, format } = emailVerificationRequest
         const [localPart, domain] = email.split('@')
 
-        const emailVerification: EmailVerificationResult = {
+        const emailVerification: EmailVerificationResponse = {
             exists: null,
             sources: [],
             domain,

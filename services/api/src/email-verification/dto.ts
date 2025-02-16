@@ -5,7 +5,7 @@ export interface EmailVerificationRequest {
     format?: string
 }
 
-export interface EmailVerificationResult {
+export interface EmailVerificationResponse {
     email: string
     domain: string
     localPart: string

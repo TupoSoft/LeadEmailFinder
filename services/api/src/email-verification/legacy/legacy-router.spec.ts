@@ -5,7 +5,7 @@ import { constants } from 'node:http2'
 import { ErrorMiddleware } from '../../middleware/handle-error'
 import { LegacyEmailVerificationController } from './legacy-controller'
 import type { IEmailVerificationService } from '../service'
-import type { EmailVerificationResult } from '../dto'
+import type { EmailVerificationResponse } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
@@ -46,7 +46,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
     const [localPart, domain] = email.split('@')
     const verifiedAt = new Date('2025-01-01')
 
-    const verificationResult: EmailVerificationResult = {
+    const verificationResult: EmailVerificationResponse = {
         domain,
         exists: false,
         localPart,

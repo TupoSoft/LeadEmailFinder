@@ -1,12 +1,12 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
-import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
+import type { EmailVerificationResponse, EmailVerificationSource } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import type { LegacyEmailVerificationResult } from './dto'
 
 describe('toLegacyResult', () => {
     it('should map correctly', () => {
-        const input: EmailVerificationResult = {
+        const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
@@ -27,7 +27,7 @@ describe('toLegacyResult', () => {
 
     it('should map verifiedAt to input value if provided', () => {
         const verifiedAt = new Date('2023-01-01')
-        const input: EmailVerificationResult = {
+        const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
@@ -43,7 +43,7 @@ describe('toLegacyResult', () => {
     })
 
     it('should default verifiedAt to current date if not provided', () => {
-        const input: EmailVerificationResult = {
+        const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',
@@ -63,7 +63,7 @@ describe('toLegacyResult', () => {
     it('should map catchAll using mapCatchAllStatus function', () => {
         const sources: EmailVerificationSource[] = ['mx']
 
-        const input: EmailVerificationResult = {
+        const input: EmailVerificationResponse = {
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',

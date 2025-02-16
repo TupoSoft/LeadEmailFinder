@@ -1,8 +1,8 @@
 import { MongoClientCreator } from './util/mongo'
 import {
     EmailVerificationRouter,
+    EmailVerificationRunner,
     EmailVerificationService,
-    EmailVerifier,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
 } from './email-verification'
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
-    const smtpEmailVerifier = new EmailVerifier(
+    const smtpEmailVerifier = new EmailVerificationRunner(
         smtpVerifier,
         [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
         logger,

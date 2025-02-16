@@ -1,12 +1,12 @@
 import { type Db, ObjectId } from 'mongodb'
-import type { EmailVerificationResult, EmailVerificationSource } from './dto'
+import type { EmailVerificationResponse, EmailVerificationSource } from './dto'
 import { DESCENDING, generateObjectIdAsync } from '../util/mongo'
 import type { EmailPatternUsage } from '../domain'
 
 export interface EmailVerificationRepository {
-    save: (emailVerification: EmailVerificationResult) => Promise<void>
-    findById: (id: string) => Promise<EmailVerificationResult>
-    findByEmail: (email: string) => Promise<EmailVerificationResult>
+    save: (emailVerification: EmailVerificationResponse) => Promise<void>
+    findById: (id: string) => Promise<EmailVerificationResponse>
+    findByEmail: (email: string) => Promise<EmailVerificationResponse>
     aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
@@ -40,21 +40,21 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         await this.collection.createIndex(['domain', 'format'])
     }
 
-    findByEmail: (email: string) => Promise<EmailVerificationResult> = async (
+    findByEmail: (email: string) => Promise<EmailVerificationResponse> = async (
         email: string,
-    ): Promise<EmailVerificationResult> => {
+    ): Promise<EmailVerificationResponse> => {
         const dataModel = await this.collection.findOne({ email })
         if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
         return dataModel
     }
 
-    async findById(id: string): Promise<EmailVerificationResult> {
+    async findById(id: string): Promise<EmailVerificationResponse> {
         const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
         if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
         return dataModel
     }
 
-    async save(emailVerification: EmailVerificationResult): Promise<void> {
+    async save(emailVerification: EmailVerificationResponse): Promise<void> {
         await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
     }
 
@@ -114,9 +114,9 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 export class MockEmailVerificationRepository implements EmailVerificationRepository {
     aggregateEmailPatternUsageForDomain!: (domain: string) => Promise<EmailPatternUsage[]>
 
-    findById!: (id: string) => Promise<EmailVerificationResult>
+    findById!: (id: string) => Promise<EmailVerificationResponse>
 
-    findByEmail!: (email: string) => Promise<EmailVerificationResult>
+    findByEmail!: (email: string) => Promise<EmailVerificationResponse>
 
-    save!: (emailVerification: EmailVerificationResult) => Promise<void>
+    save!: (emailVerification: EmailVerificationResponse) => Promise<void>
 }

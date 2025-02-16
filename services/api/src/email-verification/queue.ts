@@ -1,11 +1,11 @@
-import type { EmailVerificationResult } from './dto'
+import type { EmailVerificationResponse } from './dto'
 import type { Queue } from 'bullmq'
 import { ok } from 'node:assert'
 import { JobNotFoundError } from './errors'
 
 type DataType = string[]
 
-type ResultType = EmailVerificationResult[]
+type ResultType = EmailVerificationResponse[]
 
 type NameType = 'verifyBulk'
 

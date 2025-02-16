@@ -10,16 +10,9 @@ import { appendRandomPrefix } from '../util/string'
 import { isIP } from 'node:net'
 import { ZERO } from '../common'
 import type { CatchAllCache } from './catch-all-cache'
+import type { EmailVerifier } from '../email-verification'
 
-export interface SMTPVerifyOptions {
-    email: string
-}
-
-export interface ISMTPVerifier {
-    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
-}
-
-export class SMTPVerifier implements ISMTPVerifier {
+export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
     constructor(
         private readonly dnsCache: DNSCache,
         private readonly catchAllCache: CatchAllCache,
@@ -40,8 +33,11 @@ export class SMTPVerifier implements ISMTPVerifier {
         }
     }
 
-    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async ({ email }) => {
-        const smtpVerificationResult: SMTPVerificationResult = {}
+    verify: (email: string) => Promise<SMTPVerificationResult> = async email => {
+        const smtpVerificationResult: SMTPVerificationResult = {
+            success: false,
+        }
+
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
@@ -153,6 +149,6 @@ export class SMTPVerifier implements ISMTPVerifier {
     }
 }
 
-export class MockSMTPVerifier implements ISMTPVerifier {
-    verify!: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
+export class MockSMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
+    verify!: (email: string) => Promise<SMTPVerificationResult>
 }
