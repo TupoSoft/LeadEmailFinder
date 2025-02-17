@@ -104,7 +104,7 @@ export class SmtpClientImpl implements SmtpClient {
 
             this.socket.once('close', onClose)
             this.socket.once('timeout', () => {
-                this.logger?.debug(`Socket timed out`)
+                this.logger?.info(`Socket timed out`)
                 this.socket.end()
             })
 
@@ -149,7 +149,7 @@ export class SmtpClientImpl implements SmtpClient {
 
     private async readResponse(): Promise<SmtpResponse> {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
-        this.logger?.debug(`Response: ${response}`)
+        this.logger?.info(`Response: ${response}`)
 
         const responseLines = response.split('\r\n')
 
@@ -174,7 +174,7 @@ export class SmtpClientImpl implements SmtpClient {
     }
 
     private async sendCommand(command: string): Promise<void> {
-        this.logger?.debug(`Sending command: ${command}`)
+        this.logger?.info(`Sending command: ${command}`)
 
         await write(this.socket, `${command}\r\n`)
         await this.readResponse()
