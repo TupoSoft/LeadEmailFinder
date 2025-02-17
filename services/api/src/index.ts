@@ -4,7 +4,10 @@ import {
     EmailVerificationRunner,
     EmailVerificationService,
     ExpressEmailVerificationController,
+    mimecastStrategy,
     MongoEmailVerificationRepository,
+    outlookStrategy,
+    smtpStrategy,
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
@@ -128,13 +131,16 @@ async function main(): Promise<void> {
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
-    const smtpEmailVerifier = new EmailVerificationRunner({
-        mx: smtpVerifier,
-        outlook: microsoftLogin,
-        microsoft_4: microsoftGetCreds,
-        o365: officeApps,
-        linkedin: linkedinLogin,
-    })
+    const smtpEmailVerifier = new EmailVerificationRunner(
+        {
+            mx: smtpVerifier,
+            outlook: microsoftLogin,
+            microsoft_4: microsoftGetCreds,
+            o365: officeApps,
+            linkedin: linkedinLogin,
+        },
+        [smtpStrategy, outlookStrategy, mimecastStrategy],
+    )
     const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
         smtpEmailVerifier,
         mongoEmailVerificationRepository,

@@ -6,13 +6,19 @@ export interface EmailVerificationRequest {
     format?: string
 }
 
+export const enum ExistenceStatus {
+    Exists = 'exists',
+    DoesNotExist = 'does_not_exist',
+    Unknown = 'unknown',
+}
+
 export interface EmailVerificationResponse {
     email: string
     domain: string
-    localPart: string
+    username: string
     format?: string
     sources: Record<string, EmailVerificationResult>
-    exists: boolean | null
+    status: ExistenceStatus
     checkedAt: string
 }
 
@@ -26,4 +32,9 @@ export interface VerifyEmailBulkResponse {
 
 export interface VerifyEmailBulkStatusResponse {
     status: string
+}
+
+export interface ExistenceStrategy {
+    predicate: (results: Record<string, EmailVerificationResult>) => boolean
+    action: (results: Record<string, EmailVerificationResult>) => ExistenceStatus
 }

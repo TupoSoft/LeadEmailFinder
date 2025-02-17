@@ -1,6 +1,6 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
-import type { EmailVerificationResponse } from '../dto'
+import { type EmailVerificationResponse, ExistenceStatus } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import type { LegacyEmailVerificationResult } from './dto'
 import type { SMTPVerificationResult } from '../../smtp/dto'
@@ -17,12 +17,12 @@ describe('toLegacyResult', () => {
 
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
-            localPart: 'test',
+            username: 'test',
             domain: 'example.com',
             sources: {
                 mx: smtpVerificationResult,
             },
-            exists: true,
+            status: ExistenceStatus.Exists,
             checkedAt: '',
         }
 
@@ -45,12 +45,12 @@ describe('toLegacyResult', () => {
         const verifiedAt = new Date('2023-01-01')
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
-            localPart: 'test',
+            username: 'test',
             domain: 'example.com',
             sources: {
                 mx: smtpVerificationResult,
             },
-            exists: true,
+            status: ExistenceStatus.Unknown,
             checkedAt: verifiedAt.toISOString(),
         }
 
@@ -68,12 +68,12 @@ describe('toLegacyResult', () => {
         const input: EmailVerificationResponse = {
             checkedAt: '',
             email: 'test@example.com',
-            localPart: 'test',
+            username: 'test',
             domain: 'example.com',
             sources: {
                 mx: smtpVerificationResult,
             },
-            exists: true,
+            status: ExistenceStatus.Unknown,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -92,12 +92,12 @@ describe('toLegacyResult', () => {
 
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
-            localPart: 'test',
+            username: 'test',
             domain: 'example.com',
             sources: {
                 mx: smtpVerificationResult,
             },
-            exists: true,
+            status: ExistenceStatus.Exists,
             checkedAt: '',
         }
 

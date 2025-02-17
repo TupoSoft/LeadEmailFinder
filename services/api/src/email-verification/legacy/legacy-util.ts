@@ -1,5 +1,5 @@
 import type { LegacyEmailVerificationResult } from './dto'
-import type { EmailVerificationResponse } from '../dto'
+import { type EmailVerificationResponse, ExistenceStatus } from '../dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import type { SMTPVerificationResult } from '../../smtp/dto'
 
@@ -11,35 +11,36 @@ function mapCatchAllStatus(catchAllStatus?: boolean): CatchAllStatus {
     }
 }
 
-function mapDeliveryStatus(exists: boolean | null): DeliveryStatus {
-    if (exists === null) {
-        return DeliveryStatus.NotProcessed
-    } else if (exists) {
-        return DeliveryStatus.Accepted
-    } else {
-        return DeliveryStatus.Rejected
+function mapDeliveryStatus(exists: ExistenceStatus): DeliveryStatus {
+    switch (exists) {
+        case ExistenceStatus.Exists:
+            return DeliveryStatus.Accepted
+        case ExistenceStatus.DoesNotExist:
+            return DeliveryStatus.Rejected
+        case ExistenceStatus.Unknown:
+            return DeliveryStatus.NotProcessed
     }
 }
 
 export function toLegacyResult({
     email,
-    localPart,
+    username,
     domain,
     sources,
-    exists,
+    status,
     checkedAt,
 }: EmailVerificationResponse): LegacyEmailVerificationResult {
     const mxData = sources.mx as SMTPVerificationResult
     const { catchAll, mxRecord } = mxData
     const catchAllStatus = mapCatchAllStatus(catchAll)
-    const deliveryStatus = mapDeliveryStatus(exists)
+    const deliveryStatus = mapDeliveryStatus(status)
 
     return {
         catchAll: catchAllStatus,
         deliveryStatus,
         verifiedAt: checkedAt !== '' ? new Date(checkedAt) : new Date(),
         email,
-        localPart,
+        localPart: username,
         domain,
         targetExchange: mxRecord,
     }

@@ -11,7 +11,7 @@ import type { IEmailVerificationService } from './service'
 import { ExpressEmailVerificationController } from './controller'
 import { EmailVerificationRouter } from './router'
 import type { IAuthMiddleware } from '../middleware'
-import type { EmailVerificationResponse, VerifyEmailBulkResponse } from './dto'
+import { type EmailVerificationResponse, ExistenceStatus, type VerifyEmailBulkResponse } from './dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
@@ -58,8 +58,8 @@ describe(EMAIL_ROUTE, () => {
     const verificationResult: EmailVerificationResponse = {
         checkedAt: '',
         domain,
-        exists: false,
-        localPart,
+        status: ExistenceStatus.DoesNotExist,
+        username: localPart,
         sources: {
             mx: smtpVerificationResult,
         },

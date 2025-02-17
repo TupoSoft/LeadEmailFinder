@@ -1,6 +1,6 @@
-import type { EmailVerificationRequest, EmailVerificationResponse } from './dto'
+import { type EmailVerificationRequest, type EmailVerificationResponse, ExistenceStatus } from './dto'
 import type { EmailVerificationRepository } from './repository'
-import type { IEmailVerificationRunner } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 
 export class ThrowableEmailVerifierDecorator implements IEmailVerificationRunner {
     constructor(private readonly emailVerifier: IEmailVerificationRunner) {}
@@ -8,9 +8,9 @@ export class ThrowableEmailVerifierDecorator implements IEmailVerificationRunner
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResponse> =
         async emailVerificationRequest => {
             const emailVerificationResult = await this.emailVerifier.verify(emailVerificationRequest)
-            const { email, exists } = emailVerificationResult
+            const { email, status } = emailVerificationResult
 
-            if (exists !== true) {
+            if (status !== ExistenceStatus.Exists) {
                 throw new Error(`The email ${email} doesn't exist`)
             }
 

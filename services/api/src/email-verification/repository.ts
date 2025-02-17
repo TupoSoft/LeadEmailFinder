@@ -1,5 +1,5 @@
 import { type Db, ObjectId } from 'mongodb'
-import type { EmailVerificationResponse } from './dto'
+import { type EmailVerificationResponse, ExistenceStatus } from './dto'
 import { DESCENDING, generateObjectIdAsync } from '../util/mongo'
 import type { EmailPatternUsage } from '../domain'
 import type { EmailVerificationResult } from './email-verifier'
@@ -12,13 +12,12 @@ export interface EmailVerificationRepository {
 }
 
 interface EmailVerificationSchema {
-    _id?: ObjectId
+    _id: ObjectId
     email: string
     domain: string
     localPart: string
     format?: string
     targetExchange?: string
-    verifiedAt?: Date
     exists: boolean | null
     sources: Record<string, EmailVerificationResult>
 }
@@ -36,6 +35,52 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         this.collection = db.collection<EmailVerificationSchema>('emailVerifications')
     }
 
+    private static fromSchema({
+        exists,
+        sources,
+        domain,
+        email,
+        _id,
+        format,
+        localPart,
+    }: EmailVerificationSchema): EmailVerificationResponse {
+        const status =
+            exists === null ? ExistenceStatus.Unknown : exists ? ExistenceStatus.Exists : ExistenceStatus.DoesNotExist
+
+        return {
+            status,
+            sources,
+            domain,
+            email,
+            checkedAt: _id.getTimestamp().toISOString(),
+            format,
+            username: localPart,
+        }
+    }
+
+    private static async toSchema({
+        status,
+        username,
+        email,
+        domain,
+        sources,
+        format,
+        checkedAt,
+    }: EmailVerificationResponse): Promise<EmailVerificationSchema> {
+        const exists = status === ExistenceStatus.Unknown ? null : status === ExistenceStatus.Exists
+        const localPart = username
+
+        return {
+            _id: await generateObjectIdAsync(),
+            exists,
+            localPart,
+            email,
+            domain,
+            sources,
+            format,
+        }
+    }
+
     async init(): Promise<void> {
         await this.collection.createIndex('email')
         await this.collection.createIndex(['domain', 'format'])
@@ -46,17 +91,18 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     ): Promise<EmailVerificationResponse> => {
         const dataModel = await this.collection.findOne({ email })
         if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
-        return { ...dataModel, checkedAt: dataModel._id.getTimestamp().toISOString() }
+        return MongoEmailVerificationRepository.fromSchema(dataModel)
     }
 
     async findById(id: string): Promise<EmailVerificationResponse> {
         const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
         if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
-        return { ...dataModel, checkedAt: dataModel._id.getTimestamp().toISOString() }
+        return MongoEmailVerificationRepository.fromSchema(dataModel)
     }
 
     async save(emailVerification: EmailVerificationResponse): Promise<void> {
-        await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
+        const schema = await MongoEmailVerificationRepository.toSchema(emailVerification)
+        await this.collection.insertOne(schema)
     }
 
     aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>

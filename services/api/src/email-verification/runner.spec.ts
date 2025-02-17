@@ -1,18 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { EmailVerificationRunner } from './verifier'
+import { EmailVerificationRunner } from './runner'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
-import type { EmailVerificationResponse } from './dto'
+import { type EmailVerificationResponse, ExistenceStatus } from './dto'
+import { smtpStrategy } from './existence-strategies'
 
 describe('EmailVerifier', () => {
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerifier = new EmailVerificationRunner({
-        mx: smtpVerifierMock,
-    })
+    const emailVerifier = new EmailVerificationRunner(
+        {
+            mx: smtpVerifierMock,
+        },
+        [smtpStrategy],
+    )
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
@@ -33,11 +37,11 @@ describe('EmailVerifier', () => {
         checkedAt: checkedAt.toISOString(),
         email,
         domain,
-        localPart,
+        username: localPart,
         sources: {
             mx: smtpVerificationResult,
         },
-        exists: success,
+        status: ExistenceStatus.Exists,
     }
 
     jest.useFakeTimers().setSystemTime(checkedAt)
@@ -62,7 +66,7 @@ describe('EmailVerifier', () => {
         const expectedResult: EmailVerificationResponse = {
             ...expectedEmailVerificationResult,
             sources: { mx: smtpEmailDoesNotExist },
-            exists: false,
+            status: ExistenceStatus.DoesNotExist,
         }
 
         const result = await emailVerifier.verify({ email })

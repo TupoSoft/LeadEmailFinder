@@ -5,7 +5,7 @@ import { constants } from 'node:http2'
 import { ErrorMiddleware } from '../../middleware/handle-error'
 import { LegacyEmailVerificationController } from './legacy-controller'
 import type { IEmailVerificationService } from '../service'
-import type { EmailVerificationResponse } from '../dto'
+import { type EmailVerificationResponse, ExistenceStatus } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
@@ -54,8 +54,8 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
 
     const verificationResult: EmailVerificationResponse = {
         domain,
-        exists: false,
-        localPart,
+        status: ExistenceStatus.Exists,
+        username: localPart,
         sources: {
             mx: smtpVerificationResult,
         },

@@ -73,7 +73,6 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
         } catch (error) {
             ok(isNativeError(error))
             console.error(`Error in SMTPVerifier.verify: `, error)
-            throw error
         } finally {
             client.end()
         }

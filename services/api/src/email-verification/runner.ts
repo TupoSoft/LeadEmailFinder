@@ -1,4 +1,9 @@
-import type { EmailVerificationRequest, EmailVerificationResponse } from './dto'
+import {
+    type EmailVerificationRequest,
+    type EmailVerificationResponse,
+    ExistenceStatus,
+    type ExistenceStrategy,
+} from './dto'
 import type { EmailVerificationResult, EmailVerifier } from './email-verifier'
 
 export interface IEmailVerificationRunner {
@@ -6,7 +11,10 @@ export interface IEmailVerificationRunner {
 }
 
 export class EmailVerificationRunner implements IEmailVerificationRunner {
-    constructor(private readonly emailVerifiers: Record<string, EmailVerifier>) {}
+    constructor(
+        private readonly emailVerifiers: Record<string, EmailVerifier>,
+        private readonly existenceStrategies: ExistenceStrategy[],
+    ) {}
 
     async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResponse> {
         const { email, format } = emailVerificationRequest
@@ -21,12 +29,17 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
 
         return {
             checkedAt: new Date().toISOString(),
-            exists: Object.values(results).some(result => result.success),
+            status: this.determineExistence(results),
             sources: results,
             domain,
-            localPart,
+            username: localPart,
             email,
             format,
         }
+    }
+
+    private determineExistence(results: Record<string, EmailVerificationResult>): ExistenceStatus {
+        const matchingStrategy = this.existenceStrategies.find(strategy => strategy.predicate(results))
+        return matchingStrategy !== undefined ? matchingStrategy.action(results) : ExistenceStatus.Unknown
     }
 }

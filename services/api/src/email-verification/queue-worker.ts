@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis'
 import { Worker } from 'bullmq'
 import type { EmailVerificationResponse } from './dto'
-import type { IEmailVerificationRunner } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 import { RESOURCE } from './constants'
 import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
 

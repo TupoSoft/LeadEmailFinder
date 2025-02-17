@@ -1,4 +1,4 @@
-import type { IEmailVerificationRunner } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
 import type {
     EmailVerificationRequest,
