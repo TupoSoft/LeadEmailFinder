@@ -1,8 +1,8 @@
 import { MongoClientCreator } from './util/mongo'
 import {
     EmailVerificationRouter,
+    EmailVerificationRunner,
     EmailVerificationService,
-    EmailVerifier,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
 } from './email-verification'
@@ -21,7 +21,7 @@ import { isNativeError } from 'node:util/types'
 import {
     PersistenceEmailVerifierDecorator,
     ThrowableEmailVerifierDecorator,
-} from './email-verification/verifier-decorators'
+} from './email-verification/runner-decorators'
 import { LeadQueueWorker } from './lead/queue-worker'
 import { AuthRouter } from './auth/router'
 import { AuthController } from './auth/controller'
@@ -130,13 +130,13 @@ async function main(): Promise<void> {
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
-    const smtpEmailVerifier = new EmailVerifier(
+    const emailVerificationRunner = new EmailVerificationRunner(
         smtpVerifier,
         [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
         logger,
     )
     const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
-        smtpEmailVerifier,
+        emailVerificationRunner,
         mongoEmailVerificationRepository,
     )
     const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
@@ -151,10 +151,18 @@ async function main(): Promise<void> {
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
-    const legacyRouter = Router()
-    const legacyEmailVerificationController = new LegacyEmailVerificationController(emailVerificationService)
+    const legacyEmailVerificationController = new LegacyEmailVerificationController(
+        new EmailVerificationService(
+            new PersistenceEmailVerifierDecorator(
+                new EmailVerificationRunner(smtpVerifier, [], logger),
+                mongoEmailVerificationRepository,
+            ),
+            mongoEmailVerificationRepository,
+            emailVerificationQueue,
+        ),
+    )
     const legacyEmailVerificationRouter = new LegacyEmailVerificationRouter(
-        legacyRouter,
+        router,
         authMiddleware,
         legacyEmailVerificationController,
     )
@@ -214,7 +222,6 @@ async function main(): Promise<void> {
             }),
             express.json(),
             router,
-            legacyRouter,
             (req: Request, _res: Response, next: NextFunction): void => {
                 const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
                 swagger.servers = [{ url: `${req.protocol}://${host}` }]

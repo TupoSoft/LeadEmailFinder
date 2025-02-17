@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { EmailVerifier } from './verifier'
+import { EmailVerificationRunner } from './runner'
 import { MockEmailVerificationRepository } from './repository'
 import { MockSMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
@@ -15,7 +15,7 @@ describe('EmailVerifier', () => {
     const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
     smtpVerifierMock.verify = jest.fn()
 
-    const emailVerifier = new EmailVerifier(smtpVerifierMock, [])
+    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')

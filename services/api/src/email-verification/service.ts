@@ -1,4 +1,4 @@
-import type { IEmailVerifier } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
 import type {
     EmailVerificationRequest,
@@ -22,7 +22,7 @@ export interface IEmailVerificationService {
 
 export class EmailVerificationService implements IEmailVerificationService {
     constructor(
-        private readonly emailVerifier: IEmailVerifier,
+        private readonly emailVerifier: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly emailVerificationQueue: EmailVerificationQueue,
     ) {}
