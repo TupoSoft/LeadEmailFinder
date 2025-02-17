@@ -54,7 +54,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
 
     const verificationResult: EmailVerificationResponse = {
         domain,
-        status: ExistenceStatus.Exists,
+        status: ExistenceStatus.DoesNotExist,
         username: localPart,
         sources: {
             mx: smtpVerificationResult,

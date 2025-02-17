@@ -39,7 +39,16 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
     }
 
     private determineExistence(results: Record<string, EmailVerificationResult>): ExistenceStatus {
-        const matchingStrategy = this.existenceStrategies.find(strategy => strategy.predicate(results))
-        return matchingStrategy !== undefined ? matchingStrategy.action(results) : ExistenceStatus.Unknown
+        const matchingStrategies = this.existenceStrategies.filter(strategy => strategy.predicate(results))
+
+        for (const matchingStrategy of matchingStrategies) {
+            const result = matchingStrategy.action(results)
+
+            if (result !== ExistenceStatus.Unknown) {
+                return result
+            }
+        }
+
+        return ExistenceStatus.Unknown
     }
 }

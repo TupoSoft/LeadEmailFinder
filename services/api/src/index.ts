@@ -4,6 +4,7 @@ import {
     EmailVerificationRunner,
     EmailVerificationService,
     ExpressEmailVerificationController,
+    microsoftGetCredentialTypeStrategy,
     mimecastStrategy,
     MongoEmailVerificationRepository,
     outlookStrategy,
@@ -139,7 +140,7 @@ async function main(): Promise<void> {
             o365: officeApps,
             linkedin: linkedinLogin,
         },
-        [smtpStrategy, outlookStrategy, mimecastStrategy],
+        [smtpStrategy, outlookStrategy, mimecastStrategy, microsoftGetCredentialTypeStrategy],
     )
     const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
         smtpEmailVerifier,

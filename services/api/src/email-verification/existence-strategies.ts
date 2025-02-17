@@ -51,3 +51,8 @@ export const outlookStrategy: ExistenceStrategy = {
     },
     action: results => (results.outlook.success ? ExistenceStatus.Exists : ExistenceStatus.DoesNotExist),
 }
+
+export const microsoftGetCredentialTypeStrategy: ExistenceStrategy = {
+    predicate: results => 'o365' in results,
+    action: results => (results.o365.success ? ExistenceStatus.Exists : ExistenceStatus.DoesNotExist),
+}
