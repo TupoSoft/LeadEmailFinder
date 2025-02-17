@@ -1,9 +1,9 @@
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailVerificationRepository } from './repository'
-import type { IEmailVerifier } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 
-export class ThrowableEmailVerifierDecorator implements IEmailVerifier {
-    constructor(private readonly emailVerifier: IEmailVerifier) {}
+export class ThrowableEmailVerifierDecorator implements IEmailVerificationRunner {
+    constructor(private readonly emailVerifier: IEmailVerificationRunner) {}
 
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult> =
         async emailVerificationRequest => {
@@ -18,9 +18,9 @@ export class ThrowableEmailVerifierDecorator implements IEmailVerifier {
         }
 }
 
-export class PersistenceEmailVerifierDecorator implements IEmailVerifier {
+export class PersistenceEmailVerifierDecorator implements IEmailVerificationRunner {
     constructor(
-        private readonly emailVerifier: IEmailVerifier,
+        private readonly emailVerifier: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
     ) {}
 

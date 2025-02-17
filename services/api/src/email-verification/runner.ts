@@ -8,11 +8,11 @@ import type { CatchAllEmailVerifier } from './http'
 import { isEmptyArray } from '../common'
 import { isEmailVerificationSource } from './type-guards'
 
-export interface IEmailVerifier {
+export interface IEmailVerificationRunner {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
 }
 
-export class EmailVerifier implements IEmailVerifier {
+export class EmailVerificationRunner implements IEmailVerificationRunner {
     constructor(
         private readonly smtpVerifier: ISMTPVerifier,
         private readonly catchAllEmailVerifiers: CatchAllEmailVerifier[],

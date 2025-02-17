@@ -1,14 +1,14 @@
 import type { Redis } from 'ioredis'
 import { Worker } from 'bullmq'
 import type { EmailVerificationResult } from './dto'
-import type { IEmailVerifier } from './verifier'
+import type { IEmailVerificationRunner } from './runner'
 import { RESOURCE } from './constants'
 import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
 
 export class EmailVerificationQueueWorker {
     private readonly worker
 
-    constructor(connection: Redis, emailVerifier: IEmailVerifier) {
+    constructor(connection: Redis, emailVerifier: IEmailVerificationRunner) {
         this.worker = new Worker<string[], EmailVerificationResult[]>(
             RESOURCE,
             async job => {
