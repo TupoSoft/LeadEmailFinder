@@ -9,7 +9,7 @@ interface PinoLoggerConstructorParams {
 export class PinoLogger implements ExtensibleLogger {
     private readonly logger: Pino
 
-    constructor({ logger, options }: PinoLoggerConstructorParams) {
+    constructor({ logger, options }: PinoLoggerConstructorParams = {}) {
         this.logger = logger ?? pino(options)
     }
 
