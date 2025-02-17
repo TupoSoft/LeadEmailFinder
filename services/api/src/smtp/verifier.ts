@@ -1,6 +1,6 @@
 import { type DNSCache, getSecondLevelDomain } from '../dns'
 import type { SmtpClient } from './client'
-import type { SMTPVerificationResult } from './dto'
+import { CatchAllStatus, type SMTPVerificationResult } from './dto'
 import { SmtpError } from './errors'
 import { ok } from 'node:assert'
 import type { Proxy, ProxyService } from '../proxy'
@@ -20,15 +20,15 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
         private readonly smtpClientCreator: SmtpClientCreator,
     ) {}
 
-    private static async getNewCatchAllStatus(client: SmtpClient, domain: string): Promise<boolean | undefined> {
+    private static async getNewCatchAllStatus(client: SmtpClient, domain: string): Promise<CatchAllStatus> {
         try {
             await client.rcptTo(appendRandomPrefix(`danilo@${domain}`))
-            return true
+            return CatchAllStatus.Enabled
         } catch (error) {
             if (error instanceof SmtpError) {
-                return false
+                return CatchAllStatus.Disabled
             } else {
-                return undefined
+                return CatchAllStatus.Unknown
             }
         }
     }
@@ -60,9 +60,9 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
 
             await client.mailFrom(senderEmail)
 
-            smtpVerificationResult.catchAll = await this.getCatchAllStatus(client, domain)
+            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domain)
 
-            if (smtpVerificationResult.catchAll === false) {
+            if (smtpVerificationResult.catchAllStatus === CatchAllStatus.Disabled) {
                 smtpVerificationResult.success = await client.rcptTo(email).then(
                     _ => true,
                     (_: unknown) => false,
@@ -131,15 +131,15 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
         }
     }
 
-    private async getCatchAllStatus(client: SmtpClient, domain: string): Promise<boolean | undefined> {
+    private async getCatchAllStatus(client: SmtpClient, domain: string): Promise<CatchAllStatus> {
         const existingCatchAllStatus = await this.catchAllCache.getCatchAllStatusForDomain(domain)
 
-        if (existingCatchAllStatus !== undefined) {
+        if (existingCatchAllStatus !== CatchAllStatus.Unknown) {
             return existingCatchAllStatus
         } else {
             const catchAllStatus = await SMTPVerifier.getNewCatchAllStatus(client, domain)
 
-            if (catchAllStatus !== undefined) {
+            if (catchAllStatus !== CatchAllStatus.Unknown) {
                 await this.catchAllCache.setCatchAllStatusForDomain(domain, catchAllStatus)
             }
 

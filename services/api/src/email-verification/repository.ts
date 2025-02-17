@@ -19,7 +19,7 @@ interface EmailVerificationSchema {
     format?: string
     targetExchange?: string
     exists: boolean | null
-    sources: Record<string, EmailVerificationResult>
+    verificationResults: Record<string, EmailVerificationResult>
 }
 
 export class EmailVerificationNotFoundError extends Error {
@@ -37,7 +37,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
     private static fromSchema({
         exists,
-        sources,
+        verificationResults,
         domain,
         email,
         _id,
@@ -49,10 +49,10 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
         return {
             status,
-            sources,
+            verificationResults,
             domain,
             email,
-            checkedAt: _id.getTimestamp().toISOString(),
+            checkedAt: _id.getTimestamp(),
             format,
             username: localPart,
         }
@@ -63,7 +63,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         username,
         email,
         domain,
-        sources,
+        verificationResults,
         format,
         checkedAt,
     }: EmailVerificationResponse): Promise<EmailVerificationSchema> {
@@ -76,7 +76,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             localPart,
             email,
             domain,
-            sources,
+            verificationResults,
             format,
         }
     }

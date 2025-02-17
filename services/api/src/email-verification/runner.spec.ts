@@ -34,11 +34,11 @@ describe('EmailVerifier', () => {
     }
 
     const expectedEmailVerificationResult: EmailVerificationResponse = {
-        checkedAt: checkedAt.toISOString(),
+        checkedAt,
         email,
         domain,
         username: localPart,
-        sources: {
+        verificationResults: {
             mx: smtpVerificationResult,
         },
         status: ExistenceStatus.Exists,
@@ -65,7 +65,7 @@ describe('EmailVerifier', () => {
 
         const expectedResult: EmailVerificationResponse = {
             ...expectedEmailVerificationResult,
-            sources: { mx: smtpEmailDoesNotExist },
+            verificationResults: { mx: smtpEmailDoesNotExist },
             status: ExistenceStatus.DoesNotExist,
         }
 

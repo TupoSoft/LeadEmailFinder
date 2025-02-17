@@ -28,9 +28,9 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         await Promise.allSettled(promises)
 
         return {
-            checkedAt: new Date().toISOString(),
+            checkedAt: new Date(),
             status: this.determineExistence(results),
-            sources: results,
+            verificationResults: results,
             domain,
             username: localPart,
             email,

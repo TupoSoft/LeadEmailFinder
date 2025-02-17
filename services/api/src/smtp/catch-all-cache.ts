@@ -1,9 +1,10 @@
 import type { Redis } from 'ioredis'
 import { ok } from 'node:assert'
+import { CatchAllStatus } from './dto'
 
 export interface CatchAllCache {
-    getCatchAllStatusForDomain: (domain: string) => Promise<boolean | undefined>
-    setCatchAllStatusForDomain: (domain: string, status: boolean) => Promise<void>
+    getCatchAllStatusForDomain: (domain: string) => Promise<CatchAllStatus>
+    setCatchAllStatusForDomain: (domain: string, status: CatchAllStatus) => Promise<void>
 }
 
 export class RedisCatchAllCache implements CatchAllCache {
@@ -11,22 +12,22 @@ export class RedisCatchAllCache implements CatchAllCache {
 
     constructor(private readonly redis: Redis) {}
 
-    async getCatchAllStatusForDomain(domain: string): Promise<boolean | undefined> {
+    async getCatchAllStatusForDomain(domain: string): Promise<CatchAllStatus> {
         try {
             const key = this.getKey(domain)
             const catchAllStatus = await this.redis.get(key)
-            return catchAllStatus != null ? catchAllStatus !== 'false' : undefined
+            return catchAllStatus ?? CatchAllStatus.Unknown
         } catch (error) {
-            return undefined
+            return CatchAllStatus.Unknown
         }
     }
 
-    async setCatchAllStatusForDomain(domain: string, status: boolean): Promise<void> {
+    async setCatchAllStatusForDomain(domain: string, status: CatchAllStatus): Promise<void> {
         const errorMessage = `Failed to cache catch all status '${status}' for domain '${domain}'`
 
         try {
             const key = this.getKey(domain)
-            await this.redis.set(key, JSON.stringify(status))
+            await this.redis.set(key, status)
         } catch (error) {
             ok(error instanceof Error, new Error(errorMessage))
             throw error

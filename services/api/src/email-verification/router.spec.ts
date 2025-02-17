@@ -56,11 +56,11 @@ describe(EMAIL_ROUTE, () => {
     }
 
     const verificationResult: EmailVerificationResponse = {
-        checkedAt: '',
+        checkedAt: new Date(),
         domain,
         status: ExistenceStatus.DoesNotExist,
         username: localPart,
-        sources: {
+        verificationResults: {
             mx: smtpVerificationResult,
         },
         email,

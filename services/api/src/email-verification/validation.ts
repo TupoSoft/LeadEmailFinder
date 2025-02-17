@@ -12,7 +12,7 @@ export const verifyEmailResponseBody = z.object({
     email,
     username: z.string().nonempty().openapi({ example: 'danilo' }),
     domain: z.string().nonempty().openapi({ example: 'microsoft.com' }),
-    sources: z.object({}).openapi({
+    verificationResults: z.object({}).openapi({
         example: {
             mx: {
                 success: true,
@@ -25,7 +25,7 @@ export const verifyEmailResponseBody = z.object({
     status: z
         .enum([ExistenceStatus.Exists, ExistenceStatus.DoesNotExist, ExistenceStatus.Unknown])
         .openapi({ example: ExistenceStatus.Exists }),
-    checkedAt: z.string().nonempty().date(),
+    checkedAt: z.date(),
 }) satisfies ZodType<EmailVerificationResponse>
 
 export const verifyEmailBulkRequestBody = z.object({

@@ -19,11 +19,11 @@ describe('toLegacyResult', () => {
             email: 'test@example.com',
             username: 'test',
             domain: 'example.com',
-            sources: {
+            verificationResults: {
                 mx: smtpVerificationResult,
             },
             status: ExistenceStatus.Exists,
-            checkedAt: '',
+            checkedAt: new Date(),
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -42,21 +42,21 @@ describe('toLegacyResult', () => {
             catchAll: true,
         }
 
-        const verifiedAt = new Date('2023-01-01')
+        const checkedAt = new Date('2023-01-01')
         const input: EmailVerificationResponse = {
             email: 'test@example.com',
             username: 'test',
             domain: 'example.com',
-            sources: {
+            verificationResults: {
                 mx: smtpVerificationResult,
             },
             status: ExistenceStatus.Unknown,
-            checkedAt: verifiedAt.toISOString(),
+            checkedAt,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
-        expect(result.verifiedAt).toStrictEqual(verifiedAt)
+        expect(result.verifiedAt).toStrictEqual(checkedAt)
     })
 
     it('should default verifiedAt to current date if not provided', () => {
@@ -66,11 +66,11 @@ describe('toLegacyResult', () => {
         }
 
         const input: EmailVerificationResponse = {
-            checkedAt: '',
+            checkedAt: new Date(),
             email: 'test@example.com',
             username: 'test',
             domain: 'example.com',
-            sources: {
+            verificationResults: {
                 mx: smtpVerificationResult,
             },
             status: ExistenceStatus.Unknown,
@@ -94,11 +94,11 @@ describe('toLegacyResult', () => {
             email: 'test@example.com',
             username: 'test',
             domain: 'example.com',
-            sources: {
+            verificationResults: {
                 mx: smtpVerificationResult,
             },
             status: ExistenceStatus.Exists,
-            checkedAt: '',
+            checkedAt: new Date(),
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)

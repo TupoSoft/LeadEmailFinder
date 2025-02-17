@@ -59,7 +59,9 @@ async function main(): Promise<void> {
     const configService = new ConfigService<Environment>(environment)
 
     const logger = new PinoLogger({
-        level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
+        options: {
+            level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
+        },
     })
 
     const router = Router()

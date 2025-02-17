@@ -2,8 +2,8 @@ import type { EMAIL_VERIFICATION_SOURCES } from './constants'
 import type { EmailVerificationResult } from './email-verifier'
 
 export interface EmailVerificationRequest {
-    email: string
-    format?: string
+    readonly email: string
+    readonly format?: string
 }
 
 export const enum ExistenceStatus {
@@ -13,13 +13,13 @@ export const enum ExistenceStatus {
 }
 
 export interface EmailVerificationResponse {
-    email: string
-    domain: string
-    username: string
-    format?: string
-    sources: Record<string, EmailVerificationResult>
-    status: ExistenceStatus
-    checkedAt: string
+    readonly email: string
+    readonly domain: string
+    readonly username: string
+    readonly format?: string
+    readonly verificationResults: Record<string, EmailVerificationResult>
+    readonly status: ExistenceStatus
+    readonly checkedAt: Date
 }
 
 export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]

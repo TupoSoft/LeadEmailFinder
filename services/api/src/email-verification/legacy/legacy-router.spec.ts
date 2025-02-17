@@ -56,11 +56,11 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         domain,
         status: ExistenceStatus.DoesNotExist,
         username: localPart,
-        sources: {
+        verificationResults: {
             mx: smtpVerificationResult,
         },
         email,
-        checkedAt: checkedAt.toISOString(),
+        checkedAt,
     }
 
     afterEach(() => {

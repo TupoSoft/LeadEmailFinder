@@ -3,8 +3,6 @@
 import { Redis } from 'ioredis'
 import { REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { PinoLogger } from 'logging'
-import Mocked = jest.Mocked
 
 jest.useFakeTimers()
 
@@ -14,12 +12,11 @@ jest.mock('logging')
 describe('RedisConnectionLimiter', () => {
     const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
 
-    const logger = new PinoLogger() as Mocked<PinoLogger>
     const redis = new Redis() as jest.Mocked<Redis>
     const maxConnections = 3
     const ttlSeconds = 60
 
-    const connectionLimiter = new RedisConnectionLimiter(redis, logger, REDIS_KEY, maxConnections, ttlSeconds)
+    const connectionLimiter = new RedisConnectionLimiter(redis, console, REDIS_KEY, maxConnections, ttlSeconds)
 
     afterEach(() => {
         jest.clearAllMocks()
