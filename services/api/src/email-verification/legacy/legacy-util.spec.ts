@@ -87,7 +87,7 @@ describe('toLegacyResult', () => {
     it('should map catchAll using mapCatchAllStatus function', () => {
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
-            catchAll: CatchAllStatus.Enabled,
+            catchAll: CatchAllStatus.Disabled,
         }
 
         const input: EmailVerificationResponse = {
