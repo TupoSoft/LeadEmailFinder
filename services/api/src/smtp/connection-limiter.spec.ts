@@ -12,7 +12,7 @@ jest.mock('pino')
 jest.mock('logging')
 
 describe('RedisConnectionLimiter', () => {
-    const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
+    const { LOCK_FAILURE, LOCK_SUCCESS, INITIAL_BACKOFF_MS } = RedisConnectionLimiter
 
     const logger = new PinoLogger() as Mocked<PinoLogger>
     const redis = new Redis() as jest.Mocked<Redis>
@@ -43,7 +43,7 @@ describe('RedisConnectionLimiter', () => {
             redis.incrementConnection.mockResolvedValueOnce(LOCK_FAILURE).mockResolvedValueOnce(LOCK_SUCCESS)
 
             const acquirePromise = connectionLimiter.acquire(source, destination)
-            jest.advanceTimersByTime(ACQUIRE_WAIT_MS)
+            jest.advanceTimersByTime(INITIAL_BACKOFF_MS)
             await acquirePromise
 
             await expect(acquirePromise).resolves.not.toThrow()

@@ -84,11 +84,11 @@ export class SmtpClientImpl implements SmtpClient {
     connect: () => Promise<void> = async () => {
         const { exchange, port, proxy, signal } = this
 
-        const locked = await this.connectionLimiter.acquire(this.hostname, this.exchange, signal)
+        const token = await this.connectionLimiter.acquire(this.hostname, this.exchange, signal)
 
         const onClose = (): void => {
-            if (locked) {
-                void this.connectionLimiter.release(this.hostname, this.exchange)
+            if (token !== null) {
+                void this.connectionLimiter.release(this.hostname, this.exchange, token)
             }
         }
 
@@ -120,7 +120,7 @@ export class SmtpClientImpl implements SmtpClient {
         } catch (error) {
             onClose()
             ok(isNativeError(error))
-            this.logger?.error(`Error in SMTPClient.connect: ${error.message}`)
+            this.logger?.error(`Failed to connect to ${exchange} from ${proxy?.host}: ${error.message}`)
             throw error
         }
     }
