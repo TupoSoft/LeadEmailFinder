@@ -2,6 +2,9 @@ import type { Redis, Result } from 'ioredis'
 import { setTimeout } from 'node:timers/promises'
 import type { Logger } from 'logging'
 import { randomBytes } from 'node:crypto'
+import { promisify } from 'node:util'
+
+const randomBytesAsync = promisify(randomBytes)
 
 declare module 'ioredis' {
     interface RedisCommander<Context> {
@@ -84,13 +87,14 @@ export class RedisConnectionLimiter implements ConnectionLimiter {
         return `${RedisConnectionLimiter.REDIS_KEY_PREFIX}:${source}:${destination}`
     }
 
-    private static generateToken(): string {
-        return randomBytes(RedisConnectionLimiter.TOKEN_LENGTH).toString('hex')
+    private static async generateToken(): Promise<string> {
+        const bytes = await randomBytesAsync(RedisConnectionLimiter.TOKEN_LENGTH)
+        return bytes.toString('hex')
     }
 
     async acquire(source: string, destination: string, signal?: AbortSignal): Promise<string | null> {
         const key = RedisConnectionLimiter.getKey(source, destination)
-        const token = RedisConnectionLimiter.generateToken()
+        const token = await RedisConnectionLimiter.generateToken()
         let backoff = RedisConnectionLimiter.INITIAL_BACKOFF_MS as number
 
         while (true) {
