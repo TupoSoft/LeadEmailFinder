@@ -10,6 +10,7 @@ import { appendRandomPrefix } from '../util/string'
 import { isIP } from 'node:net'
 import { ZERO } from '../common'
 import type { CatchAllCache } from './catch-all-cache'
+import { SmtpResponseCode } from './enums'
 
 export interface SMTPVerifyOptions {
     email: string
@@ -69,7 +70,22 @@ export class SMTPVerifier implements ISMTPVerifier {
             if (smtpVerificationResult.catchAllStatus === false) {
                 smtpVerificationResult.exists = await client.rcptTo(email).then(
                     _ => true,
-                    (_: unknown) => false,
+                    (reason: unknown) => {
+                        if (reason instanceof SmtpError) {
+                            const { code, message } = reason
+
+                            if (
+                                code < (SmtpResponseCode.CommandUnrecognized as number) ||
+                                /blocked|banned/.exec(message) != null
+                            ) {
+                                return undefined
+                            }
+
+                            return false
+                        } else {
+                            return undefined
+                        }
+                    },
                 )
             }
 

@@ -32,7 +32,7 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
         scope: 'openid',
     }
 
-    sourceName: EmailVerificationSource = 'outlook'
+    sourceName: EmailVerificationSource = 'microsoft_1'
 
     constructor(private readonly httpClient: HttpClient) {}
 

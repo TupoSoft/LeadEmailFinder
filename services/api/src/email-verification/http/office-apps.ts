@@ -7,7 +7,7 @@ export class OfficeApps implements CatchAllEmailVerifier {
 
     private static readonly INVALID_RESPONSES = ['OrgId,Placeholder', 'Neither', 'Error', 'Throttled']
 
-    sourceName: EmailVerificationSource = 'o365'
+    sourceName: EmailVerificationSource = 'microsoft_2'
 
     constructor(private readonly httpClient: HttpClient) {}
 
