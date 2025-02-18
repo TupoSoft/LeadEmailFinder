@@ -12,7 +12,7 @@ export const verifyEmailResponseBody = z.object({
     email,
     localPart: z.string().nonempty().openapi({ example: 'danilo' }),
     domain: z.string().nonempty().openapi({ example: 'microsoft.com' }),
-    sources: z.array(z.enum(['mx', 'microsoft_4', 'outlook', 'mimecast', 'o365', 'linkedin'])),
+    sources: z.array(z.enum(['mx', 'microsoft_4', 'microsoft_1', 'mimecast', 'microsoft_2', 'linkedin'])),
     exists: z.boolean().openapi({ example: false }),
 }) satisfies ZodType<EmailVerificationResult>
 
