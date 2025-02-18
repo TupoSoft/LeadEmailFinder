@@ -163,7 +163,12 @@ async function main(): Promise<void> {
     const legacyEmailVerificationController = new LegacyEmailVerificationController(
         new EmailVerificationService(
             new PersistenceEmailVerifierDecorator(
-                new EmailVerificationRunner(smtpVerifier, [], logger),
+                new EmailVerificationRunner(
+                    {
+                        mx: smtpVerifier,
+                    },
+                    [smtpStrategy],
+                ),
                 mongoEmailVerificationRepository,
             ),
             mongoEmailVerificationRepository,

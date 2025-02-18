@@ -8,7 +8,7 @@ export const enum CatchAllStatus {
 }
 
 export interface SMTPVerificationResult extends EmailVerificationResult {
-    catchAllStatus?: CatchAllStatus
+    catchAll?: CatchAllStatus
     mxRecord?: string
     mxDomain?: string
 }

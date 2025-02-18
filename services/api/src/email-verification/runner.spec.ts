@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './runner'
 import { MockSMTPVerifier } from '../smtp'
-import type { SMTPVerificationResult } from '../smtp/dto'
+import { CatchAllStatus, type SMTPVerificationResult } from '../smtp/dto'
 import { type EmailVerificationResponse, ExistenceStatus } from './dto'
 import { smtpStrategy } from './existence-strategies'
 
@@ -23,12 +23,11 @@ describe('EmailVerifier', () => {
     const targetExchange = 'mail.example.com'
     const mxDomain = 'example.com'
     const success = true
-    const catchAllStatus = false
     const checkedAt = new Date('2023-01-01')
 
     const smtpVerificationResult: SMTPVerificationResult = {
         success,
-        catchAll: catchAllStatus,
+        catchAll: CatchAllStatus.Enabled,
         mxDomain,
         mxRecord: targetExchange,
     }

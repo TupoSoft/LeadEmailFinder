@@ -9,9 +9,9 @@ import { type EmailVerificationResponse, ExistenceStatus } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import { DeliveryStatus } from './enums'
 import { HttpError } from '../../common'
-import type { SMTPVerificationResult } from '../../smtp/dto'
+import { CatchAllStatus, type SMTPVerificationResult } from '../../smtp/dto'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
@@ -49,7 +49,7 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
 
     const smtpVerificationResult: SMTPVerificationResult = {
         success: false,
-        catchAll: false,
+        catchAll: CatchAllStatus.Disabled,
     }
 
     const verificationResult: EmailVerificationResponse = {

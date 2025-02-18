@@ -1,6 +1,7 @@
 import { z, type ZodType } from 'zod'
 import type { LegacyEmailVerificationResult } from './dto'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import { DeliveryStatus } from './enums'
+import { CatchAllStatus } from '../../smtp/dto'
 
 const email = z.string().email().openapi({ example: 'danilo@microsoft.com' })
 

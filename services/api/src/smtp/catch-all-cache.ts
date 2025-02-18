@@ -1,6 +1,7 @@
 import type { Redis } from 'ioredis'
 import { ok } from 'node:assert'
 import { CatchAllStatus } from './dto'
+import { isCatchAllStatus } from './type-guards'
 
 export interface CatchAllCache {
     getCatchAllStatusForDomain: (domain: string) => Promise<CatchAllStatus>
@@ -16,7 +17,11 @@ export class RedisCatchAllCache implements CatchAllCache {
         try {
             const key = this.getKey(domain)
             const catchAllStatus = await this.redis.get(key)
-            return catchAllStatus ?? CatchAllStatus.Unknown
+
+            ok(catchAllStatus !== null)
+            ok(isCatchAllStatus(catchAllStatus))
+
+            return catchAllStatus
         } catch (error) {
             return CatchAllStatus.Unknown
         }

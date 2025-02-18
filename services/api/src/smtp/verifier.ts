@@ -60,9 +60,9 @@ export class SMTPVerifier implements EmailVerifier<SMTPVerificationResult> {
 
             await client.mailFrom(senderEmail)
 
-            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domain)
+            smtpVerificationResult.catchAll = await this.getCatchAllStatus(client, domain)
 
-            if (smtpVerificationResult.catchAllStatus === CatchAllStatus.Disabled) {
+            if (smtpVerificationResult.catchAll === CatchAllStatus.Disabled) {
                 smtpVerificationResult.success = await client.rcptTo(email).then(
                     _ => true,
                     (_: unknown) => false,

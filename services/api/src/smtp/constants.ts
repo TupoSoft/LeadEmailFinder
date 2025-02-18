@@ -1,5 +1,6 @@
 import { parseTimeString } from '../util/time'
 import type { SmtpClientTimeoutConfig } from './client'
+import { CatchAllStatus } from './dto'
 
 export const SMTP_PORT = 25
 export const DEFAULT_SMTP_CLIENT_TIMEOUT = parseTimeString('1m')
@@ -13,3 +14,9 @@ export const DEFAULT_TIMEOUT_CONFIG: Readonly<Required<SmtpClientTimeoutConfig>>
     mail: DEFAULT_MAIL_TIMEOUT,
     rcpt: DEFAULT_RCPT_TIMEOUT,
 }
+
+export const CATCH_ALL_STATUSES: CatchAllStatus[] = [
+    CatchAllStatus.Enabled,
+    CatchAllStatus.Disabled,
+    CatchAllStatus.Unknown,
+] as const

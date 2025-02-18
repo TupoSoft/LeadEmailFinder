@@ -1,4 +1,3 @@
-import type { EMAIL_VERIFICATION_SOURCES } from './constants'
 import type { EmailVerificationResult } from './email-verifier'
 
 export interface EmailVerificationRequest {
@@ -21,8 +20,6 @@ export interface EmailVerificationResponse {
     readonly status: ExistenceStatus
     readonly checkedAt: Date
 }
-
-export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]
 
 export interface VerifyEmailBulkResponse {
     message: string

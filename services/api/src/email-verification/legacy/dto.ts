@@ -1,4 +1,5 @@
-import type { CatchAllStatus, DeliveryStatus } from './enums'
+import type { DeliveryStatus } from './enums'
+import type { CatchAllStatus } from '../../smtp/dto'
 
 export interface LegacyEmailVerificationResult {
     email: string

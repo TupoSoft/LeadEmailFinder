@@ -1,5 +1,5 @@
 import { ExistenceStatus, type ExistenceStrategy } from './dto'
-import type { SMTPVerificationResult } from '../smtp/dto'
+import { CatchAllStatus, type SMTPVerificationResult } from '../smtp/dto'
 import { ok } from 'node:assert'
 
 export const smtpStrategy: ExistenceStrategy = {
@@ -7,7 +7,7 @@ export const smtpStrategy: ExistenceStrategy = {
     action: results => {
         const mx = results.mx as SMTPVerificationResult
 
-        if (mx.catchAll === true || mx.catchAll === undefined) {
+        if (mx.catchAll === CatchAllStatus.Enabled || mx.catchAll === CatchAllStatus.Unknown) {
             return ExistenceStatus.Unknown
         } else {
             return mx.success ? ExistenceStatus.Exists : ExistenceStatus.DoesNotExist
@@ -25,7 +25,7 @@ export const mimecastStrategy: ExistenceStrategy = {
 
         const mx = results.mx as SMTPVerificationResult
 
-        return mx.catchAll === true && mx.mxDomain === MIMECAST_DOMAIN && 'mimecast' in results
+        return mx.catchAll === CatchAllStatus.Enabled && mx.mxDomain === MIMECAST_DOMAIN && 'mimecast' in results
     },
     action: results => (results.mimecast.success ? ExistenceStatus.Exists : ExistenceStatus.DoesNotExist),
 }
@@ -40,7 +40,7 @@ export const outlookStrategy: ExistenceStrategy = {
 
             const mx = results.mx as SMTPVerificationResult
 
-            ok(mx.catchAll === true)
+            ok(mx.catchAll === CatchAllStatus.Enabled)
             ok(mx.mxDomain !== undefined)
             ok(OUTLOOK_DOMAINS.includes(mx.mxDomain))
 

@@ -3,6 +3,7 @@
 import { describe, expect, it, jest } from '@jest/globals'
 import { Redis } from 'ioredis'
 import { RedisCatchAllCache } from './catch-all-cache'
+import { CatchAllStatus } from './dto'
 import Mocked = jest.Mocked
 
 describe('CatchAllCache', () => {
@@ -10,7 +11,7 @@ describe('CatchAllCache', () => {
     const catchAllCache = new RedisCatchAllCache(redisMock)
 
     const domain = 'example.com'
-    const status = true
+    const status: CatchAllStatus = CatchAllStatus.Enabled
 
     describe('getCatchAllStatusForDomain', () => {
         it('should return true if catch all status is in the cache', async () => {

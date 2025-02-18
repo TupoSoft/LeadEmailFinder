@@ -1,9 +1,9 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
 import { type EmailVerificationResponse, ExistenceStatus } from '../dto'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import { DeliveryStatus } from './enums'
 import type { LegacyEmailVerificationResult } from './dto'
-import type { SMTPVerificationResult } from '../../smtp/dto'
+import { CatchAllStatus, type SMTPVerificationResult } from '../../smtp/dto'
 
 describe('toLegacyResult', () => {
     it('should map correctly', () => {
@@ -11,7 +11,7 @@ describe('toLegacyResult', () => {
 
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
-            catchAll: true,
+            catchAll: CatchAllStatus.Enabled,
             mxRecord: targetExchange,
         }
 
@@ -39,7 +39,7 @@ describe('toLegacyResult', () => {
     it('should map verifiedAt to input value if provided', () => {
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
-            catchAll: true,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const checkedAt = new Date('2023-01-01')
@@ -62,7 +62,7 @@ describe('toLegacyResult', () => {
     it('should default verifiedAt to current date if not provided', () => {
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
-            catchAll: true,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const input: EmailVerificationResponse = {
@@ -87,7 +87,7 @@ describe('toLegacyResult', () => {
     it('should map catchAll using mapCatchAllStatus function', () => {
         const smtpVerificationResult: SMTPVerificationResult = {
             success: true,
-            catchAll: false,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const input: EmailVerificationResponse = {
