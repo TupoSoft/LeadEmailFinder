@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
-        .set('trust proxy', true)
+        .enable('trust proxy')
         .use(
             (_req: Request, _res: Response, next: NextFunction): void => {
                 loggerMixin.correlationId = randomUUID()
@@ -242,9 +242,12 @@ async function main(): Promise<void> {
             express.json(),
             router,
             (req: Request, _res: Response, next: NextFunction): void => {
-                const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
-                swagger.servers = [{ url: `${req.protocol}://${host}` }]
-                req.swaggerDoc = swagger
+                if (req.url === '/') {
+                    const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
+                    swagger.servers = [{ url: `${req.protocol}://${host}` }]
+                    req.swaggerDoc = swagger
+                }
+
                 next()
             },
             serve,
