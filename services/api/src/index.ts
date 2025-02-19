@@ -242,11 +242,13 @@ async function main(): Promise<void> {
             express.json(),
             router,
             (req: Request, _res: Response, next: NextFunction): void => {
-                if (req.url === '/') {
-                    const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
-                    swagger.servers = [{ url: `${req.protocol}://${host}` }]
-                    req.swaggerDoc = swagger
-                }
+                const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
+                const url = `${req.protocol}://${host}`
+
+                logger.info(`Swagger URL: ${url}`)
+
+                swagger.servers = [{ url }]
+                req.swaggerDoc = swagger
 
                 next()
             },
