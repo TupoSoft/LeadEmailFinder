@@ -243,13 +243,8 @@ async function main(): Promise<void> {
             router,
             (req: Request, _res: Response, next: NextFunction): void => {
                 const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
-                const url = `${req.protocol}://${host}`
-
-                logger.info(`Swagger URL: ${url}`)
-
-                swagger.servers = [{ url }]
+                swagger.servers = [{ url: `${req.protocol}://${host}` }]
                 req.swaggerDoc = swagger
-
                 next()
             },
             serve,
