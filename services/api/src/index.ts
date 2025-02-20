@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     const port = configService.get('PORT')
     const server = express()
         .disable('x-powered-by')
-        .set('trust proxy', true)
+        .enable('trust proxy')
         .use(
             (_req: Request, _res: Response, next: NextFunction): void => {
                 loggerMixin.correlationId = randomUUID()
