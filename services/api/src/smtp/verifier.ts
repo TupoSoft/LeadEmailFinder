@@ -51,8 +51,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
 
         try {
-            const hostnames = isIP(hostname) !== ZERO ? await this.dnsCache.resolve(hostname, 'PTR') : [hostname]
-            const [clientHostname] = hostnames
+            const [clientHostname] = isIP(hostname) !== ZERO ? await this.dnsCache.resolve(hostname, 'PTR') : [hostname]
 
             await client.helo(clientHostname)
 
@@ -71,18 +70,15 @@ export class SMTPVerifier implements ISMTPVerifier {
                 smtpVerificationResult.exists = await client.rcptTo(email).then(
                     _ => true,
                     (reason: unknown) => {
-                        if (reason instanceof SmtpError) {
+                        try {
+                            ok(reason instanceof SmtpError)
                             const { code, message } = reason
 
-                            if (
-                                code < (SmtpResponseCode.CommandUnrecognized as number) ||
-                                /blocked|banned/.exec(message) != null
-                            ) {
-                                return undefined
-                            }
+                            ok(code >= (SmtpResponseCode.CommandUnrecognized as number))
+                            ok(/blocked|banned/.exec(message) == null)
 
                             return false
-                        } else {
+                        } catch (error) {
                             return undefined
                         }
                     },

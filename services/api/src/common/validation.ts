@@ -14,6 +14,6 @@ export const bulkOkResponseBodySchema = z.object({
         .nonempty()
         .url()
         .openapi({
-            example: `https://leademailfinder.com${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '1')}`,
+            example: `https://api.leademailfinder.com${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', '1')}`,
         }),
 })

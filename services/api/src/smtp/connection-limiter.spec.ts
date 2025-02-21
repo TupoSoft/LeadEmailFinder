@@ -1,106 +1,94 @@
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- test */
-
-import { Redis } from 'ioredis'
-import { REDIS_KEY, RedisConnectionLimiter } from './connection-limiter'
+import { RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
-import { PinoLogger } from 'logging'
+import { Redis } from 'ioredis'
+import { Logger } from 'logging'
 import Mocked = jest.Mocked
 
-jest.useFakeTimers()
-
-jest.mock('pino')
-jest.mock('logging')
+jest.mock('ioredis')
 
 describe('RedisConnectionLimiter', () => {
-    const { LOCK_FAILURE, LOCK_SUCCESS, ACQUIRE_WAIT_MS } = RedisConnectionLimiter
-
-    const logger = new PinoLogger() as Mocked<PinoLogger>
-    const redis = new Redis() as jest.Mocked<Redis>
-    const maxConnections = 3
-    const ttlSeconds = 60
-
-    const connectionLimiter = new RedisConnectionLimiter(redis, logger, REDIS_KEY, maxConnections, ttlSeconds)
+    const redis = new Redis() as Mocked<Redis>
+    const logger: Logger = {
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+    }
+    const limiter = new RedisConnectionLimiter(redis, logger)
 
     afterEach(() => {
         jest.clearAllMocks()
+        jest.useRealTimers()
     })
 
-    const source = '192.168.0.1'
-    const destination = 'example.com'
-    const key = `${REDIS_KEY}:${source}`
-
     describe('acquire', () => {
-        it('should acquire a connection if below maxConnectionsPerSourceHost', async () => {
-            redis.incrementConnection.mockResolvedValue(LOCK_SUCCESS)
+        it('should return a token immediately if redis.acquireConnection returns a token', async () => {
+            redis.acquireConnection.mockResolvedValue('fixedtoken')
+            const token = await limiter.acquire('source', 'destination')
 
-            await expect(connectionLimiter.acquire(source, destination)).resolves.not.toThrow()
-            expect(redis.incrementConnection).toHaveBeenCalledWith(key, destination, maxConnections, ttlSeconds)
+            expect(token).toBe('fixedtoken')
+            expect(logger.debug).toHaveBeenCalledWith(
+                expect.stringContaining('Acquired connection for source:destination with token fixedtoken'),
+            )
+            expect(redis.acquireConnection).toHaveBeenCalledTimes(1)
         })
 
-        it('should retry acquiring a connection if maxConnectionsPerSourceHost is reached', async () => {
-            const CALLED_TIMES = 2
+        it('should retry if redis.acquireConnection returns null and eventually succeed', async () => {
+            jest.useFakeTimers()
+            redis.acquireConnection.mockResolvedValueOnce(null).mockResolvedValueOnce('fixedtoken')
 
-            redis.incrementConnection.mockResolvedValueOnce(LOCK_FAILURE).mockResolvedValueOnce(LOCK_SUCCESS)
+            const acquirePromise = limiter.acquire('src', 'dest')
 
-            const acquirePromise = connectionLimiter.acquire(source, destination)
-            jest.advanceTimersByTime(ACQUIRE_WAIT_MS)
-            await acquirePromise
+            await jest.advanceTimersByTimeAsync(RedisConnectionLimiter.INITIAL_BACKOFF_MS)
 
-            await expect(acquirePromise).resolves.not.toThrow()
-            expect(redis.incrementConnection).toHaveBeenCalledTimes(CALLED_TIMES)
+            const token = await acquirePromise
+
+            expect(token).toBe('fixedtoken')
+            expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Connection limit reached for src:dest'))
+            expect(redis.acquireConnection).toHaveBeenCalledTimes(2)
         })
 
-        it('should abort pending acquisitions', async () => {
-            redis.incrementConnection.mockResolvedValueOnce(LOCK_SUCCESS).mockResolvedValueOnce(LOCK_FAILURE)
+        it('should abort immediately if the abort signal is already aborted', async () => {
             const abortController = new AbortController()
+            abortController.abort()
 
-            const acquisitions = [
-                connectionLimiter.acquire(source, destination, abortController.signal),
-                connectionLimiter.acquire(source, destination, abortController.signal),
-            ]
+            const token = await limiter.acquire('src', 'dest', abortController.signal)
 
-            const firstAcquisitionPromise = Promise.any(acquisitions)
-            const allAcquisitionPromises = Promise.all(acquisitions)
-
-            await expect(firstAcquisitionPromise).resolves.toBe(true)
-
-            abortController.abort('Acquisition')
-
-            await expect(allAcquisitionPromises).resolves.toStrictEqual([true, false])
+            expect(token).toBeNull()
+            expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Acquisition aborted for src:dest'))
         })
     })
 
     describe('release', () => {
-        it('should release a connection if there are active connections', async () => {
-            redis.decrementConnection.mockResolvedValue(LOCK_SUCCESS)
+        it('should log success if the token is released (redis.releaseConnection returns 1)', async () => {
+            redis.releaseConnection.mockResolvedValue(1)
 
-            await connectionLimiter.release(source, destination)
+            await limiter.release('src', 'dest', 'fixedtoken')
 
-            expect(redis.decrementConnection).toHaveBeenCalledWith(key, destination, ttlSeconds)
+            expect(logger.debug).toHaveBeenCalledWith(
+                expect.stringContaining('Released connection for src:dest with token fixedtoken'),
+            )
+            expect(redis.releaseConnection).toHaveBeenCalledTimes(1)
         })
 
-        it('should not set negative connections', async () => {
-            redis.decrementConnection.mockResolvedValue(LOCK_FAILURE)
+        it('should log a token not found message if redis.releaseConnection returns 0', async () => {
+            redis.releaseConnection.mockResolvedValue(0)
 
-            await connectionLimiter.release(source, destination)
+            await limiter.release('src', 'dest', 'fixedtoken')
 
-            expect(redis.decrementConnection).toHaveBeenCalledWith(key, destination, ttlSeconds)
+            expect(logger.debug).toHaveBeenCalledWith(
+                expect.stringContaining('Token fixedtoken not found for src:dest'),
+            )
         })
 
-        it('should handle missing key gracefully', async () => {
-            redis.decrementConnection.mockResolvedValue(LOCK_FAILURE)
+        it('should throw an error if redis.releaseConnection throws an error', async () => {
+            const error = new Error('Release error')
+            redis.releaseConnection.mockRejectedValue(error)
 
-            await connectionLimiter.release('', '')
-
-            expect(redis.decrementConnection).toHaveBeenCalledWith(`${REDIS_KEY}:`, '', ttlSeconds)
-        })
-    })
-
-    describe('getKey', () => {
-        it('should generate the correct key', () => {
-            // @ts-expect-error testing
-            const key = connectionLimiter.getKey(source, destination)
-            expect(key).toBe(`${REDIS_KEY}:${source}`)
+            await expect(limiter.release('src', 'dest', 'fixedtoken')).rejects.toThrow('Release error')
+            expect(logger.error).toHaveBeenCalledWith(
+                expect.stringContaining('Error releasing connection for src:dest: Release error'),
+            )
         })
     })
 })
