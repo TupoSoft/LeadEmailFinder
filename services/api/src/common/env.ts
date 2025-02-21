@@ -18,6 +18,7 @@ export interface Environment {
     REDIS_URL: string
     AUTH_TOKENS: string
     CATCH_ALL_HTTP_PROXY_URL: string
+    npm_package_version: string
 }
 
 const envSchema = z.object({
@@ -31,6 +32,7 @@ const envSchema = z.object({
     AUTH_TOKENS: stringWithMinLength,
     REDIS_URL: stringWithMinLength,
     CATCH_ALL_HTTP_PROXY_URL: stringWithMinLength,
+    npm_package_version: stringWithMinLength,
 }) satisfies ZodType<Environment, ZodTypeDef, Partial<Environment>>
 
 async function loadSecrets(): Promise<void> {

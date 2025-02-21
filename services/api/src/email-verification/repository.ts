@@ -1,10 +1,11 @@
 import { type Db, ObjectId } from 'mongodb'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
-import { DESCENDING, generateObjectIdAsync } from '../util/mongo'
+import { DESCENDING } from '../util/mongo'
 import type { EmailPatternUsage } from '../domain'
+import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
-    save: (emailVerification: EmailVerificationResult) => Promise<void>
+    save: (emailVerification: EmailVerificationResult) => Promise<EmailVerificationResult>
     findById: (id: string) => Promise<EmailVerificationResult>
     findByEmail: (email: string) => Promise<EmailVerificationResult>
     aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
@@ -17,8 +18,8 @@ interface EmailVerificationSchema {
     localPart: string
     format?: string
     targetExchange?: string
-    verifiedAt?: Date
     exists: boolean | null
+    catchAll: boolean | null
     sources: EmailVerificationSource[]
 }
 
@@ -35,6 +36,49 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         this.collection = db.collection<EmailVerificationSchema>('emailVerifications')
     }
 
+    private static toSchema({
+        email,
+        domain,
+        localPart,
+        targetExchange,
+        sources,
+        exists,
+        format,
+        catchAll,
+    }: EmailVerificationResult): EmailVerificationSchema {
+        return {
+            email,
+            domain,
+            localPart,
+            targetExchange,
+            sources,
+            exists,
+            format,
+            catchAll: catchAllStatusToBoolean(catchAll),
+        }
+    }
+
+    private static fromSchema({
+        email,
+        domain,
+        localPart,
+        targetExchange,
+        sources,
+        exists,
+        catchAll,
+    }: EmailVerificationSchema): EmailVerificationResult {
+        return {
+            email,
+            domain,
+            localPart,
+            targetExchange,
+            sources,
+            exists,
+            catchAll: booleanToCatchAllStatus(catchAll),
+            deliveryStatus: existsToDeliveryStatus(exists),
+        }
+    }
+
     async init(): Promise<void> {
         await this.collection.createIndex('email')
         await this.collection.createIndex(['domain', 'format'])
@@ -43,19 +87,27 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     findByEmail: (email: string) => Promise<EmailVerificationResult> = async (
         email: string,
     ): Promise<EmailVerificationResult> => {
-        const dataModel = await this.collection.findOne({ email })
-        if (dataModel === null) throw new EmailVerificationNotFoundError('email', email)
-        return dataModel
+        const schema = await this.collection.findOne({ email })
+        if (schema === null) throw new EmailVerificationNotFoundError('email', email)
+        return MongoEmailVerificationRepository.fromSchema(schema)
     }
 
     async findById(id: string): Promise<EmailVerificationResult> {
-        const dataModel = await this.collection.findOne({ _id: new ObjectId(id) })
-        if (dataModel === null) throw new EmailVerificationNotFoundError('id', id)
-        return dataModel
+        const schema = await this.collection.findOne({ _id: new ObjectId(id) })
+        if (schema === null) throw new EmailVerificationNotFoundError('id', id)
+        return MongoEmailVerificationRepository.fromSchema(schema)
     }
 
-    async save(emailVerification: EmailVerificationResult): Promise<void> {
-        await this.collection.insertOne({ ...emailVerification, _id: await generateObjectIdAsync() })
+    async save(emailVerification: EmailVerificationResult): Promise<EmailVerificationResult> {
+        const { insertedId: id } = await this.collection.insertOne(
+            MongoEmailVerificationRepository.toSchema(emailVerification),
+        )
+
+        return {
+            id: id.toHexString(),
+            ...emailVerification,
+            verifiedAt: id.getTimestamp(),
+        }
     }
 
     aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>
@@ -109,14 +161,4 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
                 },
             ])
             .toArray()
-}
-
-export class MockEmailVerificationRepository implements EmailVerificationRepository {
-    aggregateEmailPatternUsageForDomain!: (domain: string) => Promise<EmailPatternUsage[]>
-
-    findById!: (id: string) => Promise<EmailVerificationResult>
-
-    findByEmail!: (email: string) => Promise<EmailVerificationResult>
-
-    save!: (emailVerification: EmailVerificationResult) => Promise<void>
 }
