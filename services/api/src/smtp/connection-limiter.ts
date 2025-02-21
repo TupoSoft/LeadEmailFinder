@@ -54,7 +54,7 @@ export interface ConnectionLimiter {
 }
 
 export class RedisConnectionLimiter implements ConnectionLimiter {
-    public static readonly REDIS_KEY_PREFIX = 'SOURCE_DESTIONAION_CONNECTION_LIMIT'
+    public static readonly REDIS_KEY_PREFIX = 'SMTP_CONNECTION_LIMIT'
     public static readonly DEFAULT_MAX_CONNECTIONS = 1
     public static readonly DEFAULT_TTL_MS = 60000
     public static readonly INITIAL_BACKOFF_MS = 100
