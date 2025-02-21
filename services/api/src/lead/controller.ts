@@ -23,7 +23,7 @@ export class LeadController {
 
         this.findLeadService.findBulk(leads).then(
             value => {
-                value.monitorUrl = `${req.protocol}://${req.headers.host}${value.monitorUrl}`
+                value.monitorUrl = `${req.protocol}://${req.hostname}${value.monitorUrl}`
                 res.status(HTTP_STATUS_ACCEPTED).json(value)
             },
             (reason: unknown) => {
