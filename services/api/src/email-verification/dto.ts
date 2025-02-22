@@ -18,7 +18,7 @@ export interface EmailVerificationResult {
     deliveryStatus: DeliveryStatus
     catchAll: CatchAllStatus
     targetExchange?: string
-    verifiedAt?: Date
+    verifiedAt?: string
 }
 
 export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]

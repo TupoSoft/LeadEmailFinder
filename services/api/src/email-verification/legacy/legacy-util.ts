@@ -38,7 +38,7 @@ export function toLegacyResult({
     return {
         catchAll,
         deliveryStatus,
-        verifiedAt: verifiedAt ?? new Date(),
+        verifiedAt: verifiedAt != null ? new Date(verifiedAt) : new Date(),
         email,
         localPart,
         domain,

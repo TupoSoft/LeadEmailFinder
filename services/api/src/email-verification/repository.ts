@@ -106,7 +106,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         return {
             id: id.toHexString(),
             ...emailVerification,
-            verifiedAt: id.getTimestamp(),
+            verifiedAt: id.getTimestamp().toISOString(),
         }
     }
 

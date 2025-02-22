@@ -28,7 +28,7 @@ describe('toLegacyResult', () => {
     })
 
     it('should map verifiedAt to input value if provided', () => {
-        const verifiedAt = new Date('2023-01-01')
+        const verifiedAt = new Date('2023-01-01').toISOString()
         const input: EmailVerificationResult = {
             email: 'test@example.com',
             localPart: 'test',
@@ -43,7 +43,7 @@ describe('toLegacyResult', () => {
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
-        expect(result.verifiedAt).toBe(verifiedAt)
+        expect(result.verifiedAt).toStrictEqual(new Date(verifiedAt))
     })
 
     it('should default verifiedAt to current date if not provided', () => {

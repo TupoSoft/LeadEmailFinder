@@ -7,8 +7,8 @@ import {
     VERIFY_EMAIL_BULK_ROUTE,
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
+    VERIFY_EMAIL_ROUTE_OLD,
 } from './constants'
-import { VERIFY_EMAIL_ROUTE_LEGACY } from './legacy/constants'
 
 const MIN_LENGTH = 1
 
@@ -67,7 +67,7 @@ export class EmailVerificationRouter {
         )
 
         this.router.get(
-            VERIFY_EMAIL_ROUTE_LEGACY,
+            VERIFY_EMAIL_ROUTE_OLD,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
             validate([
                 query('email')
