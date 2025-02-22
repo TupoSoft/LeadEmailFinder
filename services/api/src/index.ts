@@ -38,7 +38,6 @@ import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
 import { emailPaths, emailTag } from './email-verification/openapi'
-import { LegacyEmailVerificationController, LegacyEmailVerificationRouter } from './email-verification/legacy'
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
@@ -161,23 +160,6 @@ async function main(): Promise<void> {
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
-    const legacyEmailVerificationController = new LegacyEmailVerificationController(
-        new EmailVerificationService(
-            new PersistenceEmailVerifierDecorator(
-                new EmailVerificationRunner(smtpVerifier, [], logger),
-                mongoEmailVerificationRepository,
-            ),
-            mongoEmailVerificationRepository,
-            emailVerificationQueue,
-        ),
-    )
-    const legacyEmailVerificationRouter = new LegacyEmailVerificationRouter(
-        router,
-        authMiddleware,
-        legacyEmailVerificationController,
-    )
-    legacyEmailVerificationRouter.init()
-
     const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
     const findLeadEmailVerificationService = new EmailVerificationService(
         throwableEmailVerifierDecorator,
@@ -193,11 +175,12 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const version = configService.get('npm_package_version')
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
             title: 'Lead Email Finder API',
-            version: '0.3.0',
+            version,
         },
         servers: [],
         tags: [emailTag, leadTag, verifyTag],

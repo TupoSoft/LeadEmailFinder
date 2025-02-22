@@ -27,7 +27,6 @@ export class PersistenceEmailVerifierDecorator implements IEmailVerificationRunn
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult> =
         async emailVerificationRequest => {
             const emailVerificationResult = await this.emailVerifier.verify(emailVerificationRequest)
-            await this.emailVerificationRepository.save(emailVerificationResult)
-            return emailVerificationResult
+            return await this.emailVerificationRepository.save(emailVerificationResult)
         }
 }

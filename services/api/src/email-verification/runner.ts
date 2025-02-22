@@ -7,6 +7,8 @@ import type { Logger } from 'logging'
 import type { CatchAllEmailVerifier } from './http'
 import { isEmptyArray } from '../common'
 import { isEmailVerificationSource } from './type-guards'
+import { CatchAllStatus, DeliveryStatus } from './enums'
+import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
 
 export interface IEmailVerificationRunner {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -25,6 +27,8 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
 
         const emailVerification: EmailVerificationResult = {
             exists: null,
+            deliveryStatus: DeliveryStatus.NotProcessed,
+            catchAll: CatchAllStatus.Unknown,
             sources: [],
             domain,
             localPart,
@@ -32,12 +36,14 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
             format,
         }
 
-        const { exists, targetExchange, mxDomain } = await this.verifyViaSmtp(email)
+        const { exists, targetExchange, mxDomain, catchAllStatus } = await this.verifyViaSmtp(email)
         if (exists !== undefined) {
             emailVerification.exists = exists
             emailVerification.targetExchange = targetExchange
             emailVerification.mxDomain = mxDomain
             emailVerification.sources.push('mx')
+            emailVerification.catchAll = booleanToCatchAllStatus(catchAllStatus ?? null)
+            emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
             return emailVerification
         }
 

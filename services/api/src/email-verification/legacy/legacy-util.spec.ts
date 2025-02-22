@@ -1,7 +1,7 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
 import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import { CatchAllStatus, DeliveryStatus } from '../enums'
 import type { LegacyEmailVerificationResult } from './dto'
 
 describe('toLegacyResult', () => {
@@ -13,6 +13,8 @@ describe('toLegacyResult', () => {
             sources: ['linkedin'],
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -26,7 +28,7 @@ describe('toLegacyResult', () => {
     })
 
     it('should map verifiedAt to input value if provided', () => {
-        const verifiedAt = new Date('2023-01-01')
+        const verifiedAt = new Date('2023-01-01').toISOString()
         const input: EmailVerificationResult = {
             email: 'test@example.com',
             localPart: 'test',
@@ -35,11 +37,13 @@ describe('toLegacyResult', () => {
             exists: true,
             targetExchange: 'exchange.example.com',
             verifiedAt,
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
 
-        expect(result.verifiedAt).toBe(verifiedAt)
+        expect(result.verifiedAt).toStrictEqual(new Date(verifiedAt))
     })
 
     it('should default verifiedAt to current date if not provided', () => {
@@ -50,6 +54,8 @@ describe('toLegacyResult', () => {
             sources: [],
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -70,6 +76,8 @@ describe('toLegacyResult', () => {
             sources,
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)

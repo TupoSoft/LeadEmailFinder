@@ -1,4 +1,5 @@
 import type { EMAIL_VERIFICATION_SOURCES } from './constants'
+import type { CatchAllStatus, DeliveryStatus } from './enums'
 
 export interface EmailVerificationRequest {
     email: string
@@ -6,6 +7,7 @@ export interface EmailVerificationRequest {
 }
 
 export interface EmailVerificationResult {
+    id?: string
     email: string
     domain: string
     localPart: string
@@ -13,8 +15,10 @@ export interface EmailVerificationResult {
     mxDomain?: string
     sources: EmailVerificationSource[]
     exists: boolean | null
+    deliveryStatus: DeliveryStatus
+    catchAll: CatchAllStatus
     targetExchange?: string
-    verifiedAt?: Date
+    verifiedAt?: string
 }
 
 export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]

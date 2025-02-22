@@ -1,10 +1,11 @@
-import { describe, it, jest } from '@jest/globals'
+import { afterEach, beforeEach, describe, it, jest } from '@jest/globals'
 import {
     EMAIL_ROUTE,
     VERIFY_EMAIL_BULK_RESULT_ROUTE,
     VERIFY_EMAIL_BULK_ROUTE,
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
+    VERIFY_EMAIL_ROUTE_OLD,
 } from './constants'
 import express, { Router } from 'express'
 import type { IEmailVerificationService } from './service'
@@ -16,6 +17,8 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
+import { CatchAllStatus, DeliveryStatus } from './enums'
+import { HttpError } from '../common'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -49,6 +52,8 @@ describe(EMAIL_ROUTE, () => {
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')
+    const systemTime = new Date('2025-01-01')
+    const verifiedAt = systemTime.toISOString()
 
     const verificationResult: EmailVerificationResult = {
         domain,
@@ -56,7 +61,18 @@ describe(EMAIL_ROUTE, () => {
         localPart,
         sources: ['mx'],
         email,
+        deliveryStatus: DeliveryStatus.Rejected,
+        catchAll: CatchAllStatus.Disabled,
+        verifiedAt,
     }
+
+    beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(systemTime)
+    })
+
+    afterEach(() => {
+        jest.useRealTimers()
+    })
 
     describe(VERIFY_EMAIL_ROUTE, () => {
         it('should return HTTP_OK', async () => {
@@ -66,7 +82,7 @@ describe(EMAIL_ROUTE, () => {
                 .post(VERIFY_EMAIL_ROUTE)
                 .send({ email })
                 .expect('Content-Type', /json/)
-                .expect(verificationResult)
+                .expect({ ...verificationResult, verifiedAt })
                 .expect(constants.HTTP_STATUS_OK)
         })
 
@@ -151,6 +167,51 @@ describe(EMAIL_ROUTE, () => {
                 .expect('Content-Type', /json/)
                 .expect(constants.HTTP_STATUS_NOT_FOUND)
                 .expect({ message })
+        })
+    })
+
+    describe(VERIFY_EMAIL_ROUTE_OLD, () => {
+        it('should return HTTP_OK', async () => {
+            emailVerificationService.verify.mockResolvedValueOnce(verificationResult)
+
+            await request(app)
+                .get(VERIFY_EMAIL_ROUTE_OLD)
+                .query({ email })
+                .expect('Content-Type', /json/)
+                .expect(constants.HTTP_STATUS_OK)
+                .expect({
+                    email,
+                    localPart,
+                    domain,
+                    sources: ['mx'],
+                    exists: false,
+                    verifiedAt: systemTime.toISOString(),
+                    deliveryStatus: DeliveryStatus.Rejected,
+                    catchAll: CatchAllStatus.Disabled,
+                })
+        })
+
+        it('should return HTTP_STATUS_BAD_REQUEST', async () => {
+            jest.useRealTimers()
+
+            await request(app)
+                .get(VERIFY_EMAIL_ROUTE_OLD)
+                .expect('Content-Type', /json/)
+                .expect(constants.HTTP_STATUS_BAD_REQUEST)
+        })
+
+        it('should return HTTP_UNAUTHORIZED', async () => {
+            jest.useRealTimers()
+
+            authMiddleware.authenticate.mockImplementationOnce((_req, _res, next) => {
+                next(HttpError.Unauthorized('Invalid token'))
+            })
+
+            await request(app)
+                .get(VERIFY_EMAIL_ROUTE_OLD)
+                .expect('Content-Type', /json/)
+                .expect(constants.HTTP_STATUS_UNAUTHORIZED)
+                .expect({ message: 'Invalid token' })
         })
     })
 })
