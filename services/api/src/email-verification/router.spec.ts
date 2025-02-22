@@ -16,6 +16,7 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
+import { CatchAllStatus, DeliveryStatus } from './enums'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -56,6 +57,8 @@ describe(EMAIL_ROUTE, () => {
         localPart,
         sources: ['mx'],
         email,
+        deliveryStatus: DeliveryStatus.Rejected,
+        catchAll: CatchAllStatus.Disabled,
     }
 
     describe(VERIFY_EMAIL_ROUTE, () => {

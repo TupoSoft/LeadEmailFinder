@@ -9,8 +9,8 @@ import type { EmailVerificationResult } from '../dto'
 import type { IAuthMiddleware } from '../../middleware'
 import { LegacyEmailVerificationRouter } from './legacy-router'
 import { VERIFY_EMAIL_ROUTE_LEGACY } from './constants'
-import { CatchAllStatus, DeliveryStatus } from './enums'
 import { HttpError } from '../../common'
+import { CatchAllStatus, DeliveryStatus } from '../enums'
 import Mocked = jest.Mocked
 
 describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
@@ -52,6 +52,8 @@ describe(VERIFY_EMAIL_ROUTE_LEGACY, () => {
         localPart,
         sources: ['mx'],
         email,
+        deliveryStatus: DeliveryStatus.Rejected,
+        catchAll: CatchAllStatus.Disabled,
     }
 
     afterEach(() => {

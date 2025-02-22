@@ -1,7 +1,7 @@
 import { toLegacyResult } from './legacy-util'
 import { describe, expect, it } from '@jest/globals'
 import type { EmailVerificationResult, EmailVerificationSource } from '../dto'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import { CatchAllStatus, DeliveryStatus } from '../enums'
 import type { LegacyEmailVerificationResult } from './dto'
 
 describe('toLegacyResult', () => {
@@ -13,6 +13,8 @@ describe('toLegacyResult', () => {
             sources: ['linkedin'],
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -35,6 +37,8 @@ describe('toLegacyResult', () => {
             exists: true,
             targetExchange: 'exchange.example.com',
             verifiedAt,
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -50,6 +54,8 @@ describe('toLegacyResult', () => {
             sources: [],
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)
@@ -70,6 +76,8 @@ describe('toLegacyResult', () => {
             sources,
             exists: true,
             targetExchange: 'exchange.example.com',
+            deliveryStatus: DeliveryStatus.Accepted,
+            catchAll: CatchAllStatus.Enabled,
         }
 
         const result: LegacyEmailVerificationResult = toLegacyResult(input)

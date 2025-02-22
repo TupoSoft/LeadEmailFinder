@@ -57,7 +57,11 @@ describe('EmailVerifier', () => {
         const smtpEmailDoesNotExist: SMTPVerificationResult = { ...smtpVerificationResult, exists: false }
         smtpVerifierMock.verify.mockResolvedValueOnce(smtpEmailDoesNotExist)
 
-        const expectedResult: EmailVerificationResult = { ...expectedEmailVerificationResult, exists: false }
+        const expectedResult: EmailVerificationResult = {
+            ...expectedEmailVerificationResult,
+            exists: false,
+            deliveryStatus: DeliveryStatus.Rejected,
+        }
 
         const result = await emailVerifier.verify({ email })
 
