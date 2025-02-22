@@ -18,7 +18,7 @@ export const verifyEmailResponseBody = z.object({
     exists: z.boolean().openapi({ example: false }),
     targetExchange: z.string().nonempty().optional().openapi({ example: 'microsoft-com.mail.protection.outlook.com' }),
     mxDomain: z.string().nonempty().optional().openapi({ example: 'outlook.com' }),
-    verifiedAt: z.date().openapi({ example: '2022-22-22T02:00:00.000Z' }),
+    verifiedAt: z.string().date().openapi({ example: '2022-22-22T02:00:00.000Z' }),
     deliveryStatus: z.enum([DeliveryStatus.Accepted, DeliveryStatus.Rejected, DeliveryStatus.NotProcessed]),
     catchAll: z.enum([CatchAllStatus.Enabled, CatchAllStatus.Disabled, CatchAllStatus.Unknown]),
 }) satisfies ZodType<EmailVerificationResult>
