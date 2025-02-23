@@ -4,6 +4,7 @@ import { EmailController } from './controller'
 import type { Logger } from 'logging'
 import type { Router } from 'express'
 import { EmailRouter } from './router'
+import type { AuthMiddleware } from '../middleware'
 
 export interface IEmailModule {
     repository: MongoEmailRepository
@@ -16,6 +17,7 @@ export class EmailModule implements IEmailModule {
         private readonly db: Db,
         private readonly logger: Logger,
         private readonly router: Router,
+        private readonly authMiddleware: AuthMiddleware,
     ) {}
 
     private _repository?: MongoEmailRepository
@@ -36,7 +38,7 @@ export class EmailModule implements IEmailModule {
         this._repository = new MongoEmailRepository(this.db)
 
         const controller = new EmailController(this._repository, this.logger)
-        const router = new EmailRouter(this.router, controller)
+        const router = new EmailRouter(this.router, controller, this.authMiddleware)
         router.init()
 
         this.isInitialized = true

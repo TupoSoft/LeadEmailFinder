@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
 
-    const emailModule = new EmailModule(db, logger, router)
+    const emailModule = new EmailModule(db, logger, router, authMiddleware)
     emailModule.init()
 
     const microsoftLogin = new MicrosoftLogin(axiosHttpClient)
