@@ -20,10 +20,11 @@ export class LeadController {
     findBulk(req: Request<unknown, unknown, FindLeadRequest[]>, res: Response, next: NextFunction): void {
         const { body: leads } = req
         const { HTTP_STATUS_ACCEPTED } = constants
+        const host = req.hostname === 'localhost' ? req.headers.host : req.hostname
 
         this.findLeadService.findBulk(leads).then(
             value => {
-                value.monitorUrl = `${req.protocol}://${req.hostname}${value.monitorUrl}`
+                value.monitorUrl = `${req.protocol}://${host}${value.monitorUrl}`
                 res.status(HTTP_STATUS_ACCEPTED).json(value)
             },
             (reason: unknown) => {

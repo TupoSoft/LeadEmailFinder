@@ -3,6 +3,7 @@ import { Queue } from 'bullmq'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { ok } from 'node:assert'
 import { SERVICE_NAME } from './constants'
+import { randomUUID } from 'node:crypto'
 
 export interface LeadQueueJobDataType {
     leads: FindLeadRequest[]
@@ -24,7 +25,7 @@ export class LeadQueue {
     }
 
     async addJob(name: LeadQueueNameType, data: LeadQueueJobDataType): Promise<string> {
-        const { id } = await this.queue.add(name, data)
+        const { id } = await this.queue.add(name, data, { jobId: randomUUID() })
         ok(id !== undefined, new Error('The job ID is undefined'))
         return id
     }

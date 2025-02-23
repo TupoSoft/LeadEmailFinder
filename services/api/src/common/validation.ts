@@ -7,7 +7,7 @@ export const bulkRequestParamsSchema = z.object({
 })
 
 export const bulkOkResponseBodySchema = z.object({
-    taskId: z.string().nonempty().openapi({ example: '1' }),
+    taskId: z.string().uuid().nonempty(),
     message: z.string().nonempty().openapi({ example: 'Request accepted.' }),
     monitorUrl: z
         .string()
