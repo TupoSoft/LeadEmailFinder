@@ -18,10 +18,6 @@ import { ProxyRouter } from './proxy/router'
 import { ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
-import {
-    PersistenceEmailVerifierDecorator,
-    ThrowableEmailVerifierDecorator,
-} from './email-verification/runner-decorators'
 import { LeadQueueWorker } from './lead/queue-worker'
 import { AuthRouter } from './auth/router'
 import { AuthController } from './auth/controller'
@@ -37,12 +33,14 @@ import { ErrorMiddleware } from './middleware/handle-error'
 import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
-import { emailPaths, emailTag } from './email-verification/openapi'
+import { emailVerificationPaths, verificationTag } from './email-verification/openapi'
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
 import express, { type NextFunction, type Request, type Response, Router } from 'express'
 import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps } from './email-verification/http'
 import { randomUUID } from 'node:crypto'
+import { EmailModule } from './email'
+import { emailApiPaths } from './email/openapi'
 
 declare module 'express' {
     interface Request {
@@ -135,6 +133,9 @@ async function main(): Promise<void> {
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
 
+    const emailModule = new EmailModule(db, logger, router)
+    emailModule.init()
+
     const microsoftLogin = new MicrosoftLogin(axiosHttpClient)
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
@@ -144,15 +145,12 @@ async function main(): Promise<void> {
         [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
         logger,
     )
-    const persistenceEmailVerifierDecorator = new PersistenceEmailVerifierDecorator(
+    const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
+    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)
+    const emailVerificationService = new EmailVerificationService(
         emailVerificationRunner,
         mongoEmailVerificationRepository,
-    )
-    const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
-    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, persistenceEmailVerifierDecorator)
-    const emailVerificationService = new EmailVerificationService(
-        persistenceEmailVerifierDecorator,
-        mongoEmailVerificationRepository,
+        emailModule.repository,
         emailVerificationQueue,
     )
     const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
@@ -160,13 +158,7 @@ async function main(): Promise<void> {
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
-    const throwableEmailVerifierDecorator = new ThrowableEmailVerifierDecorator(persistenceEmailVerifierDecorator)
-    const findLeadEmailVerificationService = new EmailVerificationService(
-        throwableEmailVerifierDecorator,
-        mongoEmailVerificationRepository,
-        emailVerificationQueue,
-    )
-    const leadFinder = new LeadFinder(findLeadEmailVerificationService, logger)
+    const leadFinder = new LeadFinder(emailVerificationService, logger)
     const leadQueue = new LeadQueue(redis)
     const leadQueueWorker = new LeadQueueWorker(redis, leadFinder)
     const leadService = new LeadService(leadFinder, leadQueue)
@@ -183,11 +175,12 @@ async function main(): Promise<void> {
             version,
         },
         servers: [],
-        tags: [emailTag, leadTag, verifyTag],
+        tags: [verificationTag, leadTag, verifyTag],
         paths: {
-            ...emailPaths,
+            ...emailVerificationPaths,
             ...leadPaths,
             ...legacyVerifyEmailPaths,
+            ...emailApiPaths,
         },
         components: {
             securitySchemes: {
@@ -222,18 +215,18 @@ async function main(): Promise<void> {
                     genReqId: (_req, _res) => loggerMixin.correlationId,
                 },
             ),
-            express.json(),
-            router,
             (req: Request, _res: Response, next: NextFunction): void => {
                 const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
                 swagger.servers = [{ url: `${req.protocol}://${host}` }]
                 req.swaggerDoc = swagger
                 next()
             },
-            serve,
-            setup(swagger, { customSiteTitle: 'Lead Email Finder API' }),
+            express.json(),
+            router,
             errorMiddleware.handleError.bind(errorMiddleware),
         )
+        .use('/', serve)
+        .get('/', setup(swagger, { customSiteTitle: 'Lead Email Finder API' }))
         .listen(port, () => {
             logger.info(`Server is running on port ${port}`)
         })

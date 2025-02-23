@@ -29,7 +29,7 @@ export function validate(validationChain: Array<ValidationChain | (Middleware & 
 
 export const validateRequest =
     (schema: ZodSchema, type: 'body' | 'query' | 'params' = 'body') =>
-    (req: Request, res: Response, next: NextFunction): void => {
+    (req: Request, _res: Response, next: NextFunction): void => {
         try {
             schema.parse(req[type])
             next()

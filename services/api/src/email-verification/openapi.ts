@@ -14,8 +14,8 @@ import {
 } from './constants'
 import { bulkOkResponseBodySchema, bulkRequestParamsSchema, errorResponseBodySchema } from '../common'
 
-export const emailTag = {
-    name: 'emails',
+export const verificationTag = {
+    name: 'verifications',
     description: 'Verifying emails',
 }
 
@@ -29,7 +29,7 @@ const verifyEmailOkResponse: ZodOpenApiResponseObject = {
 }
 
 const verifyEmailOperation: ZodOpenApiOperationObject = {
-    tags: [emailTag.name],
+    tags: [verificationTag.name],
     summary: 'Verify an email',
     requestBody: {
         content: {
@@ -61,7 +61,7 @@ const verifyEmailBulkOkResponse: ZodOpenApiResponseObject = {
 }
 
 const verifyEmailBulkOperation: ZodOpenApiOperationObject = {
-    tags: [emailTag.name],
+    tags: [verificationTag.name],
     summary: 'Verify multiple emails',
     requestBody: {
         content: {
@@ -93,7 +93,7 @@ const verifyEmailBulkStatusOkResponse: ZodOpenApiResponseObject = {
 }
 
 const verifyEmailBulkStatusOperation: ZodOpenApiOperationObject = {
-    tags: [emailTag.name],
+    tags: [verificationTag.name],
     summary: 'Get the status of bulk email verification',
     requestParams: {
         path: bulkRequestParamsSchema,
@@ -113,7 +113,7 @@ const verifyEmailBulkResultOkResponse: ZodOpenApiResponseObject = {
 }
 
 const verifyEmailBulkResultOperation: ZodOpenApiOperationObject = {
-    tags: [emailTag.name],
+    tags: [verificationTag.name],
     summary: 'Get the result of bulk email verification',
     requestParams: {
         path: bulkRequestParamsSchema,
@@ -123,7 +123,7 @@ const verifyEmailBulkResultOperation: ZodOpenApiOperationObject = {
     },
 }
 
-export const emailPaths: ZodOpenApiPathsObject = {
+export const emailVerificationPaths: ZodOpenApiPathsObject = {
     [VERIFY_EMAIL_ROUTE]: {
         post: verifyEmailOperation,
     },

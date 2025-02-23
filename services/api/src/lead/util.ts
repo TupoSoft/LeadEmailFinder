@@ -1,5 +1,6 @@
 import type { FindLeadRequest } from './dto'
 import type { EmailPatternUsage } from '../domain'
+import { EMAIL_PATTERNS } from '../email/constants'
 
 const firstNamePatterns = ['{first}']
 
@@ -30,7 +31,7 @@ export function getAllEmailFormats(): EmailPatternUsage[] {
     const emailFormatToCount: EmailPatternUsage[] = []
     const INITIAL_USAGE_COUNT = 0
 
-    for (const pattern of firstNameLastNamePatterns) {
+    for (const pattern of EMAIL_PATTERNS) {
         emailFormatToCount.push({ pattern, usageCount: INITIAL_USAGE_COUNT })
     }
 
