@@ -30,12 +30,13 @@ export class EmailModule implements IEmailModule {
         return this._repository
     }
 
-    init = (): void => {
+    init = async (): Promise<void> => {
         if (this.isInitialized) {
             return
         }
 
         this._repository = new MongoEmailRepository(this.db)
+        await this._repository.init()
 
         const controller = new EmailController(this._repository, this.logger)
         const router = new EmailRouter(this.router, controller, this.authMiddleware)
