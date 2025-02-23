@@ -134,7 +134,7 @@ async function main(): Promise<void> {
     await mongoEmailVerificationRepository.init()
 
     const emailModule = new EmailModule(db, logger, router, authMiddleware)
-    emailModule.init()
+    await emailModule.init()
 
     const microsoftLogin = new MicrosoftLogin(axiosHttpClient)
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)

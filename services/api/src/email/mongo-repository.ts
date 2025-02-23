@@ -38,6 +38,14 @@ export class MongoEmailRepository implements EmailRepository {
         }
     }
 
+    init = async (): Promise<void> => {
+        const exists = 1
+        const domain = 1
+        const format = 1
+
+        await this.collection.createIndex({ exists, domain, format })
+    }
+
     findByIdOrCreate = async ({
         format,
         domain,
