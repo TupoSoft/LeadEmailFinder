@@ -7,6 +7,7 @@ export const emailApiPaths: ZodOpenApiPathsObject = {
     [EMAIL_ROUTE]: {
         post: {
             tags: ['emails'],
+            summary: 'Adds an email record to the DB',
             requestBody: {
                 content: {
                     'application/json': {
@@ -15,7 +16,7 @@ export const emailApiPaths: ZodOpenApiPathsObject = {
                 },
             },
             responses: {
-                [constants.HTTP_STATUS_OK]: {
+                [constants.HTTP_STATUS_CREATED]: {
                     description: 'Success',
                     content: {
                         'application/json': {

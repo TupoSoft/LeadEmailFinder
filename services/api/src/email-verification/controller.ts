@@ -37,10 +37,11 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
     verifyEmails(req: Request, res: Response, next: NextFunction): void {
         const { emails } = matchedData<{ emails: string[] }>(req)
         const { HTTP_STATUS_ACCEPTED } = constants
+        const host = req.hostname === 'localhost' ? req.headers.host : req.hostname
 
         this.emailVerificationService.verifyBulk(emails).then(
             value => {
-                value.monitorUrl = `${req.protocol}://${req.hostname}${value.monitorUrl}`
+                value.monitorUrl = `${req.protocol}://${host}${value.monitorUrl}`
                 res.status(HTTP_STATUS_ACCEPTED).json(value)
             },
             (reason: unknown) => {

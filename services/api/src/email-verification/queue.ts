@@ -2,6 +2,7 @@ import type { EmailVerificationResult } from './dto'
 import type { Queue } from 'bullmq'
 import { ok } from 'node:assert'
 import { JobNotFoundError } from './errors'
+import { randomUUID } from 'node:crypto'
 
 type DataType = string[]
 
@@ -13,7 +14,7 @@ export class EmailVerificationQueue {
     constructor(private readonly queue: Queue<DataType, ResultType, NameType>) {}
 
     async addJob(name: NameType, data: DataType): Promise<string> {
-        const { id } = await this.queue.add(name, data)
+        const { id } = await this.queue.add(name, data, { jobId: randomUUID() })
         ok(id !== undefined, new Error('The job ID is undefined'))
         return id
     }
