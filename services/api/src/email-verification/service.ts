@@ -33,11 +33,11 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly emailVerificationQueue: EmailVerificationQueue,
     ) {}
 
-    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
-        const { email, format, throwIfNonexistent } = emailVerificationRequest
+    async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
+        email = email.toLowerCase()
         const [username, domain] = email.split('@')
 
-        const emailVerificationResult = await this.emailVerificationRunner.verify(emailVerificationRequest)
+        const emailVerificationResult = await this.emailVerificationRunner.verify({ email, format })
         const emailVerificationRecord = await this.emailVerificationRepository.save(emailVerificationResult)
         const { exists, id: lastVerificationId } = emailVerificationRecord
 
@@ -49,10 +49,6 @@ export class EmailVerificationService implements IEmailVerificationService {
             domain,
             lastVerificationId,
         })
-
-        if (throwIfNonexistent === true && exists !== true) {
-            throw new Error(`The email ${email} doesn't exist`)
-        }
 
         return emailVerificationRecord
     }

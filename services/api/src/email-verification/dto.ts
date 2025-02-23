@@ -5,7 +5,6 @@ import type { EmailPattern } from '../email/enums'
 export interface EmailVerificationRequest {
     email: string
     format?: EmailPattern
-    throwIfNonexistent?: boolean
 }
 
 export interface EmailVerificationResult {

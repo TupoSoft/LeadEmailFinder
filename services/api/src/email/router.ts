@@ -46,11 +46,11 @@ export class EmailRouter {
             this.controller.updateEmail,
         )
 
-        this.router.delete(
-            EMAIL_ROUTE_WITH_PARAM,
-            this.authMiddleware.authenticate.bind(this.authMiddleware),
-            requestWithIdValidator,
-            this.controller.deleteEmail,
-        )
+        // this.router.delete(
+        //     EMAIL_ROUTE_WITH_PARAM,
+        //     this.authMiddleware.authenticate.bind(this.authMiddleware),
+        //     requestWithIdValidator,
+        //     this.controller.deleteEmail,
+        // )
     }
 }

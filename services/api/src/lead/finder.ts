@@ -1,14 +1,10 @@
-import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
+import type { EmailVerificationService } from '../email-verification'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
-import type { EmailPatternUsage } from '../domain'
-import { ok } from 'node:assert'
-import { isEmptyArray } from '../common'
 import type { Logger } from 'logging'
+import type { EmailPattern } from '../email/enums'
 
 export class LeadFinder {
-    private static readonly HALF = 0.5
-
     constructor(
         private readonly emailVerificationService: EmailVerificationService,
         private readonly logger: Logger,
@@ -23,39 +19,16 @@ export class LeadFinder {
 
         try {
             const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(domain)
-            const [{ usageCount: topmostUsageCount }] = emailPatternUsage
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
-            const p0 = emailFormats.filter(
-                ({ pattern, usageCount }) =>
-                    usageCount > Math.ceil(topmostUsageCount * LeadFinder.HALF) &&
-                    !deprioritizedEmailFormats.has(pattern),
-            )
-            const p1 = emailFormats.filter(({ pattern }) => !deprioritizedEmailFormats.has(pattern))
-            const p2 = emailFormats.filter(({ pattern }) => deprioritizedEmailFormats.has(pattern))
+            const formatToEmailMapForLead = getFormatToEmailMapForLead(lead)
 
-            try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p0)
-                findLeadResult.emails.push(emailVerificationResult)
-                return findLeadResult
-            } catch (error) {
-                this.logger.error(`No high priority emails found for lead: ${JSON.stringify(lead)}`)
-            }
+            for (const { pattern: format } of emailFormats) {
+                const email = formatToEmailMapForLead.get(format)
+                if (email == null) continue
 
-            try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p1)
-                findLeadResult.emails.push(emailVerificationResult)
-                return findLeadResult
-            } catch (error) {
-                this.logger.error(`No medium priority emails found for lead: ${JSON.stringify(lead)}`)
-            }
-
-            try {
-                const emailVerificationResult = await this.findEmailForFormats(lead, p2)
-                findLeadResult.emails.push(emailVerificationResult)
-                return findLeadResult
-            } catch (error) {
-                this.logger.error(`No low priority emails found for lead: ${JSON.stringify(lead)}`)
+                const shouldContinue = await this.processEmailFormat(email, format, findLeadResult)
+                if (!shouldContinue) break
             }
         } catch (error) {
             this.logger.error(`Error in findLead: ${JSON.stringify(error)}`)
@@ -64,41 +37,20 @@ export class LeadFinder {
         return findLeadResult
     }
 
-    private async findEmailForFormats(
-        findLeadRequest: FindLeadRequest,
-        formatUsages: EmailPatternUsage[],
-    ): Promise<EmailVerificationResult> {
-        const verificationResultPromises = this.getVerificationResultPromises(findLeadRequest, formatUsages)
-        ok(!isEmptyArray(verificationResultPromises))
+    private async processEmailFormat(
+        email: string,
+        format: EmailPattern,
+        findLeadResult: FindLeadResult,
+    ): Promise<boolean> {
+        const emailVerificationResult = await this.emailVerificationService.verify({
+            email,
+            format,
+        })
 
-        const firstPositiveVerificationResult = await Promise.any(verificationResultPromises)
-
-        void Promise.allSettled(verificationResultPromises)
-
-        return firstPositiveVerificationResult
-    }
-
-    private getVerificationResultPromises(
-        findLeadRequest: FindLeadRequest,
-        emailPatternUsages: EmailPatternUsage[],
-    ): Array<Promise<EmailVerificationResult>> {
-        const formats = getFormatToEmailMapForLead(findLeadRequest)
-
-        const verificationResultPromises: Array<Promise<EmailVerificationResult>> = []
-
-        for (const { pattern: format } of emailPatternUsages) {
-            const email = formats.get(format)
-            if (email !== undefined) {
-                verificationResultPromises.push(
-                    this.emailVerificationService.verify({
-                        email,
-                        format,
-                        throwIfNonexistent: true,
-                    }),
-                )
-            }
+        if (emailVerificationResult.exists === true) {
+            findLeadResult.emails.push(emailVerificationResult)
         }
 
-        return verificationResultPromises
+        return emailVerificationResult.exists !== true || deprioritizedEmailFormats.has(format)
     }
 }
