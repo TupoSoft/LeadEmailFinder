@@ -1,29 +1,10 @@
 import type { FindLeadRequest } from './dto'
 import type { EmailPatternUsage } from '../domain'
 import { EMAIL_PATTERNS } from '../email/constants'
+import { EmailPattern } from '../email/enums'
 
-const firstNamePatterns = ['{first}']
-
-const lastNamePatterns = ['{last}']
-
-const firstNameLastNamePatterns = [
-    '{first}.{last}',
-    '{f}{last}',
-    '{f}.{last}',
-    '{first}{last}',
-    '{first}{l}',
-    '{first}.{l}',
-    '{last}.{first}',
-    '{first}_{last}',
-    '{last}{f}',
-    '{f}{l}',
-    '{l}{first}',
-    '{l}.{first}',
-    '{last}{first}',
-    '{first}-{last}',
-    ...firstNamePatterns,
-    ...lastNamePatterns,
-]
+const firstNamePatterns = [EmailPattern.First]
+const lastNamePatterns = [EmailPattern.Last]
 
 export const deprioritizedEmailFormats = new Set(['{first}', '{last}'])
 
@@ -60,13 +41,13 @@ export function mergeEmailFormats(arr1: EmailPatternUsage[], arr2: EmailPatternU
     return Array.from(formatMap.values()).sort((a, b) => b.usageCount - a.usageCount)
 }
 
-export function getFormatToEmailMapForLead(lead: FindLeadRequest): Map<string, string> {
+export function getFormatToEmailMapForLead(lead: FindLeadRequest): Map<EmailPattern, string> {
     const FIRST_CHAR_POS = 0
     const { firstName, lastName, domain } = lead
 
     if (firstName !== undefined && lastName !== undefined) {
         return new Map(
-            firstNameLastNamePatterns.map(format => [
+            EMAIL_PATTERNS.map(format => [
                 format,
                 format
                     .replace('{first}', firstName)

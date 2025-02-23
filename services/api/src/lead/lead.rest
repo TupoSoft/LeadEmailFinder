@@ -8,3 +8,38 @@ Content-Type: application/json
   "lastName": "{{$random.name.lastName}}",
   "domain": "gmail.com"
 }
+
+###
+POST {{host}}/leads/search/bulk
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+[
+    {
+        "firstName": "{{$random.name.firstName}}",
+        "lastName": "{{$random.name.lastName}}",
+        "domain": "gmail.com"
+    },
+    {
+      "firstName": "{{$random.name.firstName}}",
+      "lastName": "{{$random.name.lastName}}",
+      "domain": "gmail.com"
+    }
+]
+
+> {%
+    client.test('OK', () => {
+        client.assert(response.status === 202, 'The request is not accepted')
+        client.global.set('taskId', response.body.taskId)
+    })
+%}
+
+###
+GET {{host}}/leads/search/bulk/{{taskId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+###
+GET {{host}}/leads/search/bulk/{{taskId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
