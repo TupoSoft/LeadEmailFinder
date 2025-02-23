@@ -1,0 +1,10 @@
+###
+POST {{host}}/leads/search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "firstName": "sasha",
+  "lastName": "soskin",
+  "domain": "gmail.com"
+}

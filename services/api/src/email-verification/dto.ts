@@ -1,9 +1,11 @@
 import type { EMAIL_VERIFICATION_SOURCES } from './constants'
 import type { CatchAllStatus, DeliveryStatus } from './enums'
+import type { EmailPattern } from '../email/enums'
 
 export interface EmailVerificationRequest {
     email: string
-    format?: string
+    format?: EmailPattern
+    throwIfNonexistent?: boolean
 }
 
 export interface EmailVerificationResult {
@@ -11,7 +13,7 @@ export interface EmailVerificationResult {
     email: string
     domain: string
     localPart: string
-    format?: string
+    format?: EmailPattern
     mxDomain?: string
     sources: EmailVerificationSource[]
     exists: boolean | null

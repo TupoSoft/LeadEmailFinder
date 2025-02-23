@@ -1,13 +1,14 @@
 import type { EmailVerificationResult, EmailVerificationService } from '../email-verification'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
-import { NO_USAGES } from './constants'
 import type { EmailPatternUsage } from '../domain'
 import { ok } from 'node:assert'
 import { isEmptyArray } from '../common'
 import type { Logger } from 'logging'
 
 export class LeadFinder {
+    private static readonly HALF = 0.5
+
     constructor(
         private readonly emailVerificationService: EmailVerificationService,
         private readonly logger: Logger,
@@ -22,10 +23,13 @@ export class LeadFinder {
 
         try {
             const emailPatternUsage = await this.emailVerificationService.aggregateEmailPatternUsageForDomain(domain)
+            const [{ usageCount: topmostUsageCount }] = emailPatternUsage
             const allEmailFormats = getAllEmailFormats()
             const emailFormats = mergeEmailFormats(emailPatternUsage, allEmailFormats)
             const p0 = emailFormats.filter(
-                ({ pattern, usageCount }) => usageCount > NO_USAGES && !deprioritizedEmailFormats.has(pattern),
+                ({ pattern, usageCount }) =>
+                    usageCount > Math.ceil(topmostUsageCount * LeadFinder.HALF) &&
+                    !deprioritizedEmailFormats.has(pattern),
             )
             const p1 = emailFormats.filter(({ pattern }) => !deprioritizedEmailFormats.has(pattern))
             const p2 = emailFormats.filter(({ pattern }) => deprioritizedEmailFormats.has(pattern))
@@ -89,6 +93,7 @@ export class LeadFinder {
                     this.emailVerificationService.verify({
                         email,
                         format,
+                        throwIfNonexistent: true,
                     }),
                 )
             }

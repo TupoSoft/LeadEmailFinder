@@ -9,6 +9,8 @@ import type {
 import type { EmailPatternUsage } from '../domain'
 import type { EmailVerificationQueue } from './queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
+import type { EmailRepository } from '../email/repository'
+import type { EmailPattern } from '../email/enums'
 
 export interface IEmailVerificationService {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -21,14 +23,38 @@ export interface IEmailVerificationService {
 }
 
 export class EmailVerificationService implements IEmailVerificationService {
+    private static readonly INITIAL_COUNT = 0
+    private static readonly COUNT_INCREMENT = 1
+
     constructor(
-        private readonly emailVerifier: IEmailVerificationRunner,
+        private readonly emailVerificationRunner: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
+        private readonly emailRepository: EmailRepository,
         private readonly emailVerificationQueue: EmailVerificationQueue,
     ) {}
 
     async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
-        return await this.emailVerifier.verify(emailVerificationRequest)
+        const { email, format, throwIfNonexistent } = emailVerificationRequest
+        const [username, domain] = email.split('@')
+
+        const emailVerificationResult = await this.emailVerificationRunner.verify(emailVerificationRequest)
+        const emailVerificationRecord = await this.emailVerificationRepository.save(emailVerificationResult)
+        const { exists, id: lastVerificationId } = emailVerificationRecord
+
+        await this.emailRepository.findByIdOrCreate({
+            email,
+            format,
+            exists,
+            username,
+            domain,
+            lastVerificationId,
+        })
+
+        if (throwIfNonexistent === true && exists !== true) {
+            throw new Error(`The email ${email} doesn't exist`)
+        }
+
+        return emailVerificationRecord
     }
 
     async verifyBulk(emails: string[]): Promise<VerifyEmailBulkResponse> {
@@ -54,6 +80,22 @@ export class EmailVerificationService implements IEmailVerificationService {
     }
 
     async aggregateEmailPatternUsageForDomain(domain: string): Promise<EmailPatternUsage[]> {
-        return await this.emailVerificationRepository.aggregateEmailPatternUsageForDomain(domain)
+        const emailRecords = await this.emailRepository.findAll({ domain, exists: true, formatDefined: true })
+
+        const patternUsageMap = emailRecords.reduce<Map<EmailPattern, number>>((acc, record) => {
+            if (record.format !== undefined) {
+                const count = acc.get(record.format) ?? EmailVerificationService.INITIAL_COUNT
+                acc.set(record.format, count + EmailVerificationService.COUNT_INCREMENT)
+            }
+
+            return acc
+        }, new Map())
+
+        return Array.from(patternUsageMap.entries())
+            .map(([pattern, usageCount]) => ({
+                pattern,
+                usageCount,
+            }))
+            .sort((a, b) => b.usageCount - a.usageCount)
     }
 }

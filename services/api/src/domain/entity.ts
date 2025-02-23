@@ -1,7 +1,8 @@
 import type { MxRecord } from 'node:dns'
+import type { EmailPattern } from '../email/enums'
 
 export interface EmailPatternUsage {
-    pattern: string
+    pattern: EmailPattern
     usageCount: number
 }
 

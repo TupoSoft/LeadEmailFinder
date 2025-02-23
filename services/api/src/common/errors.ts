@@ -25,4 +25,8 @@ export class HttpError extends Error {
     static Conflict(message: string): HttpError {
         return new HttpError(constants.HTTP_STATUS_CONFLICT, message)
     }
+
+    static InternalServerError(): HttpError {
+        return new HttpError(constants.HTTP_STATUS_INTERNAL_SERVER_ERROR, 'Internal server error')
+    }
 }
