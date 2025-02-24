@@ -49,7 +49,11 @@ export const getEmailsQueryValidationSchema = z
                 z.literal('null').transform(() => null),
             ])
             .optional()
-            .openapi({ example: 'true', type: 'boolean', nullable: true, enum: [true, false, null] }),
+            .openapi({
+                example: 'true',
+                nullable: true,
+                enum: [true, false, null],
+            }),
         domain: z.string().nonempty().optional().openapi({ example: 'example.com' }),
         format: z.enum(EMAIL_PATTERNS).optional().openapi({ example: EmailPattern.LastFirst }),
         formatExists: z
