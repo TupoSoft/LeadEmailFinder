@@ -37,13 +37,14 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         }
 
         const { exists, targetExchange, mxDomain, catchAllStatus } = await this.verifyViaSmtp(email)
+        emailVerification.catchAll = booleanToCatchAllStatus(catchAllStatus ?? null)
+        emailVerification.deliveryStatus = existsToDeliveryStatus(exists ?? null)
+
         if (exists !== undefined) {
             emailVerification.exists = exists
             emailVerification.targetExchange = targetExchange
             emailVerification.mxDomain = mxDomain
             emailVerification.sources.push('mx')
-            emailVerification.catchAll = booleanToCatchAllStatus(catchAllStatus ?? null)
-            emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
             return emailVerification
         }
 

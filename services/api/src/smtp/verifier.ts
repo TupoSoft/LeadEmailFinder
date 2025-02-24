@@ -59,7 +59,7 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             ok(clientDomain !== undefined, new Error(`Invalid client domain: ${clientDomain}`))
 
-            const senderUsername = 'danilo'
+            const senderUsername = 'contact'
             const senderEmail = `${senderUsername}@${clientDomain}`
 
             await client.mailFrom(senderEmail)

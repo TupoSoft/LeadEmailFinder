@@ -174,7 +174,12 @@ async function main(): Promise<void> {
             title: 'Lead Email Finder API',
             version,
         },
-        servers: [],
+        servers: [
+            {
+                url: configService.get('API_URL'),
+                description: 'Production server',
+            },
+        ],
         tags: [verificationTag, leadTag, verifyTag, { name: 'emails', description: 'Emails API' }],
         paths: {
             ...emailVerificationPaths,
@@ -215,12 +220,6 @@ async function main(): Promise<void> {
                     genReqId: (_req, _res) => loggerMixin.correlationId,
                 },
             ),
-            (req: Request, _res: Response, next: NextFunction): void => {
-                const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
-                swagger.servers = [{ url: `${req.protocol}://${host}` }]
-                req.swaggerDoc = swagger
-                next()
-            },
             express.json(),
             router,
             errorMiddleware.handleError.bind(errorMiddleware),

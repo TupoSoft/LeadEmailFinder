@@ -9,6 +9,7 @@ const stringWithMinLength = z.string().nonempty()
 
 export interface Environment {
     NODE_ENV: 'development' | 'production' | 'test'
+    API_URL: string
     PORT: number
     JWT_HS256_SECRET: string
     JWT_ISSUER: string
@@ -23,6 +24,7 @@ export interface Environment {
 
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']),
+    API_URL: stringWithMinLength,
     PORT: z.coerce.number().default(DEFAULT_PORT),
     JWT_HS256_SECRET: z.string().min(JWT_HS256_SECRET_MIN_LENGTH),
     JWT_ISSUER: stringWithMinLength,
