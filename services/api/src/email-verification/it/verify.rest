@@ -68,13 +68,11 @@ POST {{host}}/emails/verify/bulk
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{
-  "emails": [
+[
     "{{$random.email}}",
     "{{$random.email}}",
     "{{$random.email}}"
-  ]
-}
+]
 
 > {%
     const { monitorUrl } = response.body

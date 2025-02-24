@@ -13,9 +13,7 @@ export class LeadQueueWorker {
         this.worker = new Worker<LeadQueueJobDataType, LeadQueueResultType, LeadQueueNameType>(
             SERVICE_NAME,
             async job => {
-                const {
-                    data: { leads },
-                } = job
+                const { data: leads } = job
 
                 const findLeadResults: FindLeadResult[] = []
                 for (const lead of leads) {
@@ -24,7 +22,7 @@ export class LeadQueueWorker {
                     await job.updateProgress((findLeadResults.length / leads.length) * PERCENTAGE)
                 }
 
-                return { findLeadResults }
+                return findLeadResults
             },
             {
                 connection,

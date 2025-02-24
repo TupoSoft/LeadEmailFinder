@@ -14,7 +14,7 @@ export class LeadService {
     }
 
     async findBulk(leads: FindLeadRequest[]): Promise<FindBulkResponse> {
-        const taskId = await this.leadQueue.addJob('findBulk', { leads })
+        const taskId = await this.leadQueue.addJob('findBulk', leads)
 
         return {
             taskId,
