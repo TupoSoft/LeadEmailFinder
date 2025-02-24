@@ -5,13 +5,9 @@ import { ok } from 'node:assert'
 import { SERVICE_NAME } from './constants'
 import { randomUUID } from 'node:crypto'
 
-export interface LeadQueueJobDataType {
-    leads: FindLeadRequest[]
-}
+export type LeadQueueJobDataType = FindLeadRequest[]
 
-export interface LeadQueueResultType {
-    findLeadResults: FindLeadResult[]
-}
+export type LeadQueueResultType = FindLeadResult[]
 
 export type LeadQueueNameType = 'findBulk'
 

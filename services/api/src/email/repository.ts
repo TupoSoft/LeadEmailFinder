@@ -16,7 +16,7 @@ export interface FindAllFilters {
     domain?: string
     exists?: boolean | null
     format?: EmailPattern
-    formatDefined?: boolean
+    formatExists?: boolean
 }
 
 export interface EmailRepository {

@@ -71,7 +71,7 @@ const verifyEmailBulkOperation: ZodOpenApiOperationObject = {
         },
     },
     responses: {
-        [constants.HTTP_STATUS_OK]: verifyEmailBulkOkResponse,
+        [constants.HTTP_STATUS_ACCEPTED]: verifyEmailBulkOkResponse,
         [constants.HTTP_STATUS_BAD_REQUEST]: errorResponseBodySchema({
             example: 'Must be a non-empty array of emails',
             description: 'Validation failed',

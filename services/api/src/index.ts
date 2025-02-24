@@ -63,7 +63,9 @@ async function main(): Promise<void> {
     const logger = new PinoLogger({
         options: {
             level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
-            mixin: () => loggerMixin,
+            mixin: () => ({
+                ...loggerMixin,
+            }),
         },
     })
 
@@ -167,15 +169,26 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const url = configService.get('API_URL')
     const version = configService.get('npm_package_version')
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
             title: 'Lead Email Finder API',
+            contact: {
+                email: 'contact@leademailfinder.com',
+                name: 'Lead Email Finder Support',
+                url,
+            },
             version,
         },
-        servers: [],
-        tags: [verificationTag, leadTag, verifyTag],
+        servers: [
+            {
+                url,
+                description: 'Production server',
+            },
+        ],
+        tags: [verificationTag, leadTag, verifyTag, { name: 'emails', description: 'Emails API' }],
         paths: {
             ...emailVerificationPaths,
             ...leadPaths,
@@ -215,12 +228,6 @@ async function main(): Promise<void> {
                     genReqId: (_req, _res) => loggerMixin.correlationId,
                 },
             ),
-            (req: Request, _res: Response, next: NextFunction): void => {
-                const host = req.hostname === 'localhost' ? `${req.hostname}:${port}` : req.hostname
-                swagger.servers = [{ url: `${req.protocol}://${host}` }]
-                req.swaggerDoc = swagger
-                next()
-            },
             express.json(),
             router,
             errorMiddleware.handleError.bind(errorMiddleware),

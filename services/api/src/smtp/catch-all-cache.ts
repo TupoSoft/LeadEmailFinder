@@ -7,6 +7,7 @@ export interface CatchAllCache {
 }
 
 export class RedisCatchAllCache implements CatchAllCache {
+    private static readonly CATCH_ALL_CACHE_EXPIRY = 86400
     private readonly cacheKeyPrefix = 'CATCH_ALL_STATUS'
 
     constructor(private readonly redis: Redis) {}
@@ -26,7 +27,7 @@ export class RedisCatchAllCache implements CatchAllCache {
 
         try {
             const key = this.getKey(domain)
-            await this.redis.set(key, JSON.stringify(status))
+            await this.redis.set(key, JSON.stringify(status), 'EX', RedisCatchAllCache.CATCH_ALL_CACHE_EXPIRY)
         } catch (error) {
             ok(error instanceof Error, new Error(errorMessage))
             throw error

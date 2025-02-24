@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
-import type { CreateEmailRequest, UpdateEmailRequest } from './dto'
+import type { CreateEmailRequest, GetEmailsRequestQueryParams, UpdateEmailRequest } from './dto'
 import { constants } from 'node:http2'
 import type { EmailRepository } from './repository'
 import type { Logger } from 'logging'
@@ -29,8 +29,12 @@ export class EmailController {
             )
     }
 
-    getEmails = (_req: Request, res: Response, next: NextFunction): void => {
-        this.repository.findAll().then(
+    getEmails = (
+        req: Request<unknown, unknown, unknown, GetEmailsRequestQueryParams>,
+        res: Response,
+        next: NextFunction,
+    ): void => {
+        this.repository.findAll(req.query).then(
             records => res.status(constants.HTTP_STATUS_OK).json(records),
             (error: unknown) => {
                 this.onError(error, next)
@@ -40,13 +44,13 @@ export class EmailController {
 
     getEmailById = (req: Request, res: Response, next: NextFunction): void => {
         const {
-            params: { id },
+            params: { email },
         } = req
 
-        this.repository.findById(id).then(
+        this.repository.findById(email).then(
             record => {
                 if (record == null) {
-                    next(HttpError.NotFound(`Email with ID ${id} not found`))
+                    next(HttpError.NotFound(`Email ${email} not found`))
                     return
                 }
 
@@ -61,7 +65,7 @@ export class EmailController {
     updateEmail = (
         req: Request<
             {
-                id: string
+                email: string
             },
             unknown,
             UpdateEmailRequest
@@ -70,14 +74,14 @@ export class EmailController {
         next: NextFunction,
     ): void => {
         const {
-            params: { id },
+            params: { email },
             body: updateEmailDto,
         } = req
 
-        this.repository.update(id, updateEmailDto).then(
+        this.repository.update(email, updateEmailDto).then(
             updatedEmail => {
                 if (updatedEmail == null) {
-                    next(HttpError.NotFound(`Email with ID ${id} not found`))
+                    next(HttpError.NotFound(`Email ${email} not found`))
                     return
                 }
 

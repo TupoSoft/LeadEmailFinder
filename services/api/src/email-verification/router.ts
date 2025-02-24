@@ -1,7 +1,7 @@
 import type { Router } from 'express'
 import type { EmailVerificationController } from './controller'
 import { body, query } from 'express-validator'
-import { type IAuthMiddleware, validate } from '../middleware'
+import { type IAuthMiddleware, validate, validateRequest } from '../middleware'
 import {
     VERIFY_EMAIL_BULK_RESULT_ROUTE,
     VERIFY_EMAIL_BULK_ROUTE,
@@ -9,6 +9,7 @@ import {
     VERIFY_EMAIL_ROUTE,
     VERIFY_EMAIL_ROUTE_OLD,
 } from './constants'
+import { verifyEmailBulkRequestBody } from './validation'
 
 const MIN_LENGTH = 1
 
@@ -39,18 +40,7 @@ export class EmailVerificationRouter {
         this.router.post(
             VERIFY_EMAIL_BULK_ROUTE,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
-            validate([
-                body('emails').isArray({ min: MIN_LENGTH }).withMessage('Must be a non-empty array of emails'),
-                body('emails.*')
-                    .isString()
-                    .withMessage('Email should be a string')
-                    .bail()
-                    .notEmpty()
-                    .withMessage('Email cannot be empty')
-                    .bail()
-                    .isEmail()
-                    .withMessage('Invalid email address'),
-            ]),
+            validateRequest(verifyEmailBulkRequestBody, 'body'),
             this.emailVerificationController.verifyEmails.bind(this.emailVerificationController),
         )
 

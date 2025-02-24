@@ -3,6 +3,7 @@ import type { EmailController } from './controller'
 import { type AuthMiddleware, validateRequest } from '../middleware'
 import {
     createEmailRequestValidationSchema,
+    getEmailsQueryValidationSchema,
     requestWithIdParamValidationSchema,
     updateEmailRequestValidationSchema,
 } from './validation'
@@ -21,6 +22,7 @@ export class EmailRouter {
         this.router.get(
             EMAIL_ROUTE,
             this.authMiddleware.authenticate.bind(this.authMiddleware),
+            validateRequest(getEmailsQueryValidationSchema, 'query'),
             this.controller.getEmails,
         )
 
