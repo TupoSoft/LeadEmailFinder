@@ -76,7 +76,7 @@ export class EmailVerificationService implements IEmailVerificationService {
     }
 
     async aggregateEmailPatternUsageForDomain(domain: string): Promise<EmailPatternUsage[]> {
-        const emailRecords = await this.emailRepository.findAll({ domain, exists: true, formatDefined: true })
+        const emailRecords = await this.emailRepository.findAll({ domain, exists: true, formatExists: true })
 
         const patternUsageMap = emailRecords.reduce<Map<EmailPattern, number>>((acc, record) => {
             if (record.format !== undefined) {

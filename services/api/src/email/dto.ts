@@ -20,3 +20,10 @@ export interface CreateEmailRecord extends CreateEmailRequest {
 export interface UpdateEmailRecord extends UpdateEmailRequest {
     lastVerificationId?: string
 }
+
+export interface GetEmailsRequestQueryParams {
+    exists?: boolean | null
+    domain?: string
+    format?: EmailPattern
+    formatExists?: boolean
+}

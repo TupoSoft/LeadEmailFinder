@@ -175,7 +175,7 @@ async function main(): Promise<void> {
             version,
         },
         servers: [],
-        tags: [verificationTag, leadTag, verifyTag],
+        tags: [verificationTag, leadTag, verifyTag, { name: 'emails', description: 'Emails API' }],
         paths: {
             ...emailVerificationPaths,
             ...leadPaths,

@@ -31,7 +31,8 @@ export const validateRequest =
     (schema: ZodSchema, type: 'body' | 'query' | 'params' = 'body') =>
     (req: Request, _res: Response, next: NextFunction): void => {
         try {
-            schema.parse(req[type])
+            const data: unknown = req[type]
+            req[type] = schema.parse(data) as unknown
             next()
         } catch (err) {
             if (err instanceof ZodError) {

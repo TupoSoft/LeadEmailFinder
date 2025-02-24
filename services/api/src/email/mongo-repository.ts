@@ -43,7 +43,31 @@ export class MongoEmailRepository implements EmailRepository {
         const domain = 1
         const format = 1
 
-        await this.collection.createIndex({ exists, domain, format })
+        await this.collection.createIndexes([
+            {
+                key: {
+                    exists,
+                    domain,
+                    format,
+                },
+            },
+            {
+                key: {
+                    domain,
+                    format,
+                },
+            },
+            {
+                key: {
+                    domain,
+                },
+            },
+            {
+                key: {
+                    format,
+                },
+            },
+        ])
     }
 
     findByIdOrCreate = async ({
@@ -85,21 +109,23 @@ export class MongoEmailRepository implements EmailRepository {
         exists,
         format,
         domain,
-        formatDefined,
+        formatExists,
     } = {}) => {
         const filters: Filter<EmailSchema> = {
             exists,
             domain,
         }
 
-        if (formatDefined === true) {
+        if (formatExists !== undefined) {
             filters.format = {
-                $exists: true,
+                $exists: formatExists,
             }
         }
 
         if (format !== undefined) {
-            filters.format = format
+            filters.format = {
+                $eq: format,
+            }
         }
 
         return await this.collection
