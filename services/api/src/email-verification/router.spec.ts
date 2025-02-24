@@ -108,7 +108,7 @@ describe(EMAIL_ROUTE, () => {
 
             await request(app)
                 .post(VERIFY_EMAIL_BULK_ROUTE)
-                .send({ emails })
+                .send(emails)
                 .expect(result)
                 .expect('Content-Type', /json/)
                 .expect(constants.HTTP_STATUS_ACCEPTED)
