@@ -169,16 +169,22 @@ async function main(): Promise<void> {
     void leadQueueWorker.run()
     leadRouter.init()
 
+    const url = configService.get('API_URL')
     const version = configService.get('npm_package_version')
     const swagger = createDocument({
         openapi: '3.1.0',
         info: {
             title: 'Lead Email Finder API',
+            contact: {
+                email: 'contact@leademailfinder.com',
+                name: 'Lead Email Finder Support',
+                url,
+            },
             version,
         },
         servers: [
             {
-                url: configService.get('API_URL'),
+                url,
                 description: 'Production server',
             },
         ],

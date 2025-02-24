@@ -18,7 +18,7 @@ export const createEmailRequestValidationSchema = z
 
 export const updateEmailRequestValidationSchema = z
     .object({
-        exists: z.boolean().nullable(),
+        exists: z.boolean().nullable().optional(),
         format: z.enum(EMAIL_PATTERNS).optional(),
     })
     .strict() satisfies ZodType<UpdateEmailRequest>

@@ -8,7 +8,7 @@ export interface CreateEmailRequest {
 
 export interface UpdateEmailRequest {
     format?: EmailPattern
-    exists: boolean | null
+    exists?: boolean | null
 }
 
 export interface CreateEmailRecord extends CreateEmailRequest {
