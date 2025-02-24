@@ -63,7 +63,9 @@ async function main(): Promise<void> {
     const logger = new PinoLogger({
         options: {
             level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
-            mixin: () => loggerMixin,
+            mixin: () => ({
+                ...loggerMixin,
+            }),
         },
     })
 
