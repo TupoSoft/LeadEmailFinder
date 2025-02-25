@@ -3,8 +3,8 @@ import type { Queue } from 'bullmq'
 import { ok } from 'node:assert'
 import { JobNotFoundError } from './errors'
 import { randomUUID } from 'node:crypto'
-import { bulkProgressResponseValidationSchema } from '../common'
-import type { BulkStatusResponse } from '../common/dto'
+import type { BulkStatusResponse } from '../common'
+import { bulkProgressResponseValidationSchema, jobStateToJobStatus } from '../common'
 
 type DataType = string[]
 
@@ -24,12 +24,13 @@ export class EmailVerificationQueue {
     async getStatus(id: string): Promise<BulkStatusResponse> {
         const job = await this.queue.getJob(id)
         ok(job !== undefined, new JobNotFoundError(id))
-        const status = await job.getState()
+        const state = await job.getState()
+
         const { progress } = job
         const { total, processed } = await bulkProgressResponseValidationSchema.parseAsync(progress)
 
         return {
-            status,
+            status: jobStateToJobStatus(state),
             total,
             processed,
         }

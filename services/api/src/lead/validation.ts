@@ -29,8 +29,4 @@ export const findLeadResponseBodySchema = z.intersection(
 
 export const findLeadBulkRequestBodySchema = z.array(findLeadRequestBodySchema)
 
-export const findLeadBulkStatusResponseBodySchema = z.object({
-    status: z.string().nonempty().openapi({ example: 'completed' }),
-})
-
 export const findLeadBulkResultResponseBodySchema = z.array(findLeadResponseBodySchema)

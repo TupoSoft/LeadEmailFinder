@@ -8,13 +8,16 @@ import {
 import {
     findLeadBulkRequestBodySchema,
     findLeadBulkResultResponseBodySchema,
-    findLeadBulkStatusResponseBodySchema,
     findLeadRequestBodySchema,
     findLeadResponseBodySchema,
 } from './validation'
 import { constants } from 'node:http2'
 import { z } from 'zod'
-import { bulkOkResponseBodySchema, bulkRequestParamsSchema } from '../common'
+import {
+    bulkRequestValidationSchema,
+    bulkResponseValidationSchema,
+    bulkStatusResponseValidationSchema,
+} from '../common'
 
 export const leadTag = {
     name: 'leads',
@@ -86,7 +89,7 @@ export const leadPaths: ZodOpenApiPathsObject = {
                     description: 'Request accepted',
                     content: {
                         'application/json': {
-                            schema: bulkOkResponseBodySchema,
+                            schema: bulkResponseValidationSchema,
                         },
                     },
                 },
@@ -122,14 +125,14 @@ export const leadPaths: ZodOpenApiPathsObject = {
             summary: 'Get the status of bulk lead search',
             description: 'Get the status of bulk lead search',
             requestParams: {
-                path: bulkRequestParamsSchema,
+                path: bulkRequestValidationSchema,
             },
             responses: {
                 [constants.HTTP_STATUS_OK]: {
                     description: 'Success',
                     content: {
                         'application/json': {
-                            schema: findLeadBulkStatusResponseBodySchema,
+                            schema: bulkStatusResponseValidationSchema,
                         },
                     },
                 },
@@ -152,7 +155,7 @@ export const leadPaths: ZodOpenApiPathsObject = {
             summary: 'Get the result of bulk lead search',
             description: 'Get the result of bulk lead search',
             requestParams: {
-                path: bulkRequestParamsSchema,
+                path: bulkRequestValidationSchema,
             },
             responses: {
                 [constants.HTTP_STATUS_OK]: {

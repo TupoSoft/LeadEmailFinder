@@ -1,3 +1,5 @@
+import type { JobStatus } from './enums'
+
 export interface BulkResponse {
     message: string
     taskId: string
@@ -10,5 +12,5 @@ export interface BulkProgressResponse {
 }
 
 export interface BulkStatusResponse extends BulkProgressResponse {
-    status: string
+    status: JobStatus
 }

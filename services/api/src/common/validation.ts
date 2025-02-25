@@ -1,12 +1,15 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
-import type { BulkProgressResponse } from './dto'
+import type { BulkProgressResponse, BulkStatusResponse } from './dto'
+import { JobStatus } from './enums'
 
-export const bulkRequestParamsSchema = z.object({
-    id: z.string().nonempty().openapi({ example: '1' }),
-})
+export const bulkRequestValidationSchema = z
+    .object({
+        id: z.string().uuid().nonempty(),
+    })
+    .strict()
 
-export const bulkOkResponseBodySchema = z
+export const bulkResponseValidationSchema = z
     .object({
         taskId: z.string().uuid().nonempty(),
         message: z.string().nonempty().openapi({ example: 'Request accepted.' }),
@@ -20,3 +23,12 @@ export const bulkProgressResponseValidationSchema = z
         processed: z.number(),
     })
     .strict() satisfies ZodType<BulkProgressResponse>
+
+export const bulkStatusResponseValidationSchema = z.intersection(
+    bulkProgressResponseValidationSchema,
+    z
+        .object({
+            status: z.nativeEnum(JobStatus),
+        })
+        .strict(),
+) satisfies ZodType<BulkStatusResponse>
