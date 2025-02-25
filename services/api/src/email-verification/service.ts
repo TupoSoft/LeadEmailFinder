@@ -1,23 +1,19 @@
 import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
-import type {
-    EmailVerificationRequest,
-    EmailVerificationResult,
-    VerifyEmailBulkResponse,
-    VerifyEmailBulkStatusResponse,
-} from './dto'
+import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailPatternUsage } from '../domain'
 import type { EmailVerificationQueue } from './queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 import type { EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
+import type { BulkResponse, BulkStatusResponse } from '../common'
 
 export interface IEmailVerificationService {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
 
-    verifyBulk: (emails: string[]) => Promise<VerifyEmailBulkResponse>
+    verifyBulk: (emails: string[]) => Promise<BulkResponse>
 
-    getVerifyBulkStatus: (id: string) => Promise<VerifyEmailBulkStatusResponse>
+    getVerifyBulkStatus: (id: string) => Promise<BulkStatusResponse>
 
     getVerifyBulkResult: (id: string) => Promise<EmailVerificationResult[]>
 }
@@ -53,7 +49,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         return emailVerificationRecord
     }
 
-    async verifyBulk(emails: string[]): Promise<VerifyEmailBulkResponse> {
+    async verifyBulk(emails: string[]): Promise<BulkResponse> {
         const taskId = await this.emailVerificationQueue.addJob('verifyBulk', emails)
 
         return {
@@ -63,12 +59,8 @@ export class EmailVerificationService implements IEmailVerificationService {
         }
     }
 
-    async getVerifyBulkStatus(id: string): Promise<VerifyEmailBulkStatusResponse> {
-        const status = await this.emailVerificationQueue.getStatus(id)
-
-        return {
-            status,
-        }
+    async getVerifyBulkStatus(id: string): Promise<BulkStatusResponse> {
+        return await this.emailVerificationQueue.getStatus(id)
     }
 
     async getVerifyBulkResult(id: string): Promise<EmailVerificationResult[]> {

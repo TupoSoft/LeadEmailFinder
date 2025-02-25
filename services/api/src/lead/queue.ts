@@ -4,6 +4,7 @@ import type { FindLeadRequest, FindLeadResult } from './dto'
 import { ok } from 'node:assert'
 import { SERVICE_NAME } from './constants'
 import { randomUUID } from 'node:crypto'
+import { bulkProgressResponseValidationSchema, type BulkStatusResponse } from '../common'
 
 export type LeadQueueJobDataType = FindLeadRequest[]
 
@@ -26,10 +27,19 @@ export class LeadQueue {
         return id
     }
 
-    async getStatus(id: string): Promise<string> {
+    async getStatus(id: string): Promise<BulkStatusResponse> {
         const job = await this.queue.getJob(id)
         ok(job !== undefined, new Error(`The job ${id} does not exist`))
-        return await job.getState()
+        const status = await job.getState()
+
+        const { progress } = job
+        const { total, processed } = await bulkProgressResponseValidationSchema.parseAsync(progress)
+
+        return {
+            status,
+            total,
+            processed,
+        }
     }
 
     async getResult(id: string): Promise<LeadQueueResultType> {

@@ -1,7 +1,8 @@
-import type { FindBulkResponse, FindBulkStatusResponse, FindLeadRequest, FindLeadResult } from './dto'
+import type { FindBulkResponse, FindLeadRequest, FindLeadResult } from './dto'
 import type { LeadFinder } from './finder'
 import type { LeadQueue, LeadQueueResultType } from './queue'
 import { FIND_LEAD_BULK_STATUS_ROUTE } from './constants'
+import type { BulkStatusResponse } from '../common'
 
 export class LeadService {
     constructor(
@@ -23,12 +24,8 @@ export class LeadService {
         }
     }
 
-    async findBulkStatus(id: string): Promise<FindBulkStatusResponse> {
-        const status = await this.leadQueue.getStatus(id)
-
-        return {
-            status,
-        }
+    async findBulkStatus(id: string): Promise<BulkStatusResponse> {
+        return await this.leadQueue.getStatus(id)
     }
 
     async getFindBulkResult(id: string): Promise<LeadQueueResultType> {

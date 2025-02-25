@@ -3,7 +3,7 @@ import { Worker } from 'bullmq'
 import type { EmailVerificationResult } from './dto'
 import type { IEmailVerificationRunner } from './runner'
 import { RESOURCE } from './constants'
-import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
+import { QUEUE_WORKER_CONCURRENCY } from '../common'
 
 export class EmailVerificationQueueWorker {
     private readonly worker
@@ -18,9 +18,10 @@ export class EmailVerificationQueueWorker {
                 for (const email of emails) {
                     const result = await emailVerifier.verify({ email })
                     emailVerificationResults.push(result)
-                    await job.updateProgress(
-                        (emailVerificationResults.length / emailVerificationResults.length) * PERCENTAGE,
-                    )
+                    await job.updateProgress({
+                        total: emails.length,
+                        processed: emailVerificationResults.length,
+                    })
                 }
 
                 return emailVerificationResults

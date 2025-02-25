@@ -23,13 +23,3 @@ export interface EmailVerificationResult {
 }
 
 export type EmailVerificationSource = (typeof EMAIL_VERIFICATION_SOURCES)[number]
-
-export interface VerifyEmailBulkResponse {
-    message: string
-    taskId: string
-    monitorUrl: string
-}
-
-export interface VerifyEmailBulkStatusResponse {
-    status: string
-}

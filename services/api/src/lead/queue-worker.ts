@@ -4,7 +4,7 @@ import { SERVICE_NAME } from './constants'
 import type { LeadQueueJobDataType, LeadQueueNameType, LeadQueueResultType } from './queue'
 import type { LeadFinder } from './finder'
 import type { FindLeadResult } from './dto'
-import { PERCENTAGE, QUEUE_WORKER_CONCURRENCY } from '../common'
+import { QUEUE_WORKER_CONCURRENCY } from '../common'
 
 export class LeadQueueWorker {
     private readonly worker
@@ -19,7 +19,10 @@ export class LeadQueueWorker {
                 for (const lead of leads) {
                     const result = await leadFinder.findLead(lead)
                     findLeadResults.push(result)
-                    await job.updateProgress((findLeadResults.length / leads.length) * PERCENTAGE)
+                    await job.updateProgress({
+                        total: leads.length,
+                        processed: findLeadResults.length,
+                    })
                 }
 
                 return findLeadResults

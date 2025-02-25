@@ -24,6 +24,26 @@ Content-Type: application/json
       "firstName": "{{$random.name.firstName}}",
       "lastName": "{{$random.name.lastName}}",
       "domain": "gmail.com"
+    },
+    {
+      "firstName": "{{$random.name.firstName}}",
+      "lastName": "{{$random.name.lastName}}",
+      "domain": "gmail.com"
+    },
+    {
+      "firstName": "{{$random.name.firstName}}",
+      "lastName": "{{$random.name.lastName}}",
+      "domain": "gmail.com"
+    },
+    {
+      "firstName": "{{$random.name.firstName}}",
+      "lastName": "{{$random.name.lastName}}",
+      "domain": "gmail.com"
+    },
+    {
+      "firstName": "{{$random.name.firstName}}",
+      "lastName": "{{$random.name.lastName}}",
+      "domain": "gmail.com"
     }
 ]
 
