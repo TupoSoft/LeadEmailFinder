@@ -106,10 +106,6 @@ Content-Type: application/json
 
 ### Get result
 < {%
-    const now = new Date().getTime()
-    const waitUntil = now + 5 * 1000
-    while (new Date().getTime() < waitUntil) {
-    }
     const resultUrl = client.global.get('monitorUrl').replace('/status', '')
     request.variables.set('resultUrl', resultUrl)
 %}

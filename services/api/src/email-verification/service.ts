@@ -1,25 +1,14 @@
 import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
-import type {
-    EmailVerificationRequest,
-    EmailVerificationResult,
-    VerifyEmailBulkResponse,
-    VerifyEmailBulkStatusResponse,
-} from './dto'
+import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailPatternUsage } from '../domain'
 import type { EmailVerificationQueue } from './queue'
-import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 import type { EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
 
 export interface IEmailVerificationService {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
-
-    verifyBulk: (emails: string[]) => Promise<VerifyEmailBulkResponse>
-
-    getVerifyBulkStatus: (id: string) => Promise<VerifyEmailBulkStatusResponse>
-
-    getVerifyBulkResult: (id: string) => Promise<EmailVerificationResult[]>
+    aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
 export class EmailVerificationService implements IEmailVerificationService {
@@ -51,28 +40,6 @@ export class EmailVerificationService implements IEmailVerificationService {
         })
 
         return emailVerificationRecord
-    }
-
-    async verifyBulk(emails: string[]): Promise<VerifyEmailBulkResponse> {
-        const taskId = await this.emailVerificationQueue.addJob('verifyBulk', emails)
-
-        return {
-            taskId,
-            message: 'Request accepted. Starting to find emails.',
-            monitorUrl: VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', taskId),
-        }
-    }
-
-    async getVerifyBulkStatus(id: string): Promise<VerifyEmailBulkStatusResponse> {
-        const status = await this.emailVerificationQueue.getStatus(id)
-
-        return {
-            status,
-        }
-    }
-
-    async getVerifyBulkResult(id: string): Promise<EmailVerificationResult[]> {
-        return await this.emailVerificationQueue.getResult(id)
     }
 
     async aggregateEmailPatternUsageForDomain(domain: string): Promise<EmailPatternUsage[]> {

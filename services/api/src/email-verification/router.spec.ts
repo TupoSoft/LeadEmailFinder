@@ -12,13 +12,15 @@ import type { IEmailVerificationService } from './service'
 import { ExpressEmailVerificationController } from './controller'
 import { EmailVerificationRouter } from './router'
 import type { IAuthMiddleware } from '../middleware'
-import type { EmailVerificationResult, VerifyEmailBulkResponse } from './dto'
+import type { EmailVerificationResult } from './dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import { HttpError } from '../common'
+import { BulkResponse, HttpError } from '../common'
+import { JobStatus } from '../common/enums'
+import { IEmailVerificationQueue } from './queue'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -26,11 +28,16 @@ describe(EMAIL_ROUTE, () => {
     const expressRouter = Router()
 
     const emailVerificationService: Mocked<IEmailVerificationService> = {
-        getVerifyBulkResult: jest.fn(),
-        getVerifyBulkStatus: jest.fn(),
         verify: jest.fn(),
-        verifyBulk: jest.fn(),
+        aggregateEmailPatternUsageForDomain: jest.fn(),
     }
+
+    const emailVerificationQueue: Mocked<IEmailVerificationQueue> = {
+        addJob: jest.fn(),
+        getResult: jest.fn(),
+        getStatus: jest.fn(),
+    }
+
     const authMiddleware: Mocked<IAuthMiddleware> = {
         authenticate: jest.fn((_req, _res, next) => {
             next()
@@ -38,7 +45,10 @@ describe(EMAIL_ROUTE, () => {
     }
     const errorMiddleware = new ErrorMiddleware(console)
 
-    const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
+    const emailVerificationController = new ExpressEmailVerificationController(
+        emailVerificationService,
+        emailVerificationQueue,
+    )
     const emailVerificationRouter = new EmailVerificationRouter(
         expressRouter,
         emailVerificationController,
@@ -98,13 +108,14 @@ describe(EMAIL_ROUTE, () => {
         const emails = ['danilo@microsoft.com', 'danilo@facebook.com', 'danilo@gmail.com']
 
         it('should return HTTP_ACCEPTED', async () => {
-            const result: VerifyEmailBulkResponse = {
-                taskId: '1',
+            const taskId = '1'
+            const result: BulkResponse = {
+                taskId,
                 message: 'Request accepted. Starting to find emails.',
-                monitorUrl: 'http://localhost:3000/emails/verify/bulk/1/status',
+                monitorUrl: 'http://127.0.0.1/emails/verify/bulk/1/status',
             }
 
-            emailVerificationService.verifyBulk.mockResolvedValueOnce(result)
+            emailVerificationQueue.addJob.mockResolvedValueOnce(taskId)
 
             await request(app)
                 .post(VERIFY_EMAIL_BULK_ROUTE)
@@ -124,7 +135,11 @@ describe(EMAIL_ROUTE, () => {
 
     describe(VERIFY_EMAIL_BULK_STATUS_ROUTE, () => {
         it('should return HTTP_OK', async () => {
-            emailVerificationService.getVerifyBulkStatus.mockResolvedValueOnce({ status: 'completed' })
+            emailVerificationQueue.getStatus.mockResolvedValueOnce({
+                status: JobStatus.Completed,
+                processed: 1,
+                total: 1,
+            })
 
             await request(app)
                 .get(VERIFY_EMAIL_BULK_STATUS_ROUTE)
@@ -135,7 +150,7 @@ describe(EMAIL_ROUTE, () => {
         it('should return HTTP_NOT_FOUND when the job was not found', async () => {
             const jobNotFoundError = new JobNotFoundError('1')
             const { message } = jobNotFoundError
-            emailVerificationService.getVerifyBulkStatus.mockRejectedValueOnce(jobNotFoundError)
+            emailVerificationQueue.getStatus.mockRejectedValueOnce(jobNotFoundError)
 
             await request(app)
                 .get(VERIFY_EMAIL_BULK_STATUS_ROUTE)
@@ -148,7 +163,7 @@ describe(EMAIL_ROUTE, () => {
     describe(VERIFY_EMAIL_BULK_RESULT_ROUTE, () => {
         it('should return HTTP_OK', async () => {
             const verificationResults = [verificationResult]
-            emailVerificationService.getVerifyBulkResult.mockResolvedValueOnce(verificationResults)
+            emailVerificationQueue.getResult.mockResolvedValueOnce(verificationResults)
 
             await request(app)
                 .get(VERIFY_EMAIL_BULK_RESULT_ROUTE)
@@ -160,7 +175,7 @@ describe(EMAIL_ROUTE, () => {
         it('should return HTTP_NOT_FOUND when the job was not found', async () => {
             const jobNotFoundError = new JobNotFoundError('1')
             const { message } = jobNotFoundError
-            emailVerificationService.getVerifyBulkResult.mockRejectedValueOnce(jobNotFoundError)
+            emailVerificationQueue.getResult.mockRejectedValueOnce(jobNotFoundError)
 
             await request(app)
                 .get(VERIFY_EMAIL_BULK_RESULT_ROUTE)

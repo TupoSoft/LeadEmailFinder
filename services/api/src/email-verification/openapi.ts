@@ -12,7 +12,12 @@ import {
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
 } from './constants'
-import { bulkOkResponseBodySchema, bulkRequestParamsSchema, errorResponseBodySchema } from '../common'
+import {
+    bulkRequestValidationSchema,
+    bulkResponseValidationSchema,
+    bulkStatusResponseValidationSchema,
+    errorResponseBodySchema,
+} from '../common'
 
 export const verificationTag = {
     name: 'verifications',
@@ -55,7 +60,7 @@ const verifyEmailBulkOkResponse: ZodOpenApiResponseObject = {
     description: 'Successfully verified emails',
     content: {
         'application/json': {
-            schema: bulkOkResponseBodySchema,
+            schema: bulkResponseValidationSchema,
         },
     },
 }
@@ -87,7 +92,7 @@ const verifyEmailBulkStatusOkResponse: ZodOpenApiResponseObject = {
     description: 'Success',
     content: {
         'application/json': {
-            schema: bulkOkResponseBodySchema,
+            schema: bulkStatusResponseValidationSchema,
         },
     },
 }
@@ -96,7 +101,7 @@ const verifyEmailBulkStatusOperation: ZodOpenApiOperationObject = {
     tags: [verificationTag.name],
     summary: 'Get the status of bulk email verification',
     requestParams: {
-        path: bulkRequestParamsSchema,
+        path: bulkRequestValidationSchema,
     },
     responses: {
         [constants.HTTP_STATUS_OK]: verifyEmailBulkStatusOkResponse,
@@ -116,7 +121,7 @@ const verifyEmailBulkResultOperation: ZodOpenApiOperationObject = {
     tags: [verificationTag.name],
     summary: 'Get the result of bulk email verification',
     requestParams: {
-        path: bulkRequestParamsSchema,
+        path: bulkRequestValidationSchema,
     },
     responses: {
         [constants.HTTP_STATUS_OK]: verifyEmailBulkResultOkResponse,
