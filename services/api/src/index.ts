@@ -11,7 +11,7 @@ import { AxiosHttpClient } from './http-client'
 import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { RedisCatchAllCache, RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
-import { LeadController, LeadFinder, LeadQueue, LeadRouter, LeadService } from './lead'
+import { LeadController, LeadFinder, LeadQueue, LeadRouter } from './lead'
 import { MongoProxyRepository, ProxyService } from './proxy'
 import { ProxyController } from './proxy/controller'
 import { ProxyRouter } from './proxy/router'
@@ -163,8 +163,7 @@ async function main(): Promise<void> {
     const leadFinder = new LeadFinder(emailVerificationService, logger)
     const leadQueue = new LeadQueue(redis)
     const leadQueueWorker = new LeadQueueWorker(redis, leadFinder)
-    const leadService = new LeadService(leadFinder, leadQueue)
-    const leadController = new LeadController(leadService)
+    const leadController = new LeadController(leadFinder, leadQueue)
     const leadRouter = new LeadRouter(router, leadController, authMiddleware)
     void leadQueueWorker.run()
     leadRouter.init()
