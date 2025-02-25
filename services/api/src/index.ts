@@ -155,7 +155,10 @@ async function main(): Promise<void> {
         emailModule.repository,
         emailVerificationQueue,
     )
-    const emailVerificationController = new ExpressEmailVerificationController(emailVerificationService)
+    const emailVerificationController = new ExpressEmailVerificationController(
+        emailVerificationService,
+        emailVerificationQueue,
+    )
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController, authMiddleware)
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
