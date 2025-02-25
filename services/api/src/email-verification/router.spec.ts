@@ -12,13 +12,14 @@ import type { IEmailVerificationService } from './service'
 import { ExpressEmailVerificationController } from './controller'
 import { EmailVerificationRouter } from './router'
 import type { IAuthMiddleware } from '../middleware'
-import type { EmailVerificationResult, VerifyEmailBulkResponse } from './dto'
+import type { EmailVerificationResult } from './dto'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import { HttpError } from '../common'
+import { BulkResponse, HttpError } from '../common'
+import { JobStatus } from '../common/enums'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -98,7 +99,7 @@ describe(EMAIL_ROUTE, () => {
         const emails = ['danilo@microsoft.com', 'danilo@facebook.com', 'danilo@gmail.com']
 
         it('should return HTTP_ACCEPTED', async () => {
-            const result: VerifyEmailBulkResponse = {
+            const result: BulkResponse = {
                 taskId: '1',
                 message: 'Request accepted. Starting to find emails.',
                 monitorUrl: 'http://localhost:3000/emails/verify/bulk/1/status',
@@ -124,7 +125,11 @@ describe(EMAIL_ROUTE, () => {
 
     describe(VERIFY_EMAIL_BULK_STATUS_ROUTE, () => {
         it('should return HTTP_OK', async () => {
-            emailVerificationService.getVerifyBulkStatus.mockResolvedValueOnce({ status: 'completed' })
+            emailVerificationService.getVerifyBulkStatus.mockResolvedValueOnce({
+                status: JobStatus.Completed,
+                processed: 1,
+                total: 1,
+            })
 
             await request(app)
                 .get(VERIFY_EMAIL_BULK_STATUS_ROUTE)
