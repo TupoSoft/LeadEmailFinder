@@ -29,6 +29,7 @@ describe(EMAIL_ROUTE, () => {
 
     const emailVerificationService: Mocked<IEmailVerificationService> = {
         verify: jest.fn(),
+        aggregateEmailPatternUsageForDomain: jest.fn(),
     }
 
     const emailVerificationQueue: Mocked<IEmailVerificationQueue> = {
