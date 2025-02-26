@@ -1,15 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- testing */
-
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './runner'
-import { MockSMTPVerifier } from '../smtp'
+import type { ISMTPVerifier } from '../smtp'
 import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResult } from './dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
+import Mocked = jest.Mocked
 
 describe('EmailVerifier', () => {
-    const smtpVerifierMock = new MockSMTPVerifier() as jest.Mocked<MockSMTPVerifier>
-    smtpVerifierMock.verify = jest.fn()
+    const smtpVerifierMock: Mocked<ISMTPVerifier> = {
+        verify: jest.fn(),
+    }
 
     const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
 
@@ -18,7 +18,6 @@ describe('EmailVerifier', () => {
     const targetExchange = 'mail.example.com'
     const mxDomain = 'example.com'
     const exists = true
-    const deliveryStatus = DeliveryStatus.Accepted
     const catchAllStatus = false
 
     const smtpVerificationResult: SMTPVerificationResult = {
@@ -36,7 +35,7 @@ describe('EmailVerifier', () => {
         sources: ['mx'],
         exists,
         mxDomain,
-        deliveryStatus,
+        deliveryStatus: DeliveryStatus.Accepted,
         catchAll: CatchAllStatus.Disabled,
     }
 
