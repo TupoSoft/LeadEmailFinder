@@ -48,6 +48,7 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
                 emailVerification.targetExchange = targetExchange
                 emailVerification.mxDomain = getSecondLevelDomain(targetExchange)
                 emailVerification.sources.push('mx')
+                return emailVerification
             }
         }
 
