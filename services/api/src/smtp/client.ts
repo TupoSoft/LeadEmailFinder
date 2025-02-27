@@ -1,7 +1,5 @@
 import { Socket } from 'node:net'
 import type { Proxy } from '../proxy'
-import type { ConnectionLimiter } from './connection-limiter'
-import { randomUUID } from 'node:crypto'
 import { DEFAULT_SMTP_CLIENT_TIMEOUT, DEFAULT_TIMEOUT_CONFIG, SMTP_PORT, SMTP_RESPONSE_REGEX } from './constants'
 import { hostname as osHostname } from 'os'
 import { promiseWithTimeout } from '../util/timeout'
@@ -40,7 +38,6 @@ export interface SmtpClientConstructorOptions {
     proxy?: Proxy
     timeouts?: SmtpClientTimeoutConfig
     signal?: AbortSignal
-    socket?: Socket
     logger?: ExtensibleLogger
 }
 
@@ -50,7 +47,6 @@ export class SmtpClientImpl implements SmtpClient {
 
     public readonly hostname: string
 
-    private readonly id: string
     private readonly timeouts: Required<SmtpClientTimeoutConfig>
     private readonly socket: Socket
 
@@ -58,39 +54,21 @@ export class SmtpClientImpl implements SmtpClient {
     private readonly signal?: AbortSignal
     private readonly logger?: ExtensibleLogger
 
-    constructor(
-        { host, port, proxy, timeouts, signal, logger, socket }: SmtpClientConstructorOptions,
-        private readonly connectionLimiter: ConnectionLimiter,
-    ) {
-        this.id = randomUUID()
+    constructor({ host, port, proxy, timeouts, signal, logger }: SmtpClientConstructorOptions) {
         this.exchange = host
         this.port = port ?? SMTP_PORT
         this.proxy = proxy
         this.signal = signal
         this.hostname = proxy != null ? proxy.host : osHostname()
         this.timeouts = Object.assign(timeouts ?? {}, DEFAULT_TIMEOUT_CONFIG)
-        this.logger = logger?.child({
-            id: this.id,
-            source: this.hostname,
-            exchange: this.exchange,
+        this.logger = logger
+        this.socket = new Socket({
+            signal,
         })
-        this.socket =
-            socket ??
-            new Socket({
-                signal,
-            })
     }
 
     connect: () => Promise<void> = async () => {
         const { exchange, port, proxy, signal } = this
-
-        const token = await this.connectionLimiter.acquire(this.hostname, this.exchange, signal)
-
-        const onClose = (): void => {
-            if (token !== null) {
-                void this.connectionLimiter.release(this.hostname, this.exchange, token)
-            }
-        }
 
         try {
             await connect({
@@ -102,7 +80,6 @@ export class SmtpClientImpl implements SmtpClient {
                 socket: this.socket,
             })
 
-            this.socket.once('close', onClose)
             this.socket.once('timeout', () => {
                 this.logger?.info(`Socket timed out`)
                 this.socket.end()
@@ -111,14 +88,13 @@ export class SmtpClientImpl implements SmtpClient {
             const { code, enhancedCode, message } = await promiseWithTimeout(
                 this.readResponse(),
                 this.timeouts.greeting,
-                new SmtpClientTimeoutError(this.id),
+                new SmtpClientTimeoutError(),
             )
 
             if (code !== SmtpResponseCode.ServiceReady) {
                 throw new SmtpError(code, enhancedCode, message)
             }
         } catch (error) {
-            onClose()
             ok(isNativeError(error))
             this.logger?.error(`Failed to connect to ${exchange} from ${proxy?.host}: ${error.message}`)
             throw error
@@ -181,6 +157,6 @@ export class SmtpClientImpl implements SmtpClient {
     }
 
     private async sendCommandWithTimeout(command: string, timeout: number): Promise<void> {
-        await promiseWithTimeout(this.sendCommand(command), timeout, new SmtpClientTimeoutError(this.id))
+        await promiseWithTimeout(this.sendCommand(command), timeout, new SmtpClientTimeoutError())
     }
 }

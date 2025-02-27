@@ -3,13 +3,11 @@ import type { SmtpClient } from './client'
 import type { SMTPVerificationResult } from './dto'
 import { SmtpError } from './errors'
 import { ok } from 'node:assert'
-import type { Proxy, ProxyService } from '../proxy'
+import type { Proxy, ProxyRepository } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import type { SmtpClientCreator } from './client-creator'
-import { appendRandomPrefix } from '../util/string'
 import { isIP } from 'node:net'
 import { ZERO } from '../common'
-import type { CatchAllCache } from './catch-all-cache'
 import { SmtpResponseCode } from './enums'
 
 export interface SMTPVerifyOptions {
@@ -23,32 +21,15 @@ export interface ISMTPVerifier {
 export class SMTPVerifier implements ISMTPVerifier {
     constructor(
         private readonly dnsCache: DNSCache,
-        private readonly catchAllCache: CatchAllCache,
-        private readonly proxyService: ProxyService,
+        private readonly proxyRepository: ProxyRepository,
         private readonly smtpClientCreator: SmtpClientCreator,
     ) {}
 
-    private static async getNewCatchAllStatus(client: SmtpClient, domain: string): Promise<boolean | undefined> {
-        try {
-            await client.rcptTo(appendRandomPrefix(`danilo@${domain}`))
-            return true
-        } catch (error) {
-            if (error instanceof SmtpError) {
-                return false
-            } else {
-                return undefined
-            }
-        }
-    }
-
     verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async ({ email }) => {
-        const smtpVerificationResult: SMTPVerificationResult = {}
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
-        const { hostname, exchange } = client
-        smtpVerificationResult.targetExchange = exchange
-        smtpVerificationResult.mxDomain = getSecondLevelDomain(exchange)
+        const { hostname, exchange: targetExchange } = client
 
         try {
             const [clientHostname] = isIP(hostname) !== ZERO ? await this.dnsCache.resolve(hostname, 'PTR') : [hostname]
@@ -64,42 +45,44 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             await client.mailFrom(senderEmail)
 
-            smtpVerificationResult.catchAllStatus = await this.getCatchAllStatus(client, domain)
+            const exists = await client.rcptTo(email).then(
+                _ => true,
+                (reason: unknown) => {
+                    try {
+                        ok(reason instanceof SmtpError)
+                        const { code, message } = reason
 
-            if (smtpVerificationResult.catchAllStatus === false) {
-                smtpVerificationResult.exists = await client.rcptTo(email).then(
-                    _ => true,
-                    (reason: unknown) => {
-                        try {
-                            ok(reason instanceof SmtpError)
-                            const { code, message } = reason
+                        ok(code >= (SmtpResponseCode.CommandUnrecognized as number))
+                        ok(/block|banned/.exec(message) == null)
 
-                            ok(code >= (SmtpResponseCode.CommandUnrecognized as number))
-                            ok(/blocked|banned/.exec(message) == null)
-
-                            return false
-                        } catch (error) {
-                            return undefined
-                        }
-                    },
-                )
-            }
+                        return false
+                    } catch (error) {
+                        return null
+                    }
+                },
+            )
 
             await client.quit()
+
+            return {
+                exists,
+                targetExchange,
+            }
         } catch (error) {
             ok(isNativeError(error))
-            console.error(`Error in SMTPVerifier.verify: `, error)
-            throw error
+
+            return {
+                exists: null,
+                targetExchange,
+            }
         } finally {
             client.end()
         }
-
-        return smtpVerificationResult
     }
 
     private async getSmtpClient(domain: string): Promise<SmtpClient> {
         const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-        const proxies = await this.proxyService.getAll()
+        const proxies = await this.proxyRepository.getAll()
 
         const connectPromises: Array<Promise<SmtpClient>> = []
         const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
@@ -147,24 +130,4 @@ export class SMTPVerifier implements ISMTPVerifier {
             throw error
         }
     }
-
-    private async getCatchAllStatus(client: SmtpClient, domain: string): Promise<boolean | undefined> {
-        const existingCatchAllStatus = await this.catchAllCache.getCatchAllStatusForDomain(domain)
-
-        if (existingCatchAllStatus !== undefined) {
-            return existingCatchAllStatus
-        } else {
-            const catchAllStatus = await SMTPVerifier.getNewCatchAllStatus(client, domain)
-
-            if (catchAllStatus !== undefined) {
-                await this.catchAllCache.setCatchAllStatusForDomain(domain, catchAllStatus)
-            }
-
-            return catchAllStatus
-        }
-    }
-}
-
-export class MockSMTPVerifier implements ISMTPVerifier {
-    verify!: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
 }

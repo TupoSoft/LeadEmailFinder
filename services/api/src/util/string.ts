@@ -1,4 +1,4 @@
-import { ZERO } from '../common/constants'
+import { ZERO } from '../common'
 
 export function appendRandomPrefix(str: string): string {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'

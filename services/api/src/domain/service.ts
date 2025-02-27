@@ -9,6 +9,6 @@ export class DomainService {
     }
 
     async get(name: string): Promise<Domain> {
-        return await this.domainRepository.findByName(name)
+        return await this.domainRepository.findById(name)
     }
 }

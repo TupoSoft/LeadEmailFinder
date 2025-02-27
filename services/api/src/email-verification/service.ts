@@ -2,7 +2,6 @@ import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailPatternUsage } from '../domain'
-import type { EmailVerificationQueue } from './queue'
 import type { EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
 
@@ -19,7 +18,6 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly emailVerificationRunner: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly emailRepository: EmailRepository,
-        private readonly emailVerificationQueue: EmailVerificationQueue,
     ) {}
 
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {

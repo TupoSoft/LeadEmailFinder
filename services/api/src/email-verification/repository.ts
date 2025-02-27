@@ -12,7 +12,6 @@ export interface EmailVerificationRepository {
 }
 
 interface EmailVerificationSchema {
-    _id?: ObjectId
     email: string
     domain: string
     localPart: string

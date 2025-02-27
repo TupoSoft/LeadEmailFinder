@@ -1,11 +1,14 @@
 import type { SmtpResponseCode } from './enums'
 
-export interface SMTPVerificationResult {
-    exists?: boolean
-    catchAllStatus?: boolean
-    targetExchange?: string
-    mxDomain?: string
-}
+export type SMTPVerificationResult =
+    | {
+          exists: null
+          targetExchange?: string
+      }
+    | {
+          exists: true | false
+          targetExchange: string
+      }
 
 export interface SmtpResponse {
     code: SmtpResponseCode

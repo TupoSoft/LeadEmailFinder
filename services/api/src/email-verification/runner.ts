@@ -1,14 +1,13 @@
 import type { ISMTPVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificationSource } from './dto'
-import { isNativeError } from 'node:util/types'
-import { ok } from 'node:assert'
-import type { SMTPVerificationResult } from '../smtp/dto'
-import type { Logger } from 'logging'
 import type { CatchAllEmailVerifier } from './http'
 import { isEmptyArray } from '../common'
 import { isEmailVerificationSource } from './type-guards'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
+import { appendRandomPrefix } from '../util/string'
+import { getSecondLevelDomain } from '../dns'
+import type { CatchAllCache } from './catch-all-cache'
 
 export interface IEmailVerificationRunner {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -18,11 +17,10 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
     constructor(
         private readonly smtpVerifier: ISMTPVerifier,
         private readonly catchAllEmailVerifiers: CatchAllEmailVerifier[],
-        private readonly logger: Logger = console,
+        private readonly catchAllCache: CatchAllCache,
     ) {}
 
-    async verify(emailVerificationRequest: EmailVerificationRequest): Promise<EmailVerificationResult> {
-        const { email, format } = emailVerificationRequest
+    async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
         const [localPart, domain] = email.split('@')
 
         const emailVerification: EmailVerificationResult = {
@@ -36,16 +34,21 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
             format,
         }
 
-        const { exists, targetExchange, mxDomain, catchAllStatus } = await this.verifyViaSmtp(email)
-        emailVerification.catchAll = booleanToCatchAllStatus(catchAllStatus ?? null)
-        emailVerification.deliveryStatus = existsToDeliveryStatus(exists ?? null)
+        const catchAllEnabled = await this.checkCatchAllStatus(domain)
 
-        if (exists !== undefined) {
+        emailVerification.catchAll = booleanToCatchAllStatus(catchAllEnabled)
+        emailVerification.deliveryStatus = existsToDeliveryStatus(null)
+
+        if (catchAllEnabled === false) {
+            const { exists, targetExchange } = await this.smtpVerifier.verify({ email })
+            emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
             emailVerification.exists = exists
-            emailVerification.targetExchange = targetExchange
-            emailVerification.mxDomain = mxDomain
-            emailVerification.sources.push('mx')
-            return emailVerification
+
+            if (exists !== null) {
+                emailVerification.targetExchange = targetExchange
+                emailVerification.mxDomain = getSecondLevelDomain(targetExchange)
+                emailVerification.sources.push('mx')
+            }
         }
 
         const sources = await this.verifyViaHttp(email)
@@ -57,16 +60,22 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         return emailVerification
     }
 
-    private async verifyViaSmtp(email: string): Promise<SMTPVerificationResult> {
-        try {
-            return await this.smtpVerifier.verify({
+    private async checkCatchAllStatus(domain: string): Promise<boolean | null> {
+        const isCatchAllEnabled = await this.catchAllCache.isCatchAllEnabledForDomain(domain)
+
+        if (isCatchAllEnabled != null) {
+            return isCatchAllEnabled
+        } else {
+            const email = appendRandomPrefix(`@${domain}`)
+            const { exists } = await this.smtpVerifier.verify({
                 email,
             })
-        } catch (error) {
-            ok(isNativeError(error))
 
-            this.logger.error(`SMTP verification failed for email ${email}: ${error.message}`)
-            return {}
+            if (exists != null) {
+                await this.catchAllCache.setCatchAllEnabledForDomain(domain, exists)
+            }
+
+            return exists
         }
     }
 
