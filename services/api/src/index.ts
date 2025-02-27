@@ -9,7 +9,6 @@ import {
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
-import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
 import { SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter } from './lead'
@@ -18,12 +17,7 @@ import { ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './commo
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import { LeadQueueWorker } from './lead/queue-worker'
-import { AuthRouter } from './auth/router'
-import { AuthController } from './auth/controller'
-import { AuthService } from './auth/service'
-import { MongoUserRepository, UserService } from './user'
 import { AuthMiddleware } from './middleware'
-import { JwtService } from './auth/jwt'
 import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 import { Queue } from 'bullmq'
@@ -76,27 +70,7 @@ async function main(): Promise<void> {
     const redisCreator = new RedisCreator(configService, logger)
     const redis = redisCreator.create()
 
-    const mongoUserRepository = new MongoUserRepository(db)
-    const userService = new UserService(mongoUserRepository)
-    await mongoUserRepository.createIndices()
-
-    const jwtService = new JwtService({
-        issuer: configService.get('JWT_ISSUER'),
-        audience: configService.get('JWT_AUDIENCE'),
-        secret: configService.get('JWT_HS256_SECRET'),
-        expiration: configService.get('JWT_EXPIRATION'),
-    })
-    const authService = new AuthService(userService, jwtService)
-    const authController = new AuthController(authService)
-    const authRouter = new AuthRouter(router, authController)
-    authRouter.init()
-
     const authMiddleware = new AuthMiddleware(configService, logger)
-    const mongoDomainRepository = new MongoDomainRepository(db)
-    const domainService = new DomainService(mongoDomainRepository)
-    const domainController = new DomainControllerImpl(domainService)
-    const domainRouter = new DomainRouter(router, domainController, authMiddleware)
-    domainRouter.init()
 
     const {
         port: proxyPort,
@@ -105,6 +79,7 @@ async function main(): Promise<void> {
         password,
         protocol,
     } = new URL(configService.get('CATCH_ALL_HTTP_PROXY_URL'))
+
     const axiosInstance = axios.create({
         proxy: {
             port: Number(proxyPort),
