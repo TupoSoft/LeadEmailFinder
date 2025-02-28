@@ -55,6 +55,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     }
 
     private static fromSchema({
+        _id,
         email,
         domain,
         localPart,
@@ -64,6 +65,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         catchAll,
     }: EmailVerificationSchema): EmailVerificationResult {
         return {
+            id: _id?.toHexString(),
             email,
             domain,
             localPart,
@@ -72,6 +74,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             exists,
             catchAll: booleanToCatchAllStatus(catchAll),
             deliveryStatus: existsToDeliveryStatus(exists),
+            verifiedAt: _id?.getTimestamp().toISOString(),
         }
     }
 

@@ -127,14 +127,7 @@ export class SmtpClientImpl implements SmtpClient {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
         this.logger?.info(`Response: ${response}`)
 
-        const responseLines = response.split('\r\n')
-
-        responseLines.pop()
-        const lastLine = responseLines.pop()
-
-        ok(lastLine !== undefined, `Malformed response: ${response}`)
-
-        const smtpResponse = parseSmtpResponse(lastLine)
+        const smtpResponse = parseSmtpResponse(response)
         const { code, enhancedCode, message } = smtpResponse
 
         if (code > SmtpResponseCode.OK) {

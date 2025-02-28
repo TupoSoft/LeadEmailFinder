@@ -69,8 +69,6 @@ export class SMTPVerifier implements ISMTPVerifier {
                 targetExchange,
             }
         } catch (error) {
-            ok(isNativeError(error))
-
             return {
                 exists: null,
                 targetExchange,
