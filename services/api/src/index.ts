@@ -153,7 +153,6 @@ async function main(): Promise<void> {
         emailVerificationRunner,
         mongoEmailVerificationRepository,
         emailModule.repository,
-        emailVerificationQueue,
     )
     const emailVerificationController = new ExpressEmailVerificationController(
         emailVerificationService,
