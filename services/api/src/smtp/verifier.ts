@@ -3,7 +3,7 @@ import type { SmtpClient } from './client'
 import type { SMTPVerificationResult } from './dto'
 import { SmtpError } from './errors'
 import { ok } from 'node:assert'
-import type { Proxy, ProxyService } from '../proxy'
+import type { Proxy, ProxyRepository } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import type { SmtpClientCreator } from './client-creator'
 import { appendRandomPrefix } from '../util/string'
@@ -24,7 +24,7 @@ export class SMTPVerifier implements ISMTPVerifier {
     constructor(
         private readonly dnsCache: DNSCache,
         private readonly catchAllCache: CatchAllCache,
-        private readonly proxyService: ProxyService,
+        private readonly proxyRepository: ProxyRepository,
         private readonly smtpClientCreator: SmtpClientCreator,
     ) {}
 
@@ -97,7 +97,7 @@ export class SMTPVerifier implements ISMTPVerifier {
 
     private async getSmtpClient(domain: string): Promise<SmtpClient> {
         const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-        const proxies = await this.proxyService.getAll()
+        const proxies = await this.proxyRepository.getAll()
 
         const connectPromises: Array<Promise<SmtpClient>> = []
         const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
