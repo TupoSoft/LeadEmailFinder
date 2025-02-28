@@ -1,5 +1,5 @@
 import type { EmailRecord, EmailRepository, FindAllFilters } from './repository'
-import { type Db, type Filter, MongoServerError, type WithId } from 'mongodb'
+import { type Db, type Filter, MongoServerError, type UpdateFilter, type WithId } from 'mongodb'
 import type { CreateEmailRecord, UpdateEmailRecord } from './dto'
 import { ok } from 'node:assert'
 
@@ -25,6 +25,7 @@ export class MongoEmailRepository implements EmailRepository {
         updatedAt,
         username,
         format,
+        lastVerifiedAt,
     }: WithId<EmailSchema>): EmailRecord {
         return {
             email: _id,
@@ -35,6 +36,7 @@ export class MongoEmailRepository implements EmailRepository {
             lastVerificationId,
             createdAt,
             updatedAt,
+            lastVerifiedAt,
         }
     }
 
@@ -138,11 +140,22 @@ export class MongoEmailRepository implements EmailRepository {
         _id: string,
         { format, exists, lastVerificationId }: UpdateEmailRecord,
     ): Promise<EmailRecord | null> => {
-        const updatedRecord = await this.collection.findOneAndUpdate(
-            { _id },
-            { $set: { format, exists, lastVerificationId } },
-            { returnDocument: 'after' },
-        )
+        const updateFilter: UpdateFilter<EmailSchema> = {
+            $set: {
+                format,
+                exists,
+                lastVerificationId,
+                updatedAt: new Date(),
+            },
+        }
+
+        if (lastVerificationId !== undefined) {
+            updateFilter.$set = {
+                lastVerifiedAt: new Date(),
+            }
+        }
+
+        const updatedRecord = await this.collection.findOneAndUpdate({ _id }, updateFilter, { returnDocument: 'after' })
 
         return updatedRecord != null ? MongoEmailRepository.fromSchema(updatedRecord) : null
     }

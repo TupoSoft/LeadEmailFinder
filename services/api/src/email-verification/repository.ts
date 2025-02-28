@@ -1,14 +1,11 @@
 import { type Db, ObjectId } from 'mongodb'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
-import { DESCENDING } from '../util/mongo'
-import type { EmailPatternUsage } from '../domain'
 import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
     save: (emailVerification: EmailVerificationResult) => Promise<EmailVerificationResult>
     findById: (id: string) => Promise<EmailVerificationResult>
     findByEmail: (email: string) => Promise<EmailVerificationResult>
-    aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
 interface EmailVerificationSchema {
@@ -59,6 +56,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     }
 
     private static fromSchema({
+        _id,
         email,
         domain,
         localPart,
@@ -68,6 +66,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         catchAll,
     }: EmailVerificationSchema): EmailVerificationResult {
         return {
+            id: _id?.toHexString(),
             email,
             domain,
             localPart,
@@ -76,6 +75,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             exists,
             catchAll: booleanToCatchAllStatus(catchAll),
             deliveryStatus: existsToDeliveryStatus(exists),
+            verifiedAt: _id?.getTimestamp().toISOString(),
         }
     }
 
@@ -109,56 +109,4 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             verifiedAt: id.getTimestamp().toISOString(),
         }
     }
-
-    aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]> = async domain =>
-        await this.collection
-            .aggregate<EmailPatternUsage>([
-                {
-                    $match: {
-                        domain,
-                        format: {
-                            $ne: null,
-                        },
-                    },
-                },
-                {
-                    $group: {
-                        _id: '$email',
-                        latestEntry: {
-                            $last: '$$ROOT',
-                        },
-                    },
-                },
-                {
-                    $replaceRoot: {
-                        newRoot: '$latestEntry',
-                    },
-                },
-                {
-                    $match: {
-                        exists: true,
-                    },
-                },
-                {
-                    $group: {
-                        _id: '$format',
-                        usageCount: {
-                            $count: {},
-                        },
-                    },
-                },
-                {
-                    $sort: {
-                        usageCount: DESCENDING,
-                    },
-                },
-                {
-                    $project: {
-                        _id: false,
-                        pattern: '$_id',
-                        usageCount: true,
-                    },
-                },
-            ])
-            .toArray()
 }

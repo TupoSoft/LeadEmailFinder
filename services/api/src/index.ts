@@ -130,7 +130,7 @@ async function main(): Promise<void> {
     const catchAllCache = new RedisCatchAllCache(redis)
     const connectionLimiter = new RedisConnectionLimiter(redis, logger)
     const smtpClientFactory = new SmtpClientCreatorImpl(connectionLimiter, logger)
-    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyService, smtpClientFactory)
+    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyRepository, smtpClientFactory)
 
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
@@ -153,7 +153,6 @@ async function main(): Promise<void> {
         emailVerificationRunner,
         mongoEmailVerificationRepository,
         emailModule.repository,
-        emailVerificationQueue,
     )
     const emailVerificationController = new ExpressEmailVerificationController(
         emailVerificationService,
