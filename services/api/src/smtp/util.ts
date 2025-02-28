@@ -1,7 +1,7 @@
 import type { SmtpResponse } from './dto'
 
 export function parseSmtpResponse(rawResponse: string): SmtpResponse {
-    const regex = /^(\d{3})(?:[ -](\d\.\d\.\d))? (.+)$/
+    const regex = /^(\d{3})(?: ?(\d\.\d\.\d))? (.+)$/m
     const match = regex.exec(rawResponse)
 
     if (match == null) {

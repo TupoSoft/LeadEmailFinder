@@ -87,9 +87,7 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             await client.quit()
         } catch (error) {
-            ok(isNativeError(error))
             console.error(`Error in SMTPVerifier.verify: `, error)
-            throw error
         } finally {
             client.end()
         }
@@ -163,8 +161,4 @@ export class SMTPVerifier implements ISMTPVerifier {
             return catchAllStatus
         }
     }
-}
-
-export class MockSMTPVerifier implements ISMTPVerifier {
-    verify!: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
 }
