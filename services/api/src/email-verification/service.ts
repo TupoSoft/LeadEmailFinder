@@ -12,6 +12,7 @@ export interface IEmailVerificationService {
 }
 
 export class EmailVerificationService implements IEmailVerificationService {
+    private static readonly VERIFICATION_SHELF_LIFE = parseTimeString('1d')
     private static readonly INITIAL_COUNT = 0
     private static readonly COUNT_INCREMENT = 1
 
@@ -37,7 +38,7 @@ export class EmailVerificationService implements IEmailVerificationService {
             const now = Date.now()
             const timeDiff = now - lastVerifiedAt.getTime()
 
-            if (timeDiff < parseTimeString('1d')) {
+            if (timeDiff < EmailVerificationService.VERIFICATION_SHELF_LIFE) {
                 return await this.emailVerificationRepository.findById(lastVerificationId)
             }
         }
