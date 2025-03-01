@@ -14,7 +14,7 @@ export enum EmailVerificationReasonEnum {
     TemporarilyBlocked = 'temporarily_blocked',
     NoMxRecords = 'no_mx_records',
     UnexpectedError = 'unexpected_error',
-    Blocked = 'blocked',
+    Blocked = 'blacklisted',
     Unknown = 'unknown',
     NoConnect = 'no_connect',
 }

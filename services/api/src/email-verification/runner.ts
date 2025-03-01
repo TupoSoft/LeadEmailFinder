@@ -21,8 +21,16 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         private readonly catchAllCache: CatchAllSmtpVerificationResultRepository,
     ) {}
 
-    private static shouldVerifyViaHttp(emailVerification: EmailVerificationResult): boolean {
-        return emailVerification.catchAll === CatchAllStatus.Enabled || emailVerification.reason === 'blocked'
+    private static shouldVerifyViaHttp(
+        emailVerification: EmailVerificationResult,
+    ): emailVerification is EmailVerificationResult &
+        (
+            | {
+                  catchAll: CatchAllStatus.Enabled
+              }
+            | { reason: 'blacklisted' }
+        ) {
+        return emailVerification.catchAll === CatchAllStatus.Enabled || emailVerification.reason === 'blacklisted'
     }
 
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {

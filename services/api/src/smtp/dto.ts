@@ -7,7 +7,7 @@ export enum SmtpVerificationReasonEnum {
     TemporarilyBlocked = 'temporarily_blocked',
     NoMxRecords = 'no_mx_records',
     UnexpectedError = 'unexpected_error',
-    Blocked = 'blocked',
+    Blocked = 'blacklisted',
     NoConnect = 'no_connect',
 }
 

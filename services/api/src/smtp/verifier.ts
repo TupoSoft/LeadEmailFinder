@@ -34,7 +34,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                 email,
                 exists: null,
                 targetExchange,
-                reason: 'blocked',
+                reason: 'blacklisted',
             }
         }
 
@@ -70,7 +70,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                     email,
                     exists: null,
                     targetExchange,
-                    reason: 'blocked',
+                    reason: 'blacklisted',
                 }
         }
     }
