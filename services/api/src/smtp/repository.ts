@@ -10,7 +10,7 @@ export interface SmtpVerificationResultRepository {
 
 export class RedisSmtpVerificationResultRepository implements SmtpVerificationResultRepository {
     private static readonly CACHE_EXPIRY = 86400
-    private static readonly CACHE_KEY_PREFIX = 'CATCH_ALL_STATUS'
+    private static readonly CACHE_KEY_PREFIX = 'SMTP_VERIFICATION_RESULT'
 
     constructor(private readonly redis: Redis) {}
 
