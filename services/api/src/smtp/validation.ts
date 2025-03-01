@@ -6,4 +6,5 @@ export const smtpVerificationResultValidationSchema = z.object({
     exists: z.boolean().nullable(),
     reason: z.nativeEnum(SmtpVerificationReasonEnum),
     targetExchange: z.string().optional(),
+    proxyId: z.string().optional(),
 }) satisfies ZodType<SmtpVerificationResult>

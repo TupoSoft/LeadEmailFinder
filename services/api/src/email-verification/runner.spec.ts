@@ -1,22 +1,16 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './runner'
-import type { ISMTPVerifier } from '../smtp'
+import type { ISmtpVerifier } from '../smtp'
 import type { EmailVerificationResult } from './dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import type { CatchAllSmtpVerificationResultRepository } from './catch-all-cache'
 import Mocked = jest.Mocked
 
 describe('EmailVerifier', () => {
-    const smtpVerifierMock: Mocked<ISMTPVerifier> = {
+    const smtpVerifierMock: Mocked<ISmtpVerifier> = {
         verify: jest.fn(),
     }
 
-    const catchAllCache: Mocked<CatchAllSmtpVerificationResultRepository> = {
-        getCatchAllSmtpVerificationResult: jest.fn(),
-        setCatchAllSmtpVerificationResult: jest.fn(),
-    }
-
-    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [], catchAllCache)
+    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')

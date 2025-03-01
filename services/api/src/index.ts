@@ -5,11 +5,15 @@ import {
     EmailVerificationService,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
-    RedisCatchAllCache,
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
-import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
+import {
+    RedisConnectionLimiter,
+    RedisSmtpVerificationResultRepository,
+    SmtpClientCreatorImpl,
+    SmtpVerifier,
+} from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter } from './lead'
 import { MongoProxyRepository } from './proxy'
@@ -96,10 +100,15 @@ async function main(): Promise<void> {
     const dnsCache = new DNSCacheImpl(redis)
 
     const proxyRepository = new MongoProxyRepository(db)
-    const catchAllCache = new RedisCatchAllCache(redis)
+    const redisSmtpVerificationResultCache = new RedisSmtpVerificationResultRepository(redis)
     const connectionLimiter = new RedisConnectionLimiter(redis, logger)
     const smtpClientFactory = new SmtpClientCreatorImpl(logger, connectionLimiter)
-    const smtpVerifier = new SMTPVerifier(dnsCache, proxyRepository, smtpClientFactory)
+    const smtpVerifier = new SmtpVerifier(
+        dnsCache,
+        proxyRepository,
+        smtpClientFactory,
+        redisSmtpVerificationResultCache,
+    )
 
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
@@ -111,11 +120,12 @@ async function main(): Promise<void> {
     const microsoftGetCreds = new MicrosoftGetCredentialType(axiosHttpClient)
     const officeApps = new OfficeApps(axiosHttpClient)
     const linkedinLogin = new LinkedInLogin(axiosHttpClient)
-    const emailVerificationRunner = new EmailVerificationRunner(
-        smtpVerifier,
-        [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
-        catchAllCache,
-    )
+    const emailVerificationRunner = new EmailVerificationRunner(smtpVerifier, [
+        microsoftGetCreds,
+        microsoftLogin,
+        officeApps,
+        linkedinLogin,
+    ])
     const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
     const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)
     const emailVerificationService = new EmailVerificationService(

@@ -1,13 +1,10 @@
-import type { ISMTPVerifier } from '../smtp'
+import type { ISmtpVerifier } from '../smtp'
 import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificationSource } from './dto'
 import type { CatchAllEmailVerifier } from './http'
 import { isEmailVerificationSource } from './type-guards'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
-import { appendRandomPrefix } from '../util/string'
 import { getSecondLevelDomain } from '../dns'
-import type { CatchAllSmtpVerificationResultRepository } from './catch-all-cache'
-import type { SmtpVerificationResult } from '../smtp/dto'
 import { isEmptyArray } from '../common'
 
 export interface IEmailVerificationRunner {
@@ -15,10 +12,11 @@ export interface IEmailVerificationRunner {
 }
 
 export class EmailVerificationRunner implements IEmailVerificationRunner {
+    private static readonly CATCH_ALL_EMAIL_USERNAME = 'lzulaeflfg'
+
     constructor(
-        private readonly smtpVerifier: ISMTPVerifier,
+        private readonly smtpVerifier: ISmtpVerifier,
         private readonly catchAllEmailVerifiers: CatchAllEmailVerifier[],
-        private readonly catchAllCache: CatchAllSmtpVerificationResultRepository,
     ) {}
 
     private static shouldVerifyViaHttp(
@@ -52,7 +50,8 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
             format,
         }
 
-        const { exists, targetExchange, reason } = await this.checkCatchAllSmtpVerificationResult(email)
+        const wrongEmail = `${EmailVerificationRunner.CATCH_ALL_EMAIL_USERNAME}@${domain}`
+        const { exists, targetExchange, reason } = await this.smtpVerifier.verify({ email: wrongEmail })
 
         emailVerification.targetExchange = targetExchange
         emailVerification.mxDomain = EmailVerificationRunner.extractMxDomain(targetExchange)
@@ -85,41 +84,6 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         }
 
         return emailVerification
-    }
-
-    private async checkCatchAllSmtpVerificationResult(email: string): Promise<SmtpVerificationResult> {
-        const [, domain] = email.split('@')
-        const cachedVerificationResult = await this.catchAllCache.getCatchAllSmtpVerificationResult(domain)
-
-        if (cachedVerificationResult != null) {
-            const { email, exists, targetExchange, reason } = cachedVerificationResult
-
-            if (exists != null) {
-                return {
-                    email,
-                    exists,
-                    targetExchange,
-                    reason,
-                }
-            } else {
-                const smtpVerificationResult = await this.smtpVerifier.verify({
-                    email,
-                })
-
-                await this.catchAllCache.setCatchAllSmtpVerificationResult(domain, smtpVerificationResult)
-
-                return smtpVerificationResult
-            }
-        } else {
-            const wrongEmail = appendRandomPrefix(email)
-            const smtpVerificationResult = await this.smtpVerifier.verify({
-                email: wrongEmail,
-            })
-
-            await this.catchAllCache.setCatchAllSmtpVerificationResult(domain, smtpVerificationResult)
-
-            return smtpVerificationResult
-        }
     }
 
     private async verifyViaHttp(email: string): Promise<EmailVerificationSource[]> {
