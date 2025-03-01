@@ -33,6 +33,10 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         return emailVerification.catchAll === CatchAllStatus.Enabled || emailVerification.reason === 'blacklisted'
     }
 
+    private static extractMxDomain(targetExchange?: string): string | undefined {
+        return getSecondLevelDomain(targetExchange ?? '')
+    }
+
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
         const [localPart, domain] = email.split('@')
 
@@ -49,7 +53,9 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         }
 
         const { exists, targetExchange, reason } = await this.checkCatchAllSmtpVerificationResult(email)
+
         emailVerification.targetExchange = targetExchange
+        emailVerification.mxDomain = EmailVerificationRunner.extractMxDomain(targetExchange)
         emailVerification.reason = reason
         emailVerification.catchAll = booleanToCatchAllStatus(exists)
         emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
@@ -63,7 +69,7 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
 
             if (exists !== null) {
                 emailVerification.targetExchange = targetExchange
-                emailVerification.mxDomain = getSecondLevelDomain(targetExchange)
+                emailVerification.mxDomain = EmailVerificationRunner.extractMxDomain(targetExchange)
                 emailVerification.sources.push('mx')
                 return emailVerification
             }

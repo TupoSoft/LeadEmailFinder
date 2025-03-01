@@ -13,19 +13,12 @@ export enum SmtpVerificationReasonEnum {
 
 export type SmtpVerificationReason = `${SmtpVerificationReasonEnum}`
 
-export type SmtpVerificationResult = {
+export interface SmtpVerificationResult {
     email: string
     reason: SmtpVerificationReason
-} & (
-    | {
-          exists: null
-          targetExchange?: string
-      }
-    | {
-          exists: boolean
-          targetExchange: string
-      }
-)
+    exists: boolean | null
+    targetExchange?: string
+}
 
 export interface SmtpResponse {
     code: SmtpStatusCode
