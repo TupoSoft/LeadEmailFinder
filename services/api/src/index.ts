@@ -5,26 +5,19 @@ import {
     EmailVerificationService,
     ExpressEmailVerificationController,
     MongoEmailVerificationRepository,
+    RedisCatchAllCache,
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
-import { DomainControllerImpl, DomainRouter, DomainService, MongoDomainRepository } from './domain'
-import { RedisCatchAllCache, RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
+import { SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter } from './lead'
-import { MongoProxyRepository, ProxyService } from './proxy'
-import { ProxyController } from './proxy/controller'
-import { ProxyRouter } from './proxy/router'
+import { MongoProxyRepository } from './proxy'
 import { ConfigService, type Environment, EXIT_FAILURE, parseEnv } from './common'
 import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import { LeadQueueWorker } from './lead/queue-worker'
-import { AuthRouter } from './auth/router'
-import { AuthController } from './auth/controller'
-import { AuthService } from './auth/service'
-import { MongoUserRepository, UserService } from './user'
 import { AuthMiddleware } from './middleware'
-import { JwtService } from './auth/jwt'
 import { EmailVerificationQueue } from './email-verification/queue'
 import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
 import { Queue } from 'bullmq'
@@ -77,27 +70,7 @@ async function main(): Promise<void> {
     const redisCreator = new RedisCreator(configService, logger)
     const redis = redisCreator.create()
 
-    const mongoUserRepository = new MongoUserRepository(db)
-    const userService = new UserService(mongoUserRepository)
-    await mongoUserRepository.createIndices()
-
-    const jwtService = new JwtService({
-        issuer: configService.get('JWT_ISSUER'),
-        audience: configService.get('JWT_AUDIENCE'),
-        secret: configService.get('JWT_HS256_SECRET'),
-        expiration: configService.get('JWT_EXPIRATION'),
-    })
-    const authService = new AuthService(userService, jwtService)
-    const authController = new AuthController(authService)
-    const authRouter = new AuthRouter(router, authController)
-    authRouter.init()
-
     const authMiddleware = new AuthMiddleware(configService, logger)
-    const mongoDomainRepository = new MongoDomainRepository(db)
-    const domainService = new DomainService(mongoDomainRepository)
-    const domainController = new DomainControllerImpl(domainService)
-    const domainRouter = new DomainRouter(router, domainController, authMiddleware)
-    domainRouter.init()
 
     const {
         port: proxyPort,
@@ -106,6 +79,7 @@ async function main(): Promise<void> {
         password,
         protocol,
     } = new URL(configService.get('CATCH_ALL_HTTP_PROXY_URL'))
+
     const axiosInstance = axios.create({
         proxy: {
             port: Number(proxyPort),
@@ -122,15 +96,9 @@ async function main(): Promise<void> {
     const dnsCache = new DNSCacheImpl(redis)
 
     const proxyRepository = new MongoProxyRepository(db)
-    const proxyService = new ProxyService(proxyRepository)
-    const proxyController = new ProxyController(proxyService)
-    const proxyRouter = new ProxyRouter(router, proxyController, authMiddleware)
-    proxyRouter.init()
-
     const catchAllCache = new RedisCatchAllCache(redis)
-    const connectionLimiter = new RedisConnectionLimiter(redis, logger)
-    const smtpClientFactory = new SmtpClientCreatorImpl(connectionLimiter, logger)
-    const smtpVerifier = new SMTPVerifier(dnsCache, catchAllCache, proxyRepository, smtpClientFactory)
+    const smtpClientFactory = new SmtpClientCreatorImpl(logger)
+    const smtpVerifier = new SMTPVerifier(dnsCache, proxyRepository, smtpClientFactory)
 
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)
     await mongoEmailVerificationRepository.init()
@@ -145,7 +113,7 @@ async function main(): Promise<void> {
     const emailVerificationRunner = new EmailVerificationRunner(
         smtpVerifier,
         [microsoftGetCreds, microsoftLogin, officeApps, linkedinLogin],
-        logger,
+        catchAllCache,
     )
     const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
     const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)

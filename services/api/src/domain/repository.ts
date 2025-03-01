@@ -7,7 +7,7 @@ type DomainSchema = Omit<Domain, 'name'> & {
 
 export interface DomainRepository {
     save: (domain: Domain) => Promise<void>
-    findByName: (name: string) => Promise<Domain>
+    findById: (name: string) => Promise<Domain>
 }
 
 function domainEntityToDomainSchema(domain: Domain): DomainSchema {
@@ -35,7 +35,7 @@ export class MongoDomainRepository implements DomainRepository {
         this.collection = db.collection('domains')
     }
 
-    async findByName(name: string): Promise<Domain> {
+    async findById(name: string): Promise<Domain> {
         const domainSchema = await this.collection.findOne({ _id: name })
         if (domainSchema === null) throw new DomainNotFoundError(name)
         return domainSchemaToDomainEntity(domainSchema)

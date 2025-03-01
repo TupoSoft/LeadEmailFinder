@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './runner'
 import type { ISMTPVerifier } from '../smtp'
-import type { SMTPVerificationResult } from '../smtp/dto'
 import type { EmailVerificationResult } from './dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
+import type { CatchAllCache } from './catch-all-cache'
 import Mocked = jest.Mocked
 
 describe('EmailVerifier', () => {
@@ -11,21 +11,18 @@ describe('EmailVerifier', () => {
         verify: jest.fn(),
     }
 
-    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [])
+    const catchAllCache: Mocked<CatchAllCache> = {
+        isCatchAllEnabledForDomain: jest.fn(),
+        setCatchAllEnabledForDomain: jest.fn(),
+    }
+
+    const emailVerifier = new EmailVerificationRunner(smtpVerifierMock, [], catchAllCache)
 
     const email = 'john.doe@example.com'
     const [localPart, domain] = email.split('@')
     const targetExchange = 'mail.example.com'
     const mxDomain = 'example.com'
     const exists = true
-    const catchAllStatus = false
-
-    const smtpVerificationResult: SMTPVerificationResult = {
-        exists,
-        catchAllStatus,
-        mxDomain,
-        targetExchange,
-    }
 
     const expectedEmailVerificationResult: EmailVerificationResult = {
         email,
@@ -44,7 +41,8 @@ describe('EmailVerifier', () => {
     })
 
     it('should be able to verify email', async () => {
-        smtpVerifierMock.verify.mockResolvedValueOnce(smtpVerificationResult)
+        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
+        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: true, targetExchange })
 
         const result = await emailVerifier.verify({ email })
 
@@ -53,8 +51,8 @@ describe('EmailVerifier', () => {
     })
 
     it('should return a verification result when the SMTP verifier confirms the email does not exist', async () => {
-        const smtpEmailDoesNotExist: SMTPVerificationResult = { ...smtpVerificationResult, exists: false }
-        smtpVerifierMock.verify.mockResolvedValueOnce(smtpEmailDoesNotExist)
+        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
+        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
 
         const expectedResult: EmailVerificationResult = {
             ...expectedEmailVerificationResult,

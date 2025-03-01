@@ -1,5 +1,4 @@
 import { type SmtpClient, type SmtpClientConstructorOptions, SmtpClientImpl } from './client'
-import type { ConnectionLimiter } from './connection-limiter'
 import type { ExtensibleLogger } from 'logging'
 
 export interface SmtpClientCreator {
@@ -7,11 +6,11 @@ export interface SmtpClientCreator {
 }
 
 export class SmtpClientCreatorImpl implements SmtpClientCreator {
-    constructor(
-        private readonly connectionLimiter: ConnectionLimiter,
-        private readonly logger: ExtensibleLogger,
-    ) {}
+    constructor(private readonly logger: ExtensibleLogger) {}
 
     create: (options: SmtpClientConstructorOptions) => SmtpClient = options =>
-        new SmtpClientImpl({ logger: this.logger, ...options }, this.connectionLimiter)
+        new SmtpClientImpl({
+            logger: this.logger.child({ source: options.proxy?.host, exchange: options.host }),
+            ...options,
+        })
 }

@@ -44,7 +44,7 @@ Content-Type: application/json
     client.test('should be OK', () => {
         client.assert(response.status === 200)
         client.assert(response.body.exists === true)
-        client.assert(response.body.sources.includes('o365'))
+        client.assert(response.body.sources.includes('microsoft_2'))
     })
 %}
 

@@ -9,7 +9,7 @@ export class SmtpError extends Error {
 }
 
 export class SmtpClientTimeoutError extends Error {
-    constructor(id: string) {
-        super(`The client ${id} timed out`)
+    constructor() {
+        super(`The client timed out`)
     }
 }
