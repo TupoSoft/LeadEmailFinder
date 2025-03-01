@@ -1,23 +1,10 @@
-import type { SmtpNegativeStatusCode } from './enums'
-
-export interface SmtpErrorConstructorOptions {
-    code: SmtpNegativeStatusCode
-    enhancedCode: string
-    message: string
-    targetExchange: string
-}
-
 export class SmtpError extends Error {
-    readonly code
-    readonly enhancedCode
-    readonly targetExchange
-
-    constructor({ code, enhancedCode = '', message, targetExchange }: SmtpErrorConstructorOptions) {
+    constructor(
+        readonly code: number,
+        readonly enhancedCode = '',
+        message: string,
+    ) {
         super(message)
-
-        this.code = code
-        this.enhancedCode = enhancedCode
-        this.targetExchange = targetExchange
     }
 }
 

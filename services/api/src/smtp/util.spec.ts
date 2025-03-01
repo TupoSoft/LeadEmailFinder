@@ -1,13 +1,13 @@
 import { describe, expect, it } from '@jest/globals'
 import { parseSmtpResponse } from './util'
 import type { SmtpResponse } from './dto'
-import { SmtpStatusCode } from './enums'
+import { SmtpResponseCode } from './enums'
 
 describe('SMTP util', () => {
     describe('parseSmtpResponse', () => {
         it('should handle two consecutive responses', () => {
             const expectedSmtpResponse: SmtpResponse = {
-                code: SmtpStatusCode.MailboxBusy,
+                code: SmtpResponseCode.MailboxBusy,
                 enhancedCode: '5.1.1',
                 message: '<jonathank@agnewcars.com>: Recipient address rejected: User unknown in relay recipient table',
             }

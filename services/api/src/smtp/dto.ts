@@ -1,34 +1,17 @@
-import type { SmtpStatusCode } from './enums'
+import type { SmtpResponseCode } from './enums'
 
-export enum SmtpVerificationReasonEnum {
-    AcceptedEmail = 'accepted_email',
-    RejectedEmail = 'rejected_email',
-    Timeout = 'timeout',
-    TemporarilyBlocked = 'temporarily_blocked',
-    NoMxRecords = 'no_mx_records',
-    UnexpectedError = 'unexpected_error',
-    Blocked = 'blocked',
-    NoConnect = 'no_connect',
-}
-
-export type SmtpVerificationReason = `${SmtpVerificationReasonEnum}`
-
-export type SmtpVerificationResult = {
-    email: string
-    reason: SmtpVerificationReason
-} & (
+export type SMTPVerificationResult =
     | {
           exists: null
           targetExchange?: string
       }
     | {
-          exists: boolean
+          exists: true | false
           targetExchange: string
       }
-)
 
 export interface SmtpResponse {
-    code: SmtpStatusCode
-    enhancedCode: string
+    code: SmtpResponseCode
+    enhancedCode: string | undefined
     message: string
 }

@@ -1,6 +1,6 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
-import { EmailVerificationReasonEnum, type EmailVerificationResult } from './dto'
+import type { EmailVerificationResult } from './dto'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 
 const email = z.string().email().openapi({ example: 'danilo@microsoft.com' })
@@ -28,7 +28,6 @@ export const verifyEmailResponseBody = z
         verifiedAt: z.string().date().openapi({ example: '2022-22-22T02:00:00.000Z' }),
         deliveryStatus: z.enum([DeliveryStatus.Accepted, DeliveryStatus.Rejected, DeliveryStatus.NotProcessed]),
         catchAll: z.enum([CatchAllStatus.Enabled, CatchAllStatus.Disabled, CatchAllStatus.Unknown]),
-        reason: z.nativeEnum(EmailVerificationReasonEnum),
     })
     .strict() satisfies ZodType<EmailVerificationResult>
 

@@ -7,34 +7,6 @@ export interface EmailVerificationRequest {
     format?: EmailPattern
 }
 
-export enum EmailVerificationReasonEnum {
-    AcceptedEmail = 'accepted_email',
-    RejectedEmail = 'rejected_email',
-    Timeout = 'timeout',
-    TemporarilyBlocked = 'temporarily_blocked',
-    NoMxRecords = 'no_mx_records',
-    UnexpectedError = 'unexpected_error',
-    Blocked = 'blocked',
-    Unknown = 'unknown',
-    NoConnect = 'no_connect',
-}
-
-export type EmailVerificationReason = `${EmailVerificationReasonEnum}`
-
-export interface CreateEmailVerification {
-    email: string
-    domain: string
-    localPart: string
-    sources: EmailVerificationSource[]
-    exists: boolean | null
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
-    reason: EmailVerificationReason
-    format?: EmailPattern
-    mxDomain?: string
-    targetExchange?: string
-}
-
 export interface EmailVerificationResult {
     id?: string
     email: string
@@ -46,7 +18,6 @@ export interface EmailVerificationResult {
     exists: boolean | null
     deliveryStatus: DeliveryStatus
     catchAll: CatchAllStatus
-    reason: EmailVerificationReason
     targetExchange?: string
     verifiedAt?: string
 }

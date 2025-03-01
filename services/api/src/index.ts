@@ -9,7 +9,7 @@ import {
 } from './email-verification'
 import axios from 'axios'
 import { AxiosHttpClient } from './http-client'
-import { RedisConnectionLimiter, SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
+import { SmtpClientCreatorImpl, SMTPVerifier } from './smtp'
 import { DNSCacheImpl } from './dns'
 import { LeadController, LeadFinder, LeadQueue, LeadRouter } from './lead'
 import { MongoProxyRepository } from './proxy'
@@ -97,8 +97,7 @@ async function main(): Promise<void> {
 
     const proxyRepository = new MongoProxyRepository(db)
     const catchAllCache = new RedisCatchAllCache(redis)
-    const connectionLimiter = new RedisConnectionLimiter(redis, logger)
-    const smtpClientFactory = new SmtpClientCreatorImpl(logger, connectionLimiter)
+    const smtpClientFactory = new SmtpClientCreatorImpl(logger)
     const smtpVerifier = new SMTPVerifier(dnsCache, proxyRepository, smtpClientFactory)
 
     const mongoEmailVerificationRepository = new MongoEmailVerificationRepository(db)

@@ -1,6 +1,6 @@
 import { type DNSCache, getSecondLevelDomain } from '../dns'
 import type { SmtpClient } from './client'
-import type { SmtpVerificationResult } from './dto'
+import type { SMTPVerificationResult } from './dto'
 import { SmtpError } from './errors'
 import { ok } from 'node:assert'
 import type { Proxy, ProxyRepository } from '../proxy'
@@ -8,14 +8,14 @@ import { isNativeError } from 'node:util/types'
 import type { SmtpClientCreator } from './client-creator'
 import { isIP } from 'node:net'
 import { ZERO } from '../common'
-import { SmtpNegativeStatusCode } from './enums'
+import { SmtpResponseCode } from './enums'
 
 export interface SMTPVerifyOptions {
     email: string
 }
 
 export interface ISMTPVerifier {
-    verify: (opts: SMTPVerifyOptions) => Promise<SmtpVerificationResult>
+    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult>
 }
 
 export class SMTPVerifier implements ISMTPVerifier {
@@ -25,68 +25,10 @@ export class SMTPVerifier implements ISMTPVerifier {
         private readonly smtpClientCreator: SmtpClientCreator,
     ) {}
 
-    private static handleSmtpError(
-        email: string,
-        { code, message, targetExchange }: SmtpError,
-    ): SmtpVerificationResult {
-        if (/block|banned/.exec(message) != null) {
-            return {
-                email,
-                exists: null,
-                targetExchange,
-                reason: 'blocked',
-            }
-        }
-
-        switch (code) {
-            case SmtpNegativeStatusCode.MailboxUnavailable:
-            case SmtpNegativeStatusCode.RequestedCommandFailed:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'temporarily_blocked',
-                }
-            case SmtpNegativeStatusCode.CommandUnrecognized:
-            case SmtpNegativeStatusCode.SyntaxError:
-            case SmtpNegativeStatusCode.CommandNotImplemented:
-            case SmtpNegativeStatusCode.BadSequenceOfCommands:
-            case SmtpNegativeStatusCode.CommandParameterNotImplemented:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'unexpected_error',
-                }
-            case SmtpNegativeStatusCode.MailboxBusy:
-                return {
-                    email,
-                    exists: false,
-                    targetExchange,
-                    reason: 'rejected_email',
-                }
-            case SmtpNegativeStatusCode.InvalidTransaction:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'blocked',
-                }
-        }
-    }
-
-    verify: (opts: SMTPVerifyOptions) => Promise<SmtpVerificationResult> = async ({ email }) => {
+    verify: (opts: SMTPVerifyOptions) => Promise<SMTPVerificationResult> = async ({ email }) => {
         const [, domain] = email.split('@')
 
         const client = await this.getSmtpClient(domain)
-        if (client == null) {
-            return {
-                email,
-                exists: null,
-                reason: 'no_connect',
-            }
-        }
-
         const { hostname, exchange: targetExchange } = client
 
         try {
@@ -102,45 +44,55 @@ export class SMTPVerifier implements ISMTPVerifier {
             const senderEmail = `${senderUsername}@${clientDomain}`
 
             await client.mailFrom(senderEmail)
-            await client.rcptTo(email)
+
+            const exists = await client.rcptTo(email).then(
+                _ => true,
+                (reason: unknown) => {
+                    try {
+                        ok(reason instanceof SmtpError)
+                        const { code, message } = reason
+
+                        ok(code >= (SmtpResponseCode.CommandUnrecognized as number))
+                        ok(/block|banned/.exec(message) == null)
+
+                        return false
+                    } catch (error) {
+                        return null
+                    }
+                },
+            )
+
             await client.quit()
 
             return {
-                email,
-                exists: true,
-                reason: 'accepted_email',
+                exists,
                 targetExchange,
             }
         } catch (error) {
-            if (error instanceof SmtpError) {
-                return SMTPVerifier.handleSmtpError(email, error)
-            }
-
             return {
-                email,
                 exists: null,
-                reason: 'unexpected_error',
+                targetExchange,
             }
         } finally {
             client.end()
         }
     }
 
-    private async getSmtpClient(domain: string): Promise<SmtpClient | null> {
-        try {
-            const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-            const proxies = await this.proxyRepository.getAll()
+    private async getSmtpClient(domain: string): Promise<SmtpClient> {
+        const mxRecords = await this.dnsCache.resolve(domain, 'MX')
+        const proxies = await this.proxyRepository.getAll()
 
-            const connectPromises: Array<Promise<SmtpClient>> = []
-            const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
-            for (const { exchange } of mxRecords) {
-                for (const proxy of proxies) {
-                    const abortController = new AbortController()
-                    exchangeProxyAbortControllerMap.set(`${exchange}-${proxy.host}`, abortController)
-                    connectPromises.push(this.tryToConnect(exchange, proxy, abortController.signal))
-                }
+        const connectPromises: Array<Promise<SmtpClient>> = []
+        const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
+        for (const { exchange } of mxRecords) {
+            for (const proxy of proxies) {
+                const abortController = new AbortController()
+                exchangeProxyAbortControllerMap.set(`${exchange}-${proxy.host}`, abortController)
+                connectPromises.push(this.tryToConnect(exchange, proxy, abortController.signal))
             }
+        }
 
+        try {
             const client = await Promise.any(connectPromises)
             const { exchange, hostname } = client
 
@@ -154,7 +106,9 @@ export class SMTPVerifier implements ISMTPVerifier {
 
             return client
         } catch (error) {
-            return null
+            ok(isNativeError(error))
+            console.error(error.message)
+            throw error
         }
     }
 
