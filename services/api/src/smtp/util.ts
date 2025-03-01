@@ -12,7 +12,7 @@ export function parseSmtpResponse(rawResponse: string): SmtpResponse {
 
     return {
         code: parseInt(code, 10),
-        enhancedCode: enhancedCode !== '' ? enhancedCode : undefined,
+        enhancedCode,
         message: message.trim(),
     }
 }
