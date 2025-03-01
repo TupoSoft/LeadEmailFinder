@@ -18,9 +18,9 @@ import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import { BulkResponse, HttpError } from '../common'
+import { type BulkResponse, HttpError } from '../common'
 import { JobStatus } from '../common/enums'
-import { IEmailVerificationQueue } from './queue'
+import type { IEmailVerificationQueue } from './queue'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -74,6 +74,7 @@ describe(EMAIL_ROUTE, () => {
         deliveryStatus: DeliveryStatus.Rejected,
         catchAll: CatchAllStatus.Disabled,
         verifiedAt,
+        reason: 'rejected_email',
     }
 
     beforeEach(() => {
@@ -92,7 +93,7 @@ describe(EMAIL_ROUTE, () => {
                 .post(VERIFY_EMAIL_ROUTE)
                 .send({ email })
                 .expect('Content-Type', /json/)
-                .expect({ ...verificationResult, verifiedAt })
+                .expect(verificationResult)
                 .expect(constants.HTTP_STATUS_OK)
         })
 
@@ -135,10 +136,13 @@ describe(EMAIL_ROUTE, () => {
 
     describe(VERIFY_EMAIL_BULK_STATUS_ROUTE, () => {
         it('should return HTTP_OK', async () => {
+            const processed = 1
+            const total = 1
+
             emailVerificationQueue.getStatus.mockResolvedValueOnce({
                 status: JobStatus.Completed,
-                processed: 1,
-                total: 1,
+                processed,
+                total,
             })
 
             await request(app)
@@ -194,16 +198,7 @@ describe(EMAIL_ROUTE, () => {
                 .query({ email })
                 .expect('Content-Type', /json/)
                 .expect(constants.HTTP_STATUS_OK)
-                .expect({
-                    email,
-                    localPart,
-                    domain,
-                    sources: ['mx'],
-                    exists: false,
-                    verifiedAt: systemTime.toISOString(),
-                    deliveryStatus: DeliveryStatus.Rejected,
-                    catchAll: CatchAllStatus.Disabled,
-                })
+                .expect(verificationResult)
         })
 
         it('should return HTTP_STATUS_BAD_REQUEST', async () => {
