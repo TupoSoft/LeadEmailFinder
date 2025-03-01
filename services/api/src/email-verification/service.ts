@@ -47,6 +47,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         })
 
         const hasRecentVerification = EmailVerificationService.hasRecentVerification(emailRecord)
+
         if (hasRecentVerification) {
             const previousVerification = await this.emailVerificationRepository.findById(emailRecord.lastVerificationId)
             if (previousVerification?.exists != null) {
