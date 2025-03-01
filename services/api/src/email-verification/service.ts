@@ -11,8 +11,6 @@ export interface IEmailVerificationService {
     aggregateEmailPatternUsageForDomain: (domain: string) => Promise<EmailPatternUsage[]>
 }
 
-type LastVerificationData = Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt' | 'exists'>
-
 export class EmailVerificationService implements IEmailVerificationService {
     private static readonly VERIFICATION_SHELF_LIFE = parseTimeString('1d')
     private static readonly INITIAL_COUNT = 0
@@ -24,11 +22,15 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly emailRepository: EmailRepository,
     ) {}
 
-    private static isPreviouslyVerified(
-        lastVerificationData: LastVerificationData,
-    ): lastVerificationData is Required<LastVerificationData> {
-        const { lastVerifiedAt, lastVerificationId, exists } = lastVerificationData
-        return lastVerifiedAt !== undefined && lastVerificationId !== undefined && exists !== null
+    private static hasRecentVerification(
+        lastVerificationData: Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt'>,
+    ): lastVerificationData is Required<Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt'>> {
+        const { lastVerifiedAt, lastVerificationId } = lastVerificationData
+        return (
+            lastVerifiedAt !== undefined &&
+            lastVerificationId !== undefined &&
+            Date.now() - lastVerifiedAt.getTime() < EmailVerificationService.VERIFICATION_SHELF_LIFE
+        )
     }
 
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
@@ -44,9 +46,10 @@ export class EmailVerificationService implements IEmailVerificationService {
             domain,
         })
 
-        if (EmailVerificationService.isPreviouslyVerified(emailRecord)) {
-            const previousVerification = await this.getPreviousFreshVerificationIfFound(emailRecord)
-            if (previousVerification != null) {
+        const hasRecentVerification = EmailVerificationService.hasRecentVerification(emailRecord)
+        if (hasRecentVerification) {
+            const previousVerification = await this.emailVerificationRepository.findById(emailRecord.lastVerificationId)
+            if (previousVerification?.exists != null) {
                 return previousVerification
             }
         }
@@ -82,19 +85,5 @@ export class EmailVerificationService implements IEmailVerificationService {
                 usageCount,
             }))
             .sort((a, b) => b.usageCount - a.usageCount)
-    }
-
-    private async getPreviousFreshVerificationIfFound({
-        lastVerificationId,
-        lastVerifiedAt,
-    }: Required<Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt'>>): Promise<EmailVerificationResult | null> {
-        const now = Date.now()
-        const timeDiff = now - lastVerifiedAt.getTime()
-
-        if (timeDiff < EmailVerificationService.VERIFICATION_SHELF_LIFE) {
-            return await this.emailVerificationRepository.findById(lastVerificationId)
-        }
-
-        return null
     }
 }
