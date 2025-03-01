@@ -9,25 +9,42 @@ import type { SmtpClientCreator } from './client-creator'
 import { isIP } from 'node:net'
 import { isEmptyArray, ZERO } from '../common'
 import { SmtpNegativeStatusCode } from './enums'
+import type { SmtpVerificationResultRepository } from './repository'
 
-export interface SMTPVerifyOptions {
+export interface VerifyParams {
     email: string
 }
 
-export interface ISMTPVerifier {
-    verify: (opts: SMTPVerifyOptions) => Promise<SmtpVerificationResult>
+export interface ISmtpVerifier {
+    verify: (params: VerifyParams) => Promise<SmtpVerificationResult>
 }
 
-export class SMTPVerifier implements ISMTPVerifier {
+interface GetExchangesParams {
+    domain: string
+    targetExchange?: string
+}
+
+interface TryVerifyParams {
+    client: SmtpClient
+    email: string
+}
+
+interface GetSmtpClientParams {
+    exchanges: string[]
+    proxyId?: string
+}
+
+export class SmtpVerifier implements ISmtpVerifier {
     constructor(
         private readonly dnsCache: DNSCache,
         private readonly proxyRepository: ProxyRepository,
         private readonly smtpClientCreator: SmtpClientCreator,
+        private readonly smtpVerificationResultRepository: SmtpVerificationResultRepository,
     ) {}
 
     private static handleSmtpError(
         email: string,
-        { code, message, targetExchange }: SmtpError,
+        { code, message, targetExchange, proxyId }: SmtpError,
     ): SmtpVerificationResult {
         if (/block|banned/.exec(message) != null) {
             return {
@@ -35,6 +52,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                 exists: null,
                 targetExchange,
                 reason: 'blacklisted',
+                proxyId,
             }
         }
 
@@ -46,6 +64,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                     exists: null,
                     targetExchange,
                     reason: 'temporarily_blocked',
+                    proxyId,
                 }
             case SmtpNegativeStatusCode.CommandUnrecognized:
             case SmtpNegativeStatusCode.SyntaxError:
@@ -57,6 +76,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                     exists: null,
                     targetExchange,
                     reason: 'unexpected_error',
+                    proxyId,
                 }
             case SmtpNegativeStatusCode.MailboxBusy:
                 return {
@@ -64,6 +84,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                     exists: false,
                     targetExchange,
                     reason: 'rejected_email',
+                    proxyId,
                 }
             case SmtpNegativeStatusCode.InvalidTransaction:
                 return {
@@ -71,15 +92,50 @@ export class SMTPVerifier implements ISMTPVerifier {
                     exists: null,
                     targetExchange,
                     reason: 'blacklisted',
+                    proxyId,
                 }
         }
     }
 
-    verify: (opts: SMTPVerifyOptions) => Promise<SmtpVerificationResult> = async ({ email }) => {
+    private static isTemporarilyBlocked(result: Pick<SmtpVerificationResult, 'reason'> | null): result is {
+        reason: 'temporarily_blocked'
+    } {
+        return result?.reason === 'temporarily_blocked'
+    }
+
+    private static hasEmailVerificationOutcome(result: Pick<SmtpVerificationResult, 'exists'> | null): result is {
+        exists: boolean
+    } {
+        return result?.exists != null
+    }
+
+    verify = async ({ email }: VerifyParams): Promise<SmtpVerificationResult> => {
         const [, domain] = email.split('@')
 
-        const mxRecords = await this.dnsCache.resolve(domain, 'MX')
-        if (isEmptyArray(mxRecords)) {
+        const getExchangesParams: GetExchangesParams = { domain }
+        const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
+
+        const cachedResult = await this.smtpVerificationResultRepository.getById(email)
+        if (SmtpVerifier.hasEmailVerificationOutcome(cachedResult)) {
+            const { email, exists, targetExchange, reason } = cachedResult
+
+            return {
+                email,
+                exists,
+                targetExchange,
+                reason,
+            }
+        }
+
+        if (SmtpVerifier.isTemporarilyBlocked(cachedResult)) {
+            const { proxyId, targetExchange } = cachedResult
+
+            getExchangesParams.targetExchange = targetExchange
+            getSmtpClientParams.proxyId = proxyId
+        }
+
+        getSmtpClientParams.exchanges = await this.getExchanges(getExchangesParams)
+        if (isEmptyArray(getSmtpClientParams.exchanges)) {
             return {
                 email,
                 exists: false,
@@ -87,8 +143,7 @@ export class SMTPVerifier implements ISMTPVerifier {
             }
         }
 
-        const exchanges = mxRecords.map(({ exchange }) => exchange)
-        const client = await this.getSmtpClient(exchanges)
+        const client = await this.getSmtpClient(getSmtpClientParams)
         if (client == null) {
             return {
                 email,
@@ -97,10 +152,20 @@ export class SMTPVerifier implements ISMTPVerifier {
             }
         }
 
-        return await this.tryVerify(client, email)
+        const result = await this.tryVerify({ client, email })
+
+        await this.smtpVerificationResultRepository.save(result)
+
+        return result
     }
 
-    private async tryVerify(client: SmtpClient, email: string): Promise<SmtpVerificationResult> {
+    private async getExchanges({ domain, targetExchange }: GetExchangesParams): Promise<string[]> {
+        const mxRecords = await this.dnsCache.resolve(domain, 'MX')
+        const exchanges = mxRecords.map(({ exchange }) => exchange)
+        return targetExchange != null ? exchanges.filter(exchange => exchange === targetExchange) : exchanges
+    }
+
+    private async tryVerify({ client, email }: TryVerifyParams): Promise<SmtpVerificationResult> {
         const { hostname, exchange: targetExchange } = client
 
         try {
@@ -127,7 +192,7 @@ export class SMTPVerifier implements ISMTPVerifier {
             }
         } catch (error) {
             if (error instanceof SmtpError) {
-                return SMTPVerifier.handleSmtpError(email, error)
+                return SmtpVerifier.handleSmtpError(email, error)
             }
 
             return {
@@ -140,9 +205,9 @@ export class SMTPVerifier implements ISMTPVerifier {
         }
     }
 
-    private async getSmtpClient(exchanges: string[]): Promise<SmtpClient | null> {
+    private async getSmtpClient({ exchanges, proxyId }: GetSmtpClientParams): Promise<SmtpClient | null> {
         try {
-            const proxies = await this.proxyRepository.getAll()
+            const proxies = await this.getProxies(proxyId)
 
             const connectPromises: Array<Promise<SmtpClient>> = []
             const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
@@ -168,6 +233,15 @@ export class SMTPVerifier implements ISMTPVerifier {
             return client
         } catch (error) {
             return null
+        }
+    }
+
+    private async getProxies(proxyId?: string): Promise<Proxy[]> {
+        if (proxyId == null) {
+            return await this.proxyRepository.getAll()
+        } else {
+            const proxy = await this.proxyRepository.getById(proxyId)
+            return proxy != null ? [proxy] : []
         }
     }
 

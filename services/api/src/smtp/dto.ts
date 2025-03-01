@@ -18,6 +18,7 @@ export interface SmtpVerificationResult {
     reason: SmtpVerificationReason
     exists: boolean | null
     targetExchange?: string
+    proxyId?: string
 }
 
 export interface SmtpResponse {
