@@ -7,8 +7,16 @@ export interface DNSTypeMap {
     PTR: string[]
 }
 
+async function tryResolveMx(domain: string): Promise<MxRecord[]> {
+    try {
+        return await resolveMx(domain)
+    } catch {
+        return []
+    }
+}
+
 export async function fetchMxRecords(domain: string): Promise<DNSTypeMap['MX']> {
-    const records = await resolveMx(domain)
+    const records = await tryResolveMx(domain)
     return records.sort((a, b) => a.priority - b.priority)
 }
 
