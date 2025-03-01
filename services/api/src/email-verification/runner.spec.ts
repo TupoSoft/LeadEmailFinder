@@ -41,8 +41,13 @@ describe('EmailVerifier', () => {
     })
 
     it('should be able to verify email', async () => {
-        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
-        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: true, targetExchange })
+        smtpVerifierMock.verify.mockResolvedValueOnce({
+            exists: false,
+            targetExchange,
+            email,
+            reason: 'rejected_email',
+        })
+        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: true, targetExchange, email, reason: 'accepted_email' })
 
         const result = await emailVerifier.verify({ email })
 
@@ -51,8 +56,18 @@ describe('EmailVerifier', () => {
     })
 
     it('should return a verification result when the SMTP verifier confirms the email does not exist', async () => {
-        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
-        smtpVerifierMock.verify.mockResolvedValueOnce({ exists: false, targetExchange })
+        smtpVerifierMock.verify.mockResolvedValueOnce({
+            exists: false,
+            targetExchange,
+            email,
+            reason: 'rejected_email',
+        })
+        smtpVerifierMock.verify.mockResolvedValueOnce({
+            exists: false,
+            targetExchange,
+            email,
+            reason: 'rejected_email',
+        })
 
         const expectedResult: EmailVerificationResult = {
             ...expectedEmailVerificationResult,

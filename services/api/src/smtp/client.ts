@@ -4,14 +4,13 @@ import { DEFAULT_SMTP_CLIENT_TIMEOUT, DEFAULT_TIMEOUT_CONFIG, SMTP_PORT, SMTP_RE
 import { hostname as osHostname } from 'os'
 import { promiseWithTimeout } from '../util/timeout'
 import { SmtpClientTimeoutError, SmtpError } from './errors'
-import { SmtpResponseCode } from './enums'
-import { ok } from 'node:assert'
-import { isNativeError } from 'node:util/types'
 import type { SmtpResponse } from './dto'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
 import { connect } from '../socket'
 import type { ExtensibleLogger } from 'logging'
+import type { ConnectionLimiter } from './connection-limiter'
+import { SmtpNegativeStatusCode, type SmtpStatusCode } from './enums'
 
 export interface SmtpClientTimeoutConfig {
     greeting?: number
@@ -54,7 +53,10 @@ export class SmtpClientImpl implements SmtpClient {
     private readonly signal?: AbortSignal
     private readonly logger?: ExtensibleLogger
 
-    constructor({ host, port, proxy, timeouts, signal, logger }: SmtpClientConstructorOptions) {
+    constructor(
+        { host, port, proxy, timeouts, signal, logger }: SmtpClientConstructorOptions,
+        private readonly connectionLimiter: ConnectionLimiter,
+    ) {
         this.exchange = host
         this.port = port ?? SMTP_PORT
         this.proxy = proxy
@@ -67,37 +69,44 @@ export class SmtpClientImpl implements SmtpClient {
         })
     }
 
+    private static isNegativeStatusCode(code: SmtpStatusCode): code is SmtpNegativeStatusCode {
+        return code >= SmtpNegativeStatusCode.MailboxUnavailable
+    }
+
     connect: () => Promise<void> = async () => {
         const { exchange, port, proxy, signal } = this
 
-        try {
-            await connect({
-                host: exchange,
-                port,
-                proxy,
-                signal,
-                timeout: DEFAULT_SMTP_CLIENT_TIMEOUT,
-                socket: this.socket,
-            })
+        const token = await this.connectionLimiter.acquire(this.hostname, this.exchange, signal)
 
-            this.socket.once('timeout', () => {
-                this.logger?.info(`Socket timed out`)
-                this.socket.end()
-            })
-
-            const { code, enhancedCode, message } = await promiseWithTimeout(
-                this.readResponse(),
-                this.timeouts.greeting,
-                new SmtpClientTimeoutError(),
-            )
-
-            if (code !== SmtpResponseCode.ServiceReady) {
-                throw new SmtpError(code, enhancedCode, message)
+        const onClose = (): void => {
+            if (token !== null) {
+                void this.connectionLimiter.release(this.hostname, this.exchange, token)
             }
-        } catch (error) {
-            ok(isNativeError(error))
-            this.logger?.error(`Failed to connect to ${exchange} from ${proxy?.host}: ${error.message}`)
-            throw error
+        }
+
+        this.socket.once('close', onClose)
+        this.socket.once('timeout', () => {
+            this.logger?.info(`Socket timed out`)
+            this.socket.end()
+        })
+
+        await connect({
+            host: exchange,
+            port,
+            proxy,
+            signal,
+            timeout: DEFAULT_SMTP_CLIENT_TIMEOUT,
+            socket: this.socket,
+        })
+
+        const { code, enhancedCode, message } = await promiseWithTimeout(
+            this.readResponse(),
+            this.timeouts.greeting,
+            new SmtpClientTimeoutError(),
+        )
+
+        if (SmtpClientImpl.isNegativeStatusCode(code)) {
+            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange })
         }
     }
 
@@ -130,13 +139,13 @@ export class SmtpClientImpl implements SmtpClient {
         const smtpResponse = parseSmtpResponse(response)
         const { code, enhancedCode, message } = smtpResponse
 
-        if (code > SmtpResponseCode.OK) {
+        if (SmtpClientImpl.isNegativeStatusCode(code)) {
             this.logger?.error(`Error in SMTP response: ${message}`, {
                 smtpResponseCode: code,
                 smtpResponseEnhancedCode: enhancedCode,
             })
 
-            throw new SmtpError(code, enhancedCode, message)
+            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange })
         }
 
         return smtpResponse
