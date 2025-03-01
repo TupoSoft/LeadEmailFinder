@@ -5,19 +5,22 @@ export interface SmtpErrorConstructorOptions {
     enhancedCode: string
     message: string
     targetExchange: string
+    proxyId?: string
 }
 
 export class SmtpError extends Error {
     readonly code
     readonly enhancedCode
     readonly targetExchange
+    readonly proxyId
 
-    constructor({ code, enhancedCode = '', message, targetExchange }: SmtpErrorConstructorOptions) {
+    constructor({ code, enhancedCode = '', message, targetExchange, proxyId }: SmtpErrorConstructorOptions) {
         super(message)
 
         this.code = code
         this.enhancedCode = enhancedCode
         this.targetExchange = targetExchange
+        this.proxyId = proxyId
     }
 }
 
