@@ -106,7 +106,7 @@ export class SmtpClientImpl implements SmtpClient {
         )
 
         if (SmtpClientImpl.isNegativeStatusCode(code)) {
-            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange })
+            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange, proxyId: proxy?.id })
         }
     }
 
@@ -145,7 +145,7 @@ export class SmtpClientImpl implements SmtpClient {
                 smtpResponseEnhancedCode: enhancedCode,
             })
 
-            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange })
+            throw new SmtpError({ code, enhancedCode, message, targetExchange: this.exchange, proxyId: this.proxy?.id })
         }
 
         return smtpResponse

@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream'
-import { FIRST_ARRAY_ELEMENT_INDEX } from '../common/constants'
+import { FIRST_ARRAY_ELEMENT_INDEX } from '../common'
 import { KILOBYTE } from './constants'
 
 export async function readUntil(

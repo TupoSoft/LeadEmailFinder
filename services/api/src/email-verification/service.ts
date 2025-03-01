@@ -2,7 +2,7 @@ import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { EmailPatternUsage } from '../domain'
-import type { EmailRepository } from '../email/repository'
+import type { EmailRecord, EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
 import { parseTimeString } from '../util/time'
 
@@ -22,11 +22,23 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly emailRepository: EmailRepository,
     ) {}
 
+    private static hasRecentVerification(
+        lastVerificationData: Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt'>,
+    ): lastVerificationData is Required<Pick<EmailRecord, 'lastVerificationId' | 'lastVerifiedAt'>> {
+        const { lastVerifiedAt, lastVerificationId } = lastVerificationData
+        return (
+            lastVerifiedAt !== undefined &&
+            lastVerificationId !== undefined &&
+            Date.now() - lastVerifiedAt.getTime() < EmailVerificationService.VERIFICATION_SHELF_LIFE
+        )
+    }
+
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
         email = email.toLowerCase()
+
         const [username, domain] = email.split('@')
 
-        const { lastVerifiedAt, lastVerificationId } = await this.emailRepository.findByIdOrCreate({
+        const emailRecord = await this.emailRepository.findByIdOrCreate({
             email,
             format,
             exists: null,
@@ -34,22 +46,27 @@ export class EmailVerificationService implements IEmailVerificationService {
             domain,
         })
 
-        if (lastVerifiedAt !== undefined && lastVerificationId !== undefined) {
-            const now = Date.now()
-            const timeDiff = now - lastVerifiedAt.getTime()
+        const hasRecentVerification = EmailVerificationService.hasRecentVerification(emailRecord)
 
-            if (timeDiff < EmailVerificationService.VERIFICATION_SHELF_LIFE) {
-                return await this.emailVerificationRepository.findById(lastVerificationId)
+        if (hasRecentVerification) {
+            const previousVerification = await this.emailVerificationRepository.findById(emailRecord.lastVerificationId)
+            if (previousVerification?.exists != null) {
+                return previousVerification
             }
         }
 
         const emailVerificationResult = await this.emailVerificationRunner.verify({ email, format })
-        const emailVerificationRecord = await this.emailVerificationRepository.save(emailVerificationResult)
-        const { exists, id: verificationId } = emailVerificationRecord
+
+        if (hasRecentVerification) {
+            const { lastVerificationId } = emailRecord
+            emailVerificationResult.id = lastVerificationId
+        }
+
+        const emailVerificationRecord = await this.emailVerificationRepository.upsert(emailVerificationResult)
 
         await this.emailRepository.update(email, {
-            exists,
-            lastVerificationId: verificationId,
+            exists: emailVerificationResult.exists,
+            lastVerificationId: emailVerificationRecord.id,
         })
 
         return emailVerificationRecord

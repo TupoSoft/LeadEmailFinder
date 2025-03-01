@@ -7,25 +7,18 @@ export enum SmtpVerificationReasonEnum {
     TemporarilyBlocked = 'temporarily_blocked',
     NoMxRecords = 'no_mx_records',
     UnexpectedError = 'unexpected_error',
-    Blocked = 'blocked',
+    Blocked = 'blacklisted',
     NoConnect = 'no_connect',
 }
 
 export type SmtpVerificationReason = `${SmtpVerificationReasonEnum}`
 
-export type SmtpVerificationResult = {
+export interface SmtpVerificationResult {
     email: string
     reason: SmtpVerificationReason
-} & (
-    | {
-          exists: null
-          targetExchange?: string
-      }
-    | {
-          exists: boolean
-          targetExchange: string
-      }
-)
+    exists: boolean | null
+    targetExchange?: string
+}
 
 export interface SmtpResponse {
     code: SmtpStatusCode

@@ -7,7 +7,7 @@ import type { Proxy, ProxyRepository } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import type { SmtpClientCreator } from './client-creator'
 import { isIP } from 'node:net'
-import { ZERO } from '../common'
+import { isEmptyArray, ZERO } from '../common'
 import { SmtpNegativeStatusCode } from './enums'
 
 export interface SMTPVerifyOptions {
@@ -34,7 +34,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                 email,
                 exists: null,
                 targetExchange,
-                reason: 'blocked',
+                reason: 'blacklisted',
             }
         }
 
@@ -70,7 +70,7 @@ export class SMTPVerifier implements ISMTPVerifier {
                     email,
                     exists: null,
                     targetExchange,
-                    reason: 'blocked',
+                    reason: 'blacklisted',
                 }
         }
     }
@@ -78,7 +78,17 @@ export class SMTPVerifier implements ISMTPVerifier {
     verify: (opts: SMTPVerifyOptions) => Promise<SmtpVerificationResult> = async ({ email }) => {
         const [, domain] = email.split('@')
 
-        const client = await this.getSmtpClient(domain)
+        const mxRecords = await this.dnsCache.resolve(domain, 'MX')
+        if (isEmptyArray(mxRecords)) {
+            return {
+                email,
+                exists: false,
+                reason: 'no_mx_records',
+            }
+        }
+
+        const exchanges = mxRecords.map(({ exchange }) => exchange)
+        const client = await this.getSmtpClient(exchanges)
         if (client == null) {
             return {
                 email,
@@ -87,6 +97,10 @@ export class SMTPVerifier implements ISMTPVerifier {
             }
         }
 
+        return await this.tryVerify(client, email)
+    }
+
+    private async tryVerify(client: SmtpClient, email: string): Promise<SmtpVerificationResult> {
         const { hostname, exchange: targetExchange } = client
 
         try {
@@ -126,18 +140,17 @@ export class SMTPVerifier implements ISMTPVerifier {
         }
     }
 
-    private async getSmtpClient(domain: string): Promise<SmtpClient | null> {
+    private async getSmtpClient(exchanges: string[]): Promise<SmtpClient | null> {
         try {
-            const mxRecords = await this.dnsCache.resolve(domain, 'MX')
             const proxies = await this.proxyRepository.getAll()
 
             const connectPromises: Array<Promise<SmtpClient>> = []
             const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
-            for (const { exchange } of mxRecords) {
+            for (const exchange of exchanges) {
                 for (const proxy of proxies) {
                     const abortController = new AbortController()
                     exchangeProxyAbortControllerMap.set(`${exchange}-${proxy.host}`, abortController)
-                    connectPromises.push(this.tryToConnect(exchange, proxy, abortController.signal))
+                    connectPromises.push(this.tryConnect(exchange, proxy, abortController.signal))
                 }
             }
 
@@ -158,7 +171,7 @@ export class SMTPVerifier implements ISMTPVerifier {
         }
     }
 
-    private async tryToConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<SmtpClient> {
+    private async tryConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<SmtpClient> {
         try {
             const client = this.smtpClientCreator.create({
                 host: exchange,

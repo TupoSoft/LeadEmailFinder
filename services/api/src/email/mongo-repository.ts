@@ -84,13 +84,13 @@ export class MongoEmailRepository implements EmailRepository {
             { _id: email },
             {
                 $setOnInsert: {
+                    exists,
                     format,
                     domain,
                     username,
                     createdAt: new Date(),
                 },
                 $set: {
-                    exists,
                     lastVerificationId,
                     updatedAt: new Date(),
                 },
@@ -151,6 +151,7 @@ export class MongoEmailRepository implements EmailRepository {
 
         if (lastVerificationId !== undefined) {
             updateFilter.$set = {
+                ...updateFilter.$set,
                 lastVerifiedAt: new Date(),
             }
         }

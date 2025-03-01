@@ -1,35 +1,54 @@
 import type { Redis } from 'ioredis'
 import { ok } from 'node:assert'
+import type { SmtpVerificationResult } from '../smtp/dto'
+import { smtpVerificationResultValidationSchema } from '../smtp/validation'
 
-export interface CatchAllCache {
-    isCatchAllEnabledForDomain: (domain: string) => Promise<boolean | null>
-    setCatchAllEnabledForDomain: (domain: string, status: boolean) => Promise<void>
+export interface CatchAllSmtpVerificationResultRepository {
+    getCatchAllSmtpVerificationResult: (domain: string) => Promise<SmtpVerificationResult | null>
+    setCatchAllSmtpVerificationResult: (domain: string, verificationResult: SmtpVerificationResult) => Promise<void>
 }
 
-export class RedisCatchAllCache implements CatchAllCache {
+export class RedisCatchAllCache implements CatchAllSmtpVerificationResultRepository {
     private static readonly CATCH_ALL_CACHE_EXPIRY = 86400
     private readonly cacheKeyPrefix = 'CATCH_ALL_STATUS'
 
     constructor(private readonly redis: Redis) {}
 
-    async isCatchAllEnabledForDomain(domain: string): Promise<boolean | null> {
+    private static isSmtpVerificationResult(value: unknown): value is SmtpVerificationResult {
+        return smtpVerificationResultValidationSchema.safeParse(value).success
+    }
+
+    async getCatchAllSmtpVerificationResult(domain: string): Promise<SmtpVerificationResult | null> {
         try {
             const key = this.getKey(domain)
-            const result = await this.redis.get(key)
-            return result != null ? result === 'true' : null
+            const rawValue = await this.redis.get(key)
+            ok(rawValue != null)
+
+            const value: unknown = JSON.parse(rawValue)
+            ok(RedisCatchAllCache.isSmtpVerificationResult(value))
+
+            return value
         } catch (error) {
             return null
         }
     }
 
-    async setCatchAllEnabledForDomain(domain: string, status: boolean): Promise<void> {
-        const errorMessage = `Failed to cache catch all status '${status}' for domain '${domain}'`
-
+    async setCatchAllSmtpVerificationResult(domain: string, verificationResult: SmtpVerificationResult): Promise<void> {
         try {
             const key = this.getKey(domain)
-            await this.redis.set(key, String(status), 'EX', RedisCatchAllCache.CATCH_ALL_CACHE_EXPIRY)
+            await this.redis.set(
+                key,
+                JSON.stringify(verificationResult),
+                'EX',
+                RedisCatchAllCache.CATCH_ALL_CACHE_EXPIRY,
+            )
         } catch (error) {
-            ok(error instanceof Error, new Error(errorMessage))
+            ok(
+                error instanceof Error,
+                new Error(
+                    `Failed to cache catch all verification result '${JSON.stringify(verificationResult)}' for domain '${domain}'`,
+                ),
+            )
             throw error
         }
     }

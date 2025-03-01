@@ -1,11 +1,16 @@
 import { type Db, ObjectId, type WithId } from 'mongodb'
-import type { EmailVerificationResult, EmailVerificationSource } from './dto'
+import type {
+    CreateEmailVerification,
+    EmailVerificationReason,
+    EmailVerificationResult,
+    EmailVerificationSource,
+} from './dto'
 import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
-    save: (emailVerification: EmailVerificationResult) => Promise<EmailVerificationResult>
-    findById: (id: string) => Promise<EmailVerificationResult>
-    findByEmail: (email: string) => Promise<EmailVerificationResult>
+    upsert: (emailVerificationResult: EmailVerificationResult) => Promise<EmailVerificationResult>
+    findById: (id: string) => Promise<EmailVerificationResult | null>
+    findByEmail: (email: string) => Promise<EmailVerificationResult | null>
 }
 
 interface EmailVerificationSchema {
@@ -16,13 +21,8 @@ interface EmailVerificationSchema {
     targetExchange?: string
     exists: boolean | null
     catchAll: boolean | null
+    reason?: EmailVerificationReason
     sources: EmailVerificationSource[]
-}
-
-export class EmailVerificationNotFoundError extends Error {
-    constructor(fieldName: string, fieldValue: string) {
-        super(`EmailVerification with ${fieldName} ${fieldValue} not found`)
-    }
 }
 
 export class MongoEmailVerificationRepository implements EmailVerificationRepository {
@@ -41,6 +41,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         exists,
         format,
         catchAll,
+        reason,
     }: EmailVerificationResult): EmailVerificationSchema {
         return {
             email,
@@ -50,6 +51,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             sources,
             exists,
             format,
+            reason,
             catchAll: catchAllStatusToBoolean(catchAll),
         }
     }
@@ -63,6 +65,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         sources,
         exists,
         catchAll,
+        reason,
     }: WithId<EmailVerificationSchema>): EmailVerificationResult {
         return {
             id: _id.toHexString(),
@@ -72,10 +75,52 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             targetExchange,
             sources,
             exists,
+            reason: reason ?? 'unknown',
             catchAll: booleanToCatchAllStatus(catchAll),
             deliveryStatus: existsToDeliveryStatus(exists),
             verifiedAt: _id.getTimestamp().toISOString(),
         }
+    }
+
+    upsert = async ({
+        id,
+        exists,
+        catchAll,
+        reason,
+        format,
+        targetExchange,
+        sources,
+        mxDomain,
+        email,
+        localPart,
+        domain,
+    }: EmailVerificationResult): Promise<EmailVerificationResult> => {
+        const record = await this.collection.findOneAndUpdate(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    exists,
+                    catchAll: catchAllStatusToBoolean(catchAll),
+                    reason,
+                    format,
+                    targetExchange,
+                    sources,
+                    mxDomain,
+                },
+                $setOnInsert: {
+                    email,
+                    domain,
+                    localPart,
+                },
+            },
+            { returnDocument: 'after', upsert: true, ignoreUndefined: true },
+        )
+
+        if (record == null) {
+            throw new Error('Upsert failed.')
+        }
+
+        return MongoEmailVerificationRepository.fromSchema(record)
     }
 
     async init(): Promise<void> {
@@ -83,28 +128,24 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         await this.collection.createIndex(['domain', 'format'])
     }
 
-    findByEmail: (email: string) => Promise<EmailVerificationResult> = async (
-        email: string,
-    ): Promise<EmailVerificationResult> => {
-        const schema = await this.collection.findOne({ email })
-        if (schema === null) throw new EmailVerificationNotFoundError('email', email)
-        return MongoEmailVerificationRepository.fromSchema(schema)
+    findByEmail = async (email: string): Promise<EmailVerificationResult | null> => {
+        const record = await this.collection.findOne({ email })
+        return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
     }
 
-    async findById(id: string): Promise<EmailVerificationResult> {
-        const schema = await this.collection.findOne({ _id: new ObjectId(id) })
-        if (schema === null) throw new EmailVerificationNotFoundError('id', id)
-        return MongoEmailVerificationRepository.fromSchema(schema)
+    async findById(id: string): Promise<EmailVerificationResult | null> {
+        const record = await this.collection.findOne({ _id: new ObjectId(id) })
+        return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
     }
 
-    async save(emailVerification: EmailVerificationResult): Promise<EmailVerificationResult> {
+    async save(createEmailVerification: CreateEmailVerification): Promise<EmailVerificationResult> {
         const { insertedId: id } = await this.collection.insertOne(
-            MongoEmailVerificationRepository.toSchema(emailVerification),
+            MongoEmailVerificationRepository.toSchema(createEmailVerification),
         )
 
         return {
             id: id.toHexString(),
-            ...emailVerification,
+            ...createEmailVerification,
             verifiedAt: id.getTimestamp().toISOString(),
         }
     }
