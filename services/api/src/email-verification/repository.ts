@@ -1,4 +1,4 @@
-import { type Db, ObjectId } from 'mongodb'
+import { type Db, ObjectId, type WithId } from 'mongodb'
 import type { EmailVerificationResult, EmailVerificationSource } from './dto'
 import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
@@ -63,9 +63,9 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         sources,
         exists,
         catchAll,
-    }: EmailVerificationSchema): EmailVerificationResult {
+    }: WithId<EmailVerificationSchema>): EmailVerificationResult {
         return {
-            id: _id?.toHexString(),
+            id: _id.toHexString(),
             email,
             domain,
             localPart,
@@ -74,7 +74,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             exists,
             catchAll: booleanToCatchAllStatus(catchAll),
             deliveryStatus: existsToDeliveryStatus(exists),
-            verifiedAt: _id?.getTimestamp().toISOString(),
+            verifiedAt: _id.getTimestamp().toISOString(),
         }
     }
 
