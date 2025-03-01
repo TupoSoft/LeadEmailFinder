@@ -4,11 +4,13 @@ import type {
     EmailVerificationReason,
     EmailVerificationResult,
     EmailVerificationSource,
+    UpdateEmailVerification,
 } from './dto'
 import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
     save: (createEmailVerification: CreateEmailVerification) => Promise<EmailVerificationResult>
+    update: (id: string, updateEmailVerification: CreateEmailVerification) => Promise<EmailVerificationResult | null>
     findById: (id: string) => Promise<EmailVerificationResult | null>
     findByEmail: (email: string) => Promise<EmailVerificationResult | null>
 }
@@ -80,6 +82,29 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             deliveryStatus: existsToDeliveryStatus(exists),
             verifiedAt: _id.getTimestamp().toISOString(),
         }
+    }
+
+    update = async (
+        id: string,
+        { exists, catchAll, reason, format, targetExchange, sources, mxDomain }: UpdateEmailVerification,
+    ): Promise<EmailVerificationResult | null> => {
+        const record = await this.collection.findOneAndUpdate(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    exists,
+                    catchAll: catchAllStatusToBoolean(catchAll),
+                    reason,
+                    format,
+                    targetExchange,
+                    sources,
+                    mxDomain,
+                },
+            },
+            { returnDocument: 'after' },
+        )
+
+        return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
     }
 
     async init(): Promise<void> {
