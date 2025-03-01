@@ -4,13 +4,11 @@ import type {
     EmailVerificationReason,
     EmailVerificationResult,
     EmailVerificationSource,
-    UpdateEmailVerification,
 } from './dto'
 import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
-    save: (createEmailVerification: CreateEmailVerification) => Promise<EmailVerificationResult>
-    update: (id: string, updateEmailVerification: CreateEmailVerification) => Promise<EmailVerificationResult | null>
+    upsert: (emailVerificationResult: EmailVerificationResult) => Promise<EmailVerificationResult>
     findById: (id: string) => Promise<EmailVerificationResult | null>
     findByEmail: (email: string) => Promise<EmailVerificationResult | null>
 }
@@ -84,10 +82,19 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         }
     }
 
-    update = async (
-        id: string,
-        { exists, catchAll, reason, format, targetExchange, sources, mxDomain }: UpdateEmailVerification,
-    ): Promise<EmailVerificationResult | null> => {
+    upsert = async ({
+        id,
+        exists,
+        catchAll,
+        reason,
+        format,
+        targetExchange,
+        sources,
+        mxDomain,
+        email,
+        localPart,
+        domain,
+    }: EmailVerificationResult): Promise<EmailVerificationResult> => {
         const record = await this.collection.findOneAndUpdate(
             { _id: new ObjectId(id) },
             {
@@ -100,11 +107,20 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
                     sources,
                     mxDomain,
                 },
+                $setOnInsert: {
+                    email,
+                    domain,
+                    localPart,
+                },
             },
-            { returnDocument: 'after' },
+            { returnDocument: 'after', upsert: true, ignoreUndefined: true },
         )
 
-        return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
+        if (record == null) {
+            throw new Error('Upsert failed.')
+        }
+
+        return MongoEmailVerificationRepository.fromSchema(record)
     }
 
     async init(): Promise<void> {

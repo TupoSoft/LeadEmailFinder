@@ -56,12 +56,16 @@ export class EmailVerificationService implements IEmailVerificationService {
 
         const emailVerificationResult = await this.emailVerificationRunner.verify({ email, format })
 
-        const emailVerificationRecord = await this.emailVerificationRepository.save(emailVerificationResult)
-        const { exists, id: verificationId } = emailVerificationRecord
+        if (hasRecentVerification) {
+            const { lastVerificationId } = emailRecord
+            emailVerificationResult.id = lastVerificationId
+        }
+
+        const emailVerificationRecord = await this.emailVerificationRepository.upsert(emailVerificationResult)
 
         await this.emailRepository.update(email, {
-            exists,
-            lastVerificationId: verificationId,
+            exists: emailVerificationResult.exists,
+            lastVerificationId: emailVerificationRecord.id,
         })
 
         return emailVerificationRecord
