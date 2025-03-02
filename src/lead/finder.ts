@@ -1,7 +1,7 @@
 import type { IEmailVerificationService } from '../email-verification'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { deprioritizedEmailFormats, getAllEmailFormats, getFormatToEmailMapForLead, mergeEmailFormats } from './util'
-import type { Logger } from 'logging'
+import type { Logger } from '../logging'
 import type { EmailPattern } from '../email/enums'
 
 export class LeadFinder {

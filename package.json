@@ -1,22 +1,29 @@
 {
     "private": true,
-    "name": "monorepo",
-    "description": "Lead Email Finder",
+    "name": "api",
+    "version": "0.8.0",
+    "description": "Lead Email Finder API",
     "packageManager": "pnpm@10.3.0",
-    "keywords": [
-        "lead",
-        "email",
-        "verifier",
-        "finder",
-        "verification",
-        "SMTP"
-    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.prod.json",
+        "start": "node --env-file-if-exists=.env dist",
+        "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
+        "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
+        "clean": "tsc --build --clean && rm -r dist",
+        "test": "jest"
+    },
     "author": {
         "url": "https://tuposoft.com",
         "email": "contact@tuposoft.com",
         "name": "TupoSoft"
     },
     "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/supertest": "^6.0.2",
+        "@types/swagger-ui-express": "^4.1.8",
+        "supertest": "^7.0.0",
+        "ts-jest": "^29.2.6",
+        "ts-node": "^10.9.2",
         "@eslint/js": "^9.17.0",
         "@jest/globals": "^29.7.0",
         "@tsconfig/node-lts": "^22.0.1",
@@ -28,5 +35,25 @@
         "jest": "^29.7.0",
         "prettier": "^3.4.2",
         "typescript": "^5.7.2"
+    },
+    "dependencies": {
+        "axios": "^1.8.1",
+        "bullmq": "^5.41.7",
+        "cheerio": "^1.0.0",
+        "express": "^4.21.2",
+        "express-validator": "^7.2.1",
+        "ioredis": "^5.5.0",
+        "mongodb": "^6.14.0",
+        "pino-gelf": "^2.2.0",
+        "swagger-ui-express": "^5.0.1",
+        "tldts": "^6.1.82",
+        "zod": "^3.24.2",
+        "zod-openapi": "^4.2.3",
+        "pino": "^9.6.0",
+        "pino-http": "^10.3.0"
+    },
+    "jest": {
+        "preset": "ts-jest",
+        "testEnvironment": "node"
     }
 }

@@ -8,7 +8,7 @@ import type { SmtpResponse } from './dto'
 import { readUntil, write } from '../stream'
 import { parseSmtpResponse } from './util'
 import { connect } from '../socket'
-import type { ExtensibleLogger } from 'logging'
+import type { ExtensibleLogger } from '../logging'
 import type { ConnectionLimiter } from './connection-limiter'
 import { SmtpNegativeStatusCode, type SmtpStatusCode } from './enums'
 

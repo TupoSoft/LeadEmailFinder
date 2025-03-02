@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { ok } from 'node:assert'
 import { type ConfigService, type Environment, EXIT_FAILURE, HttpError } from '../common'
-import type { Logger } from 'logging'
+import type { Logger } from '../logging'
 
 function isRecordStringBoolean(value: unknown): value is Record<string, boolean> {
     if (typeof value !== 'object' || value === null) {
