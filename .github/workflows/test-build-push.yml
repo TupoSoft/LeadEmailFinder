@@ -7,14 +7,15 @@ on:
     paths:
       - '**/*.ts'
       - '**/*.js'
-      - '**/Dockerfile'
+      - Dockerfile
   pull_request:
     branches:
       - master
     paths:
       - '**/*.ts'
       - '**/*.js'
-      - '**/Dockerfile'
+      - Dockerfile
+  workflow_dispatch:
 
 jobs:
   assert-diff-within-limit:
@@ -27,72 +28,15 @@ jobs:
       pull-requests: write
     secrets: inherit
 
-  get-changed-services:
-    runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch'
-    outputs:
-      services: ${{ steps.set-matrix.outputs.services }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-
-      - name: Get changed services
-        id: set-matrix
-        run: |
-          filter=`[ "${{ github.event_name }}" = "pull_request" ] && echo "{services}[origin/${{ github.event.pull_request.base.ref }}]" || echo "{services}[HEAD~1]"`
-          services=`pnpm ls --filter "$filter" --filter "!monorepo" --depth=-1 --json | jq -r ".[].name" | jq -R . | jq -cs .`
-          echo "services=$services" >> $GITHUB_OUTPUT
-
   test:
-    needs: get-changed-services
-    if: needs.get-changed-services.outputs.services != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm --filter "${{ matrix.service }}..." install
-
-      - name: Build packages
-        run: pnpm --filter "${{ matrix.service }}..." --filter "!${{ matrix.service }}" build
-
-      - name: Run tests
-        run: pnpm --filter ${{ matrix.service }} test
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    permissions:
+      contents: read
 
   build-push:
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.get-changed-services.outputs.services != '[]'
-    needs:
-      - get-changed-services
-      - test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: test
     uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
-    with:
-      dockerfile: services/${{ matrix.service }}/Dockerfile
-      image-name: leademailfinder-${{ matrix.service }}
-    strategy:
-      matrix:
-        service: ${{ fromJSON(needs.get-changed-services.outputs.services) }}
     permissions:
       packages: write
       contents: read
