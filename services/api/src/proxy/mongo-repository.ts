@@ -1,14 +1,8 @@
-import { type Collection, type Db, ObjectId, type WithId } from 'mongodb'
-import { generateObjectIdAsync } from '../util/mongo'
+import { type Collection, type Db, type Filter, ObjectId, type UpdateFilter, type WithId } from 'mongodb'
 import type { ProxyFvo, ProxyMvo } from './dto'
-import type { Proxy, ProxyRepository } from './repository'
+import type { GetAllFilter, Proxy, ProxyRepository } from './repository'
 
-export type ProxySchema = WithId<Omit<Proxy, 'id'>>
-
-function convertSchemaToEntity(proxySchema: ProxySchema): Proxy {
-    const { _id, ...proxy } = proxySchema
-    return { id: _id.toHexString(), ...proxy }
-}
+export type ProxySchema = Omit<Proxy, 'id'>
 
 export class MongoProxyRepository implements ProxyRepository {
     private readonly collection: Collection<ProxySchema>
@@ -17,32 +11,73 @@ export class MongoProxyRepository implements ProxyRepository {
         this.collection = db.collection('proxy')
     }
 
-    getAll: () => Promise<Proxy[]> = async () => {
-        const proxies = await this.collection.find().toArray()
-
-        return proxies.map(convertSchemaToEntity)
+    private static fromSchema({ host, type, blacklists, password, port, user, _id }: WithId<ProxySchema>): Proxy {
+        return {
+            id: _id.toHexString(),
+            host,
+            type,
+            blacklists,
+            password,
+            port,
+            user,
+        }
     }
 
-    getById: (id: string) => Promise<Proxy | null> = async id => {
+    getAll = async ({ blacklistsExclude = [] }: GetAllFilter = {}): Promise<Proxy[]> => {
+        const filter: Filter<ProxySchema> = {
+            blacklists: {
+                $nin: blacklistsExclude,
+            },
+        }
+
+        const proxies = await this.collection.find(filter).toArray()
+        return proxies.map(MongoProxyRepository.fromSchema.bind(MongoProxyRepository))
+    }
+
+    getById = async (id: string): Promise<Proxy | null> => {
         const result = await this.collection.findOne({
             _id: new ObjectId(id),
         })
 
-        return result != null ? convertSchemaToEntity(result) : result
+        return result != null ? MongoProxyRepository.fromSchema(result) : result
     }
 
-    save: (proxy: ProxyFvo) => Promise<Proxy> = async (proxy: ProxyFvo): Promise<Proxy> => {
-        const { insertedId } = await this.collection.insertOne({ ...proxy, _id: await generateObjectIdAsync() })
-        return { ...proxy, id: insertedId.toHexString() }
+    create = async ({ type, password, port, user, host }: ProxyFvo): Promise<Proxy> => {
+        const { insertedId } = await this.collection.insertOne({ type, user, host, port, password })
+        return { id: insertedId.toHexString(), type, user, host, port, password }
     }
 
-    update: (id: string, proxy: ProxyMvo) => Promise<Proxy | null> = async (id, proxy) => {
-        const proxySchema = await this.collection.findOneAndUpdate(
-            { _id: new ObjectId(id) },
-            { $set: proxy },
-            { returnDocument: 'after' },
-        )
+    update = async (
+        id: string,
+        { host, type, user, port, password, blacklistsToAdd, blacklistsToRemove }: ProxyMvo,
+    ): Promise<Proxy | null> => {
+        const updateFilter: UpdateFilter<ProxySchema> = {
+            $set: {
+                host,
+                type,
+                user,
+                port,
+                password,
+            },
+        }
 
-        return proxySchema != null ? convertSchemaToEntity(proxySchema) : proxySchema
+        if (blacklistsToAdd != null) {
+            updateFilter.$addToSet = {
+                blacklists: { $each: blacklistsToAdd },
+            }
+        }
+
+        if (blacklistsToRemove != null) {
+            updateFilter.$pullAll = {
+                blacklists: blacklistsToRemove,
+            }
+        }
+
+        const proxySchema = await this.collection.findOneAndUpdate({ _id: new ObjectId(id) }, updateFilter, {
+            returnDocument: 'after',
+            ignoreUndefined: true,
+        })
+
+        return proxySchema != null ? MongoProxyRepository.fromSchema(proxySchema) : proxySchema
     }
 }

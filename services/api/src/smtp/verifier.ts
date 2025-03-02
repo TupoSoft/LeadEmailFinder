@@ -34,6 +34,11 @@ interface GetSmtpClientParams {
     proxyId?: string
 }
 
+interface GetProxiesParams {
+    exchanges?: string[]
+    proxyId?: string
+}
+
 export class SmtpVerifier implements ISmtpVerifier {
     constructor(
         private readonly dnsCache: DNSCache,
@@ -41,61 +46,6 @@ export class SmtpVerifier implements ISmtpVerifier {
         private readonly smtpClientCreator: SmtpClientCreator,
         private readonly smtpVerificationResultRepository: SmtpVerificationResultRepository,
     ) {}
-
-    private static handleSmtpError(
-        email: string,
-        { code, message, targetExchange, proxyId }: SmtpError,
-    ): SmtpVerificationResult {
-        if (/block|banned/.exec(message) != null) {
-            return {
-                email,
-                exists: null,
-                targetExchange,
-                reason: 'blacklisted',
-                proxyId,
-            }
-        }
-
-        switch (code) {
-            case SmtpNegativeStatusCode.MailboxUnavailable:
-            case SmtpNegativeStatusCode.RequestedCommandFailed:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'temporarily_blocked',
-                    proxyId,
-                }
-            case SmtpNegativeStatusCode.CommandUnrecognized:
-            case SmtpNegativeStatusCode.SyntaxError:
-            case SmtpNegativeStatusCode.CommandNotImplemented:
-            case SmtpNegativeStatusCode.BadSequenceOfCommands:
-            case SmtpNegativeStatusCode.CommandParameterNotImplemented:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'unexpected_error',
-                    proxyId,
-                }
-            case SmtpNegativeStatusCode.MailboxBusy:
-                return {
-                    email,
-                    exists: false,
-                    targetExchange,
-                    reason: 'rejected_email',
-                    proxyId,
-                }
-            case SmtpNegativeStatusCode.InvalidTransaction:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'blacklisted',
-                    proxyId,
-                }
-        }
-    }
 
     private static isTemporarilyBlocked(result: Pick<SmtpVerificationResult, 'reason'> | null): result is {
         reason: 'temporarily_blocked'
@@ -159,6 +109,72 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result
     }
 
+    private async handleSmtpError(
+        email: string,
+        { code, message, targetExchange, proxyId }: SmtpError,
+    ): Promise<SmtpVerificationResult> {
+        if (/block|banned/.exec(message) != null) {
+            return await this.handleBlacklisting(email, { targetExchange, proxyId })
+        }
+
+        switch (code) {
+            case SmtpNegativeStatusCode.MailboxUnavailable:
+            case SmtpNegativeStatusCode.RequestedCommandFailed:
+                return {
+                    email,
+                    exists: null,
+                    targetExchange,
+                    reason: 'temporarily_blocked',
+                    proxyId,
+                }
+            case SmtpNegativeStatusCode.MailboxBusy:
+                return {
+                    email,
+                    exists: false,
+                    targetExchange,
+                    reason: 'rejected_email',
+                    proxyId,
+                }
+            case SmtpNegativeStatusCode.InvalidTransaction:
+                return await this.handleBlacklisting(email, { targetExchange, proxyId })
+            case SmtpNegativeStatusCode.MailboxFull:
+                return {
+                    email,
+                    exists: null,
+                    targetExchange,
+                    reason: 'exceeded_storage',
+                    proxyId,
+                }
+            default:
+                return {
+                    email,
+                    exists: null,
+                    targetExchange,
+                    reason: 'unexpected_error',
+                    proxyId,
+                }
+        }
+    }
+
+    private async handleBlacklisting(
+        email: string,
+        { targetExchange, proxyId }: Pick<SmtpError, 'targetExchange' | 'proxyId'>,
+    ): Promise<SmtpVerificationResult> {
+        if (proxyId != null) {
+            await this.proxyRepository.update(proxyId, {
+                blacklistsToAdd: [targetExchange],
+            })
+        }
+
+        return {
+            email,
+            exists: null,
+            targetExchange,
+            reason: 'blacklisted',
+            proxyId,
+        }
+    }
+
     private async getExchanges({ domain, targetExchange }: GetExchangesParams): Promise<string[]> {
         const mxRecords = await this.dnsCache.resolve(domain, 'MX')
         const exchanges = mxRecords.map(({ exchange }) => exchange)
@@ -192,7 +208,7 @@ export class SmtpVerifier implements ISmtpVerifier {
             }
         } catch (error) {
             if (error instanceof SmtpError) {
-                return SmtpVerifier.handleSmtpError(email, error)
+                return await this.handleSmtpError(email, error)
             }
 
             return {
@@ -207,7 +223,7 @@ export class SmtpVerifier implements ISmtpVerifier {
 
     private async getSmtpClient({ exchanges, proxyId }: GetSmtpClientParams): Promise<SmtpClient | null> {
         try {
-            const proxies = await this.getProxies(proxyId)
+            const proxies = await this.getProxies({ exchanges, proxyId })
 
             const connectPromises: Array<Promise<SmtpClient>> = []
             const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
@@ -236,9 +252,9 @@ export class SmtpVerifier implements ISmtpVerifier {
         }
     }
 
-    private async getProxies(proxyId?: string): Promise<Proxy[]> {
+    private async getProxies({ exchanges, proxyId }: GetProxiesParams): Promise<Proxy[]> {
         if (proxyId == null) {
-            return await this.proxyRepository.getAll()
+            return await this.proxyRepository.getAll({ blacklistsExclude: exchanges })
         } else {
             const proxy = await this.proxyRepository.getById(proxyId)
             return proxy != null ? [proxy] : []

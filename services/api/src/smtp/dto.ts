@@ -9,6 +9,7 @@ export enum SmtpVerificationReasonEnum {
     UnexpectedError = 'unexpected_error',
     Blocked = 'blacklisted',
     NoConnect = 'no_connect',
+    ExceededStorage = 'exceeded_storage',
 }
 
 export type SmtpVerificationReason = `${SmtpVerificationReasonEnum}`

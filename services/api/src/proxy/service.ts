@@ -9,7 +9,7 @@ export interface IProxyService {
 export class ProxyService implements IProxyService {
     constructor(private readonly proxyRepository: ProxyRepository) {}
 
-    create: (proxy: ProxyFvo) => Promise<Proxy> = async proxy => await this.proxyRepository.save(proxy)
+    create: (proxy: ProxyFvo) => Promise<Proxy> = async proxy => await this.proxyRepository.create(proxy)
 
     getAll: () => Promise<Proxy[]> = async () => await this.proxyRepository.getAll()
 }

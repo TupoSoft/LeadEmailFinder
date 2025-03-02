@@ -4,8 +4,8 @@ import { describe, expect, it, jest } from '@jest/globals'
 import { ProxyService } from './service'
 import { MongoProxyRepository } from './mongo-repository'
 import { MongoClient } from 'mongodb'
-import Mocked = jest.Mocked
 import type { Proxy } from './repository'
+import Mocked = jest.Mocked
 
 jest.mock('./mongo-repository')
 
@@ -33,7 +33,7 @@ describe('ProxyService', () => {
         })
 
         it('should create a new proxy', async () => {
-            proxyRepository.save.mockResolvedValueOnce(proxy)
+            proxyRepository.create.mockResolvedValueOnce(proxy)
             await expect(proxyService.create(proxy)).resolves.toBe(proxy)
         })
     })

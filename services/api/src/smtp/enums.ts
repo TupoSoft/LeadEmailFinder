@@ -13,6 +13,7 @@ export const enum SmtpNegativeStatusCode {
     BadSequenceOfCommands = 503,
     CommandParameterNotImplemented = 504,
     MailboxBusy = 550,
+    MailboxFull = 552,
     InvalidTransaction = 554,
 }
 
