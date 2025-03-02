@@ -1,5 +1,14 @@
-import type { Proxy } from './repository'
+import type { ProxyType } from './repository'
 
-export type ProxyFvo = Omit<Proxy, 'id'>
+export interface ProxyFvo {
+    type: ProxyType
+    host: string
+    port: number
+    user?: string
+    password?: string
+}
 
-export type ProxyMvo = Partial<Omit<Proxy, 'id'>>
+export interface ProxyMvo extends Partial<ProxyFvo> {
+    blacklistsToAdd?: string[]
+    blacklistsToRemove?: string[]
+}

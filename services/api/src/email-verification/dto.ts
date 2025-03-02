@@ -17,6 +17,7 @@ export enum EmailVerificationReasonEnum {
     Blocked = 'blacklisted',
     Unknown = 'unknown',
     NoConnect = 'no_connect',
+    ExceededStorage = 'exceeded_storage',
 }
 
 export type EmailVerificationReason = `${EmailVerificationReasonEnum}`

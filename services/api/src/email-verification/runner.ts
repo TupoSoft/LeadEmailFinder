@@ -12,7 +12,7 @@ export interface IEmailVerificationRunner {
 }
 
 export class EmailVerificationRunner implements IEmailVerificationRunner {
-    private static readonly CATCH_ALL_EMAIL_USERNAME = 'lzulaeflfg'
+    private static readonly CATCH_ALL_EMAIL_USERNAME = 'tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak'
 
     constructor(
         private readonly smtpVerifier: ISmtpVerifier,

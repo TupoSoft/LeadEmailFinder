@@ -33,36 +33,19 @@ import { serve, setup } from 'swagger-ui-express'
 import { emailVerificationPaths, verificationTag } from './email-verification/openapi'
 import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from 'logging'
-import express, { type NextFunction, type Request, type Response, Router } from 'express'
+import express, { Router } from 'express'
 import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps } from './email-verification/http'
-import { randomUUID } from 'node:crypto'
 import { EmailModule } from './email'
 import { emailApiPaths } from './email/openapi'
-
-declare module 'express' {
-    interface Request {
-        swaggerDoc?: object
-    }
-}
-
-interface LoggerMixin {
-    correlationId: string
-}
+import { randomUUID } from 'node:crypto'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
     const configService = new ConfigService<Environment>(environment)
 
-    const loggerMixin: LoggerMixin = {
-        correlationId: '',
-    }
-
     const logger = new PinoLogger({
         options: {
             level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
-            mixin: () => ({
-                ...loggerMixin,
-            }),
         },
     })
 
@@ -196,16 +179,12 @@ async function main(): Promise<void> {
         .disable('x-powered-by')
         .enable('trust proxy')
         .use(
-            (_req: Request, _res: Response, next: NextFunction): void => {
-                loggerMixin.correlationId = randomUUID()
-                next()
-            },
             loggingMiddleware(
                 {
                     level: configService.get('NODE_ENV') !== 'production' ? 'debug' : 'info',
                 },
                 {
-                    genReqId: (_req, _res) => loggerMixin.correlationId,
+                    genReqId: () => randomUUID(),
                 },
             ),
             express.json(),

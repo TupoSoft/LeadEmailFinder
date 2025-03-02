@@ -21,6 +21,7 @@ import { CatchAllStatus, DeliveryStatus } from './enums'
 import { type BulkResponse, HttpError } from '../common'
 import { JobStatus } from '../common/enums'
 import type { IEmailVerificationQueue } from './queue'
+import { loggingMiddleware } from 'logging'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {
@@ -56,9 +57,12 @@ describe(EMAIL_ROUTE, () => {
     )
     emailVerificationRouter.init()
 
-    app.use(express.json())
-    app.use(expressRouter)
-    app.use(errorMiddleware.handleError.bind(errorMiddleware))
+    app.use(
+        express.json(),
+        loggingMiddleware({ level: 'silent' }),
+        expressRouter,
+        errorMiddleware.handleError.bind(errorMiddleware),
+    )
 
     const email = 'danilo@microsoft.com'
     const [localPart, domain] = email.split('@')
