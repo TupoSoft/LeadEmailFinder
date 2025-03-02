@@ -5,22 +5,21 @@ import express, { Router } from 'express'
 import request from 'supertest'
 import { constants } from 'node:http2'
 import type { ProxyFvo } from './dto'
-import type { Proxy } from './repository'
-import type { IProxyService } from './service'
+import type { Proxy, ProxyRepository } from './repository'
 import type { IAuthMiddleware } from '../middleware'
 import { ErrorMiddleware } from '../middleware/handle-error'
 import Mocked = jest.Mocked
 
 jest.mock('../middleware/authenticate')
-jest.mock('./mongo-repository')
-jest.mock('./service')
 
 describe('ProxyRouter', () => {
     const app = express()
     const expressRouter = Router()
-    const proxyService: Mocked<IProxyService> = {
+    const proxyService: Mocked<ProxyRepository> = {
         create: jest.fn(),
         getAll: jest.fn(),
+        update: jest.fn(),
+        getById: jest.fn(),
     }
     const authMiddleware: Mocked<IAuthMiddleware> = {
         authenticate: jest.fn((_req, _res, next) => {
