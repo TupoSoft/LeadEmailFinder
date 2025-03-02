@@ -1,7 +1,7 @@
 import { RedisConnectionLimiter } from './connection-limiter'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { Redis } from 'ioredis'
-import { Logger } from 'logging'
+import type { Logger } from '../logging'
 import Mocked = jest.Mocked
 
 jest.mock('ioredis')
