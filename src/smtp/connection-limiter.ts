@@ -1,6 +1,6 @@
 import type { Redis, Result } from 'ioredis'
 import { setTimeout } from 'node:timers/promises'
-import type { Logger } from 'logging'
+import type { Logger } from '../logging'
 import { randomBytes } from 'node:crypto'
 import { promisify } from 'node:util'
 

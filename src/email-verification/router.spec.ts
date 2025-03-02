@@ -21,7 +21,7 @@ import { CatchAllStatus, DeliveryStatus } from './enums'
 import { type BulkResponse, HttpError } from '../common'
 import { JobStatus } from '../common/enums'
 import type { IEmailVerificationQueue } from './queue'
-import { loggingMiddleware } from 'logging'
+import { loggingMiddleware } from '../logging'
 import Mocked = jest.Mocked
 
 describe(EMAIL_ROUTE, () => {

@@ -1,7 +1,7 @@
 import { MongoEmailRepository } from './mongo-repository'
 import type { Db } from 'mongodb'
 import { EmailController } from './controller'
-import type { Logger } from 'logging'
+import type { Logger } from '../logging'
 import type { Router } from 'express'
 import { EmailRouter } from './router'
 import type { AuthMiddleware } from '../middleware'

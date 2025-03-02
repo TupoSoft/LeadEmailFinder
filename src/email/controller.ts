@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import type { CreateEmailRequest, GetEmailsRequestQueryParams, UpdateEmailRequest } from './dto'
 import { constants } from 'node:http2'
 import type { EmailRepository } from './repository'
-import type { Logger } from 'logging'
+import type { Logger } from '../logging'
 import { HttpError } from '../common'
 
 export class EmailController {
