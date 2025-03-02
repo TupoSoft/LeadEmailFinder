@@ -6,7 +6,6 @@
 
 **/.classpath
 **/.dockerignore
-**/.env
 **/.git
 **/.gitignore
 **/.project
@@ -21,7 +20,6 @@
 **/*.jfm
 **/charts
 **/docker-compose*
-**/compose.y*ml
 **/Dockerfile*
 **/node_modules
 **/npm-debug.log
@@ -29,3 +27,8 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 README.md
+__mocks__
+docker
+Makefile
+eslint.config.mjs
+swarm.yml
