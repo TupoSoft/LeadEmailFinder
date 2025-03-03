@@ -11,12 +11,12 @@ import { isEmptyArray, ZERO } from '../common'
 import { SmtpNegativeStatusCode } from './enums'
 import type { SmtpVerificationResultRepository } from './repository'
 
-export interface VerifyParams {
-    email: string
-}
-
 export interface ISmtpVerifier {
     verify: (params: VerifyParams) => Promise<SmtpVerificationResult>
+}
+
+export interface VerifyParams {
+    email: string
 }
 
 interface GetExchangesParams {
@@ -113,7 +113,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         email: string,
         { code, message, targetExchange, proxyId }: SmtpError,
     ): Promise<SmtpVerificationResult> {
-        if (/block|banned/.exec(message) != null) {
+        if (/block|banned/i.exec(message) != null) {
             return await this.handleBlacklisting(email, { targetExchange, proxyId })
         }
 
@@ -128,6 +128,7 @@ export class SmtpVerifier implements ISmtpVerifier {
                     proxyId,
                 }
             case SmtpNegativeStatusCode.MailboxBusy:
+            case SmtpNegativeStatusCode.InvalidTransaction:
                 return {
                     email,
                     exists: false,
@@ -135,8 +136,6 @@ export class SmtpVerifier implements ISmtpVerifier {
                     reason: 'rejected_email',
                     proxyId,
                 }
-            case SmtpNegativeStatusCode.InvalidTransaction:
-                return await this.handleBlacklisting(email, { targetExchange, proxyId })
             case SmtpNegativeStatusCode.MailboxFull:
                 return {
                     email,
