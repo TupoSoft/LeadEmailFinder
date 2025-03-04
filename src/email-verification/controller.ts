@@ -33,7 +33,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
         const { email } = matchedData<{ email: string }>(req)
         this.emailVerificationService.verify({ email }).then(
             verificationData => {
-                res.log.info({ body: verificationData })
+                res.log.info({ body: verificationData }, 'verification completed')
                 res.json(verificationData)
             },
             (reason: unknown) => {
