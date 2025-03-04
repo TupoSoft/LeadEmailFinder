@@ -58,9 +58,8 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         emailVerification.reason = reason
         emailVerification.catchAll = booleanToCatchAllStatus(exists)
         emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
-        emailVerification.exists = exists
 
-        if (emailVerification.exists === false) {
+        if (exists === false) {
             const { exists, targetExchange, reason } = await this.smtpVerifier.verify({ email })
             emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
             emailVerification.exists = exists
