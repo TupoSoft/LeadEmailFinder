@@ -267,10 +267,6 @@ export class SmtpVerifier implements ISmtpVerifier {
 
             return client
         } catch (error) {
-            if (error instanceof SmtpError) {
-                await this.handleSmtpError(error)
-            }
-
             return null
         }
     }
@@ -296,7 +292,12 @@ export class SmtpVerifier implements ISmtpVerifier {
 
             return client
         } catch (error) {
-            ok(isNativeError(error))
+            ok(isNativeError(error), new Error(String(error)))
+
+            if (error instanceof SmtpError) {
+                await this.handleSmtpError(error)
+            }
+
             throw error
         }
     }
