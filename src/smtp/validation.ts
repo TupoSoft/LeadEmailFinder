@@ -1,10 +1,10 @@
 import { z, type ZodType } from 'zod'
-import { SmtpVerificationReasonEnum, type SmtpVerificationResult } from './dto'
+import { SmtpVerificationReasonEnum, type SmtpVerifyResponse } from './dto'
 
-export const smtpVerificationResultValidationSchema = z.object({
+export const smtpVerifyResponseSchema = z.object({
     email: z.string().email().nonempty(),
     exists: z.boolean().nullable(),
     reason: z.nativeEnum(SmtpVerificationReasonEnum),
     targetExchange: z.string().optional(),
     proxyId: z.string().optional(),
-}) satisfies ZodType<SmtpVerificationResult>
+}) satisfies ZodType<SmtpVerifyResponse>

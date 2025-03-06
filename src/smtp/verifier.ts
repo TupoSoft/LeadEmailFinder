@@ -1,6 +1,6 @@
 import { type DNSCache, getSecondLevelDomain } from '../dns'
 import type { SmtpClient } from './client'
-import type { SmtpVerificationResult } from './dto'
+import type { SmtpVerificationResult, SmtpVerifyResponse } from './dto'
 import { SmtpError } from './errors'
 import { ok } from 'node:assert'
 import type { Proxy, ProxyRepository } from '../proxy'
@@ -12,7 +12,7 @@ import { SmtpNegativeStatusCode } from './enums'
 import type { SmtpVerificationResultRepository } from './repository'
 
 export interface ISmtpVerifier {
-    verify: (params: VerifyParams) => Promise<SmtpVerificationResult>
+    verify: (params: VerifyParams) => Promise<SmtpVerifyResponse>
 }
 
 export interface VerifyParams {
@@ -39,7 +39,68 @@ interface GetProxiesParams {
     proxyId?: string
 }
 
+type SmtpErrorHandlingStrategy = [(error: SmtpError) => boolean, (error: SmtpError) => SmtpVerificationResult]
+
 export class SmtpVerifier implements ISmtpVerifier {
+    private static readonly smtpErrorHandlingStrategies: SmtpErrorHandlingStrategy[] = [
+        [
+            ({ targetExchange, message }) =>
+                /mimecast/i.exec(targetExchange) != null && /Administrative prohibition/i.exec(message) != null,
+            ({ targetExchange, proxyId }) => ({
+                targetExchange,
+                exists: null,
+                reason: 'sender_blocked',
+                proxyId,
+            }),
+        ],
+        [
+            ({ message }) => /block|banned|rbl/i.exec(message) != null,
+            ({ proxyId, targetExchange }) => ({
+                exists: null,
+                targetExchange,
+                reason: 'blacklisted',
+                proxyId,
+            }),
+        ],
+        [
+            () => true,
+            ({ code, targetExchange, proxyId }) => {
+                switch (code) {
+                    case SmtpNegativeStatusCode.MailboxUnavailable:
+                    case SmtpNegativeStatusCode.RequestedCommandFailed:
+                        return {
+                            exists: null,
+                            targetExchange,
+                            reason: 'temporarily_blocked',
+                            proxyId,
+                        }
+                    case SmtpNegativeStatusCode.MailboxBusy:
+                    case SmtpNegativeStatusCode.InvalidTransaction:
+                        return {
+                            exists: false,
+                            targetExchange,
+                            reason: 'rejected_email',
+                            proxyId,
+                        }
+                    case SmtpNegativeStatusCode.MailboxFull:
+                        return {
+                            exists: null,
+                            targetExchange,
+                            reason: 'exceeded_storage',
+                            proxyId,
+                        }
+                    default:
+                        return {
+                            exists: null,
+                            targetExchange,
+                            reason: 'unexpected_error',
+                            proxyId,
+                        }
+                }
+            },
+        ],
+    ]
+
     constructor(
         private readonly dnsCache: DNSCache,
         private readonly proxyRepository: ProxyRepository,
@@ -47,19 +108,19 @@ export class SmtpVerifier implements ISmtpVerifier {
         private readonly smtpVerificationResultRepository: SmtpVerificationResultRepository,
     ) {}
 
-    private static isTemporarilyBlocked(result: Pick<SmtpVerificationResult, 'reason'> | null): result is {
+    private static isTemporarilyBlocked(result: Pick<SmtpVerifyResponse, 'reason'> | null): result is {
         reason: 'temporarily_blocked'
     } {
         return result?.reason === 'temporarily_blocked'
     }
 
-    private static hasEmailVerificationOutcome(result: Pick<SmtpVerificationResult, 'exists'> | null): result is {
+    private static hasEmailVerificationOutcome(result: Pick<SmtpVerifyResponse, 'exists'> | null): result is {
         exists: boolean
     } {
         return result?.exists != null
     }
 
-    verify = async ({ email }: VerifyParams): Promise<SmtpVerificationResult> => {
+    verify = async ({ email }: VerifyParams): Promise<SmtpVerifyResponse> => {
         const [, domain] = email.split('@')
 
         const getExchangesParams: GetExchangesParams = { domain }
@@ -109,69 +170,29 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result
     }
 
-    private async handleSmtpError(
-        email: string,
-        { code, message, targetExchange, proxyId }: SmtpError,
-    ): Promise<SmtpVerificationResult> {
-        if (/block|banned/i.exec(message) != null) {
-            return await this.handleBlacklisting(email, { targetExchange, proxyId })
+    private async handleSmtpError(error: SmtpError): Promise<SmtpVerificationResult> {
+        const strategy = SmtpVerifier.smtpErrorHandlingStrategies.find(([predicate]) => predicate(error))
+        const { targetExchange, proxyId } = error
+
+        if (strategy == null) {
+            return {
+                exists: null,
+                reason: 'unexpected_error',
+                proxyId,
+                targetExchange,
+            }
         }
 
-        switch (code) {
-            case SmtpNegativeStatusCode.MailboxUnavailable:
-            case SmtpNegativeStatusCode.RequestedCommandFailed:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'temporarily_blocked',
-                    proxyId,
-                }
-            case SmtpNegativeStatusCode.MailboxBusy:
-            case SmtpNegativeStatusCode.InvalidTransaction:
-                return {
-                    email,
-                    exists: false,
-                    targetExchange,
-                    reason: 'rejected_email',
-                    proxyId,
-                }
-            case SmtpNegativeStatusCode.MailboxFull:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'exceeded_storage',
-                    proxyId,
-                }
-            default:
-                return {
-                    email,
-                    exists: null,
-                    targetExchange,
-                    reason: 'unexpected_error',
-                    proxyId,
-                }
-        }
-    }
+        const [, handleError] = strategy
+        const result = handleError(error)
 
-    private async handleBlacklisting(
-        email: string,
-        { targetExchange, proxyId }: Pick<SmtpError, 'targetExchange' | 'proxyId'>,
-    ): Promise<SmtpVerificationResult> {
-        if (proxyId != null) {
+        if (result.reason === 'blacklisted' && proxyId != null) {
             await this.proxyRepository.update(proxyId, {
                 blacklistsToAdd: [targetExchange],
             })
         }
 
-        return {
-            email,
-            exists: null,
-            targetExchange,
-            reason: 'blacklisted',
-            proxyId,
-        }
+        return result
     }
 
     private async getExchanges({ domain, targetExchange }: GetExchangesParams): Promise<string[]> {
@@ -180,7 +201,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         return targetExchange != null ? exchanges.filter(exchange => exchange === targetExchange) : exchanges
     }
 
-    private async tryVerify({ client, email }: TryVerifyParams): Promise<SmtpVerificationResult> {
+    private async tryVerify({ client, email }: TryVerifyParams): Promise<SmtpVerifyResponse> {
         const { hostname, exchange: targetExchange } = client
 
         try {
@@ -207,7 +228,8 @@ export class SmtpVerifier implements ISmtpVerifier {
             }
         } catch (error) {
             if (error instanceof SmtpError) {
-                return await this.handleSmtpError(email, error)
+                const result = await this.handleSmtpError(error)
+                return { ...result, email }
             }
 
             return {
@@ -243,10 +265,12 @@ export class SmtpVerifier implements ISmtpVerifier {
                 abortController.abort()
             }
 
-            void Promise.allSettled(connectPromises)
-
             return client
         } catch (error) {
+            if (error instanceof SmtpError) {
+                await this.handleSmtpError(error)
+            }
+
             return null
         }
     }
