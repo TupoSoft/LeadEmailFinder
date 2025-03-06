@@ -1,11 +1,11 @@
 import type { Redis } from 'ioredis'
 import { ok } from 'node:assert'
-import type { SmtpVerificationResult } from './dto'
-import { smtpVerificationResultValidationSchema } from './validation'
+import type { SmtpVerifyResponse } from './dto'
+import { smtpVerifyResponseSchema } from './validation'
 
 export interface SmtpVerificationResultRepository {
-    getById: (id: string) => Promise<SmtpVerificationResult | null>
-    save: (verificationResult: SmtpVerificationResult) => Promise<void>
+    getById: (id: string) => Promise<SmtpVerifyResponse | null>
+    save: (verificationResult: SmtpVerifyResponse) => Promise<void>
 }
 
 export class RedisSmtpVerificationResultRepository implements SmtpVerificationResultRepository {
@@ -14,15 +14,15 @@ export class RedisSmtpVerificationResultRepository implements SmtpVerificationRe
 
     constructor(private readonly redis: Redis) {}
 
-    private static isSmtpVerificationResult(value: unknown): value is SmtpVerificationResult {
-        return smtpVerificationResultValidationSchema.safeParse(value).success
+    private static isSmtpVerificationResult(value: unknown): value is SmtpVerifyResponse {
+        return smtpVerifyResponseSchema.safeParse(value).success
     }
 
     private static getKey(domain: string): string {
         return `${this.CACHE_KEY_PREFIX}:${domain}`
     }
 
-    async getById(domain: string): Promise<SmtpVerificationResult | null> {
+    async getById(domain: string): Promise<SmtpVerifyResponse | null> {
         try {
             const key = RedisSmtpVerificationResultRepository.getKey(domain)
 
@@ -38,7 +38,7 @@ export class RedisSmtpVerificationResultRepository implements SmtpVerificationRe
         }
     }
 
-    async save(verificationResult: SmtpVerificationResult): Promise<void> {
+    async save(verificationResult: SmtpVerifyResponse): Promise<void> {
         try {
             const key = RedisSmtpVerificationResultRepository.getKey(verificationResult.email)
 

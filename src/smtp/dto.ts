@@ -10,16 +10,21 @@ export enum SmtpVerificationReasonEnum {
     Blocked = 'blacklisted',
     NoConnect = 'no_connect',
     ExceededStorage = 'exceeded_storage',
+    SenderBlocked = 'sender_blocked',
+    Unknown = 'unknown',
 }
 
 export type SmtpVerificationReason = `${SmtpVerificationReasonEnum}`
 
 export interface SmtpVerificationResult {
-    email: string
     reason: SmtpVerificationReason
     exists: boolean | null
     targetExchange?: string
     proxyId?: string
+}
+
+export interface SmtpVerifyResponse extends SmtpVerificationResult {
+    email: string
 }
 
 export interface SmtpResponse {

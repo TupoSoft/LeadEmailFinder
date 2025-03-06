@@ -1,26 +1,14 @@
 import type { EMAIL_VERIFICATION_SOURCES } from './constants'
 import type { CatchAllStatus, DeliveryStatus } from './enums'
 import type { EmailPattern } from '../email/enums'
+import type { SmtpVerificationReasonEnum } from '../smtp/dto'
 
 export interface EmailVerificationRequest {
     email: string
     format?: EmailPattern
 }
 
-export enum EmailVerificationReasonEnum {
-    AcceptedEmail = 'accepted_email',
-    RejectedEmail = 'rejected_email',
-    Timeout = 'timeout',
-    TemporarilyBlocked = 'temporarily_blocked',
-    NoMxRecords = 'no_mx_records',
-    UnexpectedError = 'unexpected_error',
-    Blocked = 'blacklisted',
-    Unknown = 'unknown',
-    NoConnect = 'no_connect',
-    ExceededStorage = 'exceeded_storage',
-}
-
-export type EmailVerificationReason = `${EmailVerificationReasonEnum}`
+export type EmailVerificationReason = `${SmtpVerificationReasonEnum}` | 'unknown'
 
 export interface CreateEmailVerification {
     email: string
