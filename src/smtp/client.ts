@@ -54,15 +54,15 @@ export class SmtpClientImpl implements SmtpClient {
     private readonly logger?: ExtensibleLogger
 
     constructor(
-        { host, port, proxy, timeouts, signal, logger }: SmtpClientConstructorOptions,
+        { host, port = SMTP_PORT, proxy, timeouts = {}, signal, logger }: SmtpClientConstructorOptions,
         private readonly connectionLimiter: ConnectionLimiter,
     ) {
         this.exchange = host
-        this.port = port ?? SMTP_PORT
+        this.port = port
         this.proxy = proxy
         this.signal = signal
         this.hostname = proxy != null ? proxy.host : osHostname()
-        this.timeouts = Object.assign(timeouts ?? {}, DEFAULT_TIMEOUT_CONFIG)
+        this.timeouts = Object.assign(timeouts, DEFAULT_TIMEOUT_CONFIG)
         this.logger = logger
         this.socket = new Socket({
             signal,
