@@ -1,21 +1,5 @@
-import { clearTimeout } from 'node:timers'
+import { setTimeout } from 'node:timers/promises'
 
 export async function promiseWithTimeout<T>(promise: Promise<T>, timeoutMs: number, error: Error): Promise<T> {
-    const timeoutPromise = new Promise<never>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            reject(error)
-        }, timeoutMs)
-
-        promise
-            .catch((reason: unknown) => {
-                if (reason instanceof Error) {
-                    reject(reason)
-                }
-            })
-            .finally(() => {
-                clearTimeout(timeoutId)
-            })
-    })
-
-    return await Promise.race([promise, timeoutPromise])
+    return await Promise.race([promise, setTimeout(timeoutMs).then(async () => await Promise.reject(error))])
 }

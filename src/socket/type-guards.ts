@@ -1,36 +1,13 @@
-import { type NetConnectOpts, Socket } from 'node:net'
-import { ok } from 'node:assert'
+import type { NetConnectOpts } from 'node:net'
 import type { ConnectionOptions } from 'node:tls'
+import { connectionOptionsValidationSchema, netConnectOptsValidationSchema } from './validation'
 
 export function isNetConnectOpts(value: unknown): value is NetConnectOpts {
-    try {
-        ok(value != null)
-        ok(typeof value === 'object')
-
-        const hasPort = 'port' in value && typeof value.port === 'number'
-        const hasPath = 'path' in value && typeof value.path === 'string'
-
-        ok(hasPort || hasPath)
-    } catch (error) {
-        return false
-    }
-
-    return true
+    return netConnectOptsValidationSchema.safeParse(value).success
 }
 
-export function isTlsConnectionOptions(value: unknown): value is ConnectionOptions {
-    try {
-        ok(value != null)
-        ok(typeof value === 'object')
-
-        const hasSocket = 'socket' in value && value.socket instanceof Socket
-
-        ok(isNetConnectOpts(value) || hasSocket)
-    } catch (error) {
-        return false
-    }
-
-    return true
+export function isConnectionOptions(value: unknown): value is ConnectionOptions {
+    return connectionOptionsValidationSchema.safeParse(value).success
 }
 
 export function isString(value: unknown): value is string {

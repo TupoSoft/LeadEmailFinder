@@ -1,60 +1,49 @@
 import type { Readable } from 'node:stream'
-import { EMPTY_ARRAY_LENGTH, FIRST_ARRAY_ELEMENT_INDEX, ZERO } from '../common/constants'
+import { EMPTY_ARRAY_LENGTH, isEmptyArray, ZERO } from '../common'
 import { ok } from 'node:assert'
+import { on } from 'node:events'
 
 export async function readBytes(readable: Readable, size: number): Promise<Buffer> {
     ok(size > ZERO, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
-    return await new Promise<Buffer>((resolve, reject) => {
-        let buffer = Buffer.alloc(EMPTY_ARRAY_LENGTH)
+    let buffer = Buffer.alloc(EMPTY_ARRAY_LENGTH)
+    for await (const event of on(readable, 'readable', { close: ['end'] })) {
+        void event
 
-        const cleanup = (): void => {
-            readable.off('data', onData)
-            readable.off('error', onError)
-            readable.off('end', onEnd)
+        const chunk: unknown = readable.read(size)
+
+        if (Buffer.isBuffer(chunk)) {
+            buffer = mergeBuffers(buffer, chunk, size, readable)
         }
 
-        const onData = (chunk: Buffer): void => {
-            buffer = Buffer.concat([buffer, chunk])
+        if (buffer.length >= size) break
+    }
 
-            if (buffer.length >= size) {
-                const matchedBytes = buffer.subarray(FIRST_ARRAY_ELEMENT_INDEX, size)
-                const unmatchedBytes = buffer.subarray(size)
+    validateBufferSize(buffer, size)
 
-                cleanup()
+    return buffer
+}
 
-                readable.pause()
-                readable.unshift(unmatchedBytes)
+function mergeBuffers(buffer: Buffer, chunk: Buffer, size: number, readable: Readable): Buffer {
+    buffer = isEmptyArray(buffer) ? chunk : Buffer.concat([buffer, chunk])
 
-                resolve(matchedBytes)
-            }
-        }
+    if (buffer.length >= size) {
+        const matchedBytes = buffer.subarray(undefined, size)
+        const unmatchedBytes = buffer.subarray(size)
 
-        const onError = (err: Error): void => {
-            cleanup()
-            reject(new Error(`Stream error: ${err.message}`))
-        }
+        readable.pause()
+        readable.unshift(unmatchedBytes)
 
-        const onEnd = (): void => {
-            cleanup()
+        return matchedBytes
+    }
 
-            if (buffer.length < size) {
-                reject(
-                    new Error(
-                        `Stream ended before reading the required ${size} bytes. Only ${buffer.length} bytes were available.`,
-                    ),
-                )
-            } else {
-                resolve(buffer)
-            }
-        }
+    return buffer
+}
 
-        if (readable.isPaused()) {
-            readable.resume()
-        }
-
-        readable.on('data', onData)
-        readable.on('error', onError)
-        readable.on('end', onEnd)
-    })
+function validateBufferSize(buffer: Buffer, size: number): void {
+    if (buffer.length < size) {
+        throw new Error(
+            `Stream ended before reading the required ${size} bytes. Only ${buffer.length} bytes were available.`,
+        )
+    }
 }
