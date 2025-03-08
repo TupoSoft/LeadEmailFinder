@@ -2,14 +2,14 @@ import { describe, expect, test } from '@jest/globals'
 import { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { readBytes } from './read-bytes'
-import { ZERO } from '../common/constants'
 
 describe('readBytes', () => {
     test('should throw an error if the size is zero or negative', async () => {
+        const size = 0
         const readable = Readable.from('tuposoft')
 
-        await expect(readBytes(readable, ZERO)).rejects.toThrow(
-            `Invalid size: ${ZERO}. Size must be a positive number.`,
+        await expect(readBytes(readable, size)).rejects.toThrow(
+            `Invalid size: ${size}. Size must be a positive number.`,
         )
 
         const negativeSize = -5
@@ -44,7 +44,7 @@ describe('readBytes', () => {
         })
 
         const size = 5
-        await expect(readBytes(readable, size)).rejects.toThrow('Stream error: Stream error occurred')
+        await expect(readBytes(readable, size)).rejects.toThrow('Stream error occurred')
     })
 
     test('should return remaining bytes to the stream when exceeding required size', async () => {

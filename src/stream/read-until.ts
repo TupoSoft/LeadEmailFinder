@@ -1,65 +1,52 @@
 import type { Readable } from 'node:stream'
-import { FIRST_ARRAY_ELEMENT_INDEX } from '../common'
 import { KILOBYTE } from './constants'
+import { on } from 'node:events'
 
 export async function readUntil(
     readable: Readable,
     matchPattern: RegExp | string,
     maxBufferSize = KILOBYTE,
 ): Promise<string> {
-    return await new Promise((resolve, reject) => {
-        let buffer = ''
-        const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
+    let buffer = ''
+    const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
 
-        const cleanup = (): void => {
-            readable.off('data', onData)
-            readable.off('error', onError)
-            readable.off('end', onEnd)
-        }
+    // eslint-disable-next-line no-empty-pattern -- The empty pattern is necessary because the loop is used to trigger asynchronous iteration over readable events
+    for await (const {} of on(readable, 'readable', { close: ['end'] })) {
+        buffer = appendChunk(buffer, readable.read())
 
-        const onData = (chunk: Buffer): void => {
-            buffer += chunk.toString()
+        validateBufferSize(buffer, maxBufferSize)
 
-            if (buffer.length > maxBufferSize) {
-                cleanup()
-                reject(new Error('Buffer exceeded maximum allowed size.'))
-                return
-            }
+        const matchedData = extractMatchedData(buffer, pattern, readable)
+        if (matchedData != null) return matchedData
+    }
 
-            const matchArray = buffer.match(pattern)
+    return ''
+}
 
-            if (matchArray !== null) {
-                const [firstMatch] = matchArray
+function appendChunk(buffer: string, chunk: unknown): string {
+    if (Buffer.isBuffer(chunk)) return buffer + chunk.toString()
+    if (typeof chunk === 'string') return buffer + chunk
+    return buffer
+}
 
-                const firstMatchLastIndex = buffer.indexOf(firstMatch)
-                const matchedData = buffer.slice(FIRST_ARRAY_ELEMENT_INDEX, firstMatchLastIndex + firstMatch.length)
-                const unmatchedData = buffer.slice(firstMatchLastIndex + firstMatch.length)
+function validateBufferSize(buffer: string, maxSize: number): void {
+    if (buffer.length > maxSize) {
+        throw new Error('Buffer exceeded maximum allowed size.')
+    }
+}
 
-                cleanup()
+function extractMatchedData(buffer: string, pattern: RegExp, readable: Readable): string | null {
+    const matchArray = buffer.match(pattern)
+    if (matchArray == null) return null
 
-                readable.pause()
-                readable.unshift(unmatchedData)
+    const [firstMatch] = matchArray
+    const firstMatchLastIndex = buffer.indexOf(firstMatch)
 
-                resolve(matchedData)
-            }
-        }
+    const matchedData = buffer.slice(0, firstMatchLastIndex + firstMatch.length)
+    const unmatchedData = buffer.slice(firstMatchLastIndex + firstMatch.length)
 
-        const onError = (err: Error): void => {
-            cleanup()
-            reject(new Error(`Stream error: ${err.message}`))
-        }
+    readable.pause()
+    readable.unshift(unmatchedData)
 
-        const onEnd = (): void => {
-            cleanup()
-            resolve(buffer)
-        }
-
-        if (readable.isPaused()) {
-            readable.resume()
-        }
-
-        readable.on('data', onData)
-        readable.on('error', onError)
-        readable.on('end', onEnd)
-    })
+    return matchedData
 }

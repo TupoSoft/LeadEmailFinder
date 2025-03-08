@@ -21,7 +21,7 @@ describe('readUntil', () => {
 
         const pattern = /world/
 
-        await expect(readUntil(stream, pattern)).rejects.toThrow('Stream error: Test error')
+        await expect(readUntil(stream, pattern)).rejects.toThrow('Test error')
     })
 
     it('should resolve with data up to the match for string pattern', async () => {
