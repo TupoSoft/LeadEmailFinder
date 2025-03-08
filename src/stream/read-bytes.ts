@@ -7,8 +7,9 @@ export async function readBytes(readable: Readable, size: number): Promise<Buffe
     ok(size > ZERO, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
     let buffer = Buffer.alloc(EMPTY_ARRAY_LENGTH)
-    // eslint-disable-next-line no-empty-pattern -- The empty pattern is necessary because the loop is used to trigger asynchronous iteration over readable events
-    for await (const {} of on(readable, 'readable', { close: ['end'] })) {
+    for await (const event of on(readable, 'readable', { close: ['end'] })) {
+        void event
+
         const chunk: unknown = readable.read(size)
 
         if (Buffer.isBuffer(chunk)) {

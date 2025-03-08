@@ -10,8 +10,9 @@ export async function readUntil(
     let buffer = ''
     const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
 
-    // eslint-disable-next-line no-empty-pattern -- The empty pattern is necessary because the loop is used to trigger asynchronous iteration over readable events
-    for await (const {} of on(readable, 'readable', { close: ['end'] })) {
+    for await (const event of on(readable, 'readable', { close: ['end'] })) {
+        void event
+
         buffer = appendChunk(buffer, readable.read())
 
         validateBufferSize(buffer, maxBufferSize)
@@ -42,7 +43,7 @@ function extractMatchedData(buffer: string, pattern: RegExp, readable: Readable)
     const [firstMatch] = matchArray
     const firstMatchLastIndex = buffer.indexOf(firstMatch)
 
-    const matchedData = buffer.slice(0, firstMatchLastIndex + firstMatch.length)
+    const matchedData = buffer.slice(undefined, firstMatchLastIndex + firstMatch.length)
     const unmatchedData = buffer.slice(firstMatchLastIndex + firstMatch.length)
 
     readable.pause()
