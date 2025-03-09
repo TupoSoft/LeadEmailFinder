@@ -11,8 +11,6 @@ import {
 } from './constants'
 import { verifyEmailBulkRequestBody } from './validation'
 
-const MIN_LENGTH = 1
-
 export class EmailVerificationRouter {
     constructor(
         private readonly router: Router,
