@@ -57,6 +57,7 @@ secrets:
   tokens.json:
     external: true
   redis_url:
+    name: redis-url-03102025
     external: true
   jwt_hs256_secret:
     external: true
