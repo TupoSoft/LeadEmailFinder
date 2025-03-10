@@ -141,7 +141,7 @@ const verifyEmailLegacyOkResponse: ZodOpenApiResponseObject = {
 
 const verifyOperation: ZodOpenApiOperationObject = {
     tags: [verificationTag.name],
-    summary: 'Verify an email',
+    summary: 'Verify an email. Deprecated.',
     deprecated: true,
     requestParams: {
         query: legacyVerifyEmailRequestQueryParams,
