@@ -5,8 +5,6 @@ import type { ConfigService, Environment } from '../common'
 import { EXIT_FAILURE } from '../common'
 import type { Logger } from '../logging'
 
-export const DESCENDING = -1
-
 const randomBytesAsync = promisify(randomBytes)
 
 export class MongoClientCreator {
