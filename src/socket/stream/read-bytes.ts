@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream'
-import { EMPTY_ARRAY_LENGTH, isEmptyArray, ZERO } from '../common'
+import { EMPTY_ARRAY_LENGTH, isEmptyArray, ZERO } from '../../common'
 import { ok } from 'node:assert'
 import { on } from 'node:events'
 

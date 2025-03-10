@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import { type ConnectThroughProxyOptions, directConnect } from './connect-strategies'
-import { readUntil, write } from '../stream'
+import { readUntil, write } from './stream'
 
 function generateAuthTokenFromCredentials(user: string, password: string): string {
     return Buffer.from(`${user}:${password}`).toString('base64')
