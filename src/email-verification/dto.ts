@@ -24,16 +24,6 @@ export interface CreateEmailVerification {
     targetExchange?: string
 }
 
-export interface UpdateEmailVerification {
-    sources: EmailVerificationSource[]
-    exists: boolean | null
-    catchAll: CatchAllStatus
-    reason: EmailVerificationReason
-    format?: EmailPattern
-    mxDomain?: string
-    targetExchange?: string
-}
-
 export interface EmailVerificationResult {
     id?: string
     email: string

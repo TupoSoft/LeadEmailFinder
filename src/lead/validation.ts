@@ -1,7 +1,6 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
 import type { FindLeadRequest, FindLeadResult } from './dto'
-import { verifyEmailResponseBody } from '../email-verification/validation'
 
 export const findLeadRequestBodySchema = z.intersection(
     z.object({ domain: z.string().nonempty().openapi({ example: 'microsoft.com' }) }),
@@ -23,7 +22,7 @@ export const findLeadRequestBodySchema = z.intersection(
 export const findLeadResponseBodySchema = z.intersection(
     findLeadRequestBodySchema,
     z.object({
-        emails: z.array(verifyEmailResponseBody),
+        emails: z.array(z.string().nonempty().email().openapi({ example: 'danilo@microsoft.com' })),
     }),
 ) satisfies ZodType<FindLeadResult>
 

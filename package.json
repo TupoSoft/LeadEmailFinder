@@ -1,7 +1,7 @@
 {
     "private": true,
     "name": "@tuposoft/lead-email-finder",
-    "version": "0.9.2",
+    "version": "0.10.0",
     "description": "Lead Email Finder API",
     "packageManager": "pnpm@10.3.0",
     "scripts": {

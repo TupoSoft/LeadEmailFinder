@@ -36,3 +36,7 @@ export const verifyEmailResponseBody = z
 export const verifyEmailBulkRequestBody = z.array(email)
 
 export const verifyEmailBulkResultResponseBody = z.array(verifyEmailResponseBody)
+
+export const legacyVerifyEmailRequestQueryParams = z.object({
+    email,
+})
