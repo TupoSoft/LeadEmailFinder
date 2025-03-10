@@ -42,15 +42,15 @@ export class LeadFinder {
         format: EmailPattern,
         findLeadResult: FindLeadResult,
     ): Promise<boolean> {
-        const { exists } = await this.emailVerificationService.verify({
+        const emailVerificationResult = await this.emailVerificationService.verify({
             email,
             format,
         })
 
-        if (exists === true) {
-            findLeadResult.emails.push(email)
+        if (emailVerificationResult.exists === true) {
+            findLeadResult.emails.push(emailVerificationResult)
         }
 
-        return exists !== true || deprioritizedEmailFormats.has(format)
+        return emailVerificationResult.exists !== true || deprioritizedEmailFormats.has(format)
     }
 }
