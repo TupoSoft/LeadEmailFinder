@@ -31,7 +31,6 @@ import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
 import { serve, setup } from 'swagger-ui-express'
 import { emailVerificationPaths, verificationTag } from './email-verification/openapi'
-import { legacyVerifyEmailPaths, verifyTag } from './email-verification/legacy/openapi'
 import { loggingMiddleware, PinoLogger } from './logging'
 import express, { Router } from 'express'
 import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps } from './email-verification/http'
@@ -151,11 +150,10 @@ async function main(): Promise<void> {
                 description: 'Production server',
             },
         ],
-        tags: [verificationTag, leadTag, verifyTag, { name: 'emails', description: 'Emails API' }],
+        tags: [verificationTag, leadTag, { name: 'emails', description: 'Emails API' }],
         paths: {
             ...emailVerificationPaths,
             ...leadPaths,
-            ...legacyVerifyEmailPaths,
             ...emailApiPaths,
         },
         components: {

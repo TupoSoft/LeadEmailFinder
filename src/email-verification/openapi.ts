@@ -1,5 +1,6 @@
 import type { ZodOpenApiOperationObject, ZodOpenApiPathsObject, ZodOpenApiResponseObject } from 'zod-openapi'
 import {
+    legacyVerifyEmailRequestQueryParams,
     verifyEmailBulkRequestBody,
     verifyEmailBulkResultResponseBody,
     verifyEmailRequestBody,
@@ -11,6 +12,7 @@ import {
     VERIFY_EMAIL_BULK_ROUTE,
     VERIFY_EMAIL_BULK_STATUS_ROUTE,
     VERIFY_EMAIL_ROUTE,
+    VERIFY_EMAIL_ROUTE_OLD,
 } from './constants'
 import {
     bulkRequestValidationSchema,
@@ -128,7 +130,39 @@ const verifyEmailBulkResultOperation: ZodOpenApiOperationObject = {
     },
 }
 
+const verifyEmailLegacyOkResponse: ZodOpenApiResponseObject = {
+    description: 'Successfully verified email',
+    content: {
+        'application/json': {
+            schema: verifyEmailResponseBody,
+        },
+    },
+}
+
+const verifyOperation: ZodOpenApiOperationObject = {
+    tags: [verificationTag.name],
+    summary: 'Verify an email. Deprecated.',
+    deprecated: true,
+    requestParams: {
+        query: legacyVerifyEmailRequestQueryParams,
+    },
+    responses: {
+        [constants.HTTP_STATUS_OK]: verifyEmailLegacyOkResponse,
+        [constants.HTTP_STATUS_BAD_REQUEST]: errorResponseBodySchema({
+            example: 'Invalid email address',
+            description: 'Validation failed',
+        }),
+        [constants.HTTP_STATUS_UNAUTHORIZED]: errorResponseBodySchema({
+            example: 'Unauthorized',
+            description: 'Unauthorized',
+        }),
+    },
+}
+
 export const emailVerificationPaths: ZodOpenApiPathsObject = {
+    [VERIFY_EMAIL_ROUTE_OLD]: {
+        get: verifyOperation,
+    },
     [VERIFY_EMAIL_ROUTE]: {
         post: verifyEmailOperation,
     },

@@ -8,13 +8,3 @@ export type FindLeadRequest = { domain: string } & (
 export type FindLeadResult = FindLeadRequest & {
     emails: EmailVerificationResult[]
 }
-
-export interface FindBulkResponse {
-    message: string
-    taskId: string
-    monitorUrl: string
-}
-
-export interface FindBulkStatusResponse {
-    status: string
-}
