@@ -29,4 +29,8 @@ export class HttpError extends Error {
     static InternalServerError(): HttpError {
         return new HttpError(constants.HTTP_STATUS_INTERNAL_SERVER_ERROR, 'Internal server error')
     }
+
+    static UnavailableForLegalReasons(message = 'Unavailable for legal reasons'): HttpError {
+        return new HttpError(constants.HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS, message)
+    }
 }

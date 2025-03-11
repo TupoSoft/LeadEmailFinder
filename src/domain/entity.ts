@@ -8,11 +8,11 @@ export interface EmailPatternUsage {
 
 export interface Domain {
     name: string
-    emailPatternUsage: EmailPatternUsage[]
-    catchAllEnabled?: boolean
-    mxRecords?: MxRecord[]
-    isFree?: boolean
-    isDisposable?: boolean
-    createdAt?: Date
-    updatedAt?: Date
+    catchAllEnabled: boolean
+    mxRecords: MxRecord[]
+    isFree: boolean
+    isDisposable: boolean
+    isVerificationForbidden: boolean
+    createdAt: Date
+    updatedAt: Date
 }

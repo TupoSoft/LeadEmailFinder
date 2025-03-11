@@ -1,10 +1,11 @@
 import type { IEmailVerificationRunner } from './runner'
 import type { EmailVerificationRepository } from './repository'
 import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
-import type { EmailPatternUsage } from '../domain'
+import type { Domain, DomainRepository, EmailPatternUsage } from '../domain'
 import type { EmailRecord, EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
 import { parseTimeString } from '../util/time'
+import { DomainVerificationForbiddenError } from './errors'
 
 export interface IEmailVerificationService {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -20,6 +21,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly emailVerificationRunner: IEmailVerificationRunner,
         private readonly emailVerificationRepository: EmailVerificationRepository,
         private readonly emailRepository: EmailRepository,
+        private readonly domainRepository: DomainRepository,
     ) {}
 
     private static hasRecentVerification(
@@ -33,10 +35,21 @@ export class EmailVerificationService implements IEmailVerificationService {
         )
     }
 
+    private static validateDomain(domain: Domain | null): void {
+        if (domain === null) return
+
+        if (domain.isVerificationForbidden) {
+            throw new DomainVerificationForbiddenError(domain.name)
+        }
+    }
+
     async verify({ email, format }: EmailVerificationRequest): Promise<EmailVerificationResult> {
         email = email.toLowerCase()
 
         const [username, domain] = email.split('@')
+
+        const domainData = await this.domainRepository.findById(domain)
+        EmailVerificationService.validateDomain(domainData)
 
         const emailRecord = await this.emailRepository.findByIdOrCreate({
             email,

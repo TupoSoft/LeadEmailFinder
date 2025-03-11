@@ -37,6 +37,7 @@ import { LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, OfficeApps }
 import { EmailModule } from './email'
 import { emailApiPaths } from './email/openapi'
 import { randomUUID } from 'node:crypto'
+import { MongoDomainRepository } from './domain'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -110,10 +111,12 @@ async function main(): Promise<void> {
     ])
     const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
     const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)
+    const domainRepository = new MongoDomainRepository(db)
     const emailVerificationService = new EmailVerificationService(
         emailVerificationRunner,
         mongoEmailVerificationRepository,
         emailModule.repository,
+        domainRepository,
     )
     const emailVerificationController = new ExpressEmailVerificationController(
         emailVerificationService,

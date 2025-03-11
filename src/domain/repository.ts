@@ -1,31 +1,39 @@
 import type { Collection, Db } from 'mongodb'
 import type { Domain } from './entity'
+import type { MxRecord } from 'node:dns'
 
-type DomainSchema = Omit<Domain, 'name'> & {
+interface DomainSchema {
     _id: string
+    catchAllEnabled: boolean
+    isFree: boolean
+    isDisposable: boolean
+    isVerificationForbidden: boolean
+    mxRecords: MxRecord[]
+    createdAt: Date
+    updatedAt: Date
+}
+
+export interface CreateDomainDto {
+    name: string
+    catchAllEnabled: boolean
+    mxRecords: MxRecord[]
+    isFree: boolean
+    isDisposable: boolean
+    isVerificationForbidden: boolean
+}
+
+export interface UpdateDomainDto {
+    catchAllEnabled?: boolean
+    mxRecords?: MxRecord[]
+    isFree?: boolean
+    isDisposable?: boolean
+    isVerificationForbidden?: boolean
 }
 
 export interface DomainRepository {
-    save: (domain: Domain) => Promise<void>
-    findById: (name: string) => Promise<Domain>
-}
-
-function domainEntityToDomainSchema(domain: Domain): DomainSchema {
-    const { name: _id, ...domainSchema } = domain
-
-    return { _id, ...domainSchema }
-}
-
-function domainSchemaToDomainEntity(domainSchema: DomainSchema): Domain {
-    const { _id: name, ...domain } = domainSchema
-
-    return { name, ...domain }
-}
-
-export class DomainNotFoundError extends Error {
-    constructor(name: string) {
-        super(`The domain name ${name} doesn't exist`)
-    }
+    create: (domain: CreateDomainDto) => Promise<Domain>
+    update: (name: string, domain: UpdateDomainDto) => Promise<Domain | null>
+    findById: (name: string) => Promise<Domain | null>
 }
 
 export class MongoDomainRepository implements DomainRepository {
@@ -35,21 +43,88 @@ export class MongoDomainRepository implements DomainRepository {
         this.collection = db.collection('domains')
     }
 
-    async findById(name: string): Promise<Domain> {
-        const domainSchema = await this.collection.findOne({ _id: name })
-        if (domainSchema === null) throw new DomainNotFoundError(name)
-        return domainSchemaToDomainEntity(domainSchema)
+    private static fromDomainSchema({
+        _id,
+        isVerificationForbidden,
+        isDisposable,
+        catchAllEnabled,
+        mxRecords,
+        createdAt,
+        updatedAt,
+        isFree,
+    }: DomainSchema): Domain {
+        return {
+            name: _id,
+            isFree,
+            isVerificationForbidden,
+            isDisposable,
+            catchAllEnabled,
+            mxRecords,
+            createdAt,
+            updatedAt,
+        }
     }
 
-    async save(domain: Domain): Promise<void> {
-        const { _id, ...domainSchema } = domainEntityToDomainSchema(domain)
-        await this.collection.updateOne(
-            { _id },
-            {
-                $set: { ...domainSchema, updatedAt: new Date() },
-                $setOnInsert: { createdAt: new Date() },
+    update: (name: string, domain: UpdateDomainDto) => Promise<Domain | null> = async (
+        name,
+        { isVerificationForbidden, isDisposable, catchAllEnabled, mxRecords, isFree },
+    ): Promise<Domain | null> => {
+        const updateFilter = {
+            $set: {
+                isVerificationForbidden,
+                isDisposable,
+                catchAllEnabled,
+                mxRecords,
+                isFree,
+                updatedAt: new Date(),
             },
-            { upsert: true },
-        )
+        }
+
+        const domainSchema = await this.collection.findOneAndUpdate({ _id: name }, updateFilter, {
+            returnDocument: 'after',
+            ignoreUndefined: true,
+        })
+
+        return domainSchema != null ? MongoDomainRepository.fromDomainSchema(domainSchema) : null
+    }
+
+    async findById(name: string): Promise<Domain | null> {
+        const domainSchema = await this.collection.findOne({ _id: name })
+        if (domainSchema === null) return domainSchema
+        return MongoDomainRepository.fromDomainSchema(domainSchema)
+    }
+
+    async create({
+        name,
+        isFree,
+        isVerificationForbidden,
+        isDisposable,
+        catchAllEnabled,
+        mxRecords,
+    }: CreateDomainDto): Promise<Domain> {
+        const createdAt = new Date()
+        const updatedAt = createdAt
+
+        await this.collection.insertOne({
+            _id: name,
+            isFree,
+            isVerificationForbidden,
+            isDisposable,
+            catchAllEnabled,
+            mxRecords,
+            createdAt,
+            updatedAt,
+        })
+
+        return {
+            name,
+            isFree,
+            isVerificationForbidden,
+            isDisposable,
+            mxRecords,
+            createdAt,
+            updatedAt,
+            catchAllEnabled,
+        }
     }
 }
