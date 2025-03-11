@@ -3,9 +3,9 @@ import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificati
 import type { CatchAllEmailVerifier } from './http'
 import { isEmailVerificationSource } from './type-guards'
 import { CatchAllStatus, DeliveryStatus } from './enums'
-import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
 import { getSecondLevelDomain } from '../dns'
 import { isEmptyArray } from '../common'
+import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
 
 export interface IEmailVerificationRunner {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>

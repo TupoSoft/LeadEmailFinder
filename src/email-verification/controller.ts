@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { matchedData } from 'express-validator'
 import type { IEmailVerificationService } from './service'
 import { constants } from 'node:http2'
-import { JobNotFoundError } from './errors'
+import { DomainVerificationForbiddenError, JobNotFoundError } from './errors'
 import { HttpError } from '../common'
 import type { IEmailVerificationQueue } from './queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
@@ -36,8 +36,13 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
                 res.log.info({ body: verificationData }, 'verification completed')
                 res.json(verificationData)
             },
-            (reason: unknown) => {
-                ExpressEmailVerificationController.handleError(reason, req, res, next)
+            (error: unknown) => {
+                if (error instanceof DomainVerificationForbiddenError) {
+                    const { message } = error
+                    next(HttpError.UnavailableForLegalReasons(message))
+                } else {
+                    next(error)
+                }
             },
         )
     }
