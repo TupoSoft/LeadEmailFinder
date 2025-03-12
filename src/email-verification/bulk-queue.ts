@@ -12,7 +12,7 @@ export type EmailVerificationQueueResultType = EmailVerificationResult[]
 
 export type EmailVerificationQueueNameType = 'verifyBulk'
 
-export interface IEmailVerificationQueue
+export interface BulkEmailVerificationQueue
     extends Queue<
         EmailVerificationQueueDataType,
         EmailVerificationQueueResultType,
@@ -20,7 +20,7 @@ export interface IEmailVerificationQueue
         BulkStatusResponse
     > {}
 
-export class EmailVerificationQueue implements IEmailVerificationQueue {
+export class BullBulkEmailVerificationQueue implements BulkEmailVerificationQueue {
     constructor(
         private readonly queue: BullQueue<
             EmailVerificationQueueDataType,

@@ -4,7 +4,7 @@ import type { IEmailVerificationService } from './service'
 import { constants } from 'node:http2'
 import { DomainVerificationForbiddenError, JobNotFoundError } from './errors'
 import { HttpError } from '../common'
-import type { IEmailVerificationQueue } from './queue'
+import type { BulkEmailVerificationQueue } from './bulk-queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
 
 export interface EmailVerificationController {
@@ -17,7 +17,7 @@ export interface EmailVerificationController {
 export class ExpressEmailVerificationController implements EmailVerificationController {
     constructor(
         private readonly emailVerificationService: IEmailVerificationService,
-        private readonly emailVerificationQueue: IEmailVerificationQueue,
+        private readonly emailVerificationQueue: BulkEmailVerificationQueue,
     ) {}
 
     private static handleError(error: unknown, _req: Request<unknown>, _res: Response, next: NextFunction): void {

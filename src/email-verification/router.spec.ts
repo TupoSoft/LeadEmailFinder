@@ -20,7 +20,7 @@ import { ErrorMiddleware } from '../middleware/handle-error'
 import { CatchAllStatus, DeliveryStatus } from './enums'
 import { type BulkResponse, HttpError } from '../common'
 import { JobStatus } from '../common/enums'
-import type { IEmailVerificationQueue } from './queue'
+import type { BulkEmailVerificationQueue } from './bulk-queue'
 import { loggingMiddleware } from '../logging'
 import Mocked = jest.Mocked
 
@@ -33,7 +33,7 @@ describe(EMAIL_ROUTE, () => {
         aggregateEmailPatternUsageForDomain: jest.fn(),
     }
 
-    const emailVerificationQueue: Mocked<IEmailVerificationQueue> = {
+    const emailVerificationQueue: Mocked<BulkEmailVerificationQueue> = {
         addJob: jest.fn(),
         getResult: jest.fn(),
         getStatus: jest.fn(),

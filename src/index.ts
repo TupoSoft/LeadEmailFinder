@@ -22,8 +22,8 @@ import { RedisCreator } from './util/redis'
 import { isNativeError } from 'node:util/types'
 import { LeadQueueWorker } from './lead/queue-worker'
 import { AuthMiddleware } from './middleware'
-import { EmailVerificationQueue } from './email-verification/queue'
-import { EmailVerificationQueueWorker } from './email-verification/queue-worker'
+import { BullBulkEmailVerificationQueue } from './email-verification/bulk-queue'
+import { EmailVerificationQueueWorker } from './email-verification/bulk-queue-worker'
 import { Queue } from 'bullmq'
 import { RESOURCE as EMAILS } from './email-verification/constants'
 import { ErrorMiddleware } from './middleware/handle-error'
@@ -109,7 +109,7 @@ async function main(): Promise<void> {
         officeApps,
         linkedinLogin,
     ])
-    const emailVerificationQueue = new EmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
+    const emailVerificationQueue = new BullBulkEmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
     const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)
     const domainRepository = new MongoDomainRepository(db)
     const emailVerificationService = new EmailVerificationService(
