@@ -5,7 +5,7 @@ import type { EmailVerificationSource } from '../dto'
 const enum IfExistsResult {
     AccountExists = 0,
     DifferentIdentityProvider = 5,
-    DomainAndDifferentIdentityProvider,
+    DomainAndDifferentIdentityProvider = 6,
 }
 
 interface MicrosoftGetCredsResponseData {
