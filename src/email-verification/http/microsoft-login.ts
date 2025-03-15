@@ -10,7 +10,7 @@ export enum MicrosoftLoginErrorCode {
     SecurityChallengeNotSatisfied = 50158,
 }
 
-export interface MicrosoftErrorData {
+export interface MicrosoftLoginErrorData {
     error_codes: MicrosoftLoginErrorCode[]
 }
 
@@ -54,13 +54,12 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
             })
         } catch (error: unknown) {
             if (!isMicrosoftError(error)) return false
-            const { response } = error
-
-            if (response === undefined) return false
 
             const {
-                data: { error_codes: errorCodes },
-            } = response
+                response: {
+                    data: { error_codes: errorCodes },
+                },
+            } = error
 
             if (errorCodes.some(value => MicrosoftLogin.USER_EXISTS_ERROR_CODES.has(value))) {
                 return true

@@ -1,7 +1,6 @@
-import type { MicrosoftErrorData } from './microsoft-login'
 import { microsoftErrorSchema } from './validation'
-import type { AxiosError } from 'axios'
+import type { z } from 'zod'
 
-export function isMicrosoftError(value: unknown): value is AxiosError<MicrosoftErrorData> {
+export function isMicrosoftError(value: unknown): value is z.infer<typeof microsoftErrorSchema> {
     return microsoftErrorSchema.safeParse(value).success
 }
