@@ -55,6 +55,11 @@ const verifyEmailOperation: ZodOpenApiOperationObject = {
             example: 'Unauthorized',
             description: 'Unauthorized',
         }),
+        [constants.HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS]: errorResponseBodySchema({
+            example: 'The domain example.com verification is forbidden',
+            description:
+                'The requested operation is not permitted because the domain owner has restricted access or filed a complaint.',
+        }),
     },
 }
 
@@ -155,6 +160,11 @@ const verifyOperation: ZodOpenApiOperationObject = {
         [constants.HTTP_STATUS_UNAUTHORIZED]: errorResponseBodySchema({
             example: 'Unauthorized',
             description: 'Unauthorized',
+        }),
+        [constants.HTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS]: errorResponseBodySchema({
+            example: 'The domain example.com verification is forbidden',
+            description:
+                'The requested operation is not permitted because the domain owner has restricted access or filed a complaint.',
         }),
     },
 }
