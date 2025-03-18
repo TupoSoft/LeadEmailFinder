@@ -2,9 +2,17 @@ import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
 import type { EmailVerificationSource } from '../dto'
 
-export interface MicrosoftGetCredsResponseData {
-    IfExistsResult: number
+const enum IfExistsResult {
+    AccountExists = 0,
+    DifferentIdentityProvider = 5,
+    DomainAndDifferentIdentityProvider = 6,
 }
+
+interface MicrosoftGetCredsResponseData {
+    IfExistsResult: IfExistsResult
+}
+
+const federationFlags = 0
 
 export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
     private static readonly URL = 'https://login.microsoftonline.com/common/GetCredentialType'
@@ -38,7 +46,7 @@ export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
         forceotclogin: false,
         isExternalFederationDisallowed: false,
         isRemoteConnectSupported: false,
-        federationFlags: 0,
+        federationFlags,
         isSignup: false,
         isAccessPassSupported: true,
     }
@@ -47,7 +55,11 @@ export class MicrosoftGetCredentialType implements CatchAllEmailVerifier {
         mkt: 'en-GB',
     }
 
-    private static readonly EXISTS_RESULT = [0, 5, 6]
+    private static readonly EXISTS_RESULT = [
+        IfExistsResult.AccountExists,
+        IfExistsResult.DifferentIdentityProvider,
+        IfExistsResult.DomainAndDifferentIdentityProvider,
+    ]
 
     sourceName: EmailVerificationSource = 'microsoft_4'
 

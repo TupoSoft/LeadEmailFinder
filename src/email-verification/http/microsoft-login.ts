@@ -1,16 +1,17 @@
 import type { CatchAllEmailVerifier } from './catch-all-email-verifier'
 import type { HttpClient } from '../../http-client'
-import { AxiosError } from 'axios'
 import type { EmailVerificationSource } from '../dto'
+import { isMicrosoftError } from './type-guards'
 
-export interface MicrosoftError {
-    error: string
-    error_description: string
-    error_codes: number[]
-    timestamp: Date
-    trace_id: string
-    correlation_id: string
-    error_uri: string
+export enum MicrosoftLoginErrorCode {
+    InvalidGrant = 50126,
+    MustEnrollMfa = 50079,
+    MustUseMfa = 50076,
+    SecurityChallengeNotSatisfied = 50158,
+}
+
+export interface MicrosoftLoginErrorData {
+    error_codes: MicrosoftLoginErrorCode[]
 }
 
 export class MicrosoftLogin implements CatchAllEmailVerifier {
@@ -32,6 +33,13 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
         scope: 'openid',
     }
 
+    private static readonly USER_EXISTS_ERROR_CODES = new Set([
+        MicrosoftLoginErrorCode.InvalidGrant,
+        MicrosoftLoginErrorCode.MustEnrollMfa,
+        MicrosoftLoginErrorCode.MustUseMfa,
+        MicrosoftLoginErrorCode.SecurityChallengeNotSatisfied,
+    ])
+
     sourceName: EmailVerificationSource = 'microsoft_1'
 
     constructor(private readonly httpClient: HttpClient) {}
@@ -45,19 +53,16 @@ export class MicrosoftLogin implements CatchAllEmailVerifier {
                 headers,
             })
         } catch (error: unknown) {
-            if (error instanceof AxiosError) {
-                const { response } = error as AxiosError<MicrosoftError, unknown>
-                if (response !== undefined) {
-                    const acceptableErrorCodes = new Set<number>([50126, 50079, 50076, 50158])
+            if (!isMicrosoftError(error)) return false
 
-                    const {
-                        data: { error_codes: errorCodes },
-                    } = response
+            const {
+                response: {
+                    data: { error_codes: errorCodes },
+                },
+            } = error
 
-                    if (errorCodes.some(value => acceptableErrorCodes.has(value))) {
-                        return true
-                    }
-                }
+            if (errorCodes.some(value => MicrosoftLogin.USER_EXISTS_ERROR_CODES.has(value))) {
+                return true
             }
         }
 
