@@ -1,10 +1,5 @@
 import { type Db, ObjectId, type WithId } from 'mongodb'
-import type {
-    CreateEmailVerification,
-    EmailVerificationReason,
-    EmailVerificationResult,
-    EmailVerificationSource,
-} from './dto'
+import type { EmailVerificationReason, EmailVerificationResult, EmailVerificationSource } from './dto'
 
 export interface EmailVerificationRepository {
     upsert: (emailVerificationResult: EmailVerificationResult) => Promise<EmailVerificationResult>
@@ -23,6 +18,8 @@ interface EmailVerificationSchema {
     catchAll: boolean | null
     reason?: EmailVerificationReason
     sources: EmailVerificationSource[]
+    createdAt: Date
+    updatedAt: Date
 }
 
 export class MongoEmailVerificationRepository implements EmailVerificationRepository {
@@ -30,32 +27,6 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
 
     constructor(db: Db) {
         this.collection = db.collection<EmailVerificationSchema>('emailVerifications')
-    }
-
-    private static toSchema({
-        email,
-        domain,
-        localPart,
-        targetExchange,
-        mxDomain,
-        sources,
-        exists,
-        format,
-        catchAll,
-        reason,
-    }: EmailVerificationResult): EmailVerificationSchema {
-        return {
-            email,
-            domain,
-            localPart,
-            targetExchange,
-            mxDomain,
-            sources,
-            exists,
-            catchAll,
-            format,
-            reason,
-        }
     }
 
     private static fromSchema({
@@ -109,11 +80,13 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
                     targetExchange,
                     sources,
                     mxDomain,
+                    updatedAt: new Date(),
                 },
                 $setOnInsert: {
                     email,
                     domain,
                     localPart,
+                    createdAt: new Date(),
                 },
             },
             { returnDocument: 'after', upsert: true, ignoreUndefined: true },
@@ -139,17 +112,5 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     async findById(id: string): Promise<EmailVerificationResult | null> {
         const record = await this.collection.findOne({ _id: new ObjectId(id) })
         return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
-    }
-
-    async save(createEmailVerification: CreateEmailVerification): Promise<EmailVerificationResult> {
-        const { insertedId: id } = await this.collection.insertOne(
-            MongoEmailVerificationRepository.toSchema(createEmailVerification),
-        )
-
-        return {
-            id: id.toHexString(),
-            ...createEmailVerification,
-            verifiedAt: id.getTimestamp().toISOString(),
-        }
     }
 }

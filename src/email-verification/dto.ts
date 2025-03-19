@@ -9,19 +9,6 @@ export interface EmailVerificationRequest {
 
 export type EmailVerificationReason = `${SmtpVerificationReasonEnum}` | 'webmail' | 'unknown'
 
-export interface CreateEmailVerification {
-    email: string
-    domain: string
-    localPart: string
-    sources: EmailVerificationSource[]
-    exists: boolean | null
-    catchAll: boolean | null
-    reason: EmailVerificationReason
-    format?: EmailPattern
-    mxDomain?: string
-    targetExchange?: string
-}
-
 export interface EmailVerificationResult {
     id?: string
     email: string
