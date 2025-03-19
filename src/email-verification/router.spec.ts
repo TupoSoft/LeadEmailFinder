@@ -17,7 +17,6 @@ import request from 'supertest'
 import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
-import { CatchAllStatus, DeliveryStatus } from './enums'
 import { type BulkResponse, HttpError } from '../common'
 import { JobStatus } from '../common/enums'
 import type { IEmailVerificationQueue } from './queue'
@@ -72,11 +71,10 @@ describe(EMAIL_ROUTE, () => {
     const verificationResult: EmailVerificationResult = {
         domain,
         exists: false,
+        catchAll: false,
         localPart,
         sources: ['mx'],
         email,
-        deliveryStatus: DeliveryStatus.Rejected,
-        catchAll: CatchAllStatus.Disabled,
         verifiedAt,
         reason: 'rejected_email',
     }
@@ -202,7 +200,15 @@ describe(EMAIL_ROUTE, () => {
                 .query({ email })
                 .expect('Content-Type', /json/)
                 .expect(constants.HTTP_STATUS_OK)
-                .expect(verificationResult)
+                .expect({
+                    email: 'danilo@microsoft.com',
+                    domain: 'microsoft.com',
+                    localPart: 'danilo',
+                    reason: 'rejected_email',
+                    verifiedAt: '2025-01-01T00:00:00.000Z',
+                    catchAll: 'disabled',
+                    deliveryStatus: 'rejected',
+                })
         })
 
         it('should return HTTP_STATUS_BAD_REQUEST', async () => {
@@ -217,6 +223,7 @@ describe(EMAIL_ROUTE, () => {
         it('should return HTTP_UNAUTHORIZED', async () => {
             jest.useRealTimers()
 
+            // eslint-disable-next-line max-nested-callbacks -- Mocking authentication middleware for testing unauthorized behavior
             authMiddleware.authenticate.mockImplementationOnce((_req, _res, next) => {
                 next(HttpError.Unauthorized('Invalid token'))
             })
