@@ -66,7 +66,7 @@ export class EmailVerificationRouter {
                     .isEmail()
                     .withMessage('Invalid email address'),
             ]),
-            this.emailVerificationController.verifyEmail.bind(this.emailVerificationController),
+            this.emailVerificationController.verifyEmailOld.bind(this.emailVerificationController),
         )
     }
 }

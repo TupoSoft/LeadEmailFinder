@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { EmailVerificationRunner } from './runner'
 import type { ISmtpVerifier } from '../smtp'
 import type { EmailVerificationResult } from './dto'
-import { CatchAllStatus, DeliveryStatus } from './enums'
 import Mocked = jest.Mocked
 
 describe('EmailVerifier', () => {
@@ -26,8 +25,7 @@ describe('EmailVerifier', () => {
         sources: ['mx'],
         exists,
         mxDomain,
-        deliveryStatus: DeliveryStatus.Accepted,
-        catchAll: CatchAllStatus.Disabled,
+        catchAll: false,
         reason: 'accepted_email',
     }
 
@@ -68,7 +66,6 @@ describe('EmailVerifier', () => {
             ...expectedEmailVerificationResult,
             reason: 'rejected_email',
             exists: false,
-            deliveryStatus: DeliveryStatus.Rejected,
         }
 
         const result = await emailVerifier.verify({ email })
