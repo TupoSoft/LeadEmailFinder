@@ -18,6 +18,7 @@ interface EmailVerificationSchema {
     localPart: string
     format?: string
     targetExchange?: string
+    mxDomain?: string
     exists: boolean | null
     catchAll: boolean | null
     reason?: EmailVerificationReason
@@ -36,6 +37,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         domain,
         localPart,
         targetExchange,
+        mxDomain,
         sources,
         exists,
         format,
@@ -47,6 +49,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             domain,
             localPart,
             targetExchange,
+            mxDomain,
             sources,
             exists,
             catchAll,
@@ -61,6 +64,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         domain,
         localPart,
         targetExchange,
+        mxDomain,
         sources,
         exists,
         catchAll,
@@ -72,6 +76,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             domain,
             localPart,
             targetExchange,
+            mxDomain,
             sources,
             exists,
             reason: reason ?? 'unknown',
