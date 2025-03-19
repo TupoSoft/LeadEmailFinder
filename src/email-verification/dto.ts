@@ -1,5 +1,4 @@
 import type { EMAIL_VERIFICATION_SOURCES } from './constants'
-import type { CatchAllStatus, DeliveryStatus } from './enums'
 import type { EmailPattern } from '../email/enums'
 import type { SmtpVerificationReasonEnum } from '../smtp/dto'
 
@@ -8,7 +7,7 @@ export interface EmailVerificationRequest {
     format?: EmailPattern
 }
 
-export type EmailVerificationReason = `${SmtpVerificationReasonEnum}` | 'unknown'
+export type EmailVerificationReason = `${SmtpVerificationReasonEnum}` | 'webmail' | 'unknown'
 
 export interface CreateEmailVerification {
     email: string
@@ -16,8 +15,7 @@ export interface CreateEmailVerification {
     localPart: string
     sources: EmailVerificationSource[]
     exists: boolean | null
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
+    catchAll: boolean | null
     reason: EmailVerificationReason
     format?: EmailPattern
     mxDomain?: string
@@ -33,8 +31,7 @@ export interface EmailVerificationResult {
     mxDomain?: string
     sources: EmailVerificationSource[]
     exists: boolean | null
-    deliveryStatus: DeliveryStatus
-    catchAll: CatchAllStatus
+    catchAll: boolean | null
     reason: EmailVerificationReason
     targetExchange?: string
     verifiedAt?: string

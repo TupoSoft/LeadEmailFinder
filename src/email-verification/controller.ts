@@ -6,9 +6,11 @@ import { DomainVerificationForbiddenError, JobNotFoundError } from './errors'
 import { HttpError } from '../common'
 import type { IEmailVerificationQueue } from './queue'
 import { VERIFY_EMAIL_BULK_STATUS_ROUTE } from './constants'
+import { presentVerifyEmailOld } from './presenter'
 
 export interface EmailVerificationController {
     verifyEmail: (req: Request, res: Response, next: NextFunction) => void
+    verifyEmailOld: (req: Request, res: Response, next: NextFunction) => void
     verifyEmails: (req: Request, res: Response, next: NextFunction) => void
     getVerifyBulkStatus: (req: Request, res: Response, next: NextFunction) => void
     getVerifyBulkResults: (req: Request, res: Response, next: NextFunction) => void
@@ -42,6 +44,22 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
                     next(HttpError.UnavailableForLegalReasons(message))
                 } else {
                     next(error)
+                }
+            },
+        )
+    }
+
+    verifyEmailOld(req: Request, res: Response, next: NextFunction): void {
+        const { email } = matchedData<{ email: string }>(req)
+        this.emailVerificationService.verify({ email }).then(
+            verificationData => {
+                res.log.info({ body: verificationData }, 'verification completed')
+                res.json(presentVerifyEmailOld(verificationData))
+            },
+            (error: unknown) => {
+                if (error instanceof DomainVerificationForbiddenError) {
+                    const { message } = error
+                    next(HttpError.UnavailableForLegalReasons(message))
                 }
             },
         )

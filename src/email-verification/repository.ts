@@ -5,7 +5,6 @@ import type {
     EmailVerificationResult,
     EmailVerificationSource,
 } from './dto'
-import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
 
 export interface EmailVerificationRepository {
     upsert: (emailVerificationResult: EmailVerificationResult) => Promise<EmailVerificationResult>
@@ -50,9 +49,9 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             targetExchange,
             sources,
             exists,
+            catchAll,
             format,
             reason,
-            catchAll: catchAllStatusToBoolean(catchAll),
         }
     }
 
@@ -76,8 +75,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             sources,
             exists,
             reason: reason ?? 'unknown',
-            catchAll: booleanToCatchAllStatus(catchAll),
-            deliveryStatus: existsToDeliveryStatus(exists),
+            catchAll,
             verifiedAt: _id.getTimestamp().toISOString(),
         }
     }
@@ -100,7 +98,7 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             {
                 $set: {
                     exists,
-                    catchAll: catchAllStatusToBoolean(catchAll),
+                    catchAll,
                     reason,
                     format,
                     targetExchange,
