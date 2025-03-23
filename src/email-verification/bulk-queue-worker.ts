@@ -5,7 +5,7 @@ import type { IEmailVerificationRunner } from './runner'
 import { RESOURCE } from './constants'
 import { QUEUE_WORKER_CONCURRENCY } from '../common'
 
-export class EmailVerificationQueueWorker {
+export class BulkEmailVerificationQueueWorker {
     private readonly worker
 
     constructor(connection: Redis, emailVerifier: IEmailVerificationRunner) {

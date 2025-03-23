@@ -23,7 +23,7 @@ import { isNativeError } from 'node:util/types'
 import { LeadQueueWorker } from './lead/queue-worker'
 import { AuthMiddleware } from './middleware'
 import { BullBulkEmailVerificationQueue } from './email-verification/bulk-queue'
-import { EmailVerificationQueueWorker } from './email-verification/bulk-queue-worker'
+import { BulkEmailVerificationQueueWorker } from './email-verification/bulk-queue-worker'
 import { Queue } from 'bullmq'
 import { RESOURCE as EMAILS } from './email-verification/constants'
 import { ErrorMiddleware } from './middleware/handle-error'
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
         linkedinLogin,
     ])
     const emailVerificationQueue = new BullBulkEmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
-    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationRunner)
+    const emailVerificationQueueWorker = new BulkEmailVerificationQueueWorker(redis, emailVerificationRunner)
     const domainRepository = new MongoDomainRepository(db)
     const emailVerificationService = new EmailVerificationService(
         emailVerificationRunner,
