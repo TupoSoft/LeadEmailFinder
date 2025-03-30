@@ -38,6 +38,9 @@ services:
       resources:
         limits:
           memory: 1g
+      placement:
+        preferences:
+          spread: node.hostname
     secrets:
       - mongo_url
       - source: redis-config
