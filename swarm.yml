@@ -35,6 +35,9 @@ services:
         monitor: 15s
       rollback_config:
         order: start-first
+      resources:
+        limits:
+          memory: 1g
     secrets:
       - mongo_url
       - source: redis-config
