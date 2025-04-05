@@ -1,11 +1,15 @@
 import type { ISmtpVerifier } from '../smtp'
-import type { EmailVerificationRequest, EmailVerificationResult, EmailVerificationSource } from './dto'
+import type {
+    EmailVerificationReason,
+    EmailVerificationRequest,
+    EmailVerificationResult,
+    EmailVerificationSource,
+} from './dto'
 import type { CatchAllEmailVerifier } from './http'
 import { isEmailVerificationSource } from './type-guards'
-import { CatchAllStatus, DeliveryStatus } from './enums'
+import type { CatchAllStatus } from './enums'
 import { getSecondLevelDomain } from '../dns'
 import { isEmptyArray } from '../common'
-import { booleanToCatchAllStatus, existsToDeliveryStatus } from './util'
 
 export interface IEmailVerificationRunner {
     verify: (emailVerificationRequest: EmailVerificationRequest) => Promise<EmailVerificationResult>
@@ -26,9 +30,9 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
             | {
                   catchAll: CatchAllStatus.Enabled
               }
-            | { reason: 'blacklisted' }
+            | { reason: EmailVerificationReason }
         ) {
-        return emailVerification.catchAll === CatchAllStatus.Enabled || emailVerification.reason === 'blacklisted'
+        return emailVerification.catchAll === true || emailVerification.reason === 'blacklisted'
     }
 
     private static extractMxDomain(targetExchange?: string): string | undefined {
@@ -40,8 +44,7 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
 
         const emailVerification: EmailVerificationResult = {
             exists: null,
-            deliveryStatus: DeliveryStatus.NotProcessed,
-            catchAll: CatchAllStatus.Unknown,
+            catchAll: null,
             reason: 'unknown',
             sources: [],
             domain,
@@ -56,12 +59,10 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
         emailVerification.targetExchange = targetExchange
         emailVerification.mxDomain = EmailVerificationRunner.extractMxDomain(targetExchange)
         emailVerification.reason = reason
-        emailVerification.catchAll = booleanToCatchAllStatus(exists)
-        emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
+        emailVerification.catchAll = exists
 
         if (exists === false) {
             const { exists, targetExchange, reason } = await this.smtpVerifier.verify({ email })
-            emailVerification.deliveryStatus = existsToDeliveryStatus(exists)
             emailVerification.exists = exists
             emailVerification.reason = reason
 
@@ -78,6 +79,7 @@ export class EmailVerificationRunner implements IEmailVerificationRunner {
 
             if (!isEmptyArray(sources)) {
                 emailVerification.sources.push(...sources)
+                emailVerification.reason = 'webmail'
                 emailVerification.exists = true
             }
         }

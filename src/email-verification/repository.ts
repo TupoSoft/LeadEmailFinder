@@ -1,11 +1,5 @@
 import { type Db, ObjectId, type WithId } from 'mongodb'
-import type {
-    CreateEmailVerification,
-    EmailVerificationReason,
-    EmailVerificationResult,
-    EmailVerificationSource,
-} from './dto'
-import { booleanToCatchAllStatus, catchAllStatusToBoolean, existsToDeliveryStatus } from './util'
+import type { EmailVerificationReason, EmailVerificationResult, EmailVerificationSource } from './dto'
 
 export interface EmailVerificationRepository {
     upsert: (emailVerificationResult: EmailVerificationResult) => Promise<EmailVerificationResult>
@@ -19,10 +13,13 @@ interface EmailVerificationSchema {
     localPart: string
     format?: string
     targetExchange?: string
+    mxDomain?: string
     exists: boolean | null
     catchAll: boolean | null
     reason?: EmailVerificationReason
     sources: EmailVerificationSource[]
+    createdAt: Date
+    updatedAt: Date
 }
 
 export class MongoEmailVerificationRepository implements EmailVerificationRepository {
@@ -32,36 +29,13 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
         this.collection = db.collection<EmailVerificationSchema>('emailVerifications')
     }
 
-    private static toSchema({
-        email,
-        domain,
-        localPart,
-        targetExchange,
-        sources,
-        exists,
-        format,
-        catchAll,
-        reason,
-    }: EmailVerificationResult): EmailVerificationSchema {
-        return {
-            email,
-            domain,
-            localPart,
-            targetExchange,
-            sources,
-            exists,
-            format,
-            reason,
-            catchAll: catchAllStatusToBoolean(catchAll),
-        }
-    }
-
     private static fromSchema({
         _id,
         email,
         domain,
         localPart,
         targetExchange,
+        mxDomain,
         sources,
         exists,
         catchAll,
@@ -73,11 +47,11 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             domain,
             localPart,
             targetExchange,
+            mxDomain,
             sources,
             exists,
             reason: reason ?? 'unknown',
-            catchAll: booleanToCatchAllStatus(catchAll),
-            deliveryStatus: existsToDeliveryStatus(exists),
+            catchAll,
             verifiedAt: _id.getTimestamp().toISOString(),
         }
     }
@@ -100,17 +74,19 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
             {
                 $set: {
                     exists,
-                    catchAll: catchAllStatusToBoolean(catchAll),
+                    catchAll,
                     reason,
                     format,
                     targetExchange,
                     sources,
                     mxDomain,
+                    updatedAt: new Date(),
                 },
                 $setOnInsert: {
                     email,
                     domain,
                     localPart,
+                    createdAt: new Date(),
                 },
             },
             { returnDocument: 'after', upsert: true, ignoreUndefined: true },
@@ -136,17 +112,5 @@ export class MongoEmailVerificationRepository implements EmailVerificationReposi
     async findById(id: string): Promise<EmailVerificationResult | null> {
         const record = await this.collection.findOne({ _id: new ObjectId(id) })
         return record != null ? MongoEmailVerificationRepository.fromSchema(record) : record
-    }
-
-    async save(createEmailVerification: CreateEmailVerification): Promise<EmailVerificationResult> {
-        const { insertedId: id } = await this.collection.insertOne(
-            MongoEmailVerificationRepository.toSchema(createEmailVerification),
-        )
-
-        return {
-            id: id.toHexString(),
-            ...createEmailVerification,
-            verifiedAt: id.getTimestamp().toISOString(),
-        }
     }
 }

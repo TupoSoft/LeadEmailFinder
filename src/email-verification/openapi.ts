@@ -3,8 +3,9 @@ import {
     legacyVerifyEmailRequestQueryParams,
     verifyEmailBulkRequestBody,
     verifyEmailBulkResultResponseBody,
+    verifyEmailOldResponseSchema,
     verifyEmailRequestBody,
-    verifyEmailResponseBody,
+    verifyEmailResponseSchema,
 } from './validation'
 import { constants } from 'node:http2'
 import {
@@ -30,7 +31,7 @@ const verifyEmailOkResponse: ZodOpenApiResponseObject = {
     description: 'Successfully verified email',
     content: {
         'application/json': {
-            schema: verifyEmailResponseBody,
+            schema: verifyEmailResponseSchema,
         },
     },
 }
@@ -139,7 +140,7 @@ const verifyEmailLegacyOkResponse: ZodOpenApiResponseObject = {
     description: 'Successfully verified email',
     content: {
         'application/json': {
-            schema: verifyEmailResponseBody,
+            schema: verifyEmailOldResponseSchema,
         },
     },
 }
