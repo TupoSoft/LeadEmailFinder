@@ -28,7 +28,7 @@ services:
       CATCH_ALL_HTTP_PROXY_URL_FILE: /run/secrets/catch_all_http_proxy_url
     deploy:
       mode: replicated
-      replicas: 4
+      replicas: 6
       update_config:
         parallelism: 1
         delay: 5s
@@ -39,9 +39,10 @@ services:
         order: start-first
       resources:
         limits:
-          cpus: "2"
+          cpus: "1"
           memory: 1g
       placement:
+        max_replicas_per_node: 2
         preferences:
           - spread: node.hostname
     secrets:
