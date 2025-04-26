@@ -1,3 +1,5 @@
+#file: noinspection ComposeUnknownValues, line 46
+
 version: '3.9'
 
 services:
@@ -26,21 +28,23 @@ services:
       CATCH_ALL_HTTP_PROXY_URL_FILE: /run/secrets/catch_all_http_proxy_url
     deploy:
       mode: replicated
-      replicas: 4
+      replicas: 6
       update_config:
         parallelism: 1
         delay: 5s
-        order: start-first
+        order: stop-first
         failure_action: rollback
         monitor: 15s
       rollback_config:
         order: start-first
       resources:
         limits:
+          cpus: "1"
           memory: 1g
       placement:
+        max_replicas_per_node: 2
         preferences:
-          spread: node.hostname
+          - spread: node.hostname
     secrets:
       - mongo_url
       - source: redis-config
