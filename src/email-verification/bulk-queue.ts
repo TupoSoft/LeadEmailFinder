@@ -1,10 +1,9 @@
 import type { EmailVerificationResult } from './dto'
-import type { Queue as BullQueue } from 'bullmq'
+import type { FlowChildJob, FlowProducer } from 'bullmq'
 import { ok } from 'node:assert'
-import { JobNotFoundError } from './errors'
-import { randomUUID } from 'node:crypto'
 import type { BulkStatusResponse, Queue } from '../common'
-import { bulkProgressResponseValidationSchema, jobStateToJobStatus } from '../common'
+import { jobStateToJobStatus } from '../common'
+import { randomUUID } from 'node:crypto'
 
 export type EmailVerificationQueueDataType = string[]
 
@@ -21,27 +20,44 @@ export interface BulkEmailVerificationQueue
     > {}
 
 export class BullBulkEmailVerificationQueue implements BulkEmailVerificationQueue {
-    constructor(
-        private readonly queue: BullQueue<
-            EmailVerificationQueueDataType,
-            EmailVerificationQueueResultType,
-            EmailVerificationQueueNameType
-        >,
-    ) {}
+    constructor(private readonly flowProducer: FlowProducer) {}
 
     async addJob(name: EmailVerificationQueueNameType, data: EmailVerificationQueueDataType): Promise<string> {
-        const { id } = await this.queue.add(name, data, { jobId: randomUUID() })
+        const childrenPromises: FlowChildJob[] = data.map(
+            email =>
+                ({
+                    queueName: 'verification',
+                    name: email,
+                    data: {
+                        email,
+                    },
+                    opts: { jobId: randomUUID() },
+                }) satisfies FlowChildJob,
+        )
+
+        const children = await Promise.all(childrenPromises)
+
+        const {
+            job: { id },
+        } = await this.flowProducer.add({
+            name,
+            data,
+            queueName: name,
+            opts: { jobId: randomUUID() },
+            children,
+        })
+
         ok(id !== undefined, new Error('The job ID is undefined'))
         return id
     }
 
     async getStatus(id: string): Promise<BulkStatusResponse> {
-        const job = await this.queue.getJob(id)
-        ok(job !== undefined, new JobNotFoundError(id))
+        const flow = await this.flowProducer.getFlow({ id, queueName: 'verifyBulk' })
+        const { job } = flow
+        const none = 0
+        const { processed = none, unprocessed = none } = await job.getDependenciesCount()
         const state = await job.getState()
-
-        const { progress } = job
-        const { total, processed } = await bulkProgressResponseValidationSchema.parseAsync(progress)
+        const total = processed + unprocessed
 
         return {
             status: jobStateToJobStatus(state),
@@ -51,8 +67,9 @@ export class BullBulkEmailVerificationQueue implements BulkEmailVerificationQueu
     }
 
     async getResult(id: string): Promise<EmailVerificationQueueResultType> {
-        const job = await this.queue.getJob(id)
-        ok(job !== undefined, new JobNotFoundError(id))
-        return job.returnvalue
+        const flow = await this.flowProducer.getFlow({ id, queueName: 'verifyBulk' })
+        const { job } = flow
+        const values = await job.getChildrenValues<EmailVerificationResult>()
+        return Object.values(values)
     }
 }

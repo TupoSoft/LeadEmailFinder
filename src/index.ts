@@ -24,8 +24,7 @@ import { LeadQueueWorker } from './lead/queue-worker'
 import { AuthMiddleware } from './middleware'
 import { BullBulkEmailVerificationQueue } from './email-verification/bulk-queue'
 import { BulkEmailVerificationQueueWorker } from './email-verification/bulk-queue-worker'
-import { Queue } from 'bullmq'
-import { RESOURCE as EMAILS } from './email-verification/constants'
+import { FlowProducer } from 'bullmq'
 import { ErrorMiddleware } from './middleware/handle-error'
 import { createDocument } from 'zod-openapi'
 import { leadPaths, leadTag } from './lead/openapi'
@@ -38,6 +37,7 @@ import { EmailModule } from './email'
 import { emailApiPaths } from './email/openapi'
 import { randomUUID } from 'node:crypto'
 import { MongoDomainRepository } from './domain'
+import { EmailVerificationQueueWorker } from './email-verification/verification-queue-worker'
 
 async function main(): Promise<void> {
     const environment = await parseEnv()
@@ -109,8 +109,8 @@ async function main(): Promise<void> {
         officeApps,
         linkedinLogin,
     ])
-    const emailVerificationQueue = new BullBulkEmailVerificationQueue(new Queue(EMAILS, { connection: redis }))
-    const emailVerificationQueueWorker = new BulkEmailVerificationQueueWorker(redis, emailVerificationRunner)
+    const bullBulkEmailVerificationQueue = new BullBulkEmailVerificationQueue(new FlowProducer({ connection: redis }))
+    const bulkEmailVerificationQueueWorker = new BulkEmailVerificationQueueWorker(redis, emailVerificationRunner)
     const domainRepository = new MongoDomainRepository(db)
     const emailVerificationService = new EmailVerificationService(
         emailVerificationRunner,
@@ -118,11 +118,13 @@ async function main(): Promise<void> {
         emailModule.repository,
         domainRepository,
     )
+    const emailVerificationQueueWorker = new EmailVerificationQueueWorker(redis, emailVerificationService)
     const emailVerificationController = new ExpressEmailVerificationController(
         emailVerificationService,
-        emailVerificationQueue,
+        bullBulkEmailVerificationQueue,
     )
     const emailVerificationRouter = new EmailVerificationRouter(router, emailVerificationController, authMiddleware)
+    void bulkEmailVerificationQueueWorker.run()
     void emailVerificationQueueWorker.run()
     emailVerificationRouter.init()
 
