@@ -20,7 +20,7 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "email": "kyrylo.kupin@gmail.com"
+  "email": "kyrylo.kupixn@gmail.com"
 }
 
 > {%
