@@ -1,0 +1,61 @@
+### Validation failure when there is no password
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{$random.internet.safeEmailAddress}}"
+}
+
+> {%
+    client.test('Validation should fail', () => {
+        client.assert(response.status === 400, 'Response status is not 400')
+    })
+%}
+
+### Validation failure when there is no email
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "password": "{{$random.internet.password}}"
+}
+
+> {%
+    client.test('Validation should fail', () => {
+        client.assert(response.status === 400, 'Response status is not 400')
+    })
+%}
+
+### Registration Successful
+< {%
+    client.global.set('email', $random.internet.safeEmailAddress)
+%}
+
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{$random.internet.password}}"
+}
+
+> {%
+    client.test('Success', () => {
+        client.assert(response.status === 201, 'Response status is not 201')
+    })
+%}
+
+### Registration should fail when the user exists
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{$random.internet.password}}"
+}
+
+> {%
+    client.test('Failure', () => {
+        client.assert(response.status === 409, 'Response status is not 409')
+    })
+%}
