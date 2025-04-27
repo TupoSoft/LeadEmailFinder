@@ -34,7 +34,21 @@
         "supertest": "^7.1.0",
         "ts-jest": "^29.3.2",
         "ts-node": "^10.9.2",
-        "typescript": "^5.8.3"
+        "typescript": "^5.8.3",
+        "@eslint/eslintrc": "^3.2.0",
+        "@nestjs/cli": "^11.0.0",
+        "@nestjs/schematics": "^11.0.0",
+        "@nestjs/testing": "^11.0.1",
+        "@swc/cli": "^0.6.0",
+        "@swc/core": "^1.10.7",
+        "@types/jest": "^29.5.14",
+        "eslint-config-prettier": "^10.0.1",
+        "eslint-plugin-prettier": "^5.2.2",
+        "globals": "^16.0.0",
+        "source-map-support": "^0.5.21",
+        "ts-loader": "^9.5.2",
+        "tsconfig-paths": "^4.2.0",
+        "typescript-eslint": "^8.20.0"
     },
     "dependencies": {
         "axios": "^1.8.4",
@@ -50,10 +64,11 @@
         "swagger-ui-express": "^5.0.1",
         "tldts": "^6.1.86",
         "zod": "^3.24.3",
-        "zod-openapi": "^4.2.4"
-    },
-    "jest": {
-        "preset": "ts-jest",
-        "testEnvironment": "node"
+        "zod-openapi": "^4.2.4",
+        "@nestjs/common": "^11.0.1",
+        "@nestjs/core": "^11.0.1",
+        "@nestjs/platform-express": "^11.0.1",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.1"
     }
 }
