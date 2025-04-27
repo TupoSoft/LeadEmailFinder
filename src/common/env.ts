@@ -11,10 +11,6 @@ export interface Environment {
     NODE_ENV: 'development' | 'production' | 'test'
     API_URL: string
     PORT: number
-    JWT_HS256_SECRET: string
-    JWT_ISSUER: string
-    JWT_AUDIENCE: string
-    JWT_EXPIRATION: string
     MONGO_URL: string
     REDIS_URL: string
     AUTH_TOKENS: string
