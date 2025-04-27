@@ -9,7 +9,7 @@ export type EmailVerificationQueueDataType = string[]
 
 export type EmailVerificationQueueResultType = EmailVerificationResult[]
 
-export type EmailVerificationQueueNameType = 'verifyBulk'
+export type EmailVerificationQueueNameType = 'bulk-verification'
 
 export interface BulkEmailVerificationQueue
     extends Queue<
@@ -52,7 +52,7 @@ export class BullBulkEmailVerificationQueue implements BulkEmailVerificationQueu
     }
 
     async getStatus(id: string): Promise<BulkStatusResponse> {
-        const flow = await this.flowProducer.getFlow({ id, queueName: 'verifyBulk' })
+        const flow = await this.flowProducer.getFlow({ id, queueName: 'bulk-verification' })
         const { job } = flow
         const none = 0
         const { processed = none, unprocessed = none } = await job.getDependenciesCount()
@@ -67,9 +67,8 @@ export class BullBulkEmailVerificationQueue implements BulkEmailVerificationQueu
     }
 
     async getResult(id: string): Promise<EmailVerificationQueueResultType> {
-        const flow = await this.flowProducer.getFlow({ id, queueName: 'verifyBulk' })
+        const flow = await this.flowProducer.getFlow({ id, queueName: 'bulk-verification' })
         const { job } = flow
-        const values = await job.getChildrenValues<EmailVerificationResult>()
-        return Object.values(values)
+        return job.returnvalue as EmailVerificationQueueResultType
     }
 }

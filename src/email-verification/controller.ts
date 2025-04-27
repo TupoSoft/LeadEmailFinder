@@ -70,7 +70,7 @@ export class ExpressEmailVerificationController implements EmailVerificationCont
 
         const host = req.hostname === 'localhost' ? req.headers.host : req.hostname
 
-        this.emailVerificationQueue.addJob('verifyBulk', emails).then(
+        this.emailVerificationQueue.addJob('bulk-verification', emails).then(
             taskId => {
                 const monitorUrl = `${req.protocol}://${host}${VERIFY_EMAIL_BULK_STATUS_ROUTE.replace(':id', taskId)}`
                 res.status(constants.HTTP_STATUS_ACCEPTED).json({

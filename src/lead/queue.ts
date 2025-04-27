@@ -1,10 +1,8 @@
-import type { Redis } from 'ioredis'
-import { Queue } from 'bullmq'
 import type { FindLeadRequest, FindLeadResult } from './dto'
 import { ok } from 'node:assert'
-import { SERVICE_NAME } from './constants'
 import { randomUUID } from 'node:crypto'
 import { bulkProgressResponseValidationSchema, type BulkStatusResponse, jobStateToJobStatus } from '../common'
+import type { FlowProducer } from 'bullmq'
 
 export type LeadQueueJobDataType = FindLeadRequest[]
 
@@ -13,13 +11,7 @@ export type LeadQueueResultType = FindLeadResult[]
 export type LeadQueueNameType = 'findBulk'
 
 export class LeadQueue {
-    private readonly queue
-
-    constructor(connection: Redis) {
-        this.queue = new Queue<LeadQueueJobDataType, LeadQueueResultType, LeadQueueNameType>(SERVICE_NAME, {
-            connection,
-        })
-    }
+    constructor(private readonly flowProducer: FlowProducer) {}
 
     async addJob(name: LeadQueueNameType, data: LeadQueueJobDataType): Promise<string> {
         const { id } = await this.queue.add(name, data, { jobId: randomUUID() })
