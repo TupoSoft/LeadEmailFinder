@@ -13,7 +13,7 @@ export class Email {
     @Prop()
     domain: string
 
-    @Prop()
+    @Prop({ type: Boolean, default: null })
     exists: boolean | null
 
     @Prop()

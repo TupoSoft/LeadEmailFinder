@@ -10,7 +10,8 @@
         "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
         "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
-        "test": "jest"
+        "test": "jest",
+        "start:nest": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src/main"
     },
     "author": {
         "url": "https://tuposoft.com",
