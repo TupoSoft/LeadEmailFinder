@@ -134,4 +134,4 @@ dist
 # Dev
 **/dev
 http-client.private.env.json
-**/compose.override.yaml
+**/compose*.override.yaml

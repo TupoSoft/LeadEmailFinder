@@ -3,7 +3,7 @@ import { Email } from './Email.schema'
 import { Model } from 'mongoose'
 import { CreateEmailOptions, IEmailService, UpdateEmailOptions } from './interfaces'
 import { Injectable } from '@nestjs/common'
-import { EmailNotFoundException } from './exceptions'
+import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 
 @Injectable()
 export class EmailService implements IEmailService {
@@ -12,6 +12,10 @@ export class EmailService implements IEmailService {
     async createEmail({ email, exists, format }: CreateEmailOptions): Promise<Email> {
         const [username, domain] = email.split('@')
         const createdAt = new Date()
+
+        if (await this.emailModel.exists({ _id: email })) {
+            throw new EmailAlreadyExistsException({ email })
+        }
 
         return await this.emailModel.insertOne({
             _id: email,

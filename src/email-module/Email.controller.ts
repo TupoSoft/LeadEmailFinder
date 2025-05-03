@@ -1,9 +1,20 @@
-import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Patch, Post } from '@nestjs/common'
+import {
+    Body,
+    ConflictException,
+    Controller,
+    Get,
+    HttpCode,
+    Inject,
+    NotFoundException,
+    Param,
+    Patch,
+    Post,
+} from '@nestjs/common'
 import { CreateEmailRequestDto, UpdateEmailRequestDto } from './dto'
 import { Email } from './Email.schema'
 import { EMAIL_SERVICE_TOKEN } from './Email.constants'
 import { IEmailService } from './interfaces'
-import { EmailNotFoundException } from './exceptions'
+import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 
 @Controller('emails')
 export class EmailController {
@@ -12,7 +23,14 @@ export class EmailController {
     @Post()
     @HttpCode(201)
     async createEmail(@Body() { email, exists, format }: CreateEmailRequestDto): Promise<Email> {
-        return await this.emailService.createEmail({ email, exists, format })
+        try {
+            return await this.emailService.createEmail({ email, exists, format })
+        } catch (error) {
+            if (error instanceof EmailAlreadyExistsException) {
+                throw new ConflictException(`The email ${email} already exists`)
+            }
+            throw error
+        }
     }
 
     @Get()

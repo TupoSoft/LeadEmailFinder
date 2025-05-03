@@ -1,1 +1,2 @@
-export * from './EmailNotFoundException'
+export * from './EmailNotFound.exception'
+export * from './EmailAlreadyExists.exception'
