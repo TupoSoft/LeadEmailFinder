@@ -1,55 +1,51 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Param, Patch, Post } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Patch, Post } from '@nestjs/common'
 import { CreateEmailRequestDto, UpdateEmailRequestDto } from './dto'
 import { Email } from './Email.schema'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
+import { EMAIL_SERVICE_TOKEN } from './Email.constants'
+import { IEmailService } from './interfaces'
+import { EmailNotFoundException } from './exceptions'
 
 @Controller('emails')
 export class EmailController {
-    constructor(@InjectModel(Email.name) private readonly emailModel: Model<Email>) {}
+    constructor(@Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService) {}
 
     @Post()
     @HttpCode(201)
     async createEmail(@Body() { email, exists, format }: CreateEmailRequestDto): Promise<Email> {
-        const [username, domain] = email.split('@')
-        const createdAt = new Date()
-
-        return await this.emailModel.insertOne({
-            _id: email,
-            exists,
-            format,
-            domain,
-            username,
-            createdAt,
-            updatedAt: createdAt,
-        })
+        return await this.emailService.createEmail({ email, exists, format })
     }
 
     @Get()
     async getEmails(): Promise<Email[]> {
-        return await this.emailModel.find().exec()
+        return await this.emailService.getEmails()
     }
 
     @Get(':email')
     async getEmail(@Param('email') email: string): Promise<Email> {
-        const emailModel = await this.emailModel.findById(email).exec()
-        if (emailModel == null) {
-            throw new NotFoundException(`The email ${email} was not found`)
+        try {
+            return await this.emailService.getEmail(email)
+        } catch (error) {
+            if (error instanceof EmailNotFoundException) {
+                throw new NotFoundException(`The email ${email} was not found`)
+            }
+
+            throw error
         }
-        return emailModel
     }
 
     @Patch(':email')
     async updateEmail(
         @Param('email') email: string,
-        @Body() updateEmailRequestDto: UpdateEmailRequestDto,
+        @Body() { format, exists }: UpdateEmailRequestDto,
     ): Promise<Email> {
-        const updatedEmail = await this.emailModel
-            .findOneAndUpdate({ _id: email }, { $set: updateEmailRequestDto })
-            .exec()
-        if (updatedEmail == null) {
-            throw new NotFoundException(`The email ${email} was not found`)
+        try {
+            return await this.emailService.updateEmail(email, { format, exists })
+        } catch (error) {
+            if (error instanceof EmailNotFoundException) {
+                throw new NotFoundException(`The email ${email} was not found`)
+            }
+
+            throw error
         }
-        return updatedEmail
     }
 }

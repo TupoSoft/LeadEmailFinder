@@ -9,8 +9,8 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "email": "john.dxdoze@example.com",
-  "format": "{firs}.{last}",
+  "email": "john.dxdozxe@example.com",
+  "format": "{first}.{last}",
   "exists": true
 }
 
