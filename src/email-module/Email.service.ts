@@ -52,7 +52,18 @@ export class EmailService implements IEmailService {
     }
 
     async updateEmail(email: string, { format, exists }: UpdateEmailOptions): Promise<EmailResponseDto> {
-        const updatedEmail = await this.emailModel.findOneAndUpdate({ _id: email }, { $set: { format, exists } }).exec()
+        const updatedEmail = await this.emailModel
+            .findOneAndUpdate(
+                { _id: email },
+                {
+                    $set: {
+                        format,
+                        exists,
+                    },
+                },
+                { new: true, upsert: true },
+            )
+            .exec()
 
         if (updatedEmail == null) {
             throw new EmailNotFoundException({ email })

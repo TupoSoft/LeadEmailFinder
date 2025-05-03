@@ -5,6 +5,7 @@
     "description": "Lead Email Finder API",
     "packageManager": "pnpm@10.3.0",
     "scripts": {
+        "prepare": "ts-patch install -s",
         "build": "tsc -p tsconfig.prod.json",
         "start": "node --env-file-if-exists=.env dist",
         "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
