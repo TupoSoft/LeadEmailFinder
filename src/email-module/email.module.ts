@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
-import { EmailController } from './Email.controller'
+import { EmailController } from './email.controller'
 import { MongooseModule } from '@nestjs/mongoose'
-import { Email, EmailSchema } from './Email.schema'
-import { EmailService } from './Email.service'
-import { EMAIL_SERVICE_TOKEN } from './Email.constants'
-import { EmailProfile } from './Email.profile'
+import { Email, EmailSchema } from './email.schema'
+import { EmailService } from './email.service'
+import { EMAIL_SERVICE_TOKEN } from './email.constants'
+import { EmailProfile } from './email.profile'
 
 @Module({
     imports: [MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }])],

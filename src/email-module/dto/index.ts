@@ -1,3 +1,3 @@
-export * from './CreateEmailRequest.dto'
-export * from './UpdateEmailRequest.dto'
-export * from './EmailResponse.dto'
+export * from './create-email-request.dto'
+export * from './update-email-request.dto'
+export * from './email-response.dto'

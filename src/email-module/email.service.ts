@@ -1,5 +1,5 @@
 import { InjectModel } from '@nestjs/mongoose'
-import { Email } from './Email.schema'
+import { Email } from './email.schema'
 import { Model } from 'mongoose'
 import { CreateEmailOptions, IEmailService, UpdateEmailOptions } from './interfaces'
 import { Injectable } from '@nestjs/common'

@@ -1,1 +1,1 @@
-export * from './EmailPattern.enum'
+export * from './email-pattern.enum'

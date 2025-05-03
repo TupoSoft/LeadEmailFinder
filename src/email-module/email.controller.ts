@@ -11,7 +11,7 @@ import {
     Post,
 } from '@nestjs/common'
 import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
-import { EMAIL_SERVICE_TOKEN } from './Email.constants'
+import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { IEmailService } from './interfaces'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 

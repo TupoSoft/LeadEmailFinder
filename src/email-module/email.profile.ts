@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { AutomapperProfile, InjectMapper } from '@automapper/nestjs'
 import { createMap, forMember, mapFrom, Mapper, MappingConfiguration, MappingProfile } from '@automapper/core'
-import { Email } from './Email.schema'
+import { Email } from './email.schema'
 import { EmailResponseDto } from './dto'
 
 @Injectable()
