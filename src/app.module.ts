@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
 import { EmailModule } from './email-module'
 import secrets from './config/secrets.config'
+import { AutomapperModule } from '@automapper/nestjs'
+import { classes } from '@automapper/classes'
 
 @Module({
     imports: [
@@ -15,6 +17,9 @@ import secrets from './config/secrets.config'
                 uri: configService.get('MONGO_URL'),
             }),
             inject: [ConfigService],
+        }),
+        AutomapperModule.forRoot({
+            strategyInitializer: classes(),
         }),
         EmailModule,
     ],

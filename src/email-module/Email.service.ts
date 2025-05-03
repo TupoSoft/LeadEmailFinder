@@ -4,12 +4,18 @@ import { Model } from 'mongoose'
 import { CreateEmailOptions, IEmailService, UpdateEmailOptions } from './interfaces'
 import { Injectable } from '@nestjs/common'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
+import { InjectMapper } from '@automapper/nestjs'
+import { Mapper } from '@automapper/core'
+import { EmailResponseDto } from './dto'
 
 @Injectable()
 export class EmailService implements IEmailService {
-    constructor(@InjectModel(Email.name) private readonly emailModel: Model<Email>) {}
+    constructor(
+        @InjectModel(Email.name) private readonly emailModel: Model<Email>,
+        @InjectMapper() private readonly mapper: Mapper,
+    ) {}
 
-    async createEmail({ email, exists, format }: CreateEmailOptions): Promise<Email> {
+    async createEmail({ email, exists, format }: CreateEmailOptions): Promise<EmailResponseDto> {
         const [username, domain] = email.split('@')
         const createdAt = new Date()
 
@@ -17,7 +23,7 @@ export class EmailService implements IEmailService {
             throw new EmailAlreadyExistsException({ email })
         }
 
-        return await this.emailModel.insertOne({
+        const emailDoc = await this.emailModel.insertOne({
             _id: email,
             exists,
             format,
@@ -26,29 +32,32 @@ export class EmailService implements IEmailService {
             createdAt,
             updatedAt: createdAt,
         })
+
+        return this.mapper.map(emailDoc, Email, EmailResponseDto)
     }
 
-    async getEmails(): Promise<Email[]> {
-        return await this.emailModel.find().exec()
+    async getEmails(): Promise<EmailResponseDto[]> {
+        const emailDocs = await this.emailModel.find().exec()
+        return this.mapper.mapArray(emailDocs, Email, EmailResponseDto)
     }
 
-    async getEmail(email: string): Promise<Email> {
+    async getEmail(email: string): Promise<EmailResponseDto> {
         const emailModel = await this.emailModel.findById(email).exec()
 
         if (emailModel == null) {
             throw new EmailNotFoundException({ email })
         }
 
-        return emailModel
+        return this.mapper.map(emailModel, Email, EmailResponseDto)
     }
 
-    async updateEmail(email: string, { format, exists }: UpdateEmailOptions): Promise<Email> {
+    async updateEmail(email: string, { format, exists }: UpdateEmailOptions): Promise<EmailResponseDto> {
         const updatedEmail = await this.emailModel.findOneAndUpdate({ _id: email }, { $set: { format, exists } }).exec()
 
         if (updatedEmail == null) {
             throw new EmailNotFoundException({ email })
         }
 
-        return updatedEmail
+        return this.mapper.map(updatedEmail, Email, EmailResponseDto)
     }
 }

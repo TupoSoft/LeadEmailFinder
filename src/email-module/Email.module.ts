@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose'
 import { Email, EmailSchema } from './Email.schema'
 import { EmailService } from './Email.service'
 import { EMAIL_SERVICE_TOKEN } from './Email.constants'
+import { EmailProfile } from './Email.profile'
 
 @Module({
     imports: [MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }])],
@@ -13,6 +14,7 @@ import { EMAIL_SERVICE_TOKEN } from './Email.constants'
             provide: EMAIL_SERVICE_TOKEN,
             useClass: EmailService,
         },
+        EmailProfile,
     ],
     exports: [EMAIL_SERVICE_TOKEN],
 })

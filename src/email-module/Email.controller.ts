@@ -10,8 +10,7 @@ import {
     Patch,
     Post,
 } from '@nestjs/common'
-import { CreateEmailRequestDto, UpdateEmailRequestDto } from './dto'
-import { Email } from './Email.schema'
+import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
 import { EMAIL_SERVICE_TOKEN } from './Email.constants'
 import { IEmailService } from './interfaces'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
@@ -22,7 +21,7 @@ export class EmailController {
 
     @Post()
     @HttpCode(201)
-    async createEmail(@Body() { email, exists, format }: CreateEmailRequestDto): Promise<Email> {
+    async createEmail(@Body() { email, exists, format }: CreateEmailRequestDto): Promise<EmailResponseDto> {
         try {
             return await this.emailService.createEmail({ email, exists, format })
         } catch (error) {
@@ -34,12 +33,12 @@ export class EmailController {
     }
 
     @Get()
-    async getEmails(): Promise<Email[]> {
+    async getEmails(): Promise<EmailResponseDto[]> {
         return await this.emailService.getEmails()
     }
 
     @Get(':email')
-    async getEmail(@Param('email') email: string): Promise<Email> {
+    async getEmail(@Param('email') email: string): Promise<EmailResponseDto> {
         try {
             return await this.emailService.getEmail(email)
         } catch (error) {
@@ -55,7 +54,7 @@ export class EmailController {
     async updateEmail(
         @Param('email') email: string,
         @Body() { format, exists }: UpdateEmailRequestDto,
-    ): Promise<Email> {
+    ): Promise<EmailResponseDto> {
         try {
             return await this.emailService.updateEmail(email, { format, exists })
         } catch (error) {

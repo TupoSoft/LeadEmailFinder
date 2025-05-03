@@ -1,5 +1,5 @@
 import { EmailPatternEnum } from '../enums'
-import { Email } from '../Email.schema'
+import { EmailResponseDto } from '../dto'
 
 export interface CreateEmailOptions {
     email: string
@@ -10,11 +10,11 @@ export interface CreateEmailOptions {
 export type UpdateEmailOptions = Partial<Pick<CreateEmailOptions, 'format' | 'exists'>>
 
 export interface IEmailService {
-    createEmail(options: CreateEmailOptions): Promise<Email>
+    createEmail(options: CreateEmailOptions): Promise<EmailResponseDto>
 
-    getEmails(): Promise<Email[]>
+    getEmails(): Promise<EmailResponseDto[]>
 
-    getEmail(email: string): Promise<Email>
+    getEmail(email: string): Promise<EmailResponseDto>
 
-    updateEmail(email: string, options: UpdateEmailOptions): Promise<Email>
+    updateEmail(email: string, options: UpdateEmailOptions): Promise<EmailResponseDto>
 }
