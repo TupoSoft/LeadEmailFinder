@@ -18,6 +18,7 @@
         "strictBindCallApply": true,
         "noFallthroughCasesInSwitch": true,
         "strictPropertyInitialization": false,
+        "esModuleInterop": true,
         "plugins": [
             {
                 "transform": "@automapper/classes/transformer-plugin",
