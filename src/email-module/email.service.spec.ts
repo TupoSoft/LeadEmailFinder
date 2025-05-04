@@ -5,17 +5,20 @@ import { Email } from './email.schema'
 import { getModelToken } from '@nestjs/mongoose'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
-import { CreateEmailOptions, IEmailModel, UpdateEmailOptions } from './interfaces'
+import { CreateEmailOptions, UpdateEmailOptions } from './interfaces'
 import { EmailPatternEnum } from './enums'
 import { EmailResponseDto } from './dto'
 import { when } from 'jest-when'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
+import { Model } from 'mongoose'
 
 const now = Date.now()
 const date = new Date(now)
 jest.useFakeTimers({ now })
 
-const mockedEmailModel: jest.Mocked<IEmailModel> = {
+const mockedEmailModel: jest.Mocked<
+    Pick<Model<Email>, 'find' | 'exists' | 'insertOne' | 'findById' | 'findOneAndUpdate'>
+> = {
     find: jest.fn(),
     exists: jest.fn(),
     insertOne: jest.fn(),
@@ -52,7 +55,7 @@ const emailResponseDto: EmailResponseDto = {
 
 describe('EmailService tests', () => {
     let service: EmailService
-    let emailModel: jest.Mocked<IEmailModel>
+    let emailModel: jest.Mocked<Model<Email>>
     let mapper: jest.Mocked<Mapper>
 
     beforeEach(async () => {
@@ -83,7 +86,7 @@ describe('EmailService tests', () => {
             }
 
             emailModel.exists.mockResolvedValue(null)
-            emailModel.insertOne.mockResolvedValue(emailDoc)
+            emailModel.insertOne.mockResolvedValue(emailDoc as any)
 
             when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
                 .calledWith(emailDoc, Email, EmailResponseDto)
