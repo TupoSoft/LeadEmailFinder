@@ -1,7 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose'
 import { Email } from './email.schema'
-import { Model } from 'mongoose'
-import { CreateEmailOptions, IEmailService, UpdateEmailOptions } from './interfaces'
+import { CreateEmailOptions, IEmailModel, IEmailService, UpdateEmailOptions } from './interfaces'
 import { Injectable } from '@nestjs/common'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { InjectMapper } from '@automapper/nestjs'
@@ -11,7 +10,7 @@ import { EmailResponseDto } from './dto'
 @Injectable()
 export class EmailService implements IEmailService {
     constructor(
-        @InjectModel(Email.name) private readonly emailModel: Model<Email>,
+        @InjectModel(Email.name) private readonly emailModel: IEmailModel,
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
