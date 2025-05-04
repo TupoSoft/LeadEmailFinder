@@ -3,6 +3,8 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine AS builder
 
+ENV PATH="/app/node_modules/.bin:$PATH"
+
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm
@@ -22,7 +24,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 COPY . .
 
 # Build the application.
-RUN pnpm build
+RUN ts-patch install -s && pnpm build
 
 FROM node:${NODE_VERSION}-alpine
 

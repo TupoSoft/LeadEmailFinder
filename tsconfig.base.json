@@ -1,29 +1,32 @@
 {
-    "extends": "@tsconfig/node-lts/tsconfig.json",
     "compilerOptions": {
-        "outDir": "dist",
-        "noImplicitAny": true,
-        "useUnknownInCatchVariables": true,
-        "removeComments": true,
         "module": "commonjs",
-        "moduleResolution": "Bundler",
         "declaration": true,
+        "removeComments": true,
         "emitDecoratorMetadata": true,
         "experimentalDecorators": true,
         "allowSyntheticDefaultImports": true,
         "target": "ES2023",
+        "sourceMap": true,
+        "outDir": "./dist",
         "baseUrl": "./",
         "incremental": true,
         "skipLibCheck": true,
         "strictNullChecks": true,
         "forceConsistentCasingInFileNames": true,
+        "noImplicitAny": true,
         "strictBindCallApply": true,
         "noFallthroughCasesInSwitch": true,
         "strictPropertyInitialization": false,
+        "esModuleInterop": true,
         "plugins": [
             {
                 "transform": "@automapper/classes/transformer-plugin",
                 "modelFileNameSuffix": [".schema.ts", ".dto.ts"]
+            },
+            {
+                "transform": "@nestjs/swagger/plugin",
+                "introspectComments": true
             }
         ]
     },

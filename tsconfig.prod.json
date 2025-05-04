@@ -1,4 +1,7 @@
 {
     "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+        "sourceMap": false
+    },
     "files": ["src/index.ts"]
 }
