@@ -5,7 +5,6 @@
     "description": "Lead Email Finder API",
     "packageManager": "pnpm@10.3.0",
     "scripts": {
-        "prepare": "ts-patch install -s",
         "build": "tsc -p tsconfig.prod.json",
         "start": "node --env-file-if-exists=.env dist",
         "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
@@ -63,6 +62,7 @@
         "@nestjs/core": "^11.0.1",
         "@nestjs/mongoose": "^11.0.3",
         "@nestjs/platform-express": "^11.0.1",
+        "@nestjs/swagger": "^11.1.6",
         "axios": "^1.8.4",
         "bullmq": "^5.49.1",
         "cheerio": "^1.0.0",
@@ -82,5 +82,12 @@
         "tldts": "^6.1.86",
         "zod": "^3.24.3",
         "zod-openapi": "^4.2.4"
+    },
+    "pnpm": {
+        "overrides": {
+            "@automapper/classes>reflect-metadata": "^0.2.2",
+            "@automapper/nestjs>@nestjs/common": "^11.1.0",
+            "@automapper/nestjs>@nestjs/core": "^11.1.0"
+        }
     }
 }

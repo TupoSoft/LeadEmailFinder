@@ -28,6 +28,7 @@ export class EmailController {
             if (error instanceof EmailAlreadyExistsException) {
                 throw new ConflictException(`The email ${email} already exists`)
             }
+
             throw error
         }
     }

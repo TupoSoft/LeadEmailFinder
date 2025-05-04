@@ -38,7 +38,7 @@ export class DNSCacheImpl implements DNSCache {
 
     private async getCachedRecords<T extends keyof DNSTypeMap>(name: string, type: T): Promise<DNSTypeMap[T] | null> {
         const cached: string | null = await this.redisClient.get(this.getCacheKey(name, type))
-        return cached !== null ? JSON.parse(cached) : null
+        return cached !== null ? (JSON.parse(cached) as DNSTypeMap[T]) : null
     }
 
     private async cacheRecords<T extends keyof DNSTypeMap>(
