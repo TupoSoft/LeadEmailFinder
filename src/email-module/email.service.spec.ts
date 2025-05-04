@@ -9,6 +9,7 @@ import { CreateEmailOptions, IEmailModel } from './interfaces'
 import { EmailPatternEnum } from './enums'
 import { EmailResponseDto } from './dto'
 import { when } from 'jest-when'
+import { EmailAlreadyExistsException } from './exceptions'
 
 const now = Date.now()
 const date = new Date(now)
@@ -47,6 +48,8 @@ describe('EmailService tests', () => {
         service = moduleRef.get(EmailService)
         emailModel = moduleRef.get(getModelToken(Email.name))
         mapper = moduleRef.get(getMapperToken())
+
+        jest.clearAllMocks()
     })
 
     describe('createEmail', () => {
@@ -90,6 +93,30 @@ describe('EmailService tests', () => {
             expect(emailModel.insertOne).toHaveBeenCalledWith(emailDoc)
             expect(mapper.map).toHaveBeenCalledWith(emailDoc, Email, EmailResponseDto)
             expect(result).toEqual(emailResponseDto)
+        })
+
+        it('should throw EmailAlreadyExistsException if exists', async () => {
+            const createEmailOptions: CreateEmailOptions = {
+                email: 'user@test.com',
+                exists: true,
+                format: EmailPatternEnum.FDotLast,
+            }
+
+            const emailDoc: Email = {
+                _id: createEmailOptions.email,
+                exists: true,
+                format: EmailPatternEnum.FDotLast,
+                domain: 'test.com',
+                username: 'user',
+                createdAt: date,
+                updatedAt: date,
+            }
+
+            emailModel.exists.mockResolvedValue(emailDoc)
+
+            await expect(service.createEmail(createEmailOptions)).rejects.toThrow(EmailAlreadyExistsException)
+            expect(emailModel.exists).toHaveBeenCalledWith({ _id: createEmailOptions.email })
+            expect(emailModel.insertOne).not.toHaveBeenCalled()
         })
     })
 })
