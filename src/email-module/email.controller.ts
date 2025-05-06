@@ -26,7 +26,7 @@ export class EmailController {
             return await this.emailService.createEmail({ email, exists, format })
         } catch (error) {
             if (error instanceof EmailAlreadyExistsException) {
-                throw new ConflictException(`The email ${email} already exists`)
+                throw new ConflictException(error.message)
             }
 
             throw error
@@ -44,7 +44,7 @@ export class EmailController {
             return await this.emailService.getEmail(email)
         } catch (error) {
             if (error instanceof EmailNotFoundException) {
-                throw new NotFoundException(`The email ${email} was not found`)
+                throw new NotFoundException(error.message)
             }
 
             throw error
@@ -60,7 +60,7 @@ export class EmailController {
             return await this.emailService.updateEmail(email, { format, exists })
         } catch (error) {
             if (error instanceof EmailNotFoundException) {
-                throw new NotFoundException(`The email ${email} was not found`)
+                throw new NotFoundException(error.message)
             }
 
             throw error

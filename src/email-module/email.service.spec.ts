@@ -170,7 +170,7 @@ describe('EmailService tests', () => {
 
             expect(emailModel.findOneAndUpdate).toHaveBeenCalledWith(
                 { _id: email },
-                { $set: { format: options.format, exists: options.exists } },
+                { $set: options },
                 { new: true, upsert: true },
             )
             expect(mapper.map).toHaveBeenCalledWith(updatedDoc, Email, EmailResponseDto)
