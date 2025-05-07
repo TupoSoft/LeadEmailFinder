@@ -58,14 +58,19 @@
         "@automapper/classes": "^8.8.1",
         "@automapper/core": "^8.8.1",
         "@automapper/nestjs": "^8.8.1",
+        "@keyv/redis": "^4.4.0",
+        "@nestjs-modules/ioredis": "^2.0.2",
+        "@nestjs/cache-manager": "^3.0.1",
         "@nestjs/common": "^11.0.1",
         "@nestjs/config": "^4.0.2",
         "@nestjs/core": "^11.0.1",
         "@nestjs/mongoose": "^11.0.3",
         "@nestjs/platform-express": "^11.0.1",
         "@nestjs/swagger": "^11.1.6",
+        "@nestjs/terminus": "^11.0.0",
         "axios": "^1.8.4",
         "bullmq": "^5.49.1",
+        "cache-manager": "^6.4.3",
         "cheerio": "^1.0.0",
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.1",
@@ -87,9 +92,10 @@
     },
     "pnpm": {
         "overrides": {
-            "@automapper/classes>reflect-metadata": "^0.2.2",
-            "@automapper/nestjs>@nestjs/common": "^11.1.0",
-            "@automapper/nestjs>@nestjs/core": "^11.1.0"
+            "@automapper/classes>reflect-metadata": "$reflect-metadata",
+            "@automapper/nestjs>@nestjs/common": "$@nestjs/common",
+            "@automapper/nestjs>@nestjs/core": "$@nestjs/core",
+            "@nestjs-modules/ioredis>@nestjs/terminus": "$@nestjs/terminus"
         }
     }
 }
