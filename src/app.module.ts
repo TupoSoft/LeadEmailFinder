@@ -22,7 +22,7 @@ import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),
-        RedisModule.registerAsync({
+        RedisModule.forRootAsync({
             imports: [ConfigModule],
             useClass: ParseConnectionStringOptionsFactory,
         }),

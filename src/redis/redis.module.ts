@@ -9,20 +9,23 @@ import { Redis } from 'ioredis'
 
 @Module({})
 export class RedisModule extends ConfigurableModuleClass {
-    static register(options: typeof OPTIONS_TYPE): DynamicModule {
-        const { providers = [], ...dynamicModule } = super.register(options)
+    static forRoot(options: typeof OPTIONS_TYPE): DynamicModule {
+        const { global = true, providers = [], ...dynamicModule } = super.forRoot(options)
 
         return {
+            global,
             providers: [this.createRedisProvider(), ...providers],
             ...dynamicModule,
         }
     }
 
-    static registerAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
-        const { providers = [], ...dynamicModule } = super.registerAsync(options)
+    static forRootAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
+        const { global = true, providers = [], ...dynamicModule } = super.forRootAsync(options)
 
         return {
+            global,
             providers: [this.createRedisProvider(), ...providers],
+            exports: [Redis],
             ...dynamicModule,
         }
     }
