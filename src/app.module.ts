@@ -5,6 +5,7 @@ import { EmailModule } from './email-module'
 import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
+import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 
 @Module({
     imports: [
@@ -20,6 +21,10 @@ import { classes } from '@automapper/classes'
         }),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
+        }),
+        RedisModule.registerAsync({
+            imports: [ConfigModule],
+            useClass: ParseConnectionStringOptionsFactory,
         }),
         EmailModule,
     ],
