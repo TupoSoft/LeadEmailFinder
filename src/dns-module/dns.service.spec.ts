@@ -18,7 +18,7 @@ const mockedRedis = {
     set: jest.fn<typeof Redis.prototype.set>(),
 }
 
-describe('cacheableDnsResolverImpl', () => {
+describe('DnsService', () => {
     let dnsService: DnsService
 
     beforeEach(async () => {
