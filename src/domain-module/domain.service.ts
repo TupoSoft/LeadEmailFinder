@@ -18,7 +18,7 @@ export class DomainService implements IDomainService {
     async getDomain(name: string): Promise<DomainResponseDto> {
         const domain = await this.domainModel.findById(name).exec()
 
-        if (domain == null) {
+        if (domain === null) {
             throw new DomainNotFoundException(name)
         }
 
