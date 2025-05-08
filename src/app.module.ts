@@ -8,6 +8,7 @@ import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
 import { DnsModule } from './dns-module'
+import { DomainModule } from './domain-module'
 
 @Module({
     imports: [
@@ -29,6 +30,7 @@ import { DnsModule } from './dns-module'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
+        DomainModule,
         DnsModule,
         EmailModule,
     ],
