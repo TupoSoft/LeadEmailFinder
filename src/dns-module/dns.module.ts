@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common'
+import { CacheableDnsResolver } from './cacheable-dns-resolver'
 
 @Module({
     imports: [],
-    providers: [],
+    providers: [CacheableDnsResolver],
 })
 export class DnsModule {}

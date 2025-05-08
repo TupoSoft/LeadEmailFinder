@@ -3,16 +3,18 @@ import { type DNSTypeMap, fetchRecords } from './util'
 import console from 'node:console'
 import type { Logger } from '../logging'
 import { parseTimeString } from '../util/time'
-import { DNSResolver } from './interfaces'
+import { DnsResolver } from './interfaces'
+import { Injectable } from '@nestjs/common'
 
-export class DNSCacheImpl implements DNSResolver {
+@Injectable()
+export class CacheableDnsResolver implements DnsResolver {
     public static readonly DEFAULT_TTL_SECONDS = parseTimeString('1d')
     public static readonly DEFAULT_CACHE_KEY_PREFIX = 'DNS_CACHE'
 
     constructor(
-        private readonly redisClient: Redis,
-        private readonly ttlSeconds = DNSCacheImpl.DEFAULT_TTL_SECONDS,
-        private readonly cacheKeyPrefix = DNSCacheImpl.DEFAULT_CACHE_KEY_PREFIX,
+        private readonly redis: Redis,
+        private readonly ttlSeconds = CacheableDnsResolver.DEFAULT_TTL_SECONDS,
+        private readonly cacheKeyPrefix = CacheableDnsResolver.DEFAULT_CACHE_KEY_PREFIX,
         private readonly logger: Logger = console,
     ) {}
 
@@ -34,7 +36,7 @@ export class DNSCacheImpl implements DNSResolver {
     }
 
     private async getCachedRecords<T extends keyof DNSTypeMap>(name: string, type: T): Promise<DNSTypeMap[T] | null> {
-        const cached: string | null = await this.redisClient.get(this.getCacheKey(name, type))
+        const cached: string | null = await this.redis.get(this.getCacheKey(name, type))
         return cached !== null ? (JSON.parse(cached) as DNSTypeMap[T]) : null
     }
 
@@ -44,7 +46,7 @@ export class DNSCacheImpl implements DNSResolver {
         records: DNSTypeMap[T],
     ): Promise<void> {
         const cacheKey = this.getCacheKey(domain, type)
-        await this.redisClient.set(cacheKey, JSON.stringify(records), 'EX', this.ttlSeconds)
+        await this.redis.set(cacheKey, JSON.stringify(records), 'EX', this.ttlSeconds)
     }
 
     private getCacheKey<T extends keyof DNSTypeMap>(name: string, type: T): string {

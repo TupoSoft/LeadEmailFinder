@@ -1,4 +1,4 @@
-import { DNSCacheImpl } from './cache'
+import { CacheableDnsResolver } from './cacheable-dns-resolver'
 import { Redis } from 'ioredis'
 import { resolveMx, reverse } from 'node:dns/promises'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
@@ -21,7 +21,7 @@ jest.mock('ioredis', () => ({
 describe('DNSCacheImpl', () => {
     const redisClient = new Redis() as jest.Mocked<Redis>
 
-    const dnsCache = new DNSCacheImpl(redisClient as Redis)
+    const dnsCache = new CacheableDnsResolver(redisClient as Redis)
 
     const resolveMxMock = resolveMx as jest.Mock<typeof resolveMx>
 
@@ -57,7 +57,7 @@ describe('DNSCacheImpl', () => {
                 'DNS_CACHE:MX:example.com',
                 JSON.stringify(mxRecords),
                 'EX',
-                DNSCacheImpl.DEFAULT_TTL_SECONDS,
+                CacheableDnsResolver.DEFAULT_TTL_SECONDS,
             )
             expect(result).toEqual(mxRecords)
         })
@@ -77,7 +77,7 @@ describe('DNSCacheImpl', () => {
                 'DNS_CACHE:PTR:192.0.2.1',
                 JSON.stringify(ptrRecords),
                 'EX',
-                DNSCacheImpl.DEFAULT_TTL_SECONDS,
+                CacheableDnsResolver.DEFAULT_TTL_SECONDS,
             )
             expect(result).toEqual(ptrRecords)
         })
@@ -118,7 +118,7 @@ describe('DNSCacheImpl', () => {
                 'DNS_CACHE:MX:example.com',
                 JSON.stringify(records),
                 'EX',
-                DNSCacheImpl.DEFAULT_TTL_SECONDS,
+                CacheableDnsResolver.DEFAULT_TTL_SECONDS,
             )
         })
     })
