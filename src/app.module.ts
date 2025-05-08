@@ -6,6 +6,8 @@ import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
+import { LoggerModule } from 'pino-nestjs'
+import { DnsModule } from './dns-module'
 import { DomainModule } from './domain-module'
 
 @Module({
@@ -28,6 +30,8 @@ import { DomainModule } from './domain-module'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         DomainModule,
+        LoggerModule.forRoot(),
+        DnsModule,
         EmailModule,
     ],
 })
