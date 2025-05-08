@@ -78,6 +78,7 @@
         "pino": "^9.6.0",
         "pino-gelf": "^2.2.0",
         "pino-http": "^10.4.0",
+        "pino-nestjs": "^0.1.3",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
         "swagger-ui-express": "^5.0.1",

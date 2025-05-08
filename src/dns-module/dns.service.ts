@@ -1,21 +1,20 @@
-import type { Redis } from 'ioredis'
+import { Redis } from 'ioredis'
 import { type DNSTypeMap, fetchRecords } from './util'
-import console from 'node:console'
-import type { Logger } from '../logging'
 import { parseTimeString } from '../util/time'
-import { DnsResolver } from './interfaces'
-import { Injectable } from '@nestjs/common'
+import { IDnsService } from './interfaces'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 
 @Injectable()
-export class CacheableDnsResolver implements DnsResolver {
+export class DnsService implements IDnsService {
     public static readonly DEFAULT_TTL_SECONDS = parseTimeString('1d')
     public static readonly DEFAULT_CACHE_KEY_PREFIX = 'DNS_CACHE'
 
+    private readonly logger = new Logger(DnsService.name)
+
     constructor(
-        private readonly redis: Redis,
-        private readonly ttlSeconds = CacheableDnsResolver.DEFAULT_TTL_SECONDS,
-        private readonly cacheKeyPrefix = CacheableDnsResolver.DEFAULT_CACHE_KEY_PREFIX,
-        private readonly logger: Logger = console,
+        @Inject(Redis) private readonly redis: Redis,
+        @Optional() private readonly ttlSeconds = DnsService.DEFAULT_TTL_SECONDS,
+        @Optional() private readonly cacheKeyPrefix = DnsService.DEFAULT_CACHE_KEY_PREFIX,
     ) {}
 
     async resolve<T extends keyof DNSTypeMap>(name: string, type: T): Promise<DNSTypeMap[T]> {

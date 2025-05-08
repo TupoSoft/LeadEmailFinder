@@ -3,9 +3,11 @@ import { AppModule } from './app.module'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
+import { Logger } from 'pino-nestjs'
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule)
+    app.useLogger(app.get(Logger))
     app.useGlobalPipes(new ValidationPipe())
     app.useGlobalInterceptors(
         new ClassSerializerInterceptor(app.get(Reflector), {
