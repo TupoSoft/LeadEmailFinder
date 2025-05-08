@@ -6,6 +6,7 @@ import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
+import { DomainModule } from './domain-module'
 
 @Module({
     imports: [
@@ -26,6 +27,7 @@ import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
             imports: [ConfigModule],
             useClass: ParseConnectionStringOptionsFactory,
         }),
+        DomainModule,
         EmailModule,
     ],
 })
