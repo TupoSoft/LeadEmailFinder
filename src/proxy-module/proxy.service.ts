@@ -21,9 +21,7 @@ export class ProxyService implements IProxyService {
     }
 
     async update(id: string, updateProxyDto: UpdateProxyDto): Promise<ProxyResponse> {
-        if (!Types.ObjectId.isValid(id)) {
-            throw new ProxyNotFoundException(id)
-        }
+        this.validateId(id)
 
         const updated = await this.proxyModel.findByIdAndUpdate(id, updateProxyDto, { new: true }).exec()
 
@@ -35,9 +33,7 @@ export class ProxyService implements IProxyService {
     }
 
     async remove(id: string): Promise<ProxyResponse> {
-        if (!Types.ObjectId.isValid(id)) {
-            throw new ProxyNotFoundException(id)
-        }
+        this.validateId(id)
 
         const removed = await this.proxyModel.findByIdAndDelete(id).exec()
 
@@ -49,9 +45,7 @@ export class ProxyService implements IProxyService {
     }
 
     async addToBlacklist(id: string, blacklist: string): Promise<ProxyResponse> {
-        if (!Types.ObjectId.isValid(id)) {
-            throw new ProxyNotFoundException(id)
-        }
+        this.validateId(id)
 
         const updated = await this.proxyModel
             .findByIdAndUpdate(id, { $addToSet: { blacklists: blacklist } }, { new: true, upsert: false })
@@ -65,9 +59,7 @@ export class ProxyService implements IProxyService {
     }
 
     async getById(id: string): Promise<ProxyResponse> {
-        if (!Types.ObjectId.isValid(id)) {
-            throw new ProxyNotFoundException(id)
-        }
+        this.validateId(id)
 
         const proxy = await this.proxyModel.findById(id).exec()
 
@@ -81,5 +73,11 @@ export class ProxyService implements IProxyService {
     async get(filter: RootFilterQuery<Proxy> = {}): Promise<ProxyResponse[]> {
         const proxies = await this.proxyModel.find(filter).exec()
         return this.mapper.mapArray(proxies, Proxy, ProxyResponse)
+    }
+
+    private validateId(id: string): void {
+        if (!Types.ObjectId.isValid(id)) {
+            throw new ProxyNotFoundException(id)
+        }
     }
 }
