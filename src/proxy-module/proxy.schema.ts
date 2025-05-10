@@ -3,9 +3,6 @@ import { ProxyType } from './enums'
 
 @Schema()
 export class Proxy {
-    @Prop()
-    _id: string
-
     @Prop({ enum: ProxyType })
     type: ProxyType
 

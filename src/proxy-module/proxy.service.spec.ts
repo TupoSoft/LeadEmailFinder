@@ -7,6 +7,7 @@ import { ProxyNotFoundException } from './exceptions'
 import { Proxy } from './proxy.schema'
 import { ProxyResponse } from './dto'
 import { getMapperToken } from '@automapper/nestjs'
+import { ProxyType } from './enums'
 
 describe('ProxyService', () => {
     let service: ProxyService
@@ -65,6 +66,23 @@ describe('ProxyService', () => {
             model.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) } as any)
 
             await expect(service.update(id, updateProxyDto)).rejects.toThrow(ProxyNotFoundException)
+        })
+    })
+
+    describe('create', () => {
+        it('should create a new proxy and return the created proxy', async () => {
+            const createProxyDto = { host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const createdProxy = { _id: 'someId', host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const mappedResponse = { id: 'someId', host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+
+            model.insertOne = jest.fn().mockResolvedValue(createdProxy)
+            mapper.map.mockReturnValue(mappedResponse)
+
+            const result = await service.create(createProxyDto)
+
+            expect(result).toEqual(mappedResponse)
+            expect(model.insertOne).toHaveBeenCalledWith(createProxyDto)
+            expect(mapper.map).toHaveBeenCalledWith(createdProxy, Proxy, ProxyResponse)
         })
     })
 

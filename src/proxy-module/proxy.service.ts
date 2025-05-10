@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { IProxyService } from './interfaces'
 import { Model, RootFilterQuery, Types } from 'mongoose'
-import { ProxyResponse, UpdateProxyDto } from './dto'
+import { CreateProxyDto, ProxyResponse, UpdateProxyDto } from './dto'
 import { Proxy } from './proxy.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { InjectMapper } from '@automapper/nestjs'
@@ -14,6 +14,11 @@ export class ProxyService implements IProxyService {
         @InjectModel(Proxy.name) private readonly proxyModel: Model<Proxy>,
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
+
+    async create(createProxyDto: CreateProxyDto): Promise<ProxyResponse> {
+        const created = await this.proxyModel.insertOne(createProxyDto)
+        return this.mapper.map(created, Proxy, ProxyResponse)
+    }
 
     async update(id: string, updateProxyDto: UpdateProxyDto): Promise<ProxyResponse> {
         if (!Types.ObjectId.isValid(id)) {
