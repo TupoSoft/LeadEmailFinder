@@ -37,7 +37,7 @@ export class ProxyService implements IProxyService {
 
         const removed = await this.proxyModel.findByIdAndDelete(id).exec()
 
-        if (!removed) {
+        if (removed === null) {
             throw new ProxyNotFoundException(id)
         }
 
