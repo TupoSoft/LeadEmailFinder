@@ -1,11 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 import { ProxyType } from './enums'
-import { ObjectId, Types } from 'mongoose'
 
 @Schema()
 export class Proxy {
-    @Prop({ type: Types.ObjectId })
-    _id: ObjectId
+    @Prop()
+    _id: string
 
     @Prop({ enum: ProxyType })
     type: ProxyType

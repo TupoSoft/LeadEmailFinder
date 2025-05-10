@@ -1,5 +1,5 @@
-import { ProxyType } from '../../proxy'
 import { Expose } from 'class-transformer'
+import { ProxyType } from '../enums'
 
 export class ProxyResponse {
     @Expose()

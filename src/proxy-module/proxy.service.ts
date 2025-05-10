@@ -73,7 +73,7 @@ export class ProxyService implements IProxyService {
         return this.mapper.map(proxy, Proxy, ProxyResponse)
     }
 
-    async get(filter: RootFilterQuery<Proxy>): Promise<ProxyResponse[]> {
+    async get(filter: RootFilterQuery<Proxy> = {}): Promise<ProxyResponse[]> {
         const proxies = await this.proxyModel.find(filter).exec()
         return this.mapper.mapArray(proxies, Proxy, ProxyResponse)
     }
