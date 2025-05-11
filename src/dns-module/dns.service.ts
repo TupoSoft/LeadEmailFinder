@@ -1,8 +1,8 @@
 import { Redis } from 'ioredis'
-import { type DNSTypeMap, fetchRecords } from './util'
+import { fetchRecords } from './util'
 import { parseTimeString } from '../util/time'
-import { IDnsService } from './interfaces'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
+import { DNSTypeMap, IDnsService } from '../common'
 
 @Injectable()
 export class DnsService implements IDnsService {
