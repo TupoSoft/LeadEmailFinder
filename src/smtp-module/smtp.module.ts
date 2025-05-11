@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common'
 import { DnsModule, DnsService } from '../dns-module'
 import { MongooseModule } from '@nestjs/mongoose'
 import { SmtpVerification, SmtpVerificationSchema } from './smtp-verification.schema'
-import { SmtpVerifier } from './smtp-verifier'
 import { ProxyModule, ProxyService } from '../proxy-module'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 
@@ -18,7 +17,6 @@ import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
         ]),
     ],
     providers: [
-        SmtpVerifier,
         {
             provide: DNS_SERVICE_TOKEN,
             useValue: DnsService,
@@ -28,6 +26,5 @@ import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
             useValue: ProxyService,
         },
     ],
-    exports: [SmtpVerifier],
 })
 export class SmtpModule {}
