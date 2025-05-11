@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { Model, RootFilterQuery, Types } from 'mongoose'
-import { CreateProxyDto, ProxyResponse, UpdateProxyDto } from './dto'
+import { ProxyResponse } from './dto'
 import { Proxy } from './proxy.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { ProxyNotFoundException } from './exceptions'
-import { IProxyService } from '../common'
+import { ICreateProxyDto, IProxy, IProxyService, IUpdateProxyDto } from '../common'
 
 @Injectable()
 export class ProxyService implements IProxyService {
@@ -15,12 +15,12 @@ export class ProxyService implements IProxyService {
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
-    async create(createProxyDto: CreateProxyDto): Promise<ProxyResponse> {
+    async create(createProxyDto: ICreateProxyDto): Promise<IProxy> {
         const created = await this.proxyModel.insertOne(createProxyDto)
         return this.mapper.map(created, Proxy, ProxyResponse)
     }
 
-    async update(id: string, updateProxyDto: UpdateProxyDto): Promise<ProxyResponse> {
+    async update(id: string, updateProxyDto: IUpdateProxyDto): Promise<IProxy> {
         this.validateId(id)
 
         const updated = await this.proxyModel.findByIdAndUpdate(id, updateProxyDto, { new: true }).exec()
@@ -32,7 +32,7 @@ export class ProxyService implements IProxyService {
         return this.mapper.map(updated, Proxy, ProxyResponse)
     }
 
-    async remove(id: string): Promise<ProxyResponse> {
+    async remove(id: string): Promise<IProxy> {
         this.validateId(id)
 
         const removed = await this.proxyModel.findByIdAndDelete(id).exec()
@@ -44,7 +44,7 @@ export class ProxyService implements IProxyService {
         return this.mapper.map(removed, Proxy, ProxyResponse)
     }
 
-    async addToBlacklist(id: string, blacklist: string): Promise<ProxyResponse> {
+    async addToBlacklist(id: string, blacklist: string): Promise<IProxy> {
         this.validateId(id)
 
         const updated = await this.proxyModel
@@ -58,7 +58,7 @@ export class ProxyService implements IProxyService {
         return this.mapper.map(updated, Proxy, ProxyResponse)
     }
 
-    async getById(id: string): Promise<ProxyResponse> {
+    async getById(id: string): Promise<IProxy> {
         this.validateId(id)
 
         const proxy = await this.proxyModel.findById(id).exec()
@@ -70,7 +70,7 @@ export class ProxyService implements IProxyService {
         return this.mapper.map(proxy, Proxy, ProxyResponse)
     }
 
-    async get(filter: RootFilterQuery<Proxy> = {}): Promise<ProxyResponse[]> {
+    async get(filter: RootFilterQuery<Proxy> = {}): Promise<IProxy[]> {
         const proxies = await this.proxyModel.find(filter).exec()
         return this.mapper.mapArray(proxies, Proxy, ProxyResponse)
     }
