@@ -9,8 +9,8 @@ export class SmtpVerification {
     @Prop()
     reason: SmtpVerificationReason
 
-    @Prop()
-    exists: boolean | null
+    @Prop({ type: Boolean })
+    exists?: boolean
 
     @Prop()
     targetExchange?: string
