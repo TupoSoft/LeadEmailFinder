@@ -7,9 +7,8 @@ import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
-import { DnsModule } from './dns-module'
 import { DomainModule } from './domain-module'
-import { ProxyModule } from './proxy-module'
+import { SmtpModule } from './smtp-module'
 
 @Module({
     imports: [
@@ -32,9 +31,8 @@ import { ProxyModule } from './proxy-module'
         }),
         LoggerModule.forRoot(),
         DomainModule,
-        DnsModule,
         EmailModule,
-        ProxyModule,
+        SmtpModule,
     ],
 })
 export class AppModule {}
