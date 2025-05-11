@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals'
-import { type DNSTypeMap, fetchMxRecords, fetchRecords } from './util'
+import { fetchMxRecords, fetchRecords } from './util'
 import { resolveMx, reverse } from 'node:dns/promises'
+import { DNSTypeMap } from '../common'
 
 jest.mock('node:dns/promises', () => ({
     resolveMx: jest.fn(),

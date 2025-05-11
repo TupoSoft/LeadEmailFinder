@@ -1,11 +1,7 @@
 import { resolveMx, reverse } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
 import { getDomain } from 'tldts'
-
-export interface DNSTypeMap {
-    MX: MxRecord[]
-    PTR: string[]
-}
+import { DNSTypeMap } from '../common'
 
 async function tryResolveMx(domain: string): Promise<MxRecord[]> {
     try {

@@ -3,13 +3,13 @@ import { connectThroughHttpProxy } from './http-proxy-connect'
 import { connectViaSocks4Proxy } from './socks4-connect'
 import { connectViaSocks5Proxy } from './socks5-connect'
 import type { ConnectOptions } from './connect'
-import type { Proxy } from '../proxy'
 import { createConnectionAsync } from './create-connection-async'
 import { tlsConnectAsync } from './tls-connect'
 import { connectAsync } from './connect-async'
+import { IProxy } from './interfaces'
 
 export interface ConnectThroughProxyOptions extends ConnectOptions {
-    proxy: Proxy
+    proxy: IProxy
 }
 
 export async function connectThroughProxy(options: ConnectThroughProxyOptions): Promise<Socket> {

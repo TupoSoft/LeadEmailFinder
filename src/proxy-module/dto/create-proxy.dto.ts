@@ -1,7 +1,8 @@
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator'
 import { ProxyType } from '../enums'
+import { ICreateProxyDto } from '../../common'
 
-export class CreateProxyDto {
+export class CreateProxyDto implements ICreateProxyDto {
     @IsEnum(ProxyType)
     type: ProxyType
 
