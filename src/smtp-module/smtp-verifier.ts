@@ -5,16 +5,14 @@ import { ok } from 'node:assert'
 import type { Proxy } from '../proxy'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import { IDnsService, IProxy, IProxyService, isEmptyArray, ZERO } from '../common'
+import { IDnsService, IProxy, IProxyService, isEmptyArray, ISmtpVerifier, ZERO } from '../common'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './enums'
 import { SmtpException } from './exceptions'
 import { Model } from 'mongoose'
 import { SmtpVerification } from './smtp-verification.schema'
-import { Logger } from '@nestjs/common'
-
-export interface ISmtpVerifier {
-    verify: (email: string) => Promise<SmtpVerificationResponse>
-}
+import { Inject, Injectable, Logger } from '@nestjs/common'
+import { InjectModel } from '@nestjs/mongoose'
+import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 
 interface GetExchangesParams {
     domain: string
@@ -41,6 +39,7 @@ type SmtpErrorHandlingStrategy = [
     (error: SmtpException) => Omit<SmtpVerificationResponse, 'email'>,
 ]
 
+@Injectable()
 export class SmtpVerifier implements ISmtpVerifier {
     private static readonly smtpErrorHandlingStrategies: SmtpErrorHandlingStrategy[] = [
         [
@@ -104,9 +103,9 @@ export class SmtpVerifier implements ISmtpVerifier {
     private readonly logger = new Logger(SmtpVerifier.name)
 
     constructor(
-        private readonly dnsService: IDnsService,
-        private readonly proxyService: IProxyService,
-        private readonly smtpVerificationModel: Model<SmtpVerification>,
+        @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
+        @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
+        @InjectModel(SmtpVerification.name) private readonly smtpVerificationModel: Model<SmtpVerification>,
     ) {}
 
     private static isTemporarilyBlocked(result: Pick<SmtpVerification, 'reason'> | null): result is {
