@@ -4,6 +4,7 @@ import { CatchAllHttpModuleOptionsFactory } from './catch-all-http-module-option
 import { LinkedInLogin } from './linkedin-login'
 import { MicrosoftGetCredentialType } from './microsoft-get-credential-type'
 import { ConfigModule } from '@nestjs/config'
+import { MicrosoftLogin } from './microsoft-login'
 
 @Module({
     imports: [
@@ -12,6 +13,6 @@ import { ConfigModule } from '@nestjs/config'
             useClass: CatchAllHttpModuleOptionsFactory,
         }),
     ],
-    providers: [LinkedInLogin, MicrosoftGetCredentialType],
+    providers: [LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin],
 })
 export class CatchAllModule {}
