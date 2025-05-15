@@ -3,10 +3,12 @@ import { HttpModule } from '@nestjs/axios'
 import { CatchAllHttpModuleOptionsFactory } from './catch-all-http-module-options.factory'
 import { LinkedInLogin } from './linkedin-login'
 import { MicrosoftGetCredentialType } from './microsoft-get-credential-type'
+import { ConfigModule } from '@nestjs/config'
 
 @Module({
     imports: [
         HttpModule.registerAsync({
+            imports: [ConfigModule],
             useClass: CatchAllHttpModuleOptionsFactory,
         }),
     ],
