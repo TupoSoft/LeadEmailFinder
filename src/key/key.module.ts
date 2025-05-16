@@ -8,6 +8,6 @@ import { Key, KeySchema } from './key.schema'
     imports: [MongooseModule.forFeature([{ name: Key.name, schema: KeySchema }])],
     controllers: [KeyController],
     providers: [KeyService],
-    exports: [KeyService],
+    exports: [],
 })
 export class KeyModule {}

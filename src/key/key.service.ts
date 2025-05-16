@@ -8,7 +8,7 @@ import * as crypto from 'crypto'
 export class KeyService {
     constructor(@InjectModel(Key.name) private keyModel: Model<KeyDocument>) {}
 
-    async generateKey(permissions: KeyRole[] = [KeyRole.READ], description?: string): Promise<string> {
+    async generateKey(permissions: KeyRole[], description?: string): Promise<string> {
         const prefix = 'api_'
         const randomBytes = crypto.randomBytes(24).toString('hex')
         const token = `${prefix}${randomBytes}`
