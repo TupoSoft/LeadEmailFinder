@@ -3,7 +3,7 @@ import { ICatchAllVerifier } from '../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { MimecastData, MimecastResponse } from './interfaces'
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
+import { Injectable, Logger, Optional } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
 
 @Injectable()
@@ -28,11 +28,11 @@ export class MimecastLogin implements ICatchAllVerifier {
 
     sourceName = 'mimecast' as const
 
-    @Inject(Logger)
-    @Optional()
-    private readonly logger = new Logger(MimecastLogin.name)
-
-    constructor(private readonly httpService: HttpService) {}
+    constructor(
+        @Optional()
+        private readonly logger: Logger = new Logger(MimecastLogin.name),
+        private readonly httpService: HttpService,
+    ) {}
 
     verify: (email: string) => Promise<boolean> = async email => {
         const { URL: url, HEADERS: headers, EXPECTED_AUTH_TYPES: expectedAuthTypes } = MimecastLogin
