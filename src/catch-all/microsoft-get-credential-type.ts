@@ -1,7 +1,7 @@
 import { ICatchAllVerifier } from '../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
+import { Injectable, Logger, Optional } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
 
 const enum IfExistsResult {
@@ -64,11 +64,11 @@ export class MicrosoftGetCredentialType implements ICatchAllVerifier {
 
     sourceName = 'microsoft_4' as const
 
-    @Inject(Logger)
-    @Optional()
-    private readonly logger = new Logger(MicrosoftGetCredentialType.name)
-
-    constructor(private readonly httpClient: HttpService) {}
+    constructor(
+        @Optional()
+        private readonly logger: Logger = new Logger(MicrosoftGetCredentialType.name),
+        private readonly httpClient: HttpService,
+    ) {}
 
     verify: (email: string) => Promise<boolean> = async email => {
         const {
