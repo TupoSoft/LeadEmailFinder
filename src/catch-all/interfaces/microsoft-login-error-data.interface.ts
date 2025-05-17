@@ -1,4 +1,4 @@
-import { MicrosoftLoginErrorCode } from '../microsoft-login'
+import { MicrosoftLoginErrorCode } from '../enums'
 
 export interface IMicrosoftLoginErrorData {
     error_codes: MicrosoftLoginErrorCode[]

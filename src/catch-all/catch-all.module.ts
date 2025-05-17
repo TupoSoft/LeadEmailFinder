@@ -5,6 +5,7 @@ import { LinkedInLogin } from './linkedin-login'
 import { MicrosoftGetCredentialType } from './microsoft-get-credential-type'
 import { ConfigModule } from '@nestjs/config'
 import { MicrosoftLogin } from './microsoft-login'
+import { MimecastLogin } from './mimecast-login'
 
 @Module({
     imports: [
@@ -13,6 +14,6 @@ import { MicrosoftLogin } from './microsoft-login'
             useClass: CatchAllHttpModuleOptionsFactory,
         }),
     ],
-    providers: [LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin],
+    providers: [LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin],
 })
 export class CatchAllModule {}
