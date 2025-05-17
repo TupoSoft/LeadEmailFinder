@@ -1,20 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
-
-export type KeyDocument = Key & Document
-
-export enum KeyRole {
-    READ = 'read',
-    WRITE = 'write',
-    ADMIN = 'admin',
-}
+import { KeyPermissions } from './key.enum'
 
 @Schema({ timestamps: true })
 export class Key {
     @Prop({ required: true, unique: true, index: true })
     token: string
 
-    @Prop({ required: true, enum: KeyRole, default: [KeyRole.READ], type: [String] })
-    permissions: KeyRole[]
+    @Prop({ required: true, enum: KeyPermissions, default: [KeyPermissions.READ], type: [String] })
+    permissions: KeyPermissions[]
 
     @Prop({ required: true, default: false })
     revoked: boolean

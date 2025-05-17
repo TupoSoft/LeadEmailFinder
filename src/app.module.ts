@@ -10,6 +10,7 @@ import { LoggerModule } from 'pino-nestjs'
 import { DomainModule } from './domain-module'
 import { SmtpModule } from './smtp-module'
 import { CatchAllModule } from './catch-all/catch-all.module'
+import { KeyModule } from './key/key.module'
 
 @Module({
     imports: [
@@ -35,6 +36,7 @@ import { CatchAllModule } from './catch-all/catch-all.module'
         EmailModule,
         SmtpModule,
         CatchAllModule,
+        KeyModule,
     ],
 })
 export class AppModule {}

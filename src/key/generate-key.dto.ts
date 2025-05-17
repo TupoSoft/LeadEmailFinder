@@ -1,6 +1,6 @@
-import { KeyRole } from './key.schema'
+import { KeyPermissions } from './key.enum'
 
 export class GenerateKeyDto {
-    permissions: KeyRole[] = [KeyRole.READ]
+    permissions: KeyPermissions[] = [KeyPermissions.READ]
     description?: string
 }

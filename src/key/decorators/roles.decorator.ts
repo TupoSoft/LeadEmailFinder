@@ -1,4 +1,4 @@
 import { SetMetadata } from '@nestjs/common'
-import { KeyRole } from '../key.schema'
+import { KeyPermissions } from '../key.enum'
 
-export const RequireApiPermissions = (...roles: KeyRole[]) => SetMetadata('roles', roles)
+export const RequireApiPermissions = (...permissions: KeyPermissions[]) => SetMetadata('permissions', permissions)

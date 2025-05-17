@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { KeyService } from '../key.service'
-import { KeyRole } from '../key.schema'
+import { KeyPermissions } from '../key.enum'
 import { Request } from 'express'
 
 @Injectable()
@@ -12,7 +12,7 @@ export class ApiKeyGuard implements CanActivate {
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        const requiredPermissions = this.reflector.get<KeyRole[]>('permissions', context.getHandler()) || []
+        const requiredPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getHandler()) || []
 
         const request = context.switchToHttp().getRequest<Request>()
 
