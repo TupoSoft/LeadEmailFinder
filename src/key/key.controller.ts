@@ -13,9 +13,8 @@ export class KeyController {
     @RequireApiPermissions(KeyPermissions.ADMIN)
     @Post('generate')
     async generateKey(@Body() generateKeyDto: GenerateKeyDto) {
-        const key = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
-        console.log('key', key)
-        return JSON.stringify({ token: key })
+        const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
+        return JSON.stringify({ apiKey })
     }
 
     @UseGuards(ApiKeyGuard)
