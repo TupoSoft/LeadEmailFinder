@@ -44,6 +44,7 @@ export class KeyService {
 
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
+
     async revokeKey(token: string): Promise<boolean> {
         const result = await this.keyModel.updateOne({ token }, { revoked: true }).exec()
 
