@@ -12,7 +12,8 @@
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest",
         "start:nest": "node --env-file-if-exists=.env -r ts-node/register src/main",
-        "debug:nest": "node --env-file-if-exists=.env --inspect=0.0.0.0:9229 -r ts-node/register src/main"
+        "debug:nest": "node --env-file-if-exists=.env --inspect=0.0.0.0:9229 -r ts-node/register src/main",
+        "start:nest:dev": "nest start --watch"
     },
     "author": {
         "url": "https://tuposoft.com",
