@@ -13,9 +13,10 @@ import type { SmtpResponse } from './dto'
 import { connect, readUntil, write } from '../socket'
 import { parseSmtpResponse } from './smtp.util'
 import { SmtpErrorStatusCode, SmtpOkStatusCode } from './enums'
-import { IProxy, ISmtpClient } from './interfaces'
+import { ISmtpClient } from './interfaces'
 import { SmtpClientTimeoutException, SmtpException } from './exceptions'
 import { Logger } from '@nestjs/common'
+import { IProxy } from '../common'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number

@@ -129,7 +129,7 @@ importers:
         specifier: ^0.6.0
         version: 0.6.0(@swc/core@1.11.22)(chokidar@4.0.3)
       '@swc/core':
-        specifier: ^1.10.7
+        specifier: ^1.11.22
         version: 1.11.22
       '@tsconfig/node-lts':
         specifier: ^22.0.1
