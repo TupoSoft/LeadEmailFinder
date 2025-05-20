@@ -4,12 +4,12 @@ services:
   api:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/NestJS.Dockerfile
+    volumes:
+      - "..:/app"
+      - "/app/node_modules"
     develop:
       watch:
-        - action: sync+restart
-          path: ../src
-          target: /app/src
         - action: rebuild
           path: ../package.json
     dns:
