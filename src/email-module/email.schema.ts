@@ -16,7 +16,10 @@ export class Email {
     @Prop({ type: Boolean, default: null })
     exists: boolean | null
 
-    @Prop()
+    @Prop({
+        type: String,
+        enum: EmailPatternEnum,
+    })
     format?: EmailPatternEnum
 
     @Prop()

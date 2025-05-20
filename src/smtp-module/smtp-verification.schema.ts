@@ -6,7 +6,7 @@ export class SmtpVerification {
     @Prop()
     _id: string
 
-    @Prop()
+    @Prop({ type: String, enum: SmtpVerificationReason })
     reason: SmtpVerificationReason
 
     @Prop({ type: Boolean })

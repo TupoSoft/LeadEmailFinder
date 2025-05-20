@@ -9,7 +9,7 @@ import { ICatchAllVerifier } from '../common'
     providers: [
         {
             provide: SMTP_VERIFIER_TOKEN,
-            useClass: SmtpVerifier,
+            useExisting: SmtpVerifier,
         },
         {
             provide: CATCH_ALL_VERIFIERS_TOKEN,

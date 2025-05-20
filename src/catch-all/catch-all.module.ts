@@ -12,5 +12,6 @@ import { ConfigModule } from '@nestjs/config'
         }),
     ],
     providers: [LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],
+    exports: [LinkedInLogin, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],
 })
 export class CatchAllModule {}

@@ -9,7 +9,8 @@ import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
 import { DomainModule } from './domain-module'
 import { SmtpModule } from './smtp-module'
-import { CatchAllModule } from './catch-all/catch-all.module'
+import { CatchAllModule } from './catch-all'
+import { EmailVerificationModule } from './email-verification-module'
 
 @Module({
     imports: [
@@ -35,6 +36,7 @@ import { CatchAllModule } from './catch-all/catch-all.module'
         EmailModule,
         SmtpModule,
         CatchAllModule,
+        EmailVerificationModule,
     ],
 })
 export class AppModule {}
