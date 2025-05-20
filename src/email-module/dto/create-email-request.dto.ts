@@ -1,11 +1,11 @@
-import { EmailPatternEnum } from '../enums'
+import { EmailPatternEnum } from '../../common'
 import { IsBoolean, IsEnum, IsOptional, IsString, ValidateIf } from 'class-validator'
 
 export class CreateEmailRequestDto {
     @IsString()
     email: string
 
-    @IsEnum(EmailPatternEnum)
+    @IsEnum(EmailPatternEnum as object)
     @IsOptional()
     format?: EmailPatternEnum
 

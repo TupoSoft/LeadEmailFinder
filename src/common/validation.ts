@@ -1,7 +1,7 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
 import type { BulkProgressResponse, BulkStatusResponse } from './dto'
-import { JobStatus } from './enums'
+import { JobStatus } from './queue-enums'
 
 export const bulkRequestValidationSchema = z
     .object({

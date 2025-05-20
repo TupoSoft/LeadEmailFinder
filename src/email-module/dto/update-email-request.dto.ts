@@ -1,4 +1,4 @@
-import { EmailPatternEnum } from '../enums'
+import { EmailPatternEnum } from '../../common'
 import { IsBoolean, IsEnum, IsOptional, ValidateIf } from 'class-validator'
 
 export class UpdateEmailRequestDto {

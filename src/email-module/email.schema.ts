@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 
-import { EmailPatternEnum } from './enums'
+import { EmailPatternEnum } from '../common'
 
 @Schema()
 export class Email {

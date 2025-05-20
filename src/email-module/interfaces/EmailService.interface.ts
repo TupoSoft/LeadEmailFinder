@@ -1,4 +1,4 @@
-import { EmailPatternEnum } from '../enums'
+import { EmailPatternEnum } from '../../common'
 import { EmailResponseDto } from '../dto'
 
 export interface CreateEmailOptions {

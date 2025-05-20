@@ -1,5 +1,5 @@
 import type { JobState } from 'bullmq'
-import { JobStatus } from './enums'
+import { JobStatus } from './queue-enums'
 
 export function jobStateToJobStatus(state: JobState | 'unknown'): JobStatus {
     switch (state) {
