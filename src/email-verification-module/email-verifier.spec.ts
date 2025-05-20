@@ -1,12 +1,13 @@
 import { ICatchAllVerifier, ISmtpVerifier } from '../common'
 import { EmailVerifier } from './email-verifier'
 import { Test } from '@nestjs/testing'
-import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verification.constants'
 import { EmailVerificationReason, EmailVerificationSource } from './enums'
 import { EmailVerificationRequestDto } from './dto'
 
 const email = 'danilo@microsoft.com'
 const [, domain] = email.split('@')
+const SMTP_VERIFIER_TOKEN = 'SmtpVerifierToken'
+const CATCH_ALL_VERIFIERS_TOKEN = 'CatchAllVerifiersToken'
 
 describe('EmailVerifier', () => {
     let emailVerifier: EmailVerifier
