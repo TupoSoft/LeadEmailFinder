@@ -2,4 +2,4 @@ services:
   api:
     ports:
       - "9229:9229"
-    command: pnpm debug
+    command: pnpm start:debug
