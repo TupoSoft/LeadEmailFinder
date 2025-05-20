@@ -10,7 +10,7 @@ import { LoggerModule } from 'pino-nestjs'
 import { DomainModule } from './domain-module'
 import { SmtpModule } from './smtp-module'
 import { CatchAllModule } from './catch-all/catch-all.module'
-import { KeyModule } from './key/key.module'
+import { KeyModule } from './key'
 
 @Module({
     imports: [
