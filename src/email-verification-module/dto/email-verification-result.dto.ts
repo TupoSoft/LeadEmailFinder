@@ -1,11 +1,8 @@
 import { Expose } from 'class-transformer'
-import { EmailPatternEnum } from '../../email-module'
-import { EmailVerificationSource } from '../enums'
+import { EmailVerificationReason, EmailVerificationSource } from '../enums'
+import { EmailPatternEnum } from '../../common'
 
 export class EmailVerificationResultDto {
-    @Expose()
-    id: string
-
     @Expose()
     email: string
 
@@ -32,4 +29,6 @@ export class EmailVerificationResultDto {
 
     @Expose()
     catchAll: boolean | null
+
+    reason: EmailVerificationReason
 }

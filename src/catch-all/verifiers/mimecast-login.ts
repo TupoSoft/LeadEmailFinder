@@ -1,8 +1,8 @@
 import type { AxiosRequestConfig } from 'axios'
-import { ICatchAllVerifier } from '../common'
+import { ICatchAllVerifier } from '../../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
-import { MimecastData, MimecastResponse } from './interfaces'
+import { MimecastData, MimecastResponse } from '../interfaces'
 import { Injectable, Logger, Optional } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
 

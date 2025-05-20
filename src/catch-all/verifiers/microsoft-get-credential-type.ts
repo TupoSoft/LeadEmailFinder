@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '../common'
+import { ICatchAllVerifier } from '../../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { Injectable, Logger, Optional } from '@nestjs/common'
