@@ -69,7 +69,7 @@ export class EmailVerifier {
         if (EmailVerifier.shouldVerifyViaHttp(emailVerification)) {
             const sources = await this.verifyViaHttp(email)
 
-            if (sources.length === 0) {
+            if (sources.length > 0) {
                 emailVerification.sources.push(...sources)
                 emailVerification.reason = EmailVerificationReason.Webmail
                 emailVerification.exists = true
