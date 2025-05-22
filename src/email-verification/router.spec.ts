@@ -18,7 +18,7 @@ import { constants } from 'node:http2'
 import { JobNotFoundError } from './errors'
 import { ErrorMiddleware } from '../middleware/handle-error'
 import { type BulkResponse, HttpError } from '../common'
-import { JobStatus } from '../common/enums'
+import { JobStatus } from '../common/queue-enums'
 import type { IEmailVerificationQueue } from './queue'
 import { loggingMiddleware } from '../logging'
 import Mocked = jest.Mocked
@@ -223,7 +223,6 @@ describe(EMAIL_ROUTE, () => {
         it('should return HTTP_UNAUTHORIZED', async () => {
             jest.useRealTimers()
 
-            // eslint-disable-next-line max-nested-callbacks -- Mocking authentication middleware for testing unauthorized behavior
             authMiddleware.authenticate.mockImplementationOnce((_req, _res, next) => {
                 next(HttpError.Unauthorized('Invalid token'))
             })

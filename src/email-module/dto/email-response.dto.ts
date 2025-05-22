@@ -1,4 +1,4 @@
-import { EmailPatternEnum } from '../enums'
+import { EmailPatternEnum } from '../../common'
 import { Expose } from 'class-transformer'
 
 export class EmailResponseDto {

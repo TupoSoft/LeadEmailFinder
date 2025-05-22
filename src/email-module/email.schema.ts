@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 
-import { EmailPatternEnum } from './enums'
+import { EmailPatternEnum } from '../common'
 
 @Schema()
 export class Email {
@@ -16,7 +16,10 @@ export class Email {
     @Prop({ type: Boolean, default: null })
     exists: boolean | null
 
-    @Prop()
+    @Prop({
+        type: String,
+        enum: EmailPatternEnum,
+    })
     format?: EmailPatternEnum
 
     @Prop()

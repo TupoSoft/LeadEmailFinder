@@ -6,7 +6,7 @@ import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { IEmailService } from './interfaces'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
-import { EmailPatternEnum } from './enums'
+import { EmailPatternEnum } from '../common'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),
@@ -16,7 +16,7 @@ const mockEmailService: jest.Mocked<IEmailService> = {
 }
 
 const username = 'danilo'
-const format: EmailPatternEnum = EmailPatternEnum.First
+const format = EmailPatternEnum.First
 const domain = 'microsoft.com'
 const email = `${username}@${domain}`
 const exists = false
