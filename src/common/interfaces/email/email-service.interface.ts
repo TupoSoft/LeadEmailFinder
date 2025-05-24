@@ -1,4 +1,4 @@
-import { EmailResponseDto } from '../../../email-module/dto'
+import { EmailResponseDto } from '../../../email-verification-module/email/dto'
 import { ICreateEmailRequestDto } from './create-email-options.interface'
 import { IUpdateEmailRequestDto } from './update-email-request-dto.interface'
 

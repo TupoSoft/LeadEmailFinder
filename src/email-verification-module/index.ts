@@ -1,2 +1,2 @@
 export * from './email-verification.module'
-export * from './email-verifier'
+export * from './email-verification.service'
