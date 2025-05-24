@@ -1,6 +1,5 @@
-import { ICatchAllVerifier, ISmtpVerifier } from '../common'
+import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier, ISmtpVerifier } from '../common'
 import { EmailVerificationRequestDto, EmailVerificationResultDto } from './dto'
-import { EmailVerificationReason, EmailVerificationSource } from './enums'
 import { getSecondLevelDomain } from '../dns-module'
 import { isEmailVerificationSource } from './type-guards'
 import { Inject, Injectable } from '@nestjs/common'

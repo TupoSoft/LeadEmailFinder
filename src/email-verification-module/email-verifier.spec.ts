@@ -1,7 +1,6 @@
-import { ICatchAllVerifier, ISmtpVerifier } from '../common'
+import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier, ISmtpVerifier } from '../common'
 import { EmailVerifier } from './email-verifier'
 import { Test } from '@nestjs/testing'
-import { EmailVerificationReason, EmailVerificationSource } from './enums'
 import { EmailVerificationRequestDto } from './dto'
 
 const email = 'danilo@microsoft.com'
