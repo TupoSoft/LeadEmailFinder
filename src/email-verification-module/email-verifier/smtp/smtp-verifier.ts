@@ -1,18 +1,25 @@
 import { getSecondLevelDomain } from '../../../dns'
 import { SmtpClient } from './smtp-client'
-import { SmtpVerificationResponse } from './dto'
 import { ok } from 'node:assert'
 import type { Proxy } from '../../../proxy'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import { IDnsService, IProxy, IProxyService, isEmptyArray, ISmtpVerifier, ZERO } from '../../../common'
-import { SmtpErrorStatusCode, SmtpVerificationReason } from './enums'
-import { SmtpException } from './exceptions'
+import {
+    IDnsService,
+    IProxy,
+    IProxyService,
+    isEmptyArray,
+    ISmtpVerificationResponse,
+    ISmtpVerifier,
+    ZERO,
+} from '../../../common'
 import { Model } from 'mongoose'
 import { SmtpVerification } from './smtp-verification.schema'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
+import { SmtpException } from './smtp.exception'
+import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 
 interface GetExchangesParams {
     domain: string
@@ -36,7 +43,7 @@ interface GetProxiesParams {
 
 type SmtpErrorHandlingStrategy = [
     (error: SmtpException) => boolean,
-    (error: SmtpException) => Omit<SmtpVerificationResponse, 'email'>,
+    (error: SmtpException) => Omit<ISmtpVerificationResponse, 'email'>,
 ]
 
 @Injectable()
@@ -120,7 +127,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result?.exists != null
     }
 
-    verify = async (email: string): Promise<SmtpVerificationResponse> => {
+    verify = async (email: string): Promise<ISmtpVerificationResponse> => {
         const [, domain] = email.split('@')
 
         const getExchangesParams: GetExchangesParams = { domain }
@@ -170,7 +177,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result
     }
 
-    private async handleSmtpError(error: SmtpException): Promise<Omit<SmtpVerificationResponse, 'email'>> {
+    private async handleSmtpError(error: SmtpException): Promise<Omit<ISmtpVerificationResponse, 'email'>> {
         const strategy = SmtpVerifier.smtpErrorHandlingStrategies.find(([predicate]) => predicate(error))
         const { targetExchange, proxyId } = error
 
@@ -199,7 +206,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         return targetExchange != null ? exchanges.filter(exchange => exchange === targetExchange) : exchanges
     }
 
-    private async tryVerify({ client, email }: TryVerifyParams): Promise<SmtpVerificationResponse> {
+    private async tryVerify({ client, email }: TryVerifyParams): Promise<ISmtpVerificationResponse> {
         const { hostname, exchange: targetExchange } = client
 
         try {
