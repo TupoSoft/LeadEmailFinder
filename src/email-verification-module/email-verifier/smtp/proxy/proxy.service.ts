@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { Model, RootFilterQuery, Types } from 'mongoose'
-import { ProxyResponse } from './dto'
 import { Proxy } from './proxy.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { ProxyNotFoundException } from './exceptions'
 import { ICreateProxyDto, IProxy, IProxyService, IUpdateProxyDto } from '../../../../common'
+import { ProxyResponse } from './proxy-response.dto'
+import { ProxyNotFoundException } from './proxy-not-found.exception'
 
 @Injectable()
 export class ProxyService implements IProxyService {

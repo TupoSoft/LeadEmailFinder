@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer'
-import { ProxyType } from '../enums'
-import { IProxy } from '../../../../../common'
+import { IProxy } from '../../../../common'
+import { ProxyType } from './proxy-type.enum'
 
 export class ProxyResponse implements IProxy {
     @Expose()
