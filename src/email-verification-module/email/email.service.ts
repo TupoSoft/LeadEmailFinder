@@ -1,12 +1,13 @@
 import { InjectModel } from '@nestjs/mongoose'
 import { Email } from './email.schema'
-import { ICreateEmailRequestDto, IEmailService, IUpdateEmailRequestDto } from '../../common'
+import { ICreateEmailRequestDto, IEmailResponseDto, IEmailService, IUpdateEmailRequestDto } from '../../common'
 import { Injectable } from '@nestjs/common'
-import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { EmailResponseDto } from './dto'
 import { Model } from 'mongoose'
+import { EmailAlreadyExistsException } from './email-already-exists.exception'
+import { EmailResponseDto } from './email-response.dto'
+import { EmailNotFoundException } from './email-not-found.exception'
 
 @Injectable()
 export class EmailService implements IEmailService {
@@ -15,7 +16,7 @@ export class EmailService implements IEmailService {
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
-    async createEmail({ email, exists, format }: ICreateEmailRequestDto): Promise<EmailResponseDto> {
+    async createEmail({ email, exists, format }: ICreateEmailRequestDto): Promise<IEmailResponseDto> {
         const [username, domain] = email.split('@')
         const createdAt = new Date()
 
@@ -36,12 +37,12 @@ export class EmailService implements IEmailService {
         return this.mapper.map(emailDoc, Email, EmailResponseDto)
     }
 
-    async getEmails(): Promise<EmailResponseDto[]> {
+    async getEmails(): Promise<IEmailResponseDto[]> {
         const emailDocs = await this.emailModel.find().exec()
         return this.mapper.mapArray(emailDocs, Email, EmailResponseDto)
     }
 
-    async getEmail(email: string): Promise<EmailResponseDto> {
+    async getEmail(email: string): Promise<IEmailResponseDto> {
         const emailModel = await this.emailModel.findById(email).exec()
 
         if (emailModel == null) {
@@ -51,7 +52,7 @@ export class EmailService implements IEmailService {
         return this.mapper.map(emailModel, Email, EmailResponseDto)
     }
 
-    async updateEmail(email: string, { format, exists }: IUpdateEmailRequestDto): Promise<EmailResponseDto> {
+    async updateEmail(email: string, { format, exists }: IUpdateEmailRequestDto): Promise<IEmailResponseDto> {
         const [username, domain] = email.split('@')
 
         const updatedEmail = await this.emailModel

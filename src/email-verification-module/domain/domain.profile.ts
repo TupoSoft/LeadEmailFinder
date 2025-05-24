@@ -1,8 +1,8 @@
 import { AutomapperProfile, InjectMapper } from '@automapper/nestjs'
 import { createMap, forMember, mapFrom, Mapper, MappingConfiguration, MappingProfile } from '@automapper/core'
 import { Domain } from './domain.schema'
-import { DomainResponseDto } from './dto'
 import { Injectable } from '@nestjs/common'
+import { DomainResponseDto } from './domain-response.dto'
 
 @Injectable()
 export class DomainProfile extends AutomapperProfile {

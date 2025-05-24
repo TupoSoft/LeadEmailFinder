@@ -12,9 +12,9 @@ import {
 } from '../common'
 import { Model } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
-import { DomainVerificationForbiddenException } from './exceptions'
 import { InjectModel } from '@nestjs/mongoose'
 import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
+import { DomainVerificationForbiddenException } from './domain-verification-forbidden.exception'
 
 @Injectable()
 export class EmailVerificationService implements IEmailVerificationService {
