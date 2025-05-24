@@ -5,10 +5,11 @@ import { getModelToken } from '@nestjs/mongoose'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
 import { EmailPatternEnum, ICreateEmailRequestDto, IUpdateEmailRequestDto } from '../../common'
-import { EmailResponseDto } from './dto'
 import { when } from 'jest-when'
-import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { Model } from 'mongoose'
+import { EmailResponseDto } from './email-response.dto'
+import { EmailAlreadyExistsException } from './email-already-exists.exception'
+import { EmailNotFoundException } from './email-not-found.exception'
 
 const now = Date.now()
 const date = new Date(now)
