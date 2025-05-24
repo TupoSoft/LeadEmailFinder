@@ -1,4 +1,4 @@
-import { SmtpErrorStatusCode } from '../enums'
+import { SmtpErrorStatusCode } from './smtp.enums'
 
 interface SmtpErrorConstructorOptions {
     code: SmtpErrorStatusCode

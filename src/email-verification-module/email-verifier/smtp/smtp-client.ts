@@ -9,14 +9,15 @@ import {
 } from './smtp.constants'
 import { hostname as osHostname } from 'os'
 import { promiseWithTimeout } from '../../../util/timeout'
-import type { SmtpResponse } from './dto'
 import { connect, readUntil, write } from '../../../socket'
 import { parseSmtpResponse } from './smtp.util'
-import { SmtpErrorStatusCode, SmtpOkStatusCode } from './enums'
-import { ISmtpClient } from './interfaces'
-import { SmtpClientTimeoutException, SmtpException } from './exceptions'
 import { Logger } from '@nestjs/common'
 import { IProxy } from '../../../common'
+import { ISmtpClient } from './smtp-client.interface'
+import { SmtpClientTimeoutException } from './smtp-client-timeout.exception'
+import { SmtpException } from './smtp.exception'
+import { SmtpResponse } from './smtp-response.interface'
+import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number

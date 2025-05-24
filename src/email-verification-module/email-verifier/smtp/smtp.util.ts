@@ -1,4 +1,4 @@
-import { SmtpResponse } from './dto'
+import { SmtpResponse } from './smtp-response.interface'
 
 export function parseSmtpResponse(rawResponse: string): SmtpResponse {
     const regex = /^(\d{3})(?: ?(\d\.\d\.\d))? (.+)$/m

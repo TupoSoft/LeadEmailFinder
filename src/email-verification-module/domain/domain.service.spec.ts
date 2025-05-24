@@ -2,11 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { DomainService } from './domain.service'
 import { getModelToken } from '@nestjs/mongoose'
 import { Domain } from './domain.schema'
-import { DomainResponseDto } from './dto'
-import { DomainNotFoundException } from './exceptions'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
 import { Model } from 'mongoose'
+import { IDomainResponseDto } from '../../common'
+import { DomainResponseDto } from './domain-response.dto'
+import { DomainNotFoundException } from './domain-not-found.exception'
 
 const date = new Date()
 
@@ -47,7 +48,7 @@ describe('DomainService', () => {
         it('should return a DomainResponseDto when a domain is found', async () => {
             const domainName = 'example.com'
             const domain: Domain = { _id: domainName, catchAllEnabled: true, createdAt: date, updatedAt: date }
-            const domainResponseDto: DomainResponseDto = {
+            const domainResponseDto: IDomainResponseDto = {
                 name: domainName,
                 catchAllEnabled: true,
                 createdAt: date,

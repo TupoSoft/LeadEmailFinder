@@ -1,4 +1,4 @@
-import { SmtpErrorStatusCode, SmtpOkStatusCode } from '../enums'
+import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
 
 export interface SmtpResponse {
     code: SmtpOkStatusCode | SmtpErrorStatusCode
