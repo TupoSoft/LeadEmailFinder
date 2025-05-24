@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 import { Logger } from '@nestjs/common'
-import { OfficeApps } from './office-apps'
+import { OfficeApps } from './office-apps.service'
 
 describe('OfficeApps', () => {
     let officeApps: OfficeApps

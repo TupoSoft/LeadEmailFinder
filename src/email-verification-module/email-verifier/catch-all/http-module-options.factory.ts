@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { Injectable } from '@nestjs/common'
 
 @Injectable()
-export class CatchAllHttpModuleOptionsFactory implements HttpModuleOptionsFactory {
+export class HttpModuleOptionsFactoryImpl implements HttpModuleOptionsFactory {
     private readonly catchAllHttpProxyUrl: URL
 
     constructor(configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL: string }, true>) {

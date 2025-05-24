@@ -2,9 +2,10 @@ import type { AxiosRequestConfig } from 'axios'
 import { ICatchAllVerifier } from '../../../../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
-import { MimecastData, MimecastResponse } from '../interfaces'
 import { Injectable, Logger, Optional } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
+import { MimecastData } from './mimecast-data.interface'
+import { MimecastResponse } from './mimecast-response.interface'
 
 @Injectable()
 export class MimecastLogin implements ICatchAllVerifier {

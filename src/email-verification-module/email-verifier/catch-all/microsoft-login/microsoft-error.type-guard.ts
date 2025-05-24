@@ -1,6 +1,6 @@
 import { z, ZodType } from 'zod'
-import { IMicrosoftLoginErrorData } from './interfaces'
-import { MicrosoftLoginErrorCode } from './enums'
+import { MicrosoftLoginErrorCode } from './microsoft-login-error-code.enum'
+import { IMicrosoftLoginErrorData } from './microsoft-login-error-data.interface'
 
 const microsoftErrorSchema = z.object({
     response: z.object({

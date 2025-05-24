@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { MicrosoftLogin } from './microsoft-login'
+import { MicrosoftLogin } from './microsoft-login.service'
 import { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 

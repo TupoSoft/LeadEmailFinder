@@ -1,4 +1,4 @@
-import { MicrosoftGetCredentialType } from './microsoft-get-credential-type'
+import { MicrosoftGetCredentialType } from './microsoft-get-credential-type.service'
 import { HttpService } from '@nestjs/axios'
 import { Logger } from '@nestjs/common'
 import { of, throwError } from 'rxjs'

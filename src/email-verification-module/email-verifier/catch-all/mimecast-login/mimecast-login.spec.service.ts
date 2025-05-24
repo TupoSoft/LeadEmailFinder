@@ -1,4 +1,4 @@
-import { MimecastLogin } from './mimecast-login'
+import { MimecastLogin } from './mimecast-login.service'
 import { HttpService } from '@nestjs/axios'
 import { Test, TestingModule } from '@nestjs/testing'
 import { of, throwError } from 'rxjs'

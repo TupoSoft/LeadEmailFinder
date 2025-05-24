@@ -1,9 +1,9 @@
 import { ICatchAllVerifier } from '../../../../common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
-import { isMicrosoftError } from '../catch-all.util'
 import { Injectable } from '@nestjs/common'
-import { MicrosoftLoginErrorCode } from '../enums'
+import { MicrosoftLoginErrorCode } from './microsoft-login-error-code.enum'
+import { isMicrosoftError } from './microsoft-error.type-guard'
 
 @Injectable()
 export class MicrosoftLogin implements ICatchAllVerifier {

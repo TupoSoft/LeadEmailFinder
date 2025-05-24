@@ -1,4 +1,4 @@
-import { LinkedInLogin } from './linkedin-login'
+import { LinkedInLogin } from './linkedin-login.service'
 import { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 import { AxiosError } from 'axios'
