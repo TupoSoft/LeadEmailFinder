@@ -52,7 +52,7 @@ export class EmailService implements IEmailService {
     }
 
     async updateEmail(email: string, { format, exists }: IUpdateEmailRequestDto): Promise<EmailResponseDto> {
-        const [username, domain] = email
+        const [username, domain] = email.split('@')
 
         const updatedEmail = await this.emailModel
             .findOneAndUpdate(
