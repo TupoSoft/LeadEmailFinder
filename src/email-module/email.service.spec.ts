@@ -5,7 +5,7 @@ import { Email } from './email.schema'
 import { getModelToken } from '@nestjs/mongoose'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
-import { EmailPatternEnum, ICreateEmailOptions, IUpdateEmailOptions } from '../common'
+import { EmailPatternEnum, ICreateEmailRequestDto, IUpdateEmailRequestDto } from '../common'
 import { EmailResponseDto } from './dto'
 import { when } from 'jest-when'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
@@ -78,7 +78,7 @@ describe('EmailService tests', () => {
 
     describe('createEmail', () => {
         it('should create and return a mapped EmailResponseDto', async () => {
-            const createEmailOptions: ICreateEmailOptions = {
+            const createEmailOptions: ICreateEmailRequestDto = {
                 email: 'user@test.com',
                 exists: true,
                 format: EmailPatternEnum.FDotLast,
@@ -100,7 +100,7 @@ describe('EmailService tests', () => {
         })
 
         it('should throw EmailAlreadyExistsException if exists', async () => {
-            const createEmailOptions: ICreateEmailOptions = {
+            const createEmailOptions: ICreateEmailRequestDto = {
                 email: 'user@test.com',
                 exists: true,
                 format: EmailPatternEnum.FDotLast,

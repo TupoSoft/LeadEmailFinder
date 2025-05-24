@@ -1,4 +1,4 @@
-import { EmailVerificationReason, EmailVerificationSource } from '../common'
+import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '../common'
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 
 @Schema({ timestamps: true })
@@ -12,8 +12,8 @@ export class EmailVerification {
     @Prop()
     localPart: string
 
-    @Prop()
-    format?: string
+    @Prop({ type: String, enum: EmailPatternEnum })
+    format?: EmailPatternEnum
 
     @Prop()
     targetExchange?: string
@@ -27,10 +27,10 @@ export class EmailVerification {
     @Prop()
     catchAll: boolean | null
 
-    @Prop()
-    reason?: EmailVerificationReason
+    @Prop({ type: String, enum: EmailVerificationReason })
+    reason: EmailVerificationReason
 
-    @Prop()
+    @Prop({ type: [String], enum: EmailVerificationSource })
     sources: EmailVerificationSource[]
 }
 

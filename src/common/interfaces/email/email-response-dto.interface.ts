@@ -1,6 +1,6 @@
 import { EmailPatternEnum } from '../../enums'
 
-export interface EmailResponseDto {
+export interface IEmailResponseDto {
     email: string
 
     username: string

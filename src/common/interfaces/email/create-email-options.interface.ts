@@ -1,6 +1,6 @@
 import { EmailPatternEnum } from '../../enums'
 
-export interface ICreateEmailOptions {
+export interface ICreateEmailRequestDto {
     email: string
     exists: boolean | null
     format?: EmailPatternEnum

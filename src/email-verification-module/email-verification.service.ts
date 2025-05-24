@@ -1,18 +1,84 @@
 import { Injectable } from '@nestjs/common'
-import { parseTimeString } from '../util/time'
-import { IEmailService, IEmailVerifier } from '../common'
+import {
+    IDomainService,
+    IEmailResponseDto,
+    IEmailService,
+    IEmailVerificationRequestDto,
+    IEmailVerificationResultDto,
+    IEmailVerificationService,
+    IEmailVerifier,
+    parseTimeString,
+} from '../common'
 import { Model } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
+import { DomainResponseDto } from '../domain-module/dto'
+import { DomainVerificationForbiddenException } from './exceptions'
 
 @Injectable()
-export class EmailVerificationService {
+export class EmailVerificationService implements IEmailVerificationService {
     private static readonly VERIFICATION_SHELF_LIFE = parseTimeString('1d')
-    private static readonly INITIAL_COUNT = 0
-    private static readonly COUNT_INCREMENT = 1
 
     constructor(
         private readonly emailVerifier: IEmailVerifier,
         private readonly emailVerificationModel: Model<EmailVerification>,
         private readonly emailService: IEmailService,
+        private readonly domainService: IDomainService,
     ) {}
+
+    private static validateDomain(domain: DomainResponseDto | null): void {
+        if (domain === null) return
+
+        if (domain.isVerificationForbidden) {
+            throw new DomainVerificationForbiddenException(domain.name)
+        }
+    }
+
+    private static hasRecentVerification(
+        lastVerificationData: Pick<IEmailResponseDto, 'lastVerificationId' | 'lastVerifiedAt'>,
+    ): lastVerificationData is Required<Pick<IEmailResponseDto, 'lastVerificationId' | 'lastVerifiedAt'>> {
+        const { lastVerifiedAt, lastVerificationId } = lastVerificationData
+        return (
+            lastVerifiedAt !== undefined &&
+            lastVerificationId !== undefined &&
+            Date.now() - lastVerifiedAt.getTime() < EmailVerificationService.VERIFICATION_SHELF_LIFE
+        )
+    }
+
+    async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResultDto> {
+        email = email.toLowerCase()
+
+        const [, domain] = email.split('@')
+
+        const domainData = await this.domainService.getDomain(domain)
+        EmailVerificationService.validateDomain(domainData)
+
+        const emailRecord = await this.emailService.updateEmail(email, {
+            format,
+            exists: null,
+        })
+
+        const hasRecentVerification = EmailVerificationService.hasRecentVerification(emailRecord)
+
+        if (hasRecentVerification) {
+            const previousVerification = await this.emailVerificationModel.findById(emailRecord.lastVerificationId)
+            if (previousVerification?.exists != null) {
+                return previousVerification
+            }
+        }
+
+        const emailVerificationResult = await this.emailVerifier.verify({ email, format })
+
+        const emailVerificationRecord = await this.emailVerificationModel.findOneAndUpdate(
+            { _id: emailRecord.lastVerificationId },
+            emailVerificationResult,
+            { upsert: true, new: true },
+        )
+
+        await this.emailService.updateEmail(email, {
+            exists: emailVerificationResult.exists,
+            lastVerificationId: emailVerificationRecord._id.toHexString(),
+        })
+
+        return emailVerificationRecord
+    }
 }

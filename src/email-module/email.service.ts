@@ -1,6 +1,6 @@
 import { InjectModel } from '@nestjs/mongoose'
 import { Email } from './email.schema'
-import { ICreateEmailOptions, IEmailService, IUpdateEmailOptions } from '../common'
+import { ICreateEmailRequestDto, IEmailService, IUpdateEmailRequestDto } from '../common'
 import { Injectable } from '@nestjs/common'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { InjectMapper } from '@automapper/nestjs'
@@ -15,7 +15,7 @@ export class EmailService implements IEmailService {
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
-    async createEmail({ email, exists, format }: ICreateEmailOptions): Promise<EmailResponseDto> {
+    async createEmail({ email, exists, format }: ICreateEmailRequestDto): Promise<EmailResponseDto> {
         const [username, domain] = email.split('@')
         const createdAt = new Date()
 
@@ -52,6 +52,8 @@ export class EmailService implements IEmailService {
     }
 
     async updateEmail(email: string, { format, exists }: IUpdateEmailOptions): Promise<EmailResponseDto> {
+        const [username, domain] = email
+
         const updatedEmail = await this.emailModel
             .findOneAndUpdate(
                 { _id: email },
@@ -59,6 +61,10 @@ export class EmailService implements IEmailService {
                     $set: {
                         format,
                         exists,
+                    },
+                    $setOnInsert: {
+                        username,
+                        domain,
                     },
                 },
                 { new: true, upsert: true },

@@ -1,4 +1,4 @@
-import { parseTimeString } from '../util/time'
+import { parseTimeString } from '../common'
 import type { SmtpClientTimeoutConfig } from './client'
 
 export const SMTP_PORT = 25

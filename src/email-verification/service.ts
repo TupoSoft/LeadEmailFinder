@@ -4,7 +4,7 @@ import type { EmailVerificationRequest, EmailVerificationResult } from './dto'
 import type { Domain, DomainRepository, EmailPatternUsage } from '../domain'
 import type { EmailRecord, EmailRepository } from '../email/repository'
 import type { EmailPattern } from '../email/enums'
-import { parseTimeString } from '../util/time'
+import { parseTimeString } from '../common'
 import { DomainVerificationForbiddenError } from './errors'
 
 export interface IEmailVerificationService {

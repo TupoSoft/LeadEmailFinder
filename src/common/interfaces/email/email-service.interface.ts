@@ -1,14 +1,13 @@
 import { EmailResponseDto } from '../../../email-module/dto'
-import { ICreateEmailOptions } from './create-email-options.interface'
-
-export type IUpdateEmailOptions = Partial<Pick<ICreateEmailOptions, 'format' | 'exists'>>
+import { ICreateEmailRequestDto } from './create-email-options.interface'
+import { IUpdateEmailRequestDto } from './update-email-request-dto.interface'
 
 export interface IEmailService {
-    createEmail(options: ICreateEmailOptions): Promise<EmailResponseDto>
+    createEmail(options: ICreateEmailRequestDto): Promise<EmailResponseDto>
 
     getEmails(): Promise<EmailResponseDto[]>
 
     getEmail(email: string): Promise<EmailResponseDto>
 
-    updateEmail(email: string, options: IUpdateEmailOptions): Promise<EmailResponseDto>
+    updateEmail(email: string, options: IUpdateEmailRequestDto): Promise<EmailResponseDto>
 }
