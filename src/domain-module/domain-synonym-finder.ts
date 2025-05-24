@@ -1,5 +1,5 @@
 import { extractDomains, findRelevantLinks } from './domain.util'
-import { IDomainSynonymFinder } from './interfaces'
+import { IDomainSynonymFinder } from '../common'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { IDomainService } from './interfaces'
+import { IDomainService } from '../common'
 import { DomainResponseDto } from './dto'
 import { InjectModel } from '@nestjs/mongoose'
 import { Domain } from './domain.schema'

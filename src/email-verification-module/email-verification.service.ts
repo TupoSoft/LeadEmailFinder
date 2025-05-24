@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { parseTimeString } from '../util/time'
-import { IEmailVerifier } from '../common'
+import { IEmailService, IEmailVerifier } from '../common'
 import { Model } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
 
@@ -13,5 +13,6 @@ export class EmailVerificationService {
     constructor(
         private readonly emailVerifier: IEmailVerifier,
         private readonly emailVerificationModel: Model<EmailVerification>,
+        private readonly emailService: IEmailService,
     ) {}
 }
