@@ -47,7 +47,15 @@ describe('DomainService', () => {
     describe('getDomain', () => {
         it('should return a DomainResponseDto when a domain is found', async () => {
             const domainName = 'example.com'
-            const domain: Domain = { _id: domainName, catchAllEnabled: true, createdAt: date, updatedAt: date }
+            const domain: Domain = {
+                _id: domainName,
+                catchAllEnabled: true,
+                createdAt: date,
+                updatedAt: date,
+                isFree: false,
+                isDisposable: false,
+                isVerificationForbidden: false,
+            }
             const domainResponseDto: IDomainResponseDto = {
                 name: domainName,
                 catchAllEnabled: true,
@@ -101,6 +109,9 @@ describe('DomainService', () => {
                 isVerificationForbidden: false,
                 createdAt: date,
                 updatedAt: date,
+                catchAllEnabled: false,
+                isFree: false,
+                isDisposable: false,
             }
 
             domainModelMock.findById.mockReturnValue({
@@ -120,6 +131,9 @@ describe('DomainService', () => {
                 isVerificationForbidden: true,
                 createdAt: date,
                 updatedAt: date,
+                catchAllEnabled: false,
+                isFree: false,
+                isDisposable: false,
             }
 
             domainModelMock.findById.mockReturnValue({

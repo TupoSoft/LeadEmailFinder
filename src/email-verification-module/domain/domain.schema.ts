@@ -7,7 +7,7 @@ export class Domain {
     _id: string
 
     @Prop({ default: null })
-    catchAllEnabled?: boolean
+    catchAllEnabled: boolean
 
     @Prop({ default: false })
     isFree: boolean
@@ -20,6 +20,10 @@ export class Domain {
 
     @Prop()
     mxRecords?: MxRecord[]
+
+    createdAt: Date
+
+    updatedAt: Date
 }
 
 export const DomainSchema = SchemaFactory.createForClass(Domain)
