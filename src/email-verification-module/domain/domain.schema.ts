@@ -6,8 +6,8 @@ export class Domain {
     @Prop()
     _id: string
 
-    @Prop({ default: null })
-    catchAllEnabled: boolean
+    @Prop({ default: null, type: Boolean })
+    catchAllEnabled: boolean | null
 
     @Prop({ default: false })
     isFree: boolean
