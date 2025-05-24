@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
 import {
-    IDomainResponseDto,
     IDomainService,
     IEmailResponseDto,
     IEmailService,
@@ -27,14 +26,6 @@ export class EmailVerificationService implements IEmailVerificationService {
         @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
     ) {}
 
-    private static validateDomain(domain: IDomainResponseDto | null): void {
-        if (domain === null) return
-
-        if (domain.isVerificationForbidden) {
-            throw new DomainVerificationForbiddenException(domain.name)
-        }
-    }
-
     private static hasRecentVerification(
         lastVerificationData: Pick<IEmailResponseDto, 'lastVerificationId' | 'lastVerifiedAt'>,
     ): lastVerificationData is Required<Pick<IEmailResponseDto, 'lastVerificationId' | 'lastVerifiedAt'>> {
@@ -49,10 +40,9 @@ export class EmailVerificationService implements IEmailVerificationService {
     async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResultDto> {
         email = email.toLowerCase()
 
-        const [, domain] = email.split('@')
+        const [, domainName] = email.split('@')
 
-        const domainData = await this.domainService.getDomain(domain)
-        EmailVerificationService.validateDomain(domainData)
+        await this.validateDomain(domainName)
 
         const emailRecord = await this.emailService.updateEmail(email, {
             format,
@@ -82,5 +72,13 @@ export class EmailVerificationService implements IEmailVerificationService {
         })
 
         return emailVerificationRecord
+    }
+
+    private async validateDomain(domainName: string): Promise<void> {
+        const isAllowed = await this.domainService.isVerificationAllowed(domainName)
+
+        if (!isAllowed) {
+            throw new DomainVerificationForbiddenException(domainName)
+        }
     }
 }

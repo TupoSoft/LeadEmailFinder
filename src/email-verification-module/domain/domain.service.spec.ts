@@ -79,4 +79,57 @@ describe('DomainService', () => {
             expect(mapperMock.map).not.toHaveBeenCalled()
         })
     })
+
+    describe('isVerificationAllowed', () => {
+        it('should return true when domain does not exist', async () => {
+            const domainName = 'non-existent.com'
+
+            domainModelMock.findById.mockReturnValue({
+                exec: jest.fn().mockResolvedValue(null),
+            } as any)
+
+            const result = await service.isVerificationAllowed(domainName)
+
+            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(result).toBe(true)
+        })
+
+        it('should return true when domain exists and isVerificationForbidden is false', async () => {
+            const domainName = 'example.com'
+            const domain: Domain = {
+                _id: domainName,
+                isVerificationForbidden: false,
+                createdAt: date,
+                updatedAt: date,
+            }
+
+            domainModelMock.findById.mockReturnValue({
+                exec: jest.fn().mockResolvedValue(domain),
+            } as any)
+
+            const result = await service.isVerificationAllowed(domainName)
+
+            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(result).toBe(true)
+        })
+
+        it('should return false when domain exists and isVerificationForbidden is true', async () => {
+            const domainName = 'forbidden.com'
+            const domain: Domain = {
+                _id: domainName,
+                isVerificationForbidden: true,
+                createdAt: date,
+                updatedAt: date,
+            }
+
+            domainModelMock.findById.mockReturnValue({
+                exec: jest.fn().mockResolvedValue(domain),
+            } as any)
+
+            const result = await service.isVerificationAllowed(domainName)
+
+            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(result).toBe(false)
+        })
+    })
 })
