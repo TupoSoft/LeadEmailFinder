@@ -6,17 +6,17 @@ export class Domain {
     @Prop()
     _id: string
 
-    @Prop()
-    catchAllEnabled?: boolean
+    @Prop({ default: null, type: Boolean })
+    catchAllEnabled: boolean | null
 
-    @Prop()
-    isFree?: boolean
+    @Prop({ default: false })
+    isFree: boolean
 
-    @Prop()
-    isDisposable?: boolean
+    @Prop({ default: false })
+    isDisposable: boolean
 
-    @Prop()
-    isVerificationForbidden?: boolean
+    @Prop({ default: false })
+    isVerificationForbidden: boolean
 
     @Prop()
     mxRecords?: MxRecord[]

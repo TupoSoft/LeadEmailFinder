@@ -24,4 +24,14 @@ export class DomainService implements IDomainService {
 
         return this.mapper.map(domain, Domain, DomainResponseDto)
     }
+
+    async isVerificationAllowed(name: string): Promise<boolean> {
+        const domain = await this.domainModel.findById(name).exec()
+
+        if (domain === null) {
+            return true
+        }
+
+        return !domain.isVerificationForbidden
+    }
 }
