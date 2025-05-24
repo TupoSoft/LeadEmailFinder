@@ -21,10 +21,10 @@ export class EmailVerification {
     @Prop()
     mxDomain?: string
 
-    @Prop()
+    @Prop({ type: Boolean, default: null })
     exists: boolean | null
 
-    @Prop()
+    @Prop({ type: Boolean, default: null })
     catchAll: boolean | null
 
     @Prop({ type: String, enum: EmailVerificationReason })

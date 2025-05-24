@@ -9,5 +9,6 @@ import { HttpModule } from '@nestjs/axios'
 @Module({
     imports: [MongooseModule.forFeature([{ name: Domain.name, schema: DomainSchema }]), HttpModule],
     providers: [DomainProfile, DomainService, HTMLDomainSynonymFinder],
+    exports: [DomainService],
 })
 export class DomainModule {}
