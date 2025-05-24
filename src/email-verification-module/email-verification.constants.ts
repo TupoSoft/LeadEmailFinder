@@ -1,2 +1,5 @@
 export const SMTP_VERIFIER_TOKEN = 'SmtpVerifierToken'
 export const CATCH_ALL_VERIFIERS_TOKEN = 'CatchAllVerifiersToken'
+export const EMAIL_VERIFIER_TOKEN = 'EmailVerifierToken'
+export const EMAIL_SERVICE_TOKEN = 'EmailServiceToken'
+export const DOMAIN_SERVICE_TOKEN = 'DomainServiceToken'

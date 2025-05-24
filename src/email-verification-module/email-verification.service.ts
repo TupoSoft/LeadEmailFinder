@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import {
     IDomainResponseDto,
     IDomainService,
@@ -13,16 +13,18 @@ import {
 import { Model } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
 import { DomainVerificationForbiddenException } from './exceptions'
+import { InjectModel } from '@nestjs/mongoose'
+import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
 
 @Injectable()
 export class EmailVerificationService implements IEmailVerificationService {
     private static readonly VERIFICATION_SHELF_LIFE = parseTimeString('1d')
 
     constructor(
-        private readonly emailVerifier: IEmailVerifier,
-        private readonly emailVerificationModel: Model<EmailVerification>,
-        private readonly emailService: IEmailService,
-        private readonly domainService: IDomainService,
+        @Inject(EMAIL_VERIFIER_TOKEN) private readonly emailVerifier: IEmailVerifier,
+        @InjectModel(EmailVerification.name) private readonly emailVerificationModel: Model<EmailVerification>,
+        @Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService,
+        @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
     ) {}
 
     private static validateDomain(domain: IDomainResponseDto | null): void {
