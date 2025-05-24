@@ -51,7 +51,7 @@ export class EmailService implements IEmailService {
         return this.mapper.map(emailModel, Email, EmailResponseDto)
     }
 
-    async updateEmail(email: string, { format, exists }: IUpdateEmailOptions): Promise<EmailResponseDto> {
+    async updateEmail(email: string, { format, exists }: IUpdateEmailRequestDto): Promise<EmailResponseDto> {
         const [username, domain] = email
 
         const updatedEmail = await this.emailModel

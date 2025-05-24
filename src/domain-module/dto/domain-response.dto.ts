@@ -1,7 +1,8 @@
 import type { MxRecord } from 'node:dns'
 import { Expose } from 'class-transformer'
+import { IDomainResponseDto } from '../../common'
 
-export class DomainResponseDto {
+export class DomainResponseDto implements IDomainResponseDto {
     @Expose()
     name: string
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import {
+    IDomainResponseDto,
     IDomainService,
     IEmailResponseDto,
     IEmailService,
@@ -11,7 +12,6 @@ import {
 } from '../common'
 import { Model } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
-import { DomainResponseDto } from '../domain-module/dto'
 import { DomainVerificationForbiddenException } from './exceptions'
 
 @Injectable()
@@ -25,7 +25,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         private readonly domainService: IDomainService,
     ) {}
 
-    private static validateDomain(domain: DomainResponseDto | null): void {
+    private static validateDomain(domain: IDomainResponseDto | null): void {
         if (domain === null) return
 
         if (domain.isVerificationForbidden) {
