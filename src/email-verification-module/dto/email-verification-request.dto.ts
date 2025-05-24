@@ -1,6 +1,6 @@
-import { EmailPatternEnum } from '../../common'
+import { EmailPatternEnum, IEmailVerificationRequestDto } from '../../common'
 
-export class EmailVerificationRequestDto {
+export class EmailVerificationRequestDto implements IEmailVerificationRequestDto {
     email: string
     format?: EmailPatternEnum
 }

@@ -1,4 +1,4 @@
-import { parseTimeString } from '../util/time'
+import { parseTimeString } from '../common'
 
 export const SMTP_PORT = 25
 export const DEFAULT_SMTP_CLIENT_TIMEOUT = parseTimeString('1m')

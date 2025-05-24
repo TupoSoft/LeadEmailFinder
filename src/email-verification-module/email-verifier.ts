@@ -1,13 +1,18 @@
-import { ICatchAllVerifier, ISmtpVerifier } from '../common'
+import {
+    EmailVerificationReason,
+    EmailVerificationSource,
+    ICatchAllVerifier,
+    IEmailVerifier,
+    ISmtpVerifier,
+} from '../common'
 import { EmailVerificationRequestDto, EmailVerificationResultDto } from './dto'
-import { EmailVerificationReason, EmailVerificationSource } from './enums'
 import { getSecondLevelDomain } from '../dns-module'
 import { isEmailVerificationSource } from './type-guards'
 import { Inject, Injectable } from '@nestjs/common'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verification.constants'
 
 @Injectable()
-export class EmailVerifier {
+export class EmailVerifier implements IEmailVerifier {
     private static readonly CATCH_ALL_EMAIL_USERNAME = 'tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak'
 
     constructor(

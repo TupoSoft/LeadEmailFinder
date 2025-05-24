@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
-import { EmailModule } from './email-module'
 import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
-import { DomainModule } from './domain-module'
 import { EmailVerificationModule } from './email-verification-module'
 
 @Module({
@@ -30,8 +28,6 @@ import { EmailVerificationModule } from './email-verification-module'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
-        DomainModule,
-        EmailModule,
         EmailVerificationModule,
     ],
 })

@@ -2,7 +2,7 @@ import type { Redis } from 'ioredis'
 import { type DNSTypeMap, fetchRecords } from './util'
 import console from 'node:console'
 import type { Logger } from '../logging'
-import { parseTimeString } from '../util/time'
+import { parseTimeString } from '../common'
 
 export interface DNSCache {
     resolve: <T extends keyof DNSTypeMap>(name: string, type: T) => Promise<DNSTypeMap[T]>

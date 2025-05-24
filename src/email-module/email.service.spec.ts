@@ -1,12 +1,10 @@
-import { beforeEach } from '@jest/globals'
 import { Test } from '@nestjs/testing'
 import { EmailService } from './email.service'
 import { Email } from './email.schema'
 import { getModelToken } from '@nestjs/mongoose'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
-import { CreateEmailOptions, UpdateEmailOptions } from './interfaces'
-import { EmailPatternEnum } from '../common'
+import { EmailPatternEnum, ICreateEmailRequestDto, IUpdateEmailRequestDto } from '../common'
 import { EmailResponseDto } from './dto'
 import { when } from 'jest-when'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
@@ -31,7 +29,9 @@ const mockedMapper: jest.Mocked<Pick<Mapper, 'map' | 'mapArray'>> = {
     mapArray: jest.fn(),
 }
 
-const email = 'user@test.com'
+const username = 'user'
+const domain = 'test.com'
+const email = `${username}@${domain}`
 
 const emailDoc: Email = {
     _id: email,
@@ -58,7 +58,7 @@ describe('EmailService tests', () => {
     let emailModel: jest.Mocked<Model<Email>>
     let mapper: jest.Mocked<Mapper>
 
-    beforeEach(async () => {
+    beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({
             providers: [
                 {
@@ -73,13 +73,13 @@ describe('EmailService tests', () => {
         service = moduleRef.get(EmailService)
         emailModel = moduleRef.get(getModelToken(Email.name))
         mapper = moduleRef.get(getMapperToken())
-
-        jest.clearAllMocks()
     })
+
+    afterEach(() => jest.resetAllMocks())
 
     describe('createEmail', () => {
         it('should create and return a mapped EmailResponseDto', async () => {
-            const createEmailOptions: CreateEmailOptions = {
+            const createEmailOptions: ICreateEmailRequestDto = {
                 email: 'user@test.com',
                 exists: true,
                 format: EmailPatternEnum.FDotLast,
@@ -101,7 +101,7 @@ describe('EmailService tests', () => {
         })
 
         it('should throw EmailAlreadyExistsException if exists', async () => {
-            const createEmailOptions: CreateEmailOptions = {
+            const createEmailOptions: ICreateEmailRequestDto = {
                 email: 'user@test.com',
                 exists: true,
                 format: EmailPatternEnum.FDotLast,
@@ -156,7 +156,7 @@ describe('EmailService tests', () => {
 
     describe('updateEmail', () => {
         it('should update and return mapped email when found', async () => {
-            const options: UpdateEmailOptions = { format: EmailPatternEnum.First, exists: false }
+            const options: IUpdateEmailRequestDto = { format: EmailPatternEnum.First, exists: false }
             const updatedDoc = Object.assign({}, emailDoc, options)
             const updatedEmailResponseDto = Object.assign({}, emailResponseDto, options)
 
@@ -170,7 +170,7 @@ describe('EmailService tests', () => {
 
             expect(emailModel.findOneAndUpdate).toHaveBeenCalledWith(
                 { _id: email },
-                { $set: options },
+                { $set: options, $setOnInsert: { username, domain } },
                 { new: true, upsert: true },
             )
             expect(mapper.map).toHaveBeenCalledWith(updatedDoc, Email, EmailResponseDto)

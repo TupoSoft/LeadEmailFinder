@@ -12,10 +12,11 @@ import { EmailProfile } from './email.profile'
     providers: [
         {
             provide: EMAIL_SERVICE_TOKEN,
-            useClass: EmailService,
+            useExisting: EmailService,
         },
+        EmailService,
         EmailProfile,
     ],
-    exports: [EMAIL_SERVICE_TOKEN],
+    exports: [EmailService],
 })
 export class EmailModule {}

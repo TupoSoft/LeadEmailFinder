@@ -3,10 +3,9 @@ import { ConflictException, HttpStatus, INestApplication, NotFoundException } fr
 import request from 'supertest'
 import { EmailController } from './email.controller'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
-import { IEmailService } from './interfaces'
+import { EmailPatternEnum, IEmailService } from '../common'
 import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
 import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
-import { EmailPatternEnum } from '../common'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),
