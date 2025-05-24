@@ -3,18 +3,18 @@ import { ProxyService } from './proxy.service'
 import { getModelToken } from '@nestjs/mongoose'
 import { Mapper } from '@automapper/core'
 import { Model, Types } from 'mongoose'
-import { ProxyNotFoundException } from './exceptions'
 import { Proxy } from './proxy.schema'
-import { ProxyResponse } from './dto'
 import { getMapperToken } from '@automapper/nestjs'
-import { ProxyType } from './enums'
+import { ProxyResponse } from './proxy-response.dto'
+import { ProxyNotFoundException } from './proxy-not-found.exception'
+import { ProxyType } from './proxy-type.enum'
 
 describe('ProxyService', () => {
     let service: ProxyService
     let model: jest.Mocked<Model<Proxy>>
     let mapper: jest.Mocked<Mapper>
 
-    beforeEach(async () => {
+    beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProxyService,

@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { IDomainService } from '../../common'
-import { DomainResponseDto } from './dto'
 import { InjectModel } from '@nestjs/mongoose'
 import { Domain } from './domain.schema'
 import { Model } from 'mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { DomainNotFoundException } from './exceptions'
+import { DomainNotFoundException } from './domain-not-found.exception'
+import { DomainResponseDto } from './domain-response.dto'
 
 @Injectable()
 export class DomainService implements IDomainService {

@@ -1,5 +1,5 @@
-import { DomainResponseDto } from '../../../email-verification-module/domain/dto'
+import { IDomainResponseDto } from './domain-response-dto.interface'
 
 export interface IDomainService {
-    getDomain(name: string): Promise<DomainResponseDto>
+    getDomain(name: string): Promise<IDomainResponseDto>
 }

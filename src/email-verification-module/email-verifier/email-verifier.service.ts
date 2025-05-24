@@ -2,14 +2,15 @@ import {
     EmailVerificationReason,
     EmailVerificationSource,
     ICatchAllVerifier,
+    IEmailVerificationRequestDto,
+    IEmailVerificationResultDto,
     IEmailVerifier,
     ISmtpVerifier,
 } from '../../common'
-import { EmailVerificationRequestDto, EmailVerificationResultDto } from '../dto'
 import { getSecondLevelDomain } from './smtp/dns'
-import { isEmailVerificationSource } from '../type-guards'
 import { Inject, Injectable } from '@nestjs/common'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
+import { isEmailVerificationSource } from './email-verifier.type-guards'
 
 @Injectable()
 export class EmailVerifier implements IEmailVerifier {
@@ -21,8 +22,8 @@ export class EmailVerifier implements IEmailVerifier {
     ) {}
 
     private static shouldVerifyViaHttp(
-        emailVerification: EmailVerificationResultDto,
-    ): emailVerification is EmailVerificationResultDto &
+        emailVerification: IEmailVerificationResultDto,
+    ): emailVerification is IEmailVerificationResultDto &
         (
             | {
                   catchAll: true
@@ -36,10 +37,10 @@ export class EmailVerifier implements IEmailVerifier {
         return getSecondLevelDomain(targetExchange ?? '')
     }
 
-    async verify({ email, format }: EmailVerificationRequestDto): Promise<EmailVerificationResultDto> {
+    async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResultDto> {
         const [localPart, domain] = email.split('@')
 
-        const emailVerification: EmailVerificationResultDto = {
+        const emailVerification: IEmailVerificationResultDto = {
             exists: null,
             catchAll: null,
             reason: EmailVerificationReason.Unknown,

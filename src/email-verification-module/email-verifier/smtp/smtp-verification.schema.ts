@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
-import { SmtpVerificationReason } from './enums'
+import { SmtpVerificationReason } from './smtp.enums'
 
 @Schema()
 export class SmtpVerification {

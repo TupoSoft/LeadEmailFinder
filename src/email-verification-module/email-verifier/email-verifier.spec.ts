@@ -1,7 +1,7 @@
 import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier, ISmtpVerifier } from '../../common'
 import { EmailVerifier } from './email-verifier.service'
 import { Test } from '@nestjs/testing'
-import { EmailVerificationRequestDto } from '../dto'
+import { EmailVerificationRequestDto } from '../email-verification-request.dto'
 
 const email = 'danilo@microsoft.com'
 const [, domain] = email.split('@')

@@ -1,2 +1,6 @@
 export * from './catch-all.module'
-export * from './verifiers'
+export { MicrosoftLogin } from './microsoft-login'
+export { OfficeApps } from './office-apps'
+export { MimecastLogin } from './mimecast-login'
+export { MicrosoftGetCredentialType } from './microsoft-get-credential-type'
+export { LinkedInLogin } from './linkedin-login'

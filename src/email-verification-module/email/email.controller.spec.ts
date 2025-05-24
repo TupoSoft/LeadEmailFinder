@@ -4,8 +4,11 @@ import request from 'supertest'
 import { EmailController } from './email.controller'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { EmailPatternEnum, IEmailService } from '../../common'
-import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
-import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
+import { CreateEmailRequestDto } from './create-email-request.dto'
+import { UpdateEmailRequestDto } from './update-email-request.dto'
+import { EmailResponseDto } from './email-response.dto'
+import { EmailAlreadyExistsException } from './email-already-exists.exception'
+import { EmailNotFoundException } from './email-not-found.exception'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),

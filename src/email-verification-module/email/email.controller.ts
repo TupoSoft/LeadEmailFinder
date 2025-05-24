@@ -10,10 +10,13 @@ import {
     Patch,
     Post,
 } from '@nestjs/common'
-import { CreateEmailRequestDto, EmailResponseDto, UpdateEmailRequestDto } from './dto'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { IEmailService } from '../../common'
-import { EmailAlreadyExistsException, EmailNotFoundException } from './exceptions'
+import { CreateEmailRequestDto } from './create-email-request.dto'
+import { EmailResponseDto } from './email-response.dto'
+import { EmailAlreadyExistsException } from './email-already-exists.exception'
+import { EmailNotFoundException } from './email-not-found.exception'
+import { UpdateEmailRequestDto } from './update-email-request.dto'
 
 @Controller('emails')
 export class EmailController {
