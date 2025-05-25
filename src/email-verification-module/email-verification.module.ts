@@ -1,11 +1,17 @@
 import { Module } from '@nestjs/common'
-import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
+import {
+    DOMAIN_SERVICE_TOKEN,
+    EMAIL_SERVICE_TOKEN,
+    EMAIL_VERIFICATION_SERVICE_TOKEN,
+    EMAIL_VERIFIER_TOKEN,
+} from './email-verification.constants'
 import { MongooseModule } from '@nestjs/mongoose'
 import { EmailVerification, EmailVerificationSchema } from './email-verification.schema'
 import { EmailModule, EmailService } from './email'
 import { DomainModule, DomainService } from './domain'
 import { EmailVerifier, EmailVerifierModule } from './email-verifier'
 import { EmailVerificationService } from './email-verification.service'
+import { EmailVerificationController } from './email-verification.controller'
 
 @Module({
     imports: [
@@ -33,7 +39,12 @@ import { EmailVerificationService } from './email-verification.service'
             provide: DOMAIN_SERVICE_TOKEN,
             useExisting: DomainService,
         },
+        {
+            provide: EMAIL_VERIFICATION_SERVICE_TOKEN,
+            useExisting: EmailVerificationService,
+        },
     ],
+    controllers: [EmailVerificationController],
     exports: [EmailVerificationService],
 })
 export class EmailVerificationModule {}

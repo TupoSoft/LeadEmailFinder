@@ -20,15 +20,6 @@ export class EmailVerificationResultDto implements IEmailVerificationResultDto {
     format?: EmailPatternEnum
 
     @Expose()
-    mxDomain?: string
-
-    @Expose()
-    targetExchange?: string
-
-    @Expose()
-    sources: EmailVerificationSource[]
-
-    @Expose()
     exists: boolean | null
 
     @Expose()
@@ -36,4 +27,13 @@ export class EmailVerificationResultDto implements IEmailVerificationResultDto {
 
     @Expose()
     reason: EmailVerificationReason
+
+    @Expose()
+    sources: EmailVerificationSource[]
+
+    @Expose()
+    mxDomain?: string
+
+    @Expose()
+    targetExchange?: string
 }
