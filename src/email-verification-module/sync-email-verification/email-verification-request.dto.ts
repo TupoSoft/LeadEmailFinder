@@ -1,4 +1,4 @@
-import { EmailPatternEnum, IEmailVerificationRequestDto } from '../common'
+import { EmailPatternEnum, IEmailVerificationRequestDto } from '../../common'
 import { IsEmail, IsEnum, IsOptional } from 'class-validator'
 
 export class EmailVerificationRequestDto implements IEmailVerificationRequestDto {

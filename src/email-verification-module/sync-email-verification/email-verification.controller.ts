@@ -1,5 +1,5 @@
 import { Body, Controller, Inject, Post } from '@nestjs/common'
-import { IEmailVerificationService } from '../common'
+import { IEmailVerificationService } from '../../common'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'

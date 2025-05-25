@@ -1,8 +1,8 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq'
 import { Job } from 'bullmq'
-import { IEmailVerificationResponseDto, IEmailVerificationService } from '../common'
+import { IEmailVerificationResponseDto, IEmailVerificationService } from '../../common'
 import { Inject } from '@nestjs/common'
-import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
+import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 
 @Processor('email-verification')
 export class EmailVerificationProcessor extends WorkerHost {

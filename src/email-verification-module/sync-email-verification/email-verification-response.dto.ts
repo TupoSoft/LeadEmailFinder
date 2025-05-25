@@ -4,7 +4,7 @@ import {
     EmailVerificationReason,
     EmailVerificationSource,
     IEmailVerificationResponseDto,
-} from '../common'
+} from '../../common'
 
 export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
     @Expose()
