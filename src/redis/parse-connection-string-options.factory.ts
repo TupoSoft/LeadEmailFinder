@@ -25,7 +25,12 @@ export class ParseConnectionStringOptionsFactory {
     }
 
     create(): RedisOptions {
-        return this.parseRedisUrl()
+        const parsedOptions = this.parseRedisUrl()
+
+        return {
+            maxRetriesPerRequest: null,
+            ...parsedOptions,
+        }
     }
 
     private parseRedisUrl(): RedisOptions {

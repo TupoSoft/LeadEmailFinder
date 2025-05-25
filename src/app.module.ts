@@ -7,6 +7,8 @@ import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
+import { BullModule } from '@nestjs/bullmq'
+import { Redis } from 'ioredis'
 
 @Module({
     imports: [
@@ -28,6 +30,12 @@ import { EmailVerificationModule } from './email-verification-module'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
+        BullModule.forRootAsync({
+            useFactory: (connection: Redis) => ({
+                connection,
+            }),
+            inject: [Redis],
+        }),
         EmailVerificationModule,
     ],
 })

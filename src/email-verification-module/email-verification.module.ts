@@ -13,9 +13,19 @@ import { EmailVerifier, EmailVerifierModule } from './email-verifier'
 import { EmailVerificationService } from './email-verification.service'
 import { EmailVerificationController } from './email-verification.controller'
 import { EmailVerificationProfile } from './email-verification.profile'
+import { BullModule } from '@nestjs/bullmq'
+import { EmailVerificationProcessor } from './email-verification.processor'
 
 @Module({
     imports: [
+        BullModule.registerQueue(
+            {
+                name: 'email-verification',
+            },
+            {
+                name: 'email-verification-bulk',
+            },
+        ),
         MongooseModule.forFeature([
             {
                 name: EmailVerification.name,
@@ -29,6 +39,7 @@ import { EmailVerificationProfile } from './email-verification.profile'
     providers: [
         EmailVerificationService,
         EmailVerificationProfile,
+        EmailVerificationProcessor,
         {
             provide: EMAIL_VERIFIER_TOKEN,
             useExisting: EmailVerifier,
