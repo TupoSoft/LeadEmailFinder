@@ -11,7 +11,7 @@
         "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest",
-        "start:dev": "nest start -b swc --type-check -w",
+        "start:dev": "nest start -w",
         "start:debug": "nest start -w -d 0.0.0.0:9229"
     },
     "author": {

@@ -4,7 +4,6 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
 import { Logger } from 'pino-nestjs'
-import metadata from './metadata'
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule)
@@ -29,7 +28,6 @@ async function bootstrap() {
 
     const config = documentBuilder.build()
 
-    await SwaggerModule.loadPluginMetadata(metadata)
     const documentFactory = () => SwaggerModule.createDocument(app, config)
 
     SwaggerModule.setup('/', app, documentFactory)

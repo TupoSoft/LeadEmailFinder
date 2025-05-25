@@ -19,5 +19,8 @@ export class ProxyResponse implements IProxy {
     user?: string
 
     @Expose()
+    password?: string
+
+    @Expose()
     blacklists?: string[]
 }

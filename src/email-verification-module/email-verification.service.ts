@@ -4,16 +4,19 @@ import {
     IEmailResponseDto,
     IEmailService,
     IEmailVerificationRequestDto,
-    IEmailVerificationResultDto,
+    IEmailVerificationResponseDto,
     IEmailVerificationService,
     IEmailVerifier,
     parseTimeString,
 } from '../common'
-import { Model } from 'mongoose'
+import { Model, Types } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
 import { DomainVerificationForbiddenException } from './domain-verification-forbidden.exception'
+import { InjectMapper } from '@automapper/nestjs'
+import { Mapper } from '@automapper/core'
+import { EmailVerificationResponseDto } from './email-verification-response.dto'
 
 @Injectable()
 export class EmailVerificationService implements IEmailVerificationService {
@@ -24,6 +27,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         @InjectModel(EmailVerification.name) private readonly emailVerificationModel: Model<EmailVerification>,
         @Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService,
         @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
+        @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
     private static hasRecentVerification(
@@ -37,7 +41,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         )
     }
 
-    async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResultDto> {
+    async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResponseDto> {
         email = email.toLowerCase()
 
         const [, domainName] = email.split('@')
@@ -54,14 +58,14 @@ export class EmailVerificationService implements IEmailVerificationService {
         if (hasRecentVerification) {
             const previousVerification = await this.emailVerificationModel.findById(emailRecord.lastVerificationId)
             if (previousVerification?.exists != null) {
-                return previousVerification
+                return this.mapper.map(previousVerification, EmailVerification, EmailVerificationResponseDto)
             }
         }
 
         const emailVerificationResult = await this.emailVerifier.verify({ email, format })
 
         const emailVerificationRecord = await this.emailVerificationModel.findOneAndUpdate(
-            { _id: emailRecord.lastVerificationId },
+            { _id: emailRecord.lastVerificationId ?? new Types.ObjectId() },
             emailVerificationResult,
             { upsert: true, new: true },
         )
@@ -71,7 +75,7 @@ export class EmailVerificationService implements IEmailVerificationService {
             lastVerificationId: emailVerificationRecord._id.toHexString(),
         })
 
-        return emailVerificationRecord
+        return this.mapper.map(emailVerificationRecord, EmailVerification, EmailVerificationResponseDto)
     }
 
     private async validateDomain(domainName: string): Promise<void> {

@@ -3,10 +3,13 @@ import {
     EmailPatternEnum,
     EmailVerificationReason,
     EmailVerificationSource,
-    IEmailVerificationResultDto,
+    IEmailVerificationResponseDto,
 } from '../common'
 
-export class EmailVerificationResultDto implements IEmailVerificationResultDto {
+export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
+    @Expose()
+    id: string
+
     @Expose()
     email: string
 

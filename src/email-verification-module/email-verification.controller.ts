@@ -2,7 +2,7 @@ import { Body, Controller, Inject, Post } from '@nestjs/common'
 import { IEmailVerificationService } from '../common'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
-import { EmailVerificationResultDto } from './email-verification-result.dto'
+import { EmailVerificationResponseDto } from './email-verification-response.dto'
 
 @Controller('emails')
 export class EmailVerificationController {
@@ -13,7 +13,7 @@ export class EmailVerificationController {
     @Post('verify')
     async verifyEmail(
         @Body() emailVerificationRequestDto: EmailVerificationRequestDto,
-    ): Promise<EmailVerificationResultDto> {
+    ): Promise<EmailVerificationResponseDto> {
         return await this.emailVerificationService.verify(emailVerificationRequestDto)
     }
 }
