@@ -11,8 +11,9 @@ import {
     SerializeOptions,
 } from '@nestjs/common'
 import {
-    GetAsyncVerificationStatusDto,
-    VerifyAsyncRequestDto,
+    GetAsyncVerificationStatusRequestParamsDto,
+    GetAsyncVerificationStatusResponseDto,
+    VerifyAsyncRequestBodyDto,
     VerifyAsyncResponseDto,
 } from './async-email-verification.dto'
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
@@ -29,13 +30,15 @@ export class AsyncEmailVerificationController {
     @Post()
     @HttpCode(HttpStatus.ACCEPTED)
     @SerializeOptions({ type: VerifyAsyncResponseDto })
-    async verifyAsync(@Body() request: VerifyAsyncRequestDto): Promise<VerifyAsyncResponseDto> {
+    async verifyAsync(@Body() request: VerifyAsyncRequestBodyDto): Promise<VerifyAsyncResponseDto> {
         return await this.asyncEmailVerificationService.verifyAsync(request)
     }
 
     @Get(':id')
-    @SerializeOptions({ type: GetAsyncVerificationStatusDto })
-    async getAsyncVerificationState(@Param('id') id: string): Promise<GetAsyncVerificationStatusDto> {
+    @SerializeOptions({ type: GetAsyncVerificationStatusResponseDto })
+    async getAsyncVerificationState(
+        @Param() { id }: GetAsyncVerificationStatusRequestParamsDto,
+    ): Promise<GetAsyncVerificationStatusResponseDto> {
         try {
             return await this.asyncEmailVerificationService.getAsyncVerificationState(id)
         } catch (error) {

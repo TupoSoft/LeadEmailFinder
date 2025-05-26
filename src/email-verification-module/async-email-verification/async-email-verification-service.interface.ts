@@ -9,6 +9,10 @@ export interface VerifyAsyncResponse {
     id: string
 }
 
+export interface GetAsyncVerificationStatusRequestParams {
+    id: string
+}
+
 export interface GetAsyncVerificationStatus {
     state: JobState
     result?: IEmailVerificationResponseDto

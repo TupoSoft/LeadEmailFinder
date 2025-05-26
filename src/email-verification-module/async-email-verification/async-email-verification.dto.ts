@@ -1,14 +1,15 @@
 import {
     GetAsyncVerificationStatus,
+    GetAsyncVerificationStatusRequestParams,
     VerifyAsyncRequest,
     VerifyAsyncResponse,
 } from './async-email-verification-service.interface'
 import { Expose } from 'class-transformer'
 import { EmailVerificationResponseDto } from '../sync-email-verification/email-verification-response.dto'
 import { JobState } from './job-state.enum'
-import { IsEmail } from 'class-validator'
+import { IsEmail, IsUUID } from 'class-validator'
 
-export class VerifyAsyncRequestDto implements VerifyAsyncRequest {
+export class VerifyAsyncRequestBodyDto implements VerifyAsyncRequest {
     @Expose()
     @IsEmail()
     email: string
@@ -16,10 +17,17 @@ export class VerifyAsyncRequestDto implements VerifyAsyncRequest {
 
 export class VerifyAsyncResponseDto implements VerifyAsyncResponse {
     @Expose()
+    @IsUUID()
     id: string
 }
 
-export class GetAsyncVerificationStatusDto implements GetAsyncVerificationStatus {
+export class GetAsyncVerificationStatusRequestParamsDto implements GetAsyncVerificationStatusRequestParams {
+    @Expose()
+    @IsUUID()
+    id: string
+}
+
+export class GetAsyncVerificationStatusResponseDto implements GetAsyncVerificationStatus {
     @Expose()
     state: JobState
 
