@@ -14,6 +14,12 @@ import { AsyncEmailVerificationController } from './async-email-verification.con
         SyncEmailVerificationModule,
         BullModule.registerQueue({
             name: 'async-email-verification',
+            defaultJobOptions: {
+                attempts: 5,
+                backoff: {
+                    type: 'async-email-verification',
+                },
+            },
         }),
     ],
     providers: [

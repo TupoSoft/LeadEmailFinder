@@ -3,7 +3,7 @@ POST {{host}}/verifyAsync
 Content-Type: application/json
 
 {
-  "email": "kyrylo.kupin@tuposoft.com"
+  "email": "igor.mihajlov@tuposoft.com"
 }
 
 > {%
