@@ -1,1 +1,2 @@
 export const EMAIL_VERIFICATION_SERVICE_TOKEN = 'EmailVerificationServiceToken'
+export const ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN = 'AsyncEmailVerificationServiceToken'

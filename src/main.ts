@@ -12,6 +12,7 @@ async function bootstrap() {
     app.useGlobalInterceptors(
         new ClassSerializerInterceptor(app.get(Reflector), {
             strategy: 'excludeAll',
+            enableImplicitConversion: true,
         }),
     )
 

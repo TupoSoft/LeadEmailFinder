@@ -1,17 +1,40 @@
-import { Controller, Get, NotFoundException, Param, Post } from '@nestjs/common'
-import { GetAsyncVerificationStatusDto, VerifyAsyncResponseDto } from './async-email-verification.dto'
+import {
+    Body,
+    Controller,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Inject,
+    NotFoundException,
+    Param,
+    Post,
+    SerializeOptions,
+} from '@nestjs/common'
+import {
+    GetAsyncVerificationStatusDto,
+    VerifyAsyncRequestDto,
+    VerifyAsyncResponseDto,
+} from './async-email-verification.dto'
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
+import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
+import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 
-@Controller('/emails/:email/verify-async')
+@Controller('/verifyAsync')
 export class AsyncEmailVerificationController {
-    constructor(private readonly asyncEmailVerificationService: AsyncEmailVerificationService) {}
+    constructor(
+        @Inject(ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN)
+        private readonly asyncEmailVerificationService: AsyncEmailVerificationService,
+    ) {}
 
     @Post()
-    async verifyAsync(@Param('email') email: string): Promise<VerifyAsyncResponseDto> {
-        return await this.asyncEmailVerificationService.verifyAsync(email)
+    @HttpCode(HttpStatus.ACCEPTED)
+    @SerializeOptions({ type: VerifyAsyncResponseDto })
+    async verifyAsync(@Body() request: VerifyAsyncRequestDto): Promise<VerifyAsyncResponseDto> {
+        return await this.asyncEmailVerificationService.verifyAsync(request)
     }
 
     @Get(':id')
+    @SerializeOptions({ type: GetAsyncVerificationStatusDto })
     async getAsyncVerificationState(@Param('id') id: string): Promise<GetAsyncVerificationStatusDto> {
         try {
             return await this.asyncEmailVerificationService.getAsyncVerificationState(id)

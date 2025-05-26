@@ -1,0 +1,18 @@
+### Verify Async
+POST {{host}}/verifyAsync
+Content-Type: application/json
+
+{
+  "email": "kyrylo.kupin@tuposoft.com"
+}
+
+> {%
+    client.test('should be ACCEPTED', () => {
+        client.assert(response.status === 202, 'Status code is not 202')
+        client.global.set('jobId', response.body.id)
+    })
+%}
+
+### Get Async Verification Status
+GET {{host}}/verifyAsync/{{jobId}}
+Content-Type: application/json

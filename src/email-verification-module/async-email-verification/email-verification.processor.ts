@@ -4,7 +4,7 @@ import { IEmailVerificationResponseDto, IEmailVerificationService } from '../../
 import { Inject } from '@nestjs/common'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 
-@Processor('email-verification')
+@Processor('async-email-verification')
 export class EmailVerificationProcessor extends WorkerHost {
     constructor(
         @Inject(EMAIL_VERIFICATION_SERVICE_TOKEN) private readonly emailVerificationService: IEmailVerificationService,
