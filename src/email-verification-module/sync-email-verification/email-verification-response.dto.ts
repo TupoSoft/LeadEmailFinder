@@ -3,10 +3,13 @@ import {
     EmailPatternEnum,
     EmailVerificationReason,
     EmailVerificationSource,
-    IEmailVerificationResultDto,
-} from '../common'
+    IEmailVerificationResponseDto,
+} from '../../common'
 
-export class EmailVerificationResultDto implements IEmailVerificationResultDto {
+export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
+    @Expose()
+    id: string
+
     @Expose()
     email: string
 
@@ -20,15 +23,6 @@ export class EmailVerificationResultDto implements IEmailVerificationResultDto {
     format?: EmailPatternEnum
 
     @Expose()
-    mxDomain?: string
-
-    @Expose()
-    targetExchange?: string
-
-    @Expose()
-    sources: EmailVerificationSource[]
-
-    @Expose()
     exists: boolean | null
 
     @Expose()
@@ -36,4 +30,13 @@ export class EmailVerificationResultDto implements IEmailVerificationResultDto {
 
     @Expose()
     reason: EmailVerificationReason
+
+    @Expose()
+    sources: EmailVerificationSource[]
+
+    @Expose()
+    mxDomain?: string
+
+    @Expose()
+    targetExchange?: string
 }

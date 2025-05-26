@@ -20,11 +20,11 @@ import { SmtpVerifier } from './smtp-verifier'
     providers: [
         {
             provide: DNS_SERVICE_TOKEN,
-            useValue: DnsService,
+            useExisting: DnsService,
         },
         {
             provide: PROXY_SERVICE_TOKEN,
-            useValue: ProxyService,
+            useExisting: ProxyService,
         },
         SmtpVerifier,
     ],

@@ -172,7 +172,10 @@ export class SmtpVerifier implements ISmtpVerifier {
 
         const result = await this.tryVerify({ client, email })
 
-        await this.smtpVerificationModel.insertOne(result)
+        await this.smtpVerificationModel.insertOne({
+            _id: email,
+            ...result,
+        })
 
         return result
     }

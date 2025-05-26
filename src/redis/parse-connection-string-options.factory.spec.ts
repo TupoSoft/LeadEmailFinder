@@ -44,6 +44,7 @@ describe('ParseConnectionStringOptionsFactory', () => {
                 db: 5,
                 username: 'user',
                 password: 'pass',
+                maxRetriesPerRequest: null,
             })
         })
 
@@ -56,6 +57,7 @@ describe('ParseConnectionStringOptionsFactory', () => {
                 db: REDIS_DEFAULT_DB_INDEX,
                 username: undefined,
                 password: undefined,
+                maxRetriesPerRequest: null,
             })
         })
 
@@ -92,6 +94,7 @@ describe('ParseConnectionStringOptionsFactory', () => {
                 password,
                 sentinelPassword: password,
                 db: parseInt(dbIndex, 10),
+                maxRetriesPerRequest: null,
             })
         })
 
