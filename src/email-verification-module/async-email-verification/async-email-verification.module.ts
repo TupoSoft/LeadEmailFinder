@@ -3,13 +3,23 @@ import { BullModule } from '@nestjs/bullmq'
 import { AsyncEmailVerificationServiceImpl } from './async-email-verification-service-impl.service'
 import { EmailVerificationProcessor } from './email-verification.processor'
 import { EmailVerificationService, SyncEmailVerificationModule } from '../sync-email-verification'
-import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
+import {
+    ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
+    EMAIL_VERIFICATION_SERVICE_TOKEN,
+} from './async-email-verification.constants'
+import { AsyncEmailVerificationController } from './async-email-verification.controller'
 
 @Module({
     imports: [
         SyncEmailVerificationModule,
         BullModule.registerQueue({
             name: 'async-email-verification',
+            defaultJobOptions: {
+                attempts: 5,
+                backoff: {
+                    type: 'async-email-verification',
+                },
+            },
         }),
     ],
     providers: [
@@ -19,6 +29,11 @@ import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.con
             provide: EMAIL_VERIFICATION_SERVICE_TOKEN,
             useExisting: EmailVerificationService,
         },
+        {
+            provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
+            useExisting: AsyncEmailVerificationServiceImpl,
+        },
     ],
+    controllers: [AsyncEmailVerificationController],
 })
 export class AsyncEmailVerificationModule {}

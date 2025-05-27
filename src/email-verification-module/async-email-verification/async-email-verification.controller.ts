@@ -1,18 +1,44 @@
-import { Controller, Get, NotFoundException, Param, Post } from '@nestjs/common'
-import { GetAsyncVerificationStatusDto, VerifyAsyncResponseDto } from './async-email-verification.dto'
+import {
+    Body,
+    Controller,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Inject,
+    NotFoundException,
+    Param,
+    Post,
+    SerializeOptions,
+} from '@nestjs/common'
+import {
+    GetAsyncVerificationStatusRequestParamsDto,
+    GetAsyncVerificationStatusResponseDto,
+    VerifyAsyncRequestBodyDto,
+    VerifyAsyncResponseDto,
+} from './async-email-verification.dto'
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
+import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
+import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 
-@Controller('/emails/:email/verify-async')
+@Controller('/verifyAsync')
 export class AsyncEmailVerificationController {
-    constructor(private readonly asyncEmailVerificationService: AsyncEmailVerificationService) {}
+    constructor(
+        @Inject(ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN)
+        private readonly asyncEmailVerificationService: AsyncEmailVerificationService,
+    ) {}
 
     @Post()
-    async verifyAsync(@Param('email') email: string): Promise<VerifyAsyncResponseDto> {
-        return await this.asyncEmailVerificationService.verifyAsync(email)
+    @HttpCode(HttpStatus.ACCEPTED)
+    @SerializeOptions({ type: VerifyAsyncResponseDto })
+    async verifyAsync(@Body() request: VerifyAsyncRequestBodyDto): Promise<VerifyAsyncResponseDto> {
+        return await this.asyncEmailVerificationService.verifyAsync(request)
     }
 
     @Get(':id')
-    async getAsyncVerificationState(@Param('id') id: string): Promise<GetAsyncVerificationStatusDto> {
+    @SerializeOptions({ type: GetAsyncVerificationStatusResponseDto })
+    async getAsyncVerificationState(
+        @Param() { id }: GetAsyncVerificationStatusRequestParamsDto,
+    ): Promise<GetAsyncVerificationStatusResponseDto> {
         try {
             return await this.asyncEmailVerificationService.getAsyncVerificationState(id)
         } catch (error) {

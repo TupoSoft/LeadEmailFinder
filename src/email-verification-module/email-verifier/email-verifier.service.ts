@@ -1,6 +1,7 @@
 import {
     EmailVerificationReason,
     EmailVerificationSource,
+    fromStringToEnum,
     ICatchAllVerifier,
     IEmailVerificationRequestDto,
     IEmailVerificationResultDto,
@@ -11,6 +12,7 @@ import { getSecondLevelDomain } from './smtp/dns'
 import { Inject, Injectable } from '@nestjs/common'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
 import { isEmailVerificationSource } from './email-verifier.type-guards'
+import { ok } from 'node:assert'
 
 @Injectable()
 export class EmailVerifier implements IEmailVerifier {
@@ -52,17 +54,22 @@ export class EmailVerifier implements IEmailVerifier {
         }
 
         const wrongEmail = `${EmailVerifier.CATCH_ALL_EMAIL_USERNAME}@${domain}`
-        const { exists, targetExchange, reason } = await this.smtpVerifier.verify(wrongEmail)
+        const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(wrongEmail)
+        const reason = fromStringToEnum(EmailVerificationReason, reasonString)
+        ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
 
         emailVerification.targetExchange = targetExchange
         emailVerification.mxDomain = EmailVerifier.extractMxDomain(targetExchange)
-        emailVerification.reason = reason as EmailVerificationReason
+        emailVerification.reason = reason
         emailVerification.catchAll = exists
 
         if (exists === false) {
-            const { exists, targetExchange, reason } = await this.smtpVerifier.verify(email)
+            const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(email)
+            const reason = fromStringToEnum(EmailVerificationReason, reasonString)
+            ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
+
             emailVerification.exists = exists
-            emailVerification.reason = reason as EmailVerificationReason
+            emailVerification.reason = reason
 
             if (exists !== null) {
                 emailVerification.targetExchange = targetExchange

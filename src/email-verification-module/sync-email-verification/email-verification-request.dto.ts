@@ -1,11 +1,7 @@
-import { EmailPatternEnum, IEmailVerificationRequestDto } from '../../common'
-import { IsEmail, IsEnum, IsOptional } from 'class-validator'
+import { IEmailVerificationRequestDto } from '../../common'
+import { IsEmail } from 'class-validator'
 
 export class EmailVerificationRequestDto implements IEmailVerificationRequestDto {
     @IsEmail()
     email: string
-
-    @IsOptional()
-    @IsEnum(EmailPatternEnum)
-    format?: EmailPatternEnum
 }

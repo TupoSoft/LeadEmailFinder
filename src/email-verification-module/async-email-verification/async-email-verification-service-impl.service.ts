@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
-import { IEmailVerificationResponseDto } from '../../common'
+import { fromStringToEnum, IEmailVerificationResponseDto } from '../../common'
 import { randomUUID } from 'node:crypto'
-import { VerifyAsyncResponse } from './verify-async-response.interface'
-import { GetAsyncVerificationStatus } from './get-async-verification-status.interface'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
-import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
+import {
+    AsyncEmailVerificationService,
+    GetAsyncVerificationStatus,
+    VerifyAsyncRequest,
+    VerifyAsyncResponse,
+} from './async-email-verification-service.interface'
+import { JobState } from './job-state.enum'
+import { ok } from 'node:assert'
 
 @Injectable()
 export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerificationService {
@@ -15,21 +20,28 @@ export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerification
         private readonly queue: Queue<string, IEmailVerificationResponseDto, 'async-email-verification'>,
     ) {}
 
-    async verifyAsync(email: string): Promise<VerifyAsyncResponse> {
+    async verifyAsync({ email }: VerifyAsyncRequest): Promise<VerifyAsyncResponse> {
         const { id } = await this.queue.add('async-email-verification', email, { jobId: randomUUID() })
+
+        ok(
+            id,
+            `Failed to add job to queue. Job ID is undefined. Queue name: async-email-verification. Job data: ${email}`,
+        )
+
         return { id }
     }
 
     async getAsyncVerificationState(id: string): Promise<GetAsyncVerificationStatus> {
         const job = await this.queue.getJob(id)
 
-        if (job === undefined) {
-            throw new AsyncEmailVerificationJobNotFoundException()
-        }
+        ok(job, new AsyncEmailVerificationJobNotFoundException(id))
 
-        const state = await job.getState()
+        const stateString = await job.getState()
+        const state = fromStringToEnum(JobState, stateString)
 
-        if (state !== 'completed') {
+        ok(state, `Unknown job state: ${stateString}. Job ID: ${id}. Job data: ${job.data}`)
+
+        if (state !== JobState.COMPLETED) {
             return {
                 state,
             }
@@ -38,7 +50,7 @@ export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerification
         const { returnvalue: result } = job
 
         return {
-            state,
+            state: state,
             result,
         }
     }
