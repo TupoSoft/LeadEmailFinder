@@ -14,7 +14,7 @@ export class KeyController {
     @Post('generate')
     async generateKey(@Body() generateKeyDto: GenerateKeyDto) {
         const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
-        return JSON.stringify({ apiKey })
+        return JSON.stringify(apiKey)
     }
 
     @Get()

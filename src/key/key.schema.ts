@@ -9,9 +9,6 @@ export class Key {
     @Prop({ required: true, enum: KeyPermissions, default: [KeyPermissions.READ], type: [String] })
     permissions: KeyPermissions[]
 
-    @Prop({ required: true, default: false })
-    revoked: boolean
-
     @Prop({ required: false })
     description: string
 

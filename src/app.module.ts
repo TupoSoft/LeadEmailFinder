@@ -6,14 +6,10 @@ import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
-import { CatchAllModule } from './catch-all/catch-all.module'
-import { KeyModule } from './key'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
-import { DomainModule } from './email-verification-module/domain'
-import { EmailModule } from './email-verification-module/email'
-import { SmtpModule } from './email-verification-module/email-verifier/smtp'
+import { KeyModule } from './key'
 
 @Module({
     imports: [
@@ -35,10 +31,6 @@ import { SmtpModule } from './email-verification-module/email-verifier/smtp'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
-        DomainModule,
-        EmailModule,
-        SmtpModule,
-        CatchAllModule,
         KeyModule,
         BullModule.forRootAsync({
             useFactory: (connection: Redis) => ({

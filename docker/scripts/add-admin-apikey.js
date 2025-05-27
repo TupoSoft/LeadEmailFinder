@@ -13,15 +13,14 @@ const adminApikeyFile = readFileSync(adminApikeyFilePath, 'utf-8')
 const token = adminApikeyFile.toString().replace(/\s+/g, '')
 
 try {
-  db.keys.insertOne({
-    token,
-    permissions: ['admin'],
-    revoked: false,
-    description: 'Hardcoded key for local env',
-    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })
+    db.keys.insertOne({
+        token,
+        permissions: ['admin'],
+        description: 'Hardcoded key for local env',
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    })
 } catch (err) {
-  console.error(`Failed to insert domains: `, err)
+    console.error(`Failed to insert domains: `, err)
 }

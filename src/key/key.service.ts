@@ -9,7 +9,7 @@ import { KeyPermissions } from './key.enum'
 export class KeyService {
     constructor(@InjectModel(Key.name) private keyModel: Model<Key>) {}
 
-    async generateKey(permissions: KeyPermissions[], description?: string): Promise<string> {
+    async generateKey(permissions: KeyPermissions[], description?: string) {
         const prefix = 'api_'
         const randomBytes = crypto.randomBytes(24).toString('hex')
         const token = `${prefix}${randomBytes}`
@@ -18,18 +18,15 @@ export class KeyService {
             token,
             permissions,
             description,
-            revoked: false,
         })
 
-        await key.save()
-        return token
+        return await key.save()
     }
 
     async validateKeyForRoles(token: string, requiredPermissions: KeyPermissions[]): Promise<boolean> {
         const key = await this.keyModel
             .findOne({
                 token,
-                revoked: false,
                 expiresAt: { $gt: new Date() },
             })
             .exec()
@@ -45,10 +42,9 @@ export class KeyService {
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
-    async revokeKey(token: string): Promise<boolean> {
-        const result = await this.keyModel.updateOne({ token }, { revoked: true }).exec()
-
-        return result.modifiedCount > 0
+    async revokeKey(token: string) {
+        const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
+        return result
     }
 
     async listKeys(): Promise<string[]> {

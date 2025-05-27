@@ -12,7 +12,10 @@ export class ApiKeyGuard implements CanActivate {
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        const requiredPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getHandler()) || []
+        const methodPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getHandler()) || []
+        const controllerPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getClass()) || []
+
+        const requiredPermissions = [...controllerPermissions, ...methodPermissions]
 
         const request = context.switchToHttp().getRequest<Request>()
 
