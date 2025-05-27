@@ -4,9 +4,11 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
 import { Logger } from 'pino-nestjs'
+import { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule)
+    const app = await NestFactory.create<NestExpressApplication>(AppModule)
+    app.disable('x-powered-by')
     app.useLogger(app.get(Logger))
     app.useGlobalPipes(new ValidationPipe())
     app.useGlobalInterceptors(
