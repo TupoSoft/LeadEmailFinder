@@ -1,7 +1,15 @@
-import { JobState } from 'bullmq'
 import { IEmailVerificationResponseDto } from '../../common'
+import { JobState } from './job-state.enum'
+
+export interface VerifyAsyncRequest {
+    email: string
+}
 
 export interface VerifyAsyncResponse {
+    id: string
+}
+
+export interface GetAsyncVerificationStatusRequestParams {
     id: string
 }
 
@@ -11,7 +19,7 @@ export interface GetAsyncVerificationStatus {
 }
 
 export interface AsyncEmailVerificationService {
-    verifyAsync(email: string): Promise<VerifyAsyncResponse>
+    verifyAsync(options: VerifyAsyncRequest): Promise<VerifyAsyncResponse>
 
     getAsyncVerificationState(id: string): Promise<GetAsyncVerificationStatus>
 }

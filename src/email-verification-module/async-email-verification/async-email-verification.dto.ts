@@ -1,14 +1,33 @@
-import { GetAsyncVerificationStatus, VerifyAsyncResponse } from './async-email-verification-service.interface'
+import {
+    GetAsyncVerificationStatus,
+    GetAsyncVerificationStatusRequestParams,
+    VerifyAsyncRequest,
+    VerifyAsyncResponse,
+} from './async-email-verification-service.interface'
 import { Expose } from 'class-transformer'
-import { JobState } from 'bullmq'
 import { EmailVerificationResponseDto } from '../sync-email-verification/email-verification-response.dto'
+import { JobState } from './job-state.enum'
+import { IsEmail, IsUUID } from 'class-validator'
+
+export class VerifyAsyncRequestBodyDto implements VerifyAsyncRequest {
+    @Expose()
+    @IsEmail()
+    email: string
+}
 
 export class VerifyAsyncResponseDto implements VerifyAsyncResponse {
     @Expose()
+    @IsUUID()
     id: string
 }
 
-export class GetAsyncVerificationStatusDto implements GetAsyncVerificationStatus {
+export class GetAsyncVerificationStatusRequestParamsDto implements GetAsyncVerificationStatusRequestParams {
+    @Expose()
+    @IsUUID()
+    id: string
+}
+
+export class GetAsyncVerificationStatusResponseDto implements GetAsyncVerificationStatus {
     @Expose()
     state: JobState
 

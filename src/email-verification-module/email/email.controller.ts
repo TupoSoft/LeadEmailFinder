@@ -17,7 +17,9 @@ import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
 import { UpdateEmailRequestDto } from './update-email-request.dto'
+import { ApiExcludeController } from '@nestjs/swagger'
 
+@ApiExcludeController()
 @Controller('emails')
 export class EmailController {
     constructor(@Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService) {}
