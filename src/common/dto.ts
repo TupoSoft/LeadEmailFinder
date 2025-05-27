@@ -1,4 +1,4 @@
-import type { JobStatus } from './enums'
+import type { JobStatus } from './queue-enums'
 
 export interface BulkResponse {
     message: string

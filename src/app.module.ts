@@ -1,16 +1,19 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
-import { EmailModule } from './email-module'
 import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
 import { LoggerModule } from 'pino-nestjs'
-import { DomainModule } from './domain-module'
-import { SmtpModule } from './smtp-module'
 import { CatchAllModule } from './catch-all/catch-all.module'
 import { KeyModule } from './key'
+import { EmailVerificationModule } from './email-verification-module'
+import { BullModule } from '@nestjs/bullmq'
+import { Redis } from 'ioredis'
+import { DomainModule } from './email-verification-module/domain'
+import { EmailModule } from './email-verification-module/email'
+import { SmtpModule } from './email-verification-module/email-verifier/smtp'
 
 @Module({
     imports: [
@@ -37,6 +40,13 @@ import { KeyModule } from './key'
         SmtpModule,
         CatchAllModule,
         KeyModule,
+        BullModule.forRootAsync({
+            useFactory: (connection: Redis) => ({
+                connection,
+            }),
+            inject: [Redis],
+        }),
+        EmailVerificationModule,
     ],
 })
 export class AppModule {}

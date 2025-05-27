@@ -26,7 +26,7 @@ const proxyDocuments = proxyUrlArray
     }))
 
 try {
-    db.proxy.insertMany(proxyDocuments)
+    db.proxies.insertMany(proxyDocuments)
 } catch (err) {
     console.error(`Failed to insert proxies: `, err)
 }
