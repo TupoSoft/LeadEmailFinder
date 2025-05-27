@@ -11,16 +11,16 @@ export class AsyncEmailVerificationController {
         return await this.asyncEmailVerificationService.verifyAsync(email)
     }
 
-    @Get(':id')
-    async getAsyncVerificationState(@Param('id') id: string): Promise<GetAsyncVerificationStatusDto> {
-        try {
-            return await this.asyncEmailVerificationService.getAsyncVerificationState(id)
-        } catch (error) {
-            if (error instanceof AsyncEmailVerificationJobNotFoundException) {
-                throw new NotFoundException(error.message)
-            }
-
-            throw error
-        }
-    }
+    // @Get(':id')
+    // async getAsyncVerificationState(@Param('id') id: string): Promise<GetAsyncVerificationStatusDto> {
+    // try {
+    // return await this.asyncEmailVerificationService.getAsyncVerificationState(id)
+    // } catch (error) {
+    // if (error instanceof AsyncEmailVerificationJobNotFoundException) {
+    // throw new NotFoundException(error.message)
+    // }
+    //
+    // throw error
+    // }
+    // }
 }

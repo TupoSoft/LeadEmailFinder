@@ -20,7 +20,8 @@ export class KeyService {
             description,
         })
 
-        return await key.save()
+        const savedKey = await key.save()
+        return savedKey
     }
 
     async validateKeyForRoles(token: string, requiredPermissions: KeyPermissions[]): Promise<boolean> {
@@ -38,6 +39,8 @@ export class KeyService {
         if (requiredPermissions.length === 0) {
             return true
         }
+
+        console.log('Permissions (validation)', key)
 
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
