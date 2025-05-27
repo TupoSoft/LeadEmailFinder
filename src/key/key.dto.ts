@@ -1,8 +1,14 @@
 import { KeyPermissions } from './key.enum'
 import { Expose } from 'class-transformer'
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 
 export class GenerateKeyDto {
+    @IsArray()
+    @IsEnum(KeyPermissions, { each: true })
     permissions: KeyPermissions[] = [KeyPermissions.READ]
+
+    @IsOptional()
+    @IsString()
     description?: string
 }
 
