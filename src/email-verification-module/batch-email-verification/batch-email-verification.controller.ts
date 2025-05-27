@@ -5,7 +5,7 @@ import { Express } from 'express'
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
     @Post('uploadCSV')
-    @UseInterceptors(FileInterceptor('file', {}))
+    @UseInterceptors(FileInterceptor('file'))
     uploadFile(
         @UploadedFile(
             new ParseFilePipeBuilder()
