@@ -9,6 +9,7 @@ import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
+import { HealthModule } from './health'
 
 @Module({
     imports: [
@@ -36,7 +37,9 @@ import { Redis } from 'ioredis'
             }),
             inject: [Redis],
         }),
+        HealthModule,
         EmailVerificationModule,
+        HealthModule,
     ],
 })
 export class AppModule {}
