@@ -19,6 +19,7 @@ export class KeyController {
 
         return plainToInstance(ApiKeyResponseDto, apiKey.toObject())
     }
+
     @Get()
     async listKeys() {
         return await this.keyService.listKeys()

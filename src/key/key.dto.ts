@@ -1,5 +1,5 @@
 import { KeyPermissions } from './key.enum'
-import { Expose } from 'class-transformer'
+import { Expose, Transform } from 'class-transformer'
 import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 
 export class GenerateKeyDto {
@@ -20,7 +20,8 @@ export class ApiKeyResponseDto {
     permissions: KeyPermissions[]
 
     @Expose()
-    _id: string
+    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString())
+    id: string
 
     @Expose()
     expiresAt: Date
