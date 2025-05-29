@@ -1,12 +1,13 @@
-import { Controller, Post, Body, Get, Delete, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Post, UseGuards } from '@nestjs/common'
 import { KeyService } from './key.service'
-import { GenerateKeyDto } from './key.dto'
+import { ApiKeyResponseDto, GenerateKeyDto } from './key.dto'
 import { ApiKeyGuard } from './guards/api-key.guard'
 import { RequireApiPermissions } from './decorators/roles.decorator'
-import { ApiKeyResponseDto } from './key.dto'
 import { KeyPermissions } from './key.enum'
 import { plainToInstance } from 'class-transformer'
+import { ApiExcludeController } from '@nestjs/swagger'
 
+@ApiExcludeController()
 @UseGuards(ApiKeyGuard)
 @RequireApiPermissions(KeyPermissions.ADMIN)
 @Controller('key')

@@ -1,6 +1,8 @@
 import { Controller, Get, SerializeOptions } from '@nestjs/common'
 import { HealthCheck, HealthCheckResult, HealthCheckService, MongooseHealthIndicator } from '@nestjs/terminus'
+import { ApiExcludeController } from '@nestjs/swagger'
 
+@ApiExcludeController()
 @Controller('health')
 export class HealthController {
     constructor(
