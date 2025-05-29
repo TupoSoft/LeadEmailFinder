@@ -16,7 +16,7 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     ports:
-      - "3000:3000"
+      - '3000:3000'
     restart: unless-stopped
     healthcheck: &healthcheck
       test: curl http://localhost:3000/ping
@@ -50,16 +50,18 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      ADMIN_APIKEY_FILE: /run/secrets/admin_apikey
       DISPOSABLE_DOMAINS_FILE: /email-data/disposable-email-providers.json
       FREE_DOMAINS_FILE: /email-data/free-email-providers.json
       # A comma-separated string of proxies to insert on startup,
       # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
       PROXIES: ${PROXIES}
     ports:
-      - "27017:27017"
+      - '27017:27017'
     secrets:
       - mongo_root_username
       - mongo_root_password
+      - admin_apikey
       - mongo_url
     volumes:
       - ./scripts:/docker-entrypoint-initdb.d
@@ -71,7 +73,7 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     healthcheck:
       <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
@@ -84,7 +86,7 @@ services:
     environment:
       REDIS_HOST: redis
     ports:
-      - "4000:3000"
+      - '4000:3000'
 
 secrets:
   mongo_root_username:
@@ -97,6 +99,8 @@ secrets:
     file: secrets/redis_url.txt
   tokens.json:
     file: secrets/tokens.json
+  admin_apikey:
+    file: secrets/admin_apikey.txt
 
 volumes:
   mongo-data:
