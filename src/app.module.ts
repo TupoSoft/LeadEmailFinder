@@ -9,6 +9,7 @@ import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
+import { KeyModule } from './key'
 import { HealthModule } from './health'
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthModule } from './health'
             useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
+        KeyModule,
         BullModule.forRootAsync({
             useFactory: (connection: Redis) => ({
                 connection,
