@@ -10,6 +10,7 @@ import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { KeyModule } from './key'
+import { HealthModule } from './health'
 
 @Module({
     imports: [
@@ -39,6 +40,7 @@ import { KeyModule } from './key'
             inject: [Redis],
         }),
         EmailVerificationModule,
+        HealthModule,
     ],
 })
 export class AppModule {}

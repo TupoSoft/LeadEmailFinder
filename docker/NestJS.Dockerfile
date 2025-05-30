@@ -14,7 +14,7 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 
 WORKDIR /app
 
-RUN apk add --no-cache curl wget bind-tools
+RUN apk add --no-cache curl wget bind-tools jq
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \

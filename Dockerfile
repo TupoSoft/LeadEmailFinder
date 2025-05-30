@@ -33,7 +33,9 @@ RUN apk add --no-cache \
     # curl is for the healthcheck
     curl \
     # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
-    bind-tools
+    bind-tools \
+    # jq is for the healthcheck
+    jq
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
