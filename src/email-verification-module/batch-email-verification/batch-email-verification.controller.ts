@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
-    @Post('uploadCSV')
+    @Post('csv')
     @UseInterceptors(FileInterceptor('file'))
     @HttpCode(HttpStatus.ACCEPTED)
     uploadFile(

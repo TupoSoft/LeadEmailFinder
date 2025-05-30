@@ -26,7 +26,7 @@ describe('BatchEmailVerificationController', () => {
             const fileBuffer = Buffer.from(csvContent)
 
             await request(app.getHttpServer())
-                .post('/verifyBatch/uploadCSV')
+                .post('/verifyBatch/csv')
                 .attach('file', fileBuffer, {
                     filename: 'test.csv',
                     contentType: 'text/csv',
@@ -38,12 +38,10 @@ describe('BatchEmailVerificationController', () => {
             const invalidFileContent = '<html lang="en"></html>'
             const fileBuffer = Buffer.from(invalidFileContent)
 
-            const response = await request(app.getHttpServer())
-                .post('/verifyBatch/uploadCSV')
-                .attach('file', fileBuffer, {
-                    filename: 'test.html',
-                    contentType: 'text/html',
-                })
+            const response = await request(app.getHttpServer()).post('/verifyBatch/csv').attach('file', fileBuffer, {
+                filename: 'test.html',
+                contentType: 'text/html',
+            })
 
             expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
         })
@@ -52,7 +50,7 @@ describe('BatchEmailVerificationController', () => {
             const largeFileBuffer = Buffer.alloc(2 * 1024 * 1024) // 2 MB
 
             const response = await request(app.getHttpServer())
-                .post('/verifyBatch/uploadCSV')
+                .post('/verifyBatch/csv')
                 .attach('file', largeFileBuffer, {
                     filename: 'large.csv',
                     contentType: 'text/csv',
@@ -65,12 +63,10 @@ describe('BatchEmailVerificationController', () => {
             const invalidCsvContent = ''
             const fileBuffer = Buffer.from(invalidCsvContent)
 
-            const response = await request(app.getHttpServer())
-                .post('/verifyBatch/uploadCSV')
-                .attach('file', fileBuffer, {
-                    filename: 'invalid.csv',
-                    contentType: 'text/csv',
-                })
+            const response = await request(app.getHttpServer()).post('/verifyBatch/csv').attach('file', fileBuffer, {
+                filename: 'invalid.csv',
+                contentType: 'text/csv',
+            })
 
             expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
         })

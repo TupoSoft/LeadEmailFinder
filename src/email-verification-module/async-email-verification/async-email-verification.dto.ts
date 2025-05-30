@@ -8,10 +8,10 @@ import { Expose } from 'class-transformer'
 import { EmailVerificationResponseDto } from '../sync-email-verification/email-verification-response.dto'
 import { JobState } from './job-state.enum'
 import { IsEmail, IsUUID } from 'class-validator'
+import { HOST_BLACKLIST } from '../email-verification.constants'
 
 export class VerifyAsyncRequestBodyDto implements VerifyAsyncRequest {
-    @Expose()
-    @IsEmail()
+    @IsEmail({ host_blacklist: HOST_BLACKLIST })
     email: string
 }
 
@@ -22,7 +22,6 @@ export class VerifyAsyncResponseDto implements VerifyAsyncResponse {
 }
 
 export class GetAsyncVerificationStatusRequestParamsDto implements GetAsyncVerificationStatusRequestParams {
-    @Expose()
     @IsUUID()
     id: string
 }
