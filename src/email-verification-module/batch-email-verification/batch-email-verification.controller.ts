@@ -1,11 +1,22 @@
-import { Controller, HttpStatus, ParseFilePipeBuilder, Post, UploadedFile, UseInterceptors } from '@nestjs/common'
+import {
+    Controller,
+    HttpCode,
+    HttpStatus,
+    ParseFilePipeBuilder,
+    Post,
+    UploadedFile,
+    UseInterceptors,
+} from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { Express } from 'express'
+import { BatchEmailVerificationFileValidator } from './batch-email-verification.file-validator'
+import { randomUUID } from 'node:crypto'
 
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
     @Post('uploadCSV')
     @UseInterceptors(FileInterceptor('file'))
+    @HttpCode(HttpStatus.ACCEPTED)
     uploadFile(
         @UploadedFile(
             new ParseFilePipeBuilder()
@@ -16,12 +27,13 @@ export class BatchEmailVerificationController {
                 .addMaxSizeValidator({
                     maxSize: 1048576,
                 })
+                .addValidator(new BatchEmailVerificationFileValidator())
                 .build({
                     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
                 }),
         )
         file: Express.Multer.File,
     ) {
-        console.log(file.buffer.toString())
+        return { id: randomUUID() }
     }
 }

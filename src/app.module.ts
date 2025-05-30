@@ -10,6 +10,7 @@ import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { KeyModule } from './key'
+import { BatchEmailVerificationService } from './email-verification-module/batch-email-verification/batch-email-verification.service'
 
 @Module({
     imports: [
@@ -40,5 +41,6 @@ import { KeyModule } from './key'
         }),
         EmailVerificationModule,
     ],
+    providers: [BatchEmailVerificationService],
 })
 export class AppModule {}

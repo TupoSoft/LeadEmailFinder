@@ -61,6 +61,9 @@ importers:
       class-validator:
         specifier: ^0.14.1
         version: 0.14.1
+      csv-parse:
+        specifier: ^5.6.0
+        version: 5.6.0
       express:
         specifier: ^4.21.2
         version: 4.21.2
@@ -2051,6 +2054,9 @@ packages:
   css-what@6.1.0:
     resolution: {integrity: sha512-HTUrgRJ7r4dsZKU6GjmpfRK1O76h97Z8MfS1G0FozR+oF2kG6Vfe8JE6zwrkbxigziPHinCJ+gCPjA9EaBDtRw==}
     engines: {node: '>= 6'}
+
+  csv-parse@5.6.0:
+    resolution: {integrity: sha512-l3nz3euub2QMg5ouu5U09Ew9Wf6/wQ8I++ch1loQ0ljmzhmfZYrH9fflS22i/PQEvsPvxCwxgz5q7UB8K1JO4Q==}
 
   data-view-buffer@1.0.2:
     resolution: {integrity: sha512-EmKO5V3OLXh1rtK2wgXRansaK1/mtVdTUEiEI0W8RkvgT05kfxaH29PliLnpLP73yYO6142Q72QNa8Wx/A5CqQ==}
@@ -6987,6 +6993,8 @@ snapshots:
       nth-check: 2.1.1
 
   css-what@6.1.0: {}
+
+  csv-parse@5.6.0: {}
 
   data-view-buffer@1.0.2:
     dependencies:
