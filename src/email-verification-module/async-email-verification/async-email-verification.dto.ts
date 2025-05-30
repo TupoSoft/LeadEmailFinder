@@ -7,11 +7,11 @@ import {
 import { Expose } from 'class-transformer'
 import { EmailVerificationResponseDto } from '../sync-email-verification/email-verification-response.dto'
 import { JobState } from './job-state.enum'
-import { IsEmail, IsUUID } from 'class-validator'
-import { HOST_BLACKLIST } from '../email-verification.constants'
+import { IsUUID } from 'class-validator'
+import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 
 export class VerifyAsyncRequestBodyDto implements VerifyAsyncRequest {
-    @IsEmail({ host_blacklist: HOST_BLACKLIST })
+    @IsVerifiableEmail()
     email: string
 }
 

@@ -1,7 +1,6 @@
-import { IsEmail } from 'class-validator'
-import { HOST_BLACKLIST } from '../email-verification.constants'
+import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 
 export class BatchEmailVerificationCsvRowDto {
-    @IsEmail({ host_blacklist: HOST_BLACKLIST })
+    @IsVerifiableEmail()
     email: string
 }
