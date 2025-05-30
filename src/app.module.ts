@@ -39,7 +39,6 @@ import { HealthModule } from './health'
             }),
             inject: [Redis],
         }),
-        HealthModule,
         EmailVerificationModule,
         HealthModule,
     ],
