@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
 import { Key } from './key.schema'
@@ -47,11 +47,11 @@ export class KeyService {
         const key = await this.keyModel.findOne({ token }).exec()
 
         if (!key) {
-            throw new Error('Key not found')
+            throw new NotFoundException('Key not found')
         }
 
         if (!key.permissions.includes(KeyPermissions.ADMIN)) {
-            throw new Error('Cannot revoke admin token')
+            throw new UnauthorizedException('Cannot revoke admin token')
         }
 
         const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
