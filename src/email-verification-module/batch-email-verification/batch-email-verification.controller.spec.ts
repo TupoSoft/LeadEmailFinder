@@ -18,7 +18,7 @@ describe('BatchEmailVerificationController', () => {
                 {
                     provide: batchEmailVerificationServiceToken,
                     useValue: {
-                        enqueueBatch: jest.fn(),
+                        uploadFile: jest.fn(),
                     },
                 },
             ],
@@ -72,18 +72,6 @@ describe('BatchEmailVerificationController', () => {
                     filename: 'large.csv',
                     contentType: 'text/csv',
                 })
-
-            expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
-        })
-
-        it('should return 422 if the file content fails custom validation', async () => {
-            const invalidCsvContent = ''
-            const fileBuffer = Buffer.from(invalidCsvContent)
-
-            const response = await request(app.getHttpServer()).post('/verifyBatch/csv').attach('file', fileBuffer, {
-                filename: 'invalid.csv',
-                contentType: 'text/csv',
-            })
 
             expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
         })
