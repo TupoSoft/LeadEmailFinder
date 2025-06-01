@@ -127,7 +127,7 @@ describe('KeyService', () => {
 
     describe('revokeKey', () => {
         it('should revoke admin key successfully', async () => {
-            const mockKey = { permissions: [KeyPermissions.ADMIN] }
+            const mockKey = { permissions: [KeyPermissions.READ] }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockKey),
@@ -155,8 +155,8 @@ describe('KeyService', () => {
             await expect(service.revokeKey('invalid_key')).rejects.toThrow('Key not found')
         })
 
-        it('should throw error when trying to revoke non-admin key', async () => {
-            const mockNonAdminKey = { permissions: [KeyPermissions.READ] }
+        it('should throw error when trying to revoke admin key', async () => {
+            const mockNonAdminKey = { permissions: [KeyPermissions.ADMIN] }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockNonAdminKey),

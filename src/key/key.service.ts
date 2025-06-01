@@ -50,7 +50,7 @@ export class KeyService {
             throw new NotFoundException('Key not found')
         }
 
-        if (!key.permissions.includes(KeyPermissions.ADMIN)) {
+        if (key.permissions.includes(KeyPermissions.ADMIN)) {
             throw new UnauthorizedException('Cannot revoke admin token')
         }
 
