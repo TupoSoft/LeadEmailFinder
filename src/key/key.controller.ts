@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Post, UseGuards } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    ForbiddenException,
+    Get,
+    InternalServerErrorException,
+    NotFoundException,
+    Post,
+    UseGuards,
+} from '@nestjs/common'
 import { KeyService } from './key.service'
 import { ApiKeyResponseDto, GenerateKeyDto } from './key.dto'
 import { ApiKeyGuard } from './guards/api-key.guard'
@@ -6,6 +16,7 @@ import { RequireApiPermissions } from './decorators/roles.decorator'
 import { KeyPermissions } from './key.enum'
 import { plainToInstance } from 'class-transformer'
 import { ApiExcludeController } from '@nestjs/swagger'
+import { AdminTokenRevocationForbidden, KeyNotFound } from './key.error'
 
 @ApiExcludeController()
 @UseGuards(ApiKeyGuard)
@@ -28,7 +39,17 @@ export class KeyController {
 
     @Delete('revoke')
     async revokeKey(@Body() body: { token: string }) {
-        const success = await this.keyService.revokeKey(body.token)
-        return { success }
+        try {
+            const result = await this.keyService.revokeKey(body.token)
+            return { success: true, modifiedCount: result.modifiedCount }
+        } catch (error: unknown) {
+            if (error instanceof KeyNotFound) {
+                throw new NotFoundException(error.message)
+            } else if (error instanceof AdminTokenRevocationForbidden) {
+                throw new ForbiddenException(error.message)
+            } else {
+                throw new InternalServerErrorException('Failed to revoke key')
+            }
+        }
     }
 }
