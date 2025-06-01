@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { BatchEmailVerificationService } from './batch-email-verification.service'
+import { BatchEmailVerificationServiceImpl } from './batch-email-verification-service-impl.service'
 
 describe('BatchEmailVerificationService', () => {
-    let service: BatchEmailVerificationService
+    let service: BatchEmailVerificationServiceImpl
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
-            providers: [BatchEmailVerificationService],
+            providers: [BatchEmailVerificationServiceImpl],
         }).compile()
 
-        service = module.get<BatchEmailVerificationService>(BatchEmailVerificationService)
+        service = module.get<BatchEmailVerificationServiceImpl>(BatchEmailVerificationServiceImpl)
     })
 
     it('should be defined', () => {
