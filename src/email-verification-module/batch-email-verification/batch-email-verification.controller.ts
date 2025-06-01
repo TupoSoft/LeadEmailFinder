@@ -39,6 +39,7 @@ export class BatchEmailVerificationController {
                 .addFileTypeValidator({
                     fileType: 'text/csv',
                     skipMagicNumbersValidation: true,
+                    fallbackToMimetype: true,
                 })
                 .addMaxSizeValidator({
                     maxSize: BatchEmailVerificationController.MAX_FILE_SIZE,
