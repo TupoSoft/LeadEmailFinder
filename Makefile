@@ -23,7 +23,7 @@ build-dev:
 	$(COMPOSE_DEV) build
 
 start-dev:
-	$(COMPOSE_DEV) up -d
+	$(COMPOSE_DEV) up -d --build -V
 
 stop-dev:
 	$(COMPOSE_DEV) down -v
@@ -34,7 +34,7 @@ build-debug:
 	$(COMPOSE_DEBUG) build
 
 start-debug:
-	$(COMPOSE_DEBUG) up -d
+	$(COMPOSE_DEBUG) up -d --build -V
 
 stop-debug:
 	$(COMPOSE_DEBUG) down -v

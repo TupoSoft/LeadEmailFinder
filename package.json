@@ -11,8 +11,8 @@
         "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest",
-        "start:dev": "nest start -w",
-        "start:debug": "nest start -w -d 0.0.0.0:9229"
+        "start:dev": "nest start -p tsconfig.dev.json -w",
+        "start:debug": "nest start -p tsconfig.dev.json -w -d 0.0.0.0:9229"
     },
     "author": {
         "url": "https://tuposoft.com",
@@ -67,6 +67,7 @@
         "@nestjs/mongoose": "^11.0.3",
         "@nestjs/platform-express": "^11.0.1",
         "@nestjs/swagger": "^11.1.6",
+        "@nestjs/terminus": "^11.0.0",
         "axios": "^1.8.4",
         "bullmq": "^5.49.1",
         "cheerio": "^1.0.0",
