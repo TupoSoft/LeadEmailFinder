@@ -40,7 +40,7 @@ describe('BatchEmailVerificationController', () => {
             const fileBuffer = Buffer.from(csvContent)
 
             const id = randomUUID()
-            batchEmailVerificationService.enqueueBatch.mockResolvedValueOnce({ id })
+            batchEmailVerificationService.uploadFile.mockResolvedValueOnce({ id })
 
             await request(app.getHttpServer())
                 .post('/verifyBatch/csv')

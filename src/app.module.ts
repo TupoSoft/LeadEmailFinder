@@ -11,6 +11,7 @@ import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { KeyModule } from './key'
 import { HealthModule } from './health'
+import { S3Module } from 'nestjs-s3'
 
 @Module({
     imports: [
@@ -41,6 +42,17 @@ import { HealthModule } from './health'
         }),
         EmailVerificationModule,
         HealthModule,
+        S3Module.forRoot({
+            config: {
+                credentials: {
+                    accessKeyId: 'minioadmin',
+                    secretAccessKey: 'minioadmin',
+                },
+                region: 'us-east-1',
+                endpoint: 'http://minio:9000',
+                forcePathStyle: true,
+            },
+        }),
     ],
 })
 export class AppModule {}

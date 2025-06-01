@@ -91,6 +91,9 @@ importers:
       multer-s3:
         specifier: ^3.0.1
         version: 3.0.1(@aws-sdk/client-s3@3.821.0)
+      nestjs-s3:
+        specifier: ^2.0.1
+        version: 2.0.1(@aws-sdk/client-s3@3.821.0)(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.0)
       pino:
         specifier: ^9.6.0
         version: 9.6.0
@@ -4023,6 +4026,13 @@ packages:
 
   neo-async@2.6.2:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
+
+  nestjs-s3@2.0.1:
+    resolution: {integrity: sha512-nnSzBPDXKFWH4nLR8qur5SUHFhlW2embwze7efUtNi5r+0VzAWT/rY0TiMhvMTZUiEJhBdYf+tvYU4ja2C0UTg==}
+    peerDependencies:
+      '@aws-sdk/client-s3': '>=3.328.0'
+      '@nestjs/common': '>=6.7.0'
+      '@nestjs/core': '>=6.7.0'
 
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
@@ -10191,6 +10201,12 @@ snapshots:
   negotiator@1.0.0: {}
 
   neo-async@2.6.2: {}
+
+  nestjs-s3@2.0.1(@aws-sdk/client-s3@3.821.0)(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.0):
+    dependencies:
+      '@aws-sdk/client-s3': 3.821.0
+      '@nestjs/common': 11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.1.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
 
   node-abort-controller@3.1.1: {}
 

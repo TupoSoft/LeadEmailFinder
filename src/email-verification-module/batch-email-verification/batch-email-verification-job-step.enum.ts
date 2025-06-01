@@ -1,4 +1,6 @@
 export enum BatchEmailVerificationJobStep {
-    WaitForChildren,
+    Validate,
     Process,
+    WaitForChildren,
+    Finish,
 }

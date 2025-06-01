@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { Express } from 'express'
-import { BatchEmailVerificationFileValidator } from './batch-email-verification.file-validator'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { UploadFileRequestDto, UploadFileResponseDto } from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
@@ -39,18 +38,16 @@ export class BatchEmailVerificationController {
                 .addFileTypeValidator({
                     fileType: 'text/csv',
                     skipMagicNumbersValidation: true,
-                    fallbackToMimetype: true,
                 })
                 .addMaxSizeValidator({
                     maxSize: BatchEmailVerificationController.MAX_FILE_SIZE,
                 })
-                .addValidator(new BatchEmailVerificationFileValidator())
                 .build({
                     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
                 }),
         )
-        file: Express.Multer.File,
+        file: Express.MulterS3.File,
     ): Promise<UploadFileResponseDto> {
-        return await this.batchEmailVerificationService.enqueueBatch(file)
+        return await this.batchEmailVerificationService.uploadFile(file)
     }
 }
