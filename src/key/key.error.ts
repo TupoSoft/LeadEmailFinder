@@ -7,7 +7,7 @@ export class KeyNotFound extends Error {
 
 export class AdminTokenRevocationForbidden extends Error {
     name = 'AdminTokenRevocationForbidden'
-    constructor(message: string) {
-        super(message)
+    constructor(id: string) {
+        super(`Admin token ${id} cannot be revoked`)
     }
 }
