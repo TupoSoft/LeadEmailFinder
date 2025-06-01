@@ -1,7 +1,7 @@
 export class KeyNotFound extends Error {
     name = 'KeyNotFound'
-    constructor(message: string) {
-        super(message)
+    constructor(id: string) {
+        super(`Key ${id} was not found`)
     }
 }
 
