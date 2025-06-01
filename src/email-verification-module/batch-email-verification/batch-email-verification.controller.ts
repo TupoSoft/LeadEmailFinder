@@ -14,6 +14,8 @@ import { randomUUID } from 'node:crypto'
 
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
+    private static readonly MAX_FILE_SIZE = 1048576
+
     @Post('csv')
     @UseInterceptors(FileInterceptor('file'))
     @HttpCode(HttpStatus.ACCEPTED)
@@ -25,7 +27,7 @@ export class BatchEmailVerificationController {
                     skipMagicNumbersValidation: true,
                 })
                 .addMaxSizeValidator({
-                    maxSize: 1048576,
+                    maxSize: BatchEmailVerificationController.MAX_FILE_SIZE,
                 })
                 .addValidator(new BatchEmailVerificationFileValidator())
                 .build({
