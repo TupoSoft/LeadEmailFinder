@@ -156,10 +156,10 @@ describe('KeyService', () => {
         })
 
         it('should throw error when trying to revoke admin key', async () => {
-            const mockNonAdminKey = { permissions: [KeyPermissions.ADMIN] }
+            const mockAdminKey = { permissions: [KeyPermissions.ADMIN] }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockNonAdminKey),
+                exec: jest.fn().mockResolvedValue(mockAdminKey),
             } as any)
 
             await expect(service.revokeKey('read_key')).rejects.toThrow('Cannot revoke admin token')
