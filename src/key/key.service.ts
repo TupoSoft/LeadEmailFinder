@@ -40,12 +40,20 @@ export class KeyService {
             return true
         }
 
-        console.log('Permissions (validation)', key)
-
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
     async revokeKey(token: string) {
+        const key = await this.keyModel.findOne({ token }).exec()
+
+        if (!key) {
+            throw new Error('Key not found')
+        }
+
+        if (!key.permissions.includes(KeyPermissions.ADMIN)) {
+            throw new Error('Cannot revoke admin token')
+        }
+
         const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
         return result
     }
