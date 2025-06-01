@@ -48,11 +48,11 @@ export class KeyService {
         const key = await this.keyModel.findOne({ token }).exec()
 
         if (!key) {
-            throw new KeyNotFound('Key not found')
+            throw new KeyNotFound(token)
         }
 
         if (key.permissions.includes(KeyPermissions.ADMIN)) {
-            throw new AdminTokenRevocationForbidden('Cannot revoke admin token')
+            throw new AdminTokenRevocationForbidden(token)
         }
 
         const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()

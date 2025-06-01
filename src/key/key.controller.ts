@@ -40,8 +40,8 @@ export class KeyController {
     @Delete('revoke')
     async revokeKey(@Body() body: { token: string }) {
         try {
-            const result = await this.keyService.revokeKey(body.token)
-            return { success: true, modifiedCount: result.modifiedCount }
+            await this.keyService.revokeKey(body.token)
+            return { success: true }
         } catch (error: unknown) {
             if (error instanceof KeyNotFound) {
                 throw new NotFoundException(error.message)

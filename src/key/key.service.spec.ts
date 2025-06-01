@@ -152,7 +152,7 @@ describe('KeyService', () => {
                 exec: jest.fn().mockResolvedValue(null),
             } as any)
 
-            await expect(service.revokeKey('invalid_key')).rejects.toThrow('Key not found')
+            await expect(service.revokeKey('invalid_key')).rejects.toThrow('Key invalid_key was not found')
         })
 
         it('should throw error when trying to revoke admin key', async () => {
@@ -162,7 +162,7 @@ describe('KeyService', () => {
                 exec: jest.fn().mockResolvedValue(mockAdminKey),
             } as any)
 
-            await expect(service.revokeKey('read_key')).rejects.toThrow('Cannot revoke admin token')
+            await expect(service.revokeKey('read_key')).rejects.toThrow('Admin token read_key cannot be revoked')
         })
     })
 
