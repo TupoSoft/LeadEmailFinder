@@ -4,6 +4,7 @@ import { Model } from 'mongoose'
 import { Key } from './key.schema'
 import * as crypto from 'crypto'
 import { KeyPermissions } from './key.enum'
+import { AdminTokenRevocationForbidden, KeyNotFound } from './key.error'
 
 @Injectable()
 export class KeyService {
@@ -40,12 +41,20 @@ export class KeyService {
             return true
         }
 
-        console.log('Permissions (validation)', key)
-
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
     async revokeKey(token: string) {
+        const key = await this.keyModel.findOne({ token }).exec()
+
+        if (!key) {
+            throw new KeyNotFound(token)
+        }
+
+        if (key.permissions.includes(KeyPermissions.ADMIN)) {
+            throw new AdminTokenRevocationForbidden(token)
+        }
+
         const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
         return result
     }
