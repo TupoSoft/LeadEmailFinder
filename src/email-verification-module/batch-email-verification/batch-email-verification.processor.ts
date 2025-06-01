@@ -18,11 +18,8 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
     }
 
     private async waitForChildren(job: Job<BatchEmailVerificationJobData>, token: string): Promise<void> {
-        const shouldWait = await job.moveToWaitingChildren(token)
-
-        if (shouldWait) {
-            throw new WaitingChildrenError()
-        }
+        await job.moveToWaitingChildren(token)
+        throw new WaitingChildrenError()
     }
 
     private handleDefault(job: Job<BatchEmailVerificationJobData>): never {

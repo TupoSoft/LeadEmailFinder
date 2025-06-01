@@ -10,6 +10,7 @@ import { plainToInstance } from 'class-transformer'
 import { BatchEmailVerificationCsvRowDto } from './batch-email-verification-csv-row.dto'
 import { BatchEmailVerificationJobData } from './batch-email-verification-job-data.interface'
 import { BatchEmailVerificationService, EnqueueBatchResponse } from './batch-email-verification-service.interface'
+import { Readable } from 'node:stream'
 
 @Injectable()
 export class BatchEmailVerificationServiceImpl implements BatchEmailVerificationService {
@@ -19,7 +20,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         @InjectQueue('async-email-verification') private readonly asyncEmailVerificationQueue: Queue<string>,
     ) {}
 
-    async enqueueBatch({ stream }: BatchEmailVerificationFile): Promise<EnqueueBatchResponse> {
+    async enqueueBatch({ buffer }: BatchEmailVerificationFile): Promise<EnqueueBatchResponse> {
         const batchEmailVerificationJob = await this.batchEmailVerificationQueue.add(
             'batch-email-verification',
             {
@@ -28,14 +29,11 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
             { jobId: randomUUID() },
         )
 
-        const { id: batchEmailVerificationJobId } = batchEmailVerificationJob
+        const { id, queueQualifiedName: queue } = batchEmailVerificationJob
 
-        ok(
-            batchEmailVerificationJobId,
-            'Failed to add job to queue. Job ID is undefined. Queue name: batch-email-verification.',
-        )
+        ok(id, 'Failed to add job to queue. Job ID is undefined. Queue name: batch-email-verification.')
 
-        const parser = stream.pipe(
+        const parser = Readable.from(buffer).pipe(
             parse({
                 columns: true,
                 skip_empty_lines: true,
@@ -48,7 +46,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
 
             await this.asyncEmailVerificationQueue.add('async-email-verification', email, {
                 jobId: randomUUID(),
-                parent: { id: batchEmailVerificationJobId, queue: 'batch-email-verification' },
+                parent: { id, queue },
             })
         }
 
@@ -57,7 +55,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         })
 
         return {
-            id: batchEmailVerificationJobId,
+            id,
         }
     }
 }

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
 import { BullModule } from '@nestjs/bullmq'
+import { BatchEmailVerificationServiceImpl } from './batch-email-verification-service-impl.service'
+import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 
 @Module({
     imports: [
@@ -9,5 +11,13 @@ import { BullModule } from '@nestjs/bullmq'
         BullModule.registerFlowProducer({ name: 'batch-email-verification-flow' }),
     ],
     controllers: [BatchEmailVerificationController],
+    providers: [
+        BatchEmailVerificationServiceImpl,
+        BatchEmailVerificationProcessor,
+        {
+            provide: 'BatchEmailVerificationServiceToken',
+            useExisting: BatchEmailVerificationServiceImpl,
+        },
+    ],
 })
 export class BatchEmailVerificationModule {}
