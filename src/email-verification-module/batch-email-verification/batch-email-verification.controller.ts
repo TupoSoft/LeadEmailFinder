@@ -1,8 +1,11 @@
 import {
     Controller,
+    Get,
     HttpCode,
     HttpStatus,
     Inject,
+    NotFoundException,
+    Param,
     ParseFilePipeBuilder,
     Post,
     SerializeOptions,
@@ -12,8 +15,14 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express'
 import { Express } from 'express'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
-import { UploadFileRequestDto, UploadFileResponseDto } from './batch-email-verification.dto'
+import {
+    GetBatchStatusRequestParamsDto,
+    GetBatchStatusResponseDto,
+    UploadFileRequestDto,
+    UploadFileResponseDto,
+} from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
+import { JobNotFoundException } from './job-not-found.exception'
 
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
@@ -49,5 +58,19 @@ export class BatchEmailVerificationController {
         file: Express.MulterS3.File,
     ): Promise<UploadFileResponseDto> {
         return await this.batchEmailVerificationService.uploadFile(file)
+    }
+
+    @Get()
+    @SerializeOptions({ type: GetBatchStatusResponseDto })
+    async getBatchStatus(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<GetBatchStatusResponseDto> {
+        try {
+            return await this.batchEmailVerificationService.getBatchStatus(id)
+        } catch (error) {
+            if (error instanceof JobNotFoundException) {
+                throw new NotFoundException(error.message)
+            }
+
+            throw error
+        }
     }
 }
