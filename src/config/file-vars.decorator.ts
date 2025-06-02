@@ -1,4 +1,4 @@
-import { IsString, ValidateIf } from 'class-validator'
+import { Contains, ValidateIf } from 'class-validator'
 
 const FILE_VARS_KEY = Symbol('env:file-vars')
 
@@ -21,7 +21,7 @@ export function WithFileVars(): ClassDecorator {
                 configurable: true,
             })
 
-            IsString()(prototype, fileProp)
+            Contains('/run/secrets')(prototype, fileProp)
             ValidateIf((object: Record<string, unknown>) => object[fileProp] === undefined)(prototype, prop)
             ValidateIf((object: Record<string, unknown>) => object[prop] === undefined)(prototype, fileProp)
         }
