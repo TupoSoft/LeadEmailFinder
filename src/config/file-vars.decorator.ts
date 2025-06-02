@@ -1,5 +1,6 @@
-import { FILE_VARS_KEY } from './config.constants'
 import { IsString, ValidateIf } from 'class-validator'
+
+const FILE_VARS_KEY = Symbol('env:file-vars')
 
 export function WithFileVars(): ClassDecorator {
     return function (target): typeof target {
