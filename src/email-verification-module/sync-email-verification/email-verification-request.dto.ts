@@ -1,7 +1,7 @@
 import { IEmailVerificationRequestDto } from '../../common'
-import { IsEmail } from 'class-validator'
+import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 
 export class EmailVerificationRequestDto implements IEmailVerificationRequestDto {
-    @IsEmail()
+    @IsVerifiableEmail()
     email: string
 }

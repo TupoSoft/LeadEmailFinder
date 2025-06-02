@@ -91,6 +91,13 @@ services:
     ports:
       - '4000:3000'
 
+  minio:
+    image: minio/minio
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    command: server /data --console-address=":9001"
+
 secrets:
   mongo_root_username:
     file: secrets/mongo_root_username.txt

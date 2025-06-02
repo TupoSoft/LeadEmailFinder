@@ -1,12 +1,38 @@
-import { Controller, HttpStatus, ParseFilePipeBuilder, Post, UploadedFile, UseInterceptors } from '@nestjs/common'
+import {
+    Controller,
+    HttpCode,
+    HttpStatus,
+    Inject,
+    ParseFilePipeBuilder,
+    Post,
+    SerializeOptions,
+    UploadedFile,
+    UseInterceptors,
+} from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { Express } from 'express'
+import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
+import { UploadFileRequestDto, UploadFileResponseDto } from './batch-email-verification.dto'
+import { ApiBody, ApiConsumes } from '@nestjs/swagger'
 
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
-    @Post('uploadCSV')
+    private static readonly MAX_FILE_SIZE = 104857600
+
+    constructor(
+        @Inject('BatchEmailVerificationServiceToken')
+        private readonly batchEmailVerificationService: BatchEmailVerificationService,
+    ) {}
+
+    @Post('csv')
     @UseInterceptors(FileInterceptor('file'))
-    uploadFile(
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({
+        type: UploadFileRequestDto,
+    })
+    @HttpCode(HttpStatus.ACCEPTED)
+    @SerializeOptions({ type: UploadFileResponseDto })
+    async uploadFile(
         @UploadedFile(
             new ParseFilePipeBuilder()
                 .addFileTypeValidator({
@@ -14,14 +40,14 @@ export class BatchEmailVerificationController {
                     skipMagicNumbersValidation: true,
                 })
                 .addMaxSizeValidator({
-                    maxSize: 1048576,
+                    maxSize: BatchEmailVerificationController.MAX_FILE_SIZE,
                 })
                 .build({
                     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
                 }),
         )
-        file: Express.Multer.File,
-    ) {
-        console.log(file.buffer.toString())
+        file: Express.MulterS3.File,
+    ): Promise<UploadFileResponseDto> {
+        return await this.batchEmailVerificationService.uploadFile(file)
     }
 }
