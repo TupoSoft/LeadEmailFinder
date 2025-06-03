@@ -3,7 +3,7 @@ import { IsEmail } from 'class-validator'
 const host_blacklist = ['localhost', 'tuposoft.com', 'leademailfinder.com']
 
 export function IsVerifiableEmail(): PropertyDecorator {
-    return function (target, propertyKey) {
+    return function (target, propertyKey): void {
         IsEmail({ host_blacklist })(target, propertyKey)
     }
 }

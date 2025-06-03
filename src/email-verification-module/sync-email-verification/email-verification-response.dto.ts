@@ -5,19 +5,19 @@ import {
     EmailVerificationSource,
     IEmailVerificationResponseDto,
 } from '../../common'
+import { IsEmail, IsFQDN } from 'class-validator'
 
 export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
     @Expose()
-    id: string
-
-    @Expose()
+    @IsEmail()
     email: string
 
     @Expose()
-    domain: string
+    localPart: string
 
     @Expose()
-    localPart: string
+    @IsFQDN()
+    domain: string
 
     @Expose()
     format?: EmailPatternEnum
@@ -35,8 +35,13 @@ export class EmailVerificationResponseDto implements IEmailVerificationResponseD
     sources: EmailVerificationSource[]
 
     @Expose()
+    @IsFQDN()
     mxDomain?: string
 
     @Expose()
+    @IsFQDN()
     targetExchange?: string
+
+    @Expose({ toClassOnly: true })
+    createdAt: Date
 }
