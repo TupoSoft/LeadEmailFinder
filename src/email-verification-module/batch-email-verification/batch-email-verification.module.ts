@@ -5,6 +5,7 @@ import { BatchEmailVerificationServiceImpl } from './batch-email-verification-se
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { MulterModule } from '@nestjs/platform-express'
 import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
+import { SyncEmailVerificationModule } from '../sync-email-verification'
 
 @Module({
     imports: [
@@ -14,6 +15,7 @@ import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
         MulterModule.registerAsync({
             useClass: MulterOptionsFactoryImpl,
         }),
+        SyncEmailVerificationModule,
     ],
     controllers: [BatchEmailVerificationController],
     providers: [

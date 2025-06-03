@@ -1,11 +1,7 @@
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
 
-export type BatchEmailVerificationJobData =
-    | {
-          step: BatchEmailVerificationJobStep.Finish | BatchEmailVerificationJobStep.WaitForChildren
-      }
-    | {
-          step: BatchEmailVerificationJobStep.Validate | BatchEmailVerificationJobStep.Process
-          key: string
-          bucket: string
-      }
+export interface BatchEmailVerificationJobData {
+    step: BatchEmailVerificationJobStep
+    key: string
+    bucket: string
+}

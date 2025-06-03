@@ -45,6 +45,6 @@ import { SyncEmailVerificationController } from './sync-email-verification.contr
         },
     ],
     controllers: [SyncEmailVerificationController],
-    exports: [EmailVerificationService],
+    exports: [EmailVerificationService, MongooseModule],
 })
 export class SyncEmailVerificationModule {}

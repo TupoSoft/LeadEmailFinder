@@ -40,3 +40,4 @@ export class EmailVerification {
 }
 
 export const EmailVerificationSchema = SchemaFactory.createForClass(EmailVerification)
+EmailVerificationSchema.index({ email: 1, batchId: 1 })
