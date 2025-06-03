@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 
-export default function (): Record<string, unknown> {
+export function loadSecrets(): Record<string, unknown> {
     const config: Record<string, unknown> = {}
 
     for (const [envKey, envVal] of Object.entries(process.env)) {

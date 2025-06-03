@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
-import secrets from './config/secrets.config'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ParseConnectionStringOptionsFactory, RedisModule } from './redis'
@@ -12,11 +11,15 @@ import { Redis } from 'ioredis'
 import { KeyModule } from './key'
 import { HealthModule } from './health'
 import { S3Module } from 'nestjs-s3'
+import { loadSecrets, validate } from './config'
+import { env } from 'node:process'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
-            load: [secrets],
+            load: [loadSecrets],
+            validate,
+            cache: env.NODE_ENV === 'production',
         }),
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
