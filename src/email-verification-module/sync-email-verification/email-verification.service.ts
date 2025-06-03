@@ -14,9 +14,6 @@ import { EmailVerification } from './email-verification.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
 import { DomainVerificationForbiddenException } from './domain-verification-forbidden.exception'
-import { InjectMapper } from '@automapper/nestjs'
-import { Mapper } from '@automapper/core'
-import { EmailVerificationResponseDto } from './email-verification-response.dto'
 
 @Injectable()
 export class EmailVerificationService implements IEmailVerificationService {
@@ -27,7 +24,6 @@ export class EmailVerificationService implements IEmailVerificationService {
         @InjectModel(EmailVerification.name) private readonly emailVerificationModel: Model<EmailVerification>,
         @Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService,
         @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
-        @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
     private static hasRecentVerification(
@@ -58,7 +54,7 @@ export class EmailVerificationService implements IEmailVerificationService {
         if (hasRecentVerification) {
             const previousVerification = await this.emailVerificationModel.findById(emailRecord.lastVerificationId)
             if (previousVerification?.exists != null) {
-                return this.mapper.map(previousVerification, EmailVerification, EmailVerificationResponseDto)
+                return previousVerification
             }
         }
 
@@ -75,7 +71,7 @@ export class EmailVerificationService implements IEmailVerificationService {
             lastVerificationId: emailVerificationRecord._id.toHexString(),
         })
 
-        return this.mapper.map(emailVerificationRecord, EmailVerification, EmailVerificationResponseDto)
+        return emailVerificationRecord
     }
 
     private async validateDomain(domainName: string): Promise<void> {

@@ -11,8 +11,7 @@ import { EmailModule, EmailService } from '../email'
 import { DomainModule, DomainService } from '../domain'
 import { EmailVerifier, EmailVerifierModule } from '../email-verifier'
 import { EmailVerificationService } from './email-verification.service'
-import { EmailVerificationController } from './email-verification.controller'
-import { EmailVerificationProfile } from './email-verification.profile'
+import { SyncEmailVerificationController } from './sync-email-verification.controller'
 
 @Module({
     imports: [
@@ -28,7 +27,6 @@ import { EmailVerificationProfile } from './email-verification.profile'
     ],
     providers: [
         EmailVerificationService,
-        EmailVerificationProfile,
         {
             provide: EMAIL_VERIFIER_TOKEN,
             useExisting: EmailVerifier,
@@ -46,7 +44,7 @@ import { EmailVerificationProfile } from './email-verification.profile'
             useExisting: EmailVerificationService,
         },
     ],
-    controllers: [EmailVerificationController],
+    controllers: [SyncEmailVerificationController],
     exports: [EmailVerificationService],
 })
 export class SyncEmailVerificationModule {}

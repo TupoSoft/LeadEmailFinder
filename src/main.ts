@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config'
 import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(AppModule)
     app.disable('x-powered-by')
     app.useLogger(app.get(Logger))
