@@ -1,12 +1,20 @@
-### Verify
+### Verify (Old Response)
 GET {{host}}/verify?email=kyrylo.kupin@gmail.com
+
+### Verify
+POST {{host}}/verify
+Content-Type: application/json
+
+{
+  "email": "kyrylo.kupin@gmail.com"
+}
 
 ### Verify Async
 POST {{host}}/verifyAsync
 Content-Type: application/json
 
 {
-  "email": "john.doe@gmail.com"
+  "email": "igor.mihajlov@tuposoft.com"
 }
 
 > {%

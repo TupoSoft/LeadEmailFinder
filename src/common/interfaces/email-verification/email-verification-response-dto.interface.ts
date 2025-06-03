@@ -1,8 +1,6 @@
 import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '../../enums'
 
 export interface IEmailVerificationResponseDto {
-    id: string
-
     email: string
 
     domain: string
@@ -22,4 +20,6 @@ export interface IEmailVerificationResponseDto {
     catchAll: boolean | null
 
     reason: EmailVerificationReason
+
+    createdAt: Date
 }

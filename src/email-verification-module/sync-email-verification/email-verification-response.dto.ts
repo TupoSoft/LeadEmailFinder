@@ -5,24 +5,23 @@ import {
     EmailVerificationSource,
     IEmailVerificationResponseDto,
 } from '../../common'
+import { IsEmail, IsFQDN } from 'class-validator'
 import { AutoMap } from '@automapper/classes'
 
 export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
     @Expose()
-    @AutoMap()
-    id: string
-
-    @Expose()
+    @IsEmail()
     @AutoMap()
     email: string
 
     @Expose()
     @AutoMap()
-    domain: string
+    localPart: string
 
     @Expose()
     @AutoMap()
-    localPart: string
+    @IsFQDN()
+    domain: string
 
     @Expose()
     @AutoMap(() => String)
@@ -46,9 +45,15 @@ export class EmailVerificationResponseDto implements IEmailVerificationResponseD
 
     @Expose()
     @AutoMap()
+    @IsFQDN()
     mxDomain?: string
 
     @Expose()
     @AutoMap()
+    @IsFQDN()
     targetExchange?: string
+
+    @Expose({ toClassOnly: true })
+    @AutoMap()
+    createdAt: Date
 }
