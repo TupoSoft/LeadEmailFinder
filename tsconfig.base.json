@@ -18,18 +18,5 @@
         "noFallthroughCasesInSwitch": true,
         "strictPropertyInitialization": false,
         "esModuleInterop": true,
-        "plugins": [
-            {
-                "transform": "@automapper/classes/transformer-plugin",
-                "modelFileNameSuffix": [".schema.ts", ".dto.ts"]
-            },
-            {
-                "transform": "@nestjs/swagger/plugin",
-                "introspectComments": true
-            }
-        ]
     },
-    "ts-node": {
-        "compiler": "ts-patch/compiler"
-    }
 }
