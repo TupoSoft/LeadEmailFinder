@@ -11,8 +11,8 @@
         "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
         "clean": "tsc --build --clean && rm -r dist",
         "test": "jest",
-        "start:dev": "nest start -p tsconfig.dev.json -w",
-        "start:debug": "nest start -p tsconfig.dev.json -w -d 0.0.0.0:9229"
+        "start:dev": "nest start -p tsconfig.dev.json -w -b swc --type-check",
+        "start:debug": "nest start -p tsconfig.dev.json -w -d 0.0.0.0:9229 -b swc --type-check"
     },
     "author": {
         "url": "https://tuposoft.com",

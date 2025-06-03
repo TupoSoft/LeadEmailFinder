@@ -5,13 +5,7 @@
     "compilerOptions": {
         "deleteOutDir": true,
         "plugins": [
-            "@nestjs/swagger",
-            {
-                "name": "@automapper/classes/transformer-plugin",
-                "options": {
-                    "modelFileNameSuffix": [".schema.ts", ".dto.ts"]
-                }
-            }
+            "@nestjs/swagger"
         ]
     }
 }

@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
 import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
+import metadata from './metadata'
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(AppModule)
@@ -31,6 +32,7 @@ async function bootstrap(): Promise<void> {
 
     const config = documentBuilder.build()
 
+    await SwaggerModule.loadPluginMetadata(metadata)
     const documentFactory = () => SwaggerModule.createDocument(app, config)
 
     SwaggerModule.setup('/', app, documentFactory)
