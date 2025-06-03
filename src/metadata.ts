@@ -1,4 +1,2 @@
 /* eslint-disable */
-export default async () => {
-    return {}
-};
+export default async () => ({})
