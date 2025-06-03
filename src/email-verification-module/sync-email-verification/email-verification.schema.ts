@@ -32,6 +32,8 @@ export class EmailVerification {
 
     @Prop({ type: [String], enum: EmailVerificationSource })
     sources: EmailVerificationSource[]
+
+    createdAt: Date
 }
 
 export const EmailVerificationSchema = SchemaFactory.createForClass(EmailVerification)
