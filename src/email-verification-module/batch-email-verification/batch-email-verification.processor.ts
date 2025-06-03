@@ -12,12 +12,13 @@ import { plainToInstance } from 'class-transformer'
 import { BatchEmailVerificationCsvRowDto } from './batch-email-verification-csv-row.dto'
 import { validate } from 'class-validator'
 import { randomUUID } from 'node:crypto'
+import { VerifyOptions } from '../../common'
 
 @Processor('batch-email-verification')
 export class BatchEmailVerificationProcessor extends WorkerHost {
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
-        @InjectQueue('async-email-verification') private readonly asyncEmailVerificationQueue: Queue<string>,
+        @InjectQueue('async-email-verification') private readonly asyncEmailVerificationQueue: Queue<VerifyOptions>,
     ) {
         super()
     }
@@ -76,13 +77,17 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         for await (const row of parser) {
             const { email } = plainToInstance(BatchEmailVerificationCsvRowDto, row)
 
-            await this.asyncEmailVerificationQueue.add('async-email-verification', email, {
-                jobId: randomUUID(),
-                parent: {
-                    id: job.id,
-                    queue: job.queueQualifiedName,
+            await this.asyncEmailVerificationQueue.add(
+                'async-email-verification',
+                { email, batchId: job.id },
+                {
+                    jobId: randomUUID(),
+                    parent: {
+                        id: job.id,
+                        queue: job.queueQualifiedName,
+                    },
                 },
-            })
+            )
         }
 
         await job.updateData({

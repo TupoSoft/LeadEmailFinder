@@ -34,6 +34,9 @@ export class EmailVerification {
     sources: EmailVerificationSource[]
 
     createdAt: Date
+
+    @Prop()
+    batchId?: string
 }
 
 export const EmailVerificationSchema = SchemaFactory.createForClass(EmailVerification)

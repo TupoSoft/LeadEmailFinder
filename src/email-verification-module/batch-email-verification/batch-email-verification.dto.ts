@@ -27,7 +27,13 @@ export class GetBatchStatusResponseDto implements GetBatchStatusResponse {
     @IsUUID()
     id: string
 
+    status: JobState
+
     progress: number
 
-    status: JobState
+    total: number
+
+    processed: number
+
+    unprocessed: number
 }

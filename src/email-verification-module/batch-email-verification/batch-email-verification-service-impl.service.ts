@@ -14,6 +14,7 @@ import {
 import { JobNotFoundException } from './job-not-found.exception'
 import { JobState } from './job-state.enum'
 import { fromStringToEnum } from '../../common'
+import { Readable } from 'stream'
 
 @Injectable()
 export class BatchEmailVerificationServiceImpl implements BatchEmailVerificationService {
@@ -21,6 +22,10 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         @InjectQueue('batch-email-verification')
         private readonly batchEmailVerificationQueue: Queue<BatchEmailVerificationJobData>,
     ) {}
+
+    getBatchResults(id: string): Promise<Readable> {
+        throw new Error('Method not implemented.')
+    }
 
     async getBatchStatus(id: string): Promise<GetBatchStatusResponse> {
         const job = await this.batchEmailVerificationQueue.getJob(id)
@@ -32,11 +37,16 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         const state = await job.getState()
         const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
 
+        const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
+        const total = processed + unprocessed
         const progress = await this.calculateProgress(job)
 
         return {
             id,
             status,
+            total,
+            processed,
+            unprocessed,
             progress,
         }
     }
