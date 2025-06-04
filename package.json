@@ -3,7 +3,7 @@
     "name": "@tuposoft/lead-email-finder",
     "version": "0.9.5",
     "description": "Lead Email Finder API",
-    "packageManager": "pnpm@10.10.0",
+    "packageManager": "pnpm@10.11.1",
     "scripts": {
         "build": "tsc -p tsconfig.prod.json",
         "start": "node --env-file-if-exists=.env dist",
