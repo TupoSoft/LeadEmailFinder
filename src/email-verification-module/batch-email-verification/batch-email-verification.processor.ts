@@ -64,8 +64,12 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
         const { bucket, key } = job.data
 
+        const columns = Object.keys(this.emailVerificationModel.schema.paths)
         const cursor = this.emailVerificationModel.find<EmailVerification>({ batchId: job.id }).lean().cursor()
-        const stringifier = stringify()
+        const stringifier = stringify({
+            columns,
+            header: true,
+        })
         const passThrough = new PassThrough()
 
         const upload = new Upload({
