@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
-import { fromStringToEnum, IEmailVerificationResponseDto } from '../../common'
+import { fromStringToEnum, IEmailVerificationResponseDto, JobState } from '../../common'
 import { randomUUID } from 'node:crypto'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import {
@@ -10,7 +10,6 @@ import {
     VerifyAsyncRequest,
     VerifyAsyncResponse,
 } from './async-email-verification-service.interface'
-import { JobState } from './job-state.enum'
 import { ok } from 'node:assert'
 
 @Injectable()

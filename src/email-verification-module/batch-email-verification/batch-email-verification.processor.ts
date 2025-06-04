@@ -18,8 +18,9 @@ import { EmailVerification } from '../sync-email-verification'
 import { Model } from 'mongoose'
 import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
+import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 
-@Processor('batch-email-verification')
+@Processor(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
 export class BatchEmailVerificationProcessor extends WorkerHost {
     private readonly logger = new Logger(BatchEmailVerificationProcessor.name)
 
@@ -31,7 +32,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         super()
     }
 
-    async process(job: Job<BatchEmailVerificationJobData>, token: string): Promise<any> {
+    async process(job: Job<BatchEmailVerificationJobData, string>, token: string): Promise<string> {
         while (job.data.step !== BatchEmailVerificationJobStep.Finish) {
             switch (job.data.step) {
                 case BatchEmailVerificationJobStep.Validate:
@@ -50,6 +51,12 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
                     this.handleDefault(job)
             }
         }
+
+        const {
+            data: { resultFilePath },
+        } = job
+
+        return resultFilePath
     }
 
     private async uploadResults(job: Job<BatchEmailVerificationJobData>): Promise<void> {
@@ -81,8 +88,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
         await job.updateData({
             step: BatchEmailVerificationJobStep.Finish,
-            bucket,
-            key,
+            resultFilePath: `s3://${bucket}-results/${key}`,
         })
     }
 
@@ -110,6 +116,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
     }
 
     private async processFile(job: Job<BatchEmailVerificationJobData>): Promise<void> {
+        ok(job.data.step === BatchEmailVerificationJobStep.Process, 'Invalid step.')
         ok(job.id, 'Job ID is undefined.')
 
         const { bucket, key } = job.data
@@ -154,6 +161,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
     }
 
     private async waitForChildren(job: Job<BatchEmailVerificationJobData>, token: string): Promise<void> {
+        ok(job.data.step === BatchEmailVerificationJobStep.WaitForChildren, 'Invalid step.')
         const shouldWait = await job.moveToWaitingChildren(token)
 
         if (shouldWait) {

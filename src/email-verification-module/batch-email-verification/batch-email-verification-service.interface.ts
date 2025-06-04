@@ -1,6 +1,6 @@
 import { BatchEmailVerificationFile } from './batch-email-verification-file.interface'
-import { JobState } from './job-state.enum'
 import { Readable } from 'node:stream'
+import { JobState } from '../../common'
 
 export interface EnqueueBatchResponse {
     id: string

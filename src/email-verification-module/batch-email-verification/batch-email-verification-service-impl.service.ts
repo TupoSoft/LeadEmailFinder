@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { Job, Queue } from 'bullmq'
 import { InjectQueue } from '@nestjs/bullmq'
 import { randomUUID } from 'node:crypto'
@@ -12,19 +12,46 @@ import {
     GetBatchStatusResponse,
 } from './batch-email-verification-service.interface'
 import { JobNotFoundException } from './job-not-found.exception'
-import { JobState } from './job-state.enum'
-import { fromStringToEnum } from '../../common'
+import { fromStringToEnum, JobState } from '../../common'
 import { Readable } from 'stream'
+import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
+import { getS3ConnectionToken, S3 } from 'nestjs-s3'
+import { ReadableStream } from 'node:stream/web'
+import { parse } from 'csv-parse'
 
 @Injectable()
 export class BatchEmailVerificationServiceImpl implements BatchEmailVerificationService {
     constructor(
-        @InjectQueue('batch-email-verification')
-        private readonly batchEmailVerificationQueue: Queue<BatchEmailVerificationJobData>,
+        @InjectQueue(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
+        private readonly batchEmailVerificationQueue: Queue<BatchEmailVerificationJobData, string>,
+        @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
     ) {}
 
-    getBatchResults(id: string): Promise<Readable> {
-        throw new Error('Method not implemented.')
+    async getBatchResults(id: string): Promise<Readable> {
+        const job = await this.batchEmailVerificationQueue.getJob(id)
+
+        ok(job, new JobNotFoundException(id))
+
+        const state = await job.getState()
+        const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
+
+        ok(status === JobState.COMPLETED, `Job ${id} is not completed. Current state: ${status}`)
+
+        const { returnvalue: result } = job
+
+        const { hostname: Bucket, pathname: Key } = new URL(result)
+
+        const { Body } = await this.s3.getObject({ Bucket, Key })
+
+        ok(Body, `Failed to get object from bucket ${Bucket} with key ${Key}.`)
+
+        return Readable.fromWeb(Body.transformToWebStream() as ReadableStream).pipe(
+            parse({
+                skip_empty_lines: true,
+                columns: true,
+                trim: true,
+            }),
+        )
     }
 
     async getBatchStatus(id: string): Promise<GetBatchStatusResponse> {
@@ -73,7 +100,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
 
     async uploadFile({ bucket, key }: BatchEmailVerificationFile): Promise<EnqueueBatchResponse> {
         const batchEmailVerificationJob = await this.batchEmailVerificationQueue.add(
-            'batch-email-verification',
+            BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
             {
                 step: BatchEmailVerificationJobStep.Validate,
                 bucket,
