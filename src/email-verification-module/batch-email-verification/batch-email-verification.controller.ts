@@ -9,6 +9,7 @@ import {
     ParseFilePipeBuilder,
     Post,
     SerializeOptions,
+    StreamableFile,
     UploadedFile,
     UseInterceptors,
 } from '@nestjs/common'
@@ -60,11 +61,25 @@ export class BatchEmailVerificationController {
         return await this.batchEmailVerificationService.uploadFile(file)
     }
 
-    @Get()
+    @Get(':id')
     @SerializeOptions({ type: GetBatchStatusResponseDto })
     async getBatchStatus(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<GetBatchStatusResponseDto> {
         try {
             return await this.batchEmailVerificationService.getBatchStatus(id)
+        } catch (error) {
+            if (error instanceof JobNotFoundException) {
+                throw new NotFoundException(error.message)
+            }
+
+            throw error
+        }
+    }
+
+    @Get(':id/results')
+    async getBatchResults(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<StreamableFile> {
+        try {
+            const readable = await this.batchEmailVerificationService.getBatchResults(id)
+            return new StreamableFile(readable)
         } catch (error) {
             if (error instanceof JobNotFoundException) {
                 throw new NotFoundException(error.message)
