@@ -17,7 +17,6 @@ import { Readable } from 'stream'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
 import { ReadableStream } from 'node:stream/web'
-import { parse } from 'csv-parse'
 
 @Injectable()
 export class BatchEmailVerificationServiceImpl implements BatchEmailVerificationService {
@@ -45,13 +44,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
 
         ok(Body, `Failed to get object from bucket ${Bucket} with key ${Key}.`)
 
-        return Readable.fromWeb(Body.transformToWebStream() as ReadableStream).pipe(
-            parse({
-                skip_empty_lines: true,
-                columns: true,
-                trim: true,
-            }),
-        )
+        return Readable.fromWeb(Body.transformToWebStream() as ReadableStream)
     }
 
     async getBatchStatus(id: string): Promise<GetBatchStatusResponse> {

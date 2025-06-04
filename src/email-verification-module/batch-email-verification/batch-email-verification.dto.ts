@@ -25,15 +25,21 @@ export class GetBatchStatusRequestParamsDto implements GetBatchStatusRequestPara
 
 export class GetBatchStatusResponseDto implements GetBatchStatusResponse {
     @IsUUID()
+    @Expose()
     id: string
 
+    @Expose()
     status: JobState
 
+    @Expose()
     progress: number
 
+    @Expose()
     total: number
 
+    @Expose()
     processed: number
 
+    @Expose()
     unprocessed: number
 }
