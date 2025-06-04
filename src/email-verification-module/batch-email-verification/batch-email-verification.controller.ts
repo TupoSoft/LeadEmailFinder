@@ -79,7 +79,7 @@ export class BatchEmailVerificationController {
     async getBatchResults(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<StreamableFile> {
         try {
             const readable = await this.batchEmailVerificationService.getBatchResults(id)
-            return new StreamableFile(readable)
+            return new StreamableFile(readable, { type: 'text/csv' })
         } catch (error) {
             if (error instanceof JobNotFoundException) {
                 throw new NotFoundException(error.message)
