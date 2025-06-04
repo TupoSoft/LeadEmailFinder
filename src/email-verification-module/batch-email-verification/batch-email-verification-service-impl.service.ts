@@ -37,36 +37,38 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         const state = await job.getState()
         const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
 
-        const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
-        const total = processed + unprocessed
-        const progress = await this.calculateProgress(job)
+        const stats = await this.getStats(job)
 
         return {
             id,
             status,
-            total,
-            processed,
-            unprocessed,
-            progress,
+            ...stats,
         }
     }
 
-    private async calculateProgress(job: Job<BatchEmailVerificationJobData>): Promise<number> {
+    private async getStats(
+        job: Job<BatchEmailVerificationJobData>,
+    ): Promise<{ total: number; processed: number; unprocessed: number; progress: number }> {
         const {
             data: { step },
         } = job
 
+        const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
+
+        const stats = {
+            total: processed + unprocessed,
+            processed,
+            unprocessed,
+            progress: 0,
+        }
+
         if (step === BatchEmailVerificationJobStep.Validate || step === BatchEmailVerificationJobStep.Process) {
-            return 0
+            return stats
         }
 
-        const { processed, unprocessed } = await job.getDependenciesCount()
+        stats.progress = (processed / unprocessed) * 100
 
-        if (processed === undefined || unprocessed === undefined) {
-            return 0
-        }
-
-        return (processed / unprocessed) * 100
+        return stats
     }
 
     async uploadFile({ bucket, key }: BatchEmailVerificationFile): Promise<EnqueueBatchResponse> {
