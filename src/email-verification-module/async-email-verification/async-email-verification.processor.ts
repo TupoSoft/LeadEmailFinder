@@ -5,6 +5,7 @@ import {
     IEmailVerificationResponseDto,
     IEmailVerificationService,
     parseTimeString,
+    VerifyOptions,
 } from '../../common'
 import { Inject } from '@nestjs/common'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
@@ -25,20 +26,20 @@ import { GreylistedException } from './greylisted.exception'
         },
     },
 })
-export class EmailVerificationProcessor extends WorkerHost {
+export class AsyncEmailVerificationProcessor extends WorkerHost {
     constructor(
         @Inject(EMAIL_VERIFICATION_SERVICE_TOKEN) private readonly emailVerificationService: IEmailVerificationService,
     ) {
         super()
     }
 
-    async process(job: Job<string, IEmailVerificationResponseDto>): Promise<IEmailVerificationResponseDto> {
-        const { data: email } = job
+    async process(job: Job<VerifyOptions, IEmailVerificationResponseDto>): Promise<IEmailVerificationResponseDto> {
+        const { data: verifyOptions } = job
 
-        const response = await this.emailVerificationService.verify({ email })
+        const response = await this.emailVerificationService.verify(verifyOptions)
 
         if (response.reason === EmailVerificationReason.TemporarilyBlocked) {
-            throw new GreylistedException(email)
+            throw new GreylistedException(response.email)
         }
 
         return response

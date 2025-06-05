@@ -5,15 +5,17 @@ import { BatchEmailVerificationServiceImpl } from './batch-email-verification-se
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { MulterModule } from '@nestjs/platform-express'
 import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
+import { SyncEmailVerificationModule } from '../sync-email-verification'
+import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 
 @Module({
     imports: [
-        BullModule.registerQueue({ name: 'batch-email-verification' }),
+        BullModule.registerQueue({ name: BATCH_EMAIL_VERIFICATION_QUEUE_NAME }),
         BullModule.registerQueue({ name: 'async-email-verification' }),
-        BullModule.registerFlowProducer({ name: 'batch-email-verification-flow' }),
         MulterModule.registerAsync({
             useClass: MulterOptionsFactoryImpl,
         }),
+        SyncEmailVerificationModule,
     ],
     controllers: [BatchEmailVerificationController],
     providers: [

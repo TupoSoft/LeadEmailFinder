@@ -1,4 +1,4 @@
-export * from './email-verification-request-dto.interface'
+export * from './verify-options.interface'
 export * from './email-verification-result-dto.interface'
 export * from './email-verification-response-dto.interface'
 export * from './email-verification-service.interface'

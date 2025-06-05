@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common'
 import { BullModule } from '@nestjs/bullmq'
 import { AsyncEmailVerificationServiceImpl } from './async-email-verification-service-impl.service'
-import { EmailVerificationProcessor } from './email-verification.processor'
+import { AsyncEmailVerificationProcessor } from './async-email-verification.processor'
 import { EmailVerificationService, SyncEmailVerificationModule } from '../sync-email-verification'
 import {
     ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
@@ -24,7 +24,7 @@ import { AsyncEmailVerificationController } from './async-email-verification.con
     ],
     providers: [
         AsyncEmailVerificationServiceImpl,
-        EmailVerificationProcessor,
+        AsyncEmailVerificationProcessor,
         {
             provide: EMAIL_VERIFICATION_SERVICE_TOKEN,
             useExisting: EmailVerificationService,

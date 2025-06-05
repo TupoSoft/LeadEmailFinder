@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { BatchEmailVerificationServiceImpl } from './batch-email-verification-service-impl.service'
 import { getQueueToken } from '@nestjs/bullmq'
+import { getS3ConnectionToken } from 'nestjs-s3'
 
 describe('BatchEmailVerificationService', () => {
     let service: BatchEmailVerificationServiceImpl
@@ -15,6 +16,10 @@ describe('BatchEmailVerificationService', () => {
                 },
                 {
                     provide: getQueueToken('async-email-verification'),
+                    useValue: null,
+                },
+                {
+                    provide: getS3ConnectionToken('default'),
                     useValue: null,
                 },
             ],

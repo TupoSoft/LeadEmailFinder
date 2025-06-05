@@ -2,10 +2,15 @@ import { BatchEmailVerificationJobStep } from './batch-email-verification-job-st
 
 export type BatchEmailVerificationJobData =
     | {
-          step: BatchEmailVerificationJobStep.Finish | BatchEmailVerificationJobStep.WaitForChildren
-      }
-    | {
-          step: BatchEmailVerificationJobStep.Validate | BatchEmailVerificationJobStep.Process
+          step:
+              | BatchEmailVerificationJobStep.Validate
+              | BatchEmailVerificationJobStep.Process
+              | BatchEmailVerificationJobStep.WaitForChildren
+              | BatchEmailVerificationJobStep.UploadResults
           key: string
           bucket: string
+      }
+    | {
+          step: BatchEmailVerificationJobStep.Finish
+          resultFilePath: string
       }

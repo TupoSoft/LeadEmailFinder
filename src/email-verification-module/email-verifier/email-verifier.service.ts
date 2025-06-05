@@ -3,10 +3,10 @@ import {
     EmailVerificationSource,
     fromStringToEnum,
     ICatchAllVerifier,
-    IEmailVerificationRequestDto,
     IEmailVerificationResultDto,
     IEmailVerifier,
     ISmtpVerifier,
+    VerifyOptions,
 } from '../../common'
 import { getSecondLevelDomain } from './smtp/dns'
 import { Inject, Injectable } from '@nestjs/common'
@@ -39,7 +39,7 @@ export class EmailVerifier implements IEmailVerifier {
         return getSecondLevelDomain(targetExchange ?? '')
     }
 
-    async verify({ email, format }: IEmailVerificationRequestDto): Promise<IEmailVerificationResultDto> {
+    async verify({ email, format }: VerifyOptions): Promise<IEmailVerificationResultDto> {
         const [localPart, domain] = email.split('@')
 
         const emailVerification: IEmailVerificationResultDto = {

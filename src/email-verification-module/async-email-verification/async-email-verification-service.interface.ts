@@ -1,5 +1,4 @@
-import { IEmailVerificationResponseDto } from '../../common'
-import { JobState } from './job-state.enum'
+import { IEmailVerificationResponseDto, JobState } from '../../common'
 
 export interface VerifyAsyncRequest {
     email: string

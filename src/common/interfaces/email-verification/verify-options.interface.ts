@@ -1,6 +1,7 @@
 import { EmailPatternEnum } from '../../enums'
 
-export interface IEmailVerificationRequestDto {
+export interface VerifyOptions {
     email: string
     format?: EmailPatternEnum
+    batchId?: string
 }

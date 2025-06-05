@@ -27,3 +27,31 @@ Content-Type: application/json
 ### Get Async Verification Status
 GET {{host}}/verifyAsync/{{jobId}}
 Content-Type: application/json
+
+### Verify Batch
+POST {{host}}/verifyBatch/csv
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="test.csv"
+Content-Type: text/csv
+
+email
+john.doe@gmail.com
+kyrylo.kupin@gmail.com
+igor.mihajlov@gmail.com
+
+--boundary--
+
+> {%
+    client.test('should be 202', () => {
+        client.assert(response.status === 202, 'Status code is not 202')
+        client.global.set('id', response.body.id)
+    })
+%}
+
+### Get Verify Batch Status
+GET {{host}}/verifyBatch/{{id}}
+
+### Get Verify Batch Results
+GET {{host}}/verifyBatch/{{id}}/results

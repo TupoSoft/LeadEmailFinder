@@ -25,6 +25,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.821.0
         version: 3.821.0
+      '@aws-sdk/lib-storage':
+        specifier: ^3.823.0
+        version: 3.823.0(@aws-sdk/client-s3@3.821.0)
       '@nestjs/axios':
         specifier: ^4.0.0
         version: 4.0.0(@nestjs/common@11.1.0(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(axios@1.8.4)(rxjs@7.8.2)
@@ -70,6 +73,9 @@ importers:
       csv-parse:
         specifier: ^5.6.0
         version: 5.6.0
+      csv-stringify:
+        specifier: ^6.5.2
+        version: 6.5.2
       express:
         specifier: ^4.21.2
         version: 4.21.2
@@ -423,11 +429,11 @@ packages:
     resolution: {integrity: sha512-FF5wnRJkxSQaCVVvWNv53K1MhTMgH8d+O+MHTbkv51gVIgVATrtfFQMKBLcEAxzXrgAliIO3LiNv+1TqqBZ+BA==}
     engines: {node: '>=18.0.0'}
 
-  '@aws-sdk/lib-storage@3.821.0':
-    resolution: {integrity: sha512-79N58EjrNOFbbegxJoeR1d9TH3MTV8gfpob5gIpXnZWl27gSJYPaD5K7vNS1wbwFEnIWMp9esRO3TtEMb/UAPg==}
+  '@aws-sdk/lib-storage@3.823.0':
+    resolution: {integrity: sha512-KuBn4F9dNBXlSHxnkCL/FZitVX0HR5QzbrLJ0c29/mJBIz2rB2Yj0q8u2WFKOo6jCZwdHZhFvQjJvVj61ptIBQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      '@aws-sdk/client-s3': ^3.821.0
+      '@aws-sdk/client-s3': ^3.823.0
 
   '@aws-sdk/middleware-bucket-endpoint@3.821.0':
     resolution: {integrity: sha512-cebgeytKlWOgGczLo3BPvNY9XlzAzGZQANSysgJ2/8PSldmUpXRIF+GKPXDVhXeInWYHIfB8zZi3RqrPoXcNYQ==}
@@ -2513,6 +2519,9 @@ packages:
 
   csv-parse@5.6.0:
     resolution: {integrity: sha512-l3nz3euub2QMg5ouu5U09Ew9Wf6/wQ8I++ch1loQ0ljmzhmfZYrH9fflS22i/PQEvsPvxCwxgz5q7UB8K1JO4Q==}
+
+  csv-stringify@6.5.2:
+    resolution: {integrity: sha512-RFPahj0sXcmUyjrObAK+DOWtMvMIFV328n4qZJhgX3x2RqkQgOTU2mCUmiFR0CzM6AzChlRSUErjiJeEt8BaQA==}
 
   data-view-buffer@1.0.2:
     resolution: {integrity: sha512-EmKO5V3OLXh1rtK2wgXRansaK1/mtVdTUEiEI0W8RkvgT05kfxaH29PliLnpLP73yYO6142Q72QNa8Wx/A5CqQ==}
@@ -5545,7 +5554,7 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@aws-sdk/lib-storage@3.821.0(@aws-sdk/client-s3@3.821.0)':
+  '@aws-sdk/lib-storage@3.823.0(@aws-sdk/client-s3@3.821.0)':
     dependencies:
       '@aws-sdk/client-s3': 3.821.0
       '@smithy/abort-controller': 4.0.4
@@ -8340,6 +8349,8 @@ snapshots:
 
   csv-parse@5.6.0: {}
 
+  csv-stringify@6.5.2: {}
+
   data-view-buffer@1.0.2:
     dependencies:
       call-bound: 1.0.4
@@ -10177,7 +10188,7 @@ snapshots:
   multer-s3@3.0.1(@aws-sdk/client-s3@3.821.0):
     dependencies:
       '@aws-sdk/client-s3': 3.821.0
-      '@aws-sdk/lib-storage': 3.821.0(@aws-sdk/client-s3@3.821.0)
+      '@aws-sdk/lib-storage': 3.823.0(@aws-sdk/client-s3@3.821.0)
       file-type: 3.9.0
       html-comment-regex: 1.1.2
       run-parallel: 1.2.0
