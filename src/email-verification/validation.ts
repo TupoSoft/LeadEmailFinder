@@ -1,17 +1,8 @@
 import 'zod-openapi/extend'
 import { z, type ZodType } from 'zod'
 import type { EmailVerificationResult } from './dto'
-import { SmtpVerificationReasonEnum } from '../smtp/dto'
-import type { VerifyEmailOldViewModel } from './presenter'
-import { CatchAllStatus, DeliveryStatus } from './enums'
 
 const email = z.string().email().openapi({ example: 'danilo@microsoft.com' })
-
-export const verifyEmailRequestBody = z
-    .object({
-        email,
-    })
-    .strict()
 
 export const verifyEmailResponseSchema = z
     .object({
@@ -29,26 +20,5 @@ export const verifyEmailResponseSchema = z
             .openapi({ example: 'microsoft-com.mail.protection.outlook.com' }),
         mxDomain: z.string().nonempty().optional().openapi({ example: 'outlook.com' }),
         verifiedAt: z.string().date().openapi({ example: '2022-22-22T02:00:00.000Z' }),
-        reason: z.nativeEnum(SmtpVerificationReasonEnum),
     })
     .strict() satisfies ZodType<EmailVerificationResult>
-
-export const verifyEmailOldResponseSchema = z.object({
-    email,
-    localPart: z.string().nonempty().openapi({ example: 'danilo' }),
-    domain: z.string().nonempty().openapi({ example: 'microsoft.com' }),
-    deliveryStatus: z.enum([DeliveryStatus.Accepted, DeliveryStatus.Rejected, DeliveryStatus.NotProcessed]),
-    catchAll: z.enum([CatchAllStatus.Enabled, CatchAllStatus.Disabled, CatchAllStatus.Unknown]),
-    reason: z.nativeEnum(SmtpVerificationReasonEnum),
-    verifiedAt: z.string().date().openapi({ example: '2022-22-22T02:00:00.000Z' }),
-    targetExchange: z.string().nonempty().optional().openapi({ example: 'microsoft-com.mail.protection.outlook.com' }),
-    mxDomain: z.string().nonempty().optional().openapi({ example: 'outlook.com' }),
-}) satisfies ZodType<VerifyEmailOldViewModel>
-
-export const verifyEmailBulkRequestBody = z.array(email)
-
-export const verifyEmailBulkResultResponseBody = z.array(verifyEmailResponseSchema)
-
-export const legacyVerifyEmailRequestQueryParams = z.object({
-    email,
-})
