@@ -8,7 +8,3 @@ export interface Logger {
     error: Log
     debug: Log
 }
-
-export interface ExtensibleLogger extends Logger {
-    child: (bindings: LogMeta) => ExtensibleLogger
-}
