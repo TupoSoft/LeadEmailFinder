@@ -4,7 +4,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: docker/NestJS.Dockerfile
+      dockerfile: docker/Dockerfile
     volumes:
       - "..:/app"
       - "/app/node_modules"
@@ -29,6 +29,12 @@ services:
       MONGO_URL_FILE: /run/secrets/mongo_url
       REDIS_URL_FILE: /run/secrets/redis_url
       AUTH_TOKENS_FILE: /run/secrets/tokens.json
+      S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_URL: http://minio:9000
+      S3_REGION: us-east-1
+      S3_FORCE_PATH_STYLE: true
+      S3_BUCKET: batch-email-verification
     env_file: .env
     depends_on:
       mongo:
@@ -41,6 +47,8 @@ services:
       - mongo_url
       - redis_url
       - tokens.json
+      - s3_access_key_id
+      - s3_secret_key
 
   mongo:
     image: mongo:latest
@@ -116,7 +124,6 @@ services:
       - |
         mc alias s minio http://minio:9000 minioadmin minioadmin
         mc mb minio/batch-email-verification
-        mc mb minio/batch-email-verification-results
 
 secrets:
   mongo_root_username:
@@ -131,6 +138,10 @@ secrets:
     file: secrets/tokens.json
   admin_apikey:
     file: secrets/admin_apikey.txt
+  s3_access_key_id:
+    file: secrets/s3_access_key_id.txt
+  s3_secret_key:
+    file: secrets/s3_secret_key.txt
 
 volumes:
   mongo-data:

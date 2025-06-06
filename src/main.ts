@@ -9,6 +9,7 @@ import { NestExpressApplication } from '@nestjs/platform-express'
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(AppModule)
     app.disable('x-powered-by')
+    app.enable('trust proxy')
     app.useLogger(app.get(Logger))
     app.useGlobalPipes(new ValidationPipe())
     app.useGlobalInterceptors(

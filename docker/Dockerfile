@@ -10,7 +10,11 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine
 
-RUN apk add --no-cache curl wget bind-tools
+ENV PATH="/app/node_modules/.bin:$PATH"
+
+WORKDIR /app
+
+RUN apk add --no-cache curl wget bind-tools jq
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
@@ -22,8 +26,8 @@ WORKDIR /app
 # Leverage a cache mount to /root/.local/share/pnpm/store to speed up subsequent builds.
 # Leverage a bind mounts to package.json and pnpm-lock.yaml to avoid having to copy them into
 # into this layer.
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=pnpm-lock.yaml,target=pnpm-lock.yaml \
+RUN --mount=type=bind,source=../package.json,target=package.json \
+    --mount=type=bind,source=../pnpm-lock.yaml,target=pnpm-lock.yaml \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --frozen-lockfile i
 
@@ -40,4 +44,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD ["pnpm", "dev"]
+CMD pnpm start:dev

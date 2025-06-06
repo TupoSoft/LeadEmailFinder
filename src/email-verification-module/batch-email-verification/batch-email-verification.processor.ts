@@ -70,19 +70,21 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             columns,
             header: true,
         })
-        const passThrough = new PassThrough()
+
+        const Body = new PassThrough()
+        const Key = `results/${key}`
 
         const upload = new Upload({
             client: this.s3,
             params: {
-                Bucket: `${bucket}-results`,
-                Key: key,
-                Body: passThrough,
+                Bucket: bucket,
+                Key,
+                Body,
                 ContentType: 'text/csv',
             },
         })
 
-        cursor.pipe(stringifier).pipe(passThrough)
+        cursor.pipe(stringifier).pipe(Body)
 
         try {
             await upload.done()
@@ -92,7 +94,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
         await job.updateData({
             step: BatchEmailVerificationJobStep.Finish,
-            resultFilePath: `s3://${bucket}-results/${key}`,
+            resultFilePath: `s3://${bucket}/${Key}`,
         })
     }
 

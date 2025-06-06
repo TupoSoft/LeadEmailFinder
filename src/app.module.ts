@@ -10,10 +10,11 @@ import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { ApiKeyGuard, KeyModule } from './key'
 import { HealthModule } from './health'
-import { S3Module } from 'nestjs-s3'
 import { loadSecrets, validate } from './config'
 import { env } from 'node:process'
 import { APP_GUARD } from '@nestjs/core'
+import { S3Module } from 'nestjs-s3'
+import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 
 @Module({
     imports: [
@@ -46,16 +47,9 @@ import { APP_GUARD } from '@nestjs/core'
         }),
         EmailVerificationModule,
         HealthModule,
-        S3Module.forRoot({
-            config: {
-                credentials: {
-                    accessKeyId: 'minioadmin',
-                    secretAccessKey: 'minioadmin',
-                },
-                region: 'us-east-1',
-                endpoint: 'http://minio:9000',
-                forcePathStyle: true,
-            },
+        S3Module.forRootAsync({
+            imports: [ConfigModule],
+            useClass: S3ModuleOptionsFactoryImpl,
         }),
     ],
     providers: [
