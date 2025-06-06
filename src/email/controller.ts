@@ -93,26 +93,6 @@ export class EmailController {
         )
     }
 
-    deleteEmail = (req: Request, res: Response, next: NextFunction): void => {
-        const {
-            params: { id },
-        } = req
-
-        this.repository.delete(id).then(
-            deletedEmail => {
-                if (deletedEmail == null) {
-                    next(HttpError.NotFound(`Email with ID ${id} not found`))
-                    return
-                }
-
-                res.status(constants.HTTP_STATUS_OK).json(deletedEmail)
-            },
-            (error: unknown) => {
-                this.onError(error, next)
-            },
-        )
-    }
-
     private onError(error: unknown, next: NextFunction): void {
         if (error instanceof Error) {
             this.logger.error(`Error creating email: ${error.message}`)

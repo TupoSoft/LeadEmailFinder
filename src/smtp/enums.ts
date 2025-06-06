@@ -1,6 +1,4 @@
 export const enum SmtpPositiveStatusCode {
-    ServiceReady = 220,
-    ServiceClosingTransmissionChannel = 221,
     OK = 250,
 }
 

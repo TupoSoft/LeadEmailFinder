@@ -1,4 +1,3 @@
-export const NO_USAGES = 0
 export const SERVICE_NAME = 'leads'
 export const LEAD_ROUTE = `/${SERVICE_NAME}`
 export const FIND_LEAD_ROUTE = `${LEAD_ROUTE}/search`
