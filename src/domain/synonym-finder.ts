@@ -19,10 +19,8 @@ export class HTMLSynonymFinder implements SynonymFinder {
 
             const relevantLinks = findRelevantLinks(homepageHTML, domain)
 
-            const fetchPromises = relevantLinks.map(async link =>
-                await this.httpClient.get<string>(link).then(
-                    pageHTML => extractDomains(pageHTML)
-                )
+            const fetchPromises = relevantLinks.map(
+                async link => await this.httpClient.get<string>(link).then(pageHTML => extractDomains(pageHTML)),
             )
 
             const results = await Promise.allSettled(fetchPromises)
