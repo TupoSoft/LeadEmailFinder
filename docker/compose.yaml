@@ -124,7 +124,6 @@ services:
       - |
         mc alias s minio http://minio:9000 minioadmin minioadmin
         mc mb minio/batch-email-verification
-        mc mb minio/batch-email-verification-results
 
 secrets:
   mongo_root_username:
