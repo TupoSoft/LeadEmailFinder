@@ -1,12 +1,11 @@
 import type { Readable } from 'node:stream'
-import { EMPTY_ARRAY_LENGTH, isEmptyArray, ZERO } from '../../common'
 import { ok } from 'node:assert'
 import { on } from 'node:events'
 
 export async function readBytes(readable: Readable, size: number): Promise<Buffer> {
-    ok(size > ZERO, new Error(`Invalid size: ${size}. Size must be a positive number.`))
+    ok(size > 0, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
-    let buffer = Buffer.alloc(EMPTY_ARRAY_LENGTH)
+    let buffer = Buffer.alloc(0)
     for await (const event of on(readable, 'readable', { close: ['end'] })) {
         void event
 
@@ -25,7 +24,7 @@ export async function readBytes(readable: Readable, size: number): Promise<Buffe
 }
 
 function mergeBuffers(buffer: Buffer, chunk: Buffer, size: number, readable: Readable): Buffer {
-    buffer = isEmptyArray(buffer) ? chunk : Buffer.concat([buffer, chunk])
+    buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk])
 
     if (buffer.length >= size) {
         const matchedBytes = buffer.subarray(undefined, size)

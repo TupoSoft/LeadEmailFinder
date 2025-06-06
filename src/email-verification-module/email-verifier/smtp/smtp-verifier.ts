@@ -1,17 +1,8 @@
-import { getSecondLevelDomain } from '../../../dns'
 import { SmtpClient } from './smtp-client'
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import {
-    IDnsService,
-    IProxy,
-    IProxyService,
-    isEmptyArray,
-    ISmtpVerificationResponse,
-    ISmtpVerifier,
-    ZERO,
-} from '../../../common'
+import { IDnsService, IProxy, IProxyService, ISmtpVerificationResponse, ISmtpVerifier } from '../../../common'
 import { Model } from 'mongoose'
 import { SmtpVerification } from './smtp-verification.schema'
 import { Inject, Injectable, Logger } from '@nestjs/common'
@@ -19,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
+import { getDomain } from 'tldts'
 
 interface GetExchangesParams {
     domain: string
@@ -152,7 +144,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         }
 
         getSmtpClientParams.exchanges = await this.getExchanges(getExchangesParams)
-        if (isEmptyArray(getSmtpClientParams.exchanges)) {
+        if (getSmtpClientParams.exchanges.length === 0) {
             return {
                 email,
                 exists: false,
@@ -211,14 +203,13 @@ export class SmtpVerifier implements ISmtpVerifier {
         const { hostname, exchange: targetExchange } = client
 
         try {
-            const [clientHostname] =
-                isIP(hostname) !== ZERO ? await this.dnsService.resolve(hostname, 'PTR') : [hostname]
+            const [clientHostname] = isIP(hostname) !== 0 ? await this.dnsService.resolve(hostname, 'PTR') : [hostname]
 
             await client.helo(clientHostname)
 
-            const clientDomain = getSecondLevelDomain(clientHostname)
+            const clientDomain = getDomain(clientHostname)
 
-            ok(clientDomain !== undefined, new Error(`Invalid client domain: ${clientDomain}`))
+            ok(clientDomain !== null, new Error(`Invalid client domain: ${clientDomain}`))
 
             const senderUsername = 'contact'
             const senderEmail = `${senderUsername}@${clientDomain}`
