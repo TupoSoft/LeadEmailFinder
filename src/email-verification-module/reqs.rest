@@ -1,9 +1,11 @@
 ### Verify (Old Response)
-GET {{host}}/verify?email=kyrylo.kupin@gmail.com
+GET {{host}}/verify?email=kyryloxxx.kupin@gmail.com
+X-Api-Key: ce67e59812a338b997e35da8328df720c255ae5b3ad726d7117bc2508acf3bf9
 
 ### Verify
 POST {{host}}/verify
 Content-Type: application/json
+Authorization: Bearer api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac
 
 {
   "email": "kyrylo.kupin@gmail.com"
@@ -12,6 +14,7 @@ Content-Type: application/json
 ### Verify Async
 POST {{host}}/verifyAsync
 Content-Type: application/json
+X-Api-Key: api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac
 
 {
   "email": "igor.mihajlov@tuposoft.com"
@@ -27,10 +30,12 @@ Content-Type: application/json
 ### Get Async Verification Status
 GET {{host}}/verifyAsync/{{jobId}}
 Content-Type: application/json
+X-Api-Key: api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac
 
 ### Verify Batch
 POST {{host}}/verifyBatch/csv
 Content-Type: multipart/form-data; boundary=boundary
+X-Api-Key: api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac
 
 --boundary
 Content-Disposition: form-data; name="file"; filename="test.csv"
@@ -52,6 +57,8 @@ igor.mihajlov@gmail.com
 
 ### Get Verify Batch Status
 GET {{host}}/verifyBatch/{{id}}
+X-Api-Key: api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac
 
 ### Get Verify Batch Results
 GET {{host}}/verifyBatch/{{id}}/results
+X-Api-Key: api_0b829a5a957515ff61b02cdad64bf5843c558d295a34bdac

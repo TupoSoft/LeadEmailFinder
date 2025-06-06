@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { KeyService } from '../key.service'
 import { KeyPermissions } from '../key.enum'
@@ -27,8 +27,6 @@ export class ApiKeyGuard implements CanActivate {
             throw new UnauthorizedException('API key is missing')
         }
 
-        const isValid = await this.keyService.validateKeyForRoles(apiKey, requiredPermissions)
-
-        return isValid
+        return await this.keyService.validateKeyForRoles(apiKey, requiredPermissions)
     }
 }
