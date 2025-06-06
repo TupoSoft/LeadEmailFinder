@@ -1,5 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core'
-import { AppModule } from './app.module'
+import { LeadEmailFinderApiModule } from './lead-email-finder-api.module'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
@@ -7,7 +7,7 @@ import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create<NestExpressApplication>(AppModule)
+    const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule)
     app.disable('x-powered-by')
     app.enable('trust proxy')
     app.useLogger(app.get(Logger))

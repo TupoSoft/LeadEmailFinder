@@ -59,4 +59,4 @@ import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
         },
     ],
 })
-export class AppModule {}
+export class LeadEmailFinderApiModule {}
