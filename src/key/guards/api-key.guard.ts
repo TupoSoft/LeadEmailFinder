@@ -21,10 +21,11 @@ export class ApiKeyGuard implements CanActivate {
             return true
         }
 
-        const requiredPermissions = this.reflector.getAllAndOverride<KeyPermissions[]>('permissions', [
-            context.getHandler(),
-            context.getClass(),
-        ])
+        const requiredPermissions =
+            this.reflector.getAllAndOverride<KeyPermissions[]>('permissions', [
+                context.getHandler(),
+                context.getClass(),
+            ]) ?? []
 
         const request = context.switchToHttp().getRequest<Request>()
 
