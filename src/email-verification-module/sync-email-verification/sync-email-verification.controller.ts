@@ -1,5 +1,5 @@
 import { IEmailVerificationService } from '../../common'
-import { Body, Controller, Inject, Post } from '@nestjs/common'
+import { Body, Controller, Inject, Post, SerializeOptions } from '@nestjs/common'
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
@@ -11,6 +11,7 @@ export class SyncEmailVerificationController {
     ) {}
 
     @Post()
+    @SerializeOptions({ type: EmailVerificationResponseDto })
     async verifyEmail(
         @Body() emailVerificationRequest: EmailVerificationRequestDto,
     ): Promise<EmailVerificationResponseDto> {

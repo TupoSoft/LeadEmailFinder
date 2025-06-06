@@ -24,7 +24,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 COPY . .
 
 # Build the application.
-RUN ts-patch install -s && pnpm build
+RUN pnpm build
 
 FROM node:${NODE_VERSION}-alpine
 

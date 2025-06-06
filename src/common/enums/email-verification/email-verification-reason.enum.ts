@@ -9,6 +9,6 @@ export enum EmailVerificationReason {
     NoConnect = 'no_connect',
     ExceededStorage = 'exceeded_storage',
     SenderBlocked = 'sender_blocked',
-    Webmail = 'webmain',
+    Webmail = 'webmail',
     Unknown = 'unknown',
 }

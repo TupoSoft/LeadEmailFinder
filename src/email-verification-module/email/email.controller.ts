@@ -18,7 +18,10 @@ import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
 import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { ApiExcludeController } from '@nestjs/swagger'
+import { RequireApiPermissions } from '../../key/decorators/roles.decorator'
+import { KeyPermissions } from '../../key'
 
+@RequireApiPermissions(KeyPermissions.ADMIN)
 @ApiExcludeController()
 @Controller('emails')
 export class EmailController {

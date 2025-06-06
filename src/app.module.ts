@@ -8,11 +8,12 @@ import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
-import { KeyModule } from './key'
+import { ApiKeyGuard, KeyModule } from './key'
 import { HealthModule } from './health'
 import { S3Module } from 'nestjs-s3'
 import { loadSecrets, validate } from './config'
 import { env } from 'node:process'
+import { APP_GUARD } from '@nestjs/core'
 
 @Module({
     imports: [
@@ -56,6 +57,12 @@ import { env } from 'node:process'
                 forcePathStyle: true,
             },
         }),
+    ],
+    providers: [
+        {
+            provide: APP_GUARD,
+            useClass: ApiKeyGuard,
+        },
     ],
 })
 export class AppModule {}

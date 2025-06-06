@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { KeyService } from '../key.service'
 import { KeyPermissions } from '../key.enum'
@@ -12,23 +12,32 @@ export class ApiKeyGuard implements CanActivate {
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        const methodPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getHandler()) || []
-        const controllerPermissions = this.reflector.get<KeyPermissions[]>('permissions', context.getClass()) || []
+        const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
+            context.getHandler(),
+            context.getClass(),
+        ])
 
-        const requiredPermissions = [...controllerPermissions, ...methodPermissions]
+        if (isPublic) {
+            return true
+        }
+
+        const requiredPermissions =
+            this.reflector.getAllAndOverride<KeyPermissions[]>('permissions', [
+                context.getHandler(),
+                context.getClass(),
+            ]) ?? []
 
         const request = context.switchToHttp().getRequest<Request>()
 
         const authHeader = request.headers['authorization']
+        const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
         const xApiKey = request.headers['x-api-key'] as string | undefined
-        const apiKey = (authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined) ?? xApiKey
+        const apiKey = bearerToken ?? xApiKey
 
         if (!apiKey) {
             throw new UnauthorizedException('API key is missing')
         }
 
-        const isValid = await this.keyService.validateKeyForRoles(apiKey, requiredPermissions)
-
-        return isValid
+        return await this.keyService.validateKeyForRoles(apiKey, requiredPermissions)
     }
 }

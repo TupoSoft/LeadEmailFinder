@@ -1,54 +1,57 @@
 import { EmailPatternEnum, EmailVerificationReason } from '../../common'
-import { Expose, Transform } from 'class-transformer'
-import {
-    transformCatchAll,
-    transformDeliveryStatus,
-    transformVerifiedAt,
-} from './old-sync-email-verification-response.util'
+import { Expose } from 'class-transformer'
 import { OldEmailVerificationResponse } from './old-sync-email-verification-response.interface'
 import { IsDateString, IsEmail, IsEnum, IsFQDN } from 'class-validator'
 import { CatchAllStatus, DeliveryStatus } from './old-email-verification.enums'
+import { AutoMap } from '@automapper/classes'
 
 export class OldSyncEmailVerificationResponseDto implements OldEmailVerificationResponse {
     @Expose()
     @IsEmail()
+    @AutoMap()
     email: string
 
     @Expose()
     @IsFQDN()
+    @AutoMap()
     domain: string
 
     @Expose()
+    @AutoMap()
     localPart: string
 
     @Expose()
-    @Transform(transformDeliveryStatus)
     @IsEnum(DeliveryStatus)
+    @AutoMap()
     deliveryStatus: DeliveryStatus
 
     @Expose()
-    @Transform(transformCatchAll, { toClassOnly: true })
     @IsEmail()
+    @AutoMap()
     catchAll: CatchAllStatus
 
     @Expose()
     @IsEnum(EmailVerificationReason)
+    @AutoMap()
     reason: EmailVerificationReason
 
     @Expose()
     @IsFQDN()
+    @AutoMap()
     targetExchange?: string
 
     @Expose()
     @IsFQDN()
+    @AutoMap()
     mxDomain?: string
 
     @Expose()
     @IsEnum(EmailPatternEnum)
+    @AutoMap()
     format?: EmailPatternEnum
 
     @Expose()
-    @Transform(transformVerifiedAt, { toClassOnly: true })
     @IsDateString()
+    @AutoMap()
     verifiedAt: string
 }
