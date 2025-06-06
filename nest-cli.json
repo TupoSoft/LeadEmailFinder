@@ -9,9 +9,11 @@
     "plugins": [
       "@nestjs/swagger"
     ],
-    "tsConfigPath": "apps/tuposoft-lead-email-finder/tsconfig.app.json"
+    "tsConfigPath": "apps/tuposoft-lead-email-finder/tsconfig.app.json",
+    "webpack": true
   },
   "monorepo": true,
+  "defaultLibraryPrefix": "@tuposoft/lead-email-finder",
   "root": "apps/tuposoft-lead-email-finder",
   "projects": {
     "async-email-verification-worker": {
@@ -21,6 +23,24 @@
       "sourceRoot": "apps/async-email-verification-worker/src",
       "compilerOptions": {
         "tsConfigPath": "apps/async-email-verification-worker/tsconfig.app.json"
+      }
+    },
+    "key": {
+      "type": "library",
+      "root": "libs/key",
+      "entryFile": "index",
+      "sourceRoot": "libs/key/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/key/tsconfig.lib.json"
+      }
+    },
+    "redis": {
+      "type": "library",
+      "root": "libs/redis",
+      "entryFile": "index",
+      "sourceRoot": "libs/redis/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/redis/tsconfig.lib.json"
       }
     },
     "tuposoft-lead-email-finder": {

@@ -7,8 +7,8 @@ import {
     REDIS_SENTINEL_DEFAULT_PORT,
     REDIS_SENTINEL_URL_REGEX,
 } from './redis.constants'
-import { RedisSentinelUrlParts } from './interfaces'
 import { Injectable } from '@nestjs/common'
+import { RedisSentinelUrlParts } from './redis-sentinel-url-parts.interface'
 
 @Injectable()
 export class ParseConnectionStringOptionsFactory {

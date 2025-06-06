@@ -5,6 +5,19 @@
   ],
   "compilerOptions": {
     "baseUrl": "./",
-    "paths": {}
+    "paths": {
+      "@tuposoft/lead-email-finder/key": [
+        "libs/key/src"
+      ],
+      "@tuposoft/lead-email-finder/key/*": [
+        "libs/key/src/*"
+      ],
+      "@tuposoft/lead-email-finder/redis": [
+        "libs/redis/src"
+      ],
+      "@tuposoft/lead-email-finder/redis/*": [
+        "libs/redis/src/*"
+      ]
+    }
   }
 }
