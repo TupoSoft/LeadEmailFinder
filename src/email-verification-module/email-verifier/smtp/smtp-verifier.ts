@@ -1,7 +1,6 @@
 import { getSecondLevelDomain } from '../../../dns'
 import { SmtpClient } from './smtp-client'
 import { ok } from 'node:assert'
-import type { Proxy } from '../../../proxy'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
 import {
@@ -296,7 +295,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         }
     }
 
-    private async tryConnect(exchange: string, proxy: Proxy, signal?: AbortSignal): Promise<SmtpClient> {
+    private async tryConnect(exchange: string, proxy: IProxy, signal?: AbortSignal): Promise<SmtpClient> {
         try {
             const client = new SmtpClient({
                 host: exchange,
