@@ -10,7 +10,7 @@ services:
       - 8.8.8.8
     command: sh -c "pnpm start | pino-gelf log"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:3000/ping" ]
+      test: curl -s http://localhost:3000/health | jq -e '.status == "ok"' > /dev/null
       interval: 15s
       timeout: 10s
       retries: 3
@@ -19,13 +19,15 @@ services:
       NODE_ENV: production
       API_URL: https://api.leademailfinder.com
       REDIS_URL_FILE: /run/secrets/redis_url
-      AUTH_TOKENS_FILE: /run/secrets/tokens.json
       MONGO_URL_FILE: /run/secrets/mongo_url
-      JWT_HS256_SECRET_FILE: /run/secrets/jwt_hs256_secret
-      PINO_GELF_HOST: graylog.eu.tuposoft.internal
-      JWT_ISSUER: LeadEmailFinder
-      JWT_AUDIENCE: LeadEmailFinder
       CATCH_ALL_HTTP_PROXY_URL_FILE: /run/secrets/catch_all_http_proxy_url
+      PINO_GELF_HOST: graylog.eu.tuposoft.internal
+      S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
+      S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+      S3_URL: /run/secrets/s3_url_file
+      S3_REGION: us-east-1
+      S3_FORCE_PATH_STYLE: true
+      S3_BUCKET: lead-email-finder
     deploy:
       mode: replicated
       replicas: 6
@@ -47,12 +49,11 @@ services:
           - spread: node.hostname
     secrets:
       - mongo_url
-      - source: redis-config
-        target: redis-config.json
-      - tokens.json
       - redis_url
-      - jwt_hs256_secret
       - catch_all_http_proxy_url
+      - s3_secret_key
+      - s3_access_key_id
+      - s3_url
     networks:
       - default
       - redis_default
@@ -62,16 +63,16 @@ services:
 secrets:
   mongo_url:
     external: true
-  redis-config:
-    external: true
-  tokens.json:
-    external: true
   redis_url:
     name: redis-url-03102025
     external: true
-  jwt_hs256_secret:
-    external: true
   catch_all_http_proxy_url:
+    external: true
+  s3_access_key_id:
+    external: true
+  s3_secret_key:
+    external: true
+  s3_url:
     external: true
 
 networks:

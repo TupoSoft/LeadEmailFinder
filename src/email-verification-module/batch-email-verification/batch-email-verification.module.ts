@@ -7,12 +7,14 @@ import { MulterModule } from '@nestjs/platform-express'
 import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
 import { SyncEmailVerificationModule } from '../sync-email-verification'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
+import { ConfigModule } from '@nestjs/config'
 
 @Module({
     imports: [
         BullModule.registerQueue({ name: BATCH_EMAIL_VERIFICATION_QUEUE_NAME }),
         BullModule.registerQueue({ name: 'async-email-verification' }),
         MulterModule.registerAsync({
+            imports: [ConfigModule],
             useClass: MulterOptionsFactoryImpl,
         }),
         SyncEmailVerificationModule,
