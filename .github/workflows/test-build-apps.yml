@@ -39,8 +39,6 @@ jobs:
     outputs:
       apps: ${{ steps.set-projects.outputs.apps }}
       libraries: ${{ steps.set-projects.outputs.libraries }}
-      app_names: ${{ steps.set-projects.outputs.app_names }}
-      library_names: ${{ steps.set-projects.outputs.library_names }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,19 +50,11 @@ jobs:
 
           # Extract all applications
           APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
-          APP_NAMES=$(echo "$NEST_CLI" | jq -r '.projects | to_entries[] | select(.value.type == "application") | .key')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
-          echo "app_names<<EOF" >> $GITHUB_OUTPUT
-          echo "$APP_NAMES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
           # Extract all libraries
           LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
-          LIBRARY_NAMES=$(echo "$NEST_CLI" | jq -r '.projects | to_entries[] | select(.value.type == "library") | .key')
           echo "libraries=$LIBRARIES" >> $GITHUB_OUTPUT
-          echo "library_names<<EOF" >> $GITHUB_OUTPUT
-          echo "$LIBRARY_NAMES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
           # Print detected projects for debugging
           echo "Detected applications: $APPS"
@@ -174,118 +164,35 @@ jobs:
           echo "Changed apps: $CHANGED_APPS"
           echo "Changed libraries: $CHANGED_LIBS"
 
-  test-libs:
+  test-changed-libs:
     needs: [ detect-projects, detect-changes ]
     if: needs.detect-changes.outputs.any_lib_changed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: '10.11.1'
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pnpm-store
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Test changed libraries
-        run: |
-          # Get the list of changed libraries
-          CHANGED_LIBS='${{ needs.detect-changes.outputs.changed_libs }}'
-
-          # Run tests for each changed library
-          for LIB in $(echo "$CHANGED_LIBS" | jq -r '.[]'); do
-            echo "Testing library: $LIB"
-            pnpm test libs/$LIB
-          done
-
-  test-build-apps:
-    needs: [ detect-projects, detect-changes, test-libs ]
-    if: |
-      needs.detect-changes.outputs.any_app_changed == 'true' ||
-      needs.detect-changes.outputs.any_lib_changed == 'true'
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: ${{ fromJson(needs.detect-projects.outputs.apps) }}
-      fail-fast: false
-    steps:
-      - name: Check if app needs testing/building
-        id: check-app
-        run: |
-          # Get the list of changed apps and check if any libraries changed
-          CHANGED_APPS='${{ needs.detect-changes.outputs.changed_apps }}'
-          ANY_LIB_CHANGED='${{ needs.detect-changes.outputs.any_lib_changed }}'
-          CURRENT_APP='${{ matrix.app }}'
+        lib: ${{ fromJSON(needs.detect-changes.outputs.changed_libs) }}
+    permissions:
+      contents: read
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    with:
+      test_path: ./libs/${{ matrix.lib }}
 
-          # Check if this app needs to be tested/built
-          if [[ $(echo "$CHANGED_APPS" | jq -r --arg app "$CURRENT_APP" 'contains([$app])') == "true" ]] || [[ "$ANY_LIB_CHANGED" == "true" ]]; then
-            echo "App $CURRENT_APP needs testing/building"
-            echo "needs_testing=true" >> $GITHUB_OUTPUT
-          else
-            echo "App $CURRENT_APP doesn't need testing/building - skipping"
-            echo "needs_testing=false" >> $GITHUB_OUTPUT
-          fi
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Checkout repository
-        uses: actions/checkout@v4
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: '10.11.1'
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pnpm-store
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Install dependencies
-        run: pnpm install
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Test ${{ matrix.app }}
-        run: pnpm test apps/${{ matrix.app }}
-
-      - if: steps.check-app.outputs.needs_testing == 'true'
-        name: Build ${{ matrix.app }}
-        run: pnpm nest build ${{ matrix.app }}
+  test-changed-apps:
+    needs:
+      - detect-projects
+      - detect-changes
+      - test-changed-libs
+    if: needs.detect-changes.outputs.any_app_changed == 'true' || needs.detect-changes.outputs.any_lib_changed == 'true'
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
+    permissions:
+      contents: read
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    with:
+      test_path: ./apps/${{ matrix.app }}
 
   summary:
-    needs: [ detect-projects, detect-changes, test-libs, test-build-apps ]
+    needs: [ detect-projects, detect-changes, test-changed-libs, test-changed-apps ]
     if: always() && needs.detect-changes.outputs.any_change == 'true'
     runs-on: ubuntu-latest
     steps:
