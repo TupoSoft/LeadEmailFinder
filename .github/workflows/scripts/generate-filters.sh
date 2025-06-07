@@ -9,6 +9,7 @@ COMMON_FILTERS=(
   "pnpm-lock.yaml"
   "nest-cli.json"
   "tsconfig*.json"
+  "Dockerfile"
 )
 
 add_filter_section() {
