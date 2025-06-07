@@ -53,29 +53,23 @@ jobs:
       - name: Detect apps and libraries
         id: set-projects
         run: |
-          # Read nest-cli.json and extract apps and libraries
           NEST_CLI=$(cat nest-cli.json)
 
-          # Extract all applications
           APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
 
-          # Extract all libraries
           LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
           echo "libraries=$LIBRARIES" >> $GITHUB_OUTPUT
 
-          # Print detected projects for debugging
           echo "Detected applications: $APPS"
           echo "Detected libraries: $LIBRARIES"
 
       - name: Generate filters
         id: generate-filters
         run: |
-          # Get the list of apps and libraries from the previous job
           APPS='${{ steps.set-projects.outputs.apps }}'
           LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
 
-          # Start building the filters
           FILTERS="any-change:\n"
           FILTERS+="  - 'apps/**'\n"
           FILTERS+="  - 'libs/**'\n"
@@ -84,7 +78,6 @@ jobs:
           FILTERS+="  - 'nest-cli.json'\n"
           FILTERS+="  - 'tsconfig*.json'\n"
 
-          # Add filters for each app
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             FILTERS+="${APP}:\n"
             FILTERS+="  - 'apps/${APP}/**'\n"
@@ -94,7 +87,6 @@ jobs:
             FILTERS+="  - 'tsconfig*.json'\n"
           done
 
-          # Add filters for each library
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             FILTERS+="${LIB}-lib:\n"
             FILTERS+="  - 'libs/${LIB}/**'\n"
@@ -104,8 +96,6 @@ jobs:
             FILTERS+="  - 'tsconfig*.json'\n"
           done
 
-          # Save filters to a file for debugging
-          echo -e "$FILTERS" > filters.yml
           echo "filters<<EOF" >> $GITHUB_OUTPUT
           echo -e "$FILTERS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
