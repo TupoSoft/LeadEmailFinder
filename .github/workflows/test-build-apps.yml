@@ -1,0 +1,318 @@
+name: Test and Build Apps
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'nest-cli.json'
+      - 'tsconfig*.json'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'nest-cli.json'
+      - 'tsconfig*.json'
+  workflow_dispatch:
+
+jobs:
+  detect-projects:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set-projects.outputs.apps }}
+      libraries: ${{ steps.set-projects.outputs.libraries }}
+      app_names: ${{ steps.set-projects.outputs.app_names }}
+      library_names: ${{ steps.set-projects.outputs.library_names }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect apps and libraries
+        id: set-projects
+        run: |
+          # Read nest-cli.json and extract apps and libraries
+          NEST_CLI=$(cat nest-cli.json)
+
+          # Extract all applications
+          APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
+          APP_NAMES=$(echo "$NEST_CLI" | jq -r '.projects | to_entries[] | select(.value.type == "application") | .key')
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          echo "app_names<<EOF" >> $GITHUB_OUTPUT
+          echo "$APP_NAMES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Extract all libraries
+          LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
+          LIBRARY_NAMES=$(echo "$NEST_CLI" | jq -r '.projects | to_entries[] | select(.value.type == "library") | .key')
+          echo "libraries=$LIBRARIES" >> $GITHUB_OUTPUT
+          echo "library_names<<EOF" >> $GITHUB_OUTPUT
+          echo "$LIBRARY_NAMES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Print detected projects for debugging
+          echo "Detected applications: $APPS"
+          echo "Detected libraries: $LIBRARIES"
+
+  detect-changes:
+    needs: detect-projects
+    runs-on: ubuntu-latest
+    outputs:
+      changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
+      changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
+      any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
+      any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
+      any_change: ${{ steps.filter.outputs.any-change }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate filters
+        id: generate-filters
+        run: |
+          # Get the list of apps and libraries from the previous job
+          APPS='${{ needs.detect-projects.outputs.apps }}'
+          LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
+
+          # Start building the filters
+          FILTERS="any-change:\n"
+          FILTERS+="  - 'apps/**'\n"
+          FILTERS+="  - 'libs/**'\n"
+          FILTERS+="  - 'package.json'\n"
+          FILTERS+="  - 'pnpm-lock.yaml'\n"
+          FILTERS+="  - 'nest-cli.json'\n"
+          FILTERS+="  - 'tsconfig*.json'\n"
+
+          # Add filters for each app
+          for APP in $(echo "$APPS" | jq -r '.[]'); do
+            FILTERS+="${APP}:\n"
+            FILTERS+="  - 'apps/${APP}/**'\n"
+            FILTERS+="  - 'package.json'\n"
+            FILTERS+="  - 'pnpm-lock.yaml'\n"
+            FILTERS+="  - 'nest-cli.json'\n"
+            FILTERS+="  - 'tsconfig*.json'\n"
+          done
+
+          # Add filters for each library
+          for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
+            FILTERS+="${LIB}-lib:\n"
+            FILTERS+="  - 'libs/${LIB}/**'\n"
+            FILTERS+="  - 'package.json'\n"
+            FILTERS+="  - 'pnpm-lock.yaml'\n"
+            FILTERS+="  - 'nest-cli.json'\n"
+            FILTERS+="  - 'tsconfig*.json'\n"
+          done
+
+          # Save filters to a file for debugging
+          echo -e "$FILTERS" > filters.yml
+          echo "filters<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$FILTERS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: ${{ steps.generate-filters.outputs.filters }}
+
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          # Get the list of apps and libraries from the previous job
+          APPS='${{ needs.detect-projects.outputs.apps }}'
+          LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
+
+          # Initialize arrays for changed apps and libraries
+          CHANGED_APPS="[]"
+          CHANGED_LIBS="[]"
+          ANY_APP_CHANGED="false"
+          ANY_LIB_CHANGED="false"
+
+          # Check which apps have changed
+          for APP in $(echo "$APPS" | jq -r '.[]'); do
+            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"$APP\":true"* ]]; then
+              CHANGED_APPS=$(echo "$CHANGED_APPS" | jq --arg app "$APP" '. += [$app]')
+              ANY_APP_CHANGED="true"
+            fi
+          done
+
+          # Check which libraries have changed
+          for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
+            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"$LIB-lib\":true"* ]]; then
+              CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
+              ANY_LIB_CHANGED="true"
+            fi
+          done
+
+          # Set outputs
+          echo "changed_apps=$CHANGED_APPS" >> $GITHUB_OUTPUT
+          echo "changed_libs=$CHANGED_LIBS" >> $GITHUB_OUTPUT
+          echo "any_app_changed=$ANY_APP_CHANGED" >> $GITHUB_OUTPUT
+          echo "any_lib_changed=$ANY_LIB_CHANGED" >> $GITHUB_OUTPUT
+
+          # Print for debugging
+          echo "Changed apps: $CHANGED_APPS"
+          echo "Changed libraries: $CHANGED_LIBS"
+
+  test-libs:
+    needs: [ detect-projects, detect-changes ]
+    if: needs.detect-changes.outputs.any_lib_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: '10.11.1'
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Test changed libraries
+        run: |
+          # Get the list of changed libraries
+          CHANGED_LIBS='${{ needs.detect-changes.outputs.changed_libs }}'
+
+          # Run tests for each changed library
+          for LIB in $(echo "$CHANGED_LIBS" | jq -r '.[]'); do
+            echo "Testing library: $LIB"
+            pnpm test libs/$LIB
+          done
+
+  test-build-apps:
+    needs: [ detect-projects, detect-changes, test-libs ]
+    if: |
+      needs.detect-changes.outputs.any_app_changed == 'true' ||
+      needs.detect-changes.outputs.any_lib_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.detect-projects.outputs.apps) }}
+      fail-fast: false
+    steps:
+      - name: Check if app needs testing/building
+        id: check-app
+        run: |
+          # Get the list of changed apps and check if any libraries changed
+          CHANGED_APPS='${{ needs.detect-changes.outputs.changed_apps }}'
+          ANY_LIB_CHANGED='${{ needs.detect-changes.outputs.any_lib_changed }}'
+          CURRENT_APP='${{ matrix.app }}'
+
+          # Check if this app needs to be tested/built
+          if [[ $(echo "$CHANGED_APPS" | jq -r --arg app "$CURRENT_APP" 'contains([$app])') == "true" ]] || [[ "$ANY_LIB_CHANGED" == "true" ]]; then
+            echo "App $CURRENT_APP needs testing/building"
+            echo "needs_testing=true" >> $GITHUB_OUTPUT
+          else
+            echo "App $CURRENT_APP doesn't need testing/building - skipping"
+            echo "needs_testing=false" >> $GITHUB_OUTPUT
+          fi
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Checkout repository
+        uses: actions/checkout@v4
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: '10.11.1'
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Install dependencies
+        run: pnpm install
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Test ${{ matrix.app }}
+        run: pnpm test apps/${{ matrix.app }}
+
+      - if: steps.check-app.outputs.needs_testing == 'true'
+        name: Build ${{ matrix.app }}
+        run: pnpm nest build ${{ matrix.app }}
+
+  summary:
+    needs: [ detect-projects, detect-changes, test-libs, test-build-apps ]
+    if: always() && needs.detect-changes.outputs.any_change == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize changes
+        run: |
+          echo "## Build and Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Components" >> $GITHUB_STEP_SUMMARY
+
+          CHANGED_LIBS='${{ needs.detect-changes.outputs.changed_libs }}'
+          CHANGED_APPS='${{ needs.detect-changes.outputs.changed_apps }}'
+
+          if [[ "$CHANGED_LIBS" != "[]" ]]; then
+            echo "#### Libraries:" >> $GITHUB_STEP_SUMMARY
+            for LIB in $(echo "$CHANGED_LIBS" | jq -r '.[]'); do
+              echo "- ✅ $LIB" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          if [[ "$CHANGED_APPS" != "[]" ]]; then
+            echo "#### Applications:" >> $GITHUB_STEP_SUMMARY
+            for APP in $(echo "$CHANGED_APPS" | jq -r '.[]'); do
+              echo "- ✅ $APP" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Status" >> $GITHUB_STEP_SUMMARY
+
+          # Report on libraries test job
+          if [[ "${{ needs.test-libs.result }}" != "skipped" ]]; then
+            echo "- Libraries Test: ${{ needs.test-libs.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "- Applications Test and Build:" >> $GITHUB_STEP_SUMMARY
+
+          APPS='${{ needs.detect-projects.outputs.apps }}'
+
+          for APP in $(echo "$APPS" | jq -r '.[]'); do
+            if [[ "$CHANGED_APPS" == *"$APP"* ]] || [[ "${{ needs.detect-changes.outputs.any_lib_changed }}" == "true" ]]; then
+              APP_STATUS="${{ needs.test-build-apps.result }}"
+              echo "  - $APP: $APP_STATUS" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
