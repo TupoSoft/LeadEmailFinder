@@ -54,7 +54,7 @@ jobs:
 
       - name: Detect apps and libraries
         id: set-projects
-        run: .github/workflows/scripts/set-projects.sh
+        run: bash .github/workflows/scripts/set-projects.sh
 
       - name: Generate filters
         id: generate-filters
