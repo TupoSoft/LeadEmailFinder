@@ -119,7 +119,7 @@ jobs:
       - name: Set outputs
         id: set-outputs
         run: |
-          FILTER_OUTPUTS="${{ steps.filter.outputs }}"
+          FILTER_OUTPUTS="${{ toJSON(steps.filter.outputs) }}"
           
           echo ${FILTER_OUTPUTS["lead-email-finder"]}
           
