@@ -44,7 +44,7 @@ jobs:
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
       any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
       any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
-      any_change: ${{ steps.set-outputs.outputs.any_change }}
+      any_change: ${{ steps.filter.outputs.any_change }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,7 +120,7 @@ jobs:
         id: set-outputs
         run: |
           FILTER_OUTPUTS='${{ toJSON(steps.filter.outputs) }}'
-
+          
           echo "${{ steps.filter.outputs.any_change }}"
           
           APPS='${{ steps.set-projects.outputs.apps }}'
@@ -130,11 +130,9 @@ jobs:
           CHANGED_LIBS="[]"
           ANY_LIB_CHANGED="false"
           ANY_APP_CHANGED="false"
-          ANY_CHANGE="false"
           
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
-              ANY_CHANGE="true"
               ANY_LIB_CHANGED="true"
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
           
@@ -147,7 +145,6 @@ jobs:
           
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
-              ANY_CHANGE="true"
               ANY_APP_CHANGED="true"
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
             fi
@@ -160,7 +157,6 @@ jobs:
           echo "changed_libs=$CHANGED_LIBS" >> $GITHUB_OUTPUT
           echo "any_lib_changed=$ANY_LIB_CHANGED" >> $GITHUB_OUTPUT
           echo "any_app_changed=$ANY_APP_CHANGED" >> $GITHUB_OUTPUT
-          echo "any_change=$ANY_CHANGE" >> $GITHUB_OUTPUT
 
           echo "Changed apps: $CHANGED_APPS"
           echo "Changed libraries: $CHANGED_LIBS"
