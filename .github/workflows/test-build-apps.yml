@@ -103,8 +103,7 @@ jobs:
           echo "Changed libraries: $CHANGED_LIBS"
 
   test-changed-libs:
-    needs:
-      - detect-changes
+    needs: detect-changes
     if: needs.detect-changes.outputs.any_lib_changed == 'true'
     strategy:
       matrix:
@@ -116,8 +115,7 @@ jobs:
       test_path: ./libs/${{ matrix.lib }}
 
   test-changed-apps:
-    needs:
-      - detect-changes
+    needs: detect-changes
     if: needs.detect-changes.outputs.any_app_changed == 'true'
     strategy:
       matrix:
