@@ -120,6 +120,8 @@ jobs:
         id: set-outputs
         run: |
           FILTER_OUTPUTS='${{ toJSON(steps.filter.outputs) }}'
+
+          echo "${{ steps.filter.outputs.any_change }}"
           
           APPS='${{ steps.set-projects.outputs.apps }}'
           LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
