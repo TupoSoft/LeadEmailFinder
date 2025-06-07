@@ -119,9 +119,7 @@ jobs:
       - name: Set outputs
         id: set-outputs
         run: |
-          FILTER_OUTPUTS="${{ toJSON(steps.filter.outputs) }}"
-          
-          echo ${FILTER_OUTPUTS["lead-email-finder"]}
+          FILTER_OUTPUTS='${{ toJSON(steps.filter.outputs) }}'
           
           APPS='${{ needs.detect-projects.outputs.apps }}'
           LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
@@ -132,14 +130,14 @@ jobs:
           ANY_LIB_CHANGED="false"
 
           for APP in $(echo "$APPS" | jq -r '.[]'); do
-            if [[ ${FILTER_OUTPUTS[$APP]} == "true" ]]; then
+            if [[ `echo $FILTER_OUTPUTS | jq -r --arg app $APP '.[$app]'` == "true" ]]; then
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq --arg app "$APP" '. += [$app]')
               ANY_APP_CHANGED="true"
             fi
           done
 
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
-            if [[ ${FILTER_OUTPUTS["${LIB}-lib"]} == "true" ]]; then
+            if [[ `echo $FILTER_OUTPUTS | jq -r --arg lib $LIB '.[$lib-lib]'` == "true" ]]; then
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
               ANY_LIB_CHANGED="true"
             fi
