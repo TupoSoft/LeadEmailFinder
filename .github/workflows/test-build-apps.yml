@@ -54,17 +54,7 @@ jobs:
 
       - name: Detect apps and libraries
         id: set-projects
-        run: |
-          NEST_CLI=$(cat nest-cli.json)
-
-          APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
-          echo "apps=$APPS" >> $GITHUB_OUTPUT
-
-          LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
-          echo "libraries=$LIBRARIES" >> $GITHUB_OUTPUT
-
-          echo "Detected applications: $APPS"
-          echo "Detected libraries: $LIBRARIES"
+        run: .github/workflows/scripts/set-projects.sh
 
       - name: Generate filters
         id: generate-filters
