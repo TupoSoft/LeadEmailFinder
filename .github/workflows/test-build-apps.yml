@@ -68,7 +68,7 @@ jobs:
 
       - name: Generate filters
         id: generate-filters
-        run: ./scripts/generate-filters.sh '${{ steps.set-projects.outputs.apps }}' '${{ steps.set-projects.outputs.libraries }}'
+        run: .github/workflows/scripts/generate-filters.sh '${{ steps.set-projects.outputs.apps }}' '${{ steps.set-projects.outputs.libraries }}'
 
       - name: Check for changes
         uses: dorny/paths-filter@v3
