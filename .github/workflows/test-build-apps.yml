@@ -34,13 +34,21 @@ jobs:
       pull-requests: write
     secrets: inherit
 
-  detect-projects:
+  detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
     outputs:
-      apps: ${{ steps.set-projects.outputs.apps }}
-      libraries: ${{ steps.set-projects.outputs.libraries }}
+      changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
+      changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
+      any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
+      any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
+      any_change: ${{ steps.filter.outputs.any-change }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Detect apps and libraries
         id: set-projects
@@ -60,29 +68,12 @@ jobs:
           echo "Detected applications: $APPS"
           echo "Detected libraries: $LIBRARIES"
 
-  detect-changes:
-    needs: detect-projects
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-      contents: read
-    outputs:
-      changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
-      changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
-      any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
-      any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
-      any_change: ${{ steps.filter.outputs.any-change }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Generate filters
         id: generate-filters
         run: |
           # Get the list of apps and libraries from the previous job
-          APPS='${{ needs.detect-projects.outputs.apps }}'
-          LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
+          APPS='${{ steps.set-projects.outputs.apps }}'
+          LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
 
           # Start building the filters
           FILTERS="any-change:\n"
@@ -165,7 +156,8 @@ jobs:
           echo "Changed libraries: $CHANGED_LIBS"
 
   test-changed-libs:
-    needs: [ detect-projects, detect-changes ]
+    needs:
+      - detect-changes
     if: needs.detect-changes.outputs.any_lib_changed == 'true'
     strategy:
       matrix:
@@ -178,7 +170,6 @@ jobs:
 
   test-changed-apps:
     needs:
-      - detect-projects
       - detect-changes
       - test-changed-libs
     if: needs.detect-changes.outputs.any_app_changed == 'true' || needs.detect-changes.outputs.any_lib_changed == 'true'
@@ -192,7 +183,10 @@ jobs:
       test_path: ./apps/${{ matrix.app }}
 
   summary:
-    needs: [ detect-projects, detect-changes, test-changed-libs, test-changed-apps ]
+    needs:
+      - detect-changes
+      - test-changed-libs
+      - test-changed-apps
     if: always() && needs.detect-changes.outputs.any_change == 'true'
     runs-on: ubuntu-latest
     steps:
