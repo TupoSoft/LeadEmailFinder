@@ -2,8 +2,8 @@ name: Test and Build Apps
 
 on:
   push:
-    #    branches:
-    #      - master
+    branches:
+      - master
     paths:
       - 'apps/**'
       - 'libs/**'
@@ -24,6 +24,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  assert-diff-within-limit:
+    uses: TupoSoft/GitHubActions/.github/workflows/check-pr-lines.yml@master
+    if: github.event_name == 'pull_request'
+    with:
+      max_lines: 500
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets: inherit
+
   detect-projects:
     runs-on: ubuntu-latest
     outputs:
