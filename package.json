@@ -38,6 +38,7 @@
     "@types/node": "^22.14.1",
     "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.8",
+    "depcheck": "^1.4.7",
     "eslint": "^9.25.0",
     "eslint-config-love": "^114.0.0",
     "eslint-config-prettier": "^10.0.1",
