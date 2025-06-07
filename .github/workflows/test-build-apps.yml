@@ -11,6 +11,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'nest-cli.json'
       - 'tsconfig*.json'
+      - 'Dockerfile'
   pull_request:
     branches:
       - master
@@ -21,6 +22,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'nest-cli.json'
       - 'tsconfig*.json'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
@@ -66,39 +68,7 @@ jobs:
 
       - name: Generate filters
         id: generate-filters
-        run: |
-          APPS='${{ steps.set-projects.outputs.apps }}'
-          LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
-
-          FILTERS="any-change:\n"
-          FILTERS+="  - 'apps/**'\n"
-          FILTERS+="  - 'libs/**'\n"
-          FILTERS+="  - 'package.json'\n"
-          FILTERS+="  - 'pnpm-lock.yaml'\n"
-          FILTERS+="  - 'nest-cli.json'\n"
-          FILTERS+="  - 'tsconfig*.json'\n"
-
-          for APP in $(echo "$APPS" | jq -r '.[]'); do
-            FILTERS+="${APP}:\n"
-            FILTERS+="  - 'apps/${APP}/**'\n"
-            FILTERS+="  - 'package.json'\n"
-            FILTERS+="  - 'pnpm-lock.yaml'\n"
-            FILTERS+="  - 'nest-cli.json'\n"
-            FILTERS+="  - 'tsconfig*.json'\n"
-          done
-
-          for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
-            FILTERS+="${LIB}-lib:\n"
-            FILTERS+="  - 'libs/${LIB}/**'\n"
-            FILTERS+="  - 'package.json'\n"
-            FILTERS+="  - 'pnpm-lock.yaml'\n"
-            FILTERS+="  - 'nest-cli.json'\n"
-            FILTERS+="  - 'tsconfig*.json'\n"
-          done
-
-          echo "filters<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$FILTERS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        run: ./scripts/generate-filters.sh '${{ steps.set-projects.outputs.apps }}' '${{ steps.set-projects.outputs.libraries }}'
 
       - name: Check for changes
         uses: dorny/paths-filter@v3
