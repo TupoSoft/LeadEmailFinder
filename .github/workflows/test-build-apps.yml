@@ -121,8 +121,8 @@ jobs:
         run: |
           FILTER_OUTPUTS='${{ toJSON(steps.filter.outputs) }}'
           
-          APPS='${{ needs.detect-projects.outputs.apps }}'
-          LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
+          APPS='${{ steps.set-projects.outputs.apps }}'
+          LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
 
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
@@ -130,7 +130,7 @@ jobs:
           ANY_LIB_CHANGED="false"
 
           for APP in $(echo "$APPS" | jq -r '.[]'); do
-            if [[ `echo $FILTER_OUTPUTS | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
+            if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
               echo "$APP changed"
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq --arg app "$APP" '. += [$app]')
               ANY_APP_CHANGED="true"
@@ -138,7 +138,7 @@ jobs:
           done
 
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
-            if [[ `echo $FILTER_OUTPUTS | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
+            if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
               echo "$LIB changed"
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
               ANY_LIB_CHANGED="true"
