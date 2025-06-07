@@ -45,7 +45,7 @@ jobs:
       changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
       any_app_changed: ${{ steps.filter.outputs.any-app-changed }}
-      any_lib_changed: ${{ steps.set-outputs.outputs.any-lib-changed }}
+      any_lib_changed: ${{ steps.filter.outputs.any-lib-changed }}
       any_change: ${{ steps.filter.outputs.any-change }}
     steps:
       - uses: actions/checkout@v4
