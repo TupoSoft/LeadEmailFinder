@@ -1,14 +1,65 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "src",
+  "sourceRoot": "apps/lead-email-finder/src",
   "compilerOptions": {
-    "builder": "swc",
-    "typeCheck": true,
+    "builder": "webpack",
     "manualRestart": true,
     "deleteOutDir": true,
     "plugins": [
       "@nestjs/swagger"
-    ]
+    ],
+    "tsConfigPath": "apps/lead-email-finder/tsconfig.app.json",
+    "webpack": true
+  },
+  "monorepo": true,
+  "defaultLibraryPrefix": "@tuposoft/lead-email-finder",
+  "root": "apps/lead-email-finder",
+  "projects": {
+    "async-email-verification-worker": {
+      "type": "application",
+      "root": "apps/async-email-verification-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/async-email-verification-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/async-email-verification-worker/tsconfig.app.json"
+      }
+    },
+    "key": {
+      "type": "library",
+      "root": "libs/key",
+      "entryFile": "index",
+      "sourceRoot": "libs/key/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/key/tsconfig.lib.json"
+      }
+    },
+    "lead-email-finder": {
+      "type": "application",
+      "root": "apps/lead-email-finder",
+      "entryFile": "main",
+      "sourceRoot": "apps/lead-email-finder/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/redis/tsconfig.lib.json"
+      }
+    },
+    "lead-email-finder-api": {
+      "type": "application",
+      "root": "apps/lead-email-finder-api",
+      "entryFile": "main",
+      "sourceRoot": "apps/lead-email-finder-api/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/lead-email-finder-api/tsconfig.app.json"
+      }
+    },
+    "redis": {
+      "type": "library",
+      "root": "libs/redis",
+      "entryFile": "index",
+      "sourceRoot": "libs/redis/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/redis/tsconfig.lib.json"
+      }
+    }
   }
 }

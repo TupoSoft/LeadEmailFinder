@@ -4,7 +4,7 @@ import {
     ConfigurableModuleClass,
     MODULE_OPTIONS_TOKEN,
     OPTIONS_TYPE,
-} from './redis.module-definition'
+} from '@tuposoft/lead-email-finder/redis/redis.module-definition'
 import { Redis } from 'ioredis'
 
 @Module({})
