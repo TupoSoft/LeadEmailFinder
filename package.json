@@ -5,7 +5,7 @@
   "description": "Lead Email Finder API",
   "packageManager": "pnpm@10.11.1",
   "scripts": {
-    "build": "nest build -p tsconfig.prod.json",
+    "build": "nest build",
     "start": "node --env-file-if-exists=.env dist/main",
     "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
     "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
@@ -38,7 +38,6 @@
     "@types/node": "^22.14.1",
     "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.8",
-    "depcheck": "^1.4.7",
     "eslint": "^9.25.0",
     "eslint-config-love": "^114.0.0",
     "eslint-config-prettier": "^10.0.1",

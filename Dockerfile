@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 ARG NODE_VERSION=lts
 
-ARG APP
-
 FROM node:${NODE_VERSION}-alpine AS builder
+
+ARG TARGET_APP
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
@@ -26,9 +26,11 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 COPY . .
 
 # Build the application.
-RUN pnpm build $APP
+RUN pnpm build $TARGET_APP
 
 FROM node:${NODE_VERSION}-alpine
+
+ARG APP
 
 # Container dependencies
 RUN apk add --no-cache \
@@ -59,5 +61,7 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
 
+ENV APP_MAIN_FILE=dist/apps/$TARGET_APP/main
+
 # Run the application.
-CMD ["node", "dist/apps/$APP/main"]
+CMD node $APP_MAIN_FILE
