@@ -120,6 +120,9 @@ jobs:
         id: set-outputs
         run: |
           FILTER_OUTPUTS="${{ steps.filter.outputs }}"
+          
+          echo ${FILTER_OUTPUTS["lead-email-finder"]}
+          
           APPS='${{ needs.detect-projects.outputs.apps }}'
           LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
 
