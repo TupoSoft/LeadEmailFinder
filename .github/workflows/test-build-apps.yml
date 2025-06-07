@@ -189,6 +189,20 @@ jobs:
     with:
       test_path: ./apps/${{ matrix.app }}
 
+  build-changed-apps:
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
+    needs: test-changed-apps
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
+    permissions:
+      packages: write
+      contents: read
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.app }}
+
   summary:
     needs:
       - detect-changes
