@@ -137,7 +137,7 @@ jobs:
           done
 
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
-            if [[ `echo $FILTER_OUTPUTS | jq -r --arg lib $LIB '.[$lib-lib]'` == "true" ]]; then
+            if [[ `echo $FILTER_OUTPUTS | jq -r --arg lib $LIB '.[$lib + "-lib"]'` == "true" ]]; then
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
               ANY_LIB_CHANGED="true"
             fi
