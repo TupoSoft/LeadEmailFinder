@@ -119,39 +119,33 @@ jobs:
       - name: Set outputs
         id: set-outputs
         run: |
-          # Get the list of apps and libraries from the previous job
           APPS='${{ needs.detect-projects.outputs.apps }}'
           LIBRARIES='${{ needs.detect-projects.outputs.libraries }}'
 
-          # Initialize arrays for changed apps and libraries
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
           ANY_APP_CHANGED="false"
           ANY_LIB_CHANGED="false"
 
-          # Check which apps have changed
           for APP in $(echo "$APPS" | jq -r '.[]'); do
-            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"$APP\":true"* ]]; then
+            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"$APP\": \"true\""* ]]; then
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq --arg app "$APP" '. += [$app]')
               ANY_APP_CHANGED="true"
             fi
           done
 
-          # Check which libraries have changed
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
-            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"$LIB-lib\":true"* ]]; then
+            if [[ "${{ toJSON(steps.filter.outputs) }}" == *"\"${LIB}-lib\": \"true\""* ]]; then
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
               ANY_LIB_CHANGED="true"
             fi
           done
 
-          # Set outputs
           echo "changed_apps=$CHANGED_APPS" >> $GITHUB_OUTPUT
           echo "changed_libs=$CHANGED_LIBS" >> $GITHUB_OUTPUT
           echo "any_app_changed=$ANY_APP_CHANGED" >> $GITHUB_OUTPUT
           echo "any_lib_changed=$ANY_LIB_CHANGED" >> $GITHUB_OUTPUT
 
-          # Print for debugging
           echo "Changed apps: $CHANGED_APPS"
           echo "Changed libraries: $CHANGED_LIBS"
 
