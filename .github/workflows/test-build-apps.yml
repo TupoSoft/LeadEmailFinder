@@ -126,13 +126,13 @@ jobs:
 
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
-          ANY_LIB_CHANGED=false
-          ANY_APP_CHANGED=false
-          ANY_CHANGE=false
+          ANY_LIB_CHANGED="false"
+          ANY_APP_CHANGED="false"
+          ANY_CHANGE="false"
           
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
-              ANY_CHANGE=true
+              ANY_CHANGE="true"
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
           
               for CONSUMER in `grep -R -l "from ['\"]@tuposoft/lead-email-finder/$LIB['\"]" apps/ | cut -d '/' -f2 | sort -u`; do
@@ -143,7 +143,7 @@ jobs:
           
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
-              ANY_CHANGE=true
+              ANY_CHANGE="true"
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
             fi
           done
@@ -163,7 +163,7 @@ jobs:
   test-changed-libs:
     needs:
       - detect-changes
-    if: needs.detect-changes.outputs.any_lib_changed == true
+    if: needs.detect-changes.outputs.any_lib_changed == 'true'
     strategy:
       matrix:
         lib: ${{ fromJSON(needs.detect-changes.outputs.changed_libs) }}
@@ -176,8 +176,7 @@ jobs:
   test-changed-apps:
     needs:
       - detect-changes
-      - test-changed-libs
-    if: needs.detect-changes.outputs.any_app_changed == 'true' || needs.detect-changes.outputs.any_lib_changed == 'true'
+    if: needs.detect-changes.outputs.any_app_changed == 'true'
     strategy:
       matrix:
         app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
@@ -192,7 +191,7 @@ jobs:
       - detect-changes
       - test-changed-libs
       - test-changed-apps
-    if: always() && needs.detect-changes.outputs.any_change == true
+    if: always() && needs.detect-changes.outputs.any_change == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Summarize changes
