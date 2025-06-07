@@ -42,9 +42,6 @@ jobs:
     outputs:
       changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
-      any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
-      any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
-      any_change: ${{ steps.filter.outputs.any-change }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,27 +123,31 @@ jobs:
 
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
-          ANY_APP_CHANGED="false"
-          ANY_LIB_CHANGED="false"
-
-          for APP in $(echo "$APPS" | jq -r '.[]'); do
-            if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
-              CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
-              ANY_APP_CHANGED="true"
-            fi
-          done
-
+          ANY_LIB_CHANGED=false
+          ANY_APP_CHANGED=true
+          ANY_CHANGE=true
+          
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
-              ANY_LIB_CHANGED="true"
+          
+              for CONSUMER in `grep -R -l "from ['\"]@tuposoft/lead-email-finder/$LIB['\"]" apps/ | cut -d '/' -f2 | sort -u`; do
+                CHANGED_APPS=`echo "$CHANGED_APPS" | jq -c --arg app $CONSUMER '. += [$app]'`
+              done
             fi
           done
+          
+          for APP in $(echo "$APPS" | jq -r '.[]'); do
+            if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
+              CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
+            fi
+          done
+          
+          CHANGED_APPS=`echo "$CHANGED_APPS" | jq -c 'unique'`
+          CHANGED_LIBS=`echo $CHANGED_LIBS | jq -c 'unique'`
 
           echo "changed_apps=$CHANGED_APPS" >> $GITHUB_OUTPUT
           echo "changed_libs=$CHANGED_LIBS" >> $GITHUB_OUTPUT
-          echo "any_app_changed=$ANY_APP_CHANGED" >> $GITHUB_OUTPUT
-          echo "any_lib_changed=$ANY_LIB_CHANGED" >> $GITHUB_OUTPUT
 
           echo "Changed apps: $CHANGED_APPS"
           echo "Changed libraries: $CHANGED_LIBS"
@@ -154,7 +155,7 @@ jobs:
   test-changed-libs:
     needs:
       - detect-changes
-    if: needs.detect-changes.outputs.any_lib_changed == 'true'
+    if: needs.detect-changes.outputs.any_lib_changed == true
     strategy:
       matrix:
         lib: ${{ fromJSON(needs.detect-changes.outputs.changed_libs) }}
@@ -183,7 +184,7 @@ jobs:
       - detect-changes
       - test-changed-libs
       - test-changed-apps
-    if: always() && needs.detect-changes.outputs.any_change == 'true'
+    if: always() && needs.detect-changes.outputs.any_change == true
     runs-on: ubuntu-latest
     steps:
       - name: Summarize changes
