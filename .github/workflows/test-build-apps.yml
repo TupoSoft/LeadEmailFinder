@@ -65,6 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
+      contents: read
     outputs:
       changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
