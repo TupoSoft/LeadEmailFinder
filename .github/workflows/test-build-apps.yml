@@ -63,6 +63,8 @@ jobs:
   detect-changes:
     needs: detect-projects
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     outputs:
       changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
