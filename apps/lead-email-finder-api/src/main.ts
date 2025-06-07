@@ -7,7 +7,7 @@ import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap(): Promise<void> {
-    console.log('Starting server...')
+    console.log('Starting server..')
 
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule)
     app.disable('x-powered-by')
