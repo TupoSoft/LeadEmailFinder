@@ -133,9 +133,11 @@ jobs:
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
               ANY_CHANGE="true"
+              ANY_LIB_CHANGED="true"
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
           
               for CONSUMER in `grep -R -l "from ['\"]@tuposoft/lead-email-finder/$LIB['\"]" apps/ | cut -d '/' -f2 | sort -u`; do
+                ANY_APP_CHANGED="true"
                 CHANGED_APPS=`echo "$CHANGED_APPS" | jq -c --arg app $CONSUMER '. += [$app]'`
               done
             fi
@@ -144,6 +146,7 @@ jobs:
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
               ANY_CHANGE="true"
+              ANY_APP_CHANGED="true"
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
             fi
           done
