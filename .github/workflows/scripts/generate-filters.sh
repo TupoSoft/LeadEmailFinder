@@ -32,6 +32,9 @@ for filter in "${COMMON_FILTERS[@]}"; do
   FILTERS+="  - '${filter}'\n"
 done
 
+add_filter_section "any-app-changed" "apps"
+add_filter_section "any-lib-changed" "libs"
+
 # Add app-specific filters
 for APP in $(echo "$APPS" | jq -r '.[]'); do
   add_filter_section "$APP" "apps/${APP}"

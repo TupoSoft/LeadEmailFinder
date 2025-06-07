@@ -44,8 +44,8 @@ jobs:
     outputs:
       changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
       changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
-      any_app_changed: ${{ steps.set-outputs.outputs.any_app_changed }}
-      any_lib_changed: ${{ steps.set-outputs.outputs.any_lib_changed }}
+      any_app_changed: ${{ steps.filter.outputs.any-app-changed }}
+      any_lib_changed: ${{ steps.set-outputs.outputs.any-lib-changed }}
       any_change: ${{ steps.filter.outputs.any-change }}
     steps:
       - uses: actions/checkout@v4
@@ -86,16 +86,12 @@ jobs:
 
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
-          ANY_LIB_CHANGED="false"
-          ANY_APP_CHANGED="false"
           
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
-              ANY_LIB_CHANGED="true"
               CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
           
               for CONSUMER in `grep -R -l "from ['\"]@tuposoft/lead-email-finder/$LIB['\"]" apps/ | cut -d '/' -f2 | sort -u`; do
-                ANY_APP_CHANGED="true"
                 CHANGED_APPS=`echo "$CHANGED_APPS" | jq -c --arg app $CONSUMER '. += [$app]'`
               done
             fi
@@ -103,7 +99,6 @@ jobs:
           
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
-              ANY_APP_CHANGED="true"
               CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
             fi
           done
@@ -113,8 +108,6 @@ jobs:
 
           echo "changed_apps=$CHANGED_APPS" >> $GITHUB_OUTPUT
           echo "changed_libs=$CHANGED_LIBS" >> $GITHUB_OUTPUT
-          echo "any_lib_changed=$ANY_LIB_CHANGED" >> $GITHUB_OUTPUT
-          echo "any_app_changed=$ANY_APP_CHANGED" >> $GITHUB_OUTPUT
 
           echo "Changed apps: $CHANGED_APPS"
           echo "Changed libraries: $CHANGED_LIBS"
