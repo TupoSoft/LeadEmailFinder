@@ -2,8 +2,8 @@ name: Test and Build Apps
 
 on:
   push:
-    branches:
-      - master
+    #    branches:
+    #      - master
     paths:
       - 'apps/**'
       - 'libs/**'
