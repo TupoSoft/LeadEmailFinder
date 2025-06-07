@@ -131,16 +131,14 @@ jobs:
 
           for APP in $(echo "$APPS" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg app "$APP" '.[$app]'` == "true" ]]; then
-              echo "$APP changed"
-              CHANGED_APPS=$(echo "$CHANGED_APPS" | jq --arg app "$APP" '. += [$app]')
+              CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app "$APP" '. += [$app]')
               ANY_APP_CHANGED="true"
             fi
           done
 
           for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
             if [[ `echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]'` == "true" ]]; then
-              echo "$LIB changed"
-              CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq --arg lib "$LIB" '. += [$lib]')
+              CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
               ANY_LIB_CHANGED="true"
             fi
           done
