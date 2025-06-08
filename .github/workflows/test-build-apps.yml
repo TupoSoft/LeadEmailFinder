@@ -139,6 +139,8 @@ jobs:
     secrets: inherit
     with:
       image-name: ${{ matrix.app }}
+      build-args: |
+        TARGET_APP=${{ matrix.app }}
 
   summary:
     needs:
