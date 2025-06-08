@@ -49,6 +49,8 @@ done
 
 # Output to GitHub Actions
 {
+  echo "apps=$APPS"
+  echo "libraries=$LIBRARIES"
   echo "filters<<EOF"
   echo -e "$FILTERS"
   echo "EOF"

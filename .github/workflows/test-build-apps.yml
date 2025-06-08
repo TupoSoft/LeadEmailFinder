@@ -67,8 +67,8 @@ jobs:
         run: |
           FILTER_OUTPUTS='${{ toJSON(steps.filter.outputs) }}'
 
-          APPS='${{ steps.set-projects.outputs.apps }}'
-          LIBRARIES='${{ steps.set-projects.outputs.libraries }}'
+          APPS='${{ steps.generate-filters.outputs.apps }}'
+          LIBRARIES='${{ steps.generate-filters.outputs.libraries }}'
 
           CHANGED_APPS="[]"
           CHANGED_LIBS="[]"
