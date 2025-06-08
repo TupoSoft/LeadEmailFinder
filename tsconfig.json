@@ -17,6 +17,12 @@
       ],
       "@tuposoft/lead-email-finder/redis/*": [
         "libs/redis/src/*"
+      ],
+      "@tuposoft/lead-email-finder/socket": [
+        "libs/socket/src"
+      ],
+      "@tuposoft/lead-email-finder/socket/*": [
+        "libs/socket/src/*"
       ]
     }
   }

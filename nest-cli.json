@@ -60,6 +60,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/redis/tsconfig.lib.json"
       }
+    },
+    "socket": {
+      "type": "library",
+      "root": "libs/socket",
+      "entryFile": "index",
+      "sourceRoot": "libs/socket/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/socket/tsconfig.lib.json"
+      }
     }
   }
 }
