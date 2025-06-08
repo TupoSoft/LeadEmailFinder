@@ -101,7 +101,7 @@ jobs:
     needs:
       - detect-changes
       - test-changed-apps
-    #    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
     uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
     permissions:
       packages: write
