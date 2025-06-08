@@ -1,9 +1,16 @@
 #!/bin/bash
 
-NEST_CLI=$(cat nest-cli.json)
+NEST_CLI_FILE="nest-cli.json"
 
-APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
-LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
+APPS=$(jq -c \
+  --arg default_project_root "$(jq -r '.root' "$NEST_CLI_FILE")" \
+  '[.projects
+  | to_entries[]
+  | select(.value.type == "application" and .value.root != $default_project_root)
+  | .key]' \
+  "$NEST_CLI_FILE")
+
+LIBRARIES=$(jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]' "$NEST_CLI_FILE")
 
 # Common filter patterns
 COMMON_FILTERS=(
