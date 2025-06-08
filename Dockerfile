@@ -64,4 +64,5 @@ EXPOSE 3000
 ENV APP_MAIN_FILE=dist/apps/$TARGET_APP/main
 
 # Run the application.
-CMD ["node", "$APP_MAIN_FILE"]
+SHELL ["sh", "-c"]
+CMD node $APP_MAIN_FILE
