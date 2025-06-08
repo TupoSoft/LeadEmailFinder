@@ -1,0 +1,144 @@
+name: Test and Build Apps
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'nest-cli.json'
+      - 'tsconfig*.json'
+      - 'Dockerfile'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/**'
+      - 'libs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'nest-cli.json'
+      - 'tsconfig*.json'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+jobs:
+  assert-diff-within-limit:
+    uses: TupoSoft/GitHubActions/.github/workflows/check-pr-lines.yml@master
+    if: github.event_name == 'pull_request'
+    with:
+      max_lines: 500
+    permissions:
+      contents: read
+      pull-requests: write
+    secrets: inherit
+
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
+    outputs:
+      changed_apps: ${{ steps.set-outputs.outputs.changed_apps }}
+      changed_libs: ${{ steps.set-outputs.outputs.changed_libs }}
+      any_app_changed: ${{ steps.filter.outputs.any-app-changed }}
+      any_lib_changed: ${{ steps.filter.outputs.any-lib-changed }}
+      any_change: ${{ steps.filter.outputs.any-change }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate filters
+        id: generate-filters
+        run: .github/workflows/scripts/generate-filters.sh
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: ${{ steps.generate-filters.outputs.filters }}
+
+      - name: Set outputs
+        id: set-outputs
+        run: >
+          .github/workflows/scripts/set-outputs.sh 
+          '${{ toJSON(steps.filter.outputs) }}' 
+          '${{ steps.generate-filters.outputs.apps }}' 
+          '${{ steps.generate-filters.outputs.libraries }}'
+
+  test-changed-libs:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_lib_changed == 'true'
+    strategy:
+      matrix:
+        lib: ${{ fromJSON(needs.detect-changes.outputs.changed_libs) }}
+    permissions:
+      contents: read
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    with:
+      test_path: ./libs/${{ matrix.lib }}
+
+  test-changed-apps:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_app_changed == 'true'
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
+    permissions:
+      contents: read
+    uses: TupoSoft/GitHubActions/.github/workflows/node-test.yml@master
+    with:
+      test_path: ./apps/${{ matrix.app }}
+
+  build-changed-apps:
+    strategy:
+      matrix:
+        app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
+    needs:
+      - detect-changes
+      - test-changed-apps
+    #    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
+    permissions:
+      packages: write
+      contents: read
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.app }}
+      build-args: |
+        TARGET_APP=${{ matrix.app }}
+
+  summary:
+    needs:
+      - detect-changes
+      - test-changed-libs
+      - test-changed-apps
+      - build-changed-apps
+    if: always() && needs.detect-changes.outputs.any_change == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize changes
+        run: |
+          echo "## Build and Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Components" >> $GITHUB_STEP_SUMMARY
+
+          CHANGED_LIBS='${{ needs.detect-changes.outputs.changed_libs }}'
+          CHANGED_APPS='${{ needs.detect-changes.outputs.changed_apps }}'
+
+          if [[ "$CHANGED_LIBS" != "[]" ]]; then
+            echo "#### Libraries:" >> $GITHUB_STEP_SUMMARY
+            for LIB in $(echo "$CHANGED_LIBS" | jq -r '.[]'); do
+              echo "- ✅ $LIB" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          if [[ "$CHANGED_APPS" != "[]" ]]; then
+            echo "#### Applications:" >> $GITHUB_STEP_SUMMARY
+            for APP in $(echo "$CHANGED_APPS" | jq -r '.[]'); do
+              echo "- ✅ $APP" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
