@@ -6,6 +6,12 @@
   "compilerOptions": {
     "baseUrl": "./",
     "paths": {
+      "@tuposoft/lead-email-finder/dns": [
+        "libs/dns/src"
+      ],
+      "@tuposoft/lead-email-finder/dns/*": [
+        "libs/dns/src/*"
+      ],
       "@tuposoft/lead-email-finder/key": [
         "libs/key/src"
       ],

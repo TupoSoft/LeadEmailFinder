@@ -25,6 +25,15 @@
         "tsConfigPath": "apps/async-email-verification-worker/tsconfig.app.json"
       }
     },
+    "dns": {
+      "type": "library",
+      "root": "libs/dns",
+      "entryFile": "index",
+      "sourceRoot": "libs/dns/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/dns/tsconfig.lib.json"
+      }
+    },
     "key": {
       "type": "library",
       "root": "libs/key",
