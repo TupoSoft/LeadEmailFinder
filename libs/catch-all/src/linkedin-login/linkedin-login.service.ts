@@ -1,7 +1,7 @@
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { AxiosError } from 'axios'
-import { ICatchAllVerifier } from '../../../../common'
+import { ICatchAllVerifier } from '../../../../apps/lead-email-finder-api/src/common'
 import { constants } from 'node:http2'
 import { Injectable } from '@nestjs/common'
 
