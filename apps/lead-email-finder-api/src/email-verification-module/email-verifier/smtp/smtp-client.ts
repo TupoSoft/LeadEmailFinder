@@ -9,7 +9,7 @@ import {
 } from './smtp.constants'
 import { hostname as osHostname } from 'os'
 import { promiseWithTimeout } from '../../../util/timeout'
-import { connect, readUntil, write } from '../../../socket'
+import { connect, readUntil, write } from '@tuposoft/lead-email-finder/socket'
 import { parseSmtpResponse } from './smtp.util'
 import { Logger } from '@nestjs/common'
 import { IProxy } from '../../../common'
