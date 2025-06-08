@@ -30,7 +30,7 @@ RUN pnpm build $TARGET_APP
 
 FROM node:${NODE_VERSION}-alpine
 
-ARG APP
+ARG TARGET_APP
 
 # Container dependencies
 RUN apk add --no-cache \
