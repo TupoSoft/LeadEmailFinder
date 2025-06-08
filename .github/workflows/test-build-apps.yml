@@ -139,22 +139,3 @@ jobs:
               echo "- ✅ $APP" >> $GITHUB_STEP_SUMMARY
             done
           fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Job Status" >> $GITHUB_STEP_SUMMARY
-
-          # Report on libraries test job
-          if [[ "${{ needs.test-libs.result }}" != "skipped" ]]; then
-            echo "- Libraries Test: ${{ needs.test-libs.result }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "- Applications Test and Build:" >> $GITHUB_STEP_SUMMARY
-
-          APPS='${{ needs.detect-projects.outputs.apps }}'
-
-          for APP in $(echo "$APPS" | jq -r '.[]'); do
-            if [[ "$CHANGED_APPS" == *"$APP"* ]] || [[ "${{ needs.detect-changes.outputs.any_lib_changed }}" == "true" ]]; then
-              APP_STATUS="${{ needs.test-build-apps.result }}"
-              echo "  - $APP: $APP_STATUS" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
