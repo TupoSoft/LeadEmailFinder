@@ -1,7 +1,9 @@
 #!/bin/bash
 
-APPS="$1"
-LIBRARIES="$2"
+NEST_CLI=$(cat nest-cli.json)
+
+APPS=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "application") | .key]')
+LIBRARIES=$(echo "$NEST_CLI" | jq -c '[.projects | to_entries[] | select(.value.type == "library") | .key]')
 
 # Common filter patterns
 COMMON_FILTERS=(
