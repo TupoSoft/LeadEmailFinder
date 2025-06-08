@@ -14,6 +14,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/key': '<rootDir>/libs/key/src/$1',
         '@tuposoft/lead-email-finder/socket': '<rootDir>/libs/socket/src/$1',
         '@tuposoft/lead-email-finder/dns': '<rootDir>/libs/dns/src/$1',
+        '@tuposoft/lead-email-finder/catch-all': '<rootDir>/libs/catch-all/src/$1',
     },
 }
 
