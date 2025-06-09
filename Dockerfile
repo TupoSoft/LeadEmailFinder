@@ -7,6 +7,8 @@ ARG TARGET_APP
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
+ENV METADATA_FILE_PATH="apps/$TARGET_APP/src/generate-metadata.ts"
+
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm
@@ -25,8 +27,11 @@ RUN --mount=type=bind,source=package.json,target=package.json \
 # Copy the rest of the source files into the image.
 COPY . .
 
-# Build the application.
-RUN pnpm build $TARGET_APP
+# Generate metadata and build the application.
+RUN <<EOF
+[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"
+pnpm build $TARGET_APP
+EOF
 
 FROM node:${NODE_VERSION}-alpine
 
