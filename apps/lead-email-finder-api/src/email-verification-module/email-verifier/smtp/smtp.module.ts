@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common'
-import { DnsModule, DnsService } from './dns'
+import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
 import { MongooseModule } from '@nestjs/mongoose'
 import { SmtpVerification, SmtpVerificationSchema } from './smtp-verification.schema'
 import { ProxyModule, ProxyService } from './proxy'

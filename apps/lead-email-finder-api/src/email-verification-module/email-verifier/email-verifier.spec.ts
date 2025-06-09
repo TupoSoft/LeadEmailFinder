@@ -2,6 +2,11 @@ import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier, IS
 import { EmailVerifier } from './email-verifier.service'
 import { Test } from '@nestjs/testing'
 import { EmailVerificationRequestDto } from '../sync-email-verification/email-verification-request.dto'
+import { getSecondLevelDomain } from '@tuposoft/lead-email-finder/dns'
+
+jest.mock('@tuposoft/lead-email-finder/dns', () => ({
+    getSecondLevelDomain: jest.fn(),
+}))
 
 const email = 'danilo@microsoft.com'
 const [, domain] = email.split('@')
@@ -12,6 +17,7 @@ describe('EmailVerifier', () => {
     let emailVerifier: EmailVerifier
     let smtpVerifierMock: jest.Mocked<ISmtpVerifier>
     let catchAllVerifiersMock: Array<jest.Mocked<ICatchAllVerifier>>
+    let getSecondLevelDomainMock = getSecondLevelDomain as jest.MockedFn<typeof getSecondLevelDomain>
 
     beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({
@@ -138,6 +144,8 @@ describe('EmailVerifier', () => {
             targetExchange: 'smtp.some.domain.com',
             reason: EmailVerificationReason.AcceptedEmail,
         })
+
+        getSecondLevelDomainMock.mockReturnValueOnce('domain.com')
 
         const result = await emailVerifier.verify(requestDto)
 

@@ -3,7 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
-import { ParseConnectionStringOptionsFactory, RedisModule } from '@tuposoft/lead-email-finder/redis'
 import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
@@ -32,10 +31,6 @@ import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
         }),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
-        }),
-        RedisModule.forRootAsync({
-            imports: [ConfigModule],
-            useClass: ParseConnectionStringOptionsFactory,
         }),
         LoggerModule.forRoot(),
         KeyModule,

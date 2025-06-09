@@ -25,6 +25,24 @@
         "tsConfigPath": "apps/async-email-verification-worker/tsconfig.app.json"
       }
     },
+    "catch-all": {
+      "type": "library",
+      "root": "libs/catch-all",
+      "entryFile": "index",
+      "sourceRoot": "libs/catch-all/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/catch-all/tsconfig.lib.json"
+      }
+    },
+    "dns": {
+      "type": "library",
+      "root": "libs/dns",
+      "entryFile": "index",
+      "sourceRoot": "libs/dns/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/dns/tsconfig.lib.json"
+      }
+    },
     "key": {
       "type": "library",
       "root": "libs/key",

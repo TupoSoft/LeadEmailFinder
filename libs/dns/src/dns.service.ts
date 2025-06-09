@@ -1,6 +1,6 @@
 import { Redis } from 'ioredis'
 import { fetchRecords } from './util'
-import { DNSTypeMap, IDnsService, parseTimeString } from '../../../../common'
+import { DNSTypeMap, IDnsService, parseTimeString } from '../../../apps/lead-email-finder-api/src/common'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 
 @Injectable()

@@ -1,7 +1,7 @@
 const resolveMxMock = jest.fn<typeof resolveMx>()
 const reverseMock = jest.fn<typeof reverse>()
 
-import { DNSTypeMap } from '../../../../common'
+import { DNSTypeMap } from '../../../apps/lead-email-finder-api/src/common'
 import { DnsService } from './dns.service'
 import { Redis } from 'ioredis'
 import { afterEach, describe, expect, it, jest } from '@jest/globals'

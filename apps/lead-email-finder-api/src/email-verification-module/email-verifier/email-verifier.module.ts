@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common'
 import { SmtpModule, SmtpVerifier } from './smtp'
-import { CatchAllModule, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps } from './catch-all'
+import {
+    CatchAllModule,
+    MicrosoftGetCredentialType,
+    MicrosoftLogin,
+    MimecastLogin,
+    OfficeApps,
+} from '@tuposoft/lead-email-finder/catch-all'
 import { EmailVerifier } from './email-verifier.service'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
 import { ICatchAllVerifier } from '../../common'

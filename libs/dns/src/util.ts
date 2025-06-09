@@ -1,7 +1,7 @@
 import { resolveMx, reverse } from 'node:dns/promises'
 import type { MxRecord } from 'node:dns'
 import { getDomain } from 'tldts'
-import { DNSTypeMap } from '../../../../common'
+import { DNSTypeMap } from '../../../apps/lead-email-finder-api/src/common'
 
 async function tryResolveMx(domain: string): Promise<MxRecord[]> {
     try {

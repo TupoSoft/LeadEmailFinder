@@ -10,6 +10,8 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine
 
+ENV METADATA_FILE_PATH="apps/lead-email-finder/src/generate-metadata.ts"
+
 ENV PATH="/app/node_modules/.bin:$PATH"
 
 WORKDIR /app
@@ -19,8 +21,6 @@ RUN apk add --no-cache curl wget bind-tools jq
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm
-
-WORKDIR /app
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.local/share/pnpm/store to speed up subsequent builds.
@@ -44,4 +44,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD pnpm start:dev
+CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" && pnpm start:dev

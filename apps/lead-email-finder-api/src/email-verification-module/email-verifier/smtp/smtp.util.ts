@@ -1,4 +1,5 @@
 import { SmtpResponse } from './smtp-response.interface'
+import { setTimeout } from 'node:timers/promises'
 
 export function parseSmtpResponse(rawResponse: string): SmtpResponse {
     const regex = /^(\d{3})(?: ?(\d\.\d\.\d))? (.+)$/m
@@ -15,4 +16,8 @@ export function parseSmtpResponse(rawResponse: string): SmtpResponse {
         enhancedCode,
         message: message.trim(),
     }
+}
+
+export async function promiseWithTimeout<T>(promise: Promise<T>, timeoutMs: number, error: Error): Promise<T> {
+    return await Promise.race([promise, setTimeout(timeoutMs).then(async () => await Promise.reject(error))])
 }
