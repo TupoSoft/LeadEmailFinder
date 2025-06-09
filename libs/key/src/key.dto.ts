@@ -5,7 +5,7 @@ import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 export class GenerateKeyDto {
     @IsArray()
     @IsEnum(KeyPermissions, { each: true })
-    permissions: KeyPermissions[] = [KeyPermissions.READ]
+    permissions: KeyPermissions[] = [KeyPermissions.USER]
 
     @IsOptional()
     @IsString()
@@ -24,6 +24,13 @@ export class ApiKeyResponseDto {
     id: string
 
     @Expose()
+    @Transform(({ obj }: { obj: { userId: { toString(): string } } }) => obj.userId?.toString())
+    userId: string
+
+    @Expose()
+    description?: string
+
+    @Expose()
     expiresAt: Date
 
     @Expose()
@@ -31,4 +38,9 @@ export class ApiKeyResponseDto {
 
     @Expose()
     updatedAt: Date
+}
+
+export class RevokeKeyDto {
+    @IsString()
+    token: string
 }

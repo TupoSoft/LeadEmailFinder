@@ -1,5 +1,4 @@
 export enum KeyPermissions {
-    READ = 'read',
-    WRITE = 'write',
+    USER = 'user',
     ADMIN = 'admin',
 }

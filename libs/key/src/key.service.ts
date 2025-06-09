@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, ForbiddenException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
+import { Model, Types } from 'mongoose'
 import { Key } from './key.schema'
 import * as crypto from 'crypto'
 import { KeyPermissions } from './key.enum'
@@ -10,7 +10,7 @@ import { AdminTokenRevocationForbidden, KeyNotFound } from './key.error'
 export class KeyService {
     constructor(@InjectModel(Key.name) private keyModel: Model<Key>) {}
 
-    async generateKey(permissions: KeyPermissions[], description?: string) {
+    async generateKey(userId: string, permissions: KeyPermissions[], description?: string) {
         const prefix = 'api_'
         const randomBytes = crypto.randomBytes(24).toString('hex')
         const token = `${prefix}${randomBytes}`
@@ -19,6 +19,7 @@ export class KeyService {
             token,
             permissions,
             description,
+            userId: new Types.ObjectId(userId),
         })
 
         const savedKey = await key.save()
@@ -44,14 +45,31 @@ export class KeyService {
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
-    async revokeKey(token: string) {
+    async getKeyByToken(token: string) {
+        const key = await this.keyModel.findOne({ token }).exec()
+        if (!key) {
+            throw new KeyNotFound(token)
+        }
+        return key
+    }
+
+    async getKeysByUserId(userId: string): Promise<Key[]> {
+        return this.keyModel.find({ userId: new Types.ObjectId(userId) }).exec()
+    }
+
+    async revokeKey(token: string, userId?: string, isAdmin: boolean = false) {
         const key = await this.keyModel.findOne({ token }).exec()
 
         if (!key) {
             throw new KeyNotFound(token)
         }
 
-        if (key.permissions.includes(KeyPermissions.ADMIN)) {
+        // Check if user owns the key or is admin
+        if (!isAdmin && userId && key.userId.toString() !== userId) {
+            throw new ForbiddenException('You can only revoke your own keys')
+        }
+
+        if (key.permissions.includes(KeyPermissions.ADMIN) && !isAdmin) {
             throw new AdminTokenRevocationForbidden(token)
         }
 
@@ -59,8 +77,24 @@ export class KeyService {
         return result
     }
 
-    async listKeys(): Promise<string[]> {
-        const keys = await this.keyModel.find().exec()
-        return keys.map(key => key.token)
+    async revokeUserKeys(userId: string) {
+        const result = await this.keyModel
+            .updateMany({ userId: new Types.ObjectId(userId) }, { expiresAt: new Date() })
+            .exec()
+        return result
+    }
+
+    async listKeys(userId?: string): Promise<Key[]> {
+        const query = userId ? { userId: new Types.ObjectId(userId) } : {}
+        return this.keyModel.find(query).exec()
+    }
+
+    async deleteExpiredKeys() {
+        const result = await this.keyModel
+            .deleteMany({
+                expiresAt: { $lt: new Date() },
+            })
+            .exec()
+        return result
     }
 }

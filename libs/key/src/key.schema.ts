@@ -6,7 +6,7 @@ export class Key {
     @Prop({ required: true, unique: true, index: true })
     token: string
 
-    @Prop({ required: true, enum: KeyPermissions, default: [KeyPermissions.READ], type: [String] })
+    @Prop({ required: true, enum: KeyPermissions, default: [KeyPermissions.USER], type: [String] })
     permissions: KeyPermissions[]
 
     @Prop({ required: false })

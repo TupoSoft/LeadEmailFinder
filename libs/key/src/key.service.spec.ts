@@ -18,7 +18,7 @@ describe('KeyService', () => {
     beforeAll(async () => {
         const mockSave = jest.fn().mockResolvedValue({
             token: 'api_mockedtoken123',
-            permissions: [KeyPermissions.READ],
+            permissions: [KeyPermissions.USER],
             description: 'Test key',
         })
 
@@ -53,10 +53,10 @@ describe('KeyService', () => {
 
     describe('generateKey', () => {
         it('should generate a key with correct token format', async () => {
-            const result = await service.generateKey([KeyPermissions.READ], 'Test key')
+            const result = await service.generateKey([KeyPermissions.USER], 'Test key')
 
             expect(result.token).toBe('api_mockedtoken123')
-            expect(result.permissions).toEqual([KeyPermissions.READ])
+            expect(result.permissions).toEqual([KeyPermissions.USER])
             expect(result.description).toBe('Test key')
         })
     })
@@ -64,14 +64,14 @@ describe('KeyService', () => {
     describe('validateKeyForRoles', () => {
         it('should return true for valid key with matching permissions', async () => {
             const mockKey = {
-                permissions: [KeyPermissions.READ, KeyPermissions.WRITE],
+                permissions: [KeyPermissions.USER],
             }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockKey),
             } as any)
 
-            const result = await service.validateKeyForRoles('api_test', [KeyPermissions.READ])
+            const result = await service.validateKeyForRoles('api_test', [KeyPermissions.USER])
 
             expect(result).toBe(true)
             expect(keyModelMock.findOne).toHaveBeenCalledWith({
@@ -85,7 +85,7 @@ describe('KeyService', () => {
                 exec: jest.fn().mockResolvedValue(null),
             } as any)
 
-            const result = await service.validateKeyForRoles('invalid_key', [KeyPermissions.READ])
+            const result = await service.validateKeyForRoles('invalid_key', [KeyPermissions.USER])
 
             expect(result).toBe(false)
         })
@@ -95,13 +95,13 @@ describe('KeyService', () => {
                 exec: jest.fn().mockResolvedValue(null),
             } as any)
 
-            const result = await service.validateKeyForRoles('expired_key', [KeyPermissions.READ])
+            const result = await service.validateKeyForRoles('expired_key', [KeyPermissions.USER])
 
             expect(result).toBe(false)
         })
 
         it('should return true when no permissions required', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+            const mockKey = { permissions: [KeyPermissions.USER] }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockKey),
@@ -113,13 +113,13 @@ describe('KeyService', () => {
         })
 
         it('should return false when key lacks required permissions', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+            const mockKey = { permissions: [KeyPermissions.USER] }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockKey),
             } as any)
 
-            const result = await service.validateKeyForRoles('api_test', [KeyPermissions.WRITE])
+            const result = await service.validateKeyForRoles('api_test', [KeyPermissions.ADMIN])
 
             expect(result).toBe(false)
         })
@@ -127,7 +127,7 @@ describe('KeyService', () => {
 
     describe('revokeKey', () => {
         it('should revoke admin key successfully', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+            const mockKey = { permissions: [KeyPermissions.USER] }
 
             keyModelMock.findOne.mockReturnValue({
                 exec: jest.fn().mockResolvedValue(mockKey),
