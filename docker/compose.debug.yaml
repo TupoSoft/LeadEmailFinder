@@ -2,4 +2,14 @@ services:
   api:
     ports:
       - "9229:9229"
-    command: pnpm start:debug
+    command: pnpm start:debug lead-email-finder-api
+
+  async-email-verification-worker:
+    ports:
+      - "9230:9229"
+    command: pnpm start:debug async-email-verification-worker
+
+  api-key:
+    ports:
+      - "9231:9229"
+    command: pnpm start:debug api-key

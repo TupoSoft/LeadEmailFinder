@@ -1,10 +1,12 @@
-name: Lead Email Finder
+name: LEF
 
 services:
-  api:
+  api: &service
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        TARGET_APP: lead-email-finder-api
     volumes:
       - "..:/app"
       - "/app/node_modules"
@@ -50,6 +52,29 @@ services:
       - s3_access_key_id
       - s3_secret_key
 
+  async-email-verification-worker:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        TARGET_APP: async-email-verification-worker
+    ports: []
+
+  api-key:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        TARGET_APP: api-key
+    ports:
+      - '5000:5000'
+    environment:
+      MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+    secrets:
+      - apikey_mongo_url
+
   mongo:
     image: mongo:latest
     restart: unless-stopped
@@ -61,6 +86,7 @@ services:
     environment:
       MONGO_INITDB_DATABASE: verifier
       MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
       ADMIN_APIKEY_FILE: /run/secrets/admin_apikey
@@ -76,6 +102,7 @@ services:
       - mongo_root_password
       - admin_apikey
       - mongo_url
+      - apikey_mongo_url
     volumes:
       - ./scripts:/docker-entrypoint-initdb.d
       - mongo-data:/data/db
@@ -142,6 +169,8 @@ secrets:
     file: secrets/s3_access_key_id.txt
   s3_secret_key:
     file: secrets/s3_secret_key.txt
+  apikey_mongo_url:
+    file: secrets/apikey_mongo_url.txt
 
 volumes:
   mongo-data:

@@ -1,43 +1,29 @@
-import {
-    Body,
-    Controller,
-    Delete,
-    ForbiddenException,
-    Get,
-    InternalServerErrorException,
-    NotFoundException,
-    Post,
-    UseGuards,
-} from '@nestjs/common'
-import { KeyService } from './key.service'
-import { ApiKeyResponseDto, GenerateKeyDto } from './key.dto'
-import { ApiKeyGuard } from './guards/api-key.guard'
-import { RequireApiPermissions } from './decorators/roles.decorator'
-import { KeyPermissions } from './key.enum'
+import { Body, Controller, ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common'
+import { ApiKeyService } from './api-key.service'
+import { ApiKeyResponseDto, GenerateKeyDto, ValidateKeyForRolesDto } from './api-key.dto'
 import { plainToInstance } from 'class-transformer'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { AdminTokenRevocationForbidden, KeyNotFound } from './key.error'
+import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
+import { GrpcMethod } from '@nestjs/microservices'
 
 @ApiExcludeController()
-@UseGuards(ApiKeyGuard)
-@RequireApiPermissions(KeyPermissions.ADMIN)
-@Controller('key')
-export class KeyController {
-    constructor(private readonly keyService: KeyService) {}
+@Controller()
+export class ApiKeyController {
+    constructor(private readonly keyService: ApiKeyService) {}
 
-    @Post('generate')
+    @GrpcMethod('ApiKeyService')
     async generateKey(@Body() generateKeyDto: GenerateKeyDto) {
         const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
 
         return plainToInstance(ApiKeyResponseDto, apiKey.toObject())
     }
 
-    @Get()
+    @GrpcMethod('ApiKeyService')
     async listKeys() {
         return await this.keyService.listKeys()
     }
 
-    @Delete('revoke')
+    @GrpcMethod('ApiKeyService')
     async revokeKey(@Body() body: { token: string }) {
         try {
             await this.keyService.revokeKey(body.token)
@@ -51,5 +37,10 @@ export class KeyController {
                 throw new InternalServerErrorException('Failed to revoke key')
             }
         }
+    }
+
+    @GrpcMethod('ApiKeyService')
+    async validateKeyForRoles(@Body() { token, requiredPermissions }: ValidateKeyForRolesDto): Promise<boolean> {
+        return await this.keyService.validateKeyForRoles(token, requiredPermissions)
     }
 }

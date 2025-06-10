@@ -10,12 +10,23 @@
       "@nestjs/swagger"
     ],
     "tsConfigPath": "apps/lead-email-finder/tsconfig.app.json",
-    "webpack": true
+    "webpack": true,
+    "assets": ["**/*.proto"],
+    "watchAssets": true
   },
   "monorepo": true,
   "defaultLibraryPrefix": "@tuposoft/lead-email-finder",
   "root": "apps/lead-email-finder",
   "projects": {
+    "api-key": {
+      "type": "application",
+      "root": "apps/api-key",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-key/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-key/tsconfig.app.json"
+      }
+    },
     "async-email-verification-worker": {
       "type": "application",
       "root": "apps/async-email-verification-worker",
@@ -34,6 +45,15 @@
         "tsConfigPath": "libs/catch-all/tsconfig.lib.json"
       }
     },
+    "config": {
+      "type": "library",
+      "root": "libs/config",
+      "entryFile": "index",
+      "sourceRoot": "libs/config/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/config/tsconfig.lib.json"
+      }
+    },
     "dns": {
       "type": "library",
       "root": "libs/dns",
@@ -49,7 +69,8 @@
       "entryFile": "index",
       "sourceRoot": "libs/key/src",
       "compilerOptions": {
-        "tsConfigPath": "libs/key/tsconfig.lib.json"
+        "tsConfigPath": "libs/key/tsconfig.lib.json",
+        "assets": ["**/*.proto"]
       }
     },
     "lead-email-finder": {

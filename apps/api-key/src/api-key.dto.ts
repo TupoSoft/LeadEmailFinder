@@ -1,4 +1,4 @@
-import { KeyPermissions } from './key.enum'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 import { Expose, Transform } from 'class-transformer'
 import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 
@@ -31,4 +31,13 @@ export class ApiKeyResponseDto {
 
     @Expose()
     updatedAt: Date
+}
+
+export class ValidateKeyForRolesDto {
+    @IsString()
+    token: string
+
+    @IsArray()
+    @IsEnum(KeyPermissions, { each: true })
+    requiredPermissions: KeyPermissions[]
 }

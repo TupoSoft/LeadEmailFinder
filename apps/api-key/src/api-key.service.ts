@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
-import { Key } from './key.schema'
+import { Key } from './api-key.schema'
 import * as crypto from 'crypto'
-import { KeyPermissions } from './key.enum'
-import { AdminTokenRevocationForbidden, KeyNotFound } from './key.error'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
+import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
 
 @Injectable()
-export class KeyService {
+export class ApiKeyService {
     constructor(@InjectModel(Key.name) private keyModel: Model<Key>) {}
 
     async generateKey(permissions: KeyPermissions[], description?: string) {
@@ -21,8 +21,7 @@ export class KeyService {
             description,
         })
 
-        const savedKey = await key.save()
-        return savedKey
+        return await key.save()
     }
 
     async validateKeyForRoles(token: string, requiredPermissions: KeyPermissions[]): Promise<boolean> {
@@ -55,8 +54,7 @@ export class KeyService {
             throw new AdminTokenRevocationForbidden(token)
         }
 
-        const result = await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
-        return result
+        return await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
     }
 
     async listKeys(): Promise<string[]> {
