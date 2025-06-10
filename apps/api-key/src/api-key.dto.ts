@@ -14,14 +14,14 @@ export class GenerateKeyDto {
 
 export class ApiKeyResponseDto {
     @Expose()
+    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString())
+    id: string
+    
+    @Expose()
     token: string
 
     @Expose()
     permissions: KeyPermissions[]
-
-    @Expose()
-    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString())
-    id: string
 
     @Expose()
     expiresAt: Date

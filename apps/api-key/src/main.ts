@@ -9,6 +9,7 @@ async function bootstrap() {
         options: {
             package: 'api_key',
             protoPath: join(__dirname, 'api_key.proto'),
+            url: '0.0.0.0:5000',
         },
     })
 
