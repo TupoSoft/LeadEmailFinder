@@ -10,11 +10,7 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine
 
-ARG TARGET_APP
-
-ENV APP=$TARGET_APP
-
-ENV METADATA_FILE_PATH="apps/${TARGET_APP:-lead-email-finder}/src/generate-metadata.ts"
+ENV METADATA_FILE_PATH="apps/lead-email-finder/src/generate-metadata.ts"
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
@@ -48,4 +44,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"; pnpm start $APP
+CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" && pnpm start
