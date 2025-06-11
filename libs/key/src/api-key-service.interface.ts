@@ -1,10 +1,9 @@
 import { KeyPermissions } from './key.enum'
-
-export interface ValidateKeyForRolesRequest {
-    token: string
-    requiredPermissions: KeyPermissions[]
-}
+import { Observable } from 'rxjs'
 
 export interface ApiKeyService {
-    validateKeyForRoles(request: ValidateKeyForRolesRequest): Promise<boolean>
+    validateKeyForRoles(request: {
+        token: string
+        requiredPermissions: KeyPermissions[]
+    }): Observable<{ value: boolean }>
 }

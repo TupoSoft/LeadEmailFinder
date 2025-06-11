@@ -4,6 +4,7 @@ import { KeyPermissions } from '../key.enum'
 import { Request } from 'express'
 import { ClientGrpc } from '@nestjs/microservices'
 import { ApiKeyService } from '../api-key-service.interface'
+import { firstValueFrom } from 'rxjs'
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate, OnModuleInit {
@@ -14,7 +15,7 @@ export class ApiKeyGuard implements CanActivate, OnModuleInit {
         private readonly reflector: Reflector,
     ) {}
 
-    onModuleInit() {
+    onModuleInit(): void {
         this.apiKeyService = this.client.getService<ApiKeyService>('ApiKeyService')
     }
 
@@ -45,6 +46,8 @@ export class ApiKeyGuard implements CanActivate, OnModuleInit {
             throw new UnauthorizedException('API key is missing')
         }
 
-        return await this.apiKeyService.validateKeyForRoles({ token, requiredPermissions })
+        const { value } = await firstValueFrom(this.apiKeyService.validateKeyForRoles({ token, requiredPermissions }))
+
+        return value
     }
 }

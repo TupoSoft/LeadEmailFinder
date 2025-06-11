@@ -4,44 +4,11 @@ package api_key;
 
 import "google/protobuf/wrappers.proto";
 
-message GenerateKeyRequest {
-  repeated string permissions = 1;
-  string description = 2;
-}
-
-message GenerateKeyResponse {
-  string apiKey = 1;
-  string createdAt = 2;
-  string updatedAt = 3;
-}
-
-message RevokeKeyRequest {
-  string token = 1;
-}
-
-message RevokeKeyResponse {
-  bool success = 1;
-}
-
-message ListKeysResponse {
-  repeated Key keys = 1;
-}
-
-message Key {
-  string id = 1;
-  string token = 2;
-  repeated string permissions = 3;
-  string createdAt = 4;
-  string updatedAt = 5;
-}
-
 message ValidateKeyForRolesRequest {
   string token = 1;
   repeated string requiredPermissions = 2;
 }
 
 service ApiKeyService {
-  rpc GenerateKey(GenerateKeyRequest) returns (GenerateKeyResponse);
-  rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
   rpc ValidateKeyForRoles(ValidateKeyForRolesRequest) returns (google.protobuf.BoolValue);
 }

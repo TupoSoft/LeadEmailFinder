@@ -1,4 +1,12 @@
-import { Body, Controller, ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    ForbiddenException,
+    InternalServerErrorException,
+    NotFoundException,
+    UsePipes,
+    ValidationPipe,
+} from '@nestjs/common'
 import { ApiKeyService } from './api-key.service'
 import { ApiKeyResponseDto, GenerateKeyDto, ValidateKeyForRolesDto } from './api-key.dto'
 import { plainToInstance } from 'class-transformer'
@@ -12,9 +20,15 @@ export class ApiKeyController {
     constructor(private readonly keyService: ApiKeyService) {}
 
     @GrpcMethod('ApiKeyService')
-    async generateKey(@Body() generateKeyDto: GenerateKeyDto) {
+    @UsePipes(
+        new ValidationPipe({
+            whitelist: true,
+            transform: true,
+            forbidNonWhitelisted: true,
+        }),
+    )
+    async generateKey(@Body() generateKeyDto: GenerateKeyDto): Promise<ApiKeyResponseDto> {
         const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
-
         return plainToInstance(ApiKeyResponseDto, apiKey.toObject())
     }
 
@@ -40,7 +54,14 @@ export class ApiKeyController {
     }
 
     @GrpcMethod('ApiKeyService')
-    async validateKeyForRoles(@Body() { token, requiredPermissions }: ValidateKeyForRolesDto): Promise<boolean> {
-        return await this.keyService.validateKeyForRoles(token, requiredPermissions)
+    async validateKeyForRoles({
+        token,
+        requiredPermissions = [],
+    }: ValidateKeyForRolesDto): Promise<{ value: boolean }> {
+        const value = await this.keyService.validateKeyForRoles(token, requiredPermissions)
+
+        return {
+            value,
+        }
     }
 }
