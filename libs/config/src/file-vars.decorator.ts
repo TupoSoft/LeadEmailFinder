@@ -1,3 +1,4 @@
+import 'reflect-metadata'
 import { Contains, ValidateIf } from 'class-validator'
 
 const FILE_VARS_KEY = Symbol('env:file-vars')
