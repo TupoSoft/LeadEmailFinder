@@ -12,12 +12,12 @@ help:
 	@echo "  build-dev  		Build development environment"
 	@echo "  start-dev  		Start development containers"
 	@echo "  stop-dev   		Stop development containers"
-	@echo "  refresh-deps       Start recreating anonymous volumes"
+	@echo "  refresh-deps		Start recreating anonymous volumes"
 	@echo "  restart-dev 		Restart development containers"
-	@echo "  build-debug        Build debug environment"
-	@echo "  start-debug        Start debug containers"
-	@echo "  stop-debug         Stop debug containers"
-	@echo "  clean              Clean up unused Docker resources"
+	@echo "  build-debug		Build debug environment"
+	@echo "  start-debug		Start debug containers"
+	@echo "  stop-debug			Stop debug containers"
+	@echo "  clean				Clean up unused Docker resources"
 
 # Environment-Specific Commands
 build-dev:
