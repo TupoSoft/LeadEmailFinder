@@ -10,7 +10,9 @@
       "@nestjs/swagger"
     ],
     "tsConfigPath": "apps/lead-email-finder/tsconfig.app.json",
-    "webpack": true
+    "webpack": true,
+    "assets": ["**/*.proto"],
+    "watchAssets": true
   },
   "monorepo": true,
   "defaultLibraryPrefix": "@tuposoft/lead-email-finder",

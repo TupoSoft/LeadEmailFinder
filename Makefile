@@ -38,7 +38,7 @@ build-debug:
 	$(COMPOSE_DEBUG) build
 
 start-debug:
-	$(COMPOSE_DEBUG) up -d --build -V
+	$(COMPOSE_DEBUG) up -d --build
 
 stop-debug:
 	$(COMPOSE_DEBUG) down -v
