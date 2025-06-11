@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsString } from 'class-validator'
-import { IsFileVar, WithFileVars } from './file-vars.decorator'
+import { IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform } from 'class-transformer'
 
 enum Environment {

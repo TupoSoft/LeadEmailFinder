@@ -9,11 +9,12 @@ import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { ApiKeyGuard, KeyModule } from '@tuposoft/lead-email-finder/key'
 import { HealthModule } from './health'
-import { loadSecrets, validate } from './config'
+import { validate } from './config'
 import { env } from 'node:process'
 import { APP_GUARD } from '@nestjs/core'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
+import { loadSecrets } from '@tuposoft/lead-email-finder/config'
 
 @Module({
     imports: [
