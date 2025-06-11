@@ -1,12 +1,10 @@
 name: LEF
 
 services:
-  api: &service
+  api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      args:
-        TARGET_APP: lead-email-finder-api
     volumes:
       - "..:/app"
       - "/app/node_modules"
@@ -19,6 +17,7 @@ services:
       - 8.8.8.8
     ports:
       - '3000:3000'
+      - '5000:5000'
     restart: unless-stopped
     healthcheck:
       test: curl -s http://localhost:3000/health | jq -e '.status == "ok"' > /dev/null
@@ -28,9 +27,13 @@ services:
       start_period: 10s
     environment:
       API_URL: http://localhost:3000
-      MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_URL: api:5000
+
       REDIS_URL_FILE: /run/secrets/redis_url
-      AUTH_TOKENS_FILE: /run/secrets/tokens.json
+
+      MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+
       S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
       S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
       S3_URL: http://minio:9000
@@ -48,31 +51,8 @@ services:
     secrets:
       - mongo_url
       - redis_url
-      - tokens.json
       - s3_access_key_id
       - s3_secret_key
-
-  async-email-verification-worker:
-    <<: *service
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      args:
-        TARGET_APP: async-email-verification-worker
-    ports: []
-
-  api-key:
-    <<: *service
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      args:
-        TARGET_APP: api-key
-    ports:
-      - '5000:5000'
-    environment:
-      MONGO_URL_FILE: /run/secrets/apikey_mongo_url
-    secrets:
       - apikey_mongo_url
 
   mongo:

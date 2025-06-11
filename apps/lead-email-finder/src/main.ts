@@ -2,9 +2,24 @@ import { NestFactory } from '@nestjs/core'
 import { LeadEmailFinderModule } from './lead-email-finder.module'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import { MicroserviceOptions, Transport } from '@nestjs/microservices'
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(LeadEmailFinderModule)
+
+    app.connectMicroservice<MicroserviceOptions>(
+        {
+            transport: Transport.GRPC,
+            options: {
+                package: 'api_key',
+                protoPath: 'proto/api_key.proto',
+                url: '0.0.0.0:5000',
+            },
+        },
+        {
+            inheritAppConfig: true,
+        },
+    )
 
     const configService: ConfigService<unknown, true> = app.get(ConfigService)
     const url = configService.get<string>('API_URL')
@@ -24,10 +39,12 @@ async function bootstrap() {
     const { default: metadata } = await import('./metadata')
     await SwaggerModule.loadPluginMetadata(metadata)
 
-    const documentFactory = () => SwaggerModule.createDocument(app, config)
+    const documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
+        SwaggerModule.createDocument(app, config)
 
     SwaggerModule.setup('/', app, documentFactory)
 
+    await app.startAllMicroservices()
     await app.listen(process.env.port ?? 3000)
 }
 

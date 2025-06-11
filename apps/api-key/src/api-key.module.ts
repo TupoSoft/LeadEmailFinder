@@ -17,7 +17,7 @@ import { LoggerModule } from 'pino-nestjs'
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
-                uri: configService.get('MONGO_URL'),
+                uri: configService.get('APIKEY_MONGO_URL'),
             }),
             inject: [ConfigService],
         }),
