@@ -37,14 +37,14 @@ describe('KeyService', () => {
             providers: [
                 ApiKeyService,
                 {
-                    provide: getModelToken(Key.name),
+                    provide: getModelToken(Key.name, 'api-key'),
                     useValue: mockConstructor,
                 },
             ],
         }).compile()
 
         service = module.get<ApiKeyService>(ApiKeyService)
-        keyModelMock = module.get(getModelToken(Key.name))
+        keyModelMock = module.get(getModelToken(Key.name, 'api-key'))
     })
 
     beforeEach(() => {
