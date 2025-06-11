@@ -1,4 +1,4 @@
-name: Lead Email Finder
+name: LEF
 
 services:
   api:

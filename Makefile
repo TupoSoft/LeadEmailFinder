@@ -3,7 +3,7 @@ COMPOSE_DEV=docker compose -f docker/compose.yaml
 COMPOSE_DEBUG=docker compose -f docker/compose.yaml -f docker/compose.debug.yaml
 
 # Default Behavior
-.PHONY: all help check clean build start stop build-dev start-dev stop-dev restart-dev build-debug start-debug stop-debug
+.PHONY: all help check clean build start stop build-dev start-dev stop-dev restart-dev build-debug start-debug stop-debug refresh-deps
 
 all: help
 
@@ -12,6 +12,7 @@ help:
 	@echo "  build-dev  		Build development environment"
 	@echo "  start-dev  		Start development containers"
 	@echo "  stop-dev   		Stop development containers"
+	@echo "  refresh-deps       Start recreating anonymous volumes"
 	@echo "  restart-dev 		Restart development containers"
 	@echo "  build-debug        Build debug environment"
 	@echo "  start-debug        Start debug containers"
@@ -23,6 +24,9 @@ build-dev:
 	$(COMPOSE_DEV) build
 
 start-dev:
+	$(COMPOSE_DEV) up -d --build
+
+refresh-deps:
 	$(COMPOSE_DEV) up -d --build -V
 
 stop-dev:

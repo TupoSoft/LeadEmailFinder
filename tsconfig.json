@@ -12,6 +12,12 @@
       "@tuposoft/lead-email-finder/catch-all/*": [
         "libs/catch-all/src/*"
       ],
+      "@tuposoft/lead-email-finder/config": [
+        "libs/config/src"
+      ],
+      "@tuposoft/lead-email-finder/config/*": [
+        "libs/config/src/*"
+      ],
       "@tuposoft/lead-email-finder/dns": [
         "libs/dns/src"
       ],
