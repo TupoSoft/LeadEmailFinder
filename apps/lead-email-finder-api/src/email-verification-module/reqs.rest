@@ -1,7 +1,7 @@
 ### Verify (Old Response)
 # temporarily_blocked lindsay.loftusx(at)anheuser-busch.com
 GET {{host}}/verify?email=kyrylo.kupin@gmail.com
-X-Api-Key: xxx
+X-Api-Key: {{token}}
 
 ### Verify
 POST {{host}}/verify

@@ -13,7 +13,9 @@ import { plainToInstance } from 'class-transformer'
 import { ApiExcludeController } from '@nestjs/swagger'
 import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
 import { GrpcMethod } from '@nestjs/microservices'
+import { Public } from '@tuposoft/lead-email-finder/key'
 
+@Public()
 @ApiExcludeController()
 @Controller()
 export class ApiKeyController {
