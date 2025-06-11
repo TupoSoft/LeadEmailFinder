@@ -18,6 +18,15 @@
   "defaultLibraryPrefix": "@tuposoft/lead-email-finder",
   "root": "apps/lead-email-finder",
   "projects": {
+    "api-key": {
+      "type": "application",
+      "root": "apps/api-key",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-key/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-key/tsconfig.app.json"
+      }
+    },
     "async-email-verification-worker": {
       "type": "application",
       "root": "apps/async-email-verification-worker",
