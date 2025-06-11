@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package api_key;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+message GenerateKeyRequest {
+  repeated string permissions = 1;
+  string description = 2;
+}
+
+message RevokeKeyRequest {
+  string token = 1;
+}
+
+message RevokeKeyResponse {
+  bool success = 1;
+}
+
+message ApiKeyResponseDto {
+  string id = 1;
+  string token = 2;
+  repeated string permissions = 3;
+  string expiresAt = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message ValidateKeyForRolesRequest {
+  string token = 1;
+  repeated string requiredPermissions = 2;
+}
+
+service ApiKeyService {
+  rpc GenerateKey(GenerateKeyRequest) returns (ApiKeyResponseDto);
+  rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
+  rpc ValidateKeyForRoles(ValidateKeyForRolesRequest) returns (google.protobuf.BoolValue);
+}

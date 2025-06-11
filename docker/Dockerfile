@@ -44,4 +44,4 @@ EXPOSE 9229
 EXPOSE 3000
 
 # Run the application.
-CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" && pnpm start:dev
+CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" && pnpm start
