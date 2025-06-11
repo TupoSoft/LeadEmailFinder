@@ -8,6 +8,7 @@ import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
 import { SyncEmailVerificationModule } from '../sync-email-verification'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { ConfigModule } from '@nestjs/config'
+import { KeyModule } from '@tuposoft/lead-email-finder/key'
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import { ConfigModule } from '@nestjs/config'
             useClass: MulterOptionsFactoryImpl,
         }),
         SyncEmailVerificationModule,
+        KeyModule,
     ],
     controllers: [BatchEmailVerificationController],
     providers: [

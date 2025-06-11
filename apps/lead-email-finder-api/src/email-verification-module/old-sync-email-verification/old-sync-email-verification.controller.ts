@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common'
+import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common'
 import { IEmailVerificationService } from '../../common'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 import { OldSyncEmailVerificationRequestQueryDto } from './old-sync-email-verification-request-query.dto'
@@ -6,7 +6,9 @@ import { ApiOperation } from '@nestjs/swagger'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
 
+@UseGuards(ApiKeyGuard)
 @Controller('verify')
 export class OldSyncEmailVerificationController {
     constructor(

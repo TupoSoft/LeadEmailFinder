@@ -7,11 +7,9 @@ import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
-import { ApiKeyGuard, KeyModule } from '@tuposoft/lead-email-finder/key'
 import { HealthModule } from './health'
 import { validate } from './config'
 import { env } from 'node:process'
-import { APP_GUARD } from '@nestjs/core'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { loadSecrets } from '@tuposoft/lead-email-finder/config'
@@ -34,7 +32,6 @@ import { loadSecrets } from '@tuposoft/lead-email-finder/config'
             strategyInitializer: classes(),
         }),
         LoggerModule.forRoot(),
-        KeyModule,
         BullModule.forRootAsync({
             useFactory: (connection: Redis) => ({
                 connection,
@@ -47,12 +44,6 @@ import { loadSecrets } from '@tuposoft/lead-email-finder/config'
             imports: [ConfigModule],
             useClass: S3ModuleOptionsFactoryImpl,
         }),
-    ],
-    providers: [
-        {
-            provide: APP_GUARD,
-            useClass: ApiKeyGuard,
-        },
     ],
 })
 export class LeadEmailFinderApiModule {}

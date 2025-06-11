@@ -9,6 +9,7 @@ import {
     Param,
     Patch,
     Post,
+    UseGuards,
 } from '@nestjs/common'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { IEmailService } from '../../common'
@@ -18,8 +19,9 @@ import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
 import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { KeyPermissions, RequireApiPermissions } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard, KeyPermissions, RequireApiPermissions } from '@tuposoft/lead-email-finder/key'
 
+@UseGuards(ApiKeyGuard)
 @RequireApiPermissions(KeyPermissions.ADMIN)
 @ApiExcludeController()
 @Controller('emails')

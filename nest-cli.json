@@ -69,8 +69,7 @@
       "entryFile": "index",
       "sourceRoot": "libs/key/src",
       "compilerOptions": {
-        "tsConfigPath": "libs/key/tsconfig.lib.json",
-        "assets": ["**/*.proto"]
+        "tsConfigPath": "libs/key/tsconfig.lib.json"
       }
     },
     "lead-email-finder": {

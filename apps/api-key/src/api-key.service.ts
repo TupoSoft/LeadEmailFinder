@@ -8,7 +8,7 @@ import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
 
 @Injectable()
 export class ApiKeyService {
-    constructor(@InjectModel(Key.name) private keyModel: Model<Key>) {}
+    constructor(@InjectModel(Key.name, 'api-key') private keyModel: Model<Key>) {}
 
     async generateKey(permissions: KeyPermissions[], description?: string) {
         const prefix = 'api_'

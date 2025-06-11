@@ -15,13 +15,14 @@ import { LoggerModule } from 'pino-nestjs'
             cache: env.NODE_ENV === 'production',
         }),
         MongooseModule.forRootAsync({
+            connectionName: 'api-key',
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
                 uri: configService.get('APIKEY_MONGO_URL'),
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([{ name: Key.name, schema: ApiKeySchema }]),
+        MongooseModule.forFeature([{ name: Key.name, schema: ApiKeySchema }], 'api-key'),
         LoggerModule.forRoot(),
     ],
     controllers: [ApiKeyController],

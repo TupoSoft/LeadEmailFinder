@@ -9,6 +9,7 @@ import {
     Param,
     Post,
     SerializeOptions,
+    UseGuards,
 } from '@nestjs/common'
 import {
     GetAsyncVerificationStatusRequestParamsDto,
@@ -19,7 +20,9 @@ import {
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
 
+@UseGuards(ApiKeyGuard)
 @Controller('/verifyAsync')
 export class AsyncEmailVerificationController {
     constructor(
