@@ -5,13 +5,14 @@
   "description": "Lead Email Finder API",
   "packageManager": "pnpm@10.11.1",
   "scripts": {
+    "prebuild": "ts-node scripts/copy-proto-files.ts",
     "build": "nest build",
-    "start": "node --env-file-if-exists=.env dist/main",
     "dev": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings -r ts-node/register src",
     "debug": "node --env-file-if-exists=.env --trace-sync-io --trace-warnings --inspect=0.0.0.0:9229 -r ts-node/register src",
     "clean": "tsc --build --clean && rm -r dist",
     "test": "jest",
-    "start:dev": "nest start -w",
+    "prestart": "ts-node scripts/copy-proto-files.ts",
+    "start": "nest start -w",
     "start:debug": "nest start -w -d 0.0.0.0:9229"
   },
   "author": {

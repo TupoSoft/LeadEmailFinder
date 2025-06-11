@@ -10,7 +10,7 @@ async function bootstrap() {
         transport: Transport.GRPC,
         options: {
             package: 'api_key',
-            protoPath: join(__dirname, 'api_key.proto'),
+            protoPath: join(__dirname, 'proto', 'api_key.proto'),
             url: '0.0.0.0:5000',
         },
     })

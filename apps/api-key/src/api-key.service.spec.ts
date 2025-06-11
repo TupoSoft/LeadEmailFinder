@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/mongoose'
 import { ApiKeyService } from './api-key.service'
 import { Key } from './api-key.schema'
-import { KeyPermissions } from '../../../libs/key/src/key.enum'
 import { Model } from 'mongoose'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 
 jest.mock('crypto', () => ({
     randomBytes: jest.fn().mockReturnValue({

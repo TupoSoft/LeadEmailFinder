@@ -17,5 +17,7 @@ for (const app of appDirs) {
         continue
     }
 
-    cpSync(protoDir, appSrcDir)
+    cpSync(protoDir, `${appSrcDir}/proto`, { recursive: true })
+
+    console.info(`Copied the proto directory to ${appSrcDir}`)
 }

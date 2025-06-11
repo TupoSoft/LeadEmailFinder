@@ -137,3 +137,5 @@ http-client.private.env.json
 **/compose*.override.yaml*
 tmp
 **/src/metadata.ts
+**/*.proto
+!proto/*.proto

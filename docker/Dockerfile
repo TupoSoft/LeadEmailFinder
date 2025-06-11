@@ -50,4 +50,4 @@ EXPOSE 3000
 RUN
 
 # Run the application.
-CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"; pnpm start:dev $APP
+CMD \[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"; pnpm start $APP
