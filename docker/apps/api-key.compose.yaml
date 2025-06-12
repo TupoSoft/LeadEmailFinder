@@ -1,0 +1,36 @@
+services:
+  api-key:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+      args:
+        TARGET_APP: api-key
+    volumes:
+      - "../..:/app"
+      - "/app/node_modules"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    ports:
+      - '5000:5000'
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    secrets:
+      - apikey_mongo_url
+    environment:
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+    profiles:
+      - dev
+
+  api-key-debug:
+    extends:
+      service: api-key
+    command:
+      - pnpm
+      - debug
+      - api-key
+    ports:
+      - '9230:9229'
+    profiles: !override [debug]

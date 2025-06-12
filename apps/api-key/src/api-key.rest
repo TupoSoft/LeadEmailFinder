@@ -2,7 +2,7 @@
 GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
 
 {
-    "description": 3333
+    "description": "Hello World"
 }
 
 ### Validate Key For Roles
@@ -10,6 +10,6 @@ GRPC localhost:5000/api_key.ApiKeyService/ValidateKeyForRoles
 Content-Type: application/json
 
 {
-  "token": "api_1de3ed0637360ddf7a5875b610f6eec69749a130df33e921",
+  "token": "api_d0bb21de5ab27bd2591f4176956ce24a5c456f71fdfb60a8",
   "requiredPermissions": ["read"]
 }

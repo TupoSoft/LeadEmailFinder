@@ -4,7 +4,7 @@ COMPOSE_DEBUG=docker compose -f docker/compose.yaml -f docker/compose.debug.yaml
 COMPOSE_APPS=docker compose -f docker/apps.compose.yaml
 
 # Default Behavior
-.PHONY: all help check clean build start stop build-dev start-dev stop-dev restart-dev build-debug start-debug stop-debug refresh-deps start-apps stop-apps
+.PHONY: all help check clean build start stop build-dev start-dev stop-dev restart-dev build-debug start-debug stop-debug refresh-deps start-apps-dev stop-apps-dev start-apps-debug stop-apps-debug
 
 all: help
 
@@ -18,9 +18,9 @@ help:
 	@echo "  build-debug		Build debug environment"
 	@echo "  start-debug		Start debug containers"
 	@echo "  stop-debug			Stop debug containers"
-	@echo "  start-apps			Start all the apps separately"
+	@echo "  start-apps-dev		Start all the apps separately"
+	@echo "  stop-apps-dev		Stop all the apps"
 
-# Environment-Specific Commands
 build-dev:
 	$(COMPOSE_DEV) build
 
@@ -33,11 +33,17 @@ start-dev:
 start-debug:
 	$(COMPOSE_DEBUG) up -d --build
 
-start-apps:
-	$(COMPOSE_APPS) up -d --build
+start-apps-dev:
+	$(COMPOSE_APPS) --profile dev up -d --build
 
-stop-apps:
-	$(COMPOSE_APPS) down -v
+start-apps-debug:
+	$(COMPOSE_APPS) --profile debug up -d --build
+
+stop-apps-debug:
+	$(COMPOSE_APPS) --profile debug down -v
+
+stop-apps-dev:
+	$(COMPOSE_APPS) --profile dev down -v
 
 stop-dev:
 	$(COMPOSE_DEV) down -v

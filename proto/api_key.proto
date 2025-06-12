@@ -21,10 +21,11 @@ message RevokeKeyResponse {
 message ApiKeyResponseDto {
   string id = 1;
   string token = 2;
-  repeated string permissions = 3;
-  string expiresAt = 4;
-  string createdAt = 5;
-  string updatedAt = 6;
+  string description = 3;
+  repeated string permissions = 4;
+  string expiresAt = 5;
+  string createdAt = 6;
+  string updatedAt = 7;
 }
 
 message ValidateKeyForRolesRequest {

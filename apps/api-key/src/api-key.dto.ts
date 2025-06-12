@@ -1,6 +1,6 @@
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 import { Expose, Transform } from 'class-transformer'
-import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
 
 export class GenerateKeyDto {
     @IsArray()
@@ -14,11 +14,14 @@ export class GenerateKeyDto {
 
 export class ApiKeyResponseDto {
     @Expose()
-    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString())
+    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString(), { toClassOnly: true })
     id: string
-    
+
     @Expose()
     token: string
+
+    @Expose()
+    description?: string
 
     @Expose()
     permissions: KeyPermissions[]
@@ -40,4 +43,10 @@ export class ValidateKeyForRolesDto {
     @IsArray()
     @IsEnum(KeyPermissions, { each: true })
     requiredPermissions: KeyPermissions[]
+}
+
+export class BoolValueDto {
+    @Expose()
+    @IsBoolean()
+    value: boolean
 }
