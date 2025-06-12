@@ -1,14 +1,16 @@
-import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/mongoose'
+import { Test, TestingModule } from '@nestjs/testing'
 import { ApiKeyService } from './api-key.service'
 import { Key } from './api-key.schema'
-import { Model } from 'mongoose'
+import { Model, Types } from 'mongoose'
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 
-jest.mock('crypto', () => ({
-    randomBytes: jest.fn().mockReturnValue({
-        toString: jest.fn().mockReturnValue('mockedtoken123'),
-    }),
+jest.mock('node:util', () => ({
+    promisify: jest.fn().mockReturnValue(
+        jest.fn().mockResolvedValue({
+            toString: jest.fn().mockReturnValue('mockedtoken123'),
+        }),
+    ),
 }))
 
 describe('KeyService', () => {
@@ -16,34 +18,22 @@ describe('KeyService', () => {
     let keyModelMock: jest.Mocked<Model<Key>>
 
     beforeAll(async () => {
-        const mockSave = jest.fn().mockResolvedValue({
-            token: 'api_mockedtoken123',
-            permissions: [KeyPermissions.READ],
-            description: 'Test key',
-        })
-
-        const mockConstructor = jest.fn().mockImplementation((doc: Partial<Key>) => ({
-            ...doc,
-            save: mockSave,
-        })) as unknown as jest.MockedClass<Model<Key>>
-
-        Object.assign(mockConstructor, {
-            findOne: jest.fn(),
-            find: jest.fn(),
-            updateOne: jest.fn(),
-        })
-
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ApiKeyService,
                 {
                     provide: getModelToken(Key.name, 'api-key'),
-                    useValue: mockConstructor,
+                    useValue: {
+                        findOne: jest.fn(),
+                        find: jest.fn(),
+                        findOneAndUpdate: jest.fn(),
+                        insertOne: jest.fn(),
+                    },
                 },
             ],
         }).compile()
 
-        service = module.get<ApiKeyService>(ApiKeyService)
+        service = module.get(ApiKeyService)
         keyModelMock = module.get(getModelToken(Key.name, 'api-key'))
     })
 
@@ -53,7 +43,23 @@ describe('KeyService', () => {
 
     describe('generateKey', () => {
         it('should generate a key with correct token format', async () => {
-            const result = await service.generateKey([KeyPermissions.READ], 'Test key')
+            const permissions = [KeyPermissions.READ]
+            const description = 'Test key'
+
+            keyModelMock.insertOne.mockResolvedValueOnce({
+                _id: new Types.ObjectId(),
+                token: 'api_mockedtoken123',
+                permissions,
+                description,
+            } as any)
+
+            const result = await service.generateKey([KeyPermissions.READ], description)
+
+            expect(keyModelMock.insertOne).toHaveBeenCalledWith({
+                token: 'api_mockedtoken123',
+                permissions,
+                description,
+            })
 
             expect(result.token).toBe('api_mockedtoken123')
             expect(result.permissions).toEqual([KeyPermissions.READ])
@@ -68,7 +74,9 @@ describe('KeyService', () => {
             }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockKey),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockKey),
+                }),
             } as any)
 
             const result = await service.validateKeyForRoles('api_test', [KeyPermissions.READ])
@@ -82,7 +90,9 @@ describe('KeyService', () => {
 
         it('should return false for non-existent key', async () => {
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(null),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(null),
+                }),
             } as any)
 
             const result = await service.validateKeyForRoles('invalid_key', [KeyPermissions.READ])
@@ -92,7 +102,9 @@ describe('KeyService', () => {
 
         it('should return false for expired key', async () => {
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(null),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(null),
+                }),
             } as any)
 
             const result = await service.validateKeyForRoles('expired_key', [KeyPermissions.READ])
@@ -104,7 +116,9 @@ describe('KeyService', () => {
             const mockKey = { permissions: [KeyPermissions.READ] }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockKey),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockKey),
+                }),
             } as any)
 
             const result = await service.validateKeyForRoles('api_test', [])
@@ -116,7 +130,9 @@ describe('KeyService', () => {
             const mockKey = { permissions: [KeyPermissions.READ] }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockKey),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockKey),
+                }),
             } as any)
 
             const result = await service.validateKeyForRoles('api_test', [KeyPermissions.WRITE])
@@ -126,30 +142,46 @@ describe('KeyService', () => {
     })
 
     describe('revokeKey', () => {
+        const now = new Date()
+
+        beforeEach(() => {
+            jest.useFakeTimers({ now })
+        })
+
+        afterEach(() => {
+            jest.useRealTimers()
+        })
+
         it('should revoke admin key successfully', async () => {
             const mockKey = { permissions: [KeyPermissions.READ] }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockKey),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockKey),
+                }),
             } as any)
 
-            const mockUpdateResult = { modifiedCount: 1 }
-            keyModelMock.updateOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockUpdateResult),
+            keyModelMock.findOneAndUpdate.mockReturnValue({
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockKey),
+                }),
             } as any)
 
             const result = await service.revokeKey('api_test')
 
-            expect(result).toEqual(mockUpdateResult)
-            expect(keyModelMock.updateOne).toHaveBeenCalledWith(
+            expect(result).toEqual(mockKey)
+            expect(keyModelMock.findOneAndUpdate).toHaveBeenCalledWith(
                 { token: 'api_test' },
-                { expiresAt: expect.any(Date) as Date },
+                { expiresAt: now },
+                { new: true },
             )
         })
 
         it('should throw error for non-existent key', async () => {
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(null),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(null),
+                }),
             } as any)
 
             await expect(service.revokeKey('invalid_key')).rejects.toThrow('Key invalid_key was not found')
@@ -159,7 +191,9 @@ describe('KeyService', () => {
             const mockAdminKey = { permissions: [KeyPermissions.ADMIN] }
 
             keyModelMock.findOne.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockAdminKey),
+                lean: jest.fn().mockReturnValue({
+                    exec: jest.fn().mockResolvedValue(mockAdminKey),
+                }),
             } as any)
 
             await expect(service.revokeKey('read_key')).rejects.toThrow('Admin token read_key cannot be revoked')

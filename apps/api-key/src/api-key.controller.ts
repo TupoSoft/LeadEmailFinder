@@ -31,7 +31,7 @@ export class ApiKeyController {
     )
     async generateKey(@Body() generateKeyDto: GenerateKeyDto): Promise<ApiKeyResponseDto> {
         const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
-        return plainToInstance(ApiKeyResponseDto, apiKey.toObject())
+        return plainToInstance(ApiKeyResponseDto, apiKey)
     }
 
     @GrpcMethod('ApiKeyService')
