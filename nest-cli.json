@@ -11,7 +11,9 @@
     ],
     "tsConfigPath": "apps/lead-email-finder/tsconfig.app.json",
     "webpack": true,
-    "assets": ["**/*.proto"],
+    "assets": [
+      "**/*.proto"
+    ],
     "watchAssets": true
   },
   "monorepo": true,
@@ -61,6 +63,15 @@
       "sourceRoot": "libs/dns/src",
       "compilerOptions": {
         "tsConfigPath": "libs/dns/tsconfig.lib.json"
+      }
+    },
+    "grpc": {
+      "type": "library",
+      "root": "libs/grpc",
+      "entryFile": "index",
+      "sourceRoot": "libs/grpc/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/grpc/tsconfig.lib.json"
       }
     },
     "key": {

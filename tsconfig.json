@@ -24,6 +24,12 @@
       "@tuposoft/lead-email-finder/dns/*": [
         "libs/dns/src/*"
       ],
+      "@tuposoft/lead-email-finder/grpc": [
+        "libs/grpc/src"
+      ],
+      "@tuposoft/lead-email-finder/grpc/*": [
+        "libs/grpc/src/*"
+      ],
       "@tuposoft/lead-email-finder/key": [
         "libs/key/src"
       ],
