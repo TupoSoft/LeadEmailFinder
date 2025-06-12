@@ -1,0 +1,101 @@
+services:
+  mongo:
+    image: mongo:latest
+    restart: unless-stopped
+    healthcheck: &healthcheck
+      test: mongosh --eval "db.adminCommand('ping')"
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    environment:
+      MONGO_INITDB_DATABASE: verifier
+      MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      ADMIN_APIKEY_FILE: /run/secrets/admin_apikey
+      DISPOSABLE_DOMAINS_FILE: /email-data/disposable-email-providers.json
+      FREE_DOMAINS_FILE: /email-data/free-email-providers.json
+      # A comma-separated string of proxies to insert on startup,
+      # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
+      PROXIES: ${PROXIES}
+    ports:
+      - '27017:27017'
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+      - admin_apikey
+      - mongo_url
+      - apikey_mongo_url
+    volumes:
+      - ./scripts:/docker-entrypoint-initdb.d
+      - mongo-data:/data/db
+      - ./data:/email-data
+
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      <<: *healthcheck
+      test: "[ `redis-cli ping` = 'PONG' ]"
+    volumes:
+      - redis-data:/data
+
+  bullboard:
+    image: venatum/bull-board:latest
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - '4000:3000'
+
+  minio:
+    image: minio/minio
+    healthcheck:
+      test: curl -I http://localhost:9000/minio/health/live
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    command: server /data --console-address=":9001"
+
+  mc:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        mc alias s minio http://minio:9000 minioadmin minioadmin
+        mc mb minio/batch-email-verification
+
+secrets:
+  mongo_root_username:
+    file: secrets/mongo_root_username.txt
+  mongo_root_password:
+    file: secrets/mongo_root_password.txt
+  mongo_url:
+    file: secrets/mongo_url.txt
+  redis_url:
+    file: secrets/redis_url.txt
+  tokens.json:
+    file: secrets/tokens.json
+  admin_apikey:
+    file: secrets/admin_apikey.txt
+  s3_access_key_id:
+    file: secrets/s3_access_key_id.txt
+  s3_secret_key:
+    file: secrets/s3_secret_key.txt
+  apikey_mongo_url:
+    file: secrets/apikey_mongo_url.txt
+
+volumes:
+  mongo-data:
+  redis-data:
