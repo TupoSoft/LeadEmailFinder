@@ -8,6 +8,7 @@ import {
     EMAIL_VERIFICATION_SERVICE_TOKEN,
 } from './async-email-verification.constants'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
+import { KeyModule } from '@tuposoft/lead-email-finder/key'
 
 @Module({
     imports: [
@@ -21,6 +22,7 @@ import { AsyncEmailVerificationController } from './async-email-verification.con
                 },
             },
         }),
+        KeyModule,
     ],
     providers: [
         AsyncEmailVerificationServiceImpl,

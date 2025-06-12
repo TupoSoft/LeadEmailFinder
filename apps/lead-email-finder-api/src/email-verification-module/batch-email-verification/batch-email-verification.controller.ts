@@ -11,6 +11,7 @@ import {
     SerializeOptions,
     StreamableFile,
     UploadedFile,
+    UseGuards,
     UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
@@ -24,7 +25,9 @@ import {
 } from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JobNotFoundException } from './job-not-found.exception'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
 
+@UseGuards(ApiKeyGuard)
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
     private static readonly MAX_FILE_SIZE = 104857600

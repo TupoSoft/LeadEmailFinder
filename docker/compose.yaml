@@ -17,6 +17,7 @@ services:
       - 8.8.8.8
     ports:
       - '3000:3000'
+      - '5000:5000'
     restart: unless-stopped
     healthcheck:
       test: curl -s http://localhost:3000/health | jq -e '.status == "ok"' > /dev/null
@@ -26,9 +27,13 @@ services:
       start_period: 10s
     environment:
       API_URL: http://localhost:3000
-      MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_URL: api:5000
+
       REDIS_URL_FILE: /run/secrets/redis_url
-      AUTH_TOKENS_FILE: /run/secrets/tokens.json
+
+      MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+
       S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
       S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
       S3_URL: http://minio:9000
@@ -46,9 +51,9 @@ services:
     secrets:
       - mongo_url
       - redis_url
-      - tokens.json
       - s3_access_key_id
       - s3_secret_key
+      - apikey_mongo_url
 
   mongo:
     image: mongo:latest
@@ -61,6 +66,7 @@ services:
     environment:
       MONGO_INITDB_DATABASE: verifier
       MONGO_URL_FILE: /run/secrets/mongo_url
+      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
       ADMIN_APIKEY_FILE: /run/secrets/admin_apikey
@@ -76,6 +82,7 @@ services:
       - mongo_root_password
       - admin_apikey
       - mongo_url
+      - apikey_mongo_url
     volumes:
       - ./scripts:/docker-entrypoint-initdb.d
       - mongo-data:/data/db
@@ -142,6 +149,8 @@ secrets:
     file: secrets/s3_access_key_id.txt
   s3_secret_key:
     file: secrets/s3_secret_key.txt
+  apikey_mongo_url:
+    file: secrets/apikey_mongo_url.txt
 
 volumes:
   mongo-data:

@@ -9,6 +9,7 @@ import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
+import { ApiKeyGuard } from '../../../../../libs/key/src'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),
@@ -55,7 +56,10 @@ describe('EmailController', () => {
                     useValue: mockEmailService,
                 },
             ],
-        }).compile()
+        })
+            .overrideGuard(ApiKeyGuard)
+            .useValue(null)
+            .compile()
 
         app = moduleRef.createNestApplication()
         await app.init()

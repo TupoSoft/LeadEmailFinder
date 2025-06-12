@@ -1,9 +1,11 @@
 import { IEmailVerificationService } from '../../common'
-import { Body, Controller, Inject, Post, SerializeOptions } from '@nestjs/common'
+import { Body, Controller, Inject, Post, SerializeOptions, UseGuards } from '@nestjs/common'
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
 
+@UseGuards(ApiKeyGuard)
 @Controller('verify')
 export class SyncEmailVerificationController {
     constructor(

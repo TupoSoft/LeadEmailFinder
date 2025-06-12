@@ -4,6 +4,7 @@ import { HttpStatus, INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { randomUUID } from 'node:crypto'
+import { ApiKeyGuard } from '../../../../../libs/key/src'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 
@@ -22,7 +23,10 @@ describe('BatchEmailVerificationController', () => {
                     },
                 },
             ],
-        }).compile()
+        })
+            .overrideGuard(ApiKeyGuard)
+            .useValue(null)
+            .compile()
 
         batchEmailVerificationService = module.get(batchEmailVerificationServiceToken)
         app = module.createNestApplication()

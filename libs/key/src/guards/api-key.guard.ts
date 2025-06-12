@@ -1,15 +1,23 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Inject, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { KeyService } from '../key.service'
 import { KeyPermissions } from '../key.enum'
 import { Request } from 'express'
+import { ClientGrpc } from '@nestjs/microservices'
+import { ApiKeyService } from '../api-key-service.interface'
+import { firstValueFrom } from 'rxjs'
 
 @Injectable()
-export class ApiKeyGuard implements CanActivate {
+export class ApiKeyGuard implements CanActivate, OnModuleInit {
+    private apiKeyService: ApiKeyService
+
     constructor(
-        private readonly keyService: KeyService,
+        @Inject('API_KEY_PACKAGE') private readonly client: ClientGrpc,
         private readonly reflector: Reflector,
     ) {}
+
+    onModuleInit(): void {
+        this.apiKeyService = this.client.getService<ApiKeyService>('ApiKeyService')
+    }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
@@ -32,12 +40,14 @@ export class ApiKeyGuard implements CanActivate {
         const authHeader = request.headers['authorization']
         const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
         const xApiKey = request.headers['x-api-key'] as string | undefined
-        const apiKey = bearerToken ?? xApiKey
+        const token = bearerToken ?? xApiKey
 
-        if (!apiKey) {
+        if (!token) {
             throw new UnauthorizedException('API key is missing')
         }
 
-        return await this.keyService.validateKeyForRoles(apiKey, requiredPermissions)
+        const { value } = await firstValueFrom(this.apiKeyService.validateKeyForRoles({ token, requiredPermissions }))
+
+        return value
     }
 }

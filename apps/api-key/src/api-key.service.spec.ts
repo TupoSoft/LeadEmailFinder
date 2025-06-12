@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/mongoose'
-import { KeyService } from './key.service'
-import { Key } from './key.schema'
-import { KeyPermissions } from './key.enum'
+import { ApiKeyService } from './api-key.service'
+import { Key } from './api-key.schema'
 import { Model } from 'mongoose'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 
 jest.mock('crypto', () => ({
     randomBytes: jest.fn().mockReturnValue({
@@ -12,7 +12,7 @@ jest.mock('crypto', () => ({
 }))
 
 describe('KeyService', () => {
-    let service: KeyService
+    let service: ApiKeyService
     let keyModelMock: jest.Mocked<Model<Key>>
 
     beforeAll(async () => {
@@ -35,16 +35,16 @@ describe('KeyService', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
-                KeyService,
+                ApiKeyService,
                 {
-                    provide: getModelToken(Key.name),
+                    provide: getModelToken(Key.name, 'api-key'),
                     useValue: mockConstructor,
                 },
             ],
         }).compile()
 
-        service = module.get<KeyService>(KeyService)
-        keyModelMock = module.get(getModelToken(Key.name))
+        service = module.get<ApiKeyService>(ApiKeyService)
+        keyModelMock = module.get(getModelToken(Key.name, 'api-key'))
     })
 
     beforeEach(() => {

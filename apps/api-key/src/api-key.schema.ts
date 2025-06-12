@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
-import { KeyPermissions } from './key.enum'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 
 @Schema({ timestamps: true })
 export class Key {
@@ -16,4 +16,4 @@ export class Key {
     expiresAt: Date
 }
 
-export const KeySchema = SchemaFactory.createForClass(Key)
+export const ApiKeySchema = SchemaFactory.createForClass(Key)
