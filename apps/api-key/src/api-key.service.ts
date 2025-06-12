@@ -43,7 +43,7 @@ export class ApiKeyService {
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
-    async revokeKey(token: string) {
+    async revokeKey(token: string): Promise<Key> {
         const key = await this.keyModel.findOne({ token }).exec()
 
         if (!key) {
@@ -54,7 +54,9 @@ export class ApiKeyService {
             throw new AdminTokenRevocationForbidden(token)
         }
 
-        return await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
+        await this.keyModel.updateOne({ token }, { expiresAt: new Date() }).exec()
+
+        return key
     }
 
     async listKeys(): Promise<string[]> {
