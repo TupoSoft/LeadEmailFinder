@@ -4,15 +4,17 @@ import { MongooseModule } from '@nestjs/mongoose'
 import { ApiKeySchema, Key } from './api-key.schema'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { ApiKeyService } from './api-key.service'
-import { loadSecrets } from '@tuposoft/lead-email-finder/config'
+import { Environment, loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { env } from 'node:process'
 import { LoggerModule } from 'pino-nestjs'
+import { EnvironmentVariablesDto } from './environment-variables.dto'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             load: [loadSecrets],
-            cache: env.NODE_ENV === 'production',
+            validate: config => validate(EnvironmentVariablesDto, config),
+            cache: env.NODE_ENV === Environment.Production,
         }),
         MongooseModule.forRootAsync({
             connectionName: 'api-key',

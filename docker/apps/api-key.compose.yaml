@@ -20,6 +20,7 @@ services:
     secrets:
       - apikey_mongo_url
     environment:
+      NODE_ENV: development
       APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
     profiles:
       - dev

@@ -8,18 +8,18 @@ import { EmailVerificationModule } from './email-verification-module'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
 import { HealthModule } from './health'
-import { validate } from './config'
 import { env } from 'node:process'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
-import { loadSecrets } from '@tuposoft/lead-email-finder/config'
+import { Environment, loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
+import { EnvironmentVariablesDto } from './environment-variables.dto'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             load: [loadSecrets],
-            validate,
-            cache: env.NODE_ENV === 'production',
+            validate: config => validate(EnvironmentVariablesDto, config),
+            cache: env.NODE_ENV === Environment.Production,
         }),
         MongooseModule.forRootAsync({
             imports: [ConfigModule],

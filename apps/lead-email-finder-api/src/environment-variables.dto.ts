@@ -1,11 +1,6 @@
 import { IsBoolean, IsEnum, IsString } from 'class-validator'
-import { IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
+import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform } from 'class-transformer'
-
-enum Environment {
-    Development = 'development',
-    Production = 'production',
-}
 
 @WithFileVars()
 export class EnvironmentVariablesDto {
