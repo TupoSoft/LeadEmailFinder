@@ -1,11 +1,11 @@
 import { NestFactory, Reflector } from '@nestjs/core'
 import { ApiKeyModule } from './api-key.module'
-import { MicroserviceOptions, RpcException, Transport } from '@nestjs/microservices'
+import { MicroserviceOptions, Transport } from '@nestjs/microservices'
 import { join } from 'node:path'
-import { Logger } from 'pino-nestjs'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
+import { Logger } from 'pino-nestjs'
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
     const app = await NestFactory.createMicroservice<MicroserviceOptions>(ApiKeyModule, {
         transport: Transport.GRPC,
         options: {
@@ -15,22 +15,21 @@ async function bootstrap() {
         },
     })
 
-    app.useLogger(app.get(Logger))
     app.useGlobalPipes(
         new ValidationPipe({
-            exceptionFactory: errors => new RpcException(errors),
             whitelist: true,
             transform: true,
             forbidNonWhitelisted: true,
             forbidUnknownValues: true,
         }),
-    )
-    app.useGlobalInterceptors(
+    ).useGlobalInterceptors(
         new ClassSerializerInterceptor(app.get(Reflector), {
             strategy: 'excludeAll',
             enableImplicitConversion: true,
         }),
     )
+
+    app.useLogger(app.get(Logger))
 
     await app.listen()
 }

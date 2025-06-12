@@ -5,11 +5,16 @@ GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
     "description": "Hello World"
 }
 
+> {%
+    client.assert(response.status === 207)
+    client.global.set('token', response.body.token)
+%}
+
 ### Validate Key For Roles
 GRPC localhost:5000/api_key.ApiKeyService/ValidateKeyForRoles
 Content-Type: application/json
 
 {
-  "token": "api_d0bb21de5ab27bd2591f4176956ce24a5c456f71fdfb60a8",
-  "requiredPermissions": ["read"]
+  "token": "{{ token }}",
+  "requiredPermissions": ["foo"]
 }
