@@ -10,7 +10,7 @@ import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
 export class ApiKeyService {
     constructor(@InjectModel(Key.name, 'api-key') private keyModel: Model<Key>) {}
 
-    async generateKey(permissions: KeyPermissions[], description?: string) {
+    async generateKey(permissions: KeyPermissions[], description?: string): Promise<Key> {
         const prefix = 'api_'
         const randomBytes = crypto.randomBytes(24).toString('hex')
         const token = `${prefix}${randomBytes}`

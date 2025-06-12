@@ -35,12 +35,7 @@ export class ApiKeyController {
     }
 
     @GrpcMethod('ApiKeyService')
-    async listKeys() {
-        return await this.keyService.listKeys()
-    }
-
-    @GrpcMethod('ApiKeyService')
-    async revokeKey(@Body() body: { token: string }) {
+    async revokeKey(@Body() body: { token: string }): Promise<{ success: boolean }> {
         try {
             await this.keyService.revokeKey(body.token)
             return { success: true }
