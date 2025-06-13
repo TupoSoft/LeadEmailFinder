@@ -29,6 +29,7 @@ COPY . .
 
 # Generate metadata and build the application.
 RUN <<EOF
+tsc --noEmit -p apps/$TARGET_APP/tsconfig.app.json
 [ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"
 pnpm build $TARGET_APP
 EOF
@@ -37,22 +38,32 @@ FROM node:${NODE_VERSION}-alpine
 
 ARG TARGET_APP
 
-# Container dependencies
-RUN apk add --no-cache \
-    # curl is for the healthcheck
-    curl \
-    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
-    bind-tools \
-    # jq is for the healthcheck
-    jq
+ARG GRPC=false
+
+ENV APP_MAIN_FILE=dist/apps/$TARGET_APP/main
+
+ENV PATH="/app/node_modules/.bin:$PATH"
+
+RUN <<EOF
+apk add --no-cache \
+wget \
+# curl is for the healthcheck
+curl \
+# bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
+bind-tools \
+# jq is for the healthcheck
+jq
+
+GRPC_HEALTH_PROBE_VERSION=v0.4.38
+wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64
+chmod +x /bin/grpc_health_probe
+EOF
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm
 
 WORKDIR /app
-
-ENV PATH="/app/node_modules/.bin:$PATH"
 
 COPY package.json .
 COPY pnpm-lock.yaml .
@@ -65,8 +76,6 @@ USER node
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
-
-ENV APP_MAIN_FILE=dist/apps/$TARGET_APP/main
 
 # Run the application.
 SHELL ["sh", "-c"]

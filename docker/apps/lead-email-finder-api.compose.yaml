@@ -40,7 +40,7 @@ services:
       minio:
         condition: service_healthy
       api-key:
-        condition: service_started
+        condition: service_healthy
     secrets:
       - mongo_url
       - redis_url
