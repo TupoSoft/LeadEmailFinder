@@ -1,7 +1,7 @@
 import { S3ModuleOptions, S3ModuleOptionsFactory } from 'nestjs-s3'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from './config'
+import { EnvironmentVariablesDto } from './environment-variables.dto'
 
 @Injectable()
 export class S3ModuleOptionsFactoryImpl implements S3ModuleOptionsFactory {

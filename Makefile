@@ -1,59 +1,34 @@
-# Variables
-COMPOSE_DEV=docker compose -f docker/compose.yaml
-COMPOSE_DEBUG=docker compose -f docker/compose.yaml -f docker/compose.debug.yaml
-COMPOSE_APPS=docker compose -f docker/apps.compose.yaml
+COMPOSE_FILE_DEV=docker compose -f docker/compose.yaml
+COMPOSE_FILE_DEBUG=$(COMPOSE_FILE_DEV) -f docker/compose.debug.yaml
+COMPOSE_FILE_APPS=docker compose -f docker/apps.compose.yaml
+COMPOSE_OPTIONS_UP=-d --build
+COMPOSE_OPTIONS_DOWN=-v
 
-# Default Behavior
-.PHONY: all help check clean build start stop build-dev start-dev stop-dev restart-dev build-debug start-debug stop-debug refresh-deps start-apps-dev stop-apps-dev start-apps-debug stop-apps-debug
-
+.PHONY: all help build start stop restart refresh-deps
 all: help
-
 help:
 	@echo "Available targets:"
-	@echo "  build-dev  		Build development environment"
-	@echo "  start-dev  		Start development containers"
-	@echo "  stop-dev   		Stop development containers"
-	@echo "  refresh-deps		Start recreating anonymous volumes"
-	@echo "  restart-dev 		Restart development containers"
-	@echo "  build-debug		Build debug environment"
-	@echo "  start-debug		Start debug containers"
-	@echo "  stop-debug			Stop debug containers"
-	@echo "  start-apps-dev		Start all the apps separately"
-	@echo "  stop-apps-dev		Stop all the apps"
+	@echo "  build <env>        Build environment (env=dev|debug|apps-dev|apps-debug)"
+	@echo "  start <env>        Start containers with profiles (env=dev|debug|apps-dev|apps-debug)"
+	@echo "  stop <env>         Stop containers (env=dev|debug|apps-dev|apps-debug)"
+	@echo "  restart <env>      Restart containers (env=dev|debug|apps-dev|apps-debug)"
+	@echo "  refresh-deps       Recreate anonymous volumes with profiles"
 
-build-dev:
-	$(COMPOSE_DEV) build
+env=dev
+profile='*'
 
-build-debug:
-	$(COMPOSE_DEBUG) build
+build:
+	$(COMPOSE_FILE_$(env)) build
 
-start-dev:
-	$(COMPOSE_DEV) up -d --build
+start:
+	$(COMPOSE_FILE_$(env)) --profile $(profile) up $(COMPOSE_OPTIONS_UP)
 
-start-debug:
-	$(COMPOSE_DEBUG) up -d --build
+stop:
+	$(COMPOSE_FILE_$(env)) --profile $(profile) down $(COMPOSE_OPTIONS_DOWN)
 
-start-apps-dev:
-	$(COMPOSE_APPS) --profile dev up -d --build
-
-start-apps-debug:
-	$(COMPOSE_APPS) --profile debug up -d --build
-
-stop-apps-debug:
-	$(COMPOSE_APPS) --profile debug down -v
-
-stop-apps-dev:
-	$(COMPOSE_APPS) --profile dev down -v
-
-stop-dev:
-	$(COMPOSE_DEV) down -v
-
-stop-debug:
-	$(COMPOSE_DEBUG) down -v
-
-restart-dev: stop-dev build-dev start-dev
-
-restart-debug: stop-debug build-debug start-debug
+restart:
+	@$(MAKE) stop env=$(env) profile=$(profile)
+	@$(MAKE) start env=$(env) profile=$(profile)
 
 refresh-deps:
-	$(COMPOSE_DEV) up -d --build -V
+	$(COMPOSE_FILE_$(env)) --profile $(profile) up $(COMPOSE_OPTIONS_UP) -V

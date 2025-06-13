@@ -4,7 +4,7 @@ import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
 import multerS3 from 'multer-s3'
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from '../../config'
+import { EnvironmentVariablesDto } from '../../environment-variables.dto'
 
 @Injectable()
 export class MulterOptionsFactoryImpl implements MulterOptionsFactory {
