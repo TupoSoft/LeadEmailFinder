@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package proxy;
+
+service ProxyService {
+  rpc GetHealthyProxy(GetProxyRequest) returns (GetProxyResponse);
+  rpc ReportBlacklist(ReportBlacklistRequest) returns (Empty);
+}
+
+message GetProxyRequest {
+  string mxHost = 1;
+}
+
+message GetProxyResponse {
+  string id = 1;
+  string protocol = 2;
+  string host = 3;
+  uint32 port = 4;
+  uint32 weight = 5;
+  optional GetProxyResponseAuth auth = 6;
+  optional string region = 7;
+}
+
+message GetProxyResponseAuth {
+  string user = 1;
+  string pass = 2;
+}
+
+message ReportBlacklistRequest {
+  string proxyId = 1;
+  string mxHost = 2;
+  int32 backoffMs = 3;
+}
+
+message Empty {}
