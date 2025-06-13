@@ -3,15 +3,15 @@ syntax = "proto3";
 package proxy;
 
 service ProxyService {
-  rpc GetHealthyProxy(GetProxyRequest) returns (GetProxyResponse);
+  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (GetHealthyProxyResponse);
   rpc ReportBlacklist(ReportBlacklistRequest) returns (Empty);
 }
 
-message GetProxyRequest {
+message GetHealthyProxyRequest {
   string mxHost = 1;
 }
 
-message GetProxyResponse {
+message GetHealthyProxyResponse {
   string id = 1;
   string protocol = 2;
   string host = 3;
