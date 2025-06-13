@@ -16,20 +16,20 @@ message GetHealthyProxyResponse {
   string protocol = 2;
   string host = 3;
   uint32 port = 4;
-  optional Auth auth = 5;
-  uint32 weight = 6;
+  uint32 weight = 5;
+  optional Auth auth = 6;
   optional string region = 7;
-}
 
-message Auth {
-  string user = 1;
-  string pass = 2;
+  message Auth {
+    string user = 1;
+    string pass = 2;
+  }
 }
 
 message ReportBlacklistRequest {
   string proxyId = 1;
   string mxHost = 2;
-  int32 backoffMs = 3;
+  uint32 backoffMs = 3;
 }
 
 message Empty {}
