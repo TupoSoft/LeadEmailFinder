@@ -14,7 +14,7 @@ help:
 	@echo "  restart <env>      Restart containers (env=dev|debug|apps-dev|apps-debug)"
 	@echo "  refresh-deps       Recreate anonymous volumes with profiles"
 
-env=dev
+env=DEV
 profile='*'
 
 build:
