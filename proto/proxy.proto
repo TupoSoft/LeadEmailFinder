@@ -3,17 +3,17 @@ syntax = "proto3";
 package proxy;
 
 service ProxyService {
-  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (GetHealthyProxyResponse);
-  rpc ReportBlacklist(ReportBlacklistRequest) returns (Empty);
+  rpc FetchHealthyProxy(FetchHealthyProxyRequest) returns (FetchHealthyProxyResponse);
+  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (NoContent);
 }
 
-message GetHealthyProxyRequest {
+message FetchHealthyProxyRequest {
   string mxHost = 1;
 }
 
-message GetHealthyProxyResponse {
+message FetchHealthyProxyResponse {
   string id = 1;
-  string protocol = 2;
+  Protocol protocol = 2;
   string host = 3;
   uint32 port = 4;
   uint32 weight = 5;
@@ -24,12 +24,18 @@ message GetHealthyProxyResponse {
     string user = 1;
     string pass = 2;
   }
+
+  enum Protocol {
+    HTTP = 0;
+    HTTPS = 1;
+    SOCKS5 = 2;
+  }
 }
 
-message ReportBlacklistRequest {
+message ReportProxyBlacklistRequest {
   string proxyId = 1;
   string mxHost = 2;
   uint32 backoffMs = 3;
 }
 
-message Empty {}
+message NoContent {}
