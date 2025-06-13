@@ -16,12 +16,12 @@ message GetHealthyProxyResponse {
   string protocol = 2;
   string host = 3;
   uint32 port = 4;
-  uint32 weight = 5;
-  optional GetProxyResponseAuth auth = 6;
+  optional Auth auth = 5;
+  uint32 weight = 6;
   optional string region = 7;
 }
 
-message GetProxyResponseAuth {
+message Auth {
   string user = 1;
   string pass = 2;
 }
