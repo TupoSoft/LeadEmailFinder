@@ -3,33 +3,79 @@ syntax = "proto3";
 package proxy;
 
 service ProxyService {
-  rpc FetchHealthyProxy(FetchHealthyProxyRequest) returns (FetchHealthyProxyResponse);
+  rpc AddProxy(AddProxyRequest) returns (ProxyDescriptor);
+  rpc ListProxies(ListProxiesRequest) returns (ListProxiesResponse);
+  rpc GetProxy(GetProxyRequest) returns (ProxyDescriptor);
+  rpc UpdateProxy(UpdateProxyRequest) returns (ProxyDescriptor);
+  rpc DeleteProxy(DeleteProxyRequest) returns (ProxyDescriptor);
+  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (ProxyDescriptor);
   rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (NoContent);
 }
 
-message FetchHealthyProxyRequest {
+message Auth {
+  string user = 1;
+  string pass = 2;
+}
+
+enum Protocol {
+  HTTP = 0;
+  HTTPS = 1;
+  SOCKS5 = 2;
+}
+
+message GetHealthyProxyRequest {
   string mxHost = 1;
 }
 
-message FetchHealthyProxyResponse {
+message ProxyDescriptor {
   string id = 1;
   Protocol protocol = 2;
   string host = 3;
   uint32 port = 4;
+  Auth auth = 6;
   uint32 weight = 5;
-  optional Auth auth = 6;
-  optional string region = 7;
+  string description = 7;
+  bool enabled = 8;
+  string createdAt = 9;
+  string updatedAt = 10;
+}
 
-  message Auth {
-    string user = 1;
-    string pass = 2;
-  }
+message AddProxyRequest {
+  Protocol protocol = 1;
+  string host = 2;
+  uint32 port = 3;
+  Auth auth = 4;
+  string description = 5;
+  uint32 weight = 6;
+  bool enabled = 7;
+}
 
-  enum Protocol {
-    HTTP = 0;
-    HTTPS = 1;
-    SOCKS5 = 2;
-  }
+message ListProxiesRequest {
+  uint32 pageSize = 1;
+  string pageToken = 2;
+}
+
+message ListProxiesResponse {
+  repeated ProxyDescriptor proxies = 1;
+  string nextPageToken = 2;
+}
+
+message GetProxyRequest {
+  string id = 1;
+}
+
+message UpdateProxyRequest {
+  Protocol protocol = 1;
+  string host = 2;
+  uint32 port = 3;
+  Auth auth = 4;
+  string description = 5;
+  uint32 weight = 6;
+  bool enabled = 7;
+}
+
+message DeleteProxyRequest {
+  string id = 1;
 }
 
 message ReportProxyBlacklistRequest {
