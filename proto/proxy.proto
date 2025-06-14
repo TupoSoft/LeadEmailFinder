@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package proxy;
+
+service ProxyService {
+  rpc FetchHealthyProxy(FetchHealthyProxyRequest) returns (FetchHealthyProxyResponse);
+  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (NoContent);
+}
+
+message FetchHealthyProxyRequest {
+  string mxHost = 1;
+}
+
+message FetchHealthyProxyResponse {
+  string id = 1;
+  Protocol protocol = 2;
+  string host = 3;
+  uint32 port = 4;
+  uint32 weight = 5;
+  optional Auth auth = 6;
+  optional string region = 7;
+
+  message Auth {
+    string user = 1;
+    string pass = 2;
+  }
+
+  enum Protocol {
+    HTTP = 0;
+    HTTPS = 1;
+    SOCKS5 = 2;
+  }
+}
+
+message ReportProxyBlacklistRequest {
+  string proxyId = 1;
+  string mxHost = 2;
+}
+
+message NoContent {}
