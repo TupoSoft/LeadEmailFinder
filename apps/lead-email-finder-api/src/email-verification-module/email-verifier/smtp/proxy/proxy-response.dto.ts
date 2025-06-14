@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer'
-import { IProxy } from '../../../../common'
+import { IProxy } from '@tuposoft/lead-email-finder/common'
 import { ProxyType } from './proxy-type.enum'
 import { AutoMap } from '@automapper/classes'
 

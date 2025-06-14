@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
-import { fromStringToEnum, IEmailVerificationResponseDto, JobState } from '../../common'
+import { fromStringToEnum, IEmailVerificationResponseDto, JobState } from '@tuposoft/lead-email-finder/common'
 import { randomUUID } from 'node:crypto'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import {

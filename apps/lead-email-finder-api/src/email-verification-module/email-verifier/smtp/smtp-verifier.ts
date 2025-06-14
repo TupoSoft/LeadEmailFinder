@@ -2,7 +2,13 @@ import { SmtpClient } from './smtp-client'
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import { IDnsService, IProxy, IProxyService, ISmtpVerificationResponse, ISmtpVerifier } from '../../../common'
+import {
+    IDnsService,
+    IProxy,
+    IProxyService,
+    ISmtpVerificationResponse,
+    ISmtpVerifier,
+} from '@tuposoft/lead-email-finder/common'
 import { Model } from 'mongoose'
 import { SmtpVerification } from './smtp-verification.schema'
 import { Inject, Injectable, Logger } from '@nestjs/common'

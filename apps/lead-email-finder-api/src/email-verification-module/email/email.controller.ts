@@ -12,7 +12,7 @@ import {
     UseGuards,
 } from '@nestjs/common'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
-import { IEmailService } from '../../common'
+import { IEmailService } from '@tuposoft/lead-email-finder/common'
 import { CreateEmailRequestDto } from './create-email-request.dto'
 import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'

@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 
-import { EmailPatternEnum } from '../../common'
+import { EmailPatternEnum } from '@tuposoft/lead-email-finder/common'
 import { AutoMap } from '@automapper/classes'
 
 @Schema()

@@ -1,4 +1,4 @@
-import { EmailPatternEnum, EmailVerificationReason } from '../../common'
+import { EmailPatternEnum, EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { Expose } from 'class-transformer'
 import { OldEmailVerificationResponse } from './old-sync-email-verification-response.interface'
 import { IsDateString, IsEmail, IsEnum, IsFQDN } from 'class-validator'

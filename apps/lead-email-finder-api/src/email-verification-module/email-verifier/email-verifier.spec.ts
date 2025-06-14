@@ -1,4 +1,9 @@
-import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier, ISmtpVerifier } from '../../common'
+import {
+    EmailVerificationReason,
+    EmailVerificationSource,
+    ICatchAllVerifier,
+    ISmtpVerifier,
+} from '@tuposoft/lead-email-finder/common'
 import { EmailVerifier } from './email-verifier.service'
 import { Test } from '@nestjs/testing'
 import { EmailVerificationRequestDto } from '../sync-email-verification/email-verification-request.dto'
@@ -17,7 +22,7 @@ describe('EmailVerifier', () => {
     let emailVerifier: EmailVerifier
     let smtpVerifierMock: jest.Mocked<ISmtpVerifier>
     let catchAllVerifiersMock: Array<jest.Mocked<ICatchAllVerifier>>
-    let getSecondLevelDomainMock = getSecondLevelDomain as jest.MockedFn<typeof getSecondLevelDomain>
+    const getSecondLevelDomainMock = getSecondLevelDomain as jest.MockedFn<typeof getSecondLevelDomain>
 
     beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({

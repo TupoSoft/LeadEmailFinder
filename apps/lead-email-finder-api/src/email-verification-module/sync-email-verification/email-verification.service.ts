@@ -6,7 +6,7 @@ import {
     IEmailVerificationService,
     IEmailVerifier,
     VerifyOptions,
-} from '../../common'
+} from '@tuposoft/lead-email-finder/common'
 import { Model, Types } from 'mongoose'
 import { EmailVerification } from './email-verification.schema'
 import { InjectModel } from '@nestjs/mongoose'

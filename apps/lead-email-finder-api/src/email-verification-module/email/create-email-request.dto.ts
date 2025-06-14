@@ -1,4 +1,4 @@
-import { EmailPatternEnum } from '../../common'
+import { EmailPatternEnum } from '@tuposoft/lead-email-finder/common'
 import { IsBoolean, IsEnum, IsOptional, IsString, ValidateIf } from 'class-validator'
 
 export class CreateEmailRequestDto {

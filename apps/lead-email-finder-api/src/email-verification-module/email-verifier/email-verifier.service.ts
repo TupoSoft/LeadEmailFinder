@@ -7,7 +7,7 @@ import {
     IEmailVerifier,
     ISmtpVerifier,
     VerifyOptions,
-} from '../../common'
+} from '@tuposoft/lead-email-finder/common'
 import { getSecondLevelDomain } from '@tuposoft/lead-email-finder/dns'
 import { Inject, Injectable } from '@nestjs/common'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'

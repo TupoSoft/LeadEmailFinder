@@ -6,7 +6,7 @@ import {
     IEmailVerificationService,
     parseTimeString,
     VerifyOptions,
-} from '../../common'
+} from '@tuposoft/lead-email-finder/common'
 import { Inject } from '@nestjs/common'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 import { GreylistedException } from './greylisted.exception'

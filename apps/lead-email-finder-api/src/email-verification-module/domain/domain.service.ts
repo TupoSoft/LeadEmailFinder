@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { IDomainService } from '../../common'
+import { IDomainService } from '@tuposoft/lead-email-finder/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Domain } from './domain.schema'
 import { Model } from 'mongoose'

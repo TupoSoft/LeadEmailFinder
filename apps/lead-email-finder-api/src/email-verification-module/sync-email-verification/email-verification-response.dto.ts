@@ -4,7 +4,7 @@ import {
     EmailVerificationReason,
     EmailVerificationSource,
     IEmailVerificationResponseDto,
-} from '../../common'
+} from '@tuposoft/lead-email-finder/common'
 import { IsEmail, IsFQDN } from 'class-validator'
 import { AutoMap } from '@automapper/classes'
 

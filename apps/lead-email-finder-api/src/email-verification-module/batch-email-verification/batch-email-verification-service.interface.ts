@@ -1,6 +1,6 @@
 import { BatchEmailVerificationFile } from './batch-email-verification-file.interface'
 import { Readable } from 'node:stream'
-import { JobState } from '../../common'
+import { JobState } from '@tuposoft/lead-email-finder/common'
 
 export interface EnqueueBatchResponse {
     id: string

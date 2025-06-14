@@ -1,4 +1,4 @@
-import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '../../common'
+import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
 import { AutoMap } from '@automapper/classes'
 

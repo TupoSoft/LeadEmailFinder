@@ -1,6 +1,11 @@
 import { InjectModel } from '@nestjs/mongoose'
 import { Email } from './email.schema'
-import { ICreateEmailRequestDto, IEmailResponseDto, IEmailService, IUpdateEmailRequestDto } from '../../common'
+import {
+    ICreateEmailRequestDto,
+    IEmailResponseDto,
+    IEmailService,
+    IUpdateEmailRequestDto,
+} from '@tuposoft/lead-email-finder/common'
 import { Injectable } from '@nestjs/common'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'

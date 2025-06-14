@@ -1,4 +1,4 @@
-import { parseTimeString } from '../../../common'
+import { parseTimeString } from '@tuposoft/lead-email-finder/common'
 
 export const SMTP_PORT = 25
 export const DEFAULT_SMTP_CLIENT_TIMEOUT = parseTimeString('1m')
