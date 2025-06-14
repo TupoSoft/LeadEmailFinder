@@ -5,3 +5,4 @@ include:
   - apps/lead-email-finder-api.compose.yaml
   - apps/api-key.compose.yaml
   - apps/async-email-verification-worker.compose.yaml
+  - apps/proxy.compose.yaml

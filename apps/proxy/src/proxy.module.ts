@@ -1,10 +1,7 @@
 import { Module } from '@nestjs/common'
-import { ProxyController } from './proxy.controller'
-import { ProxyService } from './proxy.service'
+import { LoggerModule } from 'pino-nestjs'
 
 @Module({
-    imports: [],
-    controllers: [ProxyController],
-    providers: [ProxyService],
+    imports: [LoggerModule.forRoot()],
 })
 export class ProxyModule {}

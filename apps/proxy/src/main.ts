@@ -1,9 +1,4 @@
-import { NestFactory } from '@nestjs/core'
 import { ProxyModule } from './proxy.module'
+import { bootstrap } from '@tuposoft/lead-email-finder/grpc'
 
-async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create(ProxyModule)
-    await app.listen(process.env.port ?? 3000)
-}
-
-void bootstrap()
+void bootstrap({ module: ProxyModule, protoPackage: 'proxy' })
