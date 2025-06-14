@@ -1,35 +1,21 @@
 services:
   api-key:
+    extends:
+      file: templates/grpc-app.compose.yaml
+      service: grpc-app
     build:
-      context: ../..
-      dockerfile: docker/Dockerfile
       args:
         TARGET_APP: api-key
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr", "localhost:5000"]
-      interval: 10s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    volumes:
-      - "../..:/app"
-      - "/app/node_modules"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
     ports:
       - '5000:5000'
-    restart: unless-stopped
     depends_on:
       mongo:
         condition: service_healthy
     secrets:
       - apikey_mongo_url
     environment:
-      NODE_ENV: development
+      TARGET_APP: api-key
       APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
-    profiles:
-      - dev
 
   api-key-debug:
     extends:

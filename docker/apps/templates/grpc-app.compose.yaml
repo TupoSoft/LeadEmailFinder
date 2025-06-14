@@ -1,0 +1,22 @@
+services:
+  grpc-app:
+    build:
+      context: ../../..
+      dockerfile: docker/Dockerfile
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr", "localhost:5000"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - "../../..:/app"
+      - "/app/node_modules"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+    profiles:
+      - dev

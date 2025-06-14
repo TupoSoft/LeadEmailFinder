@@ -1,0 +1,26 @@
+services:
+  proxy:
+    extends:
+      service: grpc-app
+      file: templates/grpc-app.compose.yaml
+    build:
+      args:
+        TARGET_APP: proxy
+    ports:
+      - '5001:5000'
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      TARGET_APP: proxy
+
+  proxy-debug:
+    extends:
+      service: proxy
+    command:
+      - pnpm
+      - debug
+      - proxy
+    ports:
+      - '9232:9229'
+    profiles: !override [debug]
