@@ -1,4 +1,4 @@
-import { EmailPatternEnum, EmailVerificationReason } from '../../common'
+import { EmailPatternEnum, EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { CatchAllStatus, DeliveryStatus } from './old-email-verification.enums'
 
 export interface OldEmailVerificationResponse {

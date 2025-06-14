@@ -12,7 +12,7 @@ import {
     GetBatchStatusResponse,
 } from './batch-email-verification-service.interface'
 import { JobNotFoundException } from './job-not-found.exception'
-import { fromStringToEnum, JobState } from '../../common'
+import { fromStringToEnum, JobState } from '@tuposoft/lead-email-finder/common'
 import { Readable } from 'stream'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'

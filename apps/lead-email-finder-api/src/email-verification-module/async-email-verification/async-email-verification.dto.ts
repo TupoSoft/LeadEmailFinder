@@ -6,7 +6,7 @@ import {
 } from './async-email-verification-service.interface'
 import { Expose } from 'class-transformer'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
-import { JobState } from '../../common'
+import { JobState } from '@tuposoft/lead-email-finder/common'
 import { IsUUID } from 'class-validator'
 import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 

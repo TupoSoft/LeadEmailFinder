@@ -5,7 +5,7 @@ import { Domain } from './domain.schema'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
 import { Model } from 'mongoose'
-import { IDomainResponseDto } from '../../common'
+import { IDomainResponseDto } from '@tuposoft/lead-email-finder/common'
 import { DomainResponseDto } from './domain-response.dto'
 import { DomainNotFoundException } from './domain-not-found.exception'
 

@@ -6,7 +6,7 @@ import {
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { IsUUID } from 'class-validator'
-import { JobState } from '../../common'
+import { JobState } from '@tuposoft/lead-email-finder/common'
 
 export class UploadFileResponseDto implements EnqueueBatchResponse {
     @Expose()

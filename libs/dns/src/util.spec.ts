@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals'
 import { fetchMxRecords, fetchRecords } from './util'
 import { resolveMx, reverse } from 'node:dns/promises'
-import { DNSTypeMap } from '../../../apps/lead-email-finder-api/src/common'
+import { DNSTypeMap } from '../../common/src'
 
 jest.mock('node:dns/promises', () => ({
     resolveMx: jest.fn(),

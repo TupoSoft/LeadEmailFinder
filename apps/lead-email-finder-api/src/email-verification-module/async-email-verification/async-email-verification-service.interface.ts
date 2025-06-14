@@ -1,4 +1,4 @@
-import { IEmailVerificationResponseDto, JobState } from '../../common'
+import { IEmailVerificationResponseDto, JobState } from '@tuposoft/lead-email-finder/common'
 
 export interface VerifyAsyncRequest {
     email: string

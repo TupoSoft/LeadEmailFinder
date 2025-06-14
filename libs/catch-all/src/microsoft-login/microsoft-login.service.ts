@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '../../../../apps/lead-email-finder-api/src/common'
+import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { Injectable } from '@nestjs/common'

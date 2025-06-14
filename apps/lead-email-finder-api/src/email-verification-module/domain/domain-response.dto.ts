@@ -1,6 +1,6 @@
 import type { MxRecord } from 'node:dns'
 import { Expose } from 'class-transformer'
-import { IDomainResponseDto } from '../../common'
+import { IDomainResponseDto } from '@tuposoft/lead-email-finder/common'
 import { AutoMap } from '@automapper/classes'
 
 export class DomainResponseDto implements IDomainResponseDto {

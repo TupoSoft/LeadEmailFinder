@@ -1,4 +1,4 @@
-import { EmailPatternEnum } from '../../common'
+import { EmailPatternEnum } from '@tuposoft/lead-email-finder/common'
 import { Expose } from 'class-transformer'
 import { AutoMap } from '@automapper/classes'
 

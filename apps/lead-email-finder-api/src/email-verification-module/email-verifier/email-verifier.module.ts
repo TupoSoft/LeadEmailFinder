@@ -9,7 +9,7 @@ import {
 } from '@tuposoft/lead-email-finder/catch-all'
 import { EmailVerifier } from './email-verifier.service'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
-import { ICatchAllVerifier } from '../../common'
+import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
 
 @Module({
     imports: [SmtpModule, CatchAllModule],

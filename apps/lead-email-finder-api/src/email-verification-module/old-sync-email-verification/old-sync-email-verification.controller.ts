@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common'
-import { IEmailVerificationService } from '../../common'
+import { IEmailVerificationService } from '@tuposoft/lead-email-finder/common'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 import { OldSyncEmailVerificationRequestQueryDto } from './old-sync-email-verification-request-query.dto'
 import { ApiOperation } from '@nestjs/swagger'
