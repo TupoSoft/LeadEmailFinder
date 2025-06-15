@@ -30,7 +30,7 @@ message ApiKeyResponseDto {
 
 message ValidateKeyForRolesRequest {
   string token = 1;
-  repeated string requiredPermissions = 2;
+  repeated string required_permissions = 2;
 }
 
 service ApiKeyService {
