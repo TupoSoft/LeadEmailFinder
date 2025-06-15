@@ -2,7 +2,46 @@ syntax = "proto3";
 
 package auth;
 
-import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service AuthService {
+    // Registration (creates both auth and user records)
+    rpc Register(RegisterRequest) returns (RegisterResponse);
+
+    // Authentication
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+    rpc Logout(LogoutRequest) returns (LogoutResponse);
+    rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+    // Password Management
+    rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+    rpc ResetPasswordRequest(ResetPasswordRequestMessage) returns (ResetPasswordResponseMessage);
+    rpc ResetPasswordConfirm(ResetPasswordConfirmMessage) returns (ResetPasswordConfirmResponse);
+
+    // Get current user info from token
+    rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
+}
+
+message AuthUser {
+    string id = 1;
+    string email = 2;
+    string username = 3;
+    google.protobuf.Timestamp createdAt = 4;
+}
+
+message RegisterRequest {
+    string email = 1;
+    string username = 2;
+    string password = 3;
+}
+
+message RegisterResponse {
+    AuthUser user = 1;
+    string accessToken = 2;
+    string refreshToken = 3;
+    int64 expiresIn = 4;
+}
 
 message LoginRequest {
     string email = 1;
@@ -10,23 +49,24 @@ message LoginRequest {
 }
 
 message LoginResponse {
-    string access_token = 1;
-    string refresh_token = 2;
-    int64 expires_in = 3;
+    AuthUser user = 1;
+    string accessToken = 2;
+    string refreshToken = 3;
+    int64 expiresIn = 4;
 }
 
 message RefreshTokenRequest {
-    string refresh_token = 1;
+    string refreshToken = 1;
 }
 
 message RefreshTokenResponse {
-    string access_token = 1;
-    string refresh_token = 2;
-    int64 expires_in = 3;
+    string accessToken = 1;
+    string refreshToken = 2;
+    int64 expiresIn = 3;
 }
 
 message LogoutRequest {
-    string refresh_token = 1;
+    string refreshToken = 1;
 }
 
 message LogoutResponse {
@@ -34,19 +74,50 @@ message LogoutResponse {
 }
 
 message ValidateTokenRequest {
-    string access_token = 1;
+    string accessToken = 1;
 }
 
 message ValidateTokenResponse {
     bool valid = 1;
-    string user_id = 2;
+    string userId = 2;
     string email = 3;
     string username = 4;
 }
 
-service AuthService {
-    rpc Login(LoginRequest) returns (LoginResponse);
-    rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
-    rpc Logout(LogoutRequest) returns (LogoutResponse);
-    rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+message GetCurrentUserRequest {
+    string accessToken = 1;
+}
+
+message GetCurrentUserResponse {
+    AuthUser user = 1;
+}
+
+message ChangePasswordRequest {
+    string accessToken = 1;
+    string currentPassword = 2;
+    string newPassword = 3;
+}
+
+message ChangePasswordResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message ResetPasswordRequestMessage {
+    string email = 1;
+}
+
+message ResetPasswordResponseMessage {
+    bool success = 1;
+    string message = 2;
+}
+
+message ResetPasswordConfirmMessage {
+    string resetToken = 1;
+    string newPassword = 2;
+}
+
+message ResetPasswordConfirmResponse {
+    bool success = 1;
+    string message = 2;
 }
