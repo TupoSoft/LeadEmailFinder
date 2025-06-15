@@ -1,9 +1,24 @@
-const { env } = process
-const { PROXIES } = env
+const { ok } = require('node:assert/strict')
+const { readFileSync } = require('node:fs')
+const { createUserFromUrl } = require('common/create-user-from-url')
+const { env, exit } = require('node:process')
+
+const { PROXIES, PROXY_MONGO_URL_FILE } = env
+
+ok(PROXY_MONGO_URL_FILE, 'PROXY_MONGO_URL_FILE must be set')
+
+const mongoUrlFile = readFileSync(PROXY_MONGO_URL_FILE)
+const url = new URL(mongoUrlFile)
+const { pathname } = url
+const dbName = pathname.slice(1)
+
+const db = db.getSiblingDB(dbName)
+
+createUserFromUrl({ db, url })
 
 if (!PROXIES) {
-    console.info(`There are no proxies to insert. Please set the PROXIES environment variable. Exiting the script.`)
-    quit()
+    console.info(`There are no proxies to insert.`)
+    exit(0)
 }
 
 const proxyUrlArray = PROXIES.split(',').map(proxy => {

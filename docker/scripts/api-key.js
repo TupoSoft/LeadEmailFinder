@@ -2,6 +2,7 @@ const { readFileSync } = require('node:fs')
 const assert = require('node:assert')
 const { URL } = require('url')
 const { env } = process
+const { createUserFromUrl } = require(`common/create-user-from-url.js`)
 
 const { APIKEY_MONGO_URL_FILE: mongoUrlFilePath, ADMIN_APIKEY_FILE: adminApikeyFilePath } = env
 
@@ -12,27 +13,12 @@ if (mongoUrlFilePath === undefined) {
 
 const mongoUrlFile = readFileSync(mongoUrlFilePath, 'utf-8')
 const mongoUrl = new URL(mongoUrlFile)
-const { username: user, password: pwd, pathname } = mongoUrl
+const { pathname } = mongoUrl
 const dbName = pathname.slice(1)
 
 db = db.getSiblingDB(dbName)
 
-const { ok } = db.createUser({
-    user,
-    pwd,
-    roles: [
-        {
-            role: 'readWrite',
-            db: dbName,
-        },
-    ],
-})
-
-if (ok) {
-    console.log(`The database ${dbName} with user '${user}' and password ${pwd} was successfully created.`)
-} else {
-    console.error(`Something went wrong while creating the user.`)
-}
+createUserFromUrl({ db, url: mongoUrl })
 
 const isNonEmptyString = val => typeof val === 'string' && !!val
 
