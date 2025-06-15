@@ -53,6 +53,8 @@ services:
   api-debug:
     extends:
       service: api
+    environment:
+      APIKEY_URL: api-key-debug:5000
     depends_on: !override
       mongo:
         condition: service_healthy

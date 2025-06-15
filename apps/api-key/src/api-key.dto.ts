@@ -40,6 +40,7 @@ export class ValidateKeyForRolesDto {
     @IsString()
     token: string
 
+    @IsOptional()
     @IsArray()
     @IsEnum(KeyPermissions, { each: true })
     requiredPermissions: KeyPermissions[]
