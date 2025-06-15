@@ -2,11 +2,21 @@ syntax = "proto3";
 
 package user;
 
+import "google/protobuf/timestamp.proto";
+
+service UserService {
+    rpc CreateUser(CreateUserRequest) returns (UserDescriptor);
+    rpc GetUser(GetUserRequest) returns (UserDescriptor);
+    rpc UpdateUser(UpdateUserRequest) returns (UserDescriptor);
+    rpc DeleteUser(DeleteUserRequest) returns (UserDescriptor);
+}
+
 message UserDescriptor {
     string id = 1;
     string email = 2;
     string username = 3;
-    string password = 4;
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp updated_at = 5;
 }
 
 message CreateUserRequest {
@@ -19,20 +29,16 @@ message GetUserRequest {
     string id = 1;
 }
 
+message UpdatedUser {
+    string email = 1;
+    string username = 2;
+}
+
 message UpdateUserRequest {
     string id = 1;
-    string email = 2;
-    string username = 3;
-    string password = 4;
+    UpdatedUser user = 2;
 }
 
 message DeleteUserRequest {
     string id = 1;
-}
-
-service UserService {
-    rpc CreateUser(CreateUserRequest) returns (UserDescriptor);
-    rpc GetUser(GetUserRequest) returns (UserDescriptor);
-    rpc UpdateUser(UpdateUserRequest) returns (UserDescriptor);
-    rpc DeleteUser(DeleteUserRequest) returns (UserDescriptor);
 }
