@@ -5,40 +5,50 @@ package user;
 import "google/protobuf/timestamp.proto";
 
 service UserService {
-    rpc CreateUser(CreateUserRequest) returns (UserDescriptor);
     rpc GetUser(GetUserRequest) returns (UserDescriptor);
     rpc UpdateUser(UpdateUserRequest) returns (UserDescriptor);
-    rpc DeleteUser(DeleteUserRequest) returns (UserDescriptor);
+    rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+    rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
 }
 
+// User profile data (no password)
 message UserDescriptor {
     string id = 1;
     string email = 2;
     string username = 3;
-    google.protobuf.Timestamp created_at = 4;
-    google.protobuf.Timestamp updated_at = 5;
+    google.protobuf.Timestamp createdAt = 4;
+    google.protobuf.Timestamp updatedAt = 5;
 }
 
-message CreateUserRequest {
-    string email = 1;
-    string username = 2;
-    string password = 3;
-}
-
+// Get User
 message GetUserRequest {
     string id = 1;
 }
 
-message UpdatedUser {
-    string email = 1;
-    string username = 2;
-}
-
+// Update User
 message UpdateUserRequest {
     string id = 1;
-    UpdatedUser user = 2;
+    optional string email = 2;
+    optional string username = 3;
 }
 
+// Delete User
 message DeleteUserRequest {
     string id = 1;
+}
+
+message DeleteUserResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// List Users
+message ListUsersRequest {
+    int32 pageSize = 1;
+    int32 page = 2;
+}
+
+message ListUsersResponse {
+    repeated UserDescriptor users = 1;
+    int32 totalCount = 2;
 }
