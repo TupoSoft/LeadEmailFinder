@@ -1,17 +1,8 @@
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 import { Expose, Transform } from 'class-transformer'
 import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
-import {
-    ApiKeyDescriptor,
-    CheckKeyPermissionsRequest,
-    CheckKeyPermissionsResponse,
-    GenerateKeyRequest,
-    GenerateKeyResponse,
-    RevokeKeyRequest,
-    RevokeKeyResponse,
-} from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
 
-export class GenerateKeyRequestDto implements GenerateKeyRequest {
+export class GenerateKeyDto {
     @IsArray()
     @IsEnum(KeyPermissions, { each: true })
     permissions: KeyPermissions[] = [KeyPermissions.READ]
@@ -21,22 +12,7 @@ export class GenerateKeyRequestDto implements GenerateKeyRequest {
     description?: string
 }
 
-export class GenerateKeyResponseDto implements GenerateKeyResponse {
-    @Expose()
-    apiKey: ApiKeyDescriptor
-}
-
-export class RevokeKeyRequestDto implements RevokeKeyRequest {
-    @IsString()
-    token: string
-}
-
-export class RevokeKeyResponseDto implements RevokeKeyResponse {
-    @Expose()
-    apiKey: ApiKeyDescriptor
-}
-
-export class ApiKeyDescriptorDto implements ApiKeyDescriptor {
+export class ApiKeyResponseDto {
     @Expose()
     @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString(), { toClassOnly: true })
     id: string
@@ -45,7 +21,7 @@ export class ApiKeyDescriptorDto implements ApiKeyDescriptor {
     token: string
 
     @Expose()
-    description: string
+    description?: string
 
     @Expose()
     permissions: KeyPermissions[]
@@ -60,7 +36,7 @@ export class ApiKeyDescriptorDto implements ApiKeyDescriptor {
     updatedAt: Date
 }
 
-export class CheckKeyPermissionsRequestDto implements CheckKeyPermissionsRequest {
+export class ValidateKeyForRolesDto {
     @IsString()
     token: string
 
@@ -70,8 +46,8 @@ export class CheckKeyPermissionsRequestDto implements CheckKeyPermissionsRequest
     requiredPermissions: KeyPermissions[]
 }
 
-export class CheckKeyPermissionsResponseDto implements CheckKeyPermissionsResponse {
+export class BoolValueDto {
     @Expose()
     @IsBoolean()
-    allowed: boolean
+    value: boolean
 }
