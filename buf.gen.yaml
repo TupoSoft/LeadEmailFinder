@@ -5,6 +5,5 @@ plugins:
     opt:
       - env=node
       - nestJs=true
-      - useOptionals=messages,
       - outputIndex=true,
       - useDate=true

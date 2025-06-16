@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package api_key.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message ApiKeyDescriptor {
+  string id = 1;
+  string token = 2;
+  string description = 3;
+  repeated string permissions = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GenerateKeyRequest {
+  repeated string permissions = 1;
+  optional string description = 2;
+}
+
+message RevokeKeyRequest {
+  string token = 1;
+}
+
+message CheckKeyPermissionsRequest {
+  string token = 1;
+  repeated string required_permissions = 2;
+}
+
+message GenerateKeyResponse {
+  ApiKeyDescriptor api_key = 1;
+}
+
+message RevokeKeyResponse {
+  ApiKeyDescriptor api_key = 1;
+}
+
+message CheckKeyPermissionsResponse {
+  bool allowed = 1;
+}
+
+service ApiKeyService {
+  rpc GenerateKey(GenerateKeyRequest) returns (GenerateKeyResponse);
+  rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
+  rpc CheckKeyPermissions(CheckKeyPermissionsRequest) returns (CheckKeyPermissionsResponse);
+}

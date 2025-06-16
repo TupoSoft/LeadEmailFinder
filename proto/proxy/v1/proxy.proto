@@ -1,19 +1,18 @@
 syntax = "proto3";
 
-package proxy;
+package proxy.v1;
 
-import "google/protobuf/timestamp.proto";
 import "google/protobuf/field_mask.proto";
-import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 service ProxyService {
-  rpc AddProxy(AddProxyRequest) returns (ProxyDescriptor);
+  rpc AddProxy(AddProxyRequest) returns (AddProxyResponse);
   rpc ListProxies(ListProxiesRequest) returns (ListProxiesResponse);
-  rpc GetProxy(GetProxyRequest) returns (ProxyDescriptor);
-  rpc UpdateProxy(UpdateProxyRequest) returns (ProxyDescriptor);
-  rpc DeleteProxy(DeleteProxyRequest) returns (ProxyDescriptor);
-  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (ProxyDescriptor);
-  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (google.protobuf.Empty);
+  rpc GetProxy(GetProxyRequest) returns (GetProxyResponse);
+  rpc UpdateProxy(UpdateProxyRequest) returns (UpdateProxyResponse);
+  rpc DeleteProxy(DeleteProxyRequest) returns (DeleteProxyResponse);
+  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (GetHealthyProxyResponse);
+  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (ReportProxyBlacklistResponse);
 }
 
 message Auth {
@@ -23,13 +22,9 @@ message Auth {
 
 enum Protocol {
   PROTOCOL_UNSPECIFIED = 0;
-  HTTP = 1;
-  HTTPS = 2;
-  SOCKS5 = 3;
-}
-
-message GetHealthyProxyRequest {
-  string mx_host = 1;
+  PROTOCOL_HTTP = 1;
+  PROTOCOL_HTTPS = 2;
+  PROTOCOL_SOCKS5 = 3;
 }
 
 message ProxyDescriptor {
@@ -45,6 +40,14 @@ message ProxyDescriptor {
   google.protobuf.Timestamp updated_at = 10;
 }
 
+message GetHealthyProxyRequest {
+  string mx_host = 1;
+}
+
+message GetHealthyProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
 message AddProxyRequest {
   Protocol protocol = 1;
   string host = 2;
@@ -53,6 +56,10 @@ message AddProxyRequest {
   string description = 5;
   uint32 weight = 6;
   bool enabled = 7;
+}
+
+message AddProxyResponse {
+  ProxyDescriptor proxy = 1;
 }
 
 message ListProxiesRequest {
@@ -69,16 +76,30 @@ message GetProxyRequest {
   string id = 1;
 }
 
+message GetProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
 message UpdateProxyRequest {
   google.protobuf.FieldMask update_mask = 1;
   ProxyDescriptor proxy = 2;
+}
+
+message UpdateProxyResponse {
+  ProxyDescriptor proxy = 1;
 }
 
 message DeleteProxyRequest {
   string id = 1;
 }
 
+message DeleteProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
 message ReportProxyBlacklistRequest {
   string id = 1;
   string mx_host = 2;
 }
+
+message ReportProxyBlacklistResponse {}
