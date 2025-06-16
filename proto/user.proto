@@ -73,7 +73,7 @@ message UpdateUserResponse {
 }
 
 message UpdatePasswordRequest {
-  string id = 1;
+  string user_id = 1;
   string password_hash = 2;
 }
 
@@ -82,7 +82,7 @@ message UpdatePasswordResponse {
 }
 
 message VerifyPasswordRequest {
-  string id = 1;
+  string user_id = 1;
   string password_hash = 2;
 }
 
