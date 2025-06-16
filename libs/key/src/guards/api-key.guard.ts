@@ -3,12 +3,12 @@ import { Reflector } from '@nestjs/core'
 import { KeyPermissions } from '../key.enum'
 import { Request } from 'express'
 import { ClientGrpc } from '@nestjs/microservices'
+import { ApiKeyService } from '../api-key-service.interface'
 import { firstValueFrom } from 'rxjs'
-import { API_KEY_SERVICE_NAME, ApiKeyServiceClient } from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate, OnModuleInit {
-    private apiKeyService: ApiKeyServiceClient
+    private apiKeyService: ApiKeyService
 
     constructor(
         @Inject('API_KEY_PACKAGE') private readonly client: ClientGrpc,
@@ -16,7 +16,7 @@ export class ApiKeyGuard implements CanActivate, OnModuleInit {
     ) {}
 
     onModuleInit(): void {
-        this.apiKeyService = this.client.getService<ApiKeyServiceClient>(API_KEY_SERVICE_NAME)
+        this.apiKeyService = this.client.getService<ApiKeyService>('ApiKeyService')
     }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -46,8 +46,8 @@ export class ApiKeyGuard implements CanActivate, OnModuleInit {
             throw new UnauthorizedException('API key is missing')
         }
 
-        const { allowed } = await firstValueFrom(this.apiKeyService.checkKeyPermissions({ token, requiredPermissions }))
+        const { value } = await firstValueFrom(this.apiKeyService.validateKeyForRoles({ token, requiredPermissions }))
 
-        return allowed
+        return value
     }
 }
