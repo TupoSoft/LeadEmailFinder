@@ -1,0 +1,10 @@
+version: v2
+plugins:
+  - remote: buf.build/community/stephenh-ts-proto
+    out: libs/proto/src
+    opt:
+      - env=node
+      - nestJs=true
+      - useOptionals=messages,
+      - outputIndex=true,
+      - useDate=true
