@@ -64,7 +64,7 @@ message ValidateTokenResponse {
 }
 
 message ChangePasswordRequest {
-  string user_id = 1;
+  string access_token = 1;
   string current_password = 2;
   string new_password = 3;
 }
