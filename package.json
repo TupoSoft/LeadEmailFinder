@@ -11,8 +11,7 @@
     "prestart": "pnpm proto",
     "start": "nest start -w",
     "debug": "pnpm start -d 0.0.0.0:9229",
-    "test": "jest",
-    "protoc": "protoc --plugin=$(which protoc-gen-ts_proto) --ts_proto_out=libs/proto/src/ --ts_proto_opt=nestJs=true,env=node,useOptionals=messages,outputIndex=true,useDate=true ./proto/*.proto"
+    "test": "jest"
   },
   "author": {
     "url": "https://tuposoft.com",
