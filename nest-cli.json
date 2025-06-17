@@ -110,6 +110,15 @@
         "tsConfigPath": "apps/lead-email-finder-api/tsconfig.app.json"
       }
     },
+    "proto": {
+      "type": "library",
+      "root": "libs/proto",
+      "entryFile": "index",
+      "sourceRoot": "libs/proto/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/proto/tsconfig.lib.json"
+      }
+    },
     "proxy": {
       "type": "application",
       "root": "apps/proxy",
