@@ -7,3 +7,4 @@ plugins:
       - nestJs=true
       - outputIndex=true,
       - useDate=true
+      - comments=false
