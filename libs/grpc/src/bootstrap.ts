@@ -11,14 +11,15 @@ type IEntryNestModule = Type | DynamicModule | ForwardReference | Promise<IEntry
 interface BootstrapParams {
     module: IEntryNestModule
     protoPackage: string
+    version: string
 }
 
-export async function bootstrap({ module, protoPackage }: BootstrapParams): Promise<void> {
+export async function bootstrap({ module, protoPackage, version }: BootstrapParams): Promise<void> {
     const app = await NestFactory.createMicroservice<MicroserviceOptions>(module, {
         transport: Transport.GRPC,
         options: {
             package: protoPackage,
-            protoPath: [healthCheckProtoPath, join(__dirname, 'proto', `${protoPackage}.proto`)],
+            protoPath: [healthCheckProtoPath, join(__dirname, 'proto', protoPackage, version, `${protoPackage}.proto`)],
             url: '0.0.0.0:5000',
             onLoadPackageDefinition: (_pkg, server: Server) => {
                 const healthImpl = new HealthImplementation({
