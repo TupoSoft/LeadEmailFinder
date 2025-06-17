@@ -11,7 +11,9 @@
     "prestart": "pnpm proto",
     "start": "nest start -w",
     "debug": "pnpm start -d 0.0.0.0:9229",
-    "test": "jest"
+    "test": "jest",
+    "proto:lint": "buf lint",
+    "proto:gen": "buf generate"
   },
   "author": {
     "url": "https://tuposoft.com",
