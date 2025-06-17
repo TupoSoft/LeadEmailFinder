@@ -1,5 +1,5 @@
 ### Generate Key
-GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
+GRPC localhost:5000/api_key.v1.ApiKeyService/GenerateKey
 
 {
     "permissions": ["read"],
@@ -8,14 +8,13 @@ GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
 
 > {%
     client.assert(response.status === 207)
-    client.global.set('token', response.body.token)
+    client.global.set('key', response.body.apiKey.token)
 %}
 
 ### Validate Key For Roles
-GRPC localhost:5000/api_key.ApiKeyService/CheckKeyPermissions
-Content-Type: application/json
+GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
 
 {
-  "token": "{{ token }}",
-  "requiredPermissions": ["fooo"]
+  "token": "{{ key }}",
+  "required_permissions": ["read"]
 }

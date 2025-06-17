@@ -8,3 +8,4 @@ plugins:
       - outputIndex=true,
       - useDate=true
       - comments=false
+      - exportCommonSymbols=true

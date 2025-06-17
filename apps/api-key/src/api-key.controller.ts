@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     InternalServerErrorException,
     NotFoundException,
+    SerializeOptions,
     UseFilters,
 } from '@nestjs/common'
 import { ApiKeyService } from './api-key.service'
@@ -31,6 +32,7 @@ import {
 export class ApiKeyController implements ApiKeyServiceController {
     constructor(private readonly keyService: ApiKeyService) {}
 
+    @SerializeOptions({ type: GenerateKeyResponseDto })
     async generateKey({ permissions, description }: GenerateKeyRequestDto): Promise<GenerateKeyResponseDto> {
         const apiKeyDoc = await this.keyService.generateKey(permissions, description)
         const apiKey = plainToInstance(ApiKeyDescriptorDto, apiKeyDoc)
@@ -40,6 +42,7 @@ export class ApiKeyController implements ApiKeyServiceController {
         }
     }
 
+    @SerializeOptions({ type: RevokeKeyResponseDto })
     async revokeKey({ token }: RevokeKeyRequestDto): Promise<RevokeKeyResponseDto> {
         try {
             const apiKeyDoc = await this.keyService.revokeKey(token)
@@ -59,6 +62,7 @@ export class ApiKeyController implements ApiKeyServiceController {
         }
     }
 
+    @SerializeOptions({ type: CheckKeyPermissionsResponseDto })
     async checkKeyPermissions({
         token,
         requiredPermissions = [],

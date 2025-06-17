@@ -18,7 +18,7 @@ export async function bootstrap({ module, protoPackage, version }: BootstrapPara
     const app = await NestFactory.createMicroservice<MicroserviceOptions>(module, {
         transport: Transport.GRPC,
         options: {
-            package: protoPackage,
+            package: `${protoPackage}.${version}`,
             protoPath: [healthCheckProtoPath, join(__dirname, 'proto', protoPackage, version, `${protoPackage}.proto`)],
             url: '0.0.0.0:5000',
             onLoadPackageDefinition: (_pkg, server: Server) => {
