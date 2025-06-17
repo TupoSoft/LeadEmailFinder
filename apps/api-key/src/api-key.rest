@@ -2,6 +2,7 @@
 GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
 
 {
+    "permissions": ["read"],
     "description": "Hello World"
 }
 
@@ -11,10 +12,10 @@ GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
 %}
 
 ### Validate Key For Roles
-GRPC localhost:5000/api_key.ApiKeyService/ValidateKeyForRoles
+GRPC localhost:5000/api_key.ApiKeyService/CheckKeyPermissions
 Content-Type: application/json
 
 {
   "token": "{{ token }}",
-  "required_permissions": []
+  "requiredPermissions": ["fooo"]
 }

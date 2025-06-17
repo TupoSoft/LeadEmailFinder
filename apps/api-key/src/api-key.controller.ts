@@ -3,36 +3,51 @@ import {
     ForbiddenException,
     InternalServerErrorException,
     NotFoundException,
-    SerializeOptions,
     UseFilters,
 } from '@nestjs/common'
 import { ApiKeyService } from './api-key.service'
-import { ApiKeyResponseDto, BoolValueDto, GenerateKeyDto, ValidateKeyForRolesDto } from './api-key.dto'
-import { ApiExcludeController } from '@nestjs/swagger'
+import {
+    ApiKeyDescriptorDto,
+    CheckKeyPermissionsRequestDto,
+    CheckKeyPermissionsResponseDto,
+    GenerateKeyRequestDto,
+    GenerateKeyResponseDto,
+    RevokeKeyRequestDto,
+    RevokeKeyResponseDto,
+} from './api-key.dto'
 import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
-import { GrpcMethod } from '@nestjs/microservices'
 import { Public } from '@tuposoft/lead-email-finder/key'
 import { plainToInstance } from 'class-transformer'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
+import {
+    ApiKeyServiceController,
+    ApiKeyServiceControllerMethods,
+} from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
 
 @Public()
-@UseFilters(new HttpToGrpcExceptionFilter())
-@ApiExcludeController()
 @Controller()
-export class ApiKeyController {
+@UseFilters(new HttpToGrpcExceptionFilter())
+@ApiKeyServiceControllerMethods()
+export class ApiKeyController implements ApiKeyServiceController {
     constructor(private readonly keyService: ApiKeyService) {}
 
-    @GrpcMethod('ApiKeyService')
-    async generateKey(generateKeyDto: GenerateKeyDto): Promise<ApiKeyResponseDto> {
-        const apiKey = await this.keyService.generateKey(generateKeyDto.permissions, generateKeyDto.description)
-        return plainToInstance(ApiKeyResponseDto, apiKey)
+    async generateKey({ permissions, description }: GenerateKeyRequestDto): Promise<GenerateKeyResponseDto> {
+        const apiKeyDoc = await this.keyService.generateKey(permissions, description)
+        const apiKey = plainToInstance(ApiKeyDescriptorDto, apiKeyDoc)
+
+        return {
+            apiKey,
+        }
     }
 
-    @GrpcMethod('ApiKeyService')
-    async revokeKey(body: { token: string }): Promise<ApiKeyResponseDto> {
+    async revokeKey({ token }: RevokeKeyRequestDto): Promise<RevokeKeyResponseDto> {
         try {
-            const apiKey = await this.keyService.revokeKey(body.token)
-            return plainToInstance(ApiKeyResponseDto, apiKey)
+            const apiKeyDoc = await this.keyService.revokeKey(token)
+            const apiKey = plainToInstance(ApiKeyDescriptorDto, apiKeyDoc)
+
+            return {
+                apiKey,
+            }
         } catch (error: unknown) {
             if (error instanceof KeyNotFound) {
                 throw new NotFoundException(error.message)
@@ -44,13 +59,14 @@ export class ApiKeyController {
         }
     }
 
-    @GrpcMethod('ApiKeyService')
-    @SerializeOptions({ type: BoolValueDto })
-    async validateKeyForRoles({ token, requiredPermissions = [] }: ValidateKeyForRolesDto): Promise<BoolValueDto> {
-        const value = await this.keyService.validateKeyForRoles(token, requiredPermissions)
+    async checkKeyPermissions({
+        token,
+        requiredPermissions = [],
+    }: CheckKeyPermissionsRequestDto): Promise<CheckKeyPermissionsResponseDto> {
+        const allowed = await this.keyService.validateKeyForRoles(token, requiredPermissions)
 
         return {
-            value,
+            allowed,
         }
     }
 }
