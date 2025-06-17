@@ -2,6 +2,10 @@ syntax = "proto3";
 
 package proxy;
 
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/empty.proto";
+
 service ProxyService {
   rpc AddProxy(AddProxyRequest) returns (ProxyDescriptor);
   rpc ListProxies(ListProxiesRequest) returns (ListProxiesResponse);
@@ -9,7 +13,7 @@ service ProxyService {
   rpc UpdateProxy(UpdateProxyRequest) returns (ProxyDescriptor);
   rpc DeleteProxy(DeleteProxyRequest) returns (ProxyDescriptor);
   rpc GetHealthyProxy(GetHealthyProxyRequest) returns (ProxyDescriptor);
-  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (NoContent);
+  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (google.protobuf.Empty);
 }
 
 message Auth {
@@ -18,13 +22,14 @@ message Auth {
 }
 
 enum Protocol {
-  HTTP = 0;
-  HTTPS = 1;
-  SOCKS5 = 2;
+  PROTOCOL_UNSPECIFIED = 0;
+  HTTP = 1;
+  HTTPS = 2;
+  SOCKS5 = 3;
 }
 
 message GetHealthyProxyRequest {
-  string mxHost = 1;
+  string mx_host = 1;
 }
 
 message ProxyDescriptor {
@@ -36,8 +41,8 @@ message ProxyDescriptor {
   uint32 weight = 5;
   string description = 7;
   bool enabled = 8;
-  string createdAt = 9;
-  string updatedAt = 10;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
 }
 
 message AddProxyRequest {
@@ -51,13 +56,13 @@ message AddProxyRequest {
 }
 
 message ListProxiesRequest {
-  uint32 pageSize = 1;
-  string pageToken = 2;
+  uint32 page_size = 1;
+  string page_token = 2;
 }
 
 message ListProxiesResponse {
   repeated ProxyDescriptor proxies = 1;
-  string nextPageToken = 2;
+  string next_page_token = 2;
 }
 
 message GetProxyRequest {
@@ -65,13 +70,8 @@ message GetProxyRequest {
 }
 
 message UpdateProxyRequest {
-  Protocol protocol = 1;
-  string host = 2;
-  uint32 port = 3;
-  Auth auth = 4;
-  string description = 5;
-  uint32 weight = 6;
-  bool enabled = 7;
+  google.protobuf.FieldMask update_mask = 1;
+  ProxyDescriptor proxy = 2;
 }
 
 message DeleteProxyRequest {
@@ -79,8 +79,6 @@ message DeleteProxyRequest {
 }
 
 message ReportProxyBlacklistRequest {
-  string proxyId = 1;
-  string mxHost = 2;
+  string id = 1;
+  string mx_host = 2;
 }
-
-message NoContent {}
