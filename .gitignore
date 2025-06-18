@@ -140,4 +140,4 @@ tmp
 
 # Protobuf
 **/*.proto
-!proto/*.proto
+!proto/**/*.proto

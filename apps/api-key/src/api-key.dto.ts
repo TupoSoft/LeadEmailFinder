@@ -1,27 +1,25 @@
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
-import { Expose, Transform } from 'class-transformer'
-import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
+import { Expose } from 'class-transformer'
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
+import {
+    ApiKeyDescriptor,
+    CheckKeyPermissionsRequest,
+    CheckKeyPermissionsResponse,
+    GenerateKeyRequest,
+    GenerateKeyResponse,
+    RevokeKeyRequest,
+    RevokeKeyResponse,
+} from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
 
-export class GenerateKeyDto {
-    @IsArray()
-    @IsEnum(KeyPermissions, { each: true })
-    permissions: KeyPermissions[] = [KeyPermissions.READ]
-
-    @IsOptional()
-    @IsString()
-    description?: string
-}
-
-export class ApiKeyResponseDto {
+export class ApiKeyDescriptorDto implements ApiKeyDescriptor {
     @Expose()
-    @Transform(({ obj }: { obj: { _id: { toString(): string } } }) => obj._id.toString(), { toClassOnly: true })
     id: string
 
     @Expose()
     token: string
 
     @Expose()
-    description?: string
+    description: string
 
     @Expose()
     permissions: KeyPermissions[]
@@ -36,7 +34,32 @@ export class ApiKeyResponseDto {
     updatedAt: Date
 }
 
-export class ValidateKeyForRolesDto {
+export class GenerateKeyRequestDto implements GenerateKeyRequest {
+    @IsArray()
+    @IsEnum(KeyPermissions, { each: true })
+    permissions: KeyPermissions[] = [KeyPermissions.READ]
+
+    @IsOptional()
+    @IsString()
+    description?: string
+}
+
+export class GenerateKeyResponseDto implements GenerateKeyResponse {
+    @Expose()
+    apiKey: ApiKeyDescriptorDto
+}
+
+export class RevokeKeyRequestDto implements RevokeKeyRequest {
+    @IsString()
+    token: string
+}
+
+export class RevokeKeyResponseDto implements RevokeKeyResponse {
+    @Expose()
+    apiKey: ApiKeyDescriptorDto
+}
+
+export class CheckKeyPermissionsRequestDto implements CheckKeyPermissionsRequest {
     @IsString()
     token: string
 
@@ -46,8 +69,7 @@ export class ValidateKeyForRolesDto {
     requiredPermissions: KeyPermissions[]
 }
 
-export class BoolValueDto {
+export class CheckKeyPermissionsResponseDto implements CheckKeyPermissionsResponse {
     @Expose()
-    @IsBoolean()
-    value: boolean
+    allowed: boolean
 }
