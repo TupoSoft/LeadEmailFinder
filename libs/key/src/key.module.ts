@@ -14,10 +14,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
                     useFactory: (configService: ConfigService) => ({
                         transport: Transport.GRPC,
                         options: {
-                            package: 'api_key',
+                            package: 'api_key.v1',
                             protoPath: env.JEST_WORKER_ID
-                                ? join('proto', 'api_key.proto')
-                                : join(__dirname, 'proto', 'api_key.proto'),
+                                ? join('proto', 'api_key', 'v1', 'api_key.proto')
+                                : join(__dirname, 'proto', 'api_key', 'v1', 'api_key.proto'),
                             url: configService.get<string>('APIKEY_URL'),
                         },
                     }),

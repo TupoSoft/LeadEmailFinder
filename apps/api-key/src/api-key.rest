@@ -1,20 +1,49 @@
 ### Generate Key
-GRPC localhost:5000/api_key.ApiKeyService/GenerateKey
+GRPC localhost:5000/api_key.v1.ApiKeyService/GenerateKey
 
 {
-    "description": "Hello World"
+    "permissions": ["read"],
+    "description": "{{ $random.lorem.sentence }}"
 }
 
 > {%
     client.assert(response.status === 207)
-    client.global.set('token', response.body.token)
+    client.global.set('key', response.body.apiKey.token)
 %}
 
-### Validate Key For Roles
-GRPC localhost:5000/api_key.ApiKeyService/ValidateKeyForRoles
-Content-Type: application/json
+### Check Key Permissions Success
+GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
 
 {
-  "token": "{{ token }}",
-  "required_permissions": []
+  "token": "{{ key }}",
+  "required_permissions": ["read"]
 }
+
+> {%
+    client.assert(response.status === 207)
+    client.assert(response.body.allowed === true)
+%}
+
+### Check Key Permissions Failure
+GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
+
+{
+  "token": "{{ key }}",
+  "required_permissions": ["write"]
+}
+
+> {%
+    client.assert(response.status === 207)
+    client.assert(!response.body.allowed)
+%}
+
+### Revoke Key
+GRPC localhost:5000/api_key.v1.ApiKeyService/RevokeKey
+
+{
+  "token": "{{ key }}"
+}
+
+> {%
+    client.assert(response.status === 207)
+%}
