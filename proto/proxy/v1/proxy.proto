@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package proxy.v1;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+service ProxyService {
+  rpc AddProxy(AddProxyRequest) returns (AddProxyResponse);
+  rpc ListProxies(ListProxiesRequest) returns (ListProxiesResponse);
+  rpc GetProxy(GetProxyRequest) returns (GetProxyResponse);
+  rpc UpdateProxy(UpdateProxyRequest) returns (UpdateProxyResponse);
+  rpc DeleteProxy(DeleteProxyRequest) returns (DeleteProxyResponse);
+  rpc GetHealthyProxy(GetHealthyProxyRequest) returns (GetHealthyProxyResponse);
+  rpc ReportProxyBlacklist(ReportProxyBlacklistRequest) returns (ReportProxyBlacklistResponse);
+}
+
+message Auth {
+  string user = 1;
+  string pass = 2;
+}
+
+enum Protocol {
+  PROTOCOL_UNSPECIFIED = 0;
+  PROTOCOL_HTTP = 1;
+  PROTOCOL_HTTPS = 2;
+  PROTOCOL_SOCKS5 = 3;
+}
+
+message ProxyDescriptor {
+  string id = 1;
+  Protocol protocol = 2;
+  string host = 3;
+  uint32 port = 4;
+  Auth auth = 6;
+  uint32 weight = 5;
+  string description = 7;
+  bool enabled = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GetHealthyProxyRequest {
+  string mx_host = 1;
+}
+
+message GetHealthyProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
+message AddProxyRequest {
+  Protocol protocol = 1;
+  string host = 2;
+  uint32 port = 3;
+  Auth auth = 4;
+  string description = 5;
+  uint32 weight = 6;
+  bool enabled = 7;
+}
+
+message AddProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
+message ListProxiesRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListProxiesResponse {
+  repeated ProxyDescriptor proxies = 1;
+  string next_page_token = 2;
+}
+
+message GetProxyRequest {
+  string id = 1;
+}
+
+message GetProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
+message UpdateProxyRequest {
+  google.protobuf.FieldMask update_mask = 1;
+  ProxyDescriptor proxy = 2;
+}
+
+message UpdateProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
+message DeleteProxyRequest {
+  string id = 1;
+}
+
+message DeleteProxyResponse {
+  ProxyDescriptor proxy = 1;
+}
+
+message ReportProxyBlacklistRequest {
+  string id = 1;
+  string mx_host = 2;
+}
+
+message ReportProxyBlacklistResponse {}
