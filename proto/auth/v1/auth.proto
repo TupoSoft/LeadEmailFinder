@@ -26,7 +26,7 @@ message RegisterResponse {
 
 message LoginRequest {
   oneof identifier {
-    string email    = 1;
+    string email = 1;
     string username = 2;
   }
   string password = 3;
