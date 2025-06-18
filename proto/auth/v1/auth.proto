@@ -25,15 +25,18 @@ message RegisterResponse {
 }
 
 message LoginRequest {
-  string email = 1;
-  string password = 2;
+  oneof identifier {
+    string email    = 1;
+    string username = 2;
+  }
+  string password = 3;
 }
 
 message LoginResponse {
   string user_id = 1;
   string access_token = 2;
   string refresh_token = 3;
-  int64 expires_in = 4;
+  uint64 expires_in = 4;
 }
 
 message RefreshTokenRequest {
