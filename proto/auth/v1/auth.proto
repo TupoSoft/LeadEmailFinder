@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package auth.v1;
 
+import "google/protobuf/duration.proto";
+
 service AuthService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
@@ -21,7 +23,7 @@ message RegisterResponse {
   string user_id = 1;
   string access_token = 2;
   string refresh_token = 3;
-  int64 expires_in = 4;
+  google.protobuf.Duration expires_in = 4;
 }
 
 message LoginRequest {
@@ -36,7 +38,7 @@ message LoginResponse {
   string user_id = 1;
   string access_token = 2;
   string refresh_token = 3;
-  uint64 expires_in = 4;
+  google.protobuf.Duration expires_in = 4;
 }
 
 message RefreshTokenRequest {
@@ -46,7 +48,7 @@ message RefreshTokenRequest {
 message RefreshTokenResponse {
   string access_token = 1;
   string refresh_token = 2;
-  int64 expires_in = 3;
+  google.protobuf.Duration expires_in = 3;
 }
 
 message LogoutRequest {
