@@ -13,7 +13,8 @@
     "debug": "pnpm start -d 0.0.0.0:9229",
     "test": "jest",
     "proto:lint": "buf lint",
-    "proto:gen": "buf generate"
+    "proto:gen": "buf generate",
+    "proto:format": "buf format -w"
   },
   "author": {
     "url": "https://tuposoft.com",
