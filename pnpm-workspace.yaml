@@ -1,0 +1,13 @@
+onlyBuiltDependencies:
+  - '@bufbuild/buf'
+  - '@nestjs/core'
+  - '@scarf/scarf'
+  - '@swc/core'
+  - msgpackr-extract
+  - protobufjs
+  - unrs-resolver
+
+overrides:
+  '@automapper/classes>reflect-metadata': $reflect-metadata
+  '@automapper/nestjs>@nestjs/common': $@nestjs/common
+  '@automapper/nestjs>@nestjs/core': $@nestjs/core

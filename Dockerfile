@@ -21,6 +21,7 @@ WORKDIR /app
 # into this layer.
 RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=bind,source=pnpm-lock.yaml,target=pnpm-lock.yaml \
+    --mount=type=bind,source=pnpm-workspace.yaml,target=pnpm-workspace.yaml \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --frozen-lockfile i
 

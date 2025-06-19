@@ -7,3 +7,4 @@
 
 export * as google from "./index.google";
 export * as api_key from "./index.api_key";
+export * as proxy from "./index.proxy";

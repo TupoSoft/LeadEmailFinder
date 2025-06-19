@@ -1,5 +1,4 @@
 import { HTMLDomainSynonymFinder } from './domain-synonym-finder'
-import { beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { Test } from '@nestjs/testing'
 import { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
