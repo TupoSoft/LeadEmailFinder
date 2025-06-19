@@ -1,6 +1,5 @@
 import { loadSecrets } from './load-secrets'
 import { existsSync, readFileSync } from 'node:fs'
-import { afterEach } from '@jest/globals'
 
 jest.mock('node:fs')
 jest.mock('node:console')

@@ -6,6 +6,8 @@ import { Model, Types } from 'mongoose'
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 
 jest.mock('node:util', () => ({
+    __esModule: true,
+    ...jest.requireActual<typeof import('node:util')>('node:util'),
     promisify: jest.fn().mockReturnValue(
         jest.fn().mockResolvedValue({
             toString: jest.fn().mockReturnValue('mockedtoken123'),

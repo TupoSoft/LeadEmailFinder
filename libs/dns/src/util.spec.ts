@@ -1,4 +1,3 @@
-import { describe, expect, it, jest } from '@jest/globals'
 import { fetchMxRecords, fetchRecords } from './util'
 import { resolveMx, reverse } from 'node:dns/promises'
 import { DNSTypeMap } from '../../common/src'
@@ -9,9 +8,9 @@ jest.mock('node:dns/promises', () => ({
 }))
 
 describe('DNS Utilities', () => {
-    const resolveMxMock = resolveMx as jest.Mock<typeof resolveMx>
+    const resolveMxMock = resolveMx as jest.Mock
 
-    const reverseMock = reverse as jest.Mock<typeof reverse>
+    const reverseMock = reverse as jest.Mock
 
     describe('fetchRecords', () => {
         it('should fetch MX records', async () => {
