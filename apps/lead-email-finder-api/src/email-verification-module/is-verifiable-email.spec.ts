@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals'
 import { IsVerifiableEmail } from './is-verifiable-email.decorator'
 import { IsEmail } from 'class-validator'
 

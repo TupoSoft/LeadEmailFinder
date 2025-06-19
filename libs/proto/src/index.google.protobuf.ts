@@ -6,3 +6,4 @@
 /* eslint-disable */
 
 export * from "./google/protobuf/timestamp";
+export * from "./google/protobuf/field_mask";
