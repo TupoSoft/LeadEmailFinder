@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package user;
+package user.v1;
 
 import "google/protobuf/timestamp.proto";
 
 service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
-  rpc GetUserByEmail(GetUserByEmailRequest) returns (GetUserResponse);
+  rpc GetUserByEmail(GetUserByEmailRequest) returns (GetUserByEmailResponse);
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
@@ -33,6 +33,14 @@ message GetUserByEmailRequest {
 }
 
 message GetUserResponse {
+  string id = 1;
+  string email = 2;
+  string username = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message GetUserByEmailResponse {
   string id = 1;
   string email = 2;
   string username = 3;
