@@ -1,6 +1,5 @@
 import { Readable } from 'stream'
 import { readUntil } from './read-until'
-import { describe, expect, it } from '@jest/globals'
 import { KILOBYTE } from './constants'
 
 describe('readUntil', () => {
