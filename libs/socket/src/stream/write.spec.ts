@@ -1,11 +1,10 @@
 import { Writable } from 'node:stream'
 import { write } from './write'
-import { describe, expect, it } from '@jest/globals'
 
 describe('write', () => {
     it('should resolve when data is written successfully', async () => {
         const stream = new Writable({
-            write: (chunk, encoding, cb?) => {
+            write: (_chunk, _encoding, cb?) => {
                 if (cb !== undefined && typeof cb === 'function') {
                     cb(null)
                 }
@@ -24,7 +23,7 @@ describe('write', () => {
             },
         })
 
-        await expect(write(stream, 'test data')).rejects.toThrowError()
+        await expect(write(stream, 'test data')).rejects.toThrow('Error: Stream error')
     })
 
     it('should resolve after the stream drains when `write` returns false', async () => {
