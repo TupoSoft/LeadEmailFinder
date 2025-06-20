@@ -10,22 +10,28 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine
 
-ARG GRPC=false
+ENV PATH="/app/node_modules/.bin:$PATH"
+
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
 
 ARG TARGET_APP
 
-ENV APP=${TARGET_APP:-lead-email-finder}
-
-ENV METADATA_FILE_PATH="apps/$APP/src/generate-metadata.ts"
-
-ENV PATH="/app/node_modules/.bin:$PATH"
+ENV METADATA_FILE_PATH="apps/${TARGET_APP:-lead-email-finder}/src/generate-metadata.ts"
 
 WORKDIR /app
 
-RUN <<EOF
-apk add --no-cache curl wget bind-tools jq
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --update-cache \
+    wget \
+    # curl is for the healthcheck
+    curl \
+    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
+    bind-tools \
+    # jq is for the healthcheck
+    jq
 
-GRPC_HEALTH_PROBE_VERSION=v0.4.38
+RUN <<EOF
+set -e
 wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64
 chmod +x /bin/grpc_health_probe
 EOF
@@ -55,6 +61,8 @@ EXPOSE 9229
 
 # Expose the port that the application listens on.
 EXPOSE 3000
+
+ENV APP=$TARGET_APP
 
 # Run the application.
 CMD ([ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" || true) && pnpm start "$APP"

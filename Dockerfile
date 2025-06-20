@@ -3,9 +3,11 @@ ARG NODE_VERSION=lts
 
 FROM node:${NODE_VERSION}-alpine AS builder
 
-ARG TARGET_APP
-
 ENV PATH="/app/node_modules/.bin:$PATH"
+
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
+
+ARG TARGET_APP
 
 ENV METADATA_FILE_PATH="apps/$TARGET_APP/src/generate-metadata.ts"
 
@@ -30,6 +32,7 @@ COPY . .
 
 # Generate metadata and build the application.
 RUN <<EOF
+set -e
 tsc --noEmit -p apps/$TARGET_APP/tsconfig.app.json
 [ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"
 pnpm build $TARGET_APP
@@ -37,25 +40,26 @@ EOF
 
 FROM node:${NODE_VERSION}-alpine
 
-ARG TARGET_APP
-
-ARG GRPC=false
-
-ENV APP_MAIN_FILE=dist/apps/$TARGET_APP/main
-
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-RUN <<EOF
-apk add --no-cache \
-wget \
-# curl is for the healthcheck
-curl \
-# bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
-bind-tools \
-# jq is for the healthcheck
-jq
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
 
-GRPC_HEALTH_PROBE_VERSION=v0.4.38
+ARG TARGET_APP
+
+ENV APP_MAIN_FILE="dist/apps/$TARGET_APP/main"
+
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --update-cache \
+    wget \
+    # curl is for the healthcheck
+    curl \
+    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
+    bind-tools \
+    # jq is for the healthcheck
+    jq
+
+RUN <<EOF
+set -e
 wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64
 chmod +x /bin/grpc_health_probe
 EOF
