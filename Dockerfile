@@ -66,8 +66,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 WORKDIR /app
 
-COPY package.json .
-COPY pnpm-lock.yaml .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --frozen-lockfile -P i

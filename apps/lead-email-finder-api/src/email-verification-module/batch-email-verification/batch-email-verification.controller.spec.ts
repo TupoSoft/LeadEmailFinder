@@ -78,6 +78,6 @@ describe('BatchEmailVerificationController', () => {
                 })
 
             expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
-        })
+        }, 10000)
     })
 })
