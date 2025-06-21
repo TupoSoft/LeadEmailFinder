@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common'
+import { Controller, Get, SerializeOptions } from '@nestjs/common'
 import { ProxyService } from './proxy.service'
 import {
     AddProxyRequest,
@@ -12,17 +12,21 @@ import {
     ListProxiesRequest,
     ListProxiesResponse,
     ProxyServiceController,
+    ProxyServiceControllerMethods,
     ReportProxyBlacklistRequest,
     ReportProxyBlacklistResponse,
     UpdateProxyRequest,
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Observable } from 'rxjs'
+import { AddProxyResponseDto } from './proxy.dto'
 
 @Controller()
+@ProxyServiceControllerMethods()
 export class ProxyController implements ProxyServiceController {
     constructor(private readonly proxyService: ProxyService) {}
 
+    @SerializeOptions({ type: AddProxyResponseDto })
     async addProxy(request: AddProxyRequest): Promise<AddProxyResponse> {
         return await this.proxyService.addProxy(request)
     }

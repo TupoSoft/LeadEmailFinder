@@ -1,5 +1,5 @@
 ### Generate Key
-GRPC localhost:5000/api_key.v1.ApiKeyService/GenerateKey
+GRPC localhost:55000/api_key.v1.ApiKeyService/GenerateKey
 
 {
     "permissions": ["read"],

@@ -4,7 +4,7 @@ import { AutoMap } from '@automapper/classes'
 import { Types } from 'mongoose'
 
 @Schema({ _id: false })
-class Auth {
+export class Auth {
     @Prop()
     @AutoMap()
     user: string
@@ -32,7 +32,7 @@ export class Proxy {
     port: number
 
     @Prop()
-    @AutoMap()
+    @AutoMap(() => Auth)
     auth: Auth
 
     @Prop({ default: 1 })

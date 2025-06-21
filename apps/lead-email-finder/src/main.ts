@@ -25,8 +25,11 @@ async function bootstrap(): Promise<void> {
         {
             transport: Transport.GRPC,
             options: {
-                package: 'api_key.v1',
-                protoPath: join(__dirname, 'proto', 'api_key', 'v1', 'api_key.proto'),
+                package: ['api_key.v1', 'proxy.v1'],
+                protoPath: [
+                    join(__dirname, 'proto', 'api_key', 'v1', 'api_key.proto'),
+                    join(__dirname, 'proto', 'proxy', 'v1', 'proxy.proto'),
+                ],
                 url: '0.0.0.0:5000',
             },
         },

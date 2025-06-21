@@ -6,7 +6,7 @@ import { Proxy } from '../proxy.schema'
 import { InjectModel } from '@nestjs/mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { ProxyDescriptorDto } from '../proxy-descriptor.dto'
+import { ProxyDescriptorDto } from '../proxy.dto'
 
 @CommandHandler(AddProxyCommand)
 export class AddProxyHandler implements ICommandHandler<AddProxyCommand> {
