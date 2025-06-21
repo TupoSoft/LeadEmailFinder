@@ -1,3 +1,4 @@
+### Add Proxy
 GRPC localhost:55000/proxy.v1.ProxyService/AddProxy
 Content-Type: application/json
 
@@ -12,4 +13,24 @@ Content-Type: application/json
     "user": "foo",
     "pass": "bar"
   }
+}
+
+> {%
+    client.global.set('proxyId', response.body.proxy.id)
+%}
+
+### Get Proxy Success
+GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+Content-Type: application/json
+
+{
+  "id": "{{ proxyId }}"
+}
+
+### Get Proxy Not Found
+GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+Content-Type: application/json
+
+{
+  "id": "id"
 }

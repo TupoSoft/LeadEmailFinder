@@ -1,6 +1,14 @@
-import { AddProxyResponse, Auth, Protocol, ProxyDescriptor } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
+import {
+    AddProxyResponse,
+    Auth,
+    GetProxyRequest,
+    GetProxyResponse,
+    Protocol,
+    ProxyDescriptor,
+} from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { AutoMap } from '@automapper/classes'
 import { Expose, Type } from 'class-transformer'
+import { IsNotEmpty, IsString } from 'class-validator'
 
 @Expose()
 export class AuthDto implements Auth {
@@ -47,5 +55,16 @@ export class ProxyDescriptorDto implements ProxyDescriptor {
 
 @Expose()
 export class AddProxyResponseDto implements AddProxyResponse {
+    proxy: ProxyDescriptorDto
+}
+
+export class GetProxyRequestDto implements GetProxyRequest {
+    @IsString()
+    @IsNotEmpty()
+    id: string
+}
+
+@Expose()
+export class GetProxyResponseDto implements GetProxyResponse {
     proxy: ProxyDescriptorDto
 }
