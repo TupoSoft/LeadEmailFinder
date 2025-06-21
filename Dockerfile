@@ -5,8 +5,6 @@ FROM node:${NODE_VERSION}-alpine AS builder
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
-
 ARG TARGET_APP
 
 ENV METADATA_FILE_PATH="apps/$TARGET_APP/src/generate-metadata.ts"
