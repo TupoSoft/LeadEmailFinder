@@ -1,6 +1,6 @@
 import { AddProxyResponse, Auth, Protocol, ProxyDescriptor } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { AutoMap } from '@automapper/classes'
-import { Expose } from 'class-transformer'
+import { Expose, Type } from 'class-transformer'
 
 @Expose()
 export class AuthDto implements Auth {
@@ -26,6 +26,7 @@ export class ProxyDescriptorDto implements ProxyDescriptor {
     port: number
 
     @AutoMap(() => AuthDto)
+    @Type(() => AuthDto)
     auth: AuthDto | undefined
 
     @AutoMap()

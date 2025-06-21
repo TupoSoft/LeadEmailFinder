@@ -19,6 +19,7 @@ import {
 import { Observable } from 'rxjs'
 import { CommandBus } from '@nestjs/cqrs'
 import { AddProxyCommand } from './add-proxy/add-proxy.command'
+import { GetProxyCommand } from './get-proxy/get-proxy.command'
 
 @Injectable()
 export class ProxyService implements ProxyServiceController {
@@ -44,8 +45,8 @@ export class ProxyService implements ProxyServiceController {
         throw new Error('Method not implemented.')
     }
 
-    getProxy(request: GetProxyRequest): Promise<GetProxyResponse> | Observable<GetProxyResponse> | GetProxyResponse {
-        throw new Error('Method not implemented.')
+    async getProxy({ id }: GetProxyRequest): Promise<GetProxyResponse> {
+        return await this.commandBus.execute(new GetProxyCommand(id))
     }
 
     updateProxy(

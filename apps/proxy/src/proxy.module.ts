@@ -13,6 +13,7 @@ import { AddProxyHandler } from './add-proxy/add-proxy.handler'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
 import { CqrsModule } from '@nestjs/cqrs'
+import { GetProxyHandler } from './get-proxy/get-proxy.handler'
 
 @Module({
     imports: [
@@ -44,7 +45,7 @@ import { CqrsModule } from '@nestjs/cqrs'
         }),
         CqrsModule.forRoot(),
     ],
-    providers: [ProxyProfile, ProxyService, AddProxyHandler],
+    providers: [ProxyProfile, ProxyService, AddProxyHandler, GetProxyHandler],
     controllers: [ProxyController],
 })
 export class ProxyModule {}
