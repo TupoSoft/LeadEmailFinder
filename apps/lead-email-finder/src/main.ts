@@ -1,18 +1,32 @@
-import { NestFactory } from '@nestjs/core'
+import { NestFactory, Reflector } from '@nestjs/core'
 import { LeadEmailFinderModule } from './lead-email-finder.module'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { MicroserviceOptions, Transport } from '@nestjs/microservices'
+import { join } from 'node:path'
+import { Logger } from 'pino-nestjs'
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
+import { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create(LeadEmailFinderModule)
+    const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderModule)
+    app.disable('x-powered-by')
+    app.enable('trust proxy')
+    app.useLogger(app.get(Logger))
+    app.useGlobalPipes(new ValidationPipe())
+    app.useGlobalInterceptors(
+        new ClassSerializerInterceptor(app.get(Reflector), {
+            strategy: 'excludeAll',
+            enableImplicitConversion: true,
+        }),
+    )
 
     app.connectMicroservice<MicroserviceOptions>(
         {
             transport: Transport.GRPC,
             options: {
-                package: 'api_key',
-                protoPath: 'proto/api_key.proto',
+                package: 'api_key.v1',
+                protoPath: join(__dirname, 'proto', 'api_key', 'v1', 'api_key.proto'),
                 url: '0.0.0.0:5000',
             },
         },
