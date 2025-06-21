@@ -9,6 +9,7 @@ import { ProxySchema } from './proxy.schema'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ProxyProfile } from './proxy.profile'
+import { AddProxyHandler } from './add-proxy/add-proxy.handler'
 
 @Module({
     imports: [
@@ -26,16 +27,19 @@ import { ProxyProfile } from './proxy.profile'
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            {
-                name: Proxy.name,
-                schema: ProxySchema,
-            },
-        ]),
+        MongooseModule.forFeature(
+            [
+                {
+                    name: Proxy.name,
+                    schema: ProxySchema,
+                },
+            ],
+            'proxy',
+        ),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),
     ],
-    providers: [ProxyProfile],
+    providers: [ProxyProfile, AddProxyHandler],
 })
 export class ProxyModule {}

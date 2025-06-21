@@ -23,8 +23,8 @@ import { Observable } from 'rxjs'
 export class ProxyController implements ProxyServiceController {
     constructor(private readonly proxyService: ProxyService) {}
 
-    addProxy(request: AddProxyRequest): Promise<AddProxyResponse> | Observable<AddProxyResponse> | AddProxyResponse {
-        throw new Error('Method not implemented.')
+    async addProxy(request: AddProxyRequest): Promise<AddProxyResponse> {
+        return await this.proxyService.addProxy(request)
     }
 
     listProxies(

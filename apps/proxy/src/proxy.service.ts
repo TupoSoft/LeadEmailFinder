@@ -17,11 +17,25 @@ import {
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Observable } from 'rxjs'
+import { CommandBus } from '@nestjs/cqrs'
+import { AddProxyCommand } from './add-proxy/add-proxy.command'
 
 @Injectable()
 export class ProxyService implements ProxyServiceController {
-    addProxy(request: AddProxyRequest): Promise<AddProxyResponse> | Observable<AddProxyResponse> | AddProxyResponse {
-        throw new Error('Method not implemented.')
+    constructor(private readonly commandBus: CommandBus) {}
+
+    async addProxy({
+        protocol,
+        host,
+        port,
+        auth,
+        weight,
+        enabled,
+        description,
+    }: AddProxyRequest): Promise<AddProxyResponse> {
+        return await this.commandBus.execute(
+            new AddProxyCommand(protocol, host, port, auth, description, weight, enabled),
+        )
     }
 
     listProxies(
