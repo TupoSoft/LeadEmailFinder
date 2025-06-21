@@ -7,7 +7,7 @@ services:
       args:
         TARGET_APP: proxy
     ports:
-      - '5001:5000'
+      - '55001:5000'
     depends_on:
       mongo:
         condition: service_healthy
@@ -25,5 +25,5 @@ services:
       - debug
       - proxy
     ports:
-      - '9232:9229'
+      - '59232:9229'
     profiles: !override [debug]

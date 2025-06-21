@@ -1,5 +1,5 @@
 services:
   api:
     ports:
-      - "9229:9229"
+      - "59229:9229"
     command: pnpm debug
