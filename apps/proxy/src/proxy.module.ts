@@ -16,8 +16,9 @@ import { MongooseModule } from '@nestjs/mongoose'
         }),
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
+            connectionName: 'proxy',
             useFactory: (configService: ConfigService) => ({
-                uri: configService.get('MONGO_URL'),
+                uri: configService.get('PROXY_MONGO_URL'),
             }),
             inject: [ConfigService],
         }),
