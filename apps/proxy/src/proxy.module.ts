@@ -5,6 +5,10 @@ import { Environment, loadSecrets, validate } from '@tuposoft/lead-email-finder/
 import { env } from 'node:process'
 import { EnvDto } from './env.dto'
 import { MongooseModule } from '@nestjs/mongoose'
+import { ProxySchema } from './proxy.schema'
+import { AutomapperModule } from '@automapper/nestjs'
+import { classes } from '@automapper/classes'
+import { ProxyProfile } from './proxy.profile'
 
 @Module({
     imports: [
@@ -22,6 +26,16 @@ import { MongooseModule } from '@nestjs/mongoose'
             }),
             inject: [ConfigService],
         }),
+        MongooseModule.forFeature([
+            {
+                name: Proxy.name,
+                schema: ProxySchema,
+            },
+        ]),
+        AutomapperModule.forRoot({
+            strategyInitializer: classes(),
+        }),
     ],
+    providers: [ProxyProfile],
 })
 export class ProxyModule {}
