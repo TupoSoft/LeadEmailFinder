@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package user.v1;
 
-import "google/protobuf/timestamp.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
 
 service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
@@ -34,11 +34,11 @@ message GetUserByEmailRequest {
 }
 
 message GetUserResponse {
-    User user = 1;
+  User user = 1;
 }
 
 message GetUserByEmailResponse {
-    User user = 1;
+  User user = 1;
 }
 
 message CreateUserRequest {
@@ -48,7 +48,7 @@ message CreateUserRequest {
 }
 
 message CreateUserResponse {
-    User user = 1;
+  User user = 1;
 }
 
 message UpdateUserRequest {
@@ -58,7 +58,7 @@ message UpdateUserRequest {
 }
 
 message UpdateUserResponse {
-    User user = 1;
+  User user = 1;
 }
 
 message UpdatePasswordRequest {
