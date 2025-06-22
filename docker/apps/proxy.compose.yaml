@@ -13,7 +13,7 @@ services:
         condition: service_healthy
     environment:
       TARGET_APP: proxy
-      MONGO_URL_FILE: /run/secrets/proxy_mongo_url
+      PROXY_MONGO_URL_FILE: /run/secrets/proxy_mongo_url
     secrets:
       - proxy_mongo_url
 
