@@ -68,8 +68,8 @@ message UpdateUserRequest {
 }
 
 message UpdateUserData {
-  string email = 1;
-  string username = 2;
+  optional string email = 1;
+  optional string username = 2;
 }
 
 message UpdateUserResponse {
