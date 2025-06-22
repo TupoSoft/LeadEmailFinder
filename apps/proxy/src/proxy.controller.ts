@@ -18,7 +18,7 @@ import {
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Observable } from 'rxjs'
-import { AddProxyResponseDto, GetProxyRequestDto, GetProxyResponseDto } from './proxy.dto'
+import { AddProxyResponseDto, GetProxyRequestDto } from './proxy.dto'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
 
 @Controller()
@@ -38,8 +38,9 @@ export class ProxyController implements ProxyServiceController {
         throw new Error('Method not implemented.')
     }
 
-    @SerializeOptions({ type: GetProxyResponseDto })
-    async getProxy(request: GetProxyRequestDto): Promise<GetProxyResponse> {
+    getProxy(
+        request: GetProxyRequestDto,
+    ): Promise<GetProxyResponse> | Observable<UpdateProxyResponse> | GetProxyResponse {
         throw new Error('Method not implemented.')
     }
 
