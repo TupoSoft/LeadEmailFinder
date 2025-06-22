@@ -35,7 +35,7 @@ export class ProxyDescriptorDto implements ProxyDescriptor {
 
     @AutoMap(() => AuthDto)
     @Type(() => AuthDto)
-    auth: AuthDto | undefined
+    auth: Auth | undefined
 
     @AutoMap()
     weight: number

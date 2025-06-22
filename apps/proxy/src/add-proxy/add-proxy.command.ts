@@ -8,8 +8,8 @@ export class AddProxyCommand extends Command<AddProxyResponse> implements Readon
         public readonly port: number,
         public readonly auth: Auth | undefined,
         public readonly description: string,
-        public weight: number,
-        public enabled: boolean,
+        public weight: number = 1,
+        public enabled: boolean = true,
     ) {
         super()
     }

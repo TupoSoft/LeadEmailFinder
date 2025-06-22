@@ -33,7 +33,7 @@ export class Proxy {
 
     @Prop()
     @AutoMap(() => Auth)
-    auth: Auth
+    auth?: Auth
 
     @Prop({ default: 1 })
     @AutoMap()
