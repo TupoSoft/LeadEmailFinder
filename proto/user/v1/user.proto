@@ -3,6 +3,7 @@ syntax = "proto3";
 package user.v1;
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
 
 service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
@@ -33,56 +34,36 @@ message GetUserByEmailRequest {
 }
 
 message GetUserResponse {
-  string id = 1;
-  string email = 2;
-  string username = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
+    User user = 1;
 }
 
 message GetUserByEmailResponse {
-  string id = 1;
-  string email = 2;
-  string username = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
+    User user = 1;
 }
 
 message CreateUserRequest {
   string email = 1;
   string username = 2;
-  string password_hash = 3;
+  string password = 3;
 }
 
 message CreateUserResponse {
-  string id = 1;
-  string email = 2;
-  string username = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
+    User user = 1;
 }
 
 message UpdateUserRequest {
   string id = 1;
-  UpdateUserData data = 2;
-}
-
-message UpdateUserData {
-  optional string email = 1;
-  optional string username = 2;
+  User user = 2;
+  google.protobuf.FieldMask update_mask = 3;
 }
 
 message UpdateUserResponse {
-  string id = 1;
-  string email = 2;
-  string username = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
+    User user = 1;
 }
 
 message UpdatePasswordRequest {
   string user_id = 1;
-  string password_hash = 2;
+  string password = 2;
 }
 
 message UpdatePasswordResponse {
@@ -91,7 +72,7 @@ message UpdatePasswordResponse {
 
 message VerifyPasswordRequest {
   string user_id = 1;
-  string password_hash = 2;
+  string password = 2;
 }
 
 message VerifyPasswordResponse {
