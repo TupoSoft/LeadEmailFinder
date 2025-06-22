@@ -4,7 +4,7 @@ const config: Config = {
     moduleFileExtensions: ['js', 'json', 'ts'],
     testRegex: '.*\\.spec\\.ts$',
     transform: {
-        '^.+\\.(t|j)s$': 'ts-jest',
+        '^.+\\.(t|j)s$': '@swc/jest',
     },
     collectCoverageFrom: ['**/*.(t|j)s'],
     coverageDirectory: '../coverage',
@@ -17,6 +17,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/catch-all': '<rootDir>/libs/catch-all/src/$1',
         '@tuposoft/lead-email-finder/common': '<rootDir>/libs/common/src/$1',
         '@tuposoft/lead-email-finder/proto': '<rootDir>/libs/proto/src/$1',
+        '@tuposoft/lead-email-finder/grpc': '<rootDir>/libs/grpc/src/$1',
     },
 }
 

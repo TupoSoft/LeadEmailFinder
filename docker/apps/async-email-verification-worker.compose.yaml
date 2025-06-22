@@ -23,5 +23,5 @@ services:
       - debug
       - async-email-verification-worker
     ports:
-      - '9231:9229'
+      - '59231:9229'
     profiles: !override [debug]
