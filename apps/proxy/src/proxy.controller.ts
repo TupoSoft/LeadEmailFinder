@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, SerializeOptions, UseFilters } from '@nestjs/common'
+import { Controller, Get, SerializeOptions, UseFilters } from '@nestjs/common'
 import { ProxyService } from './proxy.service'
 import {
     AddProxyRequest,
@@ -20,7 +20,6 @@ import {
 import { Observable } from 'rxjs'
 import { AddProxyResponseDto, GetProxyRequestDto, GetProxyResponseDto } from './proxy.dto'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
-import { ProxyNotFoundException } from './proxy-not-found.exception'
 
 @Controller()
 @ProxyServiceControllerMethods()
@@ -41,15 +40,7 @@ export class ProxyController implements ProxyServiceController {
 
     @SerializeOptions({ type: GetProxyResponseDto })
     async getProxy(request: GetProxyRequestDto): Promise<GetProxyResponse> {
-        try {
-            return await this.proxyService.getProxy(request)
-        } catch (error) {
-            if (error instanceof ProxyNotFoundException) {
-                throw new NotFoundException(error)
-            }
-
-            throw error
-        }
+        throw new Error('Method not implemented.')
     }
 
     updateProxy(
