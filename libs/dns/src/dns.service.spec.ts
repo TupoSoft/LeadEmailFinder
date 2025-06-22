@@ -1,37 +1,37 @@
-const resolveMxMock = jest.fn()
-const reverseMock = jest.fn()
-
 import { DNSTypeMap } from '../../common/src'
 import { DnsService } from './dns.service'
 import { Redis } from 'ioredis'
 import { Test } from '@nestjs/testing'
-import { reverse } from 'node:dns/promises'
+import { resolveMx, reverse } from 'node:dns/promises'
 
 jest.mock('node:dns/promises', () => ({
-    resolveMx: resolveMxMock,
-    reverse: reverseMock,
+    resolveMx: jest.fn(),
+    reverse: jest.fn(),
 }))
-
-const mockedRedis = {
-    get: jest.fn(),
-    set: jest.fn(),
-}
 
 describe('DnsService', () => {
     let dnsService: DnsService
+    let mockedRedis: jest.Mocked<Redis>
+
+    const resolveMxMock = resolveMx as jest.MockedFunction<typeof resolveMx>
+    const reverseMock = reverse as jest.MockedFunction<typeof reverse>
 
     beforeEach(async () => {
         const moduleRef = await Test.createTestingModule({
             providers: [
                 {
                     provide: Redis,
-                    useValue: mockedRedis,
+                    useValue: {
+                        get: jest.fn(),
+                        set: jest.fn(),
+                    },
                 },
                 DnsService,
             ],
         }).compile()
 
         dnsService = moduleRef.get(DnsService)
+        mockedRedis = moduleRef.get(Redis)
     })
 
     afterEach(() => {
