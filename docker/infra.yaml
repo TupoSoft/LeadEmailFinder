@@ -22,7 +22,7 @@ services:
       PROXIES: ${PROXIES}
       NODE_PATH: /docker-entrypoint-initdb.d
     ports:
-      - '27017:27017'
+      - '57017:27017'
     secrets:
       - mongo_root_username
       - mongo_root_password
@@ -40,7 +40,7 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '56379:6379'
     healthcheck:
       <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
@@ -56,15 +56,15 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - '4000:3000'
+      - '54000:3000'
 
   minio:
     image: minio/minio
     healthcheck:
       test: curl -I http://localhost:9000/minio/health/live
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '59000:9000'
+      - '59001:9001'
     command: server /data --console-address=":9001"
 
   mc:

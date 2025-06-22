@@ -7,7 +7,7 @@ services:
       args:
         TARGET_APP: api-key
     ports:
-      - '5000:5000'
+      - '55000:5000'
     depends_on:
       mongo:
         condition: service_healthy
@@ -25,5 +25,5 @@ services:
       - debug
       - api-key
     ports:
-      - '9230:9229'
+      - '59230:9229'
     profiles: !override [debug]

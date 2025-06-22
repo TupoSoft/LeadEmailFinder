@@ -7,13 +7,13 @@ services:
       args:
         TARGET_APP: proxy
     ports:
-      - '5001:5000'
+      - '55001:5000'
     depends_on:
       mongo:
         condition: service_healthy
     environment:
       TARGET_APP: proxy
-      MONGO_URL_FILE: /run/secrets/proxy_mongo_url
+      PROXY_MONGO_URL_FILE: /run/secrets/proxy_mongo_url
     secrets:
       - proxy_mongo_url
 
@@ -25,5 +25,5 @@ services:
       - debug
       - proxy
     ports:
-      - '9232:9229'
+      - '59232:9229'
     profiles: !override [debug]

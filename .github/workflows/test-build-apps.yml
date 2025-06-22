@@ -37,7 +37,9 @@ jobs:
     secrets: inherit
 
   detect-changes:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - ubuntu-22
     permissions:
       pull-requests: read
       contents: read
@@ -120,7 +122,9 @@ jobs:
       - test-changed-apps
       - build-changed-apps
     if: always() && needs.detect-changes.outputs.any_change == 'true'
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - ubuntu-22
     steps:
       - name: Summarize changes
         run: |
