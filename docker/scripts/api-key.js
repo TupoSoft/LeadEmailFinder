@@ -2,7 +2,7 @@ const { readFileSync } = require('node:fs')
 const assert = require('node:assert')
 const { URL } = require('url')
 const { env } = process
-const { createUserFromUrl } = require(`common/create-user-from-url.js`)
+const { createUserFromUrl } = require('common/create-user-from-url.js')
 
 const { APIKEY_MONGO_URL_FILE: mongoUrlFilePath, ADMIN_APIKEY_FILE: adminApikeyFilePath } = env
 
