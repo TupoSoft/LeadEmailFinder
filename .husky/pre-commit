@@ -1,0 +1,3 @@
+which pnpm
+pnpm test
+pnpm proto:format
