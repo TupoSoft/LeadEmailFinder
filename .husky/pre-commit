@@ -1,2 +1,2 @@
-pnpm test
+pnpm test -o
 pnpm proto:format
