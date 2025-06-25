@@ -3,6 +3,7 @@ import {
     Auth,
     GetProxyRequest,
     GetProxyResponse,
+    ListProxiesResponse,
     Protocol,
     ProxyDescriptor,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
@@ -67,4 +68,10 @@ export class GetProxyRequestDto implements GetProxyRequest {
 @Expose()
 export class GetProxyResponseDto implements GetProxyResponse {
     proxy: ProxyDescriptorDto
+}
+
+@Expose()
+export class ListProxiesResponseDto implements ListProxiesResponse {
+    proxies: ProxyDescriptorDto[]
+    nextPageToken: string
 }

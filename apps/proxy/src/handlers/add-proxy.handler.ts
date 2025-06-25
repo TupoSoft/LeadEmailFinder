@@ -1,5 +1,5 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs'
-import { AddProxyCommand } from './add-proxy.command'
+import { AddProxyCommand } from '../commands/add-proxy.command'
 import { AddProxyResponse } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Model } from 'mongoose'
 import { Proxy } from '../proxy.schema'

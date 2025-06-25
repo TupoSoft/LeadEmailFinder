@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing'
 import { AddProxyHandler } from './add-proxy.handler'
 import { getModelToken } from '@nestjs/mongoose'
 import { getMapperToken } from '@automapper/nestjs'
-import { AddProxyCommand } from './add-proxy.command'
+import { AddProxyCommand } from '../commands/add-proxy.command'
 
 describe('AddProxyHandler', () => {
     let addProxyHandler: AddProxyHandler

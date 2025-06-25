@@ -18,3 +18,28 @@ Content-Type: application/json
 > {%
     client.global.set('proxyId', response.body.proxy.id)
 %}
+
+### Get Proxy Success
+GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+Content-Type: application/json
+
+{
+  "id": "{{proxyId}}"
+}
+
+### Get Proxy Failure
+GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+Content-Type: application/json
+
+{
+  "id": "not_found"
+}
+
+### List Proxies
+GRPC localhost:55000/proxy.v1.ProxyService/ListProxies
+Content-Type: application/json
+
+{
+  "page_size": 10,
+  "page_token": ""
+}

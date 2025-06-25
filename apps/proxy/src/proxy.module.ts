@@ -9,10 +9,12 @@ import { ProxySchema } from './proxy.schema'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ProxyProfile } from './proxy.profile'
-import { AddProxyHandler } from './add-proxy/add-proxy.handler'
+import { AddProxyHandler } from './handlers/add-proxy.handler'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
 import { CqrsModule } from '@nestjs/cqrs'
+import { GetProxyHandler } from './handlers/get-proxy.handler'
+import { ListProxiesHandler } from './handlers/list-proxies.handler'
 
 @Module({
     imports: [
@@ -44,7 +46,7 @@ import { CqrsModule } from '@nestjs/cqrs'
         }),
         CqrsModule.forRoot(),
     ],
-    providers: [ProxyProfile, ProxyService, AddProxyHandler],
+    providers: [ProxyProfile, ProxyService, AddProxyHandler, GetProxyHandler, ListProxiesHandler],
     controllers: [ProxyController],
 })
 export class ProxyModule {}

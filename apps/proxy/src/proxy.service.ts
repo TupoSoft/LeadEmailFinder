@@ -17,15 +17,20 @@ import {
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Observable } from 'rxjs'
-import { CommandBus } from '@nestjs/cqrs'
-import { AddProxyCommand } from './add-proxy/add-proxy.command'
+import { CommandBus, QueryBus } from '@nestjs/cqrs'
+import { AddProxyCommand } from './commands/add-proxy.command'
+import { GetProxyQuery } from './queries/get-proxy.query'
+import { ListProxiesQuery } from './queries/list-proxies.query'
 
 @Injectable()
 export class ProxyService implements ProxyServiceController {
-    constructor(private readonly commandBus: CommandBus) {}
+    constructor(
+        private readonly commandBus: CommandBus,
+        private readonly queryBus: QueryBus,
+    ) {}
 
-    getProxy(request: GetProxyRequest): Promise<GetProxyResponse> | Observable<GetProxyResponse> | GetProxyResponse {
-        throw new Error('Method not implemented.')
+    async getProxy({ id }: GetProxyRequest): Promise<GetProxyResponse> {
+        return await this.queryBus.execute(new GetProxyQuery(id))
     }
 
     async addProxy({
@@ -42,10 +47,8 @@ export class ProxyService implements ProxyServiceController {
         )
     }
 
-    listProxies(
-        request: ListProxiesRequest,
-    ): Promise<ListProxiesResponse> | Observable<ListProxiesResponse> | ListProxiesResponse {
-        throw new Error('Method not implemented.')
+    async listProxies({ pageSize, pageToken }: ListProxiesRequest): Promise<ListProxiesResponse> {
+        return this.queryBus.execute(new ListProxiesQuery(pageSize, pageToken))
     }
 
     updateProxy(
