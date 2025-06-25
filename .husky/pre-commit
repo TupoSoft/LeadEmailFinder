@@ -1,2 +1,2 @@
 pnpm test -o
-pnpm proto:format
+pnpm proto:format && git diff --quiet || git add .
