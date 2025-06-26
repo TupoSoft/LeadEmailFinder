@@ -1,5 +1,7 @@
+@url={{ services.proxy.host }}:{{ services.proxy.port }}
+
 ### Add Proxy
-GRPC localhost:55000/proxy.v1.ProxyService/AddProxy
+GRPC {{url}}/proxy.v1.ProxyService/AddProxy
 Content-Type: application/json
 
 {
