@@ -35,11 +35,16 @@ Content-Type: application/json
   "id": "not_found"
 }
 
+> {%
+    client.test('OK', () => {
+        client.assert(response.status === 207, 'The status is not 207')
+    })
+%}
+
 ### List Proxies
 GRPC localhost:55000/proxy.v1.ProxyService/ListProxies
 Content-Type: application/json
 
 {
-  "page_size": 10,
-  "page_token": ""
+  "page_size": 5
 }

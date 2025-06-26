@@ -3,13 +3,14 @@ import {
     Auth,
     GetProxyRequest,
     GetProxyResponse,
+    ListProxiesRequest,
     ListProxiesResponse,
     Protocol,
     ProxyDescriptor,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { AutoMap } from '@automapper/classes'
 import { Expose, Type } from 'class-transformer'
-import { IsNotEmpty, IsString } from 'class-validator'
+import { IsMongoId, IsOptional, IsPositive } from 'class-validator'
 
 @Expose()
 export class AuthDto implements Auth {
@@ -60,8 +61,9 @@ export class AddProxyResponseDto implements AddProxyResponse {
 }
 
 export class GetProxyRequestDto implements GetProxyRequest {
-    @IsString()
-    @IsNotEmpty()
+    @IsMongoId({
+        message: ({ value }) => `Invalid ID: ${value}.`,
+    })
     id: string
 }
 
@@ -71,7 +73,20 @@ export class GetProxyResponseDto implements GetProxyResponse {
 }
 
 @Expose()
+export class ListProxiesRequestDto implements ListProxiesRequest {
+    @IsOptional()
+    @IsMongoId({
+        message: ({ value }) => `Invalid ID: ${value}.`,
+    })
+    pageToken?: string
+
+    @IsPositive()
+    pageSize: number = 10
+}
+
+@Expose()
 export class ListProxiesResponseDto implements ListProxiesResponse {
+    @Type(() => ProxyDescriptorDto)
     proxies: ProxyDescriptorDto[]
     nextPageToken: string
 }

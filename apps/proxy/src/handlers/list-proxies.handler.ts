@@ -3,11 +3,12 @@ import { ListProxiesQuery } from '../queries/list-proxies.query'
 import { ListProxiesResponse } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { InjectModel } from '@nestjs/mongoose'
 import { Proxy } from '../proxy.schema'
-import { Model } from 'mongoose'
+import { Model, RootFilterQuery } from 'mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { Logger, Optional } from '@nestjs/common'
 import { ProxyDescriptorDto } from '../proxy.dto'
+import { isNativeError } from 'node:util/types'
 
 @QueryHandler(ListProxiesQuery)
 export class ListProxiesHandler implements IQueryHandler<ListProxiesQuery> {
@@ -18,12 +19,10 @@ export class ListProxiesHandler implements IQueryHandler<ListProxiesQuery> {
     ) {}
 
     // noinspection JSUnusedGlobalSymbols
-    async execute({ pageToken, pageSize }: ListProxiesQuery): Promise<ListProxiesResponse> {
-        const documents = await this.proxyModel
-            .find({ _id: { $gt: pageToken } })
-            .limit(pageSize + 1)
-            .lean()
-            .exec()
+    async execute(request: ListProxiesQuery): Promise<ListProxiesResponse> {
+        const documents = await this.fetchDocuments(request)
+
+        const { pageSize } = request
 
         let nextPageToken = ''
 
@@ -37,6 +36,28 @@ export class ListProxiesHandler implements IQueryHandler<ListProxiesQuery> {
         return {
             proxies,
             nextPageToken,
+        }
+    }
+
+    private async fetchDocuments({ pageToken, pageSize }: ListProxiesQuery): Promise<Proxy[]> {
+        const query: RootFilterQuery<Proxy> = {}
+
+        if (pageToken !== undefined) {
+            query._id = { $gt: pageToken }
+        }
+
+        try {
+            return await this.proxyModel
+                .find(query)
+                .limit(pageSize + 1)
+                .lean()
+                .exec()
+        } catch (error) {
+            if (isNativeError(error)) {
+                this.logger.error(`Error fetching documents: ${error.message}`, error.stack)
+            }
+
+            throw error
         }
     }
 }

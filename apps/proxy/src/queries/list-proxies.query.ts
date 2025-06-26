@@ -6,7 +6,7 @@ import { ListProxiesRequest, ListProxiesResponse } from '@tuposoft/lead-email-fi
 export class ListProxiesQuery extends Query<ListProxiesResponse> implements ListProxiesRequest {
     constructor(
         public readonly pageSize: number,
-        public readonly pageToken: string,
+        public readonly pageToken: string | undefined,
     ) {
         super()
     }

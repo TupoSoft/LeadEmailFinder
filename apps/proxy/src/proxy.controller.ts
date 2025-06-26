@@ -8,7 +8,6 @@ import {
     GetHealthyProxyRequest,
     GetHealthyProxyResponse,
     GetProxyResponse,
-    ListProxiesRequest,
     ListProxiesResponse,
     ProxyServiceController,
     ProxyServiceControllerMethods,
@@ -18,7 +17,13 @@ import {
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { Observable } from 'rxjs'
-import { AddProxyResponseDto, GetProxyRequestDto, GetProxyResponseDto, ListProxiesResponseDto } from './proxy.dto'
+import {
+    AddProxyResponseDto,
+    GetProxyRequestDto,
+    GetProxyResponseDto,
+    ListProxiesRequestDto,
+    ListProxiesResponseDto,
+} from './proxy.dto'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 
@@ -34,7 +39,7 @@ export class ProxyController implements ProxyServiceController {
     }
 
     @SerializeOptions({ type: ListProxiesResponseDto })
-    async listProxies(request: ListProxiesRequest): Promise<ListProxiesResponse> {
+    async listProxies(request: ListProxiesRequestDto): Promise<ListProxiesResponse> {
         return await this.proxyService.listProxies(request)
     }
 
@@ -54,25 +59,25 @@ export class ProxyController implements ProxyServiceController {
     updateProxy(
         request: UpdateProxyRequest,
     ): Promise<UpdateProxyResponse> | Observable<UpdateProxyResponse> | UpdateProxyResponse {
-        throw new Error('Method not implemented.')
+        return this.proxyService.updateProxy(request)
     }
 
     deleteProxy(
         request: DeleteProxyRequest,
     ): Promise<DeleteProxyResponse> | Observable<DeleteProxyResponse> | DeleteProxyResponse {
-        throw new Error('Method not implemented.')
+        return this.proxyService.deleteProxy(request)
     }
 
     getHealthyProxy(
         request: GetHealthyProxyRequest,
     ): Promise<GetHealthyProxyResponse> | Observable<GetHealthyProxyResponse> | GetHealthyProxyResponse {
-        throw new Error('Method not implemented.')
+        return this.proxyService.getHealthyProxy(request)
     }
 
     reportProxyBlacklist(
         request: ReportProxyBlacklistRequest,
     ): Promise<ReportProxyBlacklistResponse> | Observable<ReportProxyBlacklistResponse> | ReportProxyBlacklistResponse {
-        throw new Error('Method not implemented.')
+        return this.proxyService.reportProxyBlacklist(request)
     }
 
     @Get()
