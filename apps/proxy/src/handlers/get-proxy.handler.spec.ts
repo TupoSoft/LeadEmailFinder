@@ -14,7 +14,7 @@ describe('GetProxyHandler', () => {
     let proxyModel: jest.Mocked<Model<Proxy>>
     let mapper: jest.Mocked<Mapper>
 
-    beforeEach(async () => {
+    beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({
             providers: [
                 GetProxyHandler,
@@ -44,13 +44,17 @@ describe('GetProxyHandler', () => {
         mapper = moduleRef.get(getMapperToken())
     })
 
+    afterEach(() => {
+        jest.clearAllMocks()
+    })
+
     it('should return the proxy when found', async () => {
         const query = new GetProxyQuery('1')
         const mockProxy = { _id: '1', host: 'localhost', port: 8080 }
         const mockProxyDto = { id: '1', host: 'localhost', port: 8080 }
 
-        proxyModel.findOne.mockResolvedValue(mockProxy)
-        mapper.map.mockReturnValue(mockProxyDto)
+        proxyModel.findOne.mockResolvedValueOnce(mockProxy)
+        mapper.map.mockReturnValueOnce(mockProxyDto)
 
         const result = await handler.execute(query)
 
@@ -62,7 +66,7 @@ describe('GetProxyHandler', () => {
     it('should throw ProxyNotFoundException when proxy is not found', async () => {
         const query = new GetProxyQuery('2')
 
-        proxyModel.findOne.mockResolvedValue(null)
+        proxyModel.findOne.mockResolvedValueOnce(null)
 
         await expect(handler.execute(query)).rejects.toThrow(ProxyNotFoundException)
         expect(proxyModel.findOne).toHaveBeenCalledWith({ _id: '2' })
@@ -73,7 +77,7 @@ describe('GetProxyHandler', () => {
         const query = new GetProxyQuery('3')
         const error = new Error('Database error')
 
-        proxyModel.findOne.mockRejectedValue(error)
+        proxyModel.findOne.mockRejectedValueOnce(error)
 
         await expect(handler.execute(query)).rejects.toThrow(ProxyNotFoundException)
         expect(proxyModel.findOne).toHaveBeenCalledWith({ _id: '3' })
