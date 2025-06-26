@@ -90,7 +90,7 @@ jobs:
 
   test-changed-apps:
     needs: detect-changes
-    if: needs.detect-changes.outputs.any_app_changed == 'true'
+    if: needs.detect-changes.outputs.any_lib_changed == 'true' || needs.detect-changes.outputs.any_app_changed == 'true'
     strategy:
       matrix:
         app: ${{ fromJSON(needs.detect-changes.outputs.changed_apps) }}
