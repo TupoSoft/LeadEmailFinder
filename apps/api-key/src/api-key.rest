@@ -1,5 +1,7 @@
+@url={{ services.api-key.host }}:{{ services.api-key.port }}
+
 ### Generate Key
-GRPC localhost:55000/api_key.v1.ApiKeyService/GenerateKey
+GRPC {{url}}/api_key.v1.ApiKeyService/GenerateKey
 
 {
     "permissions": ["read"],
@@ -12,7 +14,7 @@ GRPC localhost:55000/api_key.v1.ApiKeyService/GenerateKey
 %}
 
 ### Check Key Permissions Success
-GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
+GRPC {{url}}/api_key.v1.ApiKeyService/CheckKeyPermissions
 
 {
   "token": "{{ key }}",
@@ -25,7 +27,7 @@ GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
 %}
 
 ### Check Key Permissions Failure
-GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
+GRPC {{url}}/api_key.v1.ApiKeyService/CheckKeyPermissions
 
 {
   "token": "{{ key }}",
@@ -38,7 +40,7 @@ GRPC localhost:5000/api_key.v1.ApiKeyService/CheckKeyPermissions
 %}
 
 ### Revoke Key
-GRPC localhost:5000/api_key.v1.ApiKeyService/RevokeKey
+GRPC {{url}}/api_key.v1.ApiKeyService/RevokeKey
 
 {
   "token": "{{ key }}"

@@ -1,10 +1,12 @@
+@url={{ services.api.host }}:{{ services.api.port }}
+
 ### Verify (Old Response)
 # temporarily_blocked lindsay.loftusx(at)anheuser-busch.com
-GET {{host}}/verify?email=kyrylo.kupin@gmail.com
+GET {{url}}/verify?email=kyrylo.kupin@gmail.com
 X-Api-Key: {{token}}
 
 ### Verify
-POST {{host}}/verify
+POST {{url}}/verify
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -13,7 +15,7 @@ Authorization: Bearer {{token}}
 }
 
 ### Verify Async
-POST {{host}}/verifyAsync
+POST {{url}}/verifyAsync
 Content-Type: application/json
 X-Api-Key: {{token}}
 
@@ -29,12 +31,12 @@ X-Api-Key: {{token}}
 %}
 
 ### Get Async Verification Status
-GET {{host}}/verifyAsync/{{jobId}}
+GET {{url}}/verifyAsync/{{jobId}}
 Content-Type: application/json
 X-Api-Key: {{token}}
 
 ### Verify Batch
-POST {{host}}/verifyBatch/csv
+POST {{url}}/verifyBatch/csv
 Content-Type: multipart/form-data; boundary=boundary
 X-Api-Key: {{token}}
 
@@ -57,9 +59,9 @@ igor.mihajlov@gmail.com
 %}
 
 ### Get Verify Batch Status
-GET {{host}}/verifyBatch/{{id}}
+GET {{url}}/verifyBatch/{{id}}
 X-Api-Key: {{token}}
 
 ### Get Verify Batch Results
-GET {{host}}/verifyBatch/{{id}}/results
+GET {{url}}/verifyBatch/{{id}}/results
 X-Api-Key: {{token}}
