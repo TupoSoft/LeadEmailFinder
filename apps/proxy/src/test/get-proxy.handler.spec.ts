@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
-import { GetProxyHandler } from './get-proxy.handler'
+import { GetProxyHandler } from '../handlers/get-proxy.handler'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
 import { GetProxyQuery } from '../queries/get-proxy.query'

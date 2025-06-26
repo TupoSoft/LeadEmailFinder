@@ -1,13 +1,14 @@
 import { Test } from '@nestjs/testing'
-import { ListProxiesHandler } from './list-proxies.handler'
+import { ListProxiesHandler } from '../handlers/list-proxies.handler'
 import { ListProxiesQuery } from '../queries/list-proxies.query'
 import { getModelToken } from '@nestjs/mongoose'
 import { Proxy } from '../proxy.schema'
 import { getMapperToken } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { Model, Types } from 'mongoose'
+import { Model } from 'mongoose'
 import { ProxyDescriptor } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { ProxyDescriptorDto } from '../proxy.dto'
+import { createRandomProxy } from './create-random-proxy'
 
 describe('ListProxiesHandler', () => {
     let handler: ListProxiesHandler
@@ -45,55 +46,12 @@ describe('ListProxiesHandler', () => {
 
         const listProxiesQuery = new ListProxiesQuery(2, undefined)
 
-        const proxyDocuments: Proxy[] = [
-            {
-                _id: new Types.ObjectId('68585448285d09785869e328'),
-                protocol: 1,
-                host: 'localhost',
-                port: 8080,
-                weight: 1,
-                enabled: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-            {
-                _id: new Types.ObjectId('68585448285d09785869e329'),
-                protocol: 1,
-                host: 'localhost',
-                port: 8081,
-                weight: 2,
-                enabled: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-        ]
+        const proxyDocuments: Proxy[] = Array.from({ length: 2 }, createRandomProxy)
+        const proxies: ProxyDescriptor[] = []
 
-        const proxies: ProxyDescriptor[] = [
-            {
-                id: '68585448285d09785869e328',
-                protocol: 1,
-                host: 'localhost',
-                port: 8080,
-                weight: 1,
-                enabled: true,
-                auth: undefined,
-                description: '',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-            {
-                id: '68585448285d09785869e329',
-                protocol: 1,
-                host: 'localhost',
-                port: 8081,
-                weight: 2,
-                enabled: true,
-                auth: undefined,
-                description: '',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-        ]
+        for (const { _id, ...proxyDoc } of proxyDocuments) {
+            proxies.push({ id: _id.toHexString(), auth: undefined, description: '', ...proxyDoc })
+        }
 
         proxyModel.find.mockReturnValue({
             limit: limitMock,

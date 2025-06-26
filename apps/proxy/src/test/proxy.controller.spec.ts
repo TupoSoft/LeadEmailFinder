@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
-import { ProxyController } from './proxy.controller'
-import { ProxyService } from './proxy.service'
+import { ProxyController } from '../proxy.controller'
+import { ProxyService } from '../proxy.service'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
 
 jest.mock('@tuposoft/lead-email-finder/proto/proxy/v1/proxy', () => ({
