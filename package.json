@@ -15,7 +15,7 @@
     "proto:lint": "buf lint",
     "proto:gen": "buf generate",
     "proto:format": "buf format -w",
-    "prepare": "husky || true"
+    "prepare": "husky"
   },
   "author": {
     "url": "https://tuposoft.com",
