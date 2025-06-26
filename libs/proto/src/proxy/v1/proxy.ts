@@ -59,7 +59,7 @@ export interface AddProxyResponse {
 
 export interface ListProxiesRequest {
   pageSize: number;
-  pageToken: string;
+  pageToken?: string | undefined;
 }
 
 export interface ListProxiesResponse {
