@@ -5,8 +5,10 @@ on:
     branches:
       - master
     paths:
-      - 'apps/**'
-      - 'libs/**'
+      - 'apps/**/*.ts'
+      - 'apps/**/tsconfig.app.json'
+      - 'libs/**/*.ts'
+      - 'libs/**/tsconfig.lib.json'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'nest-cli.json'
@@ -16,8 +18,10 @@ on:
     branches:
       - master
     paths:
-      - 'apps/**'
-      - 'libs/**'
+      - 'apps/**/*.ts'
+      - 'apps/**/tsconfig.app.json'
+      - 'libs/**/*.ts'
+      - 'libs/**/tsconfig.lib.json'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'nest-cli.json'
