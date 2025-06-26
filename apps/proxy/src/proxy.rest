@@ -1,5 +1,5 @@
 ### Add Proxy
-GRPC localhost:55000/proxy.v1.ProxyService/AddProxy
+GRPC {{ services.proxy.host }}:{{ services.proxy.port }}/proxy.v1.ProxyService/AddProxy
 Content-Type: application/json
 
 {
@@ -20,7 +20,7 @@ Content-Type: application/json
 %}
 
 ### Get Proxy Success
-GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+GRPC {{ services.proxy.host }}:{{ services.proxy.port }}/proxy.v1.ProxyService/GetProxy
 Content-Type: application/json
 
 {
@@ -28,7 +28,7 @@ Content-Type: application/json
 }
 
 ### Get Proxy Failure
-GRPC localhost:55000/proxy.v1.ProxyService/GetProxy
+GRPC {{ services.proxy.host }}:{{ services.proxy.port }}/proxy.v1.ProxyService/GetProxy
 Content-Type: application/json
 
 {
@@ -42,7 +42,7 @@ Content-Type: application/json
 %}
 
 ### List Proxies
-GRPC localhost:55000/proxy.v1.ProxyService/ListProxies
+GRPC {{ services.proxy.host }}:{{ services.proxy.port }}/proxy.v1.ProxyService/ListProxies
 Content-Type: application/json
 
 {
