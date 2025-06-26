@@ -13,7 +13,7 @@ for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
   if [[ $(echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]') == "true" ]]; then
     CHANGED_LIBS=$(echo "$CHANGED_LIBS" | jq -c --arg lib "$LIB" '. += [$lib]')
 
-    for CONSUMER in $(grep -R -l "from ['\"]${DEFAULT_LIBRARY_PREFIX}/${LIB}['\"]" apps/ | cut -d '/' -f2 | sort -u); do
+    for CONSUMER in $(grep -R -l "from '${DEFAULT_LIBRARY_PREFIX}/${LIB}" apps/ | cut -d '/' -f2 | sort -u); do
       CHANGED_APPS=$(echo "$CHANGED_APPS" | jq -c --arg app $CONSUMER '. += [$app]')
     done
   fi
