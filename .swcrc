@@ -11,6 +11,62 @@
       "legacyDecorator": true,
       "decoratorMetadata": true
     },
+    "paths": {
+      "@tuposoft/lead-email-finder/catch-all": [
+        "libs/catch-all/src"
+      ],
+      "@tuposoft/lead-email-finder/catch-all/*": [
+        "libs/catch-all/src/*"
+      ],
+      "@tuposoft/lead-email-finder/common": [
+        "libs/common/src"
+      ],
+      "@tuposoft/lead-email-finder/common/*": [
+        "libs/common/src/*"
+      ],
+      "@tuposoft/lead-email-finder/config": [
+        "libs/config/src"
+      ],
+      "@tuposoft/lead-email-finder/config/*": [
+        "libs/config/src/*"
+      ],
+      "@tuposoft/lead-email-finder/dns": [
+        "libs/dns/src"
+      ],
+      "@tuposoft/lead-email-finder/dns/*": [
+        "libs/dns/src/*"
+      ],
+      "@tuposoft/lead-email-finder/grpc": [
+        "libs/grpc/src"
+      ],
+      "@tuposoft/lead-email-finder/grpc/*": [
+        "libs/grpc/src/*"
+      ],
+      "@tuposoft/lead-email-finder/key": [
+        "libs/key/src"
+      ],
+      "@tuposoft/lead-email-finder/key/*": [
+        "libs/key/src/*"
+      ],
+      "@tuposoft/lead-email-finder/proto": [
+        "libs/proto/src"
+      ],
+      "@tuposoft/lead-email-finder/proto/*": [
+        "libs/proto/src/*"
+      ],
+      "@tuposoft/lead-email-finder/redis": [
+        "libs/redis/src"
+      ],
+      "@tuposoft/lead-email-finder/redis/*": [
+        "libs/redis/src/*"
+      ],
+      "@tuposoft/lead-email-finder/socket": [
+        "libs/socket/src"
+      ],
+      "@tuposoft/lead-email-finder/socket/*": [
+        "libs/socket/src/*"
+      ]
+    },
     "baseUrl": "./"
   },
   "minify": false

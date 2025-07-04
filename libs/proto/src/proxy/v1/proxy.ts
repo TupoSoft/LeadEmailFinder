@@ -27,12 +27,23 @@ export interface ProxyDescriptor {
   protocol: Protocol;
   host: string;
   port: number;
-  auth: Auth | undefined;
   weight: number;
+  auth: Auth | undefined;
   description: string;
   enabled: boolean;
   createdAt: Date | undefined;
   updatedAt: Date | undefined;
+}
+
+export interface ProxyDescriptorPatch {
+  id: string;
+  protocol?: Protocol | undefined;
+  host?: string | undefined;
+  port?: number | undefined;
+  weight?: number | undefined;
+  auth?: Auth | undefined;
+  description?: string | undefined;
+  enabled?: boolean | undefined;
 }
 
 export interface GetHealthyProxyRequest {
@@ -47,10 +58,10 @@ export interface AddProxyRequest {
   protocol: Protocol;
   host: string;
   port: number;
-  auth: Auth | undefined;
-  description: string;
-  weight: number;
-  enabled: boolean;
+  auth?: Auth | undefined;
+  description?: string | undefined;
+  weight?: number | undefined;
+  enabled?: boolean | undefined;
 }
 
 export interface AddProxyResponse {
@@ -77,7 +88,7 @@ export interface GetProxyResponse {
 
 export interface UpdateProxyRequest {
   updateMask: string[] | undefined;
-  proxy: ProxyDescriptor | undefined;
+  proxy: ProxyDescriptorPatch | undefined;
 }
 
 export interface UpdateProxyResponse {

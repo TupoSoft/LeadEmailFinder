@@ -1,4 +1,5 @@
 import {
+    AddProxyRequest,
     AddProxyResponse,
     Auth,
     GetProxyRequest,
@@ -10,7 +11,16 @@ import {
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { AutoMap } from '@automapper/classes'
 import { Expose, Type } from 'class-transformer'
-import { IsMongoId, IsOptional, IsPositive } from 'class-validator'
+import {
+    IsBoolean,
+    IsEnum,
+    IsMongoId,
+    IsNotEmpty,
+    IsOptional,
+    IsPositive,
+    IsString,
+    ValidateNested,
+} from 'class-validator'
 
 @Expose()
 export class AuthDto implements Auth {
@@ -53,6 +63,36 @@ export class ProxyDescriptorDto implements ProxyDescriptor {
 
     @AutoMap()
     updatedAt: Date
+}
+
+@Expose()
+export class AddProxyRequestDto implements AddProxyRequest {
+    @IsEnum(Protocol)
+    protocol: Protocol
+
+    @IsNotEmpty()
+    @IsString()
+    host: string
+
+    @IsPositive()
+    port: number
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => AuthDto)
+    auth?: Auth
+
+    @IsOptional()
+    @IsString()
+    description?: string
+
+    @IsOptional()
+    @IsPositive()
+    weight?: number
+
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean
 }
 
 @Expose()
