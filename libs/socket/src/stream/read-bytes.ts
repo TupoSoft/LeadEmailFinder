@@ -5,7 +5,7 @@ import { on } from 'node:events'
 export async function readBytes(readable: Readable, size: number): Promise<Buffer> {
     ok(size > 0, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
-    let buffer = Buffer.alloc(0)
+    let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0)
     for await (const event of on(readable, 'readable', { close: ['end'] })) {
         void event
 
