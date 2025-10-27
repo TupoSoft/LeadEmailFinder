@@ -30,7 +30,7 @@ services:
       S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
       S3_URL: /run/secrets/s3_url
       S3_REGION: us-east-1
-      S3_FORCE_PATH_STYLE: true
+      S3_FORCE_PATH_STYLE: "true"
       S3_BUCKET: lead-email-finder
     deploy:
       mode: replicated
