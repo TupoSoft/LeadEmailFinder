@@ -34,7 +34,7 @@ services:
       S3_BUCKET: lead-email-finder
     deploy:
       mode: replicated
-      replicas: 6
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 5s
