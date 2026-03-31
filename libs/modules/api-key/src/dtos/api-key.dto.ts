@@ -1,4 +1,4 @@
-import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key'
 import { Expose } from 'class-transformer'
 import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 import {

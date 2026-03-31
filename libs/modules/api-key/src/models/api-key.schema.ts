@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/key'
 
 @Schema({ timestamps: true })
 export class Key {

@@ -1,7 +1,7 @@
 import { getModelToken } from '@nestjs/mongoose'
 import { Test, TestingModule } from '@nestjs/testing'
 import { ApiKeyService } from './api-key.service'
-import { Key } from './api-key.schema'
+import { Key } from './models/api-key.schema'
 import { Model, Types } from 'mongoose'
 import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
 

@@ -145,6 +145,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/socket/tsconfig.lib.json"
       }
+    },
+    "api-key-module": {
+      "type": "library",
+      "root": "libs/modules/api-key",
+      "entryFile": "index",
+      "sourceRoot": "libs/modules/api-key/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/modules/api-key/tsconfig.lib.json"
+      }
     }
   }
 }
