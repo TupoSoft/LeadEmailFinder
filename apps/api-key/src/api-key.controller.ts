@@ -6,8 +6,8 @@ import {
     SerializeOptions,
     UseFilters,
 } from '@nestjs/common'
-import { ApiKeyService } from './api-key.service'
 import {
+    ApiKeyService,
     ApiKeyDescriptorDto,
     CheckKeyPermissionsRequestDto,
     CheckKeyPermissionsResponseDto,
@@ -15,8 +15,9 @@ import {
     GenerateKeyResponseDto,
     RevokeKeyRequestDto,
     RevokeKeyResponseDto,
-} from './api-key.dto'
-import { AdminTokenRevocationForbidden, KeyNotFound } from './api-key.error'
+    AdminTokenRevocationForbidden,
+    KeyNotFound,
+} from '@tuposoft/lead-email-finder/modules/api-key'
 import { Public } from '@tuposoft/lead-email-finder/key'
 import { plainToInstance } from 'class-transformer'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'

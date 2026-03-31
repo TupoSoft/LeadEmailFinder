@@ -59,6 +59,12 @@
       ],
       "@tuposoft/lead-email-finder/socket/*": [
         "libs/socket/src/*"
+      ],
+      "@tuposoft/lead-email-finder/modules/api-key": [
+        "libs/modules/api-key/src"
+      ],
+      "@tuposoft/lead-email-finder/modules/api-key/*": [
+        "libs/modules/api-key/src/*"
       ]
     }
   }
