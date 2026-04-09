@@ -1,4 +1,3 @@
-import { KeyPermissions } from '@tuposoft/lead-email-finder/key'
 import { Expose } from 'class-transformer'
 import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator'
 import {
@@ -10,6 +9,7 @@ import {
     RevokeKeyRequest,
     RevokeKeyResponse,
 } from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 
 export class ApiKeyDescriptorDto implements ApiKeyDescriptor {
     @Expose()

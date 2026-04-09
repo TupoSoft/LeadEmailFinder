@@ -23,11 +23,11 @@ WORKDIR /app
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --update-cache \
     wget \
-    # curl is for the healthcheck
+    # curl is for the healthcheck \
     curl \
-    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339
+    # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339 \
     bind-tools \
-    # jq is for the healthcheck
+    # jq is for the healthcheck \
     jq
 
 RUN <<EOF
@@ -49,9 +49,6 @@ RUN --mount=type=bind,source=../package.json,target=package.json \
     --mount=type=bind,source=../pnpm-workspace.yaml,target=pnpm-workspace.yaml \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --frozen-lockfile i
-
-# Run the application as a non-root user.
-USER node
 
 # Copy the rest of the source files into the image.
 COPY . .

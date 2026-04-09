@@ -3,7 +3,7 @@ import { Body, Controller, Inject, Post, SerializeOptions, UseGuards } from '@ne
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @UseGuards(ApiKeyGuard)
 @Controller('verify')

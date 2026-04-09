@@ -19,7 +19,9 @@ import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
 import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { ApiKeyGuard, KeyPermissions, RequireApiPermissions } from '@tuposoft/lead-email-finder/key'
+import { RequireApiPermissions } from '@tuposoft/lead-email-finder/modules/api-key/application/decorators'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 
 @UseGuards(ApiKeyGuard)
 @RequireApiPermissions(KeyPermissions.ADMIN)

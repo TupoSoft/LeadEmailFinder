@@ -20,7 +20,7 @@ import {
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @UseGuards(ApiKeyGuard)
 @Controller('/verifyAsync')

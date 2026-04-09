@@ -17,7 +17,7 @@ describe('AddProxyHandler', () => {
             providers: [
                 AddProxyHandler,
                 {
-                    provide: getModelToken(Proxy.name, 'proxy'),
+                    provide: getModelToken(Proxy.name),
                     useValue: {
                         insertOne: jest.fn(),
                     },
@@ -32,7 +32,7 @@ describe('AddProxyHandler', () => {
         }).compile()
 
         addProxyHandler = moduleRef.get(AddProxyHandler)
-        proxyModel = moduleRef.get(getModelToken(Proxy.name, 'proxy'))
+        proxyModel = moduleRef.get(getModelToken(Proxy.name))
     })
 
     it('should call proxyModel.insertOne with the correct data', async () => {

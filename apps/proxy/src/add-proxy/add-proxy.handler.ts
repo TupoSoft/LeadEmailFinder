@@ -11,7 +11,7 @@ import { ProxyDescriptorDto } from '../proxy.dto'
 @CommandHandler(AddProxyCommand)
 export class AddProxyHandler implements ICommandHandler<AddProxyCommand> {
     constructor(
-        @InjectModel(Proxy.name, 'proxy') private readonly proxyModel: Model<Proxy>,
+        @InjectModel(Proxy.name) private readonly proxyModel: Model<Proxy>,
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 

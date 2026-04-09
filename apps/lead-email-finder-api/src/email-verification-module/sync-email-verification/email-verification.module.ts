@@ -12,7 +12,7 @@ import { DomainModule, DomainService } from '../domain'
 import { EmailVerifier, EmailVerifierModule } from '../email-verifier'
 import { EmailVerificationService } from './email-verification.service'
 import { SyncEmailVerificationController } from './sync-email-verification.controller'
-import { KeyModule } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @Module({
     imports: [
@@ -25,7 +25,7 @@ import { KeyModule } from '@tuposoft/lead-email-finder/key'
         EmailVerifierModule,
         EmailModule,
         DomainModule,
-        KeyModule,
+        ApiKeyModule,
     ],
     providers: [
         EmailVerificationService,
