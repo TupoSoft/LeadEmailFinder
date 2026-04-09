@@ -24,21 +24,17 @@ import { CqrsModule } from '@nestjs/cqrs'
         }),
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
-            connectionName: 'proxy',
             useFactory: (configService: ConfigService) => ({
-                uri: configService.get('PROXY_MONGO_URL'),
+                uri: configService.get('MONGO_URL'),
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature(
-            [
-                {
-                    name: Proxy.name,
-                    schema: ProxySchema,
-                },
-            ],
-            'proxy',
-        ),
+        MongooseModule.forFeature([
+            {
+                name: Proxy.name,
+                schema: ProxySchema,
+            },
+        ]),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),

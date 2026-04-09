@@ -25,7 +25,7 @@ import {
 } from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JobNotFoundException } from './job-not-found.exception'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @UseGuards(ApiKeyGuard)
 @Controller('verifyBatch')

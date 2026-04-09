@@ -5,10 +5,10 @@ import { Email, EmailSchema } from './email.schema'
 import { EmailService } from './email.service'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { EmailProfile } from './email.profile'
-import { KeyModule } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @Module({
-    imports: [MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }]), KeyModule],
+    imports: [MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }]), ApiKeyModule],
     controllers: [EmailController],
     providers: [
         {

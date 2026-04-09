@@ -1,23 +1,15 @@
-import { CanActivate, ExecutionContext, Inject, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { KeyPermissions } from '../key.enum'
 import { Request } from 'express'
-import { ClientGrpc } from '@nestjs/microservices'
-import { firstValueFrom } from 'rxjs'
-import { API_KEY_SERVICE_NAME, ApiKeyServiceClient } from '@tuposoft/lead-email-finder/proto/api_key/v1/api_key'
+import { KeyPermissions } from '../domain/key.enum'
+import { ApiKeyService } from './api-key.service'
 
 @Injectable()
-export class ApiKeyGuard implements CanActivate, OnModuleInit {
-    private apiKeyService: ApiKeyServiceClient
-
+export class ApiKeyGuard implements CanActivate {
     constructor(
-        @Inject('API_KEY_PACKAGE') private readonly client: ClientGrpc,
         private readonly reflector: Reflector,
+        private readonly apiKeyService: ApiKeyService,
     ) {}
-
-    onModuleInit(): void {
-        this.apiKeyService = this.client.getService<ApiKeyServiceClient>(API_KEY_SERVICE_NAME)
-    }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
@@ -46,8 +38,6 @@ export class ApiKeyGuard implements CanActivate, OnModuleInit {
             throw new UnauthorizedException('API key is missing')
         }
 
-        const { allowed } = await firstValueFrom(this.apiKeyService.checkKeyPermissions({ token, requiredPermissions }))
-
-        return allowed
+        return await this.apiKeyService.validateKeyForRoles(token, requiredPermissions)
     }
 }

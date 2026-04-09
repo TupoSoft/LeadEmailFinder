@@ -1,9 +1,9 @@
 import { getModelToken } from '@nestjs/mongoose'
 import { Test, TestingModule } from '@nestjs/testing'
 import { ApiKeyService } from './api-key.service'
-import { Key } from './models/api-key.schema'
 import { Model, Types } from 'mongoose'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/key/key.enum'
+import { Key } from '../models/api-key.schema'
+import { KeyPermissions } from '../domain/key.enum'
 
 jest.mock('node:util', () => ({
     __esModule: true,
@@ -24,7 +24,7 @@ describe('KeyService', () => {
             providers: [
                 ApiKeyService,
                 {
-                    provide: getModelToken(Key.name, 'api-key'),
+                    provide: getModelToken(Key.name),
                     useValue: {
                         findOne: jest.fn(),
                         find: jest.fn(),
@@ -36,7 +36,7 @@ describe('KeyService', () => {
         }).compile()
 
         service = module.get(ApiKeyService)
-        keyModelMock = module.get(getModelToken(Key.name, 'api-key'))
+        keyModelMock = module.get(getModelToken(Key.name))
     })
 
     beforeEach(() => {

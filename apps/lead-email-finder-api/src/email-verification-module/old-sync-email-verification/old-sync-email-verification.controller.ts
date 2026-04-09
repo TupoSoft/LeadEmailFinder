@@ -6,7 +6,7 @@ import { ApiOperation } from '@nestjs/swagger'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @UseGuards(ApiKeyGuard)
 @Controller('verify')

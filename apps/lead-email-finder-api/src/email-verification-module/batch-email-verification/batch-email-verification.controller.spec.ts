@@ -4,7 +4,7 @@ import { HttpStatus, INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { randomUUID } from 'node:crypto'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/key'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 
