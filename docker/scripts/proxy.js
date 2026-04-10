@@ -3,11 +3,11 @@ const { readFileSync } = require('node:fs')
 const { createUserFromUrl } = require('common/create-user-from-url')
 const { env, exit } = require('node:process')
 
-const { PROXIES, PROXY_MONGO_URL_FILE } = env
+const { PROXIES, MONGO_URL_FILE } = env
 
-ok(PROXY_MONGO_URL_FILE, 'PROXY_MONGO_URL_FILE must be set')
+ok(MONGO_URL_FILE, 'MONGO_URL_FILE must be set')
 
-const mongoUrlFile = readFileSync(PROXY_MONGO_URL_FILE)
+const mongoUrlFile = readFileSync(MONGO_URL_FILE)
 const url = new URL(mongoUrlFile)
 const { pathname } = url
 const dbName = pathname.slice(1)

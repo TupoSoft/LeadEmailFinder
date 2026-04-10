@@ -2,8 +2,6 @@ import { NestFactory, Reflector } from '@nestjs/core'
 import { LeadEmailFinderModule } from './lead-email-finder.module'
 import { ConfigService } from '@nestjs/config'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { MicroserviceOptions, Transport } from '@nestjs/microservices'
-import { join } from 'node:path'
 import { Logger } from 'pino-nestjs'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
@@ -19,23 +17,6 @@ async function bootstrap(): Promise<void> {
             strategy: 'excludeAll',
             enableImplicitConversion: true,
         }),
-    )
-
-    app.connectMicroservice<MicroserviceOptions>(
-        {
-            transport: Transport.GRPC,
-            options: {
-                package: ['api_key.v1', 'proxy.v1'],
-                protoPath: [
-                    join(__dirname, 'proto', 'api_key', 'v1', 'api_key.proto'),
-                    join(__dirname, 'proto', 'proxy', 'v1', 'proxy.proto'),
-                ],
-                url: '0.0.0.0:5000',
-            },
-        },
-        {
-            inheritAppConfig: true,
-        },
     )
 
     const configService: ConfigService<unknown, true> = app.get(ConfigService)
@@ -61,7 +42,6 @@ async function bootstrap(): Promise<void> {
 
     SwaggerModule.setup('/', app, documentFactory)
 
-    await app.startAllMicroservices()
     await app.listen(process.env.port ?? 3000)
 }
 
