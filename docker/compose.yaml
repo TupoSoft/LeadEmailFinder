@@ -35,7 +35,6 @@ services:
       REDIS_URL_FILE: /run/secrets/redis_url
 
       MONGO_URL_FILE: /run/secrets/mongo_url
-      PROXY_MONGO_URL_FILE: /run/secrets/proxy_mongo_url
 
       S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
       S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
@@ -56,5 +55,3 @@ services:
       - redis_url
       - s3_access_key_id
       - s3_secret_key
-      - apikey_mongo_url
-      - proxy_mongo_url

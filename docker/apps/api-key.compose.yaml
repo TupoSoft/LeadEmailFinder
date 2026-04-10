@@ -12,10 +12,10 @@ services:
       mongo:
         condition: service_healthy
     secrets:
-      - apikey_mongo_url
+      - mongo_url
     environment:
       TARGET_APP: api-key
-      APIKEY_MONGO_URL_FILE: /run/secrets/apikey_mongo_url
+      MONGO_URL_FILE: /run/secrets/mongo_url
 
   api-key-debug:
     extends:

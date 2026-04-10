@@ -8,5 +8,5 @@ export class EnvDto {
 
     @IsFileVar()
     @IsUrl({ protocols: ['mongodb'], require_protocol: true })
-    PROXY_MONGO_URL: string
+    MONGO_URL: string
 }
