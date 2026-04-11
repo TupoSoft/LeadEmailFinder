@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { MongooseModule } from '@nestjs/mongoose'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { LoggerModule } from 'pino-nestjs'
@@ -25,6 +26,16 @@ import { EnvironmentVariablesDto } from './environment-variables.dto'
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
                 uri: configService.get('MONGO_URL'),
+            }),
+            inject: [ConfigService],
+        }),
+        TypeOrmModule.forRootAsync({
+            imports: [ConfigModule],
+            useFactory: (configService: ConfigService) => ({
+                type: 'postgres',
+                url: configService.get('POSTGRES_URL'),
+                entities: [],
+                synchronize: false,
             }),
             inject: [ConfigService],
         }),
