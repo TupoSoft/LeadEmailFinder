@@ -19,8 +19,8 @@ services:
       # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
       PROXIES: ${PROXIES}
       NODE_PATH: /docker-entrypoint-initdb.d
-    ports:
-      - '57017:27017'
+#    ports:
+#      - '57017:27017'
     secrets:
       - mongo_root_username
       - mongo_root_password
