@@ -33,8 +33,8 @@ services:
       APIKEY_URL: api:5000
 
       REDIS_URL_FILE: /run/secrets/redis_url
-
       MONGO_URL_FILE: /run/secrets/mongo_url
+      POSTGRES_URL_FILE: /run/secrets/postgres_url
 
       S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
       S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
@@ -55,3 +55,8 @@ services:
       - redis_url
       - s3_access_key_id
       - s3_secret_key
+      - postgres_url
+
+secrets:
+  postgres_url:
+    file: secrets/postgres_url.txt

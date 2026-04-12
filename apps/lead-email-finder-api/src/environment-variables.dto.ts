@@ -17,6 +17,10 @@ export class EnvironmentVariablesDto {
 
     @IsFileVar()
     @IsString()
+    POSTGRES_URL: string
+
+    @IsFileVar()
+    @IsString()
     CATCH_ALL_HTTP_PROXY_URL: string
 
     @IsFileVar()
