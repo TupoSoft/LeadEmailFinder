@@ -1,35 +1,22 @@
 services:
-  mongo:
-    image: mongo:latest
+  postgres:
+    image: postgres:17-alpine
     restart: unless-stopped
-    healthcheck: &healthcheck
-      test: mongosh --eval "db.adminCommand('ping')"
+    healthcheck:
+      test: pg_isready -U postgres
       interval: 10s
       timeout: 10s
       retries: 3
     environment:
-      MONGO_INITDB_DATABASE: verifier
-      MONGO_URL_FILE: /run/secrets/mongo_url
-      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
-      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
-      ADMIN_APIKEY_FILE: /run/secrets/admin_apikey
-      DISPOSABLE_DOMAINS_FILE: /email-data/disposable-email-providers.json
-      FREE_DOMAINS_FILE: /email-data/free-email-providers.json
-      # A comma-separated string of proxies to insert on startup,
-      # e.g. http://login:password@example.com:3333, socks5://foo:bar@example.com:4444
-      PROXIES: ${PROXIES}
-      NODE_PATH: /docker-entrypoint-initdb.d
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: lef
     ports:
-      - '57017:27017'
+      - '55432:5432'
     secrets:
-      - mongo_root_username
-      - mongo_root_password
-      - admin_apikey
-      - mongo_url
+      - postgres_password
     volumes:
-      - ./scripts:/docker-entrypoint-initdb.d
-      - mongo-data:/data/db
-      - ./data:/email-data
+      - postgres-data:/var/lib/postgresql/data
 
   redis:
     image: redis:alpine
@@ -38,8 +25,10 @@ services:
     ports:
       - '56379:6379'
     healthcheck:
-      <<: *healthcheck
       test: "[ `redis-cli ping` = 'PONG' ]"
+      interval: 10s
+      timeout: 10s
+      retries: 3
     volumes:
       - redis-data:/data
 
@@ -75,37 +64,11 @@ services:
         mc alias s minio http://minio:9000 minioadmin minioadmin
         mc mb minio/batch-email-verification
 
-  postgres:
-    image: postgres:18-alpine
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    environment:
-      POSTGRES_DB: lead_email_finder
-      POSTGRES_USER_FILE: /run/secrets/postgres_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    ports:
-      - '55432:5432'
-    secrets:
-      - postgres_user
-      - postgres_password
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
 secrets:
-  postgres_user:
-    file: secrets/postgres_user.txt
   postgres_password:
     file: secrets/postgres_password.txt
-  mongo_root_username:
-    file: secrets/mongo_root_username.txt
-  mongo_root_password:
-    file: secrets/mongo_root_password.txt
-  mongo_url:
-    file: secrets/mongo_url.txt
+  postgres_url:
+    file: secrets/postgres_url.txt
   redis_url:
     file: secrets/redis_url.txt
   tokens.json:
@@ -118,6 +81,5 @@ secrets:
     file: secrets/s3_secret_key.txt
 
 volumes:
-  mongo-data:
-  redis-data:
   postgres-data:
+  redis-data:

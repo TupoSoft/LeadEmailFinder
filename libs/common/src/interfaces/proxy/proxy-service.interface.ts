@@ -1,10 +1,9 @@
-import { FilterQuery } from 'mongoose'
 import { IProxy } from './proxy.interface'
 import { ICreateProxyDto } from './create-proxy-dto.interface'
 import { IUpdateProxyDto } from './update-proxy-dto.interface'
 
 export interface IProxyService {
-    get(filter: FilterQuery<IProxy>): Promise<IProxy[]>
+    get(excludedExchanges?: string[]): Promise<IProxy[]>
 
     getById(id: string): Promise<IProxy>
 

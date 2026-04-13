@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.base.json",
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
+  },
   "include": [
-    "apps/**/*.ts"
+    "apps/**/*.ts",
+    "db/**/*.ts"
   ],
   "compilerOptions": {
     "baseUrl": "./",
@@ -65,6 +69,9 @@
       ],
       "@tuposoft/lead-email-finder/modules/api-key/*": [
         "libs/modules/api-key/src/*"
+      ],
+      "@tuposoft/lead-email-finder/db/*": [
+        "db/*"
       ]
     }
   }

@@ -62,4 +62,4 @@ EXPOSE 3000
 ENV APP=$TARGET_APP
 
 # Run the application.
-CMD ([ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" || true) && pnpm start "$APP"
+CMD pnpm start "$APP"

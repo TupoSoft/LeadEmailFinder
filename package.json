@@ -12,7 +12,10 @@
         "proto:lint": "buf lint",
         "proto:gen": "buf generate",
         "proto:format": "buf format -w",
-        "prepare": "husky || true"
+        "prepare": "husky || true",
+        "migration:generate": "POSTGRES_URL=postgresql://postgres:postgres@localhost:55432/lef typeorm-ts-node-commonjs migration:generate -d db/data-source.ts",
+        "migration:run": "POSTGRES_URL=postgresql://postgres:postgres@localhost:55432/lef typeorm-ts-node-commonjs migration:run -d db/data-source.ts",
+        "migration:revert": "POSTGRES_URL=postgresql://postgres:postgres@localhost:55432/lef typeorm-ts-node-commonjs migration:revert -d db/data-source.ts"
     },
     "author": {
         "url": "https://tuposoft.com",
