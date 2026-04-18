@@ -66,7 +66,10 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         const { bucket, key } = job.data
 
         const columns = this.dataSource.getMetadata(EmailVerification).columns.map(c => c.propertyName)
-        const records = await this.emailVerificationRepo.findBy({ batchId: job.id })
+        const cursor = await this.emailVerificationRepo
+            .createQueryBuilder('ev')
+            .where('ev.batchId = :batchId', { batchId: job.id })
+            .stream()
         const stringifier = stringify({
             columns,
             header: true,
@@ -85,7 +88,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             },
         })
 
-        Readable.from(records).pipe(stringifier).pipe(Body)
+        cursor.pipe(stringifier).pipe(Body)
 
         try {
             await upload.done()

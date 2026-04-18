@@ -90,6 +90,7 @@
         "multer-s3": "^3.0.1",
         "nestjs-s3": "^3.0.1",
         "pg": "^8.20.0",
+        "pg-query-stream": "^4.14.0",
         "pino": "^9.9.0",
         "pino-gelf": "^2.2.0",
         "pino-http": "^10.5.0",
