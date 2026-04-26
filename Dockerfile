@@ -7,8 +7,6 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 
 ARG TARGET_APP
 
-ENV METADATA_FILE_PATH="apps/$TARGET_APP/src/generate-metadata.ts"
-
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g pnpm
@@ -31,20 +29,14 @@ COPY . .
 # Generate metadata and build the application.
 RUN <<EOF
 set -e
-tsc --noEmit -p apps/$TARGET_APP/tsconfig.app.json
-[ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH"
-pnpm build $TARGET_APP
+pnpm build
 EOF
 
 FROM node:${NODE_VERSION}-alpine
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
-
-ARG TARGET_APP
-
-ENV APP_MAIN_FILE="dist/apps/$TARGET_APP/main"
+ENV APP_MAIN_FILE="dist/main"
 
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --update-cache \
@@ -55,12 +47,6 @@ RUN --mount=type=cache,target=/var/cache/apk \
     bind-tools \
     # jq is for the healthcheck
     jq
-
-RUN <<EOF
-set -e
-wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64
-chmod +x /bin/grpc_health_probe
-EOF
 
 # Install pnpm.
 RUN --mount=type=cache,target=/root/.npm \
