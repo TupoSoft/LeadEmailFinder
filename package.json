@@ -9,6 +9,9 @@
         "start": "nest start -w",
         "debug": "pnpm start -d 0.0.0.0:9229",
         "test": "jest",
+        "test:ci": "jest --runInBand",
+        "lint": "eslint .",
+        "typecheck": "tsc --noEmit -p tsconfig.json",
         "proto:lint": "buf lint",
         "proto:gen": "buf generate",
         "proto:format": "buf format -w",
@@ -50,7 +53,6 @@
         "pnpm": "10.33.0",
         "prettier": "^3.6.2",
         "supertest": "^7.1.4",
-        "swc-loader": "^0.2.6",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.2",
         "typescript-eslint": "^8.41.0"

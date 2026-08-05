@@ -1,2 +1,7 @@
-pnpm test -o
-pnpm proto:format && git diff --quiet || git add .
+set -e
+
+corepack pnpm test --passWithNoTests -o
+if [ -d proto ] && find proto -name '*.proto' -print -quit | grep -q .; then
+    corepack pnpm proto:format
+    git diff --quiet -- proto || git add proto
+fi
