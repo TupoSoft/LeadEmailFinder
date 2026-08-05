@@ -14,10 +14,6 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
 
-ARG TARGET_APP
-
-ENV METADATA_FILE_PATH="apps/${TARGET_APP:-lead-email-finder}/src/generate-metadata.ts"
-
 WORKDIR /app
 
 RUN --mount=type=cache,target=/var/cache/apk \
@@ -59,7 +55,5 @@ EXPOSE 9229
 # Expose the port that the application listens on.
 EXPOSE 3000
 
-ENV APP=$TARGET_APP
-
 # Run the application.
-CMD ([ -f "$METADATA_FILE_PATH" ] && ts-node "$METADATA_FILE_PATH" || true) && pnpm start "$APP"
+CMD pnpm start
