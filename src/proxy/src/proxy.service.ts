@@ -24,7 +24,7 @@ import { AddProxyCommand } from './add-proxy/add-proxy.command'
 export class ProxyService implements ProxyServiceController {
     constructor(private readonly commandBus: CommandBus) {}
 
-    getProxy(request: GetProxyRequest): Promise<GetProxyResponse> | Observable<GetProxyResponse> | GetProxyResponse {
+    getProxy(_request: GetProxyRequest): Promise<GetProxyResponse> | Observable<GetProxyResponse> | GetProxyResponse {
         throw new Error('Method not implemented.')
     }
 
@@ -43,31 +43,31 @@ export class ProxyService implements ProxyServiceController {
     }
 
     listProxies(
-        request: ListProxiesRequest,
+        _request: ListProxiesRequest,
     ): Promise<ListProxiesResponse> | Observable<ListProxiesResponse> | ListProxiesResponse {
         throw new Error('Method not implemented.')
     }
 
     updateProxy(
-        request: UpdateProxyRequest,
+        _request: UpdateProxyRequest,
     ): Promise<UpdateProxyResponse> | Observable<UpdateProxyResponse> | UpdateProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     deleteProxy(
-        request: DeleteProxyRequest,
+        _request: DeleteProxyRequest,
     ): Promise<DeleteProxyResponse> | Observable<DeleteProxyResponse> | DeleteProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     getHealthyProxy(
-        request: GetHealthyProxyRequest,
+        _request: GetHealthyProxyRequest,
     ): Promise<GetHealthyProxyResponse> | Observable<GetHealthyProxyResponse> | GetHealthyProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     reportProxyBlacklist(
-        request: ReportProxyBlacklistRequest,
+        _request: ReportProxyBlacklistRequest,
     ): Promise<ReportProxyBlacklistResponse> | Observable<ReportProxyBlacklistResponse> | ReportProxyBlacklistResponse {
         throw new Error('Method not implemented.')
     }
