@@ -12,9 +12,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on:
-      - self-hosted
-      - ubuntu-22
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
