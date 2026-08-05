@@ -6,7 +6,7 @@ import importPlugin from 'eslint-plugin-import'
 
 export default tseslint.config(
     {
-        ignores: ['eslint.config.mjs'],
+        ignores: ['eslint.config.mjs', 'docker/scripts/**'],
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,
@@ -51,6 +51,12 @@ export default tseslint.config(
     },
     {
         rules: {
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                },
+            ],
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-floating-promises': 'warn',
             '@typescript-eslint/no-unsafe-argument': 'warn',
@@ -66,7 +72,7 @@ export default tseslint.config(
         },
     },
     {
-        files: ['**/*.spec.ts'],
+        files: ['**/*.spec.ts', '**/*.spec.service.ts'],
         rules: {
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',

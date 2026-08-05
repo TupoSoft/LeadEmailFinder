@@ -33,37 +33,37 @@ export class ProxyController implements ProxyServiceController {
     }
 
     listProxies(
-        request: ListProxiesRequest,
+        _request: ListProxiesRequest,
     ): Promise<ListProxiesResponse> | Observable<ListProxiesResponse> | ListProxiesResponse {
         throw new Error('Method not implemented.')
     }
 
     getProxy(
-        request: GetProxyRequestDto,
+        _request: GetProxyRequestDto,
     ): Promise<GetProxyResponse> | Observable<UpdateProxyResponse> | GetProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     updateProxy(
-        request: UpdateProxyRequest,
+        _request: UpdateProxyRequest,
     ): Promise<UpdateProxyResponse> | Observable<UpdateProxyResponse> | UpdateProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     deleteProxy(
-        request: DeleteProxyRequest,
+        _request: DeleteProxyRequest,
     ): Promise<DeleteProxyResponse> | Observable<DeleteProxyResponse> | DeleteProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     getHealthyProxy(
-        request: GetHealthyProxyRequest,
+        _request: GetHealthyProxyRequest,
     ): Promise<GetHealthyProxyResponse> | Observable<GetHealthyProxyResponse> | GetHealthyProxyResponse {
         throw new Error('Method not implemented.')
     }
 
     reportProxyBlacklist(
-        request: ReportProxyBlacklistRequest,
+        _request: ReportProxyBlacklistRequest,
     ): Promise<ReportProxyBlacklistResponse> | Observable<ReportProxyBlacklistResponse> | ReportProxyBlacklistResponse {
         throw new Error('Method not implemented.')
     }
