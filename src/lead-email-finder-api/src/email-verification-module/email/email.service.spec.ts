@@ -184,7 +184,10 @@ describe('EmailService tests', () => {
             emailRepo.findOneBy.mockResolvedValue(null)
             emailRepo.create.mockReturnValue(newEntity as Email)
             emailRepo.save.mockResolvedValue(newEntity as Email)
-            mapper.map.mockReturnValue(emailResponseDto)
+
+            when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
+                .calledWith(newEntity as Email, Email, EmailResponseDto)
+                .mockReturnValue(emailResponseDto)
 
             const result = await service.updateEmail(email, options)
 

@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ProxyService } from './proxy.service'
 import { getRepositoryToken } from '@nestjs/typeorm'
-import { Mapper } from '@automapper/core'
 import { Repository, SelectQueryBuilder } from 'typeorm'
 import { Proxy } from './proxy.entity'
 import { getMapperToken } from '@automapper/nestjs'
@@ -12,7 +11,9 @@ import { ProxyType } from './proxy-type.enum'
 describe('ProxyService', () => {
     let service: ProxyService
     let repo: jest.Mocked<Repository<Proxy>>
-    let mapper: jest.Mocked<Mapper>
+    // Mapper.map/mapArray are generic overloaded methods; jest.Mocked<Mapper> collapses
+    // their generics to `Dictionary<any>`, so mockReturnValue rejects concrete DTOs.
+    let mapper: { map: jest.Mock; mapArray: jest.Mock }
 
     const id = 'some-uuid'
 
