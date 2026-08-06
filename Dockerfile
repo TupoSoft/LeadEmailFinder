@@ -7,9 +7,8 @@ ENV PATH="/app/node_modules/.bin:$PATH"
 
 ARG TARGET_APP
 
-# Install pnpm.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm
+# Enable the pnpm version pinned by package.json.
+RUN corepack enable
 
 WORKDIR /app
 
@@ -48,9 +47,8 @@ RUN --mount=type=cache,target=/var/cache/apk \
     # jq is for the healthcheck
     jq
 
-# Install pnpm.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm
+# Enable the pnpm version pinned by package.json.
+RUN corepack enable
 
 WORKDIR /app
 
