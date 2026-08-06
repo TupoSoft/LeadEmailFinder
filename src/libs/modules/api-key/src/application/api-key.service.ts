@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
+import { InjectRepository } from '@nestjs/typeorm'
+import { MoreThan, Repository } from 'typeorm'
 import { ok } from 'assert/strict'
 import { promisify } from 'node:util'
 import { randomBytes } from 'node:crypto'
-import { Key } from '../models/api-key.schema'
+import { Key } from '../models/key.entity'
 import { KeyPermissions } from '../domain/key.enum'
 import { AdminTokenRevocationForbidden, KeyNotFound } from '../api-key.error'
 
@@ -12,24 +12,26 @@ const randomBytesAsync = promisify(randomBytes)
 
 @Injectable()
 export class ApiKeyService {
-    constructor(@InjectModel(Key.name) private readonly keyModel: Model<Key>) {}
+    constructor(@InjectRepository(Key) private readonly keyRepo: Repository<Key>) {}
 
     async generateKey(permissions: KeyPermissions[], description?: string): Promise<Key> {
         const prefix = 'api_'
         const randomBytes = await randomBytesAsync(24)
         const token = `${prefix}${randomBytes.toString('hex')}`
 
-        return await this.keyModel.insertOne({ token, permissions, description })
+        return await this.generateKeyWithToken(token, permissions, description)
+    }
+
+    async generateKeyWithToken(token: string, permissions: KeyPermissions[], description?: string): Promise<Key> {
+        const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+
+        return await this.keyRepo.save(this.keyRepo.create({ token, permissions, description, expiresAt }))
     }
 
     async validateKeyForRoles(token: string, requiredPermissions: KeyPermissions[]): Promise<boolean> {
-        const key = await this.keyModel
-            .findOne({
-                token,
-                expiresAt: { $gt: new Date() },
-            })
-            .lean()
-            .exec()
+        const key = await this.keyRepo.findOne({
+            where: { token, expiresAt: MoreThan(new Date()) },
+        })
 
         if (!key) {
             return false
@@ -43,7 +45,7 @@ export class ApiKeyService {
     }
 
     async revokeKey(token: string): Promise<Key> {
-        const key = await this.keyModel.findOne({ token }).lean().exec()
+        const key = await this.keyRepo.findOneBy({ token })
 
         if (!key) {
             throw new KeyNotFound(token)
@@ -53,10 +55,8 @@ export class ApiKeyService {
             throw new AdminTokenRevocationForbidden(token)
         }
 
-        const revokedKey = await this.keyModel
-            .findOneAndUpdate({ token }, { expiresAt: new Date() }, { new: true })
-            .lean()
-            .exec()
+        key.expiresAt = new Date()
+        const revokedKey = await this.keyRepo.save(key)
 
         ok(revokedKey, `Failed to revoke key with token ${token}.`)
 
@@ -64,7 +64,7 @@ export class ApiKeyService {
     }
 
     async listKeys(): Promise<string[]> {
-        const keys = await this.keyModel.find().exec()
+        const keys = await this.keyRepo.find()
         return keys.map(key => key.token)
     }
 }

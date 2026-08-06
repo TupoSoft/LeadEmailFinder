@@ -7,9 +7,9 @@ import {
     IEmailVerifier,
     VerifyOptions,
 } from '@tuposoft/lead-email-finder/common'
-import { Model, Types } from 'mongoose'
-import { EmailVerification } from './email-verification.schema'
-import { InjectModel } from '@nestjs/mongoose'
+import { EmailVerification } from './email-verification.entity'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
 import { DOMAIN_SERVICE_TOKEN, EMAIL_SERVICE_TOKEN, EMAIL_VERIFIER_TOKEN } from './email-verification.constants'
 import { DomainVerificationForbiddenException } from './domain-verification-forbidden.exception'
 
@@ -17,7 +17,7 @@ import { DomainVerificationForbiddenException } from './domain-verification-forb
 export class EmailVerificationService implements IEmailVerificationService {
     constructor(
         @Inject(EMAIL_VERIFIER_TOKEN) private readonly emailVerifier: IEmailVerifier,
-        @InjectModel(EmailVerification.name) private readonly emailVerificationModel: Model<EmailVerification>,
+        @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
         @Inject(EMAIL_SERVICE_TOKEN) private readonly emailService: IEmailService,
         @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
     ) {}
@@ -36,15 +36,18 @@ export class EmailVerificationService implements IEmailVerificationService {
 
         const emailVerificationResult = await this.emailVerifier.verify({ email, format })
 
-        const emailVerificationRecord = await this.emailVerificationModel.findOneAndUpdate(
-            { _id: emailRecord.lastVerificationId ?? new Types.ObjectId() },
-            { ...emailVerificationResult, batchId },
-            { upsert: true, new: true },
-        )
+        let emailVerificationRecord =
+            emailRecord.lastVerificationId != null
+                ? await this.emailVerificationRepo.findOneBy({ id: emailRecord.lastVerificationId })
+                : null
+
+        emailVerificationRecord ??= this.emailVerificationRepo.create()
+        Object.assign(emailVerificationRecord, { ...emailVerificationResult, batchId })
+        emailVerificationRecord = await this.emailVerificationRepo.save(emailVerificationRecord)
 
         await this.emailService.updateEmail(email, {
             exists: emailVerificationResult.exists,
-            lastVerificationId: emailVerificationRecord._id.toHexString(),
+            lastVerificationId: emailVerificationRecord.id,
         })
 
         return emailVerificationRecord

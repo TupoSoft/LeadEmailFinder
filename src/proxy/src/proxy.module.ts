@@ -4,8 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { Environment, loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { env } from 'node:process'
 import { EnvDto } from './env.dto'
-import { MongooseModule } from '@nestjs/mongoose'
-import { ProxySchema } from './proxy.schema'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { Proxy } from './proxy.entity'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
 import { ProxyProfile } from './proxy.profile'
@@ -22,19 +22,18 @@ import { CqrsModule } from '@nestjs/cqrs'
             validate: config => validate(EnvDto, config),
             cache: env.NODE_ENV === Environment.Production,
         }),
-        MongooseModule.forRootAsync({
+        TypeOrmModule.forRootAsync({
+            name: 'proxy',
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => ({
-                uri: configService.get('MONGO_URL'),
+                type: 'postgres',
+                url: configService.get('POSTGRES_URL'),
+                autoLoadEntities: true,
+                synchronize: configService.get('NODE_ENV') === Environment.Development,
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([
-            {
-                name: Proxy.name,
-                schema: ProxySchema,
-            },
-        ]),
+        TypeOrmModule.forFeature([Proxy], 'proxy'),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),

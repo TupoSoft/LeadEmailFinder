@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common'
-import { MongooseModule } from '@nestjs/mongoose'
-import { Proxy, ProxySchema } from './proxy.schema'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { Proxy } from './proxy.entity'
 import { ProxyProfile } from './proxy.profile'
 import { ProxyService } from './proxy.service'
 
 @Module({
-    imports: [MongooseModule.forFeature([{ name: Proxy.name, schema: ProxySchema }])],
+    imports: [TypeOrmModule.forFeature([Proxy])],
     providers: [ProxyProfile, ProxyService],
     exports: [ProxyService],
 })

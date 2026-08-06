@@ -13,9 +13,9 @@ import { BatchEmailVerificationCsvRowDto } from './batch-email-verification-csv-
 import { validate } from 'class-validator'
 import { randomUUID } from 'node:crypto'
 import { VerifyOptions } from '@tuposoft/lead-email-finder/common'
-import { InjectModel } from '@nestjs/mongoose'
+import { InjectRepository } from '@nestjs/typeorm'
 import { EmailVerification } from '../sync-email-verification'
-import { Model } from 'mongoose'
+import { DataSource, Repository } from 'typeorm'
 import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
@@ -27,7 +27,8 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
         @InjectQueue('async-email-verification') private readonly asyncEmailVerificationQueue: Queue<VerifyOptions>,
-        @InjectModel(EmailVerification.name) private readonly emailVerificationModel: Model<EmailVerification>,
+        @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
+        private readonly dataSource: DataSource,
     ) {
         super()
     }
@@ -64,8 +65,11 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
         const { bucket, key } = job.data
 
-        const columns = Object.keys(this.emailVerificationModel.schema.paths)
-        const cursor = this.emailVerificationModel.find<EmailVerification>({ batchId: job.id }).lean().cursor()
+        const columns = this.dataSource.getMetadata(EmailVerification).columns.map(c => c.propertyName)
+        const cursor = await this.emailVerificationRepo
+            .createQueryBuilder('ev')
+            .where('ev.batchId = :batchId', { batchId: job.id })
+            .stream()
         const stringifier = stringify({
             columns,
             header: true,

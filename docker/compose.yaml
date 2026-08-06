@@ -32,8 +32,10 @@ services:
       API_URL: http://localhost:3000
       APIKEY_URL: api:5000
 
+      ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
+
       REDIS_URL_FILE: /run/secrets/redis_url
-      MONGO_URL_FILE: /run/secrets/mongo_url
+
       POSTGRES_URL_FILE: /run/secrets/postgres_url
 
       S3_ACCESS_KEY_ID_FILE: /run/secrets/s3_access_key_id
@@ -44,18 +46,18 @@ services:
       S3_BUCKET: batch-email-verification
     env_file: .env
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
         condition: service_healthy
     secrets:
-      - mongo_url
+      - admin_apikey
+      - postgres_url
       - redis_url
       - s3_access_key_id
       - s3_secret_key
-      - postgres_url
 
 secrets:
   postgres_url:

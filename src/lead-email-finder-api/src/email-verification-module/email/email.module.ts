@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common'
 import { EmailController } from './email.controller'
-import { MongooseModule } from '@nestjs/mongoose'
-import { Email, EmailSchema } from './email.schema'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { Email } from './email.entity'
 import { EmailService } from './email.service'
 import { EMAIL_SERVICE_TOKEN } from './email.constants'
 import { EmailProfile } from './email.profile'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @Module({
-    imports: [MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }]), ApiKeyModule],
+    imports: [TypeOrmModule.forFeature([Email]), ApiKeyModule],
     controllers: [EmailController],
     providers: [
         {
