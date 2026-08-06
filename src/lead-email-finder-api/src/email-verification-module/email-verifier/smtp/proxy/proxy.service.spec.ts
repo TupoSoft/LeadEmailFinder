@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ProxyService } from './proxy.service'
-import { getModelToken } from '@nestjs/mongoose'
-import { Mapper } from '@automapper/core'
-import { Model, Types } from 'mongoose'
-import { Proxy } from './proxy.schema'
+import { getRepositoryToken } from '@nestjs/typeorm'
+import { Repository, SelectQueryBuilder } from 'typeorm'
+import { Proxy } from './proxy.entity'
 import { getMapperToken } from '@automapper/nestjs'
 import { ProxyResponse } from './proxy-response.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
@@ -11,20 +10,26 @@ import { ProxyType } from './proxy-type.enum'
 
 describe('ProxyService', () => {
     let service: ProxyService
-    let model: jest.Mocked<Model<Proxy>>
-    let mapper: jest.Mocked<Mapper>
+    let repo: jest.Mocked<Repository<Proxy>>
+    // Mapper.map/mapArray are generic overloaded methods; jest.Mocked<Mapper> collapses
+    // their generics to `Dictionary<any>`, so mockReturnValue rejects concrete DTOs.
+    let mapper: { map: jest.Mock; mapArray: jest.Mock }
+
+    const id = 'some-uuid'
 
     beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ProxyService,
                 {
-                    provide: getModelToken(Proxy.name),
+                    provide: getRepositoryToken(Proxy),
                     useValue: {
-                        findByIdAndUpdate: jest.fn(),
-                        findByIdAndDelete: jest.fn(),
-                        findById: jest.fn(),
+                        findOneBy: jest.fn(),
                         find: jest.fn(),
+                        save: jest.fn(),
+                        create: jest.fn(),
+                        remove: jest.fn(),
+                        createQueryBuilder: jest.fn(),
                     },
                 },
                 {
@@ -38,74 +43,76 @@ describe('ProxyService', () => {
         }).compile()
 
         service = module.get(ProxyService)
-        model = module.get(getModelToken(Proxy.name))
+        repo = module.get(getRepositoryToken(Proxy))
         mapper = module.get(getMapperToken())
     })
 
+    beforeEach(() => jest.resetAllMocks())
+
     describe('update', () => {
         it('should update and return the updated proxy', async () => {
-            const id = new Types.ObjectId().toString()
-            const updateProxyDto = { host: 'new.example.com' }
-            const updatedProxy = { _id: id, host: 'new.example.com' }
-            const mappedResponse = { id, host: 'new.example.com' }
+            const entity: Proxy = { id, host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const updateDto = { host: 'new.example.com' }
+            const updated = { ...entity, ...updateDto }
+            const mappedResponse = { id, host: 'new.example.com' } as ProxyResponse
 
-            model.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(updatedProxy) } as any)
+            repo.findOneBy.mockResolvedValue(entity)
+            repo.save.mockResolvedValue(updated)
             mapper.map.mockReturnValue(mappedResponse)
 
-            const result = await service.update(id, updateProxyDto)
+            const result = await service.update(id, updateDto)
 
+            expect(repo.findOneBy).toHaveBeenCalledWith({ id })
+            expect(repo.save).toHaveBeenCalled()
+            expect(mapper.map).toHaveBeenCalledWith(updated, Proxy, ProxyResponse)
             expect(result).toEqual(mappedResponse)
-            expect(model.findByIdAndUpdate).toHaveBeenCalledWith(id, updateProxyDto, { new: true })
-            expect(mapper.map).toHaveBeenCalledWith(updatedProxy, Proxy, ProxyResponse)
         })
 
         it('should throw ProxyNotFoundException if proxy is not found', async () => {
-            const id = new Types.ObjectId().toString()
-            const updateProxyDto = { host: 'new.example.com' }
+            repo.findOneBy.mockResolvedValue(null)
 
-            model.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) } as any)
-
-            await expect(service.update(id, updateProxyDto)).rejects.toThrow(ProxyNotFoundException)
+            await expect(service.update(id, { host: 'new.example.com' })).rejects.toThrow(ProxyNotFoundException)
         })
     })
 
     describe('create', () => {
         it('should create a new proxy and return the created proxy', async () => {
-            const createProxyDto = { host: 'example.com', type: ProxyType.HTTP, port: 8080 }
-            const createdProxy = { _id: 'someId', host: 'example.com', type: ProxyType.HTTP, port: 8080 }
-            const mappedResponse = { id: 'someId', host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const createDto = { host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const entity: Proxy = { id, ...createDto }
+            const mappedResponse = { id, ...createDto } as ProxyResponse
 
-            model.insertOne = jest.fn().mockResolvedValue(createdProxy)
+            repo.create.mockReturnValue(entity)
+            repo.save.mockResolvedValue(entity)
             mapper.map.mockReturnValue(mappedResponse)
 
-            const result = await service.create(createProxyDto)
+            const result = await service.create(createDto)
 
+            expect(repo.create).toHaveBeenCalledWith(createDto)
+            expect(repo.save).toHaveBeenCalledWith(entity)
+            expect(mapper.map).toHaveBeenCalledWith(entity, Proxy, ProxyResponse)
             expect(result).toEqual(mappedResponse)
-            expect(model.insertOne).toHaveBeenCalledWith(createProxyDto)
-            expect(mapper.map).toHaveBeenCalledWith(createdProxy, Proxy, ProxyResponse)
         })
     })
 
     describe('remove', () => {
         it('should remove and return the removed proxy', async () => {
-            const id = new Types.ObjectId().toString()
-            const removedProxy = { _id: id, host: 'removed.example.com' }
-            const mappedResponse = { id, host: 'removed.example.com' }
+            const entity: Proxy = { id, host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const mappedResponse = { id, host: 'example.com' } as ProxyResponse
 
-            model.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(removedProxy) } as any)
+            repo.findOneBy.mockResolvedValue(entity)
+            repo.remove.mockResolvedValue(entity)
             mapper.map.mockReturnValue(mappedResponse)
 
             const result = await service.remove(id)
 
+            expect(repo.findOneBy).toHaveBeenCalledWith({ id })
+            expect(repo.remove).toHaveBeenCalledWith(entity)
+            expect(mapper.map).toHaveBeenCalledWith(entity, Proxy, ProxyResponse)
             expect(result).toEqual(mappedResponse)
-            expect(model.findByIdAndDelete).toHaveBeenCalledWith(id)
-            expect(mapper.map).toHaveBeenCalledWith(removedProxy, Proxy, ProxyResponse)
         })
 
         it('should throw ProxyNotFoundException if proxy is not found', async () => {
-            const id = new Types.ObjectId().toString()
-
-            model.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) } as any)
+            repo.findOneBy.mockResolvedValue(null)
 
             await expect(service.remove(id)).rejects.toThrow(ProxyNotFoundException)
         })
@@ -113,74 +120,82 @@ describe('ProxyService', () => {
 
     describe('addToBlacklist', () => {
         it('should add a blacklist item and return updated proxy', async () => {
-            const id = new Types.ObjectId().toString()
             const blacklist = 'test-blacklist'
-            const updatedProxy = { _id: id, blacklists: [blacklist] }
-            const mappedResponse = { id, blacklists: [blacklist] }
+            const entity: Proxy = { id, host: 'example.com', type: ProxyType.HTTP, port: 8080, blacklists: [] }
+            const updated = { ...entity, blacklists: [blacklist] }
+            const mappedResponse = { id, blacklists: [blacklist] } as ProxyResponse
 
-            model.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(updatedProxy) } as any)
+            repo.findOneBy.mockResolvedValue(entity)
+            repo.save.mockResolvedValue(updated)
             mapper.map.mockReturnValue(mappedResponse)
 
             const result = await service.addToBlacklist(id, blacklist)
 
+            expect(repo.findOneBy).toHaveBeenCalledWith({ id })
+            expect(repo.save).toHaveBeenCalled()
             expect(result).toEqual(mappedResponse)
-            expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-                id,
-                { $addToSet: { blacklists: blacklist } },
-                { new: true, upsert: false },
-            )
-            expect(mapper.map).toHaveBeenCalledWith(updatedProxy, Proxy, ProxyResponse)
         })
 
         it('should throw ProxyNotFoundException if proxy is not found', async () => {
-            const id = new Types.ObjectId().toString()
-            const blacklist = 'test-blacklist'
+            repo.findOneBy.mockResolvedValue(null)
 
-            model.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) } as any)
-
-            await expect(service.addToBlacklist(id, blacklist)).rejects.toThrow(ProxyNotFoundException)
+            await expect(service.addToBlacklist(id, 'blacklist')).rejects.toThrow(ProxyNotFoundException)
         })
     })
 
     describe('getById', () => {
         it('should return proxy by ID', async () => {
-            const id = new Types.ObjectId().toString()
-            const foundProxy = { _id: id, host: 'example.com' }
-            const mappedResponse = { id, host: 'example.com' }
+            const entity: Proxy = { id, host: 'example.com', type: ProxyType.HTTP, port: 8080 }
+            const mappedResponse = { id, host: 'example.com' } as ProxyResponse
 
-            model.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(foundProxy) } as any)
+            repo.findOneBy.mockResolvedValue(entity)
             mapper.map.mockReturnValue(mappedResponse)
 
             const result = await service.getById(id)
 
+            expect(repo.findOneBy).toHaveBeenCalledWith({ id })
+            expect(mapper.map).toHaveBeenCalledWith(entity, Proxy, ProxyResponse)
             expect(result).toEqual(mappedResponse)
-            expect(model.findById).toHaveBeenCalledWith(id)
-            expect(mapper.map).toHaveBeenCalledWith(foundProxy, Proxy, ProxyResponse)
         })
 
         it('should throw ProxyNotFoundException if proxy is not found', async () => {
-            const id = new Types.ObjectId().toString()
-
-            model.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) } as any)
+            repo.findOneBy.mockResolvedValue(null)
 
             await expect(service.getById(id)).rejects.toThrow(ProxyNotFoundException)
         })
     })
 
     describe('get', () => {
-        it('should return all proxies matching the filter', async () => {
-            const filter = { host: { $regex: 'example' } }
-            const foundProxies = [{ _id: '1', host: 'example.com' }]
-            const mappedResponse = [{ id: '1', host: 'example.com' }]
+        it('should return all proxies when no excluded exchanges', async () => {
+            const proxies: Proxy[] = [{ id, host: 'example.com', type: ProxyType.HTTP, port: 8080 }]
+            const mappedResponse = [{ id, host: 'example.com' }] as ProxyResponse[]
 
-            model.find.mockReturnValue({ exec: jest.fn().mockResolvedValue(foundProxies) } as any)
+            repo.find.mockResolvedValue(proxies)
             mapper.mapArray.mockReturnValue(mappedResponse)
 
-            const result = await service.get(filter)
+            const result = await service.get()
 
+            expect(repo.find).toHaveBeenCalled()
+            expect(mapper.mapArray).toHaveBeenCalledWith(proxies, Proxy, ProxyResponse)
             expect(result).toEqual(mappedResponse)
-            expect(model.find).toHaveBeenCalledWith(filter)
-            expect(mapper.mapArray).toHaveBeenCalledWith(foundProxies, Proxy, ProxyResponse)
+        })
+
+        it('should use query builder when excluded exchanges provided', async () => {
+            const proxies: Proxy[] = [{ id, host: 'example.com', type: ProxyType.HTTP, port: 8080 }]
+            const mappedResponse = [{ id, host: 'example.com' }] as ProxyResponse[]
+            const qb = {
+                where: jest.fn().mockReturnThis(),
+                getMany: jest.fn().mockResolvedValue(proxies),
+            } as unknown as SelectQueryBuilder<Proxy>
+
+            repo.createQueryBuilder.mockReturnValue(qb)
+            mapper.mapArray.mockReturnValue(mappedResponse)
+
+            const result = await service.get(['mx.example.com'])
+
+            expect(repo.createQueryBuilder).toHaveBeenCalledWith('p')
+            expect(mapper.mapArray).toHaveBeenCalledWith(proxies, Proxy, ProxyResponse)
+            expect(result).toEqual(mappedResponse)
         })
     })
 })

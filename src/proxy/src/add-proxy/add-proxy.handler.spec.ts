@@ -1,14 +1,17 @@
-import { Model, Types } from 'mongoose'
-import { Proxy } from '../proxy.schema'
+import { Repository } from 'typeorm'
+import { Proxy } from '../proxy.entity'
 import { Test } from '@nestjs/testing'
 import { AddProxyHandler } from './add-proxy.handler'
-import { getModelToken } from '@nestjs/mongoose'
+import { getRepositoryToken } from '@nestjs/typeorm'
 import { getMapperToken } from '@automapper/nestjs'
 import { AddProxyCommand } from './add-proxy.command'
 
+// Protocol.PROTOCOL_HTTP = 1 (from proto enum, avoid importing proto module in tests due to protobufjs side effects)
+const PROTOCOL_HTTP = 1
+
 describe('AddProxyHandler', () => {
     let addProxyHandler: AddProxyHandler
-    let proxyModel: jest.Mocked<Model<Proxy>>
+    let proxyRepo: jest.Mocked<Pick<Repository<Proxy>, 'save' | 'create'>>
 
     const now = new Date()
 
@@ -17,9 +20,10 @@ describe('AddProxyHandler', () => {
             providers: [
                 AddProxyHandler,
                 {
-                    provide: getModelToken(Proxy.name),
+                    provide: getRepositoryToken(Proxy, 'proxy'),
                     useValue: {
-                        insertOne: jest.fn(),
+                        save: jest.fn(),
+                        create: jest.fn(),
                     },
                 },
                 {
@@ -32,27 +36,29 @@ describe('AddProxyHandler', () => {
         }).compile()
 
         addProxyHandler = moduleRef.get(AddProxyHandler)
-        proxyModel = moduleRef.get(getModelToken(Proxy.name))
+        proxyRepo = moduleRef.get(getRepositoryToken(Proxy, 'proxy'))
     })
 
-    it('should call proxyModel.insertOne with the correct data', async () => {
-        const command = new AddProxyCommand(1, 'localhost', 80, undefined, '')
+    it('should call proxyRepo.save with the created proxy', async () => {
+        const command = new AddProxyCommand(PROTOCOL_HTTP, 'localhost', 80, undefined, '')
 
-        const insertOneResult: Proxy = {
-            _id: new Types.ObjectId(),
+        const savedProxy: Proxy = {
+            id: 'some-uuid',
             createdAt: now,
             enabled: true,
             host: 'localhost',
             port: 80,
-            protocol: 1,
+            protocol: PROTOCOL_HTTP,
             updatedAt: now,
             weight: 1,
         }
 
-        proxyModel.insertOne.mockResolvedValueOnce(insertOneResult as any)
+        proxyRepo.create.mockReturnValue(savedProxy)
+        proxyRepo.save.mockResolvedValue(savedProxy)
 
         await addProxyHandler.execute(command)
 
-        expect(proxyModel.insertOne).toHaveBeenCalledWith(command)
+        expect(proxyRepo.create).toHaveBeenCalledWith(command)
+        expect(proxyRepo.save).toHaveBeenCalledWith(savedProxy)
     })
 })

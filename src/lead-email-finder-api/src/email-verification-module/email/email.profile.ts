@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { AutomapperProfile, InjectMapper } from '@automapper/nestjs'
 import { createMap, forMember, mapFrom, Mapper, MappingConfiguration, MappingProfile } from '@automapper/core'
-import { Email } from './email.schema'
+import { Email } from './email.entity'
 import { EmailResponseDto } from './email-response.dto'
 
 @Injectable()
@@ -20,7 +20,7 @@ export class EmailProfile extends AutomapperProfile {
         return [
             forMember<Email, EmailResponseDto>(
                 destination => destination.email,
-                mapFrom(source => source._id),
+                mapFrom(source => source.id),
             ),
         ]
     }

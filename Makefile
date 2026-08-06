@@ -4,7 +4,7 @@ COMPOSE_FILE_APPS=docker compose -f docker/apps.compose.yaml
 COMPOSE_OPTIONS_UP=-d --build
 COMPOSE_OPTIONS_DOWN=-v
 
-.PHONY: all help build start stop restart refresh-deps
+.PHONY: all help build start stop restart refresh-deps swagger
 all: help
 help:
 	@echo "Available targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  stop <env>         Stop containers (env=dev|debug|apps-dev|apps-debug)"
 	@echo "  restart <env>      Restart containers (env=dev|debug|apps-dev|apps-debug)"
 	@echo "  refresh-deps       Recreate anonymous volumes with profiles"
+	@echo "  swagger            Regenerate Swagger metadata"
 
 env=DEV
 profile='*'
@@ -32,3 +33,6 @@ restart:
 
 refresh-deps:
 	$(COMPOSE_FILE_$(env)) --profile $(profile) up $(COMPOSE_OPTIONS_UP) -V
+
+swagger:
+	ts-node apps/lead-email-finder/src/generate-metadata.ts

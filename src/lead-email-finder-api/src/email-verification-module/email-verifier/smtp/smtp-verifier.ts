@@ -9,10 +9,10 @@ import {
     ISmtpVerificationResponse,
     ISmtpVerifier,
 } from '@tuposoft/lead-email-finder/common'
-import { Model } from 'mongoose'
-import { SmtpVerification } from './smtp-verification.schema'
+import { SmtpVerification } from './smtp-verification.entity'
 import { Inject, Injectable, Logger } from '@nestjs/common'
-import { InjectModel } from '@nestjs/mongoose'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
@@ -109,7 +109,7 @@ export class SmtpVerifier implements ISmtpVerifier {
     constructor(
         @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
         @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
-        @InjectModel(SmtpVerification.name) private readonly smtpVerificationModel: Model<SmtpVerification>,
+        @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
     ) {}
 
     private static isTemporarilyBlocked(result: Pick<SmtpVerification, 'reason'> | null): result is {
@@ -130,12 +130,12 @@ export class SmtpVerifier implements ISmtpVerifier {
         const getExchangesParams: GetExchangesParams = { domain }
         const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
 
-        const cachedResult = await this.smtpVerificationModel.findById(email)
+        const cachedResult = await this.smtpVerificationRepo.findOneBy({ id: email })
         if (SmtpVerifier.hasEmailVerificationOutcome(cachedResult)) {
-            const { _id: email, exists, targetExchange, reason } = cachedResult
+            const { id: cachedEmail, exists, targetExchange, reason } = cachedResult
 
             return {
-                email,
+                email: cachedEmail,
                 exists,
                 targetExchange,
                 reason,
@@ -169,9 +169,10 @@ export class SmtpVerifier implements ISmtpVerifier {
 
         const result = await this.tryVerify({ client, email })
 
-        await this.smtpVerificationModel.updateOne({ _id: email }, result, {
-            upsert: true,
-        })
+        let smtpRecord = await this.smtpVerificationRepo.findOneBy({ id: email })
+        smtpRecord ??= this.smtpVerificationRepo.create({ id: email })
+        Object.assign(smtpRecord, result)
+        await this.smtpVerificationRepo.save(smtpRecord)
 
         return result
     }
@@ -281,11 +282,7 @@ export class SmtpVerifier implements ISmtpVerifier {
 
     private async getProxies({ exchanges, proxyId }: GetProxiesParams): Promise<IProxy[]> {
         if (proxyId == null) {
-            return await this.proxyService.get({
-                blacklists: {
-                    $nin: exchanges,
-                },
-            })
+            return await this.proxyService.get(exchanges)
         } else {
             const proxy = await this.proxyService.getById(proxyId)
             return proxy != null ? [proxy] : []

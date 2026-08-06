@@ -1,5 +1,5 @@
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
-import { IsEnum, IsUrl } from 'class-validator'
+import { IsEnum, IsString } from 'class-validator'
 
 @WithFileVars()
 export class EnvDto {
@@ -7,6 +7,6 @@ export class EnvDto {
     NODE_ENV: Environment
 
     @IsFileVar()
-    @IsUrl({ protocols: ['mongodb'], require_protocol: true })
-    MONGO_URL: string
+    @IsString()
+    POSTGRES_URL: string
 }
