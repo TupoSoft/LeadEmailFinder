@@ -32,9 +32,8 @@ wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-pro
 chmod +x /bin/grpc_health_probe
 EOF
 
-# Install pnpm.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g pnpm
+# Enable the pnpm version pinned by package.json.
+RUN corepack enable
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.local/share/pnpm/store to speed up subsequent builds.
