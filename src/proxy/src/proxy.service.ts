@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import {
     AddProxyRequest,
     AddProxyResponse,
@@ -19,13 +19,39 @@ import {
 import { Observable } from 'rxjs'
 import { CommandBus } from '@nestjs/cqrs'
 import { AddProxyCommand } from './add-proxy/add-proxy.command'
+import { InjectModel } from '@nestjs/mongoose'
+import { Proxy } from './proxy.schema'
+import { Model, Types } from 'mongoose'
+import { InjectMapper } from '@automapper/nestjs'
+import { Mapper } from '@automapper/core'
+import { ProxyDescriptorDto } from './proxy.dto'
+import { ProxyNotFoundException } from './proxy-not-found.exception'
+
+const DEFAULT_PAGE_SIZE = 100
+const MAX_PAGE_SIZE = 100
 
 @Injectable()
 export class ProxyService implements ProxyServiceController {
-    constructor(private readonly commandBus: CommandBus) {}
+    constructor(
+        private readonly commandBus: CommandBus,
+        @InjectModel(Proxy.name) private readonly proxyModel: Model<Proxy>,
+        @InjectMapper() private readonly mapper: Mapper,
+    ) {}
 
-    getProxy(_request: GetProxyRequest): Promise<GetProxyResponse> | Observable<GetProxyResponse> | GetProxyResponse {
-        throw new Error('Method not implemented.')
+    async getProxy({ id }: GetProxyRequest): Promise<GetProxyResponse> {
+        if (!Types.ObjectId.isValid(id)) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        const proxy = await this.proxyModel.findById(id).exec()
+
+        if (proxy === null) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        return {
+            proxy: this.mapper.map(proxy, Proxy, ProxyDescriptorDto),
+        }
     }
 
     async addProxy({
@@ -42,10 +68,30 @@ export class ProxyService implements ProxyServiceController {
         )
     }
 
-    listProxies(
-        _request: ListProxiesRequest,
-    ): Promise<ListProxiesResponse> | Observable<ListProxiesResponse> | ListProxiesResponse {
-        throw new Error('Method not implemented.')
+    async listProxies({ pageSize, pageToken }: ListProxiesRequest): Promise<ListProxiesResponse> {
+        const resolvedPageSize = Math.min(Math.max(pageSize || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+        const filter: { _id?: { $gt: Types.ObjectId } } = {}
+
+        if (pageToken !== undefined) {
+            if (!Types.ObjectId.isValid(pageToken)) {
+                throw new BadRequestException('Invalid page token.')
+            }
+
+            filter._id = { $gt: new Types.ObjectId(pageToken) }
+        }
+
+        const proxies = await this.proxyModel
+            .find(filter)
+            .sort({ _id: 1 })
+            .limit(resolvedPageSize + 1)
+            .exec()
+        const hasNextPage = proxies.length > resolvedPageSize
+        const page = hasNextPage ? proxies.slice(0, resolvedPageSize) : proxies
+
+        return {
+            proxies: this.mapper.mapArray(page, Proxy, ProxyDescriptorDto),
+            nextPageToken: hasNextPage ? page.at(-1)!._id.toHexString() : '',
+        }
     }
 
     updateProxy(
