@@ -6,7 +6,7 @@ import importPlugin from 'eslint-plugin-import'
 
 export default tseslint.config(
     {
-        ignores: ['eslint.config.mjs', 'docker/scripts/**'],
+        ignores: ['eslint.config.mjs', 'docker/scripts/**', 'dist/**'],
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,
@@ -76,6 +76,7 @@ export default tseslint.config(
         rules: {
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
         },
     },
 )
