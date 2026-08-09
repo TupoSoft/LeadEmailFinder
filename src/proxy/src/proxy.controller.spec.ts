@@ -21,6 +21,10 @@ describe('ProxyController', () => {
                         getHello: jest.fn(),
                         getProxy: jest.fn(),
                         listProxies: jest.fn(),
+                        updateProxy: jest.fn(),
+                        deleteProxy: jest.fn(),
+                        getHealthyProxy: jest.fn(),
+                        reportProxyBlacklist: jest.fn(),
                     },
                 },
             ],
@@ -55,5 +59,17 @@ describe('ProxyController', () => {
 
         await expect(proxyController.listProxies(request)).resolves.toEqual(response)
         expect(proxyService.listProxies).toHaveBeenCalledWith(request)
+    })
+
+    it('delegates proxy mutations and health operations to the service', async () => {
+        proxyService.updateProxy.mockResolvedValue({ proxy: undefined })
+        proxyService.deleteProxy.mockResolvedValue({ proxy: undefined })
+        proxyService.getHealthyProxy.mockResolvedValue({ proxy: undefined })
+        proxyService.reportProxyBlacklist.mockResolvedValue({})
+
+        await expect(proxyController.updateProxy({ updateMask: [], proxy: undefined })).resolves.toEqual({ proxy: undefined })
+        await expect(proxyController.deleteProxy({ id: 'proxy-id' })).resolves.toEqual({ proxy: undefined })
+        await expect(proxyController.getHealthyProxy({ mxHost: 'mx.example.com' })).resolves.toEqual({ proxy: undefined })
+        await expect(proxyController.reportProxyBlacklist({ id: 'proxy-id', mxHost: 'mx.example.com' })).resolves.toEqual({})
     })
 })

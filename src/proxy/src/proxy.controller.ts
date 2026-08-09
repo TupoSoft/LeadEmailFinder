@@ -17,7 +17,6 @@ import {
     UpdateProxyRequest,
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
-import { Observable } from 'rxjs'
 import { AddProxyResponseDto, GetProxyRequestDto, GetProxyResponseDto, ListProxiesResponseDto } from './proxy.dto'
 import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
 
@@ -42,28 +41,20 @@ export class ProxyController implements ProxyServiceController {
         return await this.proxyService.getProxy(request)
     }
 
-    updateProxy(
-        _request: UpdateProxyRequest,
-    ): Promise<UpdateProxyResponse> | Observable<UpdateProxyResponse> | UpdateProxyResponse {
-        throw new Error('Method not implemented.')
+    async updateProxy(request: UpdateProxyRequest): Promise<UpdateProxyResponse> {
+        return await this.proxyService.updateProxy(request)
     }
 
-    deleteProxy(
-        _request: DeleteProxyRequest,
-    ): Promise<DeleteProxyResponse> | Observable<DeleteProxyResponse> | DeleteProxyResponse {
-        throw new Error('Method not implemented.')
+    async deleteProxy(request: DeleteProxyRequest): Promise<DeleteProxyResponse> {
+        return await this.proxyService.deleteProxy(request)
     }
 
-    getHealthyProxy(
-        _request: GetHealthyProxyRequest,
-    ): Promise<GetHealthyProxyResponse> | Observable<GetHealthyProxyResponse> | GetHealthyProxyResponse {
-        throw new Error('Method not implemented.')
+    async getHealthyProxy(request: GetHealthyProxyRequest): Promise<GetHealthyProxyResponse> {
+        return await this.proxyService.getHealthyProxy(request)
     }
 
-    reportProxyBlacklist(
-        _request: ReportProxyBlacklistRequest,
-    ): Promise<ReportProxyBlacklistResponse> | Observable<ReportProxyBlacklistResponse> | ReportProxyBlacklistResponse {
-        throw new Error('Method not implemented.')
+    async reportProxyBlacklist(request: ReportProxyBlacklistRequest): Promise<ReportProxyBlacklistResponse> {
+        return await this.proxyService.reportProxyBlacklist(request)
     }
 
     @Get()

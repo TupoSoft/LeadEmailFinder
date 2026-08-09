@@ -16,34 +16,36 @@ import {
     UpdateProxyRequest,
     UpdateProxyResponse,
 } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
-import { Observable } from 'rxjs'
 import { CommandBus } from '@nestjs/cqrs'
 import { AddProxyCommand } from './add-proxy/add-proxy.command'
-import { InjectModel } from '@nestjs/mongoose'
-import { Proxy } from './proxy.schema'
-import { Model, Types } from 'mongoose'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { ProxyDescriptorDto } from './proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
+import { InjectRepository } from '@nestjs/typeorm'
+import { FindOptionsWhere, MoreThan, Repository } from 'typeorm'
+import { isUUID } from 'class-validator'
+import { Proxy } from './proxy.entity'
 
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 100
+const WRITABLE_PROXY_FIELDS = ['protocol', 'host', 'port', 'auth', 'weight', 'description', 'enabled'] as const
+type WritableProxyField = (typeof WRITABLE_PROXY_FIELDS)[number]
 
 @Injectable()
 export class ProxyService implements ProxyServiceController {
     constructor(
         private readonly commandBus: CommandBus,
-        @InjectModel(Proxy.name) private readonly proxyModel: Model<Proxy>,
+        @InjectRepository(Proxy, 'proxy') private readonly proxyRepo: Repository<Proxy>,
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
     async getProxy({ id }: GetProxyRequest): Promise<GetProxyResponse> {
-        if (!Types.ObjectId.isValid(id)) {
+        if (!isUUID(id)) {
             throw new ProxyNotFoundException(id)
         }
 
-        const proxy = await this.proxyModel.findById(id).exec()
+        const proxy = await this.proxyRepo.findOneBy({ id })
 
         if (proxy === null) {
             throw new ProxyNotFoundException(id)
@@ -70,55 +72,130 @@ export class ProxyService implements ProxyServiceController {
 
     async listProxies({ pageSize, pageToken }: ListProxiesRequest): Promise<ListProxiesResponse> {
         const resolvedPageSize = Math.min(Math.max(pageSize || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
-        const filter: { _id?: { $gt: Types.ObjectId } } = {}
+        const where: FindOptionsWhere<Proxy> = {}
 
         if (pageToken !== undefined) {
-            if (!Types.ObjectId.isValid(pageToken)) {
+            if (!isUUID(pageToken)) {
                 throw new BadRequestException('Invalid page token.')
             }
 
-            filter._id = { $gt: new Types.ObjectId(pageToken) }
+            where.id = MoreThan(pageToken)
         }
 
-        const proxies = await this.proxyModel
-            .find(filter)
-            .sort({ _id: 1 })
-            .limit(resolvedPageSize + 1)
-            .exec()
+        const proxies = await this.proxyRepo.find({
+            where,
+            order: { id: 'ASC' },
+            take: resolvedPageSize + 1,
+        })
         const hasNextPage = proxies.length > resolvedPageSize
         const page = hasNextPage ? proxies.slice(0, resolvedPageSize) : proxies
 
         return {
             proxies: this.mapper.mapArray(page, Proxy, ProxyDescriptorDto),
-            nextPageToken: hasNextPage ? page.at(-1)!._id.toHexString() : '',
+            nextPageToken: hasNextPage ? page.at(-1)!.id : '',
         }
     }
 
-    updateProxy(
-        _request: UpdateProxyRequest,
-    ): Promise<UpdateProxyResponse> | Observable<UpdateProxyResponse> | UpdateProxyResponse {
-        throw new Error('Method not implemented.')
+    async updateProxy({ updateMask, proxy }: UpdateProxyRequest): Promise<UpdateProxyResponse> {
+        if (proxy === undefined || !isUUID(proxy.id)) {
+            throw new BadRequestException('A proxy with a valid id is required.')
+        }
+
+        const fields = updateMask ?? []
+
+        if (fields.length === 0 || fields.some(field => !isWritableProxyField(field))) {
+            throw new BadRequestException('updateMask must contain one or more writable proxy fields.')
+        }
+
+        const updateFields = fields as WritableProxyField[]
+
+        const entity = await this.proxyRepo.findOneBy({ id: proxy.id })
+
+        if (entity === null) {
+            throw new ProxyNotFoundException(proxy.id)
+        }
+
+        const updates = Object.fromEntries(updateFields.map(field => [field, proxy[field]])) as Partial<Pick<Proxy, WritableProxyField>>
+        Object.assign(entity, updates)
+
+        const updated = await this.proxyRepo.save(entity)
+
+        return { proxy: this.mapper.map(updated, Proxy, ProxyDescriptorDto) }
     }
 
-    deleteProxy(
-        _request: DeleteProxyRequest,
-    ): Promise<DeleteProxyResponse> | Observable<DeleteProxyResponse> | DeleteProxyResponse {
-        throw new Error('Method not implemented.')
+    async deleteProxy({ id }: DeleteProxyRequest): Promise<DeleteProxyResponse> {
+        if (!isUUID(id)) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        const entity = await this.proxyRepo.findOneBy({ id })
+
+        if (entity === null) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        await this.proxyRepo.remove(entity)
+
+        return { proxy: this.mapper.map(entity, Proxy, ProxyDescriptorDto) }
     }
 
-    getHealthyProxy(
-        _request: GetHealthyProxyRequest,
-    ): Promise<GetHealthyProxyResponse> | Observable<GetHealthyProxyResponse> | GetHealthyProxyResponse {
-        throw new Error('Method not implemented.')
+    async getHealthyProxy({ mxHost }: GetHealthyProxyRequest): Promise<GetHealthyProxyResponse> {
+        const proxies = await this.proxyRepo
+            .createQueryBuilder('proxy')
+            .where('proxy.enabled = :enabled', { enabled: true })
+            .andWhere('(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))', { mxHost })
+            .getMany()
+
+        const totalWeight = proxies.reduce((sum, proxy) => sum + Math.max(proxy.weight, 0), 0)
+        const selected = selectWeightedProxy(proxies, totalWeight)
+
+        return { proxy: selected === undefined ? undefined : this.mapper.map(selected, Proxy, ProxyDescriptorDto) }
     }
 
-    reportProxyBlacklist(
-        _request: ReportProxyBlacklistRequest,
-    ): Promise<ReportProxyBlacklistResponse> | Observable<ReportProxyBlacklistResponse> | ReportProxyBlacklistResponse {
-        throw new Error('Method not implemented.')
+    async reportProxyBlacklist({ id, mxHost }: ReportProxyBlacklistRequest): Promise<ReportProxyBlacklistResponse> {
+        if (!isUUID(id)) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        const entity = await this.proxyRepo.findOneBy({ id })
+
+        if (entity === null) {
+            throw new ProxyNotFoundException(id)
+        }
+
+        entity.blacklists = [...new Set([...(entity.blacklists ?? []), mxHost])]
+        await this.proxyRepo.save(entity)
+
+        return {}
     }
 
     getHello(): string {
         return 'Hello World!'
     }
+}
+
+function selectWeightedProxy(proxies: Proxy[], totalWeight: number): Proxy | undefined {
+    if (proxies.length === 0) {
+        return undefined
+    }
+
+    if (totalWeight <= 0) {
+        return proxies[0]
+    }
+
+    let threshold = Math.random() * totalWeight
+
+    for (const proxy of proxies) {
+        threshold -= Math.max(proxy.weight, 0)
+
+        if (threshold < 0) {
+            return proxy
+        }
+    }
+
+    return proxies.at(-1)
+}
+
+function isWritableProxyField(field: string): field is WritableProxyField {
+    return (WRITABLE_PROXY_FIELDS as readonly string[]).includes(field)
 }

@@ -1,18 +1,20 @@
 import { Test } from '@nestjs/testing'
 import { ProxyService } from './proxy.service'
-import { getModelToken } from '@nestjs/mongoose'
-import { Proxy } from './proxy.schema'
+import { Proxy } from './proxy.entity'
 import { getMapperToken } from '@automapper/nestjs'
 import { CommandBus } from '@nestjs/cqrs'
-import { Types } from 'mongoose'
 import { BadRequestException } from '@nestjs/common'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
+import { getRepositoryToken } from '@nestjs/typeorm'
 
 describe('ProxyService', () => {
     let service: ProxyService
-    let proxyModel: {
-        findById: jest.Mock
+    let proxyRepo: {
+        findOneBy: jest.Mock
         find: jest.Mock
+        save: jest.Mock
+        remove: jest.Mock
+        createQueryBuilder: jest.Mock
     }
     let mapper: {
         map: jest.Mock
@@ -30,10 +32,13 @@ describe('ProxyService', () => {
                     },
                 },
                 {
-                    provide: getModelToken(Proxy.name),
+                    provide: getRepositoryToken(Proxy, 'proxy'),
                     useValue: {
-                        findById: jest.fn(),
+                        findOneBy: jest.fn(),
                         find: jest.fn(),
+                        save: jest.fn(),
+                        remove: jest.fn(),
+                        createQueryBuilder: jest.fn(),
                     },
                 },
                 {
@@ -47,26 +52,26 @@ describe('ProxyService', () => {
         }).compile()
 
         service = moduleRef.get(ProxyService)
-        proxyModel = moduleRef.get(getModelToken(Proxy.name))
+        proxyRepo = moduleRef.get(getRepositoryToken(Proxy, 'proxy'))
         mapper = moduleRef.get(getMapperToken())
     })
 
     describe('getProxy', () => {
         it('returns the mapped proxy', async () => {
-            const id = new Types.ObjectId()
-            const proxy = { _id: id } as Proxy
-            const descriptor = { id: id.toHexString() }
-            proxyModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(proxy) })
+            const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
+            const proxy = { id } as Proxy
+            const descriptor = { id }
+            proxyRepo.findOneBy.mockResolvedValue(proxy)
             mapper.map.mockReturnValue(descriptor)
 
-            await expect(service.getProxy({ id: id.toHexString() })).resolves.toEqual({ proxy: descriptor })
-            expect(proxyModel.findById).toHaveBeenCalledWith(id.toHexString())
+            await expect(service.getProxy({ id })).resolves.toEqual({ proxy: descriptor })
+            expect(proxyRepo.findOneBy).toHaveBeenCalledWith({ id })
             expect(mapper.map).toHaveBeenCalledWith(proxy, Proxy, expect.any(Function))
         })
 
         it('throws when the proxy does not exist', async () => {
-            const id = new Types.ObjectId().toHexString()
-            proxyModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) })
+            const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
+            proxyRepo.findOneBy.mockResolvedValue(null)
 
             await expect(service.getProxy({ id })).rejects.toBeInstanceOf(ProxyNotFoundException)
         })
@@ -74,28 +79,86 @@ describe('ProxyService', () => {
 
     describe('listProxies', () => {
         it('returns a page and a cursor for the next page', async () => {
-            const first = { _id: new Types.ObjectId() } as Proxy
-            const second = { _id: new Types.ObjectId() } as Proxy
-            const third = { _id: new Types.ObjectId() } as Proxy
-            const exec = jest.fn().mockResolvedValue([first, second, third])
-            const limit = jest.fn().mockReturnValue({ exec })
-            const sort = jest.fn().mockReturnValue({ limit })
-            proxyModel.find.mockReturnValue({ sort })
-            mapper.mapArray.mockReturnValue([{ id: first._id.toHexString() }, { id: second._id.toHexString() }])
+            const first = { id: '1d7983d6-3eba-4eb7-bd8f-ebef258faeca' } as Proxy
+            const second = { id: '2d7983d6-3eba-4eb7-bd8f-ebef258faeca' } as Proxy
+            const third = { id: '3d7983d6-3eba-4eb7-bd8f-ebef258faeca' } as Proxy
+            proxyRepo.find.mockResolvedValue([first, second, third])
+            mapper.mapArray.mockReturnValue([{ id: first.id }, { id: second.id }])
 
             await expect(service.listProxies({ pageSize: 2 })).resolves.toEqual({
-                proxies: [{ id: first._id.toHexString() }, { id: second._id.toHexString() }],
-                nextPageToken: second._id.toHexString(),
+                proxies: [{ id: first.id }, { id: second.id }],
+                nextPageToken: second.id,
             })
-            expect(proxyModel.find).toHaveBeenCalledWith({})
-            expect(sort).toHaveBeenCalledWith({ _id: 1 })
-            expect(limit).toHaveBeenCalledWith(3)
+            expect(proxyRepo.find).toHaveBeenCalledWith({ where: {}, order: { id: 'ASC' }, take: 3 })
         })
 
         it('rejects an invalid page token', async () => {
             await expect(service.listProxies({ pageSize: 10, pageToken: 'not-an-object-id' })).rejects.toBeInstanceOf(
                 BadRequestException,
             )
+        })
+    })
+
+    describe('updateProxy', () => {
+        it('updates only fields in the update mask', async () => {
+            const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
+            const entity = { id, host: 'old-host', protocol: 1 } as Proxy
+            const descriptor = { id, host: 'new-host' }
+            proxyRepo.findOneBy.mockResolvedValue(entity)
+            proxyRepo.save.mockResolvedValue({ ...entity, host: 'new-host' })
+            mapper.map.mockReturnValue(descriptor)
+
+            await expect(
+                service.updateProxy({
+                    updateMask: ['host'],
+                    proxy: { id, host: 'new-host' } as any,
+                }),
+            ).resolves.toEqual({ proxy: descriptor })
+
+            expect(proxyRepo.save).toHaveBeenCalledWith({ ...entity, host: 'new-host' })
+        })
+    })
+
+    describe('deleteProxy', () => {
+        it('removes and returns the proxy', async () => {
+            const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
+            const entity = { id } as Proxy
+            const descriptor = { id }
+            proxyRepo.findOneBy.mockResolvedValue(entity)
+            mapper.map.mockReturnValue(descriptor)
+
+            await expect(service.deleteProxy({ id })).resolves.toEqual({ proxy: descriptor })
+            expect(proxyRepo.remove).toHaveBeenCalledWith(entity)
+        })
+    })
+
+    describe('getHealthyProxy', () => {
+        it('selects an enabled proxy that is not blacklisted for the MX host', async () => {
+            const proxy = { id: '6d7983d6-3eba-4eb7-bd8f-ebef258faeca', weight: 1 } as Proxy
+            const getMany = jest.fn().mockResolvedValue([proxy])
+            const andWhere = jest.fn().mockReturnValue({ getMany })
+            const where = jest.fn().mockReturnValue({ andWhere })
+            proxyRepo.createQueryBuilder.mockReturnValue({ where })
+            mapper.map.mockReturnValue({ id: proxy.id })
+
+            await expect(service.getHealthyProxy({ mxHost: 'mx.example.com' })).resolves.toEqual({
+                proxy: { id: proxy.id },
+            })
+            expect(andWhere).toHaveBeenCalledWith(
+                '(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))',
+                { mxHost: 'mx.example.com' },
+            )
+        })
+    })
+
+    describe('reportProxyBlacklist', () => {
+        it('adds the MX host once', async () => {
+            const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
+            const entity = { id, blacklists: ['mx.example.com'] } as Proxy
+            proxyRepo.findOneBy.mockResolvedValue(entity)
+
+            await expect(service.reportProxyBlacklist({ id, mxHost: 'mx.example.com' })).resolves.toEqual({})
+            expect(proxyRepo.save).toHaveBeenCalledWith(entity)
         })
     })
 })
