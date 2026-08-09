@@ -36,6 +36,9 @@ export class Proxy {
     @AutoMap()
     enabled: boolean
 
+    @Column('text', { array: true, nullable: true })
+    blacklists?: string[]
+
     @CreateDateColumn()
     @AutoMap()
     createdAt: Date
