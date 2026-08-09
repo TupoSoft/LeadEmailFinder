@@ -13,5 +13,5 @@ export class EnvDto {
 
     @IsBoolean()
     @Transform(({ value }) => value === 'true')
-    TYPEORM_SYNCHRONIZE: boolean
+    TYPEORM_SYNCHRONIZE: boolean = false
 }

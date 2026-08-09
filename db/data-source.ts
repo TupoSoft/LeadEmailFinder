@@ -13,5 +13,5 @@ export default new DataSource({
     type: 'postgres',
     url: getPostgresUrl(),
     entities: ['src/lead-email-finder-api/src/**/*.entity.ts', 'src/libs/modules/api-key/src/**/*.entity.ts'],
-    migrations: ['db/migrations/*.ts'],
+    migrations: ['src/db/migrations/*.ts'],
 })

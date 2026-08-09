@@ -43,9 +43,9 @@ export class EnvironmentVariablesDto {
 
     @IsBoolean()
     @Transform(({ value }) => value === 'true')
-    TYPEORM_SYNCHRONIZE: boolean
+    TYPEORM_SYNCHRONIZE: boolean = false
 
     @IsBoolean()
     @Transform(({ value }) => value === 'true')
-    TYPEORM_MIGRATIONS_RUN: boolean
+    TYPEORM_MIGRATIONS_RUN: boolean = false
 }
