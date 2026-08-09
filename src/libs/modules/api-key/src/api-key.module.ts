@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common'
-import { MongooseModule } from '@nestjs/mongoose'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { LoggerModule } from 'pino-nestjs'
-import { ApiKeySchema, Key } from './models/api-key.schema'
+import { Key } from './models/key.entity'
 import { ApiKeyGuard } from './application/api-key.guard'
 import { ApiKeyService } from './application/api-key.service'
 
 @Module({
-    imports: [MongooseModule.forFeature([{ name: Key.name, schema: ApiKeySchema }]), LoggerModule.forRoot()],
+    imports: [TypeOrmModule.forFeature([Key]), LoggerModule.forRoot()],
     providers: [ApiKeyGuard, ApiKeyService],
     exports: [ApiKeyGuard, ApiKeyService],
 })

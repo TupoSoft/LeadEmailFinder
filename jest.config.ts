@@ -29,9 +29,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/grpc/(.*)': '<rootDir>/src/libs/grpc/src/$1',
         '@tuposoft/lead-email-finder/modules/api-key/(.*)': '<rootDir>/src/libs/modules/api-key/src/$1',
         '@tuposoft/lead-email-finder/config': '<rootDir>/src/libs/config/src',
-        '@tuposoft/lead-email-finder/database': '<rootDir>/src/libs/database/src',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
-        '@tuposoft/lead-email-finder/database/(.*)': '<rootDir>/src/libs/database/src/$1',
     },
 }
 

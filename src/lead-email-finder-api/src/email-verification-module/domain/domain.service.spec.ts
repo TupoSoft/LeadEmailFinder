@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { DomainService } from './domain.service'
-import { getModelToken } from '@nestjs/mongoose'
-import { Domain } from './domain.schema'
+import { getRepositoryToken } from '@nestjs/typeorm'
+import { Domain } from './domain.entity'
 import { Mapper } from '@automapper/core'
 import { getMapperToken } from '@automapper/nestjs'
-import { Model } from 'mongoose'
+import { Repository } from 'typeorm'
 import { IDomainResponseDto } from '@tuposoft/lead-email-finder/common'
 import { DomainResponseDto } from './domain-response.dto'
 import { DomainNotFoundException } from './domain-not-found.exception'
@@ -13,7 +13,7 @@ const date = new Date()
 
 describe('DomainService', () => {
     let service: DomainService
-    let domainModelMock: jest.Mocked<Model<Domain>>
+    let domainRepoMock: jest.Mocked<Pick<Repository<Domain>, 'findOneBy'>>
     let mapperMock: jest.Mocked<Mapper>
 
     beforeAll(async () => {
@@ -21,9 +21,9 @@ describe('DomainService', () => {
             providers: [
                 DomainService,
                 {
-                    provide: getModelToken(Domain.name),
+                    provide: getRepositoryToken(Domain),
                     useValue: {
-                        findById: jest.fn(),
+                        findOneBy: jest.fn(),
                     },
                 },
                 {
@@ -36,7 +36,7 @@ describe('DomainService', () => {
         }).compile()
 
         service = module.get<DomainService>(DomainService)
-        domainModelMock = module.get(getModelToken(Domain.name))
+        domainRepoMock = module.get(getRepositoryToken(Domain))
         mapperMock = module.get(getMapperToken())
     })
 
@@ -48,7 +48,7 @@ describe('DomainService', () => {
         it('should return a DomainResponseDto when a domain is found', async () => {
             const domainName = 'example.com'
             const domain: Domain = {
-                _id: domainName,
+                id: domainName,
                 catchAllEnabled: true,
                 createdAt: date,
                 updatedAt: date,
@@ -63,14 +63,12 @@ describe('DomainService', () => {
                 updatedAt: date,
             }
 
-            domainModelMock.findById.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(domain),
-            } as any)
+            domainRepoMock.findOneBy.mockResolvedValue(domain)
             mapperMock.map.mockReturnValue(domainResponseDto as any)
 
             const result = await service.getDomain(domainName)
 
-            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(mapperMock.map).toHaveBeenCalledWith(domain, Domain, DomainResponseDto)
             expect(result).toEqual(domainResponseDto)
         })
@@ -78,12 +76,10 @@ describe('DomainService', () => {
         it('should throw DomainNotFoundException when a domain is not found', async () => {
             const domainName = 'non-existent.com'
 
-            domainModelMock.findById.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(null),
-            } as any)
+            domainRepoMock.findOneBy.mockResolvedValue(null)
 
             await expect(service.getDomain(domainName)).rejects.toThrow(DomainNotFoundException)
-            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(mapperMock.map).not.toHaveBeenCalled()
         })
     })
@@ -92,20 +88,18 @@ describe('DomainService', () => {
         it('should return true when domain does not exist', async () => {
             const domainName = 'non-existent.com'
 
-            domainModelMock.findById.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(null),
-            } as any)
+            domainRepoMock.findOneBy.mockResolvedValue(null)
 
             const result = await service.isVerificationAllowed(domainName)
 
-            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(result).toBe(true)
         })
 
         it('should return true when domain exists and isVerificationForbidden is false', async () => {
             const domainName = 'example.com'
             const domain: Domain = {
-                _id: domainName,
+                id: domainName,
                 isVerificationForbidden: false,
                 createdAt: date,
                 updatedAt: date,
@@ -114,20 +108,18 @@ describe('DomainService', () => {
                 isDisposable: false,
             }
 
-            domainModelMock.findById.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(domain),
-            } as any)
+            domainRepoMock.findOneBy.mockResolvedValue(domain)
 
             const result = await service.isVerificationAllowed(domainName)
 
-            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(result).toBe(true)
         })
 
         it('should return false when domain exists and isVerificationForbidden is true', async () => {
             const domainName = 'forbidden.com'
             const domain: Domain = {
-                _id: domainName,
+                id: domainName,
                 isVerificationForbidden: true,
                 createdAt: date,
                 updatedAt: date,
@@ -136,13 +128,11 @@ describe('DomainService', () => {
                 isDisposable: false,
             }
 
-            domainModelMock.findById.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(domain),
-            } as any)
+            domainRepoMock.findOneBy.mockResolvedValue(domain)
 
             const result = await service.isVerificationAllowed(domainName)
 
-            expect(domainModelMock.findById).toHaveBeenCalledWith(domainName)
+            expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(result).toBe(false)
         })
     })

@@ -1,8 +1,8 @@
-import { getModelToken } from '@nestjs/mongoose'
+import { getRepositoryToken } from '@nestjs/typeorm'
 import { Test, TestingModule } from '@nestjs/testing'
 import { ApiKeyService } from './api-key.service'
-import { Model, Types } from 'mongoose'
-import { Key } from '../models/api-key.schema'
+import { Repository } from 'typeorm'
+import { Key } from '../models/key.entity'
 import { KeyPermissions } from '../domain/key.enum'
 
 jest.mock('node:util', () => ({
@@ -17,26 +17,27 @@ jest.mock('node:util', () => ({
 
 describe('KeyService', () => {
     let service: ApiKeyService
-    let keyModelMock: jest.Mocked<Model<Key>>
+    let keyRepoMock: jest.Mocked<Pick<Repository<Key>, 'findOne' | 'findOneBy' | 'find' | 'save' | 'create'>>
 
     beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ApiKeyService,
                 {
-                    provide: getModelToken(Key.name),
+                    provide: getRepositoryToken(Key),
                     useValue: {
                         findOne: jest.fn(),
+                        findOneBy: jest.fn(),
                         find: jest.fn(),
-                        findOneAndUpdate: jest.fn(),
-                        insertOne: jest.fn(),
+                        save: jest.fn(),
+                        create: jest.fn(),
                     },
                 },
             ],
         }).compile()
 
         service = module.get(ApiKeyService)
-        keyModelMock = module.get(getModelToken(Key.name))
+        keyRepoMock = module.get(getRepositoryToken(Key))
     })
 
     beforeEach(() => {
@@ -47,55 +48,46 @@ describe('KeyService', () => {
         it('should generate a key with correct token format', async () => {
             const permissions = [KeyPermissions.READ]
             const description = 'Test key'
-
-            keyModelMock.insertOne.mockResolvedValueOnce({
-                _id: new Types.ObjectId(),
+            const savedKey: Key = {
+                id: 'some-uuid',
                 token: 'api_mockedtoken123',
                 permissions,
                 description,
-            } as any)
+                expiresAt: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
 
-            const result = await service.generateKey([KeyPermissions.READ], description)
+            keyRepoMock.create.mockReturnValue(savedKey)
+            keyRepoMock.save.mockResolvedValue(savedKey)
 
-            expect(keyModelMock.insertOne).toHaveBeenCalledWith({
-                token: 'api_mockedtoken123',
-                permissions,
-                description,
-            })
+            const result = await service.generateKey(permissions, description)
 
+            expect(keyRepoMock.create).toHaveBeenCalledWith(
+                expect.objectContaining({ token: 'api_mockedtoken123', permissions, description }),
+            )
             expect(result.token).toBe('api_mockedtoken123')
-            expect(result.permissions).toEqual([KeyPermissions.READ])
-            expect(result.description).toBe('Test key')
+            expect(result.permissions).toEqual(permissions)
+            expect(result.description).toBe(description)
         })
     })
 
     describe('validateKeyForRoles', () => {
         it('should return true for valid key with matching permissions', async () => {
-            const mockKey = {
-                permissions: [KeyPermissions.READ, KeyPermissions.WRITE],
-            }
+            const mockKey = { permissions: [KeyPermissions.READ, KeyPermissions.WRITE] } as Key
 
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockKey),
-                }),
-            } as any)
+            keyRepoMock.findOne.mockResolvedValue(mockKey)
 
             const result = await service.validateKeyForRoles('api_test', [KeyPermissions.READ])
 
             expect(result).toBe(true)
-            expect(keyModelMock.findOne).toHaveBeenCalledWith({
-                token: 'api_test',
-                expiresAt: { $gt: expect.any(Date) as Date },
-            })
+            expect(keyRepoMock.findOne).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ token: 'api_test' }) }),
+            )
         })
 
         it('should return false for non-existent key', async () => {
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(null),
-                }),
-            } as any)
+            keyRepoMock.findOne.mockResolvedValue(null)
 
             const result = await service.validateKeyForRoles('invalid_key', [KeyPermissions.READ])
 
@@ -103,11 +95,7 @@ describe('KeyService', () => {
         })
 
         it('should return false for expired key', async () => {
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(null),
-                }),
-            } as any)
+            keyRepoMock.findOne.mockResolvedValue(null)
 
             const result = await service.validateKeyForRoles('expired_key', [KeyPermissions.READ])
 
@@ -115,13 +103,9 @@ describe('KeyService', () => {
         })
 
         it('should return true when no permissions required', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+            const mockKey = { permissions: [KeyPermissions.READ] } as Key
 
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockKey),
-                }),
-            } as any)
+            keyRepoMock.findOne.mockResolvedValue(mockKey)
 
             const result = await service.validateKeyForRoles('api_test', [])
 
@@ -129,13 +113,9 @@ describe('KeyService', () => {
         })
 
         it('should return false when key lacks required permissions', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+            const mockKey = { permissions: [KeyPermissions.READ] } as Key
 
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockKey),
-                }),
-            } as any)
+            keyRepoMock.findOne.mockResolvedValue(mockKey)
 
             const result = await service.validateKeyForRoles('api_test', [KeyPermissions.WRITE])
 
@@ -154,49 +134,30 @@ describe('KeyService', () => {
             jest.useRealTimers()
         })
 
-        it('should revoke admin key successfully', async () => {
-            const mockKey = { permissions: [KeyPermissions.READ] }
+        it('should revoke key successfully', async () => {
+            const mockKey = { permissions: [KeyPermissions.READ], token: 'api_test' } as Key
+            const revokedKey = { ...mockKey, expiresAt: now }
 
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockKey),
-                }),
-            } as any)
-
-            keyModelMock.findOneAndUpdate.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockKey),
-                }),
-            } as any)
+            keyRepoMock.findOneBy.mockResolvedValue(mockKey)
+            keyRepoMock.save.mockResolvedValue(revokedKey as Key)
 
             const result = await service.revokeKey('api_test')
 
-            expect(result).toEqual(mockKey)
-            expect(keyModelMock.findOneAndUpdate).toHaveBeenCalledWith(
-                { token: 'api_test' },
-                { expiresAt: now },
-                { new: true },
-            )
+            expect(result).toEqual(revokedKey)
+            expect(keyRepoMock.findOneBy).toHaveBeenCalledWith({ token: 'api_test' })
+            expect(keyRepoMock.save).toHaveBeenCalledWith(expect.objectContaining({ expiresAt: now }))
         })
 
         it('should throw error for non-existent key', async () => {
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(null),
-                }),
-            } as any)
+            keyRepoMock.findOneBy.mockResolvedValue(null)
 
             await expect(service.revokeKey('invalid_key')).rejects.toThrow('Key invalid_key was not found')
         })
 
         it('should throw error when trying to revoke admin key', async () => {
-            const mockAdminKey = { permissions: [KeyPermissions.ADMIN] }
+            const mockAdminKey = { permissions: [KeyPermissions.ADMIN] } as Key
 
-            keyModelMock.findOne.mockReturnValue({
-                lean: jest.fn().mockReturnValue({
-                    exec: jest.fn().mockResolvedValue(mockAdminKey),
-                }),
-            } as any)
+            keyRepoMock.findOneBy.mockResolvedValue(mockAdminKey)
 
             await expect(service.revokeKey('read_key')).rejects.toThrow('Admin token read_key cannot be revoked')
         })
@@ -204,11 +165,9 @@ describe('KeyService', () => {
 
     describe('listKeys', () => {
         it('should return array of key tokens', async () => {
-            const mockKeys = [{ token: 'api_key1' }, { token: 'api_key2' }]
+            const mockKeys = [{ token: 'api_key1' }, { token: 'api_key2' }] as Key[]
 
-            keyModelMock.find.mockReturnValue({
-                exec: jest.fn().mockResolvedValue(mockKeys),
-            } as any)
+            keyRepoMock.find.mockResolvedValue(mockKeys)
 
             const result = await service.listKeys()
 
@@ -216,9 +175,7 @@ describe('KeyService', () => {
         })
 
         it('should return empty array when no keys exist', async () => {
-            keyModelMock.find.mockReturnValue({
-                exec: jest.fn().mockResolvedValue([]),
-            } as any)
+            keyRepoMock.find.mockResolvedValue([])
 
             const result = await service.listKeys()
 

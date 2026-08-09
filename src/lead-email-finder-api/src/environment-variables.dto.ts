@@ -13,10 +13,6 @@ export class EnvironmentVariablesDto {
 
     @IsFileVar()
     @IsString()
-    MONGO_URL: string
-
-    @IsFileVar()
-    @IsString()
     POSTGRES_URL: string
 
     @IsFileVar()

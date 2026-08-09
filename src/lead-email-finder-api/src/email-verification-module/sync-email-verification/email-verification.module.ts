@@ -5,8 +5,8 @@ import {
     EMAIL_VERIFICATION_SERVICE_TOKEN,
     EMAIL_VERIFIER_TOKEN,
 } from './email-verification.constants'
-import { MongooseModule } from '@nestjs/mongoose'
-import { EmailVerification, EmailVerificationSchema } from './email-verification.schema'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { EmailVerification } from './email-verification.entity'
 import { EmailModule, EmailService } from '../email'
 import { DomainModule, DomainService } from '../domain'
 import { EmailVerifier, EmailVerifierModule } from '../email-verifier'
@@ -16,12 +16,7 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @Module({
     imports: [
-        MongooseModule.forFeature([
-            {
-                name: EmailVerification.name,
-                schema: EmailVerificationSchema,
-            },
-        ]),
+        TypeOrmModule.forFeature([EmailVerification]),
         EmailVerifierModule,
         EmailModule,
         DomainModule,
@@ -47,6 +42,6 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
         },
     ],
     controllers: [SyncEmailVerificationController],
-    exports: [EmailVerificationService, MongooseModule],
+    exports: [EmailVerificationService, TypeOrmModule],
 })
 export class SyncEmailVerificationModule {}

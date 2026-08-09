@@ -1,6 +1,9 @@
 {
     "extends": "./tsconfig.base.json",
-    "include": ["src/**/*.ts", "jest.config.ts"],
+    "ts-node": {
+        "require": ["tsconfig-paths/register"]
+    },
+    "include": ["src/**/*.ts", "jest.config.ts", "db/**/*.ts"],
     "compilerOptions": {
         "baseUrl": "./",
         "paths": {
@@ -10,8 +13,6 @@
             "@tuposoft/lead-email-finder/common/*": ["src/libs/common/src/*"],
             "@tuposoft/lead-email-finder/config": ["src/libs/config/src"],
             "@tuposoft/lead-email-finder/config/*": ["src/libs/config/src/*"],
-            "@tuposoft/lead-email-finder/database": ["src/libs/database/src"],
-            "@tuposoft/lead-email-finder/database/*": ["src/libs/database/src/*"],
             "@tuposoft/lead-email-finder/dns": ["src/libs/dns/src"],
             "@tuposoft/lead-email-finder/dns/*": ["src/libs/dns/src/*"],
             "@tuposoft/lead-email-finder/grpc": ["src/libs/grpc/src"],
@@ -25,7 +26,8 @@
             "@tuposoft/lead-email-finder/socket": ["src/libs/socket/src"],
             "@tuposoft/lead-email-finder/socket/*": ["src/libs/socket/src/*"],
             "@tuposoft/lead-email-finder/modules/api-key": ["src/libs/modules/api-key/src"],
-            "@tuposoft/lead-email-finder/modules/api-key/*": ["src/libs/modules/api-key/src/*"]
+            "@tuposoft/lead-email-finder/modules/api-key/*": ["src/libs/modules/api-key/src/*"],
+            "@tuposoft/lead-email-finder/db/*": ["db/*"]
         }
     }
 }

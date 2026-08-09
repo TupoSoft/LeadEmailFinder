@@ -1,22 +1,13 @@
 import { Module } from '@nestjs/common'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
-import { MongooseModule } from '@nestjs/mongoose'
-import { SmtpVerification, SmtpVerificationSchema } from './smtp-verification.schema'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { SmtpVerification } from './smtp-verification.entity'
 import { ProxyModule, ProxyService } from './proxy'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpVerifier } from './smtp-verifier'
 
 @Module({
-    imports: [
-        DnsModule,
-        ProxyModule,
-        MongooseModule.forFeature([
-            {
-                name: SmtpVerification.name,
-                schema: SmtpVerificationSchema,
-            },
-        ]),
-    ],
+    imports: [DnsModule, ProxyModule, TypeOrmModule.forFeature([SmtpVerification])],
     providers: [
         {
             provide: DNS_SERVICE_TOKEN,

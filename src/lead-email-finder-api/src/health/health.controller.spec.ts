@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { HealthController } from './health.controller'
-import { HealthCheckResult, HealthCheckService, MongooseHealthIndicator } from '@nestjs/terminus'
+import { HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus'
 import { NestApplication } from '@nestjs/core'
 import request from 'supertest'
 import { HttpStatus } from '@nestjs/common'
@@ -21,7 +21,7 @@ describe('HealthController', () => {
                     },
                 },
                 {
-                    provide: MongooseHealthIndicator,
+                    provide: TypeOrmHealthIndicator,
                     useValue: {
                         pingCheck: jest.fn(),
                     },
@@ -50,8 +50,8 @@ describe('HealthController', () => {
         it('should return the result of health check service', async () => {
             const expectedResult: HealthCheckResult = {
                 status: 'ok',
-                info: { mongodb: { status: 'up' } },
-                details: { mongodb: { status: 'up' } },
+                info: { postgres: { status: 'up' } },
+                details: { postgres: { status: 'up' } },
             }
 
             healthCheckService.check.mockResolvedValueOnce(expectedResult)
