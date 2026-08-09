@@ -10,6 +10,8 @@
             "@tuposoft/lead-email-finder/common/*": ["src/libs/common/src/*"],
             "@tuposoft/lead-email-finder/config": ["src/libs/config/src"],
             "@tuposoft/lead-email-finder/config/*": ["src/libs/config/src/*"],
+            "@tuposoft/lead-email-finder/database": ["src/libs/database/src"],
+            "@tuposoft/lead-email-finder/database/*": ["src/libs/database/src/*"],
             "@tuposoft/lead-email-finder/dns": ["src/libs/dns/src"],
             "@tuposoft/lead-email-finder/dns/*": ["src/libs/dns/src/*"],
             "@tuposoft/lead-email-finder/grpc": ["src/libs/grpc/src"],

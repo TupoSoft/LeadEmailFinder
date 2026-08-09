@@ -14,6 +14,7 @@ import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { Environment, loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { EnvironmentVariablesDto } from './environment-variables.dto'
+import { createPostgresDataSourceOptions } from '@tuposoft/lead-email-finder/database'
 
 @Module({
     imports: [
@@ -31,12 +32,8 @@ import { EnvironmentVariablesDto } from './environment-variables.dto'
         }),
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
-            useFactory: (configService: ConfigService) => ({
-                type: 'postgres',
-                url: configService.get('POSTGRES_URL'),
-                entities: [],
-                synchronize: false,
-            }),
+            useFactory: (configService: ConfigService) =>
+                createPostgresDataSourceOptions(configService.getOrThrow('POSTGRES_URL')),
             inject: [ConfigService],
         }),
         AutomapperModule.forRoot({
