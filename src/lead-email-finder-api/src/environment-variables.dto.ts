@@ -40,4 +40,12 @@ export class EnvironmentVariablesDto {
 
     @IsString()
     S3_BUCKET: string
+
+    @IsBoolean()
+    @Transform(({ value }) => value === 'true')
+    TYPEORM_SYNCHRONIZE: boolean
+
+    @IsBoolean()
+    @Transform(({ value }) => value === 'true')
+    TYPEORM_MIGRATIONS_RUN: boolean
 }
