@@ -1,5 +1,6 @@
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
-import { IsEnum, IsString } from 'class-validator'
+import { IsBoolean, IsEnum, IsString } from 'class-validator'
+import { Transform } from 'class-transformer'
 
 @WithFileVars()
 export class EnvDto {
@@ -9,4 +10,8 @@ export class EnvDto {
     @IsFileVar()
     @IsString()
     POSTGRES_URL: string
+
+    @IsBoolean()
+    @Transform(({ value }) => value === 'true')
+    TYPEORM_SYNCHRONIZE: boolean = false
 }

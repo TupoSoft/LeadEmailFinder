@@ -27,7 +27,7 @@
             "@tuposoft/lead-email-finder/socket/*": ["src/libs/socket/src/*"],
             "@tuposoft/lead-email-finder/modules/api-key": ["src/libs/modules/api-key/src"],
             "@tuposoft/lead-email-finder/modules/api-key/*": ["src/libs/modules/api-key/src/*"],
-            "@tuposoft/lead-email-finder/db/*": ["db/*"]
+            "@tuposoft/lead-email-finder/db/*": ["src/db/*"]
         }
     }
 }
