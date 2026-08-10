@@ -1,6 +1,10 @@
 import { IsBoolean, IsEnum, IsString } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
-import { Transform } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
+
+function transformBoolean(value: unknown): boolean {
+    return value === true || value === 'true'
+}
 
 @WithFileVars()
 export class EnvironmentVariablesDto {
@@ -35,13 +39,15 @@ export class EnvironmentVariablesDto {
     S3_REGION: string
 
     @IsBoolean()
-    @Transform(({ value }) => value === 'true')
+    @Type(() => String)
+    @Transform(({ value }) => transformBoolean(value))
     S3_FORCE_PATH_STYLE: boolean
 
     @IsString()
     S3_BUCKET: string
 
     @IsBoolean()
-    @Transform(({ value }) => value === 'true')
-    TYPEORM_SYNCHRONIZE: boolean = false
+    @Type(() => String)
+    @Transform(({ value }) => transformBoolean(value))
+    TYPEORM_SYNCHRONIZE: boolean
 }
