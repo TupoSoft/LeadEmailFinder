@@ -9,13 +9,13 @@ services:
     ports:
       - '55001:5000'
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
     environment:
       TARGET_APP: proxy
-      MONGO_URL_FILE: /run/secrets/mongo_url
+      POSTGRES_URL_FILE: /run/secrets/postgres_url
     secrets:
-      - mongo_url
+      - postgres_url
 
   proxy-debug:
     extends:

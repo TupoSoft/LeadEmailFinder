@@ -9,13 +9,13 @@ services:
     ports:
       - '55000:5000'
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
     secrets:
-      - mongo_url
+      - postgres_url
     environment:
       TARGET_APP: api-key
-      MONGO_URL_FILE: /run/secrets/mongo_url
+      POSTGRES_URL_FILE: /run/secrets/postgres_url
 
   api-key-debug:
     extends:

@@ -36,23 +36,6 @@ Clone this repository:
 
 ## Development
 
-### Environment Variables
-
-For the API to work, you must set the `PROXIES` environment variable to a comma-separated string of proxies,
-e.g., `http://login:password@example.com:3333`.
-
-To configure this:
-
-1. Create a `.env` file in the `docker` directory.
-2. Add the following configuration, replacing the example URLs with your own:
-
-  ```dotenv
-  PROXIES=http://login:password@example.com:3333,http://login2:password2@example2.com:3333
-  ```
-
-These proxies will be automatically inserted into the database when the containers start, making them available for the
-application.
-
 ### Running the Application
 
 To start the application in development mode, use the following command:
