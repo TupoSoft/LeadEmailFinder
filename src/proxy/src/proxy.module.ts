@@ -29,7 +29,7 @@ import { CqrsModule } from '@nestjs/cqrs'
                 type: 'postgres',
                 url: configService.get('POSTGRES_URL'),
                 autoLoadEntities: true,
-                synchronize: configService.get('NODE_ENV') === Environment.Development,
+                synchronize: configService.get('TYPEORM_SYNCHRONIZE'),
             }),
             inject: [ConfigService],
         }),

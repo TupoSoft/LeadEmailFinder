@@ -12,6 +12,6 @@ function getPostgresUrl(): string {
 export default new DataSource({
     type: 'postgres',
     url: getPostgresUrl(),
-    entities: ['apps/lead-email-finder-api/src/**/*.entity.ts', 'libs/modules/api-key/src/**/*.entity.ts'],
-    migrations: ['db/migrations/*.ts'],
+    entities: ['src/lead-email-finder-api/src/**/*.entity.ts', 'src/libs/modules/api-key/src/**/*.entity.ts'],
+    migrations: ['src/db/migrations/*.ts'],
 })
