@@ -1,0 +1,37 @@
+info:
+  name: 02-create-proxy
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/proxies"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "protocol": 1,
+        "host": "proxy-smoke-test.local",
+        "port": 8080,
+        "auth": {
+          "user": "smoke-test-user",
+          "pass": "smoke-test-password"
+        },
+        "description": "Bruno proxy-registry smoke test"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('creates a proxy without returning credentials', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.id).to.be.a('string');
+          expect(res.body).not.to.have.property('auth');
+          bru.setVar('proxyId', res.body.id);
+        });

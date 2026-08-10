@@ -10,6 +10,7 @@ import {
     Post,
     Query,
     ValidationPipe,
+    UseGuards,
 } from '@nestjs/common'
 import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { ProxyService } from './proxy.service'
@@ -22,8 +23,13 @@ import {
     ReportBlacklistDto,
     UpdateProxyDto,
 } from './proxy.dto'
+import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { RequireApiPermissions } from '@tuposoft/lead-email-finder/modules/api-key/application/decorators'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 
 @ApiTags('Proxies')
+@UseGuards(ApiKeyGuard)
+@RequireApiPermissions(KeyPermissions.ADMIN)
 @Controller('v1/proxies')
 export class ProxyController {
     constructor(private readonly proxyService: ProxyService) {}
