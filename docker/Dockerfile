@@ -12,25 +12,16 @@ FROM node:${NODE_VERSION}-alpine
 
 ENV PATH="/app/node_modules/.bin:$PATH"
 
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.38
-
 WORKDIR /app
 
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --update-cache \
-    wget \
     # curl is for the healthcheck \
     curl \
     # bind-tools is for DNS, see https://github.com/nodejs/docker-node/issues/339 \
     bind-tools \
     # jq is for the healthcheck \
     jq
-
-RUN <<EOF
-set -e
-wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64
-chmod +x /bin/grpc_health_probe
-EOF
 
 # Enable the pnpm version pinned by package.json.
 RUN corepack enable

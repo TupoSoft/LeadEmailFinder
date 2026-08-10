@@ -12,7 +12,6 @@ import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { EnvironmentVariablesDto } from './environment-variables.dto'
-import * as migrations from '@tuposoft/lead-email-finder/db/migrations'
 import { ProxyModule } from '../../proxy/src/proxy.module'
 
 @Module({
@@ -28,8 +27,6 @@ import { ProxyModule } from '../../proxy/src/proxy.module'
                 url: configService.get('POSTGRES_URL'),
                 autoLoadEntities: true,
                 synchronize: configService.get('TYPEORM_SYNCHRONIZE'),
-                migrations: Object.values(migrations),
-                migrationsRun: configService.get('TYPEORM_MIGRATIONS_RUN'),
             }),
             inject: [ConfigService],
         }),
