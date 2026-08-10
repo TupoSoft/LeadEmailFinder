@@ -10,10 +10,11 @@ import {
     Param,
     Post,
     SerializeOptions,
+    UseGuards,
 } from '@nestjs/common'
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
-import { Public } from '../../application/decorators'
+import { RequireApiPermissions } from '../../application/decorators'
 import { AdminTokenRevocationForbidden, KeyNotFound } from '../../api-key.error'
 import { KeyPermissions } from '../../domain/key.enum'
 import {
@@ -25,9 +26,11 @@ import {
     RevokeKeyResponseDto,
 } from './dto/api-key.dto'
 import { ApiKeyService } from '../../application/api-key.service'
+import { ApiKeyGuard } from '../../application/api-key.guard'
 
-@Public()
 @ApiTags('API keys')
+@UseGuards(ApiKeyGuard)
+@RequireApiPermissions(KeyPermissions.ADMIN)
 @Controller('v1/api-keys')
 export class ApiKeyController {
     constructor(private readonly keyService: ApiKeyService) {}

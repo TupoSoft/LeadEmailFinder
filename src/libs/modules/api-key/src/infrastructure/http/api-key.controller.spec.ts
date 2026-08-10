@@ -4,6 +4,8 @@ import { ApiKeyService } from '../../application/api-key.service'
 import { KeyPermissions } from '../../domain/key.enum'
 import { AdminTokenRevocationForbidden, KeyNotFound } from '../../api-key.error'
 import { ForbiddenException, NotFoundException } from '@nestjs/common'
+import { ApiKeyGuard } from '../../application/api-key.guard'
+import { GUARDS_METADATA } from '@nestjs/common/constants'
 
 describe('ApiKeyController', () => {
     let controller: ApiKeyController
@@ -26,6 +28,12 @@ describe('ApiKeyController', () => {
 
         controller = moduleRef.get(ApiKeyController)
         service = moduleRef.get(ApiKeyService)
+    })
+
+    it('requires an admin key for API key management', () => {
+        expect(Reflect.getMetadata(GUARDS_METADATA, ApiKeyController)).toEqual([ApiKeyGuard])
+        expect(Reflect.getMetadata('permissions', ApiKeyController)).toEqual([KeyPermissions.ADMIN])
+        expect(Reflect.getMetadata('isPublic', ApiKeyController)).toBeUndefined()
     })
 
     it('generates a read key when permissions are omitted', async () => {
