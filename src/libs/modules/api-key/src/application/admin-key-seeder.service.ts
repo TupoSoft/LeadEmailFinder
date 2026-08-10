@@ -32,6 +32,17 @@ export class AdminKeySeeder implements OnModuleInit {
 
         const existing = await this.keyRepo.findOneBy({ token })
         if (existing) {
+            const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+            const permissions = existing.permissions.includes(KeyPermissions.ADMIN)
+                ? existing.permissions
+                : [...existing.permissions, KeyPermissions.ADMIN]
+
+            if (permissions !== existing.permissions || existing.expiresAt <= new Date()) {
+                existing.permissions = permissions
+                existing.expiresAt = expiresAt
+                await this.keyRepo.save(existing)
+            }
+
             return
         }
 
