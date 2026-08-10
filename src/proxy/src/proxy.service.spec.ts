@@ -2,7 +2,6 @@ import { Test } from '@nestjs/testing'
 import { ProxyService } from './proxy.service'
 import { Proxy } from './proxy.entity'
 import { getMapperToken } from '@automapper/nestjs'
-import { CommandBus } from '@nestjs/cqrs'
 import { BadRequestException } from '@nestjs/common'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 import { getRepositoryToken } from '@nestjs/typeorm'
@@ -26,14 +25,9 @@ describe('ProxyService', () => {
             providers: [
                 ProxyService,
                 {
-                    provide: CommandBus,
+                    provide: getRepositoryToken(Proxy),
                     useValue: {
-                        execute: jest.fn(),
-                    },
-                },
-                {
-                    provide: getRepositoryToken(Proxy, 'proxy'),
-                    useValue: {
+                        create: jest.fn(),
                         findOneBy: jest.fn(),
                         find: jest.fn(),
                         save: jest.fn(),
@@ -52,7 +46,7 @@ describe('ProxyService', () => {
         }).compile()
 
         service = moduleRef.get(ProxyService)
-        proxyRepo = moduleRef.get(getRepositoryToken(Proxy, 'proxy'))
+        proxyRepo = moduleRef.get(getRepositoryToken(Proxy))
         mapper = moduleRef.get(getMapperToken())
     })
 
@@ -64,7 +58,7 @@ describe('ProxyService', () => {
             proxyRepo.findOneBy.mockResolvedValue(proxy)
             mapper.map.mockReturnValue(descriptor)
 
-            await expect(service.getProxy({ id })).resolves.toEqual({ proxy: descriptor })
+            await expect(service.getProxy(id)).resolves.toEqual(descriptor)
             expect(proxyRepo.findOneBy).toHaveBeenCalledWith({ id })
             expect(mapper.map).toHaveBeenCalledWith(proxy, Proxy, expect.any(Function))
         })
@@ -73,7 +67,7 @@ describe('ProxyService', () => {
             const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
             proxyRepo.findOneBy.mockResolvedValue(null)
 
-            await expect(service.getProxy({ id })).rejects.toBeInstanceOf(ProxyNotFoundException)
+            await expect(service.getProxy(id)).rejects.toBeInstanceOf(ProxyNotFoundException)
         })
     })
 
@@ -109,11 +103,8 @@ describe('ProxyService', () => {
             mapper.map.mockReturnValue(descriptor)
 
             await expect(
-                service.updateProxy({
-                    updateMask: ['host'],
-                    proxy: { id, host: 'new-host' } as any,
-                }),
-            ).resolves.toEqual({ proxy: descriptor })
+                service.updateProxy(id, { host: 'new-host' }),
+            ).resolves.toEqual(descriptor)
 
             expect(proxyRepo.save).toHaveBeenCalledWith({ ...entity, host: 'new-host' })
         })
@@ -127,7 +118,7 @@ describe('ProxyService', () => {
             proxyRepo.findOneBy.mockResolvedValue(entity)
             mapper.map.mockReturnValue(descriptor)
 
-            await expect(service.deleteProxy({ id })).resolves.toEqual({ proxy: descriptor })
+            await expect(service.deleteProxy(id)).resolves.toEqual(descriptor)
             expect(proxyRepo.remove).toHaveBeenCalledWith(entity)
         })
     })
@@ -141,9 +132,7 @@ describe('ProxyService', () => {
             proxyRepo.createQueryBuilder.mockReturnValue({ where })
             mapper.map.mockReturnValue({ id: proxy.id })
 
-            await expect(service.getHealthyProxy({ mxHost: 'mx.example.com' })).resolves.toEqual({
-                proxy: { id: proxy.id },
-            })
+            await expect(service.getHealthyProxy('mx.example.com')).resolves.toEqual({ id: proxy.id })
             expect(andWhere).toHaveBeenCalledWith(
                 '(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))',
                 { mxHost: 'mx.example.com' },
@@ -157,7 +146,7 @@ describe('ProxyService', () => {
             const entity = { id, blacklists: ['mx.example.com'] } as Proxy
             proxyRepo.findOneBy.mockResolvedValue(entity)
 
-            await expect(service.reportProxyBlacklist({ id, mxHost: 'mx.example.com' })).resolves.toEqual({})
+            await expect(service.reportProxyBlacklist(id, { mxHost: 'mx.example.com' })).resolves.toBeUndefined()
             expect(proxyRepo.save).toHaveBeenCalledWith(entity)
         })
     })

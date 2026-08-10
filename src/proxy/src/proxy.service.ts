@@ -1,26 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import {
-    AddProxyRequest,
-    AddProxyResponse,
-    DeleteProxyRequest,
-    DeleteProxyResponse,
-    GetHealthyProxyRequest,
-    GetHealthyProxyResponse,
-    GetProxyRequest,
-    GetProxyResponse,
-    ListProxiesRequest,
-    ListProxiesResponse,
-    ProxyServiceController,
-    ReportProxyBlacklistRequest,
-    ReportProxyBlacklistResponse,
-    UpdateProxyRequest,
-    UpdateProxyResponse,
-} from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
-import { CommandBus } from '@nestjs/cqrs'
-import { AddProxyCommand } from './add-proxy/add-proxy.command'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { ProxyDescriptorDto } from './proxy.dto'
+import { CreateProxyDto, ListProxiesQueryDto, ProxyDto, ProxyListDto, ReportBlacklistDto, UpdateProxyDto } from './proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 import { InjectRepository } from '@nestjs/typeorm'
 import { FindOptionsWhere, MoreThan, Repository } from 'typeorm'
@@ -33,14 +14,13 @@ const WRITABLE_PROXY_FIELDS = ['protocol', 'host', 'port', 'auth', 'weight', 'de
 type WritableProxyField = (typeof WRITABLE_PROXY_FIELDS)[number]
 
 @Injectable()
-export class ProxyService implements ProxyServiceController {
+export class ProxyService {
     constructor(
-        private readonly commandBus: CommandBus,
-        @InjectRepository(Proxy, 'proxy') private readonly proxyRepo: Repository<Proxy>,
+        @InjectRepository(Proxy) private readonly proxyRepo: Repository<Proxy>,
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
-    async getProxy({ id }: GetProxyRequest): Promise<GetProxyResponse> {
+    async getProxy(id: string): Promise<ProxyDto> {
         if (!isUUID(id)) {
             throw new ProxyNotFoundException(id)
         }
@@ -51,26 +31,22 @@ export class ProxyService implements ProxyServiceController {
             throw new ProxyNotFoundException(id)
         }
 
-        return {
-            proxy: this.mapper.map(proxy, Proxy, ProxyDescriptorDto),
-        }
+        return this.mapper.map(proxy, Proxy, ProxyDto)
     }
 
-    async addProxy({
-        protocol,
-        host,
-        port,
-        auth,
-        weight,
-        enabled,
-        description,
-    }: AddProxyRequest): Promise<AddProxyResponse> {
-        return await this.commandBus.execute(
-            new AddProxyCommand(protocol, host, port, auth, description, weight, enabled),
+    async createProxy(dto: CreateProxyDto): Promise<ProxyDto> {
+        const proxy = await this.proxyRepo.save(
+            this.proxyRepo.create({
+                ...dto,
+                weight: dto.weight ?? 1,
+                enabled: dto.enabled ?? true,
+            }),
         )
+
+        return this.mapper.map(proxy, Proxy, ProxyDto)
     }
 
-    async listProxies({ pageSize, pageToken }: ListProxiesRequest): Promise<ListProxiesResponse> {
+    async listProxies({ pageSize, pageToken }: ListProxiesQueryDto): Promise<ProxyListDto> {
         const resolvedPageSize = Math.min(Math.max(pageSize || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE)
         const where: FindOptionsWhere<Proxy> = {}
 
@@ -91,17 +67,17 @@ export class ProxyService implements ProxyServiceController {
         const page = hasNextPage ? proxies.slice(0, resolvedPageSize) : proxies
 
         return {
-            proxies: this.mapper.mapArray(page, Proxy, ProxyDescriptorDto),
+            proxies: this.mapper.mapArray(page, Proxy, ProxyDto),
             nextPageToken: hasNextPage ? page.at(-1)!.id : '',
         }
     }
 
-    async updateProxy({ updateMask, proxy }: UpdateProxyRequest): Promise<UpdateProxyResponse> {
-        if (proxy === undefined || !isUUID(proxy.id)) {
-            throw new BadRequestException('A proxy with a valid id is required.')
+    async updateProxy(id: string, dto: UpdateProxyDto): Promise<ProxyDto> {
+        if (!isUUID(id)) {
+            throw new ProxyNotFoundException(id)
         }
 
-        const fields = updateMask ?? []
+        const fields = Object.keys(dto)
 
         if (fields.length === 0 || fields.some(field => !isWritableProxyField(field))) {
             throw new BadRequestException('updateMask must contain one or more writable proxy fields.')
@@ -109,21 +85,21 @@ export class ProxyService implements ProxyServiceController {
 
         const updateFields = fields as WritableProxyField[]
 
-        const entity = await this.proxyRepo.findOneBy({ id: proxy.id })
+        const entity = await this.proxyRepo.findOneBy({ id })
 
         if (entity === null) {
-            throw new ProxyNotFoundException(proxy.id)
+            throw new ProxyNotFoundException(id)
         }
 
-        const updates = Object.fromEntries(updateFields.map(field => [field, proxy[field]])) as Partial<Pick<Proxy, WritableProxyField>>
+        const updates = Object.fromEntries(updateFields.map(field => [field, dto[field]])) as Partial<Pick<Proxy, WritableProxyField>>
         Object.assign(entity, updates)
 
         const updated = await this.proxyRepo.save(entity)
 
-        return { proxy: this.mapper.map(updated, Proxy, ProxyDescriptorDto) }
+        return this.mapper.map(updated, Proxy, ProxyDto)
     }
 
-    async deleteProxy({ id }: DeleteProxyRequest): Promise<DeleteProxyResponse> {
+    async deleteProxy(id: string): Promise<ProxyDto> {
         if (!isUUID(id)) {
             throw new ProxyNotFoundException(id)
         }
@@ -136,10 +112,10 @@ export class ProxyService implements ProxyServiceController {
 
         await this.proxyRepo.remove(entity)
 
-        return { proxy: this.mapper.map(entity, Proxy, ProxyDescriptorDto) }
+        return this.mapper.map(entity, Proxy, ProxyDto)
     }
 
-    async getHealthyProxy({ mxHost }: GetHealthyProxyRequest): Promise<GetHealthyProxyResponse> {
+    async getHealthyProxy(mxHost: string): Promise<ProxyDto | undefined> {
         const proxies = await this.proxyRepo
             .createQueryBuilder('proxy')
             .where('proxy.enabled = :enabled', { enabled: true })
@@ -149,10 +125,10 @@ export class ProxyService implements ProxyServiceController {
         const totalWeight = proxies.reduce((sum, proxy) => sum + Math.max(proxy.weight, 0), 0)
         const selected = selectWeightedProxy(proxies, totalWeight)
 
-        return { proxy: selected === undefined ? undefined : this.mapper.map(selected, Proxy, ProxyDescriptorDto) }
+        return selected === undefined ? undefined : this.mapper.map(selected, Proxy, ProxyDto)
     }
 
-    async reportProxyBlacklist({ id, mxHost }: ReportProxyBlacklistRequest): Promise<ReportProxyBlacklistResponse> {
+    async reportProxyBlacklist(id: string, { mxHost }: ReportBlacklistDto): Promise<void> {
         if (!isUUID(id)) {
             throw new ProxyNotFoundException(id)
         }
@@ -166,11 +142,6 @@ export class ProxyService implements ProxyServiceController {
         entity.blacklists = [...new Set([...(entity.blacklists ?? []), mxHost])]
         await this.proxyRepo.save(entity)
 
-        return {}
-    }
-
-    getHello(): string {
-        return 'Hello World!'
     }
 }
 

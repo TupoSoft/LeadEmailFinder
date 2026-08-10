@@ -1,64 +1,80 @@
-import { Controller, Get, SerializeOptions, UseFilters } from '@nestjs/common'
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Patch,
+    Post,
+    Query,
+    ValidationPipe,
+} from '@nestjs/common'
+import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { ProxyService } from './proxy.service'
 import {
-    AddProxyRequest,
-    AddProxyResponse,
-    DeleteProxyRequest,
-    DeleteProxyResponse,
-    GetHealthyProxyRequest,
-    GetHealthyProxyResponse,
-    GetProxyResponse,
-    ListProxiesRequest,
-    ListProxiesResponse,
-    ProxyServiceController,
-    ProxyServiceControllerMethods,
-    ReportProxyBlacklistRequest,
-    ReportProxyBlacklistResponse,
-    UpdateProxyRequest,
-    UpdateProxyResponse,
-} from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
-import { AddProxyResponseDto, GetProxyRequestDto, GetProxyResponseDto, ListProxiesResponseDto } from './proxy.dto'
-import { HttpToGrpcExceptionFilter } from '@tuposoft/lead-email-finder/grpc'
+    CreateProxyDto,
+    HealthyProxyQueryDto,
+    ListProxiesQueryDto,
+    ProxyDto,
+    ProxyListDto,
+    ReportBlacklistDto,
+    UpdateProxyDto,
+} from './proxy.dto'
 
-@Controller()
-@ProxyServiceControllerMethods()
-@UseFilters(new HttpToGrpcExceptionFilter())
-export class ProxyController implements ProxyServiceController {
+@ApiTags('Proxies')
+@Controller('v1/proxies')
+export class ProxyController {
     constructor(private readonly proxyService: ProxyService) {}
 
-    @SerializeOptions({ type: AddProxyResponseDto })
-    async addProxy(request: AddProxyRequest): Promise<AddProxyResponse> {
-        return await this.proxyService.addProxy(request)
-    }
-
-    @SerializeOptions({ type: ListProxiesResponseDto })
-    async listProxies(request: ListProxiesRequest): Promise<ListProxiesResponse> {
-        return await this.proxyService.listProxies(request)
-    }
-
-    @SerializeOptions({ type: GetProxyResponseDto })
-    async getProxy(request: GetProxyRequestDto): Promise<GetProxyResponse> {
-        return await this.proxyService.getProxy(request)
-    }
-
-    async updateProxy(request: UpdateProxyRequest): Promise<UpdateProxyResponse> {
-        return await this.proxyService.updateProxy(request)
-    }
-
-    async deleteProxy(request: DeleteProxyRequest): Promise<DeleteProxyResponse> {
-        return await this.proxyService.deleteProxy(request)
-    }
-
-    async getHealthyProxy(request: GetHealthyProxyRequest): Promise<GetHealthyProxyResponse> {
-        return await this.proxyService.getHealthyProxy(request)
-    }
-
-    async reportProxyBlacklist(request: ReportProxyBlacklistRequest): Promise<ReportProxyBlacklistResponse> {
-        return await this.proxyService.reportProxyBlacklist(request)
+    @Post()
+    @ApiOperation({ summary: 'Create a proxy' })
+    @ApiCreatedResponse({ type: ProxyDto })
+    async createProxy(@Body() dto: CreateProxyDto): Promise<ProxyDto> {
+        return await this.proxyService.createProxy(dto)
     }
 
     @Get()
-    getHello(): string {
-        return this.proxyService.getHello()
+    @ApiOperation({ summary: 'List proxies' })
+    @ApiOkResponse({ type: ProxyListDto })
+    async listProxies(@Query(new ValidationPipe({ transform: true })) query: ListProxiesQueryDto): Promise<ProxyListDto> {
+        return await this.proxyService.listProxies(query)
+    }
+
+    @Get('healthy')
+    @ApiOperation({ summary: 'Select a healthy proxy for an MX host' })
+    @ApiOkResponse({ type: ProxyDto })
+    async getHealthyProxy(@Query() query: HealthyProxyQueryDto): Promise<ProxyDto | undefined> {
+        return await this.proxyService.getHealthyProxy(query.mxHost)
+    }
+
+    @Get(':id')
+    @ApiOperation({ summary: 'Get a proxy' })
+    @ApiOkResponse({ type: ProxyDto })
+    async getProxy(@Param('id') id: string): Promise<ProxyDto> {
+        return await this.proxyService.getProxy(id)
+    }
+
+    @Patch(':id')
+    @ApiOperation({ summary: 'Update a proxy' })
+    @ApiOkResponse({ type: ProxyDto })
+    async updateProxy(@Param('id') id: string, @Body() dto: UpdateProxyDto): Promise<ProxyDto> {
+        return await this.proxyService.updateProxy(id, dto)
+    }
+
+    @Delete(':id')
+    @ApiOperation({ summary: 'Delete a proxy' })
+    @ApiOkResponse({ type: ProxyDto })
+    async deleteProxy(@Param('id') id: string): Promise<ProxyDto> {
+        return await this.proxyService.deleteProxy(id)
+    }
+
+    @Post(':id/blacklists')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiOperation({ summary: 'Exclude a proxy for an MX host' })
+    @ApiNoContentResponse()
+    async reportProxyBlacklist(@Param('id') id: string, @Body() dto: ReportBlacklistDto): Promise<void> {
+        await this.proxyService.reportProxyBlacklist(id, dto)
     }
 }
