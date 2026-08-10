@@ -4,6 +4,7 @@ import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
 import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { CreditGuard } from '../../credits'
 
 @UseGuards(ApiKeyGuard)
 @Controller('verify')
@@ -13,6 +14,7 @@ export class SyncEmailVerificationController {
     ) {}
 
     @Post()
+    @UseGuards(CreditGuard)
     @SerializeOptions({ type: EmailVerificationResponseDto })
     async verifyEmail(
         @Body() emailVerificationRequest: EmailVerificationRequestDto,

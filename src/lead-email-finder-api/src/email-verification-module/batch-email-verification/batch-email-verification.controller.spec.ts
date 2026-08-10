@@ -48,11 +48,17 @@ describe('BatchEmailVerificationController', () => {
 
             await request(app.getHttpServer())
                 .post('/verifyBatch/csv')
+                .set('x-api-key', 'api_test')
                 .attach('file', fileBuffer, {
                     filename: 'test.csv',
                     contentType: 'text/csv',
                 })
                 .expect(HttpStatus.ACCEPTED, { id })
+
+            expect(batchEmailVerificationService.uploadFile).toHaveBeenCalledWith(
+                expect.objectContaining({ originalname: 'test.csv' }),
+                'api_test',
+            )
         })
 
         it('should return 422 if an invalid file type is uploaded', async () => {

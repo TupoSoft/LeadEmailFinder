@@ -9,6 +9,7 @@ import {
 } from './async-email-verification.constants'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { CreditsModule } from '../../credits'
 
 @Module({
     imports: [
@@ -23,6 +24,7 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
             },
         }),
         ApiKeyModule,
+        CreditsModule,
     ],
     providers: [
         AsyncEmailVerificationServiceImpl,
