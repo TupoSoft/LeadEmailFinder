@@ -30,6 +30,7 @@ services:
       start_period: 10s
     environment:
       API_URL: http://localhost:3000
+      TYPEORM_SYNCHRONIZE: true
 
       ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
 

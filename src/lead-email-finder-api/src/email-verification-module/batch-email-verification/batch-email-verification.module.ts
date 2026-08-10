@@ -9,6 +9,7 @@ import { SyncEmailVerificationModule } from '../sync-email-verification'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { ConfigModule } from '@nestjs/config'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { CreditsModule } from '../../credits'
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
         }),
         SyncEmailVerificationModule,
         ApiKeyModule,
+        CreditsModule,
     ],
     controllers: [BatchEmailVerificationController],
     providers: [
