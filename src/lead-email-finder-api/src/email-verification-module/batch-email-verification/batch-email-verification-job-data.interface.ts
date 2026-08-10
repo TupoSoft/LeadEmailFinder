@@ -9,6 +9,7 @@ export type BatchEmailVerificationJobData =
               | BatchEmailVerificationJobStep.UploadResults
           key: string
           bucket: string
+          apiKey: string
       }
     | {
           step: BatchEmailVerificationJobStep.Finish

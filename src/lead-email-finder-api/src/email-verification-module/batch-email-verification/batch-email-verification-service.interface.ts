@@ -20,7 +20,7 @@ export interface GetBatchStatusResponse {
 }
 
 export interface BatchEmailVerificationService {
-    uploadFile(file: BatchEmailVerificationFile): Promise<EnqueueBatchResponse>
+    uploadFile(file: BatchEmailVerificationFile, apiKey: string): Promise<EnqueueBatchResponse>
     getBatchStatus(id: string): Promise<GetBatchStatusResponse>
     getBatchResults(id: string): Promise<Readable>
 }

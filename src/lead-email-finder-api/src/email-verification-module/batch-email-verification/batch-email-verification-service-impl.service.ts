@@ -91,13 +91,14 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         return stats
     }
 
-    async uploadFile({ bucket, key }: BatchEmailVerificationFile): Promise<EnqueueBatchResponse> {
+    async uploadFile({ bucket, key }: BatchEmailVerificationFile, apiKey: string): Promise<EnqueueBatchResponse> {
         const batchEmailVerificationJob = await this.batchEmailVerificationQueue.add(
             BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
             {
                 step: BatchEmailVerificationJobStep.Validate,
                 bucket,
                 key,
+                apiKey,
             },
             { jobId: randomUUID() },
         )
