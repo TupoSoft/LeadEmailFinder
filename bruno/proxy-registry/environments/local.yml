@@ -1,5 +1,6 @@
 name: local
 variables:
   - name: baseUrl
-    value: http://localhost:3000
-    enabled: true
+    value: http://localhost:53000
+  - name: adminApiKey
+    value: "{{process.env.ADMIN_API_KEY}}"
