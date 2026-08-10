@@ -5,10 +5,12 @@ import { Key } from './models/key.entity'
 import { ApiKeyGuard } from './application/api-key.guard'
 import { ApiKeyService } from './application/api-key.service'
 import { AdminKeySeeder } from './application/admin-key-seeder.service'
+import { ApiKeyController } from './infrastructure/http/api-key.controller'
 
 @Module({
     imports: [TypeOrmModule.forFeature([Key]), LoggerModule.forRoot()],
     providers: [ApiKeyGuard, ApiKeyService, AdminKeySeeder],
+    controllers: [ApiKeyController],
     exports: [ApiKeyGuard, ApiKeyService],
 })
 export class ApiKeyModule {}
