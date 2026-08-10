@@ -1,0 +1,16 @@
+info:
+  name: 01-unauthorized-list
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/proxies"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects requests without an API key', function() {
+          expect(res.status).to.equal(401);
+        });

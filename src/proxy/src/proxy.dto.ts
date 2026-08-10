@@ -1,5 +1,5 @@
 import { AutoMap } from '@automapper/classes'
-import { Expose, Type } from 'class-transformer'
+import { Exclude, Expose, Type } from 'class-transformer'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
     IsBoolean,
@@ -48,9 +48,8 @@ export class ProxyDto {
     @AutoMap()
     port: number
 
-    @AutoMap(() => ProxyAuthDto)
-    @Type(() => ProxyAuthDto)
-    auth?: ProxyAuthDto
+    @Exclude()
+    auth?: never
 
     @AutoMap()
     weight: number
@@ -146,9 +145,11 @@ export class UpdateProxyDto {
 
 @Expose()
 export class ProxyListDto {
+    @Expose()
     @Type(() => ProxyDto)
     proxies: ProxyDto[]
 
+    @Expose()
     nextPageToken: string
 }
 
