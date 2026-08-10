@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { SmtpVerification } from './smtp-verification.entity'
-import { ProxyModule, ProxyService } from './proxy'
 import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpVerifier } from './smtp-verifier'
+import { Proxy } from '../../../../../proxy/src/proxy.entity'
+import { ProxyRegistryService } from './proxy-registry.service'
 
 @Module({
-    imports: [DnsModule, ProxyModule, TypeOrmModule.forFeature([SmtpVerification])],
+    imports: [DnsModule, TypeOrmModule.forFeature([SmtpVerification, Proxy])],
     providers: [
         {
             provide: DNS_SERVICE_TOKEN,
@@ -15,8 +16,9 @@ import { SmtpVerifier } from './smtp-verifier'
         },
         {
             provide: PROXY_SERVICE_TOKEN,
-            useExisting: ProxyService,
+            useExisting: ProxyRegistryService,
         },
+        ProxyRegistryService,
         SmtpVerifier,
     ],
     exports: [SmtpVerifier],
