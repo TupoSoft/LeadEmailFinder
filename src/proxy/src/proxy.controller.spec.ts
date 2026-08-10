@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
-import { ProxyDto, ProxyListDto, ProxyProtocol } from './proxy.dto'
+import { ProxyDto, ProxyLifecycle, ProxyListDto, ProxyProtocol } from './proxy.dto'
 import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
@@ -104,11 +104,11 @@ describe('ProxyController', () => {
         service.reportProxyBlacklist.mockResolvedValue(undefined)
 
         await expect(controller.getProxy('proxy-id')).resolves.toEqual({ id: 'proxy-id' })
-        await expect(controller.updateProxy('proxy-id', { enabled: false })).resolves.toEqual({ id: 'proxy-id' })
+        await expect(controller.updateProxy('proxy-id', { state: ProxyLifecycle.DRAINING })).resolves.toEqual({ id: 'proxy-id' })
         await expect(controller.deleteProxy('proxy-id')).resolves.toEqual({ id: 'proxy-id' })
         await expect(controller.getHealthyProxy({ mxHost: 'mx.example.com' })).resolves.toBeUndefined()
         await expect(controller.reportProxyBlacklist('proxy-id', { mxHost: 'mx.example.com' })).resolves.toBeUndefined()
-        expect(service.updateProxy).toHaveBeenCalledWith('proxy-id', { enabled: false })
+        expect(service.updateProxy).toHaveBeenCalledWith('proxy-id', { state: ProxyLifecycle.DRAINING })
         expect(service.reportProxyBlacklist).toHaveBeenCalledWith('proxy-id', { mxHost: 'mx.example.com' })
     })
 })

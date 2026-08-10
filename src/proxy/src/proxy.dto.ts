@@ -2,7 +2,6 @@ import { AutoMap } from '@automapper/classes'
 import { Exclude, Expose, Type } from 'class-transformer'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
-    IsBoolean,
     IsEnum,
     IsInt,
     IsNotEmpty,
@@ -19,6 +18,12 @@ export enum ProxyProtocol {
     HTTPS = 2,
     SOCKS5 = 3,
     SOCKS4 = 4,
+}
+
+export enum ProxyLifecycle {
+    ACTIVE = 'active',
+    DRAINING = 'draining',
+    DISABLED = 'disabled',
 }
 
 @Expose()
@@ -53,13 +58,20 @@ export class ProxyDto {
     auth?: never
 
     @AutoMap()
+    @ApiProperty({ enum: ProxyLifecycle })
+    state: ProxyLifecycle
+
+    @AutoMap()
     weight: number
 
     @AutoMap()
-    description?: string
+    maxConcurrent: number
 
     @AutoMap()
-    enabled: boolean
+    requestsPerMinute: number
+
+    @AutoMap()
+    description?: string
 
     @AutoMap()
     createdAt: Date
@@ -101,10 +113,24 @@ export class CreateProxyDto {
     @Min(0)
     weight?: number
 
-    @ApiPropertyOptional({ default: true })
+    @ApiPropertyOptional({ enum: ProxyLifecycle, default: ProxyLifecycle.ACTIVE })
     @IsOptional()
-    @IsBoolean()
-    enabled?: boolean
+    @IsEnum(ProxyLifecycle)
+    state?: ProxyLifecycle
+
+    @ApiPropertyOptional({ default: 1, minimum: 1 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    maxConcurrent?: number
+
+    @ApiPropertyOptional({ default: 10, minimum: 1 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    requestsPerMinute?: number
 }
 
 export class UpdateProxyDto {
@@ -140,8 +166,20 @@ export class UpdateProxyDto {
     weight?: number
 
     @IsOptional()
-    @IsBoolean()
-    enabled?: boolean
+    @IsEnum(ProxyLifecycle)
+    state?: ProxyLifecycle
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    maxConcurrent?: number
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    requestsPerMinute?: number
 }
 
 @Expose()

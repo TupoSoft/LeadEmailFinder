@@ -15,7 +15,7 @@ http:
     type: json
     data: |-
       {
-        "enabled": false
+        "state": "draining"
       }
 
 runtime:
@@ -25,6 +25,6 @@ runtime:
         test('updates a proxy without credentials', function() {
           expect(res.status).to.equal(200);
           expect(res.body.id).to.equal(bru.getVar('proxyId'));
-          expect(res.body.enabled).to.equal(false);
+          expect(res.body.state).to.equal('draining');
           expect(res.body).not.to.have.property('auth');
         });

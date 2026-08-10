@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
 import { AutoMap } from '@automapper/classes'
-import { ProxyProtocol } from './proxy.dto'
+import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
 
 @Entity('proxy_registry')
 export class Proxy {
@@ -24,17 +24,25 @@ export class Proxy {
     @AutoMap()
     auth?: { user: string; pass: string }
 
+    @Column({ type: 'enum', enum: ProxyLifecycle, default: ProxyLifecycle.ACTIVE })
+    @AutoMap()
+    state: ProxyLifecycle
+
     @Column({ default: 1 })
     @AutoMap()
     weight: number
 
+    @Column({ default: 1 })
+    @AutoMap()
+    maxConcurrent: number
+
+    @Column({ default: 10 })
+    @AutoMap()
+    requestsPerMinute: number
+
     @Column({ nullable: true })
     @AutoMap()
     description?: string
-
-    @Column({ default: true })
-    @AutoMap()
-    enabled: boolean
 
     @Column('text', { array: true, nullable: true })
     blacklists?: string[]

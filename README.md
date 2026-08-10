@@ -45,9 +45,13 @@ Docker Compose loads `docker/.env` for the API container. Before the first start
 ```dotenv
 NODE_ENV=development
 CATCH_ALL_HTTP_PROXY_URL=<HTTP proxy URL reachable from the API container>
+PROXY_MX_REQUESTS_PER_MINUTE=10
+PROXY_LEASE_TTL_MS=60000
 ```
 
 `CATCH_ALL_HTTP_PROXY_URL` is required for catch-all verification. The Compose stack also reads its database, Redis, S3, and API-key settings from files in `docker/secrets/`; keep those files available locally and never commit real production credentials.
+
+`PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
 ### Running the Application
 

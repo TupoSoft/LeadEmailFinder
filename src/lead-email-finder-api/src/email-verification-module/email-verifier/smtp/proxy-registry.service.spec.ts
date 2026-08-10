@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { Proxy } from '../../../../../proxy/src/proxy.entity'
-import { ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
+import { ProxyLifecycle, ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 import { ProxyRegistryService } from './proxy-registry.service'
 
@@ -34,7 +34,7 @@ describe('ProxyRegistryService', () => {
         proxyRepo = moduleRef.get(getRepositoryToken(Proxy))
     })
 
-    it('returns enabled SOCKS4 registry proxies with internal credentials', async () => {
+    it('returns active SOCKS4 registry proxies with internal credentials', async () => {
         proxyRepo.findBy.mockResolvedValue([
             {
                 id: 'proxy-id',
@@ -57,10 +57,10 @@ describe('ProxyRegistryService', () => {
                 blacklists: ['mx.blocked.example'],
             },
         ])
-        expect(proxyRepo.findBy).toHaveBeenCalledWith({ enabled: true })
+        expect(proxyRepo.findBy).toHaveBeenCalledWith({ state: ProxyLifecycle.ACTIVE })
     })
 
-    it('excludes blacklisted exchanges from enabled registry proxies', async () => {
+    it('excludes blacklisted exchanges from active registry proxies', async () => {
         const getMany = jest.fn().mockResolvedValue([])
         const andWhere = jest.fn().mockReturnValue({ getMany })
         const where = jest.fn().mockReturnValue({ andWhere })
@@ -69,7 +69,7 @@ describe('ProxyRegistryService', () => {
         await expect(service.get(['mx.example.com'])).resolves.toEqual([])
 
         expect(proxyRepo.createQueryBuilder).toHaveBeenCalledWith('proxy')
-        expect(where).toHaveBeenCalledWith('proxy.enabled = :enabled', { enabled: true })
+        expect(where).toHaveBeenCalledWith('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
         expect(andWhere).toHaveBeenCalledWith(
             'proxy.blacklists IS NULL OR NOT (proxy.blacklists && ARRAY[:...exchanges])',
             { exchanges: ['mx.example.com'] },

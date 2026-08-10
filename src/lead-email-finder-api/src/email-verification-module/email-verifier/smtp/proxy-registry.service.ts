@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { IProxy, IProxyService } from '@tuposoft/lead-email-finder/common'
 import { Proxy } from '../../../../../proxy/src/proxy.entity'
-import { ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
+import { ProxyLifecycle, ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 
 const PROTOCOL_TO_TYPE: Record<ProxyProtocol, IProxy['type']> = {
@@ -23,13 +23,13 @@ export class ProxyRegistryService implements IProxyService {
         if (excludedExchanges?.length) {
             proxies = await this.proxyRepo
                 .createQueryBuilder('proxy')
-                .where('proxy.enabled = :enabled', { enabled: true })
+                .where('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
                 .andWhere('proxy.blacklists IS NULL OR NOT (proxy.blacklists && ARRAY[:...exchanges])', {
                     exchanges: excludedExchanges,
                 })
                 .getMany()
         } else {
-            proxies = await this.proxyRepo.findBy({ enabled: true })
+            proxies = await this.proxyRepo.findBy({ state: ProxyLifecycle.ACTIVE })
         }
 
         return proxies.map(mapProxy)
