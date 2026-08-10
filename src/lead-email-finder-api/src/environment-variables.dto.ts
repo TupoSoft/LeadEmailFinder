@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsString } from 'class-validator'
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform, Type } from 'class-transformer'
 
@@ -19,9 +19,9 @@ export class EnvironmentVariablesDto {
     @IsString()
     POSTGRES_URL: string
 
-    @IsFileVar()
+    @IsOptional()
     @IsString()
-    CATCH_ALL_HTTP_PROXY_URL: string
+    CATCH_ALL_HTTP_PROXY_URL?: string
 
     @IsFileVar()
     @IsString()

@@ -4,14 +4,18 @@ import { Injectable } from '@nestjs/common'
 
 @Injectable()
 export class HttpModuleOptionsFactoryImpl implements HttpModuleOptionsFactory {
-    private readonly catchAllHttpProxyUrl: URL
+    private readonly catchAllHttpProxyUrl?: URL
 
-    constructor(configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL: string }, true>) {
+    constructor(configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL?: string }, true>) {
         const proxyUrlString = configService.get<string>('CATCH_ALL_HTTP_PROXY_URL')
-        this.catchAllHttpProxyUrl = new URL(proxyUrlString)
+        this.catchAllHttpProxyUrl = proxyUrlString ? new URL(proxyUrlString) : undefined
     }
 
     createHttpOptions(): Promise<HttpModuleOptions> | HttpModuleOptions {
+        if (!this.catchAllHttpProxyUrl) {
+            return {}
+        }
+
         const { protocol: scheme, hostname: host, port: portStr, username, password } = this.catchAllHttpProxyUrl
 
         const protocol = scheme.replace(':', '')

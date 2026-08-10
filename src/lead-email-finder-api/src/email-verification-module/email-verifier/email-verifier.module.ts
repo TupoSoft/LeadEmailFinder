@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { SmtpModule, SmtpVerifier } from './smtp'
 import {
     CatchAllModule,
@@ -11,8 +12,15 @@ import { EmailVerifier } from './email-verifier.service'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
 import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
 
+export function catchAllVerifiersForProxy(
+    proxyUrl: string | undefined,
+    catchAllVerifiers: ICatchAllVerifier[],
+): ICatchAllVerifier[] {
+    return proxyUrl ? catchAllVerifiers : []
+}
+
 @Module({
-    imports: [SmtpModule, CatchAllModule],
+    imports: [ConfigModule, SmtpModule, CatchAllModule],
     providers: [
         EmailVerifier,
         {
@@ -21,8 +29,11 @@ import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
         },
         {
             provide: CATCH_ALL_VERIFIERS_TOKEN,
-            useFactory: (...catchAllVerifiers: ICatchAllVerifier[]) => catchAllVerifiers,
-            inject: [MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],
+            useFactory: (
+                configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL?: string }, true>,
+                ...catchAllVerifiers: ICatchAllVerifier[]
+            ) => catchAllVerifiersForProxy(configService.get('CATCH_ALL_HTTP_PROXY_URL'), catchAllVerifiers),
+            inject: [ConfigService, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],
         },
     ],
     exports: [EmailVerifier],
