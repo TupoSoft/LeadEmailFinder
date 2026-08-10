@@ -29,6 +29,9 @@
 README.md
 __mocks__
 docker
+!docker/
+docker/*
+!docker/garage-entrypoint.sh
 Makefile
 eslint.config.mjs
 swarm.yml
