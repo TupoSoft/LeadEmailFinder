@@ -2,7 +2,7 @@ import { AutomapperProfile, InjectMapper } from '@automapper/nestjs'
 import { Injectable } from '@nestjs/common'
 import { createMap, forMember, mapFrom, Mapper, MappingProfile } from '@automapper/core'
 import { Proxy } from './proxy.entity'
-import { ProxyDescriptorDto } from './proxy.dto'
+import { ProxyDto } from './proxy.dto'
 
 @Injectable()
 export class ProxyProfile extends AutomapperProfile {
@@ -15,8 +15,8 @@ export class ProxyProfile extends AutomapperProfile {
             createMap(
                 mapper,
                 Proxy,
-                ProxyDescriptorDto,
-                forMember<Proxy, ProxyDescriptorDto>(
+                ProxyDto,
+                forMember<Proxy, ProxyDto>(
                     obj => obj.auth,
                     mapFrom(src => src.auth),
                 ),

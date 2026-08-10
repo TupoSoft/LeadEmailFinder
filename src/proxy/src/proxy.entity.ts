@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
-import { Protocol } from '@tuposoft/lead-email-finder/proto/proxy/v1/proxy'
 import { AutoMap } from '@automapper/classes'
+import { ProxyProtocol } from './proxy.dto'
 
 @Entity('proxy_registry')
 export class Proxy {
@@ -10,7 +10,7 @@ export class Proxy {
 
     @Column({ type: 'int' })
     @AutoMap()
-    protocol: Protocol
+    protocol: ProxyProtocol
 
     @Column()
     @AutoMap()

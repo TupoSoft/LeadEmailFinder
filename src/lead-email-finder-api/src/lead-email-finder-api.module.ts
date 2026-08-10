@@ -13,6 +13,7 @@ import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { EnvironmentVariablesDto } from './environment-variables.dto'
 import * as migrations from '@tuposoft/lead-email-finder/db/migrations'
+import { ProxyModule } from '../../proxy/src/proxy.module'
 
 @Module({
     imports: [
@@ -43,6 +44,7 @@ import * as migrations from '@tuposoft/lead-email-finder/db/migrations'
             inject: [Redis],
         }),
         EmailVerificationModule,
+        ProxyModule,
         HealthModule,
         S3Module.forRootAsync({
             imports: [ConfigModule],
