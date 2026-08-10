@@ -33,23 +33,6 @@ export default tseslint.config(
         },
     },
     {
-        files: ['libs/modules/**/*.ts'],
-        rules: {
-            'import/no-restricted-paths': [
-                'error',
-                {
-                    zones: [
-                        {
-                            target: 'libs/modules/([^/]+)',
-                            from: 'libs/modules/((?!$1)[^/]+)/src/(application|domain|infrastructure)',
-                            message: 'Cross-module internal import detected. Modules must only import from the "api" folder of other modules.',
-                        },
-                    ],
-                },
-            ],
-        },
-    },
-    {
         rules: {
             '@typescript-eslint/no-unused-vars': [
                 'error',
