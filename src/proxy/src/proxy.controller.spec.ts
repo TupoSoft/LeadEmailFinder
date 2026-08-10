@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
-import { ProxyDto, ProxyProtocol } from './proxy.dto'
+import { ProxyDto, ProxyListDto, ProxyProtocol } from './proxy.dto'
 import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
 import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
@@ -52,6 +52,37 @@ describe('ProxyController', () => {
         })
 
         expect(instanceToPlain(response, { strategy: 'excludeAll' })).not.toHaveProperty('auth')
+    })
+
+    it('serializes paginated proxies and omits their credentials', () => {
+        const response = plainToInstance(ProxyListDto, {
+            proxies: [
+                {
+                    id: 'proxy-id',
+                    protocol: ProxyProtocol.HTTP,
+                    host: 'proxy.example.com',
+                    port: 8080,
+                    auth: { user: 'proxy-user', pass: 'proxy-password' },
+                },
+            ],
+            nextPageToken: '',
+        })
+
+        const serialized = instanceToPlain(response, { strategy: 'excludeAll' }) as {
+            proxies: Array<Record<string, unknown>>
+            nextPageToken: string
+        }
+
+        expect(serialized).toEqual({
+            proxies: [
+                expect.objectContaining({
+                    id: 'proxy-id',
+                    host: 'proxy.example.com',
+                }),
+            ],
+            nextPageToken: '',
+        })
+        expect(serialized.proxies[0]).not.toHaveProperty('auth')
     })
 
     it('delegates creation and listing to the service', async () => {

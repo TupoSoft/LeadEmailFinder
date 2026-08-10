@@ -110,9 +110,10 @@ export class ProxyService {
             throw new ProxyNotFoundException(id)
         }
 
+        const descriptor = this.mapper.map(entity, Proxy, ProxyDto)
         await this.proxyRepo.remove(entity)
 
-        return this.mapper.map(entity, Proxy, ProxyDto)
+        return descriptor
     }
 
     async getHealthyProxy(mxHost: string): Promise<ProxyDto | undefined> {

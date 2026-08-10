@@ -9,6 +9,7 @@ import {
     Patch,
     Post,
     Query,
+    SerializeOptions,
     ValidationPipe,
     UseGuards,
 } from '@nestjs/common'
@@ -42,6 +43,7 @@ export class ProxyController {
     }
 
     @Get()
+    @SerializeOptions({ type: ProxyListDto })
     @ApiOperation({ summary: 'List proxies' })
     @ApiOkResponse({ type: ProxyListDto })
     async listProxies(@Query(new ValidationPipe({ transform: true })) query: ListProxiesQueryDto): Promise<ProxyListDto> {

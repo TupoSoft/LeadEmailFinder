@@ -114,11 +114,14 @@ describe('ProxyService', () => {
         it('removes and returns the proxy', async () => {
             const id = '6d7983d6-3eba-4eb7-bd8f-ebef258faeca'
             const entity = { id } as Proxy
-            const descriptor = { id }
             proxyRepo.findOneBy.mockResolvedValue(entity)
-            mapper.map.mockReturnValue(descriptor)
+            mapper.map.mockImplementation((proxy: Proxy) => ({ id: proxy.id }))
+            proxyRepo.remove.mockImplementation((proxy: Proxy) => {
+                Reflect.deleteProperty(proxy, 'id')
+                return Promise.resolve(proxy)
+            })
 
-            await expect(service.deleteProxy(id)).resolves.toEqual(descriptor)
+            await expect(service.deleteProxy(id)).resolves.toEqual({ id })
             expect(proxyRepo.remove).toHaveBeenCalledWith(entity)
         })
     })

@@ -145,9 +145,11 @@ export class UpdateProxyDto {
 
 @Expose()
 export class ProxyListDto {
+    @Expose()
     @Type(() => ProxyDto)
     proxies: ProxyDto[]
 
+    @Expose()
     nextPageToken: string
 }
 
