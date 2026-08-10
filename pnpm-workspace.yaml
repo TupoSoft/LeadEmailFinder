@@ -1,10 +1,8 @@
 onlyBuiltDependencies:
-  - '@bufbuild/buf'
   - '@nestjs/core'
   - '@scarf/scarf'
   - '@swc/core'
   - msgpackr-extract
-  - protobufjs
   - unrs-resolver
 
 overrides:

@@ -30,7 +30,6 @@ services:
       start_period: 10s
     environment:
       API_URL: http://localhost:3000
-      APIKEY_URL: api:5000
 
       ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
 

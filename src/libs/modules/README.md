@@ -6,7 +6,7 @@ This directory is intended to house internal business modules. Each module shoul
 
 Each module in this directory must include the following subdirectories:
 
-- **api/**: Contains the external interface of the module (e.g., controllers, gRPC handlers, DTOs).
+- **api/**: Contains the external interface of the module (e.g., controllers and DTOs).
 - **application/**: Contains business logic and use cases. This layer coordinates domain objects to perform tasks.
 - **domain/**: Contains the core business logic, including entities, value objects, domain services, and repository interfaces.
 - **infrastructure/**: Contains technical implementation details, such as database repositories, external API clients, and other framework-specific code.
