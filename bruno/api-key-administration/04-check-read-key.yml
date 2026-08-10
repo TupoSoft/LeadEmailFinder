@@ -1,0 +1,29 @@
+info:
+  name: 04-check-read-key
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/api-keys/permissions:check"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "token": "{{managedKeyToken}}",
+        "requiredPermissions": ["read"]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('checks permissions with an admin key', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.allowed).to.equal(true);
+        });
