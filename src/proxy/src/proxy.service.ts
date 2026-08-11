@@ -56,7 +56,7 @@ export class ProxyService {
         const proxy = await this.proxyRepo.save(
             this.proxyRepo.create({
                 ...dto,
-                state: dto.state ?? ProxyLifecycle.ACTIVE,
+                state: dto.state ?? ProxyLifecycle.DISABLED,
                 weight: dto.weight ?? 1,
                 maxConcurrent: dto.maxConcurrent ?? 1,
                 requestsPerMinute: dto.requestsPerMinute ?? 10,
