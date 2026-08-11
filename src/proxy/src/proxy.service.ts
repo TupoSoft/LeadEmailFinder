@@ -1,7 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
-import { CreateProxyDto, ListProxiesQueryDto, ProxyDto, ProxyListDto, ReportBlacklistDto, UpdateProxyDto } from './proxy.dto'
+import {
+    CreateProxyDto,
+    ListProxiesQueryDto,
+    ProxyDto,
+    ProxyLifecycle,
+    ProxyListDto,
+    ReportBlacklistDto,
+    UpdateProxyDto,
+} from './proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 import { InjectRepository } from '@nestjs/typeorm'
 import { FindOptionsWhere, MoreThan, Repository } from 'typeorm'
@@ -10,7 +18,17 @@ import { Proxy } from './proxy.entity'
 
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 100
-const WRITABLE_PROXY_FIELDS = ['protocol', 'host', 'port', 'auth', 'weight', 'description', 'enabled'] as const
+const WRITABLE_PROXY_FIELDS = [
+    'protocol',
+    'host',
+    'port',
+    'auth',
+    'state',
+    'weight',
+    'maxConcurrent',
+    'requestsPerMinute',
+    'description',
+] as const
 type WritableProxyField = (typeof WRITABLE_PROXY_FIELDS)[number]
 
 @Injectable()
@@ -38,8 +56,10 @@ export class ProxyService {
         const proxy = await this.proxyRepo.save(
             this.proxyRepo.create({
                 ...dto,
+                state: dto.state ?? ProxyLifecycle.ACTIVE,
                 weight: dto.weight ?? 1,
-                enabled: dto.enabled ?? true,
+                maxConcurrent: dto.maxConcurrent ?? 1,
+                requestsPerMinute: dto.requestsPerMinute ?? 10,
             }),
         )
 
@@ -119,7 +139,7 @@ export class ProxyService {
     async getHealthyProxy(mxHost: string): Promise<ProxyDto | undefined> {
         const proxies = await this.proxyRepo
             .createQueryBuilder('proxy')
-            .where('proxy.enabled = :enabled', { enabled: true })
+            .where('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
             .andWhere('(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))', { mxHost })
             .getMany()
 

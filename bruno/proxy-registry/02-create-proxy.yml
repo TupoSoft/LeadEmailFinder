@@ -22,6 +22,9 @@ http:
           "user": "smoke-test-user",
           "pass": "smoke-test-password"
         },
+        "state": "active",
+        "maxConcurrent": 1,
+        "requestsPerMinute": 10,
         "description": "Bruno proxy-registry smoke test"
       }
 
@@ -32,6 +35,9 @@ runtime:
         test('creates a proxy without returning credentials', function() {
           expect(res.status).to.equal(201);
           expect(res.body.id).to.be.a('string');
+          expect(res.body.state).to.equal('active');
+          expect(res.body.maxConcurrent).to.equal(1);
+          expect(res.body.requestsPerMinute).to.equal(10);
           expect(res.body).not.to.have.property('auth');
           bru.setVar('proxyId', res.body.id);
         });

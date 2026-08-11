@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { ProxyService } from './proxy.service'
 import { Proxy } from './proxy.entity'
+import { CreateProxyDto, ProxyLifecycle, ProxyProtocol } from './proxy.dto'
 import { getMapperToken } from '@automapper/nestjs'
 import { BadRequestException } from '@nestjs/common'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
@@ -9,6 +10,7 @@ import { getRepositoryToken } from '@nestjs/typeorm'
 describe('ProxyService', () => {
     let service: ProxyService
     let proxyRepo: {
+        create: jest.Mock
         findOneBy: jest.Mock
         find: jest.Mock
         save: jest.Mock
@@ -48,6 +50,37 @@ describe('ProxyService', () => {
         service = moduleRef.get(ProxyService)
         proxyRepo = moduleRef.get(getRepositoryToken(Proxy))
         mapper = moduleRef.get(getMapperToken())
+    })
+
+    describe('createProxy', () => {
+        it('applies the default lifecycle and capacity values', async () => {
+            const dto = {
+                protocol: ProxyProtocol.HTTP,
+                host: 'proxy.example.com',
+                port: 8080,
+            } as CreateProxyDto
+            const createdProxy = {
+                ...dto,
+                state: ProxyLifecycle.ACTIVE,
+                weight: 1,
+                maxConcurrent: 1,
+                requestsPerMinute: 10,
+            } as Proxy
+
+            proxyRepo.create.mockReturnValue(createdProxy)
+            proxyRepo.save.mockResolvedValue(createdProxy)
+            mapper.map.mockReturnValue(createdProxy)
+
+            await service.createProxy(dto)
+
+            expect(proxyRepo.create).toHaveBeenCalledWith({
+                ...dto,
+                state: ProxyLifecycle.ACTIVE,
+                weight: 1,
+                maxConcurrent: 1,
+                requestsPerMinute: 10,
+            })
+        })
     })
 
     describe('getProxy', () => {
@@ -127,7 +160,7 @@ describe('ProxyService', () => {
     })
 
     describe('getHealthyProxy', () => {
-        it('selects an enabled proxy that is not blacklisted for the MX host', async () => {
+        it('selects an active proxy that is not blacklisted for the MX host', async () => {
             const proxy = { id: '6d7983d6-3eba-4eb7-bd8f-ebef258faeca', weight: 1 } as Proxy
             const getMany = jest.fn().mockResolvedValue([proxy])
             const andWhere = jest.fn().mockReturnValue({ getMany })
@@ -136,6 +169,7 @@ describe('ProxyService', () => {
             mapper.map.mockReturnValue({ id: proxy.id })
 
             await expect(service.getHealthyProxy('mx.example.com')).resolves.toEqual({ id: proxy.id })
+            expect(where).toHaveBeenCalledWith('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
             expect(andWhere).toHaveBeenCalledWith(
                 '(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))',
                 { mxHost: 'mx.example.com' },
