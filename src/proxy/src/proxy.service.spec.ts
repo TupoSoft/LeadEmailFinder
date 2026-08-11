@@ -61,7 +61,7 @@ describe('ProxyService', () => {
             } as CreateProxyDto
             const createdProxy = {
                 ...dto,
-                state: ProxyLifecycle.ACTIVE,
+                state: ProxyLifecycle.DISABLED,
                 weight: 1,
                 maxConcurrent: 1,
                 requestsPerMinute: 10,
@@ -75,7 +75,35 @@ describe('ProxyService', () => {
 
             expect(proxyRepo.create).toHaveBeenCalledWith({
                 ...dto,
+                state: ProxyLifecycle.DISABLED,
+                weight: 1,
+                maxConcurrent: 1,
+                requestsPerMinute: 10,
+            })
+        })
+
+        it('preserves an explicitly active lifecycle state', async () => {
+            const dto = {
+                protocol: ProxyProtocol.HTTP,
+                host: 'proxy.example.com',
+                port: 8080,
                 state: ProxyLifecycle.ACTIVE,
+            } as CreateProxyDto
+            const createdProxy = {
+                ...dto,
+                weight: 1,
+                maxConcurrent: 1,
+                requestsPerMinute: 10,
+            } as Proxy
+
+            proxyRepo.create.mockReturnValue(createdProxy)
+            proxyRepo.save.mockResolvedValue(createdProxy)
+            mapper.map.mockReturnValue(createdProxy)
+
+            await service.createProxy(dto)
+
+            expect(proxyRepo.create).toHaveBeenCalledWith({
+                ...dto,
                 weight: 1,
                 maxConcurrent: 1,
                 requestsPerMinute: 10,

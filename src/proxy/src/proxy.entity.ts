@@ -24,7 +24,7 @@ export class Proxy {
     @AutoMap()
     auth?: { user: string; pass: string }
 
-    @Column({ type: 'enum', enum: ProxyLifecycle, default: ProxyLifecycle.ACTIVE })
+    @Column({ type: 'enum', enum: ProxyLifecycle, default: ProxyLifecycle.DISABLED })
     @AutoMap()
     state: ProxyLifecycle
 

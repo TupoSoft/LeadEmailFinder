@@ -113,7 +113,7 @@ export class CreateProxyDto {
     @Min(0)
     weight?: number
 
-    @ApiPropertyOptional({ enum: ProxyLifecycle, default: ProxyLifecycle.ACTIVE })
+    @ApiPropertyOptional({ enum: ProxyLifecycle, default: ProxyLifecycle.DISABLED })
     @IsOptional()
     @IsEnum(ProxyLifecycle)
     state?: ProxyLifecycle
