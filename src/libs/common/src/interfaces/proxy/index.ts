@@ -1,2 +1,5 @@
 export * from './proxy.interface'
 export * from './proxy-service.interface'
+export * from './proxy-allocator.interface'
+export * from './proxy-lease.interface'
+export * from './proxy.tokens'

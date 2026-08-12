@@ -2,6 +2,11 @@ import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Redis } from 'ioredis'
 import { randomUUID } from 'node:crypto'
+import {
+    IProxyLeaseService,
+    ProxyLease,
+    ProxyLeaseRequest,
+} from '@tuposoft/lead-email-finder/common'
 
 const DEFAULT_MX_REQUESTS_PER_MINUTE = 10
 const DEFAULT_LEASE_TTL_MS = 60_000
@@ -53,22 +58,8 @@ const RELEASE_LEASE_SCRIPT = `
     return 1
 `
 
-export interface ProxyLeaseRequest {
-    proxyId: string
-    mxHost: string
-    maxConcurrent: number
-    requestsPerMinute: number
-}
-
-export interface ProxyLease {
-    id: string
-    proxyId: string
-    mxHost: string
-    expiresAt: Date
-}
-
 @Injectable()
-export class ProxyLeaseService {
+export class ProxyLeaseService implements IProxyLeaseService {
     private readonly mxRequestsPerMinute: number
     private readonly leaseTtlMs: number
 

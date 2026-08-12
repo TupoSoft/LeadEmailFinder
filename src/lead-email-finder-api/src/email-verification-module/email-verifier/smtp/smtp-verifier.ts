@@ -5,9 +5,12 @@ import { isIP } from 'node:net'
 import {
     IDnsService,
     IProxy,
+    IProxyAllocator,
     IProxyService,
     ISmtpVerificationResponse,
     ISmtpVerifier,
+    LeasedProxy,
+    PROXY_ALLOCATOR_TOKEN,
 } from '@tuposoft/lead-email-finder/common'
 import { SmtpVerification } from './smtp-verification.entity'
 import { Inject, Injectable, Logger } from '@nestjs/common'
@@ -17,7 +20,6 @@ import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 import { getDomain } from 'tldts'
-import { LeasedProxy, ProxyAllocatorService } from '../../../../../proxy/src/proxy-allocator.service'
 
 interface GetExchangesParams {
     domain: string
@@ -115,7 +117,7 @@ export class SmtpVerifier implements ISmtpVerifier {
     constructor(
         @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
         @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
-        private readonly proxyAllocator: ProxyAllocatorService,
+        @Inject(PROXY_ALLOCATOR_TOKEN) private readonly proxyAllocator: IProxyAllocator,
         @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
     ) {}
 
