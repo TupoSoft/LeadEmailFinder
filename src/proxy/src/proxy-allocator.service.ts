@@ -1,45 +1,39 @@
-import { Injectable } from '@nestjs/common'
-import { InjectRepository } from '@nestjs/typeorm'
-import { IProxy } from '@tuposoft/lead-email-finder/common'
-import { Repository } from 'typeorm'
-import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
-import { Proxy } from './proxy.entity'
-import { ProxyLease, ProxyLeaseService } from './proxy-lease.service'
+import { Inject, Injectable } from '@nestjs/common'
+import {
+    IProxyAllocator,
+    IProxyLeaseService,
+    LeasedProxy,
+    PROXY_LEASE_SERVICE_TOKEN,
+} from '@tuposoft/lead-email-finder/common'
+import {
+    PROXY_CANDIDATE_REPOSITORY_TOKEN,
+    ProxyCandidate,
+    ProxyCandidateRepository,
+} from './proxy-candidate.repository'
 
-const PROTOCOL_TO_TYPE: Record<ProxyProtocol, IProxy['type']> = {
-    [ProxyProtocol.HTTP]: 'http',
-    [ProxyProtocol.HTTPS]: 'https',
-    [ProxyProtocol.SOCKS4]: 'socks4',
-    [ProxyProtocol.SOCKS5]: 'socks5',
-}
-
-export interface LeasedProxy {
-    proxy: IProxy
-    lease: ProxyLease
-}
 
 @Injectable()
-export class ProxyAllocatorService {
+export class ProxyAllocatorService implements IProxyAllocator {
     constructor(
-        @InjectRepository(Proxy) private readonly proxyRepo: Repository<Proxy>,
-        private readonly proxyLeaseService: ProxyLeaseService,
+        @Inject(PROXY_CANDIDATE_REPOSITORY_TOKEN) private readonly candidateRepository: ProxyCandidateRepository,
+        @Inject(PROXY_LEASE_SERVICE_TOKEN) private readonly proxyLeaseService: IProxyLeaseService,
     ) {}
 
     async acquire(mxHost: string, proxyId?: string, excludedProxyIds: string[] = []): Promise<LeasedProxy | undefined> {
         const candidates = proxyId == null
-            ? await this.getEligibleProxies(mxHost, excludedProxyIds)
-            : await this.getExplicitProxy(mxHost, proxyId, excludedProxyIds)
+            ? await this.candidateRepository.findEligible(mxHost, excludedProxyIds)
+            : await this.getExplicitCandidate(mxHost, proxyId, excludedProxyIds)
 
-        for (const proxy of orderByWeight(candidates)) {
+        for (const candidate of orderByWeight(candidates)) {
             const lease = await this.proxyLeaseService.acquire({
-                proxyId: proxy.id,
+                proxyId: candidate.proxy.id,
                 mxHost,
-                maxConcurrent: proxy.maxConcurrent,
-                requestsPerMinute: proxy.requestsPerMinute,
+                maxConcurrent: candidate.maxConcurrent,
+                requestsPerMinute: candidate.requestsPerMinute,
             })
 
             if (lease !== undefined) {
-                return { proxy: mapProxy(proxy), lease }
+                return { proxy: candidate.proxy, lease }
             }
         }
 
@@ -50,41 +44,27 @@ export class ProxyAllocatorService {
         return await this.proxyLeaseService.release(lease)
     }
 
-    private async getEligibleProxies(mxHost: string, excludedProxyIds: string[]): Promise<Proxy[]> {
-        const query = this.proxyRepo
-            .createQueryBuilder('proxy')
-            .where('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
-            .andWhere('(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))', { mxHost })
-
-        if (excludedProxyIds.length > 0) {
-            query.andWhere('proxy.id NOT IN (:...excludedProxyIds)', { excludedProxyIds })
-        }
-
-        return await query.getMany()
-    }
-
-    private async getExplicitProxy(mxHost: string, proxyId: string, excludedProxyIds: string[]): Promise<Proxy[]> {
+    private async getExplicitCandidate(
+        mxHost: string,
+        proxyId: string,
+        excludedProxyIds: string[],
+    ): Promise<ProxyCandidate[]> {
         if (excludedProxyIds.includes(proxyId)) {
             return []
         }
 
-        const proxy = await this.proxyRepo.findOneBy({ id: proxyId, state: ProxyLifecycle.ACTIVE })
-
-        if (proxy === null || proxy.blacklists?.includes(mxHost)) {
-            return []
-        }
-
-        return [proxy]
+        const candidate = await this.candidateRepository.findActiveById(mxHost, proxyId)
+        return candidate === undefined ? [] : [candidate]
     }
 }
 
-function orderByWeight(proxies: Proxy[]): Proxy[] {
-    const remaining = [...proxies]
-    const ordered: Proxy[] = []
+function orderByWeight(candidates: ProxyCandidate[]): ProxyCandidate[] {
+    const remaining = [...candidates]
+    const ordered: ProxyCandidate[] = []
 
     while (remaining.length > 0) {
-        const totalWeight = remaining.reduce((sum, proxy) => sum + Math.max(proxy.weight, 0), 0)
-        const selected = selectWeightedProxy(remaining, totalWeight)
+        const totalWeight = remaining.reduce((sum, candidate) => sum + Math.max(candidate.weight, 0), 0)
+        const selected = selectWeightedCandidate(remaining, totalWeight)
 
         ordered.push(selected)
         remaining.splice(remaining.indexOf(selected), 1)
@@ -93,32 +73,20 @@ function orderByWeight(proxies: Proxy[]): Proxy[] {
     return ordered
 }
 
-function selectWeightedProxy(proxies: Proxy[], totalWeight: number): Proxy {
+function selectWeightedCandidate(candidates: ProxyCandidate[], totalWeight: number): ProxyCandidate {
     if (totalWeight <= 0) {
-        return proxies[0]
+        return candidates[0]
     }
 
     let threshold = Math.random() * totalWeight
 
-    for (const proxy of proxies) {
-        threshold -= Math.max(proxy.weight, 0)
+    for (const candidate of candidates) {
+        threshold -= Math.max(candidate.weight, 0)
 
         if (threshold < 0) {
-            return proxy
+            return candidate
         }
     }
 
-    return proxies.at(-1)!
-}
-
-function mapProxy(proxy: Proxy): IProxy {
-    return {
-        id: proxy.id,
-        type: PROTOCOL_TO_TYPE[proxy.protocol],
-        host: proxy.host,
-        port: proxy.port,
-        user: proxy.auth?.user,
-        password: proxy.auth?.pass,
-        blacklists: proxy.blacklists,
-    }
+    return candidates.at(-1)!
 }

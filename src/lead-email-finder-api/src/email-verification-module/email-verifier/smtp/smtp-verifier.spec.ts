@@ -1,7 +1,6 @@
 import { SmtpVerifier } from './smtp-verifier'
 import { SmtpVerificationReason } from './smtp.enums'
-import { IProxy } from '@tuposoft/lead-email-finder/common'
-import { LeasedProxy, ProxyAllocatorService } from '../../../../../proxy/src/proxy-allocator.service'
+import { IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/common'
 
 interface SmtpVerifierInternals {
     tryConnect: jest.Mock
@@ -22,7 +21,7 @@ describe('SmtpVerifier lease-aware allocation', () => {
         verifier = new SmtpVerifier(
             { resolve: jest.fn() } as any,
             { addToBlacklist: jest.fn() } as any,
-            proxyAllocator as unknown as ProxyAllocatorService,
+            proxyAllocator as unknown as IProxyAllocator,
             smtpVerificationRepo as any,
         )
         internals = verifier as unknown as SmtpVerifierInternals

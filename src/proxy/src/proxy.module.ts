@@ -8,6 +8,9 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { ConfigModule } from '@nestjs/config'
 import { ProxyLeaseService } from './proxy-lease.service'
 import { ProxyAllocatorService } from './proxy-allocator.service'
+import { PROXY_ALLOCATOR_TOKEN, PROXY_LEASE_SERVICE_TOKEN } from '@tuposoft/lead-email-finder/common'
+import { PROXY_CANDIDATE_REPOSITORY_TOKEN } from './proxy-candidate.repository'
+import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repository'
 
 @Module({
     imports: [
@@ -15,8 +18,26 @@ import { ProxyAllocatorService } from './proxy-allocator.service'
         TypeOrmModule.forFeature([Proxy]),
         ApiKeyModule,
     ],
-    providers: [ProxyProfile, ProxyService, ProxyLeaseService, ProxyAllocatorService],
+    providers: [
+        ProxyProfile,
+        ProxyService,
+        ProxyLeaseService,
+        ProxyAllocatorService,
+        TypeOrmProxyCandidateRepository,
+        {
+            provide: PROXY_CANDIDATE_REPOSITORY_TOKEN,
+            useExisting: TypeOrmProxyCandidateRepository,
+        },
+        {
+            provide: PROXY_LEASE_SERVICE_TOKEN,
+            useExisting: ProxyLeaseService,
+        },
+        {
+            provide: PROXY_ALLOCATOR_TOKEN,
+            useExisting: ProxyAllocatorService,
+        },
+    ],
     controllers: [ProxyController],
-    exports: [ProxyLeaseService, ProxyAllocatorService],
+    exports: [PROXY_ALLOCATOR_TOKEN],
 })
 export class ProxyModule {}

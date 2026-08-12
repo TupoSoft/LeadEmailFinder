@@ -1,13 +1,15 @@
 import { Test } from '@nestjs/testing'
-import { getRepositoryToken } from '@nestjs/typeorm'
-import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
-import { Proxy } from './proxy.entity'
 import { ProxyAllocatorService } from './proxy-allocator.service'
-import { ProxyLeaseService } from './proxy-lease.service'
+import { IProxy, IProxyLeaseService, PROXY_LEASE_SERVICE_TOKEN } from '@tuposoft/lead-email-finder/common'
+import {
+    PROXY_CANDIDATE_REPOSITORY_TOKEN,
+    ProxyCandidate,
+    ProxyCandidateRepository,
+} from './proxy-candidate.repository'
 
 describe('ProxyAllocatorService', () => {
     let service: ProxyAllocatorService
-    let proxyRepo: { createQueryBuilder: jest.Mock; findOneBy: jest.Mock }
+    let candidateRepository: { findEligible: jest.Mock; findActiveById: jest.Mock }
     let proxyLeaseService: { acquire: jest.Mock; release: jest.Mock }
 
     beforeEach(async () => {
@@ -15,14 +17,14 @@ describe('ProxyAllocatorService', () => {
             providers: [
                 ProxyAllocatorService,
                 {
-                    provide: getRepositoryToken(Proxy),
+                    provide: PROXY_CANDIDATE_REPOSITORY_TOKEN,
                     useValue: {
-                        createQueryBuilder: jest.fn(),
-                        findOneBy: jest.fn(),
+                        findEligible: jest.fn(),
+                        findActiveById: jest.fn(),
                     },
                 },
                 {
-                    provide: ProxyLeaseService,
+                    provide: PROXY_LEASE_SERVICE_TOKEN,
                     useValue: {
                         acquire: jest.fn(),
                         release: jest.fn(),
@@ -32,29 +34,28 @@ describe('ProxyAllocatorService', () => {
         }).compile()
 
         service = moduleRef.get(ProxyAllocatorService)
-        proxyRepo = moduleRef.get(getRepositoryToken(Proxy))
-        proxyLeaseService = moduleRef.get(ProxyLeaseService)
+        candidateRepository = moduleRef.get<ProxyCandidateRepository>(PROXY_CANDIDATE_REPOSITORY_TOKEN) as {
+            findEligible: jest.Mock
+            findActiveById: jest.Mock
+        }
+        proxyLeaseService = moduleRef.get<IProxyLeaseService>(PROXY_LEASE_SERVICE_TOKEN) as {
+            acquire: jest.Mock
+            release: jest.Mock
+        }
     })
 
     it('leases an active, non-blacklisted proxy for an MX host', async () => {
-        const proxy = createProxy()
-        const getMany = jest.fn().mockResolvedValue([proxy])
-        const andWhere = jest.fn().mockReturnValue({ getMany })
-        const where = jest.fn().mockReturnValue({ andWhere })
-        proxyRepo.createQueryBuilder.mockReturnValue({ where })
+        const candidate = createCandidate()
+        candidateRepository.findEligible.mockResolvedValue([candidate])
         proxyLeaseService.acquire.mockResolvedValue(createLease())
 
         await expect(service.acquire('mx.example.com')).resolves.toEqual({
-            proxy: expect.objectContaining({ id: proxy.id, type: 'http' }),
-            lease: expect.objectContaining({ proxyId: proxy.id, mxHost: 'mx.example.com' }),
+            proxy: candidate.proxy,
+            lease: expect.objectContaining({ proxyId: candidate.proxy.id, mxHost: 'mx.example.com' }),
         })
-        expect(where).toHaveBeenCalledWith('proxy.state = :state', { state: ProxyLifecycle.ACTIVE })
-        expect(andWhere).toHaveBeenCalledWith(
-            '(proxy.blacklists IS NULL OR NOT (:mxHost = ANY(proxy.blacklists)))',
-            { mxHost: 'mx.example.com' },
-        )
+        expect(candidateRepository.findEligible).toHaveBeenCalledWith('mx.example.com', [])
         expect(proxyLeaseService.acquire).toHaveBeenCalledWith({
-            proxyId: proxy.id,
+            proxyId: candidate.proxy.id,
             mxHost: 'mx.example.com',
             maxConcurrent: 1,
             requestsPerMinute: 10,
@@ -62,37 +63,35 @@ describe('ProxyAllocatorService', () => {
     })
 
     it('tries the next weighted candidate when a proxy has no available capacity', async () => {
-        const first = createProxy({ id: 'first-proxy', weight: 0 })
-        const second = createProxy({ id: 'second-proxy', weight: 0 })
-        const getMany = jest.fn().mockResolvedValue([first, second])
-        const andWhere = jest.fn().mockReturnValue({ getMany })
-        const where = jest.fn().mockReturnValue({ andWhere })
-        proxyRepo.createQueryBuilder.mockReturnValue({ where })
-        proxyLeaseService.acquire.mockResolvedValueOnce(undefined).mockResolvedValueOnce(createLease({ proxyId: second.id }))
+        const first = createCandidate({ proxy: createProxy('first-proxy'), weight: 0 })
+        const second = createCandidate({ proxy: createProxy('second-proxy'), weight: 0 })
+        candidateRepository.findEligible.mockResolvedValue([first, second])
+        proxyLeaseService.acquire.mockResolvedValueOnce(undefined).mockResolvedValueOnce(
+            createLease({ proxyId: second.proxy.id }),
+        )
 
         await expect(service.acquire('mx.example.com')).resolves.toEqual(
-            expect.objectContaining({ proxy: expect.objectContaining({ id: second.id }) }),
+            expect.objectContaining({ proxy: expect.objectContaining({ id: second.proxy.id }) }),
         )
-        expect(proxyLeaseService.acquire).toHaveBeenNthCalledWith(1, expect.objectContaining({ proxyId: first.id }))
-        expect(proxyLeaseService.acquire).toHaveBeenNthCalledWith(2, expect.objectContaining({ proxyId: second.id }))
+        expect(proxyLeaseService.acquire).toHaveBeenNthCalledWith(1, expect.objectContaining({ proxyId: first.proxy.id }))
+        expect(proxyLeaseService.acquire).toHaveBeenNthCalledWith(2, expect.objectContaining({ proxyId: second.proxy.id }))
     })
 
     it('only leases an explicitly requested active proxy that is not blacklisted', async () => {
-        const proxy = createProxy({ id: 'requested-proxy' })
-        proxyRepo.findOneBy.mockResolvedValue(proxy)
-        proxyLeaseService.acquire.mockResolvedValue(createLease({ proxyId: proxy.id }))
+        const candidate = createCandidate({ proxy: createProxy('requested-proxy') })
+        candidateRepository.findActiveById.mockResolvedValue(candidate)
+        proxyLeaseService.acquire.mockResolvedValue(createLease({ proxyId: candidate.proxy.id }))
 
-        await expect(service.acquire('mx.example.com', proxy.id)).resolves.toEqual(
-            expect.objectContaining({ proxy: expect.objectContaining({ id: proxy.id }) }),
+        await expect(service.acquire('mx.example.com', candidate.proxy.id)).resolves.toEqual(
+            expect.objectContaining({ proxy: expect.objectContaining({ id: candidate.proxy.id }) }),
         )
-        expect(proxyRepo.findOneBy).toHaveBeenCalledWith({ id: proxy.id, state: ProxyLifecycle.ACTIVE })
+        expect(candidateRepository.findActiveById).toHaveBeenCalledWith('mx.example.com', candidate.proxy.id)
     })
 
     it('does not lease an explicitly requested blacklisted proxy', async () => {
-        const proxy = createProxy({ blacklists: ['mx.example.com'] })
-        proxyRepo.findOneBy.mockResolvedValue(proxy)
+        candidateRepository.findActiveById.mockResolvedValue(undefined)
 
-        await expect(service.acquire('mx.example.com', proxy.id)).resolves.toBeUndefined()
+        await expect(service.acquire('mx.example.com', 'proxy-id')).resolves.toBeUndefined()
         expect(proxyLeaseService.acquire).not.toHaveBeenCalled()
     })
 
@@ -108,18 +107,23 @@ describe('ProxyAllocatorService', () => {
     })
 })
 
-function createProxy(overrides: Partial<Proxy> = {}): Proxy {
+function createCandidate(overrides: Partial<ProxyCandidate> = {}): ProxyCandidate {
     return {
-        id: 'proxy-id',
-        protocol: ProxyProtocol.HTTP,
-        host: 'proxy.example.com',
-        port: 8080,
-        state: ProxyLifecycle.ACTIVE,
+        proxy: createProxy('proxy-id'),
         weight: 1,
         maxConcurrent: 1,
         requestsPerMinute: 10,
         ...overrides,
-    } as Proxy
+    }
+}
+
+function createProxy(id: string): IProxy {
+    return {
+        id,
+        type: 'http' as const,
+        host: `${id}.example.com`,
+        port: 8080,
+    }
 }
 
 function createLease(overrides: Partial<{ id: string; proxyId: string; mxHost: string; expiresAt: Date }> = {}): {
