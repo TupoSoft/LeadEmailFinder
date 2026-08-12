@@ -7,6 +7,7 @@ import { ProxyService } from './proxy.service'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { ConfigModule } from '@nestjs/config'
 import { ProxyLeaseService } from './proxy-lease.service'
+import { ProxyAllocatorService } from './proxy-allocator.service'
 
 @Module({
     imports: [
@@ -14,8 +15,8 @@ import { ProxyLeaseService } from './proxy-lease.service'
         TypeOrmModule.forFeature([Proxy]),
         ApiKeyModule,
     ],
-    providers: [ProxyProfile, ProxyService, ProxyLeaseService],
+    providers: [ProxyProfile, ProxyService, ProxyLeaseService, ProxyAllocatorService],
     controllers: [ProxyController],
-    exports: [ProxyLeaseService],
+    exports: [ProxyLeaseService, ProxyAllocatorService],
 })
 export class ProxyModule {}

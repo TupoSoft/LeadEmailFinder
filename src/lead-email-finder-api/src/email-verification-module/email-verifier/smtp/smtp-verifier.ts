@@ -17,6 +17,7 @@ import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 import { getDomain } from 'tldts'
+import { LeasedProxy, ProxyAllocatorService } from '../../../../../proxy/src/proxy-allocator.service'
 
 interface GetExchangesParams {
     domain: string
@@ -33,9 +34,14 @@ interface GetSmtpClientParams {
     proxyId?: string
 }
 
-interface GetProxiesParams {
-    exchanges?: string[]
-    proxyId?: string
+interface LeasedSmtpClient {
+    client: SmtpClient
+    allocation: LeasedProxy
+}
+
+interface SmtpClientAcquisition {
+    leasedClient?: LeasedSmtpClient
+    attemptedConnection: boolean
 }
 
 type SmtpErrorHandlingStrategy = [
@@ -109,6 +115,7 @@ export class SmtpVerifier implements ISmtpVerifier {
     constructor(
         @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
         @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
+        private readonly proxyAllocator: ProxyAllocatorService,
         @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
     ) {}
 
@@ -158,16 +165,21 @@ export class SmtpVerifier implements ISmtpVerifier {
             }
         }
 
-        const client = await this.getSmtpClient(getSmtpClientParams)
-        if (client == null) {
+        const { leasedClient, attemptedConnection } = await this.getSmtpClient(getSmtpClientParams)
+        if (leasedClient == null) {
             return {
                 email,
                 exists: null,
-                reason: SmtpVerificationReason.NoConnect,
+                reason: attemptedConnection ? SmtpVerificationReason.NoConnect : SmtpVerificationReason.Unknown,
             }
         }
 
-        const result = await this.tryVerify({ client, email })
+        let result: ISmtpVerificationResponse
+        try {
+            result = await this.tryVerify({ client: leasedClient.client, email })
+        } finally {
+            await this.releaseAllocation(leasedClient.allocation)
+        }
 
         let smtpRecord = await this.smtpVerificationRepo.findOneBy({ id: email })
         smtpRecord ??= this.smtpVerificationRepo.create({ id: email })
@@ -247,54 +259,64 @@ export class SmtpVerifier implements ISmtpVerifier {
         }
     }
 
-    private async getSmtpClient({ exchanges, proxyId }: GetSmtpClientParams): Promise<SmtpClient | null> {
-        try {
-            const proxies = await this.getProxies({ exchanges, proxyId })
+    private async getSmtpClient({ exchanges, proxyId }: GetSmtpClientParams): Promise<SmtpClientAcquisition> {
+        let attemptedConnection = false
 
-            const connectPromises: Array<Promise<SmtpClient>> = []
-            const exchangeProxyAbortControllerMap = new Map<string, AbortController>()
-            for (const exchange of exchanges) {
-                for (const proxy of proxies) {
-                    const abortController = new AbortController()
-                    exchangeProxyAbortControllerMap.set(`${exchange}-${proxy.host}`, abortController)
-                    connectPromises.push(this.tryConnect(exchange, proxy, abortController.signal))
+        for (const exchange of exchanges) {
+            const excludedProxyIds: string[] = []
+
+            while (true) {
+                let allocation: LeasedProxy | undefined
+                try {
+                    allocation = await this.proxyAllocator.acquire(exchange, proxyId, [...excludedProxyIds])
+                } catch (error) {
+                    this.logConnectionError(error)
+                    return { attemptedConnection }
+                }
+
+                if (allocation === undefined) {
+                    break
+                }
+
+                excludedProxyIds.push(allocation.proxy.id)
+                attemptedConnection = true
+
+                try {
+                    const client = await this.tryConnect(exchange, allocation.proxy)
+                    return { leasedClient: { client, allocation }, attemptedConnection }
+                } catch (error) {
+                    await this.releaseAllocation(allocation)
+                    this.logConnectionError(error)
+
+                    if (proxyId !== undefined) {
+                        break
+                    }
                 }
             }
+        }
 
-            const client = await Promise.any(connectPromises)
-            const { exchange, hostname } = client
+        return { attemptedConnection }
+    }
 
-            exchangeProxyAbortControllerMap.delete(`${exchange}-${hostname}`)
-
-            for (const [, abortController] of exchangeProxyAbortControllerMap) {
-                abortController.abort()
-            }
-
-            return client
+    private async releaseAllocation(allocation: LeasedProxy): Promise<void> {
+        try {
+            await this.proxyAllocator.release(allocation)
         } catch (error) {
-            if (isNativeError(error)) {
-                this.logger.error(`Error while connecting to SMTP server: ${error.message}`)
-            }
-
-            return null
+            this.logConnectionError(error)
         }
     }
 
-    private async getProxies({ exchanges, proxyId }: GetProxiesParams): Promise<IProxy[]> {
-        if (proxyId == null) {
-            return await this.proxyService.get(exchanges)
-        } else {
-            const proxy = await this.proxyService.getById(proxyId)
-            return proxy != null ? [proxy] : []
+    private logConnectionError(error: unknown): void {
+        if (isNativeError(error)) {
+            this.logger.error(`Error while connecting to SMTP server: ${error.message}`)
         }
     }
 
-    private async tryConnect(exchange: string, proxy: IProxy, signal?: AbortSignal): Promise<SmtpClient> {
+    private async tryConnect(exchange: string, proxy: IProxy): Promise<SmtpClient> {
         try {
             const client = new SmtpClient({
                 host: exchange,
                 proxy,
-                signal,
             })
 
             await client.connect()

@@ -6,9 +6,10 @@ import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
 import { SmtpVerifier } from './smtp-verifier'
 import { Proxy } from '../../../../../proxy/src/proxy.entity'
 import { ProxyRegistryService } from './proxy-registry.service'
+import { ProxyModule } from '../../../../../proxy/src/proxy.module'
 
 @Module({
-    imports: [DnsModule, TypeOrmModule.forFeature([SmtpVerification, Proxy])],
+    imports: [DnsModule, ProxyModule, TypeOrmModule.forFeature([SmtpVerification, Proxy])],
     providers: [
         {
             provide: DNS_SERVICE_TOKEN,
