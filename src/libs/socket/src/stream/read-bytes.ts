@@ -6,6 +6,16 @@ export async function readBytes(readable: Readable, size: number): Promise<Buffe
     ok(size > 0, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
     let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+
+    const bufferedChunk: unknown = readable.read(size)
+    if (Buffer.isBuffer(bufferedChunk)) {
+        buffer = mergeBuffers(buffer, bufferedChunk, size, readable)
+    }
+
+    if (buffer.length >= size) {
+        return buffer
+    }
+
     for await (const event of on(readable, 'readable', { close: ['end'] })) {
         void event
 

@@ -66,4 +66,11 @@ describe('readBytes', () => {
 
         expect(remainingData.join()).toBe('soft')
     })
+
+    test('should read bytes already buffered by a previous read', async () => {
+        const readable = Readable.from(Buffer.from('tuposoft'))
+
+        await expect(readBytes(readable, 4)).resolves.toEqual(Buffer.from('tupo'))
+        await expect(readBytes(readable, 4)).resolves.toEqual(Buffer.from('soft'))
+    })
 })
