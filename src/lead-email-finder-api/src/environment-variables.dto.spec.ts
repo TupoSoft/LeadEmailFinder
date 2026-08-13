@@ -1,4 +1,5 @@
 import { plainToInstance } from 'class-transformer'
+import { validateSync } from 'class-validator'
 import { EnvironmentVariablesDto } from './environment-variables.dto'
 
 describe('EnvironmentVariablesDto', (): void => {
@@ -33,5 +34,17 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(environment.PROXY_MX_REQUESTS_PER_MINUTE).toBe(10)
         expect(environment.PROXY_LEASE_TTL_MS).toBe(60000)
+    })
+
+    it('transforms a configured SMTP port from an environment variable', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { SMTP_PORT: '2525' }, { enableImplicitConversion: true })
+
+        expect(environment.SMTP_PORT).toBe(2525)
+    })
+
+    it.each([0, 65536, 25.5, 'not-a-number'])('rejects an invalid SMTP port: %s', (SMTP_PORT): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { SMTP_PORT }, { enableImplicitConversion: true })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 })

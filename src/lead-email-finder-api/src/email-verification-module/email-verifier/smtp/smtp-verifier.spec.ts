@@ -1,6 +1,7 @@
 import { SmtpVerifier } from './smtp-verifier'
 import { SmtpVerificationReason } from './smtp.enums'
 import { IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/common'
+import { ISmtpClient } from './smtp-client.interface'
 
 interface SmtpVerifierInternals {
     tryConnect: jest.Mock
@@ -13,18 +14,31 @@ describe('SmtpVerifier lease-aware allocation', () => {
     let verifier: SmtpVerifier
     let internals: SmtpVerifierInternals
     let proxyAllocator: { acquire: jest.Mock; release: jest.Mock }
+    let smtpClientFactory: { create: jest.Mock }
     let smtpVerificationRepo: { findOneBy: jest.Mock; create: jest.Mock; save: jest.Mock }
 
     beforeEach(() => {
         proxyAllocator = { acquire: jest.fn(), release: jest.fn() }
+        smtpClientFactory = { create: jest.fn() }
         smtpVerificationRepo = { findOneBy: jest.fn(), create: jest.fn(), save: jest.fn() }
         verifier = new SmtpVerifier(
             { resolve: jest.fn() } as any,
             { addToBlacklist: jest.fn() } as any,
             proxyAllocator as unknown as IProxyAllocator,
+            smtpClientFactory,
             smtpVerificationRepo as any,
         )
         internals = verifier as unknown as SmtpVerifierInternals
+    })
+
+    it('connects using the client created by the injected factory', async () => {
+        const proxy = createAllocation('proxy-id').proxy
+        const client = { connect: jest.fn().mockResolvedValue(undefined) } as unknown as ISmtpClient
+        smtpClientFactory.create.mockReturnValue(client)
+
+        await expect(internals.tryConnect('mx.example.com', proxy)).resolves.toBe(client)
+        expect(smtpClientFactory.create).toHaveBeenCalledWith({ host: 'mx.example.com', proxy })
+        expect(client.connect).toHaveBeenCalledTimes(1)
     })
 
     it('tries leased proxies serially and releases a failed allocation before the next attempt', async () => {

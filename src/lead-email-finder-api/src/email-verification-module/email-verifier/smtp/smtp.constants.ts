@@ -9,3 +9,4 @@ export const SMTP_RESPONSE_REGEX = /^[0-9]{3} (?:.|\s)*$/m
 
 export const DNS_SERVICE_TOKEN = 'DnsService'
 export const PROXY_SERVICE_TOKEN = 'ProxyService'
+export const SMTP_CLIENT_FACTORY_TOKEN = 'SmtpClientFactory'

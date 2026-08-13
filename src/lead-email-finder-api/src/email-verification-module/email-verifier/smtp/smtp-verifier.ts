@@ -1,4 +1,3 @@
-import { SmtpClient } from './smtp-client'
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
@@ -16,10 +15,12 @@ import { SmtpVerification } from './smtp-verification.entity'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
-import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN } from './smtp.constants'
+import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 import { getDomain } from 'tldts'
+import { ISmtpClient } from './smtp-client.interface'
+import { ISmtpClientFactory } from './smtp-client-factory.interface'
 
 interface GetExchangesParams {
     domain: string
@@ -27,7 +28,7 @@ interface GetExchangesParams {
 }
 
 interface TryVerifyParams {
-    client: SmtpClient
+    client: ISmtpClient
     email: string
 }
 
@@ -37,7 +38,7 @@ interface GetSmtpClientParams {
 }
 
 interface LeasedSmtpClient {
-    client: SmtpClient
+    client: ISmtpClient
     allocation: LeasedProxy
 }
 
@@ -118,6 +119,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
         @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
         @Inject(PROXY_ALLOCATOR_TOKEN) private readonly proxyAllocator: IProxyAllocator,
+        @Inject(SMTP_CLIENT_FACTORY_TOKEN) private readonly smtpClientFactory: ISmtpClientFactory,
         @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
     ) {}
 
@@ -314,9 +316,9 @@ export class SmtpVerifier implements ISmtpVerifier {
         }
     }
 
-    private async tryConnect(exchange: string, proxy: IProxy): Promise<SmtpClient> {
+    private async tryConnect(exchange: string, proxy: IProxy): Promise<ISmtpClient> {
         try {
-            const client = new SmtpClient({
+            const client = this.smtpClientFactory.create({
                 host: exchange,
                 proxy,
             })
