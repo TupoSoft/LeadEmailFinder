@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator'
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform, Type } from 'class-transformer'
 
@@ -62,4 +62,11 @@ export class EnvironmentVariablesDto {
     @IsInt()
     @Min(1)
     PROXY_LEASE_TTL_MS?: number
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(65535)
+    SMTP_PORT?: number
 }
