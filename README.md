@@ -88,6 +88,33 @@ the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugg
 
 Attach the client to `localhost:59229`.
 
+### ISP-safe SMTP verification
+
+To exercise DNS lookup, proxy allocation, SOCKS5 transport, and SMTP verification without using outbound port 25, start the opt-in local fixture:
+
+If the base stack is already running, stop it first so Compose can recreate the default network with the fixture subnet:
+
+```shell
+docker compose -f docker/compose.yaml down
+```
+
+```shell
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
+```
+
+The overlay configures the API to use port `2525` and adds Docker-network-only CoreDNS, Mailpit, and 3proxy services. It registers one active development proxy through the authenticated API. No DNS, SMTP, Mailpit, or proxy port is published to the host; the existing API remains available at `http://localhost:53000`. The fixed proxy credentials are development-only and cannot be reached through a published host port.
+
+Use the OpenCollection smoke test in `bruno/smtp-dev` or submit `person@lef.test` to `POST /verify`. Mailpit accepts every recipient, so a successful result validates local application wiring rather than external deliverability.
+
+Stop and remove the fixture containers with:
+
+```shell
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml --profile smtp-dev-cleanup run --rm smtp-dev-proxy-cleanup
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down
+```
+
+The cleanup command removes the fixture proxy from the persistent registry before its container and DNS name disappear.
+
 ### Local Services
 
 The development Compose stack starts the following supporting services:

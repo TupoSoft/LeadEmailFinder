@@ -1,0 +1,87 @@
+services:
+  api:
+    dns: !override
+      - 172.28.0.53
+    environment:
+      SMTP_PORT: 2525
+    depends_on:
+      coredns:
+        condition: service_started
+      mailpit:
+        condition: service_healthy
+      smtp-dev-proxy:
+        condition: service_started
+
+  coredns:
+    image: coredns/coredns:1.14.6
+    command: -conf /etc/coredns/Corefile
+    restart: unless-stopped
+    volumes:
+      - ./smtp-dev/coredns/Corefile:/etc/coredns/Corefile:ro
+      - ./smtp-dev/coredns/lef.test.zone:/etc/coredns/lef.test.zone:ro
+    networks:
+      default:
+        ipv4_address: 172.28.0.53
+
+  mailpit:
+    image: axllent/mailpit:v1.30.7
+    restart: unless-stopped
+    environment:
+      MP_DISABLE_VERSION_CHECK: true
+      MP_SMTP_BIND_ADDR: 0.0.0.0:2525
+      MP_SMTP_DISABLE_RDNS: true
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      default:
+        ipv4_address: 172.28.0.25
+
+  smtp-dev-proxy:
+    image: ghcr.io/3proxy/3proxy:0.9.8
+    restart: unless-stopped
+    volumes:
+      - ./smtp-dev/3proxy.cfg:/etc/3proxy/3proxy.cfg:ro
+    networks:
+      default:
+        ipv4_address: 172.28.0.108
+
+  smtp-dev-proxy-bootstrap:
+    image: curlimages/curl:8.16.0
+    restart: "no"
+    dns:
+      - 172.28.0.53
+    depends_on:
+      api:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      smtp-dev-proxy:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "reconcile"]
+    volumes:
+      - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
+    secrets:
+      - admin_apikey
+
+  smtp-dev-proxy-cleanup:
+    image: curlimages/curl:8.16.0
+    profiles: ["smtp-dev-cleanup"]
+    restart: "no"
+    depends_on:
+      api:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "cleanup"]
+    volumes:
+      - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
+    secrets:
+      - admin_apikey
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

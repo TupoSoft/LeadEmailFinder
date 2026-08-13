@@ -1,0 +1,10 @@
+lef.test:53 {
+    errors
+    file /etc/coredns/lef.test.zone
+}
+
+.:53 {
+    errors
+    cache 30
+    forward . 127.0.0.11
+}

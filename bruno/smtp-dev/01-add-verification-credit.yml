@@ -1,0 +1,29 @@
+info:
+  name: 01-add-verification-credit
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{adminApiKey}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 1
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('adds one verification credit to the local admin key', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.balance).to.be.a('number');
+          expect(res.body.balance).to.be.at.least(1);
+        });
