@@ -2,6 +2,9 @@ import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
 import {
+    ALLOCATION_OBSERVER_TOKEN,
+    ConnectionOutcomeEvent,
+    IAllocationObserver,
     IDnsService,
     IProxy,
     IProxyAllocator,
@@ -121,6 +124,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         @Inject(PROXY_ALLOCATOR_TOKEN) private readonly proxyAllocator: IProxyAllocator,
         @Inject(SMTP_CLIENT_FACTORY_TOKEN) private readonly smtpClientFactory: ISmtpClientFactory,
         @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
+        @Inject(ALLOCATION_OBSERVER_TOKEN) private readonly allocationObserver: IAllocationObserver,
     ) {}
 
     private static isTemporarilyBlocked(result: Pick<SmtpVerification, 'reason'> | null): result is {
@@ -285,10 +289,23 @@ export class SmtpVerifier implements ISmtpVerifier {
                 excludedProxyIds.push(allocation.proxy.id)
                 attemptedConnection = true
 
+                const connectStartedAt = Date.now()
                 try {
                     const client = await this.tryConnect(exchange, allocation.proxy)
+                    this.observeConnectionOutcome({
+                        outcome: 'connected',
+                        mxHost: exchange,
+                        proxyId: allocation.proxy.id,
+                        durationMs: Date.now() - connectStartedAt,
+                    })
                     return { leasedClient: { client, allocation }, attemptedConnection }
                 } catch (error) {
+                    this.observeConnectionOutcome({
+                        outcome: 'failed',
+                        mxHost: exchange,
+                        proxyId: allocation.proxy.id,
+                        durationMs: Date.now() - connectStartedAt,
+                    })
                     await this.releaseAllocation(allocation)
                     this.logConnectionError(error)
 
@@ -313,6 +330,15 @@ export class SmtpVerifier implements ISmtpVerifier {
     private logConnectionError(error: unknown): void {
         if (isNativeError(error)) {
             this.logger.error(`Error while connecting to SMTP server: ${error.message}`)
+        }
+    }
+
+    // Observability must never break verification: a failing observer call is swallowed here.
+    private observeConnectionOutcome(event: ConnectionOutcomeEvent): void {
+        try {
+            this.allocationObserver.onConnectionOutcome(event)
+        } catch {
+            // intentionally ignored
         }
     }
 

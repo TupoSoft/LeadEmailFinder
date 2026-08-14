@@ -53,6 +53,10 @@ PROXY_LEASE_TTL_MS=60000
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
+#### Draining a proxy
+
+To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it's excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60s by default) after draining, then check the application logs for that proxy's ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it's safe to `PATCH` its state to `"disabled"` or `DELETE` it.
+
 ### Running the Application
 
 To start the application in development mode, use the following command:

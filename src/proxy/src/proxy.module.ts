@@ -8,9 +8,14 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { ConfigModule } from '@nestjs/config'
 import { ProxyLeaseService } from './proxy-lease.service'
 import { ProxyAllocatorService } from './proxy-allocator.service'
-import { PROXY_ALLOCATOR_TOKEN, PROXY_LEASE_SERVICE_TOKEN } from '@tuposoft/lead-email-finder/common'
+import {
+    ALLOCATION_OBSERVER_TOKEN,
+    PROXY_ALLOCATOR_TOKEN,
+    PROXY_LEASE_SERVICE_TOKEN,
+} from '@tuposoft/lead-email-finder/common'
 import { PROXY_CANDIDATE_REPOSITORY_TOKEN } from './proxy-candidate.repository'
 import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repository'
+import { StructuredLoggingAllocationObserver } from './structured-logging-allocation-observer'
 
 @Module({
     imports: [
@@ -24,6 +29,7 @@ import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repos
         ProxyLeaseService,
         ProxyAllocatorService,
         TypeOrmProxyCandidateRepository,
+        StructuredLoggingAllocationObserver,
         {
             provide: PROXY_CANDIDATE_REPOSITORY_TOKEN,
             useExisting: TypeOrmProxyCandidateRepository,
@@ -36,8 +42,12 @@ import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repos
             provide: PROXY_ALLOCATOR_TOKEN,
             useExisting: ProxyAllocatorService,
         },
+        {
+            provide: ALLOCATION_OBSERVER_TOKEN,
+            useExisting: StructuredLoggingAllocationObserver,
+        },
     ],
     controllers: [ProxyController],
-    exports: [PROXY_ALLOCATOR_TOKEN],
+    exports: [PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN],
 })
 export class ProxyModule {}
