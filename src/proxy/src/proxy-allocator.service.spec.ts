@@ -1,6 +1,12 @@
 import { Test } from '@nestjs/testing'
 import { ProxyAllocatorService } from './proxy-allocator.service'
-import { IProxy, IProxyLeaseService, PROXY_LEASE_SERVICE_TOKEN } from '@tuposoft/lead-email-finder/common'
+import {
+    ALLOCATION_OBSERVER_TOKEN,
+    IAllocationObserver,
+    IProxy,
+    IProxyLeaseService,
+    PROXY_LEASE_SERVICE_TOKEN,
+} from '@tuposoft/lead-email-finder/common'
 import {
     PROXY_CANDIDATE_REPOSITORY_TOKEN,
     ProxyCandidate,
@@ -11,6 +17,7 @@ describe('ProxyAllocatorService', () => {
     let service: ProxyAllocatorService
     let candidateRepository: { findEligible: jest.Mock; findActiveById: jest.Mock }
     let proxyLeaseService: { acquire: jest.Mock; release: jest.Mock }
+    let observer: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
 
     beforeEach(async () => {
         const moduleRef = await Test.createTestingModule({
@@ -30,6 +37,14 @@ describe('ProxyAllocatorService', () => {
                         release: jest.fn(),
                     },
                 },
+                {
+                    provide: ALLOCATION_OBSERVER_TOKEN,
+                    useValue: {
+                        onAllocation: jest.fn(),
+                        onConnectionOutcome: jest.fn(),
+                        onLeaseRelease: jest.fn(),
+                    },
+                },
             ],
         }).compile()
 
@@ -41,6 +56,11 @@ describe('ProxyAllocatorService', () => {
         proxyLeaseService = moduleRef.get<IProxyLeaseService>(PROXY_LEASE_SERVICE_TOKEN) as {
             acquire: jest.Mock
             release: jest.Mock
+        }
+        observer = moduleRef.get<IAllocationObserver>(ALLOCATION_OBSERVER_TOKEN) as {
+            onAllocation: jest.Mock
+            onConnectionOutcome: jest.Mock
+            onLeaseRelease: jest.Mock
         }
     })
 
@@ -60,6 +80,70 @@ describe('ProxyAllocatorService', () => {
             maxConcurrent: 1,
             requestsPerMinute: 10,
         })
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outcome: 'acquired',
+                mxHost: 'mx.example.com',
+                proxyId: candidate.proxy.id,
+                proxyState: 'active',
+            }),
+        )
+    })
+
+    it('reports exhaustion when no candidate can be leased', async () => {
+        candidateRepository.findEligible.mockResolvedValue([])
+
+        await expect(service.acquire('mx.example.com')).resolves.toBeUndefined()
+
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'exhausted', mxHost: 'mx.example.com' }),
+        )
+    })
+
+    it('reports exhaustion when real candidates exist but every one fails lease acquisition', async () => {
+        const first = createCandidate({ proxy: createProxy('first-proxy') })
+        const second = createCandidate({ proxy: createProxy('second-proxy') })
+        candidateRepository.findEligible.mockResolvedValue([first, second])
+        proxyLeaseService.acquire.mockResolvedValue(undefined)
+
+        await expect(service.acquire('mx.example.com')).resolves.toBeUndefined()
+
+        expect(proxyLeaseService.acquire).toHaveBeenCalledTimes(2)
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'exhausted', mxHost: 'mx.example.com' }),
+        )
+        expect(observer.onAllocation).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'acquired' }))
+    })
+
+    it('reports exhaustion on the explicit-proxyId path when the candidate is excluded', async () => {
+        await expect(service.acquire('mx.example.com', 'proxy-id', ['proxy-id'])).resolves.toBeUndefined()
+
+        expect(candidateRepository.findActiveById).not.toHaveBeenCalled()
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'exhausted', mxHost: 'mx.example.com' }),
+        )
+    })
+
+    it('does not let a throwing observer prevent a successful acquire from being returned', async () => {
+        const candidate = createCandidate()
+        candidateRepository.findEligible.mockResolvedValue([candidate])
+        proxyLeaseService.acquire.mockResolvedValue(createLease())
+        observer.onAllocation.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.acquire('mx.example.com')).resolves.toEqual(
+            expect.objectContaining({ proxy: candidate.proxy }),
+        )
+    })
+
+    it('does not let a throwing observer prevent exhaustion from resolving normally', async () => {
+        candidateRepository.findEligible.mockResolvedValue([])
+        observer.onAllocation.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.acquire('mx.example.com')).resolves.toBeUndefined()
     })
 
     it('tries the next weighted candidate when a proxy has no available capacity', async () => {
@@ -104,6 +188,35 @@ describe('ProxyAllocatorService', () => {
 
         await expect(service.release(allocation!)).resolves.toBe(true)
         expect(proxyLeaseService.release).toHaveBeenCalledWith(allocation!.lease)
+        expect(observer.onLeaseRelease).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'released', proxyId: 'proxy-id', mxHost: 'mx.example.com' }),
+        )
+    })
+
+    it('reports a failed release outcome when the lease service reports failure', async () => {
+        const allocation = {
+            proxy: { id: 'proxy-id' },
+            lease: createLease(),
+        } as Awaited<ReturnType<ProxyAllocatorService['acquire']>>
+        proxyLeaseService.release.mockResolvedValue(false)
+
+        await expect(service.release(allocation!)).resolves.toBe(false)
+        expect(observer.onLeaseRelease).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'failed', proxyId: 'proxy-id', mxHost: 'mx.example.com' }),
+        )
+    })
+
+    it('does not let a throwing observer prevent release from resolving normally', async () => {
+        const allocation = {
+            proxy: { id: 'proxy-id' },
+            lease: createLease(),
+        } as Awaited<ReturnType<ProxyAllocatorService['acquire']>>
+        proxyLeaseService.release.mockResolvedValue(true)
+        observer.onLeaseRelease.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.release(allocation!)).resolves.toBe(true)
     })
 })
 
