@@ -100,6 +100,52 @@ describe('ProxyAllocatorService', () => {
         )
     })
 
+    it('reports exhaustion when real candidates exist but every one fails lease acquisition', async () => {
+        const first = createCandidate({ proxy: createProxy('first-proxy') })
+        const second = createCandidate({ proxy: createProxy('second-proxy') })
+        candidateRepository.findEligible.mockResolvedValue([first, second])
+        proxyLeaseService.acquire.mockResolvedValue(undefined)
+
+        await expect(service.acquire('mx.example.com')).resolves.toBeUndefined()
+
+        expect(proxyLeaseService.acquire).toHaveBeenCalledTimes(2)
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'exhausted', mxHost: 'mx.example.com' }),
+        )
+        expect(observer.onAllocation).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'acquired' }))
+    })
+
+    it('reports exhaustion on the explicit-proxyId path when the candidate is excluded', async () => {
+        await expect(service.acquire('mx.example.com', 'proxy-id', ['proxy-id'])).resolves.toBeUndefined()
+
+        expect(candidateRepository.findActiveById).not.toHaveBeenCalled()
+        expect(observer.onAllocation).toHaveBeenCalledWith(
+            expect.objectContaining({ outcome: 'exhausted', mxHost: 'mx.example.com' }),
+        )
+    })
+
+    it('does not let a throwing observer prevent a successful acquire from being returned', async () => {
+        const candidate = createCandidate()
+        candidateRepository.findEligible.mockResolvedValue([candidate])
+        proxyLeaseService.acquire.mockResolvedValue(createLease())
+        observer.onAllocation.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.acquire('mx.example.com')).resolves.toEqual(
+            expect.objectContaining({ proxy: candidate.proxy }),
+        )
+    })
+
+    it('does not let a throwing observer prevent exhaustion from resolving normally', async () => {
+        candidateRepository.findEligible.mockResolvedValue([])
+        observer.onAllocation.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.acquire('mx.example.com')).resolves.toBeUndefined()
+    })
+
     it('tries the next weighted candidate when a proxy has no available capacity', async () => {
         const first = createCandidate({ proxy: createProxy('first-proxy'), weight: 0 })
         const second = createCandidate({ proxy: createProxy('second-proxy'), weight: 0 })
@@ -158,6 +204,19 @@ describe('ProxyAllocatorService', () => {
         expect(observer.onLeaseRelease).toHaveBeenCalledWith(
             expect.objectContaining({ outcome: 'failed', proxyId: 'proxy-id', mxHost: 'mx.example.com' }),
         )
+    })
+
+    it('does not let a throwing observer prevent release from resolving normally', async () => {
+        const allocation = {
+            proxy: { id: 'proxy-id' },
+            lease: createLease(),
+        } as Awaited<ReturnType<ProxyAllocatorService['acquire']>>
+        proxyLeaseService.release.mockResolvedValue(true)
+        observer.onLeaseRelease.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(service.release(allocation!)).resolves.toBe(true)
     })
 })
 

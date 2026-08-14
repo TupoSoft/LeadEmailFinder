@@ -37,19 +37,21 @@ export class ProxyAllocatorService implements IProxyAllocator {
             })
 
             if (lease !== undefined) {
-                this.observer.onAllocation({
-                    outcome: 'acquired',
-                    mxHost,
-                    proxyId: candidate.proxy.id,
-                    proxyState: 'active',
-                    durationMs: Date.now() - startedAt,
-                })
+                this.observe(() =>
+                    this.observer.onAllocation({
+                        outcome: 'acquired',
+                        mxHost,
+                        proxyId: candidate.proxy.id,
+                        proxyState: 'active',
+                        durationMs: Date.now() - startedAt,
+                    }),
+                )
 
                 return { proxy: candidate.proxy, lease }
             }
         }
 
-        this.observer.onAllocation({ outcome: 'exhausted', mxHost, durationMs: Date.now() - startedAt })
+        this.observe(() => this.observer.onAllocation({ outcome: 'exhausted', mxHost, durationMs: Date.now() - startedAt }))
 
         return undefined
     }
@@ -58,14 +60,25 @@ export class ProxyAllocatorService implements IProxyAllocator {
         const startedAt = Date.now()
         const released = await this.proxyLeaseService.release(allocation.lease)
 
-        this.observer.onLeaseRelease({
-            outcome: released ? 'released' : 'failed',
-            mxHost: allocation.lease.mxHost,
-            proxyId: allocation.proxy.id,
-            durationMs: Date.now() - startedAt,
-        })
+        this.observe(() =>
+            this.observer.onLeaseRelease({
+                outcome: released ? 'released' : 'failed',
+                mxHost: allocation.lease.mxHost,
+                proxyId: allocation.proxy.id,
+                durationMs: Date.now() - startedAt,
+            }),
+        )
 
         return released
+    }
+
+    // Observability must never break allocation: a failing observer call is swallowed here.
+    private observe(emit: () => void): void {
+        try {
+            emit()
+        } catch {
+            // intentionally ignored
+        }
     }
 
     private async getExplicitCandidate(

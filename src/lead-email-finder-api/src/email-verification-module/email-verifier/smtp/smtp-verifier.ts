@@ -3,6 +3,7 @@ import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
 import {
     ALLOCATION_OBSERVER_TOKEN,
+    ConnectionOutcomeEvent,
     IAllocationObserver,
     IDnsService,
     IProxy,
@@ -291,7 +292,7 @@ export class SmtpVerifier implements ISmtpVerifier {
                 const connectStartedAt = Date.now()
                 try {
                     const client = await this.tryConnect(exchange, allocation.proxy)
-                    this.allocationObserver.onConnectionOutcome({
+                    this.observeConnectionOutcome({
                         outcome: 'connected',
                         mxHost: exchange,
                         proxyId: allocation.proxy.id,
@@ -299,7 +300,7 @@ export class SmtpVerifier implements ISmtpVerifier {
                     })
                     return { leasedClient: { client, allocation }, attemptedConnection }
                 } catch (error) {
-                    this.allocationObserver.onConnectionOutcome({
+                    this.observeConnectionOutcome({
                         outcome: 'failed',
                         mxHost: exchange,
                         proxyId: allocation.proxy.id,
@@ -329,6 +330,15 @@ export class SmtpVerifier implements ISmtpVerifier {
     private logConnectionError(error: unknown): void {
         if (isNativeError(error)) {
             this.logger.error(`Error while connecting to SMTP server: ${error.message}`)
+        }
+    }
+
+    // Observability must never break verification: a failing observer call is swallowed here.
+    private observeConnectionOutcome(event: ConnectionOutcomeEvent): void {
+        try {
+            this.allocationObserver.onConnectionOutcome(event)
+        } catch {
+            // intentionally ignored
         }
     }
 

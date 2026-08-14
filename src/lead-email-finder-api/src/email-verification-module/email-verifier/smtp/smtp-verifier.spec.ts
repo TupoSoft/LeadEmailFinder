@@ -71,6 +71,36 @@ describe('SmtpVerifier lease-aware allocation', () => {
         )
     })
 
+    it('does not let a throwing observer prevent a successful connection from being returned', async () => {
+        const allocation = createAllocation('proxy-id')
+        proxyAllocator.acquire.mockResolvedValueOnce(allocation)
+        const client = {}
+        internals.tryConnect = jest.fn().mockResolvedValue(client)
+        allocationObserver.onConnectionOutcome.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(internals.getSmtpClient({ exchanges: ['mx.example.com'] })).resolves.toEqual({
+            leasedClient: { client, allocation },
+            attemptedConnection: true,
+        })
+    })
+
+    it('does not let a throwing observer prevent releasing a failed allocation', async () => {
+        const allocation = createAllocation('proxy-id')
+        proxyAllocator.acquire.mockResolvedValueOnce(allocation).mockResolvedValueOnce(undefined)
+        proxyAllocator.release.mockResolvedValue(true)
+        internals.tryConnect = jest.fn().mockRejectedValue(new Error('connect failed'))
+        allocationObserver.onConnectionOutcome.mockImplementation(() => {
+            throw new Error('logger exploded')
+        })
+
+        await expect(internals.getSmtpClient({ exchanges: ['mx.example.com'] })).resolves.toEqual({
+            attemptedConnection: true,
+        })
+        expect(proxyAllocator.release).toHaveBeenCalledWith(allocation)
+    })
+
     it('returns an unknown result when no lease can be allocated', async () => {
         proxyAllocator.acquire.mockResolvedValue(undefined)
         smtpVerificationRepo.findOneBy.mockResolvedValue(null)
