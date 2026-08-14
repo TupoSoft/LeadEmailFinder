@@ -13,6 +13,20 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: lef_identity_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lef_identity_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +48,11 @@ jobs:
 
       - name: Test
         run: corepack pnpm test:ci
+
+      - name: Test empty-database synchronization
+        env:
+          TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
+        run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
 
       - name: Build application
         run: corepack pnpm build
