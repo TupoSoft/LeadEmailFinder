@@ -1,0 +1,83 @@
+import { DataSource, DataSourceOptions, getMetadataArgsStorage } from 'typeorm'
+import { AUTH_ROLES } from '../../domain/auth-principal'
+import { ExternalIdentity } from './external-identity.entity'
+import { OrganizationCreditAccount } from './organization-credit-account.entity'
+import { OrganizationMembership } from './membership.entity'
+import { Organization } from './organization.entity'
+import { ServiceCredential } from './service-credential.entity'
+
+class MetadataDataSource extends DataSource {
+    constructor(options: DataSourceOptions) {
+        super(options)
+    }
+
+    async buildEntityMetadata(): Promise<void> {
+        await this.buildMetadatas()
+    }
+}
+
+describe('identity and organization entities', () => {
+    const metadata = getMetadataArgsStorage()
+
+    it.each([
+        [Organization, 'organizations'],
+        [ExternalIdentity, 'external_identities'],
+        [OrganizationMembership, 'organization_memberships'],
+        [ServiceCredential, 'service_credentials'],
+        [OrganizationCreditAccount, 'organization_credit_accounts'],
+    ])('maps %p to %s', (entity, tableName) => {
+        expect(metadata.tables.find(table => table.target === entity)?.name).toBe(tableName)
+    })
+
+    it('uniquely identifies an external identity by issuer and subject', () => {
+        const uniqueIndex = metadata.indices.find(index => index.target === ExternalIdentity && index.unique)
+
+        expect(uniqueIndex?.columns).toEqual(['issuer', 'subject'])
+    })
+
+    it('binds each service credential to one required organization', () => {
+        const organizationId = metadata.columns.find(
+            column => column.target === ServiceCredential && column.propertyName === 'organizationId',
+        )
+        const organizationRelation = metadata.relations.find(
+            relation => relation.target === ServiceCredential && relation.propertyName === 'organization',
+        )
+
+        expect(organizationId?.options).toEqual(expect.objectContaining({ type: 'uuid' }))
+        expect(organizationRelation?.options).toEqual(expect.objectContaining({ nullable: false }))
+    })
+
+    it('stores only supported roles on memberships', () => {
+        const roles = metadata.columns.find(
+            column => column.target === OrganizationMembership && column.propertyName === 'roles',
+        )
+
+        expect(roles?.options).toEqual(expect.objectContaining({ enum: AUTH_ROLES, array: true }))
+    })
+
+    it('uses one non-negative credit account per organization', () => {
+        const primaryColumn = metadata.columns.find(
+            column => column.target === OrganizationCreditAccount && column.propertyName === 'organizationId',
+        )
+        const balanceCheck = metadata.checks.find(check => check.target === OrganizationCreditAccount)
+
+        expect(primaryColumn?.options.primary).toBe(true)
+        expect(balanceCheck?.expression).toBe('"balance" >= 0')
+    })
+
+    it('builds complete TypeORM metadata without a database connection', async () => {
+        const dataSource = new MetadataDataSource({
+            type: 'postgres',
+            entities: [
+                Organization,
+                ExternalIdentity,
+                OrganizationMembership,
+                ServiceCredential,
+                OrganizationCreditAccount,
+            ],
+        })
+
+        await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
+        expect(dataSource.entityMetadatas).toHaveLength(5)
+    })
+})
