@@ -1,6 +1,6 @@
 import { SmtpVerifier } from './smtp-verifier'
 import { SmtpVerificationReason } from './smtp.enums'
-import { IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/common'
+import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/common'
 import { ISmtpClient } from './smtp-client.interface'
 
 interface SmtpVerifierInternals {
@@ -16,17 +16,20 @@ describe('SmtpVerifier lease-aware allocation', () => {
     let proxyAllocator: { acquire: jest.Mock; release: jest.Mock }
     let smtpClientFactory: { create: jest.Mock }
     let smtpVerificationRepo: { findOneBy: jest.Mock; create: jest.Mock; save: jest.Mock }
+    let allocationObserver: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
 
     beforeEach(() => {
         proxyAllocator = { acquire: jest.fn(), release: jest.fn() }
         smtpClientFactory = { create: jest.fn() }
         smtpVerificationRepo = { findOneBy: jest.fn(), create: jest.fn(), save: jest.fn() }
+        allocationObserver = { onAllocation: jest.fn(), onConnectionOutcome: jest.fn(), onLeaseRelease: jest.fn() }
         verifier = new SmtpVerifier(
             { resolve: jest.fn() } as any,
             { addToBlacklist: jest.fn() } as any,
             proxyAllocator as unknown as IProxyAllocator,
             smtpClientFactory,
             smtpVerificationRepo as any,
+            allocationObserver as unknown as IAllocationObserver,
         )
         internals = verifier as unknown as SmtpVerifierInternals
     })
@@ -58,6 +61,14 @@ describe('SmtpVerifier lease-aware allocation', () => {
         expect(proxyAllocator.acquire).toHaveBeenNthCalledWith(2, 'mx.example.com', undefined, ['first-proxy'])
         expect(proxyAllocator.release).toHaveBeenCalledWith(first)
         expect(proxyAllocator.release).not.toHaveBeenCalledWith(second)
+        expect(allocationObserver.onConnectionOutcome).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({ outcome: 'failed', mxHost: 'mx.example.com', proxyId: 'first-proxy' }),
+        )
+        expect(allocationObserver.onConnectionOutcome).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({ outcome: 'connected', mxHost: 'mx.example.com', proxyId: 'second-proxy' }),
+        )
     })
 
     it('returns an unknown result when no lease can be allocated', async () => {

@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common'
 import {
+    ALLOCATION_OBSERVER_TOKEN,
+    IAllocationObserver,
     IProxyAllocator,
     IProxyLeaseService,
     LeasedProxy,
@@ -17,9 +19,11 @@ export class ProxyAllocatorService implements IProxyAllocator {
     constructor(
         @Inject(PROXY_CANDIDATE_REPOSITORY_TOKEN) private readonly candidateRepository: ProxyCandidateRepository,
         @Inject(PROXY_LEASE_SERVICE_TOKEN) private readonly proxyLeaseService: IProxyLeaseService,
+        @Inject(ALLOCATION_OBSERVER_TOKEN) private readonly observer: IAllocationObserver,
     ) {}
 
     async acquire(mxHost: string, proxyId?: string, excludedProxyIds: string[] = []): Promise<LeasedProxy | undefined> {
+        const startedAt = Date.now()
         const candidates = proxyId == null
             ? await this.candidateRepository.findEligible(mxHost, excludedProxyIds)
             : await this.getExplicitCandidate(mxHost, proxyId, excludedProxyIds)
@@ -33,15 +37,35 @@ export class ProxyAllocatorService implements IProxyAllocator {
             })
 
             if (lease !== undefined) {
+                this.observer.onAllocation({
+                    outcome: 'acquired',
+                    mxHost,
+                    proxyId: candidate.proxy.id,
+                    proxyState: 'active',
+                    durationMs: Date.now() - startedAt,
+                })
+
                 return { proxy: candidate.proxy, lease }
             }
         }
 
+        this.observer.onAllocation({ outcome: 'exhausted', mxHost, durationMs: Date.now() - startedAt })
+
         return undefined
     }
 
-    async release({ lease }: LeasedProxy): Promise<boolean> {
-        return await this.proxyLeaseService.release(lease)
+    async release(allocation: LeasedProxy): Promise<boolean> {
+        const startedAt = Date.now()
+        const released = await this.proxyLeaseService.release(allocation.lease)
+
+        this.observer.onLeaseRelease({
+            outcome: released ? 'released' : 'failed',
+            mxHost: allocation.lease.mxHost,
+            proxyId: allocation.proxy.id,
+            durationMs: Date.now() - startedAt,
+        })
+
+        return released
     }
 
     private async getExplicitCandidate(
