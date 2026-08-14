@@ -8,6 +8,7 @@ import {
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from 'typeorm'
+import { AUTH_PERMISSIONS, AuthPermission } from '../../domain/auth-principal'
 import { SERVICE_CREDENTIAL_STATUSES, ServiceCredentialStatus } from '../../domain/service-credential-status'
 import { Organization } from './organization.entity'
 
@@ -33,8 +34,8 @@ export class ServiceCredential {
     @Column({ type: 'varchar', nullable: true })
     description: string | null
 
-    @Column({ type: 'text', array: true, default: '{}' })
-    scopes: string[]
+    @Column({ type: 'enum', enum: AUTH_PERMISSIONS, enumName: 'auth_permission', array: true, default: '{}' })
+    permissions: AuthPermission[]
 
     @Column({
         type: 'enum',

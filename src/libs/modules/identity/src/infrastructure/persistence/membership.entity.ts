@@ -33,8 +33,8 @@ export class OrganizationMembership {
     @JoinColumn({ name: 'externalIdentityId' })
     externalIdentity: ExternalIdentity
 
-    @Column({ type: 'enum', enum: AUTH_ROLES, enumName: 'auth_role', array: true })
-    roles: AuthRole[]
+    @Column({ type: 'enum', enum: AUTH_ROLES, enumName: 'auth_role' })
+    role: AuthRole
 
     @Column({ type: 'enum', enum: MEMBERSHIP_STATUSES, enumName: 'membership_status', default: 'active' })
     status: MembershipStatus

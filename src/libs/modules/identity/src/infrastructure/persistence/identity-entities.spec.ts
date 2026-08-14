@@ -47,12 +47,21 @@ describe('identity and organization entities', () => {
         expect(organizationRelation?.options).toEqual(expect.objectContaining({ nullable: false }))
     })
 
-    it('stores only supported roles on memberships', () => {
-        const roles = metadata.columns.find(
-            column => column.target === OrganizationMembership && column.propertyName === 'roles',
+    it('stores exactly one supported role on each membership', () => {
+        const role = metadata.columns.find(
+            column => column.target === OrganizationMembership && column.propertyName === 'role',
         )
 
-        expect(roles?.options).toEqual(expect.objectContaining({ enum: AUTH_ROLES, array: true }))
+        expect(role?.options).toEqual(expect.objectContaining({ enum: AUTH_ROLES }))
+        expect(role?.options.array).not.toBe(true)
+    })
+
+    it('stores only supported permissions on service credentials', () => {
+        const permissions = metadata.columns.find(
+            column => column.target === ServiceCredential && column.propertyName === 'permissions',
+        )
+
+        expect(permissions?.options).toEqual(expect.objectContaining({ enumName: 'auth_permission', array: true }))
     })
 
     it('uses one non-negative credit account per organization', () => {
