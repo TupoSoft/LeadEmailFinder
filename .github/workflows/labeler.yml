@@ -14,4 +14,6 @@ jobs:
       - uses: codelytv/pr-size-labeler@v1
         with:
           fail_if_xl: 'true'
-          files_to_ignore: pnpm-lock.yaml
+          files_to_ignore: |
+            pnpm-lock.yaml
+            *.md
