@@ -28,7 +28,8 @@ async function bootstrap(): Promise<void> {
     documentBuilder.setVersion(version)
     documentBuilder.setContact('Lead Email Finder Support', url, 'contact@leademailfinder.com')
     documentBuilder.addServer(url, 'Production server')
-    documentBuilder.addBearerAuth()
+    documentBuilder.addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'oidc')
+    documentBuilder.addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'legacyApiKey')
 
     const config = documentBuilder.build()
 
