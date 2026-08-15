@@ -123,6 +123,29 @@ describe('KeyService', () => {
         })
     })
 
+    describe('findValidKey', () => {
+        it('should return the key when found and unexpired', async () => {
+            const mockKey = { id: 'some-uuid', token: 'api_test', permissions: [KeyPermissions.READ] } as Key
+
+            keyRepoMock.findOne.mockResolvedValue(mockKey)
+
+            const result = await service.findValidKey('api_test')
+
+            expect(result).toEqual(mockKey)
+            expect(keyRepoMock.findOne).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ token: 'api_test' }) }),
+            )
+        })
+
+        it('should return null for a non-existent or expired key', async () => {
+            keyRepoMock.findOne.mockResolvedValue(null)
+
+            const result = await service.findValidKey('invalid_key')
+
+            expect(result).toBeNull()
+        })
+    })
+
     describe('revokeKey', () => {
         const now = new Date()
 

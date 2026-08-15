@@ -44,6 +44,12 @@ export class ApiKeyService {
         return requiredPermissions.some(permission => key.permissions.includes(permission))
     }
 
+    async findValidKey(token: string): Promise<Key | null> {
+        return await this.keyRepo.findOne({
+            where: { token, expiresAt: MoreThan(new Date()) },
+        })
+    }
+
     async revokeKey(token: string): Promise<Key> {
         const key = await this.keyRepo.findOneBy({ token })
 

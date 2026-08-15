@@ -51,13 +51,11 @@ export class EnvironmentVariablesDto {
     @Transform(({ value }) => transformBoolean(value))
     TYPEORM_SYNCHRONIZE: boolean
 
-    @IsOptional()
     @IsUrl({ require_protocol: true, require_tld: false })
-    OIDC_ISSUER_URL?: string
+    OIDC_ISSUER_URL: string
 
-    @IsOptional()
     @IsString()
-    OIDC_AUDIENCE?: string
+    OIDC_AUDIENCE: string
 
     @IsOptional()
     @Type(() => Number)

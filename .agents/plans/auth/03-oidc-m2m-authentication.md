@@ -8,13 +8,17 @@ Allow machine clients to call protected LeadEmailFinder endpoints with short-liv
 
 ## Progress
 
-- [ ] Add OIDC JWT verification and JWKS caching.
-- [ ] Resolve service credentials to an `AuthPrincipal`.
-- [ ] Register default-deny authentication and integration coverage.
+- [x] Add OIDC JWT verification and JWKS caching. (2026-08-15)
+- [x] Resolve service credentials to an `AuthPrincipal`. (2026-08-15)
+- [x] Register default-deny authentication and integration coverage. (2026-08-15)
 
 ## Surprises & Discoveries
 
-None yet.
+- `AuthPrincipal`, `AuthRole`, `AuthPermission`, and the `Organization`/`OrganizationMembership`/`ServiceCredential` entities already existed before this PR (delivered by plan 01, PR #312). Only the authentication mechanics that populate `AuthPrincipal` on a request were missing; the contract and persistence were reused as-is.
+- `AuthPrincipal.membershipRole` is a required `AuthRole`, but neither service credentials nor legacy API keys have a real membership role. Resolved without a contract change: `service_client` principals get `membershipRole: 'admin'` (matching the precedent already present in the merged `auth-principal.spec.ts`); `legacy_api_key` principals mechanically mirror the existing `KeyPermissions.ADMIN` bit (`'platform_admin'` if set, else `'member'`). Neither is the authorization source of truth for its credential kind — plan 04's policy is expected to key off `permissions`/scopes for service principals.
+- `jose@6` is ESM-only (`"type": "module"`, no `require` export condition) and is incompatible with this repo's CommonJS TypeScript output. Pinned to `jose@^5.10.0`, which ships dual `import`/`require` conditions.
+- The Keycloak realm-relative path convention already used by `scripts/keycloak/provisioning.ts` and `smoke-test.ts` (`${issuer}/protocol/openid-connect/token`, `/auth`) extends cleanly to JWKS: the JWKS URI is derived as `${OIDC_ISSUER_URL}/protocol/openid-connect/certs` rather than configured or discovered, avoiding a second network round-trip/failure mode.
+- Did not empirically verify Keycloak 26.7's access-token `typ` header value (`JWT` vs `at+jwt`) against a live realm — no running Keycloak instance was available in this environment. `jwtVerify` is configured with `typ: 'JWT'`; if a live run shows Keycloak issuing `at+jwt`, this is a one-line fix in `jose-oidc-token-verifier.ts`. Flagging for verification during Bruno/manual validation against the local Compose stack.
 
 ## Decision Log
 
@@ -24,10 +28,28 @@ None yet.
 - Decision: Keep API keys only as an undocumented bridge until PR 9.
   Rationale: Intermediate PRs must remain usable while the new authorization and resource-ownership paths are added.
   Date/Author: 2026-08-14, project planning.
+- Decision: Use `jose@^5.10.0`, not `^6`.
+  Rationale: `jose@6` publishes ESM-only with no `require` condition; this repo compiles to CommonJS.
+  Date/Author: 2026-08-15, implementation.
+- Decision: Leave all 8 currently API-key-guarded controllers (`credits`, `proxy`, `api-key`, `email`, and the four verification controllers) completely untouched in this PR. The new `AuthGuard` runs as an additional, earlier, default-deny layer via `APP_GUARD`; it does not replace any existing `@UseGuards(ApiKeyGuard)`/`@RequireApiPermissions(...)` line.
+  Rationale: Plan 04's own Progress list already owns "replace controller permission declarations." Splitting that across two PRs would create an inconsistent halfway state for no benefit, and keeps this PR strictly about authentication mechanics per its own Scope section. Consequence: no OIDC token can reach an existing business endpoint until plan 04 lands; this PR proves the guard/principal/decorator wiring end-to-end via its own throwaway test controller instead.
+  Date/Author: 2026-08-15, implementation (confirmed with the user before implementation).
+- Decision: No CI wiring for the live-Keycloak integration test in this PR; it stays local-only, skip-gated on `TEST_OIDC_ISSUER_URL`/`TEST_OIDC_CLIENT_ID`/`TEST_OIDC_CLIENT_SECRET`/`TEST_OIDC_AUDIENCE`, mirroring the existing `describeWithPostgres` pattern in `identity-schema.integration.spec.ts`.
+  Rationale: Keeps this PR scoped to application code; a Keycloak service container plus realm provisioning in `.github/workflows/validate.yml` is a real CI complexity/runtime addition best proposed and reviewed on its own.
+  Date/Author: 2026-08-15, implementation (confirmed with the user before implementation).
+- Decision: `AuthModule` lives at `src/libs/modules/auth/src/`, a new sibling to `identity` and `api-key`, not a new layer inside `identity`.
+  Rationale: `identity` is the stable data/vocabulary module (organizations, memberships, service credentials, the `AuthPrincipal` type); authentication mechanics (guards, JWT/JWKS adapters, request-scoped principal plumbing) are a distinct, growing concern that plans 06/08 will add to further, and plan 09 needs a clean module boundary to delete the legacy bridge from.
+  Date/Author: 2026-08-15, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered a new `src/libs/modules/auth` module providing: a `CredentialExtractor` (the sole header-parsing site for the new pipeline), an ordered `AuthenticationService` composing two `CredentialAuthenticator` implementations (`OidcCredentialAuthenticator` verifying Keycloak-issued Client Credentials tokens via `jose`'s cached `createRemoteJWKSet` + `jwtVerify` and resolving them to an active `ServiceCredential`; `LegacyApiKeyCredentialAuthenticator` bridging the existing `ApiKeyService`/`Key` lookup into the same `AuthPrincipal` contract), a global default-deny `AuthGuard` registered via `APP_GUARD`, a `@Public()` decorator (health switched to it) and `@CurrentPrincipal()` param decorator, and a `LegacyBridgeOrganizationResolver` that idempotently seeds one real `Organization` row for legacy-key principals to attach to.
+
+All 8 existing API-key-guarded controllers were left untouched per the locked-in decision above — they still authorize exactly as before; the new guard runs as an additional, earlier layer that currently only distinguishes "some valid credential" from "none/invalid," with authorization unchanged until plan 04. `/health` remains public. `OIDC_ISSUER_URL`/`OIDC_AUDIENCE` are now required environment variables (already set unconditionally in `docker/compose.yaml`, so no deployment-config change was needed).
+
+Full acceptance criteria coverage: unit tests cover every rejection path (wrong issuer/audience/algorithm/signature/expiry/not-before/JWKS failure, unknown/disabled service credential, invalid/expired legacy key, missing credential, unsupported credential shape) as `UnauthorizedException`/401; `auth-guard-wiring.integration.spec.ts` proves the guard + `@Public()` + `@CurrentPrincipal()` wiring end-to-end over real HTTP via `supertest`; `jose-oidc-token-verifier.live-keycloak.integration.spec.ts` is a skip-gated, opt-in real-Keycloak test (valid token, wrong audience, tampered token, JWKS-unreachable) not run in this environment (no Keycloak instance available) — remains to be exercised against the local Compose stack. Full project unit/typecheck/lint suite passes with no regressions (54 of 56 test suites; the 2 skipped are this PR's live-Keycloak test and the pre-existing `TEST_POSTGRES_URL`-gated identity-schema test).
+
+Remaining work, explicitly deferred to later plans: no controller accepts an OIDC token for business operations yet (plan 04); no automated CI run of the live-Keycloak test (deferred, see Decision Log); the exact Keycloak `typ` claim value is unverified against a real token (see Surprises & Discoveries).
 
 ## Context and Orientation
 
