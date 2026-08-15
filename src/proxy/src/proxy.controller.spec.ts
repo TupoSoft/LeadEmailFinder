@@ -2,8 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
 import { ProxyDto, ProxyLifecycle, ProxyListDto, ProxyProtocol } from './proxy.dto'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
+import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 
@@ -29,7 +28,7 @@ describe('ProxyController', () => {
                 },
             ],
         })
-            .overrideGuard(ApiKeyGuard)
+            .overrideGuard(PermissionsGuard)
             .useValue(null)
             .compile()
 
@@ -37,9 +36,9 @@ describe('ProxyController', () => {
         service = module.get(ProxyService)
     })
 
-    it('requires an admin API key for every proxy endpoint', () => {
-        expect(Reflect.getMetadata(GUARDS_METADATA, ProxyController)).toEqual([ApiKeyGuard])
-        expect(Reflect.getMetadata('permissions', ProxyController)).toEqual([KeyPermissions.ADMIN])
+    it('requires platform:admin for every proxy endpoint', () => {
+        expect(Reflect.getMetadata(GUARDS_METADATA, ProxyController)).toEqual([PermissionsGuard])
+        expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, ProxyController)).toEqual(['platform:admin'])
     })
 
     it('does not serialize proxy credentials', () => {

@@ -14,7 +14,6 @@ import {
 } from '@nestjs/common'
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
-import { RequireApiPermissions } from '../../application/decorators'
 import { AdminTokenRevocationForbidden, KeyNotFound } from '../../api-key.error'
 import { KeyPermissions } from '../../domain/key.enum'
 import {
@@ -26,11 +25,15 @@ import {
     RevokeKeyResponseDto,
 } from './dto/api-key.dto'
 import { ApiKeyService } from '../../application/api-key.service'
-import { ApiKeyGuard } from '../../application/api-key.guard'
+// Deep imports (not the auth barrel): the auth barrel re-exports auth.module.ts, and this
+// module's own barrel is imported by things AuthModule itself may load — importing the barrel
+// here would risk a circular module-evaluation order depending on unrelated import ordering.
+import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/permissions.guard'
+import { RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/require-permissions.decorator'
 
 @ApiTags('API keys')
-@UseGuards(ApiKeyGuard)
-@RequireApiPermissions(KeyPermissions.ADMIN)
+@UseGuards(PermissionsGuard)
+@RequirePermissions('platform:admin')
 @Controller('v1/api-keys')
 export class ApiKeyController {
     constructor(private readonly keyService: ApiKeyService) {}

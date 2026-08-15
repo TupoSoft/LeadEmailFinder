@@ -15,6 +15,7 @@ import { EnvironmentVariablesDto } from './environment-variables.dto'
 import { ProxyModule } from '../../proxy/src/proxy.module'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
+import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 
 @Module({
     imports: [
@@ -45,6 +46,7 @@ import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
         EmailVerificationModule,
         IdentityModule,
         AuthModule,
+        ApiKeyModule,
         ProxyModule,
         HealthModule,
         S3Module.forRootAsync({

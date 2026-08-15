@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 import { ApiKeyService } from '@tuposoft/lead-email-finder/modules/api-key/application/api-key.service'
 import { CredentialAuthenticator, ExtractedCredential } from './credential-authenticator'
 import { isJwtShapedToken } from './credential-extractor'

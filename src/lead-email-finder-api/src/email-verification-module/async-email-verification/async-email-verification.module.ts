@@ -8,7 +8,7 @@ import {
     EMAIL_VERIFICATION_SERVICE_TOKEN,
 } from './async-email-verification.constants'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '../../credits'
 
 @Module({
@@ -23,7 +23,6 @@ import { CreditsModule } from '../../credits'
                 },
             },
         }),
-        ApiKeyModule,
         CreditsModule,
     ],
     providers: [
@@ -37,6 +36,8 @@ import { CreditsModule } from '../../credits'
             provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
             useExisting: AsyncEmailVerificationServiceImpl,
         },
+        RolePermissionPolicy,
+        PermissionsGuard,
     ],
     controllers: [AsyncEmailVerificationController],
 })

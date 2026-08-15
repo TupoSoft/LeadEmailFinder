@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common'
 import { OldSyncEmailVerificationController } from './old-sync-email-verification.controller'
 import { EmailVerificationService, SyncEmailVerificationModule } from '../sync-email-verification'
 import { OldSyncEmailVerificationProfile } from './old-sync-email-verification.profile'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 
 @Module({
-    imports: [SyncEmailVerificationModule, ApiKeyModule],
+    imports: [SyncEmailVerificationModule],
     controllers: [OldSyncEmailVerificationController],
     providers: [
         {
@@ -13,6 +13,8 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
             useExisting: EmailVerificationService,
         },
         OldSyncEmailVerificationProfile,
+        RolePermissionPolicy,
+        PermissionsGuard,
     ],
 })
 export class OldSyncEmailVerificationModule {}

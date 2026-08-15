@@ -1,0 +1,19 @@
+info:
+  name: 10-reject-non-admin-key
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/proxies"
+  headers:
+    - name: X-Api-Key
+      value: "{{nonAdminApiKey}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects a non-admin (member-role) key with 403, not 401', function() {
+          expect(res.status).to.equal(403);
+        });

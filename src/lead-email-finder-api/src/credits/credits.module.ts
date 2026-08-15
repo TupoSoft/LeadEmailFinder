@@ -4,11 +4,11 @@ import { Credit } from './credit.entity'
 import { CreditsService } from './credits.service'
 import { CreditGuard } from './credits.guard'
 import { CreditsController } from './credits.controller'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Credit]), ApiKeyModule],
-    providers: [CreditsService, CreditGuard],
+    imports: [TypeOrmModule.forFeature([Credit])],
+    providers: [CreditsService, CreditGuard, RolePermissionPolicy, PermissionsGuard],
     controllers: [CreditsController],
     exports: [CreditGuard, CreditsService],
 })

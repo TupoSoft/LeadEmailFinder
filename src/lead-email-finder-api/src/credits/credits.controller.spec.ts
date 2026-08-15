@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { CreditsController } from './credits.controller'
 import { CreditsService } from './credits.service'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
 
 describe('CreditsController', () => {
     let controller: CreditsController
@@ -21,7 +21,7 @@ describe('CreditsController', () => {
                 },
             ],
         })
-            .overrideGuard(ApiKeyGuard)
+            .overrideGuard(PermissionsGuard)
             .useValue(null)
             .compile()
 
