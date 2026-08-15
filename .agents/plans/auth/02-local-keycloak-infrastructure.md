@@ -8,13 +8,16 @@ Provide a reproducible local identity provider that can issue browser and M2M to
 
 ## Progress
 
-- [ ] Add pinned Keycloak and database services.
-- [ ] Add idempotent realm provisioning.
-- [ ] Add readiness and authentication smoke tests.
+- [x] 2026-08-15 11:44 EEST — Add pinned Keycloak and database services.
+- [x] 2026-08-15 12:11 EEST — Add idempotent realm provisioning.
+- [x] 2026-08-15 12:15 EEST — Add readiness and authentication smoke tests.
 
 ## Surprises & Discoveries
 
-None yet.
+- Keycloak authentication execution responses expose both a human display name such as `Cookie` and a provider ID such as `auth-cookie`; reconciliation must use provider identity and detect the newly created execution rather than assuming they are equal.
+- A nested flow created with type `form-flow` accepts only form-action providers. The browser username/password and conditional-OTP authenticators require a `basic-flow` subflow; provisioning detects and repairs the partially created incompatible subflow.
+- The audience mapper requires the public client ID `lead-email-finder-api`, not Keycloak's internal UUID. The live token smoke test exposed this because the first token contained the UUID in `aud`.
+- The existing `lef_default` Docker network had active SMTP-fixture endpoints, so runtime validation used isolated Compose project `lef-keycloak-plan` without disrupting the running stack.
 
 ## Decision Log
 
@@ -24,10 +27,16 @@ None yet.
 - Decision: Do not modify `swarm.yml`.
   Rationale: Production infrastructure is explicitly out of scope.
   Date/Author: 2026-08-14, project planning.
+- Decision: Store generated development service credentials in `.dev/keycloak/service-client.json` with mode `0600`, and ignore the directory.
+  Rationale: Provisioning and smoke tests need repeatable local access without committing or printing the secret.
+  Date/Author: 2026-08-15, Codex.
+- Decision: Model privileged MFA with a composite `mfa_required` realm role and a conditional OTP browser execution.
+  Rationale: `owner`, `admin`, and `platform_admin` can inherit one stable MFA condition while `member` remains unaffected.
+  Date/Author: 2026-08-15, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered the disposable Keycloak 26.7.0/PostgreSQL topology, configuration-driven local issuer and audience, idempotent Admin REST provisioning, ignored service credentials, focused model/reconciliation tests, and a live smoke test. Repeated provisioning recovered from a partial authentication-flow run and then completed twice without duplicates. The issued Client Credentials token had issuer `http://localhost:58080/realms/lead-email-finder` and audience `lead-email-finder-api`; a plain-PKCE authorization request was rejected with `invalid_request`. Production deployment and application-side OIDC enforcement remain in later plans.
 
 ## Context and Orientation
 
@@ -58,7 +67,7 @@ Realm name is `lead-email-finder`; API audience is `lead-email-finder-api`; conf
 
 ## Validation
 
-Run `docker compose -f docker/compose.yaml config`, the focused provisioning tests, and the package static checks. Start the local stack, poll Keycloak readiness, run provisioning twice, request a Client Credentials token, inspect its issuer/audience, and exercise a negative PKCE configuration check.
+Run `docker compose -f docker/compose.yaml config`, `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/keycloak/provisioning.spec.ts src/lead-email-finder-api/src/environment-variables.dto.spec.ts --runInBand`, `corepack pnpm typecheck`, `corepack pnpm lint`, and `git diff --check`. Start the isolated runtime with `docker compose -p lef-keycloak-plan -f docker/compose.yaml up -d keycloak`, confirm both services are healthy, run `corepack pnpm keycloak:provision` twice, and run `corepack pnpm keycloak:smoke` to request a Client Credentials token, inspect issuer/audience, and reject a plain-PKCE request.
 
 ## Idempotence and Recovery
 
@@ -66,8 +75,11 @@ Provisioning reads before creating or updating resources. A failed run can be re
 
 ## Artifacts and Notes
 
-Record the pinned image digest if one is adopted, realm export used for assertions, and smoke-test output.
+- Observed image digest during runtime validation: `quay.io/keycloak/keycloak@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13`. Compose pins the requested version tag rather than the platform-specific digest.
+- Focused Jest suites: 2 passed, 17 tests passed.
+- `pnpm typecheck`, Compose config rendering, and `git diff --check` passed. `pnpm lint` passed with two pre-existing explicit-return-type warnings in unrelated tests.
+- Isolated runtime: Keycloak and its PostgreSQL service became healthy; provisioning passed twice; `pnpm keycloak:smoke` passed issuer, audience, Client Credentials, and non-S256 PKCE rejection checks.
 
 ## Plan readiness
 
-Ready to implement after PR 1.
+Implemented and validated as one pull request after PR 1.

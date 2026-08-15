@@ -10,6 +10,8 @@
         "debug": "pnpm start -d 0.0.0.0:9229",
         "test": "jest",
         "test:ci": "jest --runInBand",
+        "keycloak:provision": "ts-node scripts/keycloak/provision.ts",
+        "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true"
