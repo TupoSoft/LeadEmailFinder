@@ -4,7 +4,8 @@ import { HttpStatus, INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { randomUUID } from 'node:crypto'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { GUARDS_METADATA } from '@nestjs/common/constants'
+import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 
@@ -24,7 +25,7 @@ describe('BatchEmailVerificationController', () => {
                 },
             ],
         })
-            .overrideGuard(ApiKeyGuard)
+            .overrideGuard(PermissionsGuard)
             .useValue(null)
             .compile()
 
@@ -36,6 +37,25 @@ describe('BatchEmailVerificationController', () => {
 
     afterAll(async () => {
         await app.close()
+    })
+
+    it('requires verification:run to upload and verification:read to check status/results', () => {
+        expect(Reflect.getMetadata(GUARDS_METADATA, BatchEmailVerificationController)).toEqual([PermissionsGuard])
+        expect(
+            Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, BatchEmailVerificationController.prototype.uploadFile),
+        ).toEqual(['verification:run'])
+        expect(
+            Reflect.getMetadata(
+                REQUIRED_PERMISSIONS_METADATA_KEY,
+                BatchEmailVerificationController.prototype.getBatchStatus,
+            ),
+        ).toEqual(['verification:read'])
+        expect(
+            Reflect.getMetadata(
+                REQUIRED_PERMISSIONS_METADATA_KEY,
+                BatchEmailVerificationController.prototype.getBatchResults,
+            ),
+        ).toEqual(['verification:read'])
     })
 
     describe('POST /verifyBatch/csv', () => {

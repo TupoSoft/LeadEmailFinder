@@ -6,9 +6,10 @@ import { ApiOperation } from '@nestjs/swagger'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 
-@UseGuards(ApiKeyGuard)
+@UseGuards(PermissionsGuard)
+@RequirePermissions('verification:read')
 @Controller('verify')
 export class OldSyncEmailVerificationController {
     constructor(

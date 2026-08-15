@@ -1,5 +1,5 @@
 import { MODULE_METADATA } from '@nestjs/common/constants'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { ProxyModule } from './proxy.module'
 import {
     ALLOCATION_OBSERVER_TOKEN,
@@ -8,8 +8,10 @@ import {
 } from '@tuposoft/lead-email-finder/common'
 
 describe('ProxyModule', () => {
-    it('imports the API key module required by the proxy controller guard', () => {
-        expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, ProxyModule)).toContain(ApiKeyModule)
+    it('provides the permission guard required by the proxy controller', () => {
+        expect(Reflect.getMetadata(MODULE_METADATA.PROVIDERS, ProxyModule)).toEqual(
+            expect.arrayContaining([RolePermissionPolicy, PermissionsGuard]),
+        )
     })
 
     it('publishes allocation and observability through tokens while keeping infrastructure adapters private', () => {

@@ -1,5 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key'
+import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
 import { ApiKeyService } from '@tuposoft/lead-email-finder/modules/api-key/application/api-key.service'
 import { LEGACY_API_KEY_ISSUER, LegacyApiKeyCredentialAuthenticator } from './legacy-api-key-credential-authenticator'
 import { LegacyBridgeOrganizationResolver } from './legacy-bridge-organization-resolver.service'
