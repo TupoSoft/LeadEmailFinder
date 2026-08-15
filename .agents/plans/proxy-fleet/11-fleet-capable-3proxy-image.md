@@ -57,7 +57,7 @@ Add a health command that confirms the 3proxy process is running and every decla
 
 ## Interfaces and Dependencies
 
-New files are limited to `docker/proxy-fleet/`, its smoke fixtures, and focused package scripts if needed. The manifest and credential schemas are the public deployment contracts consumed by plans 02 and 03.
+New files are limited to `docker/proxy-fleet/`, its smoke fixtures, and focused package scripts if needed. The manifest and credential schemas are the public deployment contracts consumed by plans 12 and 13.
 
 This plan depends on the merged proxy allocation foundation through PR #311. It unlocks Ansible host provisioning and the Swarm reference deployment. It introduces no HTTP endpoint or application interface.
 

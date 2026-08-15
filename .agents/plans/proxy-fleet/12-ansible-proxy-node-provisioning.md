@@ -35,9 +35,9 @@ Not started.
 
 ## Context and Orientation
 
-Plan 01 defines the image's listener-manifest and credential contracts. The application already registers proxy capacity through authenticated `/v1/proxies` CRUD and enforces capacity in Redis. The repository currently has local Compose files but no Ansible inventory, WireGuard host automation, or Swarm host lifecycle.
+Plan 11 defines the image's listener-manifest and credential contracts. The application already registers proxy capacity through authenticated `/v1/proxies` CRUD and enforces capacity in Redis. The repository currently has local Compose files but no Ansible inventory, WireGuard host automation, or Swarm host lifecycle.
 
-The inventory identity `proxy_node_id` links an Ansible host, a Swarm node label, node-specific config/secret names, and the desired registry descriptions used by plan 03. Each entry in `proxy_listeners` represents one egress IP and includes its listener port and registry capacity.
+The inventory identity `proxy_node_id` links an Ansible host, a Swarm node label, node-specific config/secret names, and the desired registry descriptions used by plan 13. Each entry in `proxy_listeners` represents one egress IP and includes its listener port and registry capacity.
 
 ## Scope and Non-Goals
 
@@ -47,7 +47,7 @@ Do not create VMs, allocate or attach public IPs, configure provider routing, de
 
 ## Plan of Work
 
-Define inventory groups for `swarm_managers`, `proxy_nodes`, and `verification_workers`. Require one primary manager address, a private WireGuard CIDR, and explicit node variables: `proxy_node_id`, `wireguard_address`, `egress_interface`, and `proxy_listeners`. Each listener contains the plan-01 fields plus `maxConcurrent`, `requestsPerMinute`, an optional weight, and `desiredState` restricted to `active` or `disabled`. Validate unique node IDs, egress IDs, listener endpoints, and egress IPs across the complete inventory before changing hosts.
+Define inventory groups for `swarm_managers`, `proxy_nodes`, and `verification_workers`. Require one primary manager address, a private WireGuard CIDR, and explicit node variables: `proxy_node_id`, `wireguard_address`, `egress_interface`, and `proxy_listeners`. Each listener contains the plan-11 fields plus `maxConcurrent`, `requestsPerMinute`, an optional weight, and `desiredState` restricted to `active` or `disabled`. Validate unique node IDs, egress IDs, listener endpoints, and egress IPs across the complete inventory before changing hosts.
 
 Keep WireGuard private keys, peer preshared keys, Swarm join material when externally supplied, and per-listener proxy credentials in Ansible Vault or an external secret-variable file. Mark secret-bearing tasks `no_log: true` and `diff: false`; write host secrets with mode `0600`. The tracked example inventory contains only documentation placeholders and unroutable example addresses.
 
@@ -55,15 +55,15 @@ Install pinned/supported Docker Engine and WireGuard packages, enable their serv
 
 Before Swarm work, inspect current membership. Initialize the first manager only when inactive; join other declared nodes only when inactive; and fail with recovery guidance if a node belongs to another Swarm. From the primary manager, apply `proxy.egress=true` and `proxy.node-id=<proxy_node_id>` labels to proxy nodes. Do not remove unrelated labels.
 
-Validate every declared `egressIp` is already assigned to `egress_interface`; fail before deployment artifacts are considered ready if any is missing. Render the plan-01 listener manifest to `/etc/lead-email-finder/proxy-fleet/listeners.json` and the node credential input to a root-only staging path for plan 03. Do not start 3proxy in this pull request.
+Validate every declared `egressIp` is already assigned to `egress_interface`; fail before deployment artifacts are considered ready if any is missing. Render the plan-11 listener manifest to `/etc/lead-email-finder/proxy-fleet/listeners.json` and the node credential input to a root-only staging path for plan 13. Do not start 3proxy in this pull request.
 
 Add a reset playbook restricted to the explicit lab inventory and gated by `proxy_fleet_allow_reset=true`. It removes only files, firewall rules, WireGuard configuration, labels, and inactive disposable Swarm membership created by these roles; it never deletes application data or broad host paths.
 
 ## Interfaces and Dependencies
 
-The inventory schema under `deploy/proxy-fleet/ansible/inventory/example.yml` becomes the fleet topology source of truth. Its rendered listener manifest must conform exactly to plan 01. Plan 03 consumes the same inventory plus node-local artifacts to render Swarm services and reconcile proxy registry capacity.
+The inventory schema under `deploy/proxy-fleet/ansible/inventory/example.yml` becomes the fleet topology source of truth. Its rendered listener manifest must conform exactly to plan 11. Plan 13 consumes the same inventory plus node-local artifacts to render Swarm services and reconcile proxy registry capacity.
 
-This plan depends on plan 01's image contracts. It introduces Ansible as a development dependency and targets Ubuntu 24.04 LTS. Official check-mode behavior and its limitations are documented in the [Ansible check-mode guide](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html).
+This plan depends on plan 11's image contracts. It introduces Ansible as a development dependency and targets Ubuntu 24.04 LTS. Official check-mode behavior and its limitations are documented in the [Ansible check-mode guide](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html).
 
 ## Acceptance Criteria
 
@@ -91,4 +91,4 @@ Record sanitized inventory validation, the first and second play recaps, node-la
 
 ## Plan readiness
 
-Ready to implement after plan 01.
+Ready to implement after plan 11.

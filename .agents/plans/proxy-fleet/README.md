@@ -6,22 +6,22 @@ Implement the remaining plans in order. Each plan follows `.agents/PLANS.md` and
 
 Completed pull requests:
 
-1. [Secure proxy registry endpoints](pr-301-secure-proxy-registry-endpoints.md) — completed by PR #301
-2. [Secure API key administration](pr-302-secure-api-key-administration.md) — completed by PR #302
-3. [Cut SMTP over to the proxy registry](pr-303-cut-smtp-over-to-proxy-registry.md) — completed by PR #303
-4. [Add proxy lifecycle and capacity leases](pr-304-add-proxy-capacity-leases.md) — completed by PR #304
-5. [Default new proxies to disabled](pr-305-default-new-proxies-to-disabled.md) — completed by PR #305
-6. [Allocate leased proxies serially](pr-307-allocate-leased-proxies-serially.md) — completed by PR #307
-7. [Decouple proxy allocation adapters](pr-308-decouple-allocation-adapters.md) — completed by PR #308
-8. [Add a configurable SMTP client factory](pr-309-add-configurable-smtp-client-factory.md) — completed by PR #309
-9. [Add an ISP-safe local SMTP fixture](pr-310-add-isp-safe-local-smtp-fixture.md) — completed by PR #310
-10. [Add allocation observability and prove draining](pr-311-add-allocation-observability-and-draining.md) — completed by PR #311
+1. [Secure proxy registry endpoints](01-secure-proxy-registry-endpoints.md) — completed by PR #301
+2. [Secure API key administration](02-secure-api-key-administration.md) — completed by PR #302
+3. [Cut SMTP over to the proxy registry](03-cut-smtp-over-to-proxy-registry.md) — completed by PR #303
+4. [Add proxy lifecycle and capacity leases](04-add-proxy-capacity-leases.md) — completed by PR #304
+5. [Default new proxies to disabled](05-default-new-proxies-to-disabled.md) — completed by PR #305
+6. [Allocate leased proxies serially](06-allocate-leased-proxies-serially.md) — completed by PR #307
+7. [Decouple proxy allocation adapters](07-decouple-allocation-adapters.md) — completed by PR #308
+8. [Add a configurable SMTP client factory](08-add-configurable-smtp-client-factory.md) — completed by PR #309
+9. [Add an ISP-safe local SMTP fixture](09-add-isp-safe-local-smtp-fixture.md) — completed by PR #310
+10. [Add allocation observability and prove draining](10-add-allocation-observability-and-draining.md) — completed by PR #311
 
 Remaining pull-request sequence:
 
-1. [Build a fleet-capable 3proxy image](01-fleet-capable-3proxy-image.md)
-2. [Provision disposable proxy nodes with Ansible](02-ansible-proxy-node-provisioning.md)
-3. [Deploy and reconcile a Swarm proxy fleet](03-swarm-fleet-reconciliation.md)
+11. [Build a fleet-capable 3proxy image](11-fleet-capable-3proxy-image.md)
+12. [Provision disposable proxy nodes with Ansible](12-ansible-proxy-node-provisioning.md)
+13. [Deploy and reconcile a Swarm proxy fleet](13-swarm-fleet-reconciliation.md)
 
 Shared decisions:
 

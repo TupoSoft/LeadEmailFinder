@@ -40,7 +40,7 @@ Not started.
 
 ## Context and Orientation
 
-Plans 01 and 02 provide the image, validated inventory, node labels, host network, node-specific topology, and secret inputs. `ProxyController` exposes authenticated create, list, update, and delete operations under `/v1/proxies`. `ProxyDto` redacts credentials. `ProxyService.createProxy` defaults state to `disabled`; `TypeOrmProxyCandidateRepository` selects only `active` members; and `ProxyAllocatorService` enforces Redis leases. PR #311 added structured allocation/release events and the documented drain interval.
+Plans 11 and 12 provide the image, validated inventory, node labels, host network, node-specific topology, and secret inputs. `ProxyController` exposes authenticated create, list, update, and delete operations under `/v1/proxies`. `ProxyDto` redacts credentials. `ProxyService.createProxy` defaults state to `disabled`; `TypeOrmProxyCandidateRepository` selects only `active` members; and `ProxyAllocatorService` enforces Redis leases. PR #311 added structured allocation/release events and the documented drain interval.
 
 The desired endpoint key is `ProxyProtocol.HTTP` plus the node's WireGuard host and listener port. The inventory `egressId` is retained in the registry description using an owned prefix such as `proxy-fleet:<egressId>` so reconciliation modifies only records it owns. It is not treated as a database uniqueness guarantee.
 
@@ -52,7 +52,7 @@ Do not add migrations, change proxy allocation, automatically delete registry re
 
 ## Plan of Work
 
-Render an ignored `stack.generated.yml` from validated inventory. Reference the plan-01 image by immutable registry digest; never use `build`. For each proxy node, declare one service with `replicas: 1`, a placement constraint on its unique `proxy.node-id`, the predefined host network, a node-specific immutable Swarm config, and a node-specific immutable credential secret. Name configs and secrets with a content digest so updates create new immutable objects. The deployment wrapper creates missing objects, deploys the stack, waits for convergence, and prunes only unreferenced objects carrying the proxy-fleet ownership label.
+Render an ignored `stack.generated.yml` from validated inventory. Reference the plan-11 image by immutable registry digest; never use `build`. For each proxy node, declare one service with `replicas: 1`, a placement constraint on its unique `proxy.node-id`, the predefined host network, a node-specific immutable Swarm config, and a node-specific immutable credential secret. Name configs and secrets with a content digest so updates create new immutable objects. The deployment wrapper creates missing objects, deploys the stack, waits for convergence, and prunes only unreferenced objects carrying the proxy-fleet ownership label.
 
 Do not publish listener ports through Swarm. The process binds directly to the host's WireGuard address and declared ports. This follows Docker's host-network service behavior and avoids routing mesh. See the official [host network driver](https://docs.docker.com/engine/network/drivers/host/) and [Swarm service networking](https://docs.docker.com/engine/swarm/services/) documentation.
 
@@ -66,11 +66,11 @@ Add a deployment dry-run that renders and validates the stack before mutation. `
 
 ## Interfaces and Dependencies
 
-Add package commands for stack rendering, deployment validation, and registry reconciliation. Inputs are the plan-02 inventory artifact, image digest, API URL, admin-key file, and SMTP probe endpoint. The admin key and proxy credentials are file inputs and never command-line values.
+Add package commands for stack rendering, deployment validation, and registry reconciliation. Inputs are the plan-12 inventory artifact, image digest, API URL, admin-key file, and SMTP probe endpoint. The admin key and proxy credentials are file inputs and never command-line values.
 
 `ProxyRegistryAdmin` needs list-all-pages, create-disabled, update, and transition-state operations implemented by an HTTP adapter against the existing API. No controller or public API change is required. The reconcile engine owns comparison and state transitions; the HTTP adapter owns authentication, pagination, serialization, and response errors.
 
-This plan depends on plans 01 and 02. It completes the repository's current proxy-fleet roadmap and preserves the application's existing lease and observer boundaries.
+This plan depends on plans 11 and 12. It completes the repository's current proxy-fleet roadmap and preserves the application's existing lease and observer boundaries.
 
 ## Acceptance Criteria
 
@@ -90,7 +90,7 @@ This plan depends on plans 01 and 02. It completes the repository's current prox
 
 Run focused stack-renderer and reconcile-engine unit tests, including pagination, duplicates, unchanged state, credential redaction, health failure, reactivation, and removed-listener cases. Validate the generated stack with `docker stack config` and confirm it contains no `build` key or plaintext secret.
 
-On the disposable Swarm from plan 02, deploy at least two proxy nodes with at least two listeners on one node. Verify placement with `docker service ps` and service inspection, config/secret isolation, host networking, and zero ingress proxy ports. Through every listener, authenticate and CONNECT to the SMTP peer fixture; assert its observed peer equals the declared egress IP. Run reconciliation twice and confirm proxy counts and service/config/secret counts remain stable. Remove one desired listener and confirm its registry state becomes draining while active allocations stop. Run concurrent allocator/verification smoke traffic and inspect Redis-backed limit behavior and structured logs. Finally run `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test:ci`, `corepack pnpm build`, and `git diff --check`.
+On the disposable Swarm from plan 12, deploy at least two proxy nodes with at least two listeners on one node. Verify placement with `docker service ps` and service inspection, config/secret isolation, host networking, and zero ingress proxy ports. Through every listener, authenticate and CONNECT to the SMTP peer fixture; assert its observed peer equals the declared egress IP. Run reconciliation twice and confirm proxy counts and service/config/secret counts remain stable. Remove one desired listener and confirm its registry state becomes draining while active allocations stop. Run concurrent allocator/verification smoke traffic and inspect Redis-backed limit behavior and structured logs. Finally run `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test:ci`, `corepack pnpm build`, and `git diff --check`.
 
 ## Idempotence and Recovery
 
@@ -104,4 +104,4 @@ Record the generated stack without secrets, service placement, immutable image d
 
 ## Plan readiness
 
-Ready to implement after plans 01 and 02.
+Ready to implement after plans 11 and 12.
