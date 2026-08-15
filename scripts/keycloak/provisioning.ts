@@ -1,0 +1,424 @@
+import {
+    AuthenticationExecutionRepresentation,
+    AuthenticationFlowRepresentation,
+    ClientRepresentation,
+    IdentifiedRepresentation,
+    JsonObject,
+    KeycloakAdminPort,
+    NamedRepresentation,
+} from './keycloak-admin-api'
+
+export const REALM = 'lead-email-finder'
+export const API_AUDIENCE = 'lead-email-finder-api'
+export const BFF_CLIENT_ID = 'lef-web-bff'
+export const SERVICE_CLIENT_ID = 'lef-development-service'
+export const AUDIENCE_SCOPE = 'lef-api-audience'
+export const BROWSER_FLOW = 'lef-browser'
+export const DEVELOPMENT_ORGANIZATION = 'development'
+
+export interface ProvisioningOptions {
+    bffRedirectUris: string[]
+    bffPostLogoutRedirectUris: string[]
+}
+
+export interface ServiceClientCredentials {
+    issuer: string
+    clientId: string
+    clientSecret: string
+    audience: string
+}
+
+interface NamedRepository<T extends IdentifiedRepresentation> {
+    find(): Promise<T | undefined>
+    create(): Promise<void>
+    update(existing: T): Promise<void>
+}
+
+export function createRealmRepresentation(): JsonObject {
+    return {
+        realm: REALM,
+        displayName: 'Lead Email Finder',
+        enabled: true,
+        registrationAllowed: false,
+        resetPasswordAllowed: true,
+        verifyEmail: true,
+        bruteForceProtected: true,
+        failureFactor: 5,
+        waitIncrementSeconds: 60,
+        maxFailureWaitSeconds: 900,
+        organizationsEnabled: true,
+    }
+}
+
+export function createBffClient(options: ProvisioningOptions): ClientRepresentation {
+    return {
+        clientId: BFF_CLIENT_ID,
+        name: 'Lead Email Finder web BFF',
+        enabled: true,
+        protocol: 'openid-connect',
+        publicClient: false,
+        standardFlowEnabled: true,
+        implicitFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+        serviceAccountsEnabled: false,
+        redirectUris: options.bffRedirectUris,
+        webOrigins: options.bffRedirectUris.map(uri => new URL(uri).origin),
+        attributes: {
+            'pkce.code.challenge.method': 'S256',
+            'post.logout.redirect.uris': options.bffPostLogoutRedirectUris.join('##'),
+        },
+    }
+}
+
+export function createServiceClient(): ClientRepresentation {
+    return {
+        clientId: SERVICE_CLIENT_ID,
+        name: 'Lead Email Finder development service',
+        enabled: true,
+        protocol: 'openid-connect',
+        publicClient: false,
+        standardFlowEnabled: false,
+        implicitFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+        serviceAccountsEnabled: true,
+    }
+}
+
+export async function reconcileResource<T extends IdentifiedRepresentation>(
+    repository: NamedRepository<T>,
+): Promise<T> {
+    const existing = await repository.find()
+    if (existing) {
+        await repository.update(existing)
+        return existing
+    }
+    await repository.create()
+    const created = await repository.find()
+    if (!created) {
+        throw new Error('Keycloak resource was not visible after creation')
+    }
+    return created
+}
+
+export class KeycloakProvisioner {
+    constructor(
+        private readonly api: KeycloakAdminPort,
+        private readonly baseUrl: string,
+        private readonly options: ProvisioningOptions,
+    ) {}
+
+    async provision(): Promise<ServiceClientCredentials> {
+        await this.ensureRealm()
+        await this.ensureRoles()
+        await this.ensureOrganization()
+        await this.ensureClient(this.audienceClient())
+        const audienceScope = await this.ensureClientScope(API_AUDIENCE)
+        const bffClient = await this.ensureClient(createBffClient(this.options))
+        const serviceClient = await this.ensureClient(createServiceClient())
+        await this.assignDefaultScope(bffClient.id as string, audienceScope.id as string)
+        await this.assignDefaultScope(serviceClient.id as string, audienceScope.id as string)
+        await this.ensurePrivilegedBrowserFlow()
+        const secret = await this.api.request<{ value: string }>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${serviceClient.id}/client-secret`,
+        )
+        if (!secret.value) {
+            throw new Error('Keycloak did not return a service client secret')
+        }
+        return {
+            issuer: `${this.baseUrl}/realms/${REALM}`,
+            clientId: SERVICE_CLIENT_ID,
+            clientSecret: secret.value,
+            audience: API_AUDIENCE,
+        }
+    }
+
+    private async ensureRealm(): Promise<void> {
+        const desired = createRealmRepresentation()
+        const existing = await this.api.requestOrUndefined<JsonObject>(`/admin/realms/${REALM}`)
+        if (existing) {
+            await this.api.request('PUT', `/admin/realms/${REALM}`, { ...existing, ...desired })
+        } else {
+            await this.api.request('POST', '/admin/realms', desired)
+        }
+    }
+
+    private async ensureRoles(): Promise<void> {
+        const roleNames = ['member', 'mfa_required', 'owner', 'admin', 'platform_admin']
+        for (const name of roleNames) {
+            const encodedName = encodeURIComponent(name)
+            const existing = await this.api.requestOrUndefined<NamedRepresentation>(
+                `/admin/realms/${REALM}/roles/${encodedName}`,
+            )
+            if (!existing) {
+                await this.api.request('POST', `/admin/realms/${REALM}/roles`, { name })
+            }
+        }
+        const mfaRole = await this.api.request<NamedRepresentation>('GET', `/admin/realms/${REALM}/roles/mfa_required`)
+        for (const privilegedRole of ['owner', 'admin', 'platform_admin']) {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/roles/${privilegedRole}/composites`,
+                [mfaRole],
+                [204],
+            )
+        }
+    }
+
+    private async ensureOrganization(): Promise<void> {
+        const desired: NamedRepresentation = {
+            name: DEVELOPMENT_ORGANIZATION,
+            alias: DEVELOPMENT_ORGANIZATION,
+            enabled: true,
+            domains: [{ name: 'lef.test', verified: false }],
+        }
+        await reconcileResource({
+            find: async () => {
+                const organizations = await this.api.request<NamedRepresentation[]>(
+                    'GET',
+                    `/admin/realms/${REALM}/organizations?search=${DEVELOPMENT_ORGANIZATION}`,
+                )
+                return organizations.find(organization => organization.name === DEVELOPMENT_ORGANIZATION)
+            },
+            create: () => this.api.request('POST', `/admin/realms/${REALM}/organizations`, desired),
+            update: existing => this.api.request('PUT', `/admin/realms/${REALM}/organizations/${existing.id}`, desired),
+        })
+    }
+
+    private async ensureClient(desired: ClientRepresentation): Promise<ClientRepresentation> {
+        return reconcileResource({
+            find: async () => {
+                const clients = await this.api.request<ClientRepresentation[]>(
+                    'GET',
+                    `/admin/realms/${REALM}/clients?clientId=${encodeURIComponent(desired.clientId)}`,
+                )
+                return clients.find(client => client.clientId === desired.clientId)
+            },
+            create: () => this.api.request('POST', `/admin/realms/${REALM}/clients`, desired),
+            update: existing =>
+                this.api.request('PUT', `/admin/realms/${REALM}/clients/${existing.id}`, { ...existing, ...desired }),
+        })
+    }
+
+    private async ensureClientScope(audienceClientId: string): Promise<NamedRepresentation> {
+        const desired: NamedRepresentation = {
+            name: AUDIENCE_SCOPE,
+            protocol: 'openid-connect',
+            attributes: { 'include.in.token.scope': 'false', 'display.on.consent.screen': 'false' },
+        }
+        const scope = await reconcileResource({
+            find: async () => {
+                const scopes = await this.api.request<NamedRepresentation[]>(
+                    'GET',
+                    `/admin/realms/${REALM}/client-scopes`,
+                )
+                return scopes.find(candidate => candidate.name === AUDIENCE_SCOPE)
+            },
+            create: () => this.api.request('POST', `/admin/realms/${REALM}/client-scopes`, desired),
+            update: existing =>
+                this.api.request('PUT', `/admin/realms/${REALM}/client-scopes/${existing.id}`, {
+                    ...existing,
+                    ...desired,
+                }),
+        })
+        const mappers = await this.api.request<NamedRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/client-scopes/${scope.id}/protocol-mappers/models`,
+        )
+        const mapper = {
+            name: 'lead-email-finder-api-audience',
+            protocol: 'openid-connect',
+            protocolMapper: 'oidc-audience-mapper',
+            consentRequired: false,
+            config: {
+                'included.client.audience': audienceClientId,
+                'access.token.claim': 'true',
+                'id.token.claim': 'false',
+                'introspection.token.claim': 'true',
+            },
+        }
+        const existingMapper = mappers.find(candidate => candidate.name === mapper.name)
+        if (existingMapper) {
+            await this.api.request(
+                'PUT',
+                `/admin/realms/${REALM}/client-scopes/${scope.id}/protocol-mappers/models/${existingMapper.id}`,
+                { ...existingMapper, ...mapper },
+            )
+        } else {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/client-scopes/${scope.id}/protocol-mappers/models`,
+                mapper,
+            )
+        }
+        return scope
+    }
+
+    private async assignDefaultScope(clientId: string, scopeId: string): Promise<void> {
+        const scopes = await this.api.request<NamedRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${clientId}/default-client-scopes`,
+        )
+        if (!scopes.some(scope => scope.id === scopeId)) {
+            await this.api.request(
+                'PUT',
+                `/admin/realms/${REALM}/clients/${clientId}/default-client-scopes/${scopeId}`,
+                undefined,
+                [204],
+            )
+        }
+    }
+
+    private async ensurePrivilegedBrowserFlow(): Promise<void> {
+        const flows = await this.api.request<AuthenticationFlowRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/authentication/flows`,
+        )
+        if (!flows.some(flow => flow.alias === BROWSER_FLOW)) {
+            await this.api.request('POST', `/admin/realms/${REALM}/authentication/flows`, {
+                alias: BROWSER_FLOW,
+                description: 'Browser login with MFA required for privileged roles',
+                providerId: 'basic-flow',
+                topLevel: true,
+                builtIn: false,
+            })
+        }
+        await this.ensureExecution(BROWSER_FLOW, 'auth-cookie', 'Cookie', 'ALTERNATIVE')
+        await this.ensureExecution(
+            BROWSER_FLOW,
+            'identity-provider-redirector',
+            'Identity Provider Redirector',
+            'ALTERNATIVE',
+        )
+        const topLevelExecutions = await this.getExecutions(BROWSER_FLOW)
+        const formsExecution = topLevelExecutions.find(execution => execution.displayName === `${BROWSER_FLOW}-forms`)
+        if (formsExecution && !formsExecution.requirementChoices?.includes('ALTERNATIVE')) {
+            await this.api.request('DELETE', `/admin/realms/${REALM}/authentication/executions/${formsExecution.id}`)
+        }
+        if (!formsExecution || !formsExecution.requirementChoices?.includes('ALTERNATIVE')) {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/authentication/flows/${BROWSER_FLOW}/executions/flow`,
+                {
+                    alias: `${BROWSER_FLOW}-forms`,
+                    description: 'Username, password, and conditional OTP',
+                    provider: 'basic-flow',
+                    type: 'basic-flow',
+                },
+            )
+        }
+        await this.setExecutionRequirement(BROWSER_FLOW, `${BROWSER_FLOW}-forms`, 'ALTERNATIVE')
+        await this.ensureExecution(
+            `${BROWSER_FLOW}-forms`,
+            'auth-username-password-form',
+            'Username Password Form',
+            'REQUIRED',
+        )
+        const otpExecution = await this.ensureExecution(
+            `${BROWSER_FLOW}-forms`,
+            'auth-conditional-otp-form',
+            'Conditional OTP Form',
+            'REQUIRED',
+        )
+        const otpConfig = {
+            alias: 'privileged-role-mfa',
+            config: { forceOtpRole: 'mfa_required', defaultOtpOutcome: 'skip' },
+        }
+        if (otpExecution.authenticationConfig) {
+            await this.api.request(
+                'PUT',
+                `/admin/realms/${REALM}/authentication/config/${otpExecution.authenticationConfig}`,
+                otpConfig,
+            )
+        } else {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/authentication/executions/${otpExecution.id}/config`,
+                otpConfig,
+            )
+        }
+        const realm = await this.api.request<JsonObject>('GET', `/admin/realms/${REALM}`)
+        await this.api.request('PUT', `/admin/realms/${REALM}`, { ...realm, browserFlow: BROWSER_FLOW })
+    }
+
+    private async ensureExecution(
+        flowAlias: string,
+        provider: string,
+        displayName: string,
+        requirement: string,
+    ): Promise<AuthenticationExecutionRepresentation> {
+        const before = await this.getExecutions(flowAlias)
+        let execution = before.find(
+            candidate => candidate.providerId === provider || candidate.displayName === displayName,
+        )
+        if (!execution) {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/authentication/flows/${flowAlias}/executions/execution`,
+                { provider },
+            )
+            const previousIds = new Set(before.map(candidate => candidate.id))
+            const after = await this.getExecutions(flowAlias)
+            execution = after.find(
+                candidate =>
+                    candidate.providerId === provider ||
+                    candidate.displayName === displayName ||
+                    !previousIds.has(candidate.id),
+            )
+        }
+        if (!execution) {
+            throw new Error(`Authentication execution ${provider} was not created in ${flowAlias}`)
+        }
+        await this.updateExecutionRequirement(flowAlias, execution, requirement)
+        return execution
+    }
+
+    private async setExecutionRequirement(
+        flowAlias: string,
+        displayName: string,
+        requirement: string,
+    ): Promise<AuthenticationExecutionRepresentation> {
+        const executions = await this.getExecutions(flowAlias)
+        const execution = executions.find(candidate => candidate.displayName === displayName)
+        if (!execution) {
+            throw new Error(`Authentication execution ${displayName} was not created in ${flowAlias}`)
+        }
+        await this.updateExecutionRequirement(flowAlias, execution, requirement)
+        return execution
+    }
+
+    private getExecutions(flowAlias: string): Promise<AuthenticationExecutionRepresentation[]> {
+        return this.api.request<AuthenticationExecutionRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/authentication/flows/${flowAlias}/executions`,
+        )
+    }
+
+    private async updateExecutionRequirement(
+        flowAlias: string,
+        execution: AuthenticationExecutionRepresentation,
+        requirement: string,
+    ): Promise<void> {
+        if (execution.requirement !== requirement) {
+            await this.api.request('PUT', `/admin/realms/${REALM}/authentication/flows/${flowAlias}/executions`, {
+                ...execution,
+                requirement,
+            })
+        }
+    }
+
+    private audienceClient(): ClientRepresentation {
+        return {
+            clientId: API_AUDIENCE,
+            name: 'Lead Email Finder API audience',
+            enabled: true,
+            protocol: 'openid-connect',
+            bearerOnly: true,
+            publicClient: false,
+            standardFlowEnabled: false,
+            implicitFlowEnabled: false,
+            directAccessGrantsEnabled: false,
+            serviceAccountsEnabled: false,
+        }
+    }
+}

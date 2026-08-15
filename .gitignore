@@ -137,6 +137,7 @@ http-client.private.env.json
 **/compose*.override.yaml*
 tmp
 **/src/metadata.ts
+.dev/keycloak/
 
 # Protobuf
 **/*.proto

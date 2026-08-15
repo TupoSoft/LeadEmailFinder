@@ -32,6 +32,9 @@ services:
       API_URL: http://localhost:3000
       TYPEORM_SYNCHRONIZE: true
 
+      OIDC_ISSUER_URL: http://localhost:58080/realms/lead-email-finder
+      OIDC_AUDIENCE: lead-email-finder-api
+
       ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
 
       REDIS_URL_FILE: /run/secrets/redis_url
