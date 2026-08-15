@@ -1,6 +1,6 @@
 # Add organization and identity contracts
 
-This ExecPlan is a living document maintained according to `.agent/PLANS.md`.
+This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
