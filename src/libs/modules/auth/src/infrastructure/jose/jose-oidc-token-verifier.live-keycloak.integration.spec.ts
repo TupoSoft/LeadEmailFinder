@@ -14,6 +14,18 @@ interface TokenResponse {
     error?: string
 }
 
+function tamperSignature(token: string): string {
+    const [header, payload, signature] = token.split('.')
+    // Flip a character in the middle of the signature, not the last one: RS256 (2048-bit RSA, 256-byte)
+    // signatures have 256 % 3 === 1 leftover byte, whose base64url encoding ends in unused padding bits —
+    // flipping only the final character can land entirely in those don't-care bits and decode to the same
+    // signature bytes, leaving the token still valid and making this assertion flaky.
+    const flipIndex = Math.floor(signature.length / 2)
+    const flippedChar = signature[flipIndex] === 'a' ? 'b' : 'a'
+    const tamperedSignature = signature.slice(0, flipIndex) + flippedChar + signature.slice(flipIndex + 1)
+    return [header, payload, tamperedSignature].join('.')
+}
+
 async function obtainClientCredentialsToken(): Promise<string> {
     const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
         method: 'POST',
@@ -58,7 +70,7 @@ describeWithKeycloak('JoseOidcTokenVerifier against a live Keycloak realm', () =
 
     it('rejects a tampered token', async () => {
         const token = await obtainClientCredentialsToken()
-        const tampered = `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}`
+        const tampered = tamperSignature(token)
         const verifier = new JoseOidcTokenVerifier(configuration)
 
         await expect(verifier.verify(tampered)).rejects.toThrow(UnauthorizedException)
