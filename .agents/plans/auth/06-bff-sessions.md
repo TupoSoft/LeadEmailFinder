@@ -1,6 +1,6 @@
 # Add Redis-backed browser sessions
 
-This ExecPlan is a living document maintained according to `.agent/PLANS.md`.
+This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 

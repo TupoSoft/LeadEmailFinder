@@ -2,7 +2,7 @@
 
 This roadmap replaces raw API-key authentication with self-hosted Keycloak for browser users and machine-to-machine clients. It is development-only: all current PostgreSQL, Redis, BullMQ, S3, credit, API-key, and future Keycloak data is disposable. TypeORM synchronization and deterministic reset/reseed workflows replace migrations until a production environment exists.
 
-Implement the plans in order. Each plan is one pull request with its own acceptance criteria and validation. The identity foundation is already complete in PR #312; new implementation starts with plan 02.
+Implement the plans in order. Each plan follows `.agents/PLANS.md` and represents one pull request with its own acceptance criteria and validation. The identity foundation is already complete in PR #312; new implementation starts with plan 02.
 
 1. [Add organization and identity contracts](01-organization-identity-contracts.md) — completed by PR #312
 2. [Add disposable local Keycloak infrastructure](02-local-keycloak-infrastructure.md)

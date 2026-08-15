@@ -4,7 +4,7 @@ This document defines the required format for an execution plan, called an ExecP
 
 ## How to use ExecPlans
 
-Create one ExecPlan for every implementation task. Store it under `.agent/plans/<feature>/` and keep the feature `README.md` limited to task order, dependencies, shared constraints, and links.
+Create one ExecPlan for every implementation task. Store it under `.agents/plans/<feature>/` and keep the feature `README.md` limited to task order, dependencies, shared constraints, and links.
 
 When authoring a plan, inspect the current repository and resolve implementation decisions before declaring it ready. Name the affected modules and repository-relative paths. Explain how the current behavior works, the intended behavior, important invariants, and how success will be observed.
 
@@ -36,7 +36,7 @@ Every ExecPlan uses the following sections.
 
 # <Short, behavior-focused title>
 
-State that the file is a living document maintained according to `.agent/PLANS.md`.
+State that the file is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 

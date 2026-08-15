@@ -13,8 +13,8 @@
 
 # ExecPlans
 
-- For complex features and significant refactors, create and maintain an ExecPlan that follows `.agent/PLANS.md`.
-- Store feature plans under `.agent/plans/<feature>/`.
+- For complex features and significant refactors, create and maintain an ExecPlan that follows `.agents/PLANS.md`.
+- Store feature plans under `.agents/plans/<feature>/`.
 - Each implementation task must have its own ExecPlan and correspond to exactly one pull request.
 - Keep each ExecPlan current as implementation progresses, including its progress, discoveries, decisions, and outcomes.
 - Express acceptance criteria as observable pass-or-fail behavior and state exact focused validation separately.
