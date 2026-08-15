@@ -47,4 +47,19 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
+
+    it('accepts a local Keycloak issuer and API audience', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            OIDC_ISSUER_URL: 'http://localhost:58080/realms/lead-email-finder',
+            OIDC_AUDIENCE: 'lead-email-finder-api',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects a malformed OIDC issuer URL', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { OIDC_ISSUER_URL: 'keycloak' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
+    })
 })

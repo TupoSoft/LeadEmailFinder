@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform, Type } from 'class-transformer'
 
@@ -50,6 +50,14 @@ export class EnvironmentVariablesDto {
     @Type(() => String)
     @Transform(({ value }) => transformBoolean(value))
     TYPEORM_SYNCHRONIZE: boolean
+
+    @IsOptional()
+    @IsUrl({ require_protocol: true, require_tld: false })
+    OIDC_ISSUER_URL?: string
+
+    @IsOptional()
+    @IsString()
+    OIDC_AUDIENCE?: string
 
     @IsOptional()
     @Type(() => Number)
