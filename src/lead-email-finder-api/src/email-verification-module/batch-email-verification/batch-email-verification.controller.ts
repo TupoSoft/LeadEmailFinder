@@ -26,9 +26,9 @@ import {
 } from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JobNotFoundException } from './job-not-found.exception'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 
-@UseGuards(ApiKeyGuard)
+@UseGuards(PermissionsGuard)
 @Controller('verifyBatch')
 export class BatchEmailVerificationController {
     private static readonly MAX_FILE_SIZE = 104857600
@@ -39,6 +39,7 @@ export class BatchEmailVerificationController {
     ) {}
 
     @Post('csv')
+    @RequirePermissions('verification:run')
     @UseInterceptors(FileInterceptor('file'))
     @ApiConsumes('multipart/form-data')
     @ApiBody({
@@ -72,6 +73,7 @@ export class BatchEmailVerificationController {
     }
 
     @Get(':id')
+    @RequirePermissions('verification:read')
     @SerializeOptions({ type: GetBatchStatusResponseDto })
     async getBatchStatus(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<GetBatchStatusResponseDto> {
         try {
@@ -86,6 +88,7 @@ export class BatchEmailVerificationController {
     }
 
     @Get(':id/results')
+    @RequirePermissions('verification:read')
     async getBatchResults(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<StreamableFile> {
         try {
             const readable = await this.batchEmailVerificationService.getBatchResults(id)

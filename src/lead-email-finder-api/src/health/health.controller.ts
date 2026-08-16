@@ -1,7 +1,7 @@
 import { Controller, Get, SerializeOptions } from '@nestjs/common'
 import { HealthCheck, HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { Public } from '@tuposoft/lead-email-finder/modules/api-key/application/decorators'
+import { Public } from '@tuposoft/lead-email-finder/modules/auth'
 
 @Public()
 @ApiExcludeController()

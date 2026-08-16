@@ -2,12 +2,10 @@ import { Body, Controller, Get, Param, Post, Put, SerializeOptions, UseGuards } 
 import { ApiExcludeController } from '@nestjs/swagger'
 import { CreditsService } from './credits.service'
 import { AddCreditsDto, CreditResponseDto, SetBalanceDto } from './credits.dto'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
-import { RequireApiPermissions } from '@tuposoft/lead-email-finder/modules/api-key/application/decorators'
-import { KeyPermissions } from '@tuposoft/lead-email-finder/modules/api-key/domain/key.enum'
+import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 
-@UseGuards(ApiKeyGuard)
-@RequireApiPermissions(KeyPermissions.ADMIN)
+@UseGuards(PermissionsGuard)
+@RequirePermissions('platform:admin')
 @ApiExcludeController()
 @Controller('credits')
 export class CreditsController {

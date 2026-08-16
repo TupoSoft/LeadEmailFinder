@@ -20,10 +20,10 @@ import {
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditGuard } from '../../credits'
 
-@UseGuards(ApiKeyGuard)
+@UseGuards(PermissionsGuard)
 @Controller('/verifyAsync')
 export class AsyncEmailVerificationController {
     constructor(
@@ -32,6 +32,7 @@ export class AsyncEmailVerificationController {
     ) {}
 
     @Post()
+    @RequirePermissions('verification:run')
     @UseGuards(CreditGuard)
     @HttpCode(HttpStatus.ACCEPTED)
     @SerializeOptions({ type: VerifyAsyncResponseDto })
@@ -40,6 +41,7 @@ export class AsyncEmailVerificationController {
     }
 
     @Get(':id')
+    @RequirePermissions('verification:read')
     @SerializeOptions({ type: GetAsyncVerificationStatusResponseDto })
     async getAsyncVerificationState(
         @Param() { id }: GetAsyncVerificationStatusRequestParamsDto,

@@ -8,7 +8,7 @@ import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
 import { SyncEmailVerificationModule } from '../sync-email-verification'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { ConfigModule } from '@nestjs/config'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '../../credits'
 
 @Module({
@@ -20,7 +20,6 @@ import { CreditsModule } from '../../credits'
             useClass: MulterOptionsFactoryImpl,
         }),
         SyncEmailVerificationModule,
-        ApiKeyModule,
         CreditsModule,
     ],
     controllers: [BatchEmailVerificationController],
@@ -31,6 +30,8 @@ import { CreditsModule } from '../../credits'
             provide: 'BatchEmailVerificationServiceToken',
             useExisting: BatchEmailVerificationServiceImpl,
         },
+        RolePermissionPolicy,
+        PermissionsGuard,
     ],
 })
 export class BatchEmailVerificationModule {}

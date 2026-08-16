@@ -4,7 +4,7 @@ import { Proxy } from './proxy.entity'
 import { ProxyProfile } from './proxy.profile'
 import { ProxyController } from './proxy.controller'
 import { ProxyService } from './proxy.service'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { ConfigModule } from '@nestjs/config'
 import { ProxyLeaseService } from './proxy-lease.service'
 import { ProxyAllocatorService } from './proxy-allocator.service'
@@ -21,7 +21,6 @@ import { StructuredLoggingAllocationObserver } from './structured-logging-alloca
     imports: [
         ConfigModule,
         TypeOrmModule.forFeature([Proxy]),
-        ApiKeyModule,
     ],
     providers: [
         ProxyProfile,
@@ -30,6 +29,8 @@ import { StructuredLoggingAllocationObserver } from './structured-logging-alloca
         ProxyAllocatorService,
         TypeOrmProxyCandidateRepository,
         StructuredLoggingAllocationObserver,
+        RolePermissionPolicy,
+        PermissionsGuard,
         {
             provide: PROXY_CANDIDATE_REPOSITORY_TOKEN,
             useExisting: TypeOrmProxyCandidateRepository,

@@ -9,7 +9,7 @@ import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
-import { ApiKeyGuard } from '@tuposoft/lead-email-finder/modules/api-key'
+import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),
@@ -57,7 +57,7 @@ describe('EmailController', () => {
                 },
             ],
         })
-            .overrideGuard(ApiKeyGuard)
+            .overrideGuard(PermissionsGuard)
             .useValue(null)
             .compile()
 

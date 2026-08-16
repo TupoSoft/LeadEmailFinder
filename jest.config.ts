@@ -9,15 +9,11 @@ const config: Config = {
     collectCoverageFrom: ['**/*.(t|j)s'],
     coverageDirectory: '../coverage',
     testEnvironment: 'node',
+    // Wildcard ("/(.*)") entries must come before their bare counterparts: jest's moduleNameMapper
+    // uses the first regex that matches, and a bare entry has no capture group, so if it matched
+    // first it would collapse any deep import under that path down to the bare mapped directory,
+    // silently discarding the rest of the specifier.
     moduleNameMapper: {
-        '@tuposoft/lead-email-finder/redis': '<rootDir>/src/libs/redis/src',
-        '@tuposoft/lead-email-finder/key': '<rootDir>/src/libs/key/src',
-        '@tuposoft/lead-email-finder/socket': '<rootDir>/src/libs/socket/src',
-        '@tuposoft/lead-email-finder/dns': '<rootDir>/src/libs/dns/src',
-        '@tuposoft/lead-email-finder/catch-all': '<rootDir>/src/libs/catch-all/src',
-        '@tuposoft/lead-email-finder/common': '<rootDir>/src/libs/common/src',
-        '@tuposoft/lead-email-finder/modules/api-key': '<rootDir>/src/libs/modules/api-key/src',
-        '@tuposoft/lead-email-finder/modules/identity': '<rootDir>/src/libs/modules/identity/src',
         '@tuposoft/lead-email-finder/redis/(.*)': '<rootDir>/src/libs/redis/src/$1',
         '@tuposoft/lead-email-finder/key/(.*)': '<rootDir>/src/libs/key/src/$1',
         '@tuposoft/lead-email-finder/socket/(.*)': '<rootDir>/src/libs/socket/src/$1',
@@ -25,9 +21,19 @@ const config: Config = {
         '@tuposoft/lead-email-finder/catch-all/(.*)': '<rootDir>/src/libs/catch-all/src/$1',
         '@tuposoft/lead-email-finder/common/(.*)': '<rootDir>/src/libs/common/src/$1',
         '@tuposoft/lead-email-finder/modules/api-key/(.*)': '<rootDir>/src/libs/modules/api-key/src/$1',
+        '@tuposoft/lead-email-finder/modules/auth/(.*)': '<rootDir>/src/libs/modules/auth/src/$1',
         '@tuposoft/lead-email-finder/modules/identity/(.*)': '<rootDir>/src/libs/modules/identity/src/$1',
-        '@tuposoft/lead-email-finder/config': '<rootDir>/src/libs/config/src',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
+        '@tuposoft/lead-email-finder/redis': '<rootDir>/src/libs/redis/src',
+        '@tuposoft/lead-email-finder/key': '<rootDir>/src/libs/key/src',
+        '@tuposoft/lead-email-finder/socket': '<rootDir>/src/libs/socket/src',
+        '@tuposoft/lead-email-finder/dns': '<rootDir>/src/libs/dns/src',
+        '@tuposoft/lead-email-finder/catch-all': '<rootDir>/src/libs/catch-all/src',
+        '@tuposoft/lead-email-finder/common': '<rootDir>/src/libs/common/src',
+        '@tuposoft/lead-email-finder/modules/api-key': '<rootDir>/src/libs/modules/api-key/src',
+        '@tuposoft/lead-email-finder/modules/auth': '<rootDir>/src/libs/modules/auth/src',
+        '@tuposoft/lead-email-finder/modules/identity': '<rootDir>/src/libs/modules/identity/src',
+        '@tuposoft/lead-email-finder/config': '<rootDir>/src/libs/config/src',
     },
 }
 

@@ -62,4 +62,12 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
+
+    it('rejects a configuration missing the OIDC issuer or audience', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {})
+
+        const errors = validateSync(environment).map(error => error.property)
+
+        expect(errors).toEqual(expect.arrayContaining(['OIDC_ISSUER_URL', 'OIDC_AUDIENCE']))
+    })
 })

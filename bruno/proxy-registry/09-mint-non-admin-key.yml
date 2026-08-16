@@ -1,0 +1,29 @@
+info:
+  name: 09-mint-non-admin-key
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/api-keys"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "permissions": ["read"],
+        "description": "Bruno proxy-registry non-admin smoke test"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('mints a non-admin key for the negative-permission check', function() {
+          expect(res.status).to.equal(201);
+          bru.setVar('nonAdminApiKey', res.body.apiKey.token);
+        });
