@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
-import { fromStringToEnum, IEmailVerificationResponseDto, JobState } from '@tuposoft/lead-email-finder/common'
+import {
+    fromStringToEnum,
+    IEmailVerificationResponseDto,
+    JobState,
+    VerifyOptions,
+} from '@tuposoft/lead-email-finder/common'
 import { randomUUID } from 'node:crypto'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import {
@@ -16,11 +21,11 @@ import { ok } from 'node:assert'
 export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerificationService {
     constructor(
         @InjectQueue('async-email-verification')
-        private readonly queue: Queue<string, IEmailVerificationResponseDto, 'async-email-verification'>,
+        private readonly queue: Queue<VerifyOptions, IEmailVerificationResponseDto, 'async-email-verification'>,
     ) {}
 
     async verifyAsync({ email }: VerifyAsyncRequest): Promise<VerifyAsyncResponse> {
-        const { id } = await this.queue.add('async-email-verification', email, { jobId: randomUUID() })
+        const { id } = await this.queue.add('async-email-verification', { email }, { jobId: randomUUID() })
 
         ok(
             id,
@@ -38,7 +43,7 @@ export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerification
         const stateString = await job.getState()
         const state = fromStringToEnum(JobState, stateString)
 
-        ok(state, `Unknown job state: ${stateString}. Job ID: ${id}. Job data: ${job.data}`)
+        ok(state, `Unknown job state: ${stateString}. Job ID: ${id}. Job email: ${job.data.email}`)
 
         if (state !== JobState.COMPLETED) {
             return {
