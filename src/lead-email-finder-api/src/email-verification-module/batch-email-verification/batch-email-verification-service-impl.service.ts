@@ -13,6 +13,7 @@ import {
 } from './batch-email-verification-service.interface'
 import { JobNotFoundException } from './job-not-found.exception'
 import { fromStringToEnum, JobState } from '@tuposoft/lead-email-finder/common'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Readable } from 'stream'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
@@ -26,10 +27,11 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
     ) {}
 
-    async getBatchResults(id: string): Promise<Readable> {
+    async getBatchResults(id: string, principal: AuthPrincipal): Promise<Readable> {
         const job = await this.batchEmailVerificationQueue.getJob(id)
 
         ok(job, new JobNotFoundException(id))
+        ok(job.data.organizationId === principal.organizationId, new JobNotFoundException(id))
 
         const state = await job.getState()
         const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
@@ -47,10 +49,10 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         return Readable.fromWeb(Body.transformToWebStream() as ReadableStream)
     }
 
-    async getBatchStatus(id: string): Promise<GetBatchStatusResponse> {
+    async getBatchStatus(id: string, principal: AuthPrincipal): Promise<GetBatchStatusResponse> {
         const job = await this.batchEmailVerificationQueue.getJob(id)
 
-        if (job === undefined) {
+        if (job === undefined || job.data.organizationId !== principal.organizationId) {
             throw new JobNotFoundException(id)
         }
 
@@ -91,14 +93,18 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         return stats
     }
 
-    async uploadFile({ bucket, key }: BatchEmailVerificationFile, apiKey: string): Promise<EnqueueBatchResponse> {
+    async uploadFile(
+        { bucket, key }: BatchEmailVerificationFile,
+        principal: AuthPrincipal,
+    ): Promise<EnqueueBatchResponse> {
         const batchEmailVerificationJob = await this.batchEmailVerificationQueue.add(
             BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
             {
                 step: BatchEmailVerificationJobStep.Validate,
                 bucket,
                 key,
-                apiKey,
+                organizationId: principal.organizationId,
+                credentialId: principal.credentialId,
             },
             { jobId: randomUUID() },
         )

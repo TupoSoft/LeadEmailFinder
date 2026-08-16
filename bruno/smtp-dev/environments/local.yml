@@ -4,3 +4,5 @@ variables:
     value: http://localhost:53000
   - name: adminApiKey
     value: "{{process.env.ADMIN_API_KEY}}"
+  - name: bridgeOrganizationId
+    value: "{{process.env.BRIDGE_ORGANIZATION_ID}}"

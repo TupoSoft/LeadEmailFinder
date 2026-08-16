@@ -12,7 +12,6 @@ import { plainToInstance } from 'class-transformer'
 import { BatchEmailVerificationCsvRowDto } from './batch-email-verification-csv-row.dto'
 import { validate } from 'class-validator'
 import { randomUUID } from 'node:crypto'
-import { VerifyOptions } from '@tuposoft/lead-email-finder/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { EmailVerification } from '../sync-email-verification'
 import { DataSource, Repository } from 'typeorm'
@@ -20,6 +19,8 @@ import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { CreditsService } from '../../credits'
+import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
+import { deriveResultsKey } from './derive-results-key'
 
 @Processor(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
 export class BatchEmailVerificationProcessor extends WorkerHost {
@@ -27,7 +28,8 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
-        @InjectQueue('async-email-verification') private readonly asyncEmailVerificationQueue: Queue<VerifyOptions>,
+        @InjectQueue('async-email-verification')
+        private readonly asyncEmailVerificationQueue: Queue<AsyncEmailVerificationJobData>,
         @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
         private readonly dataSource: DataSource,
         private readonly creditsService: CreditsService,
@@ -65,7 +67,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
     private async uploadResults(job: Job<BatchEmailVerificationJobData>): Promise<void> {
         ok(job.data.step === BatchEmailVerificationJobStep.UploadResults, 'Invalid step.')
 
-        const { bucket, key } = job.data
+        const { bucket, key, organizationId, credentialId } = job.data
 
         const columns = this.dataSource.getMetadata(EmailVerification).columns.map(c => c.propertyName)
         const cursor = await this.emailVerificationRepo
@@ -78,7 +80,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         })
 
         const Body = new PassThrough()
-        const Key = `results/${key}`
+        const Key = deriveResultsKey(key)
 
         const upload = new Upload({
             client: this.s3,
@@ -101,13 +103,16 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         await job.updateData({
             step: BatchEmailVerificationJobStep.Finish,
             resultFilePath: `s3://${bucket}/${Key}`,
+            organizationId,
+            credentialId,
         })
     }
 
     private async validateFile(job: Job<BatchEmailVerificationJobData>): Promise<void> {
         ok(job.data.step === BatchEmailVerificationJobStep.Validate, 'Invalid step.')
+        ok(job.id, 'Job ID is undefined.')
 
-        const { bucket, key, apiKey } = job.data
+        const { bucket, key, organizationId, credentialId } = job.data
 
         const parser = await this.getParser(bucket, key)
 
@@ -124,13 +129,14 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             rowCount++
         }
 
-        await this.creditsService.deductCredits(apiKey, rowCount)
+        await this.creditsService.debit(organizationId, rowCount, job.id)
 
         await job.updateData({
             step: BatchEmailVerificationJobStep.Process,
             bucket,
             key,
-            apiKey,
+            organizationId,
+            credentialId,
         })
     }
 
@@ -138,7 +144,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         ok(job.data.step === BatchEmailVerificationJobStep.Process, 'Invalid step.')
         ok(job.id, 'Job ID is undefined.')
 
-        const { bucket, key, apiKey } = job.data
+        const { bucket, key, organizationId, credentialId } = job.data
 
         const parser = await this.getParser(bucket, key)
 
@@ -147,7 +153,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
             await this.asyncEmailVerificationQueue.add(
                 'async-email-verification',
-                { email, batchId: job.id },
+                { email, batchId: job.id, organizationId, credentialId },
                 {
                     jobId: randomUUID(),
                     parent: {
@@ -162,7 +168,8 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             step: BatchEmailVerificationJobStep.WaitForChildren,
             bucket,
             key,
-            apiKey,
+            organizationId,
+            credentialId,
         })
     }
 
@@ -188,13 +195,14 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             throw new WaitingChildrenError()
         }
 
-        const { bucket, key, apiKey } = job.data
+        const { bucket, key, organizationId, credentialId } = job.data
 
         await job.updateData({
             step: BatchEmailVerificationJobStep.UploadResults,
             bucket,
             key,
-            apiKey,
+            organizationId,
+            credentialId,
         })
     }
 

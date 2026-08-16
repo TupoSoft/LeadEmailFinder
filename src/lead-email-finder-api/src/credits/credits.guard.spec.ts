@@ -1,5 +1,6 @@
 import { ExecutionContext, HttpException, HttpStatus } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditGuard } from './credits.guard'
 import { CreditsService } from './credits.service'
 import { InsufficientCreditsException } from './credits.error'
@@ -15,7 +16,7 @@ describe('CreditGuard', () => {
                 {
                     provide: CreditsService,
                     useValue: {
-                        deductCredit: jest.fn(),
+                        debit: jest.fn(),
                     },
                 },
             ],
@@ -29,41 +30,34 @@ describe('CreditGuard', () => {
         jest.clearAllMocks()
     })
 
-    const contextWithHeaders = (headers: Record<string, string>): ExecutionContext =>
+    const contextWithRequest = (request: { authPrincipal?: AuthPrincipal }): ExecutionContext =>
         ({
             switchToHttp: () => ({
-                getRequest: () => ({ headers }),
+                getRequest: () => request,
             }),
         }) as unknown as ExecutionContext
 
-    it('throws 401 if the API key is missing', async () => {
-        await expect(guard.canActivate(contextWithHeaders({}))).rejects.toMatchObject({
+    const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
+
+    it('throws 401 if no authentication principal is on the request', async () => {
+        await expect(guard.canActivate(contextWithRequest({}))).rejects.toMatchObject({
             status: HttpStatus.UNAUTHORIZED,
         })
     })
 
-    it('deducts a credit using the bearer token and allows the request', async () => {
-        creditsService.deductCredit.mockResolvedValue(undefined)
+    it('debits one credit from the principal organization and allows the request', async () => {
+        creditsService.debit.mockResolvedValue(undefined)
 
-        const result = await guard.canActivate(contextWithHeaders({ authorization: 'Bearer api_test' }))
-
-        expect(result).toBe(true)
-        expect(creditsService.deductCredit).toHaveBeenCalledWith('api_test')
-    })
-
-    it('deducts a credit using the x-api-key header', async () => {
-        creditsService.deductCredit.mockResolvedValue(undefined)
-
-        const result = await guard.canActivate(contextWithHeaders({ 'x-api-key': 'api_test' }))
+        const result = await guard.canActivate(contextWithRequest({ authPrincipal: principal }))
 
         expect(result).toBe(true)
-        expect(creditsService.deductCredit).toHaveBeenCalledWith('api_test')
+        expect(creditsService.debit).toHaveBeenCalledWith('org-1', 1, expect.any(String))
     })
 
     it('throws 402 when credits are insufficient', async () => {
-        creditsService.deductCredit.mockRejectedValue(new InsufficientCreditsException('api_test'))
+        creditsService.debit.mockRejectedValue(new InsufficientCreditsException('org-1'))
 
-        const promise = guard.canActivate(contextWithHeaders({ 'x-api-key': 'api_test' }))
+        const promise = guard.canActivate(contextWithRequest({ authPrincipal: principal }))
 
         await expect(promise).rejects.toBeInstanceOf(HttpException)
         await expect(promise).rejects.toMatchObject({ status: HttpStatus.PAYMENT_REQUIRED })
@@ -71,8 +65,8 @@ describe('CreditGuard', () => {
 
     it('rethrows unexpected errors', async () => {
         const error = new Error('boom')
-        creditsService.deductCredit.mockRejectedValue(error)
+        creditsService.debit.mockRejectedValue(error)
 
-        await expect(guard.canActivate(contextWithHeaders({ 'x-api-key': 'api_test' }))).rejects.toThrow(error)
+        await expect(guard.canActivate(contextWithRequest({ authPrincipal: principal }))).rejects.toThrow(error)
     })
 })

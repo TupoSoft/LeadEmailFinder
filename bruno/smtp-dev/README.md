@@ -17,6 +17,17 @@ Copy the local admin key from `docker/secrets/admin_apikey.txt` into an ignored 
 ADMIN_API_KEY=replace-with-the-local-admin-key
 ```
 
+Legacy API keys (including the local admin key) are bridged onto a single shared organization row. Credits are granted per-organization, so look up that organization's id and add it to the same `.env` file:
+
+```shell
+docker compose -f docker/compose.yaml exec postgres psql -U postgres -d lef -c \
+  "SELECT id FROM organizations WHERE name = 'Legacy API keys (temporary bridge)';"
+```
+
+```dotenv
+BRIDGE_ORGANIZATION_ID=replace-with-the-organization-id
+```
+
 Then run:
 
 ```shell

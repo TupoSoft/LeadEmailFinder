@@ -1,4 +1,5 @@
 import { IEmailVerificationResponseDto, JobState } from '@tuposoft/lead-email-finder/common'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 export interface VerifyAsyncRequest {
     email: string
@@ -18,7 +19,7 @@ export interface GetAsyncVerificationStatus {
 }
 
 export interface AsyncEmailVerificationService {
-    verifyAsync(options: VerifyAsyncRequest): Promise<VerifyAsyncResponse>
+    verifyAsync(options: VerifyAsyncRequest, principal: AuthPrincipal): Promise<VerifyAsyncResponse>
 
-    getAsyncVerificationState(id: string): Promise<GetAsyncVerificationStatus>
+    getAsyncVerificationState(id: string, principal: AuthPrincipal): Promise<GetAsyncVerificationStatus>
 }

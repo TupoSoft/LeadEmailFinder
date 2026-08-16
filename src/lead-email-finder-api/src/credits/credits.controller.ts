@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Put, SerializeOptions, UseGuards } from '@nestjs/common'
 import { ApiExcludeController } from '@nestjs/swagger'
 import { CreditsService } from './credits.service'
-import { AddCreditsDto, CreditResponseDto, SetBalanceDto } from './credits.dto'
+import { AddCreditsDto, CreditResponseDto, CreditsAccountParamsDto, SetBalanceDto } from './credits.dto'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 
 @UseGuards(PermissionsGuard)
@@ -11,24 +11,30 @@ import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finde
 export class CreditsController {
     constructor(private readonly creditsService: CreditsService) {}
 
-    @Get(':apiKey')
+    @Get(':organizationId')
     @SerializeOptions({ type: CreditResponseDto })
-    async getBalance(@Param('apiKey') apiKey: string): Promise<CreditResponseDto> {
-        const balance = await this.creditsService.getBalance(apiKey)
+    async getBalance(@Param() { organizationId }: CreditsAccountParamsDto): Promise<CreditResponseDto> {
+        const balance = await this.creditsService.getBalance(organizationId)
         return { balance }
     }
 
-    @Post(':apiKey')
+    @Post(':organizationId')
     @SerializeOptions({ type: CreditResponseDto })
-    async addCredits(@Param('apiKey') apiKey: string, @Body() { amount }: AddCreditsDto): Promise<CreditResponseDto> {
-        const balance = await this.creditsService.addCredits(apiKey, amount)
+    async addCredits(
+        @Param() { organizationId }: CreditsAccountParamsDto,
+        @Body() { amount }: AddCreditsDto,
+    ): Promise<CreditResponseDto> {
+        const balance = await this.creditsService.addCredits(organizationId, amount)
         return { balance }
     }
 
-    @Put(':apiKey')
+    @Put(':organizationId')
     @SerializeOptions({ type: CreditResponseDto })
-    async setBalance(@Param('apiKey') apiKey: string, @Body() { amount }: SetBalanceDto): Promise<CreditResponseDto> {
-        const balance = await this.creditsService.setBalance(apiKey, amount)
+    async setBalance(
+        @Param() { organizationId }: CreditsAccountParamsDto,
+        @Body() { amount }: SetBalanceDto,
+    ): Promise<CreditResponseDto> {
+        const balance = await this.creditsService.setBalance(organizationId, amount)
         return { balance }
     }
 }

@@ -29,24 +29,26 @@ describe('CreditsController', () => {
         service = moduleRef.get(CreditsService)
     })
 
-    it('returns the balance for an API key', async () => {
+    const organizationId = '5b92ded1-7eba-4c66-b72e-a5fea465da68'
+
+    it('returns the balance for an organization', async () => {
         service.getBalance.mockResolvedValue(10)
 
-        await expect(controller.getBalance('api_test')).resolves.toEqual({ balance: 10 })
-        expect(service.getBalance).toHaveBeenCalledWith('api_test')
+        await expect(controller.getBalance({ organizationId })).resolves.toEqual({ balance: 10 })
+        expect(service.getBalance).toHaveBeenCalledWith(organizationId)
     })
 
-    it('adds credits to an API key', async () => {
+    it('adds credits to an organization', async () => {
         service.addCredits.mockResolvedValue(15)
 
-        await expect(controller.addCredits('api_test', { amount: 5 })).resolves.toEqual({ balance: 15 })
-        expect(service.addCredits).toHaveBeenCalledWith('api_test', 5)
+        await expect(controller.addCredits({ organizationId }, { amount: 5 })).resolves.toEqual({ balance: 15 })
+        expect(service.addCredits).toHaveBeenCalledWith(organizationId, 5)
     })
 
-    it('sets the balance for an API key', async () => {
+    it('sets the balance for an organization', async () => {
         service.setBalance.mockResolvedValue(7)
 
-        await expect(controller.setBalance('api_test', { amount: 7 })).resolves.toEqual({ balance: 7 })
-        expect(service.setBalance).toHaveBeenCalledWith('api_test', 7)
+        await expect(controller.setBalance({ organizationId }, { amount: 7 })).resolves.toEqual({ balance: 7 })
+        expect(service.setBalance).toHaveBeenCalledWith(organizationId, 7)
     })
 })

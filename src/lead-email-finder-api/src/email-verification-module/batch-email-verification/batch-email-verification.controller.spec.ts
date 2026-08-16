@@ -1,13 +1,42 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
-import { HttpStatus, INestApplication } from '@nestjs/common'
+import { HttpStatus, INestApplication, NestMiddleware } from '@nestjs/common'
+import { MiddlewareConsumer, Module } from '@nestjs/common'
 import request from 'supertest'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { randomUUID } from 'node:crypto'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
+import { setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
+import { NextFunction, Request, Response } from 'express'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
+const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
+
+class FixturePrincipalMiddleware implements NestMiddleware {
+    use(req: Request, _res: Response, next: NextFunction): void {
+        setAuthPrincipal(req, principal)
+        next()
+    }
+}
+
+@Module({
+    controllers: [BatchEmailVerificationController],
+    providers: [
+        {
+            provide: batchEmailVerificationServiceToken,
+            useValue: {
+                uploadFile: jest.fn(),
+            },
+        },
+    ],
+})
+class TestModule {
+    configure(consumer: MiddlewareConsumer): void {
+        consumer.apply(FixturePrincipalMiddleware).forRoutes('*')
+    }
+}
 
 describe('BatchEmailVerificationController', () => {
     let app: INestApplication
@@ -15,15 +44,7 @@ describe('BatchEmailVerificationController', () => {
 
     beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
-            controllers: [BatchEmailVerificationController],
-            providers: [
-                {
-                    provide: batchEmailVerificationServiceToken,
-                    useValue: {
-                        uploadFile: jest.fn(),
-                    },
-                },
-            ],
+            imports: [TestModule],
         })
             .overrideGuard(PermissionsGuard)
             .useValue(null)
@@ -68,7 +89,6 @@ describe('BatchEmailVerificationController', () => {
 
             await request(app.getHttpServer())
                 .post('/verifyBatch/csv')
-                .set('x-api-key', 'api_test')
                 .attach('file', fileBuffer, {
                     filename: 'test.csv',
                     contentType: 'text/csv',
@@ -77,7 +97,7 @@ describe('BatchEmailVerificationController', () => {
 
             expect(batchEmailVerificationService.uploadFile).toHaveBeenCalledWith(
                 expect.objectContaining({ originalname: 'test.csv' }),
-                'api_test',
+                principal,
             )
         })
 
