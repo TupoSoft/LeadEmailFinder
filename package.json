@@ -11,6 +11,7 @@
         "test": "jest",
         "test:ci": "jest --runInBand",
         "keycloak:provision": "ts-node scripts/keycloak/provision.ts",
+        "plans:sync": "ts-node scripts/plans/sync-project.ts",
         "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit -p tsconfig.json",
