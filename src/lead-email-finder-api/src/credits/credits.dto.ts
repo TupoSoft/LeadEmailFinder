@@ -1,5 +1,10 @@
-import { IsInt, Min } from 'class-validator'
+import { IsInt, IsUUID, Min } from 'class-validator'
 import { Expose } from 'class-transformer'
+
+export class CreditsAccountParamsDto {
+    @IsUUID()
+    organizationId: string
+}
 
 export class AddCreditsDto {
     @IsInt()

@@ -5,9 +5,9 @@ import {
     IEmailVerificationResponseDto,
     IEmailVerificationService,
     parseTimeString,
-    VerifyOptions,
 } from '@tuposoft/lead-email-finder/common'
 import { Inject } from '@nestjs/common'
+import { AsyncEmailVerificationJobData } from './async-email-verification-job-data.interface'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 import { GreylistedException } from './greylisted.exception'
 
@@ -33,10 +33,13 @@ export class AsyncEmailVerificationProcessor extends WorkerHost {
         super()
     }
 
-    async process(job: Job<VerifyOptions, IEmailVerificationResponseDto>): Promise<IEmailVerificationResponseDto> {
-        const { data: verifyOptions } = job
-
-        const response = await this.emailVerificationService.verify(verifyOptions)
+    async process(
+        job: Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>,
+    ): Promise<IEmailVerificationResponseDto> {
+        // job.data carries organizationId/credentialId beyond VerifyOptions; verify() only reads the
+        // VerifyOptions fields it declares, so passing the wider object through is safe and avoids an
+        // unused-variable destructure.
+        const response = await this.emailVerificationService.verify(job.data)
 
         if (response.reason === EmailVerificationReason.TemporarilyBlocked) {
             throw new GreylistedException(response.email)

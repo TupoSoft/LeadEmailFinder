@@ -1,7 +1,12 @@
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
 
+interface BatchEmailVerificationJobOwner {
+    organizationId: string
+    credentialId: string
+}
+
 export type BatchEmailVerificationJobData =
-    | {
+    | ({
           step:
               | BatchEmailVerificationJobStep.Validate
               | BatchEmailVerificationJobStep.Process
@@ -9,9 +14,8 @@ export type BatchEmailVerificationJobData =
               | BatchEmailVerificationJobStep.UploadResults
           key: string
           bucket: string
-          apiKey: string
-      }
-    | {
+      } & BatchEmailVerificationJobOwner)
+    | ({
           step: BatchEmailVerificationJobStep.Finish
           resultFilePath: string
-      }
+      } & BatchEmailVerificationJobOwner)

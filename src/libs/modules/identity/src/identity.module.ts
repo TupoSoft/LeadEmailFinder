@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
+import { CreditDebit } from './infrastructure/persistence/credit-debit.entity'
 import { ExternalIdentity } from './infrastructure/persistence/external-identity.entity'
 import { OrganizationCreditAccount } from './infrastructure/persistence/organization-credit-account.entity'
 import { OrganizationMembership } from './infrastructure/persistence/membership.entity'
@@ -14,6 +15,7 @@ import { ServiceCredential } from './infrastructure/persistence/service-credenti
             OrganizationMembership,
             ServiceCredential,
             OrganizationCreditAccount,
+            CreditDebit,
         ]),
     ],
     exports: [TypeOrmModule],

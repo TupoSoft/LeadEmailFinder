@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common'
-import { TypeOrmModule } from '@nestjs/typeorm'
-import { Credit } from './credit.entity'
+import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
 import { CreditGuard } from './credits.guard'
 import { CreditsController } from './credits.controller'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Credit])],
+    imports: [IdentityModule],
     providers: [CreditsService, CreditGuard, RolePermissionPolicy, PermissionsGuard],
     controllers: [CreditsController],
     exports: [CreditGuard, CreditsService],

@@ -1,50 +1,64 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
-import { Credit } from './credit.entity'
+import { DataSource, Repository } from 'typeorm'
+import { CreditDebit, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
 import { InsufficientCreditsException } from './credits.error'
 
 @Injectable()
 export class CreditsService {
-    constructor(@InjectRepository(Credit) private readonly creditRepo: Repository<Credit>) {}
+    constructor(
+        @InjectRepository(OrganizationCreditAccount)
+        private readonly organizationCreditAccountRepo: Repository<OrganizationCreditAccount>,
+        private readonly dataSource: DataSource,
+    ) {}
 
-    async deductCredit(token: string): Promise<void> {
-        return this.deductCredits(token, 1)
+    async debit(organizationId: string, amount: number, reference: string): Promise<void> {
+        await this.dataSource.transaction(async manager => {
+            const account = await manager.findOne(OrganizationCreditAccount, {
+                where: { organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+
+            if (!account) {
+                throw new InsufficientCreditsException(organizationId)
+            }
+
+            if (await manager.existsBy(CreditDebit, { organizationId, reference })) {
+                return
+            }
+
+            if (account.balance < amount) {
+                throw new InsufficientCreditsException(organizationId)
+            }
+
+            account.balance -= amount
+            await manager.save(OrganizationCreditAccount, account)
+            await manager.insert(CreditDebit, { organizationId, reference, amount })
+        })
     }
 
-    async deductCredits(token: string, count: number): Promise<void> {
-        const result = await this.creditRepo
-            .createQueryBuilder()
-            .update(Credit)
-            .set({ balance: () => 'balance - :count' })
-            .where('token = :token', { token })
-            .andWhere('balance >= :count', { count })
-            .setParameters({ token, count })
-            .execute()
+    async addCredits(organizationId: string, amount: number): Promise<number> {
+        const account =
+            (await this.organizationCreditAccountRepo.findOneBy({ organizationId })) ??
+            this.organizationCreditAccountRepo.create({ organizationId, balance: 0 })
+        account.balance += amount
 
-        if (!result.affected) {
-            throw new InsufficientCreditsException(token)
-        }
-    }
-
-    async addCredits(token: string, amount: number): Promise<number> {
-        const credit = (await this.creditRepo.findOneBy({ token })) ?? this.creditRepo.create({ token, balance: 0 })
-        credit.balance += amount
-
-        const saved = await this.creditRepo.save(credit)
+        const saved = await this.organizationCreditAccountRepo.save(account)
         return saved.balance
     }
 
-    async getBalance(token: string): Promise<number> {
-        const credit = await this.creditRepo.findOneBy({ token })
-        return credit?.balance ?? 0
+    async getBalance(organizationId: string): Promise<number> {
+        const account = await this.organizationCreditAccountRepo.findOneBy({ organizationId })
+        return account?.balance ?? 0
     }
 
-    async setBalance(token: string, amount: number): Promise<number> {
-        const credit = (await this.creditRepo.findOneBy({ token })) ?? this.creditRepo.create({ token })
-        credit.balance = amount
+    async setBalance(organizationId: string, amount: number): Promise<number> {
+        const account =
+            (await this.organizationCreditAccountRepo.findOneBy({ organizationId })) ??
+            this.organizationCreditAccountRepo.create({ organizationId })
+        account.balance = amount
 
-        const saved = await this.creditRepo.save(credit)
+        const saved = await this.organizationCreditAccountRepo.save(account)
         return saved.balance
     }
 }

@@ -1,140 +1,162 @@
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { Test, TestingModule } from '@nestjs/testing'
+import { DataSource, EntityManager, Repository } from 'typeorm'
+import { CreditDebit, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
-import { Repository } from 'typeorm'
-import { Credit } from './credit.entity'
 import { InsufficientCreditsException } from './credits.error'
 
 describe('CreditsService', () => {
     let service: CreditsService
-    let creditRepoMock: jest.Mocked<Pick<Repository<Credit>, 'findOneBy' | 'save' | 'create'>> & {
-        createQueryBuilder: jest.Mock
-    }
-    let queryBuilderMock: {
-        update: jest.Mock
-        set: jest.Mock
-        where: jest.Mock
-        andWhere: jest.Mock
-        setParameters: jest.Mock
-        execute: jest.Mock
-    }
+    let accountRepoMock: jest.Mocked<Pick<Repository<OrganizationCreditAccount>, 'findOneBy' | 'save' | 'create'>>
+    let managerMock: jest.Mocked<Pick<EntityManager, 'findOne' | 'existsBy' | 'save' | 'insert'>>
+    let dataSourceMock: { transaction: jest.Mock }
 
     beforeEach(async () => {
-        queryBuilderMock = {
-            update: jest.fn().mockReturnThis(),
-            set: jest.fn().mockReturnThis(),
-            where: jest.fn().mockReturnThis(),
-            andWhere: jest.fn().mockReturnThis(),
-            setParameters: jest.fn().mockReturnThis(),
-            execute: jest.fn(),
+        managerMock = {
+            findOne: jest.fn(),
+            existsBy: jest.fn(),
+            save: jest.fn(),
+            insert: jest.fn(),
+        }
+        dataSourceMock = {
+            transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
         }
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CreditsService,
                 {
-                    provide: getRepositoryToken(Credit),
+                    provide: getRepositoryToken(OrganizationCreditAccount),
                     useValue: {
                         findOneBy: jest.fn(),
                         save: jest.fn(),
                         create: jest.fn(),
-                        createQueryBuilder: jest.fn().mockReturnValue(queryBuilderMock),
                     },
+                },
+                {
+                    provide: DataSource,
+                    useValue: dataSourceMock,
                 },
             ],
         }).compile()
 
         service = module.get(CreditsService)
-        creditRepoMock = module.get(getRepositoryToken(Credit))
+        accountRepoMock = module.get(getRepositoryToken(OrganizationCreditAccount))
     })
 
     afterEach(() => {
         jest.clearAllMocks()
     })
 
-    describe('deductCredits', () => {
-        it('deducts credits when the balance is sufficient', async () => {
-            queryBuilderMock.execute.mockResolvedValue({ affected: 1 })
+    describe('debit', () => {
+        const organizationId = 'org-1'
 
-            await expect(service.deductCredits('api_test', 3)).resolves.toBeUndefined()
+        it('decrements the balance and records the reference when sufficient and new', async () => {
+            managerMock.findOne.mockResolvedValue({ organizationId, balance: 10 } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(false)
 
-            expect(queryBuilderMock.where).toHaveBeenCalledWith('token = :token', { token: 'api_test' })
-            expect(queryBuilderMock.andWhere).toHaveBeenCalledWith('balance >= :count', { count: 3 })
-            expect(queryBuilderMock.setParameters).toHaveBeenCalledWith({ token: 'api_test', count: 3 })
+            await expect(service.debit(organizationId, 3, 'ref-1')).resolves.toBeUndefined()
+
+            expect(managerMock.findOne).toHaveBeenCalledWith(OrganizationCreditAccount, {
+                where: { organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            expect(managerMock.save).toHaveBeenCalledWith(
+                OrganizationCreditAccount,
+                expect.objectContaining({ balance: 7 }),
+            )
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditDebit, {
+                organizationId,
+                reference: 'ref-1',
+                amount: 3,
+            })
         })
 
-        it('throws InsufficientCreditsException when nothing was affected', async () => {
-            queryBuilderMock.execute.mockResolvedValue({ affected: 0 })
+        it('throws InsufficientCreditsException without writing when the balance is too low', async () => {
+            managerMock.findOne.mockResolvedValue({ organizationId, balance: 1 } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(false)
 
-            await expect(service.deductCredits('api_test', 3)).rejects.toThrow(InsufficientCreditsException)
+            await expect(service.debit(organizationId, 3, 'ref-1')).rejects.toThrow(InsufficientCreditsException)
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
         })
-    })
 
-    describe('deductCredit', () => {
-        it('deducts exactly one credit', async () => {
-            queryBuilderMock.execute.mockResolvedValue({ affected: 1 })
+        it('throws InsufficientCreditsException when no account exists', async () => {
+            managerMock.findOne.mockResolvedValue(null)
 
-            await service.deductCredit('api_test')
+            await expect(service.debit(organizationId, 1, 'ref-1')).rejects.toThrow(InsufficientCreditsException)
 
-            expect(queryBuilderMock.andWhere).toHaveBeenCalledWith('balance >= :count', { count: 1 })
+            expect(managerMock.existsBy).not.toHaveBeenCalled()
+            expect(managerMock.save).not.toHaveBeenCalled()
+        })
+
+        it('is idempotent: a reference already charged resolves without writing again', async () => {
+            managerMock.findOne.mockResolvedValue({ organizationId, balance: 10 } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(true)
+
+            await expect(service.debit(organizationId, 3, 'ref-1')).resolves.toBeUndefined()
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
         })
     })
 
     describe('addCredits', () => {
-        it('creates a new row when none exists', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue(null)
-            creditRepoMock.create.mockReturnValue({ token: 'api_test', balance: 0 } as Credit)
-            creditRepoMock.save.mockResolvedValue({ token: 'api_test', balance: 5 } as Credit)
+        it('creates a new account when none exists', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue(null)
+            accountRepoMock.create.mockReturnValue({ organizationId: 'org-1', balance: 0 } as OrganizationCreditAccount)
+            accountRepoMock.save.mockResolvedValue({ organizationId: 'org-1', balance: 5 } as OrganizationCreditAccount)
 
-            const result = await service.addCredits('api_test', 5)
+            const result = await service.addCredits('org-1', 5)
 
-            expect(creditRepoMock.create).toHaveBeenCalledWith({ token: 'api_test', balance: 0 })
+            expect(accountRepoMock.create).toHaveBeenCalledWith({ organizationId: 'org-1', balance: 0 })
             expect(result).toBe(5)
         })
 
-        it('increments the balance of an existing row', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue({ token: 'api_test', balance: 10 } as Credit)
-            creditRepoMock.save.mockImplementation(credit => Promise.resolve(credit as Credit))
+        it('increments the balance of an existing account', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
 
-            const result = await service.addCredits('api_test', 5)
+            const result = await service.addCredits('org-1', 5)
 
             expect(result).toBe(15)
         })
     })
 
     describe('setBalance', () => {
-        it('sets the balance of an existing row', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue({ token: 'api_test', balance: 10 } as Credit)
-            creditRepoMock.save.mockImplementation(credit => Promise.resolve(credit as Credit))
+        it('sets the balance of an existing account', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
 
-            const result = await service.setBalance('api_test', 7)
+            const result = await service.setBalance('org-1', 7)
 
             expect(result).toBe(7)
         })
 
-        it('creates a new row when none exists', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue(null)
-            creditRepoMock.create.mockReturnValue({ token: 'api_test' } as Credit)
-            creditRepoMock.save.mockImplementation(credit => Promise.resolve(credit as Credit))
+        it('creates a new account when none exists', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue(null)
+            accountRepoMock.create.mockReturnValue({ organizationId: 'org-1' } as OrganizationCreditAccount)
+            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
 
-            const result = await service.setBalance('api_test', 7)
+            const result = await service.setBalance('org-1', 7)
 
-            expect(creditRepoMock.create).toHaveBeenCalledWith({ token: 'api_test' })
+            expect(accountRepoMock.create).toHaveBeenCalledWith({ organizationId: 'org-1' })
             expect(result).toBe(7)
         })
     })
 
     describe('getBalance', () => {
-        it('returns the balance when the row exists', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue({ token: 'api_test', balance: 42 } as Credit)
+        it('returns the balance when the account exists', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 42 } as OrganizationCreditAccount)
 
-            await expect(service.getBalance('api_test')).resolves.toBe(42)
+            await expect(service.getBalance('org-1')).resolves.toBe(42)
         })
 
-        it('returns 0 when no row exists', async () => {
-            creditRepoMock.findOneBy.mockResolvedValue(null)
+        it('returns 0 when no account exists', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue(null)
 
-            await expect(service.getBalance('api_test')).resolves.toBe(0)
+            await expect(service.getBalance('org-1')).resolves.toBe(0)
         })
     })
 })

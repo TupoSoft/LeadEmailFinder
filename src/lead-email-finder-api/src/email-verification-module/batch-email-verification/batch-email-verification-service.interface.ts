@@ -1,6 +1,7 @@
 import { BatchEmailVerificationFile } from './batch-email-verification-file.interface'
 import { Readable } from 'node:stream'
 import { JobState } from '@tuposoft/lead-email-finder/common'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 export interface EnqueueBatchResponse {
     id: string
@@ -20,7 +21,7 @@ export interface GetBatchStatusResponse {
 }
 
 export interface BatchEmailVerificationService {
-    uploadFile(file: BatchEmailVerificationFile, apiKey: string): Promise<EnqueueBatchResponse>
-    getBatchStatus(id: string): Promise<GetBatchStatusResponse>
-    getBatchResults(id: string): Promise<Readable>
+    uploadFile(file: BatchEmailVerificationFile, principal: AuthPrincipal): Promise<EnqueueBatchResponse>
+    getBatchStatus(id: string, principal: AuthPrincipal): Promise<GetBatchStatusResponse>
+    getBatchResults(id: string, principal: AuthPrincipal): Promise<Readable>
 }

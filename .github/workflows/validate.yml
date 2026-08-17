@@ -54,6 +54,11 @@ jobs:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
 
+      - name: Test credit account debits against a real database
+        env:
+          TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
+        run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
+
       - name: Build application
         run: corepack pnpm build
 

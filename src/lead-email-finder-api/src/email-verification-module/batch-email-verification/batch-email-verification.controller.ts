@@ -8,7 +8,6 @@ import {
     Param,
     ParseFilePipeBuilder,
     Post,
-    Req,
     SerializeOptions,
     StreamableFile,
     UploadedFile,
@@ -16,7 +15,7 @@ import {
     UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Express, Request } from 'express'
+import { Express } from 'express'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import {
     GetBatchStatusRequestParamsDto,
@@ -26,7 +25,8 @@ import {
 } from './batch-email-verification.dto'
 import { ApiBody, ApiConsumes } from '@nestjs/swagger'
 import { JobNotFoundException } from './job-not-found.exception'
-import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 @UseGuards(PermissionsGuard)
 @Controller('verifyBatch')
@@ -62,22 +62,20 @@ export class BatchEmailVerificationController {
                 }),
         )
         file: Express.MulterS3.File,
-        @Req() req: Request,
+        @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<UploadFileResponseDto> {
-        const authHeader = req.headers['authorization']
-        const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
-        const xApiKey = req.headers['x-api-key'] as string | undefined
-        const apiKey = (bearerToken ?? xApiKey) as string
-
-        return await this.batchEmailVerificationService.uploadFile(file, apiKey)
+        return await this.batchEmailVerificationService.uploadFile(file, principal)
     }
 
     @Get(':id')
     @RequirePermissions('verification:read')
     @SerializeOptions({ type: GetBatchStatusResponseDto })
-    async getBatchStatus(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<GetBatchStatusResponseDto> {
+    async getBatchStatus(
+        @Param() { id }: GetBatchStatusRequestParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<GetBatchStatusResponseDto> {
         try {
-            return await this.batchEmailVerificationService.getBatchStatus(id)
+            return await this.batchEmailVerificationService.getBatchStatus(id, principal)
         } catch (error) {
             if (error instanceof JobNotFoundException) {
                 throw new NotFoundException(error.message)
@@ -89,9 +87,12 @@ export class BatchEmailVerificationController {
 
     @Get(':id/results')
     @RequirePermissions('verification:read')
-    async getBatchResults(@Param() { id }: GetBatchStatusRequestParamsDto): Promise<StreamableFile> {
+    async getBatchResults(
+        @Param() { id }: GetBatchStatusRequestParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<StreamableFile> {
         try {
-            const readable = await this.batchEmailVerificationService.getBatchResults(id)
+            const readable = await this.batchEmailVerificationService.getBatchResults(id, principal)
             return new StreamableFile(readable, { type: 'text/csv' })
         } catch (error) {
             if (error instanceof JobNotFoundException) {

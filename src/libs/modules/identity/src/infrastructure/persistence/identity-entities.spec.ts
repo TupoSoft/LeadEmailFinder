@@ -1,5 +1,6 @@
 import { DataSource, DataSourceOptions, getMetadataArgsStorage } from 'typeorm'
 import { AUTH_ROLES } from '../../domain/auth-principal'
+import { CreditDebit } from './credit-debit.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { OrganizationMembership } from './membership.entity'
@@ -25,6 +26,7 @@ describe('identity and organization entities', () => {
         [OrganizationMembership, 'organization_memberships'],
         [ServiceCredential, 'service_credentials'],
         [OrganizationCreditAccount, 'organization_credit_accounts'],
+        [CreditDebit, 'credit_debits'],
     ])('maps %p to %s', (entity, tableName) => {
         expect(metadata.tables.find(table => table.target === entity)?.name).toBe(tableName)
     })
@@ -74,6 +76,18 @@ describe('identity and organization entities', () => {
         expect(balanceCheck?.expression).toBe('"balance" >= 0')
     })
 
+    it('uniquely identifies a credit debit by organization and reference, so retrying a reference is a no-op', () => {
+        const organizationIdColumn = metadata.columns.find(
+            column => column.target === CreditDebit && column.propertyName === 'organizationId',
+        )
+        const referenceColumn = metadata.columns.find(
+            column => column.target === CreditDebit && column.propertyName === 'reference',
+        )
+
+        expect(organizationIdColumn?.options.primary).toBe(true)
+        expect(referenceColumn?.options.primary).toBe(true)
+    })
+
     it('builds complete TypeORM metadata without a database connection', async () => {
         const dataSource = new MetadataDataSource({
             type: 'postgres',
@@ -83,10 +97,11 @@ describe('identity and organization entities', () => {
                 OrganizationMembership,
                 ServiceCredential,
                 OrganizationCreditAccount,
+                CreditDebit,
             ],
         })
 
         await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
-        expect(dataSource.entityMetadatas).toHaveLength(5)
+        expect(dataSource.entityMetadatas).toHaveLength(6)
     })
 })

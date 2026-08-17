@@ -20,7 +20,8 @@ import {
 import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
-import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditGuard } from '../../credits'
 
 @UseGuards(PermissionsGuard)
@@ -36,8 +37,11 @@ export class AsyncEmailVerificationController {
     @UseGuards(CreditGuard)
     @HttpCode(HttpStatus.ACCEPTED)
     @SerializeOptions({ type: VerifyAsyncResponseDto })
-    async verifyAsync(@Body() request: VerifyAsyncRequestBodyDto): Promise<VerifyAsyncResponseDto> {
-        return await this.asyncEmailVerificationService.verifyAsync(request)
+    async verifyAsync(
+        @Body() request: VerifyAsyncRequestBodyDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<VerifyAsyncResponseDto> {
+        return await this.asyncEmailVerificationService.verifyAsync(request, principal)
     }
 
     @Get(':id')
@@ -45,9 +49,10 @@ export class AsyncEmailVerificationController {
     @SerializeOptions({ type: GetAsyncVerificationStatusResponseDto })
     async getAsyncVerificationState(
         @Param() { id }: GetAsyncVerificationStatusRequestParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<GetAsyncVerificationStatusResponseDto> {
         try {
-            return await this.asyncEmailVerificationService.getAsyncVerificationState(id)
+            return await this.asyncEmailVerificationService.getAsyncVerificationState(id, principal)
         } catch (error) {
             if (error instanceof AsyncEmailVerificationJobNotFoundException) {
                 throw new NotFoundException(error.message)
