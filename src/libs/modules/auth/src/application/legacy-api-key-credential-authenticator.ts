@@ -20,7 +20,7 @@ export class LegacyApiKeyCredentialAuthenticator implements CredentialAuthentica
             return true
         }
 
-        return !isJwtShapedToken(credential.token)
+        return credential.scheme === 'bearer' && !isJwtShapedToken(credential.token)
     }
 
     async authenticate(credential: ExtractedCredential): Promise<AuthPrincipal> {

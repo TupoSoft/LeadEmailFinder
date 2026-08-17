@@ -1,8 +1,10 @@
-import { Controller, Get, INestApplication, UseGuards } from '@nestjs/common'
+import { randomBytes } from 'node:crypto'
+import { Controller, Get, Global, INestApplication, Module, UseGuards } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
+import { Redis } from 'ioredis'
 import request from 'supertest'
 import {
     AuthPrincipal,
@@ -60,6 +62,16 @@ function decodeSubject(token: string): string {
     return (JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub: string }).sub
 }
 
+// AuthModule now imports BffSessionModule (added by PR 6), whose providers need a Redis client and BFF
+// session configuration even though this test never exercises browser-session behavior. lazyConnect avoids
+// an unused, unwanted TCP connection attempt for a Redis instance nothing here actually calls.
+@Global()
+@Module({
+    providers: [{ provide: Redis, useFactory: () => new Redis({ lazyConnect: true }) }],
+    exports: [Redis],
+})
+class TestRedisModule {}
+
 @Controller('oidc-permission-check-test')
 class OidcPermissionCheckTestController {
     @UseGuards(PermissionsGuard)
@@ -102,9 +114,16 @@ describeWithKeycloakAndPostgres('a real OIDC token against a real PermissionsGua
         // ConfigService, so AuthModule can point at the real Keycloak realm used by every other TEST_OIDC_* test.
         process.env['OIDC_ISSUER_URL'] = issuer
         process.env['OIDC_AUDIENCE'] = audience
+        // AuthModule -> BffSessionModule needs these to construct its configuration provider, even though
+        // this test never drives a browser session. Values are unused placeholders, not exercised here.
+        process.env['APP_BASE_URL'] = 'http://localhost:53000'
+        process.env['BFF_CLIENT_ID'] = 'lef-web-bff'
+        process.env['BFF_CLIENT_SECRET'] = 'unused-in-this-test'
+        process.env['SESSION_ENCRYPTION_KEY'] = randomBytes(32).toString('base64url')
 
         const moduleRef: TestingModule = await Test.createTestingModule({
             imports: [
+                TestRedisModule,
                 ConfigModule.forRoot({ ignoreEnvFile: true }),
                 TypeOrmModule.forRoot({
                     type: 'postgres',

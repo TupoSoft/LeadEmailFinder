@@ -19,18 +19,27 @@ async function main(): Promise<void> {
     })
     await api.authenticate()
     const provisioner = new KeycloakProvisioner(api, baseUrl, {
-        bffRedirectUris: listFromEnvironment('KEYCLOAK_BFF_REDIRECT_URIS', 'http://localhost:3001/api/auth/callback'),
+        bffRedirectUris: listFromEnvironment('KEYCLOAK_BFF_REDIRECT_URIS', 'http://localhost:53000/v1/auth/callback'),
         bffPostLogoutRedirectUris: listFromEnvironment(
             'KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS',
-            'http://localhost:3001/',
+            'http://localhost:53000/',
         ),
     })
-    const credentials = await provisioner.provision()
+    const { service, bff } = await provisioner.provision()
+
     const secretsFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
     await mkdir(dirname(secretsFile), { recursive: true })
-    await writeFile(secretsFile, `${JSON.stringify(credentials, undefined, 2)}\n`, { mode: 0o600 })
+    await writeFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, { mode: 0o600 })
     await chmod(secretsFile, 0o600)
-    console.log(`Keycloak realm provisioned; development service credentials written to ${secretsFile}`)
+
+    const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
+    await mkdir(dirname(bffSecretsFile), { recursive: true })
+    await writeFile(bffSecretsFile, `${JSON.stringify(bff, undefined, 2)}\n`, { mode: 0o600 })
+    await chmod(bffSecretsFile, 0o600)
+
+    console.log(
+        `Keycloak realm provisioned; development service credentials written to ${secretsFile} and BFF credentials written to ${bffSecretsFile}`,
+    )
 }
 
 void main().catch((error: unknown) => {

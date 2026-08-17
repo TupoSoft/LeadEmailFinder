@@ -1,0 +1,38 @@
+info:
+  name: 02-login-redirects-to-keycloak-with-pkce
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/auth/login"
+
+settings:
+  followRedirects: false
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('redirects to Keycloak with PKCE S256, state, and nonce', function() {
+          expect(res.status).to.equal(302);
+
+          var location = res.headers['location'];
+          expect(location).to.be.a('string');
+          expect(location).to.include('response_type=code');
+          expect(location).to.include('client_id=lef-web-bff');
+          expect(location).to.include('code_challenge_method=S256');
+          expect(location).to.include('code_challenge=');
+          expect(location).to.include('state=');
+          expect(location).to.include('nonce=');
+        });
+
+        test('sets an HttpOnly login-state cookie', function() {
+          var setCookie = [].concat(res.headers['set-cookie'] || []);
+          var loginStateCookie = setCookie.find(function(cookie) {
+            return cookie.indexOf('lef_login_state=') === 0;
+          });
+
+          expect(loginStateCookie).to.be.a('string');
+          expect(loginStateCookie.toLowerCase()).to.include('httponly');
+        });

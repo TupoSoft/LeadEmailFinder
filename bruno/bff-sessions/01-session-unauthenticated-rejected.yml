@@ -1,0 +1,16 @@
+info:
+  name: 01-session-unauthenticated-rejected
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/auth/session"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects a session lookup with no session cookie', function() {
+          expect(res.status).to.equal(401);
+        });
