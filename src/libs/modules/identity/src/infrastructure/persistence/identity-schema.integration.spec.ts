@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm'
 import { CreditDebit } from './credit-debit.entity'
+import { CreditGrant } from './credit-grant.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { OrganizationMembership } from './membership.entity'
@@ -30,6 +31,7 @@ describeWithPostgres('identity schema synchronization', () => {
                 ServiceCredential,
                 OrganizationCreditAccount,
                 CreditDebit,
+                CreditGrant,
             ],
         })
         await dataSource.initialize()
@@ -49,6 +51,7 @@ describeWithPostgres('identity schema synchronization', () => {
 
         expect(tables.map(({ table_name }) => table_name)).toEqual([
             'credit_debits',
+            'credit_grants',
             'external_identities',
             'organization_credit_accounts',
             'organization_memberships',

@@ -1,7 +1,7 @@
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { Test, TestingModule } from '@nestjs/testing'
 import { DataSource, EntityManager, Repository } from 'typeorm'
-import { CreditDebit, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
+import { CreditDebit, CreditGrant, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
 import { InsufficientCreditsException } from './credits.error'
 
@@ -102,31 +102,55 @@ describe('CreditsService', () => {
         })
     })
 
-    describe('addCredits', () => {
+    describe('credit', () => {
         it('creates a new account when none exists', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue(null)
-            accountRepoMock.create.mockReturnValue({ organizationId: 'org-1', balance: 0 } as OrganizationCreditAccount)
-            accountRepoMock.save.mockResolvedValue({ organizationId: 'org-1', balance: 5 } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue(null)
+            managerMock.existsBy.mockResolvedValue(false)
+            managerMock.save.mockResolvedValue({ organizationId: 'org-1', balance: 5 } as OrganizationCreditAccount)
 
-            const result = await service.addCredits('org-1', 5)
+            const result = await service.credit('org-1', 5, 'ref-1')
 
-            expect(accountRepoMock.create).toHaveBeenCalledWith({ organizationId: 'org-1', balance: 0 })
+            expect(managerMock.save).toHaveBeenCalledWith(
+                OrganizationCreditAccount,
+                expect.objectContaining({ organizationId: 'org-1', balance: 5 }),
+            )
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditGrant, {
+                organizationId: 'org-1',
+                reference: 'ref-1',
+                amount: 5,
+            })
             expect(result).toBe(5)
         })
 
-        it('increments the balance of an existing account', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
-            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
+        it('increments and returns the balance of an existing account', async () => {
+            managerMock.findOne.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(false)
+            managerMock.save.mockImplementation((_entity, account) =>
+                Promise.resolve(account as OrganizationCreditAccount),
+            )
 
-            const result = await service.addCredits('org-1', 5)
+            const result = await service.credit('org-1', 5, 'ref-1')
 
             expect(result).toBe(15)
+        })
+
+        it('returns the current balance without writing when the reference already exists', async () => {
+            managerMock.findOne.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(true)
+
+            await expect(service.credit('org-1', 5, 'ref-1')).resolves.toBe(10)
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
         })
     })
 
     describe('setBalance', () => {
         it('sets the balance of an existing account', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+            accountRepoMock.findOneBy.mockResolvedValue({
+                organizationId: 'org-1',
+                balance: 10,
+            } as OrganizationCreditAccount)
             accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
 
             const result = await service.setBalance('org-1', 7)
@@ -148,7 +172,10 @@ describe('CreditsService', () => {
 
     describe('getBalance', () => {
         it('returns the balance when the account exists', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue({ organizationId: 'org-1', balance: 42 } as OrganizationCreditAccount)
+            accountRepoMock.findOneBy.mockResolvedValue({
+                organizationId: 'org-1',
+                balance: 42,
+            } as OrganizationCreditAccount)
 
             await expect(service.getBalance('org-1')).resolves.toBe(42)
         })
