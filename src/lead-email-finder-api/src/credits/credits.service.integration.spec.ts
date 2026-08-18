@@ -2,7 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 import { randomUUID } from 'node:crypto'
-import { CreditDebit, Organization, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    CreditDebit,
+    CreditGrant,
+    Organization,
+    OrganizationCreditAccount,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
 
 // Deliberately its own env var, not TEST_POSTGRES_URL: identity-schema.integration.spec.ts also gates on
@@ -11,7 +16,7 @@ import { CreditsService } from './credits.service'
 const postgresUrl = process.env['TEST_CREDITS_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 
-const entities = [Organization, OrganizationCreditAccount, CreditDebit]
+const entities = [Organization, OrganizationCreditAccount, CreditDebit, CreditGrant]
 
 describeWithPostgres('CreditsService against a real, freshly-synced Postgres schema', () => {
     let schemaDataSource: DataSource
@@ -53,9 +58,7 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
     beforeEach(async () => {
         organizationId = randomUUID()
         await schemaDataSource.getRepository(Organization).save({ id: organizationId, name: 'credits-test-org' })
-        await schemaDataSource
-            .getRepository(OrganizationCreditAccount)
-            .save({ organizationId, balance: 10 })
+        await schemaDataSource.getRepository(OrganizationCreditAccount).save({ organizationId, balance: 10 })
     })
 
     it('never lets concurrent debits push the balance negative', async () => {
@@ -72,15 +75,46 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
     })
 
     it('does not double-charge when the same reference is retried concurrently', async () => {
-        await Promise.all([
-            service.debit(organizationId, 1, 'dup-ref'),
-            service.debit(organizationId, 1, 'dup-ref'),
-        ])
+        await Promise.all([service.debit(organizationId, 1, 'dup-ref'), service.debit(organizationId, 1, 'dup-ref')])
 
         const balance = await service.getBalance(organizationId)
         expect(balance).toBe(9)
 
-        const debitRows = await schemaDataSource.getRepository(CreditDebit).findBy({ organizationId, reference: 'dup-ref' })
+        const debitRows = await schemaDataSource
+            .getRepository(CreditDebit)
+            .findBy({ organizationId, reference: 'dup-ref' })
         expect(debitRows).toHaveLength(1)
+    })
+
+    it('creates an account and records the first grant', async () => {
+        const newOrganizationId = randomUUID()
+        await schemaDataSource.getRepository(Organization).save({ id: newOrganizationId, name: 'new-credits-test-org' })
+
+        await expect(service.credit(newOrganizationId, 5, 'first-grant')).resolves.toBe(5)
+        await expect(service.getBalance(newOrganizationId)).resolves.toBe(5)
+
+        const grantRows = await schemaDataSource
+            .getRepository(CreditGrant)
+            .findBy({ organizationId: newOrganizationId, reference: 'first-grant' })
+        expect(grantRows).toEqual([expect.objectContaining({ amount: 5 })])
+    })
+
+    it('applies a repeated grant reference once', async () => {
+        await expect(service.credit(organizationId, 5, 'dup-grant')).resolves.toBe(15)
+        await expect(service.credit(organizationId, 5, 'dup-grant')).resolves.toBe(15)
+
+        await expect(service.getBalance(organizationId)).resolves.toBe(15)
+        const grantRows = await schemaDataSource
+            .getRepository(CreditGrant)
+            .findBy({ organizationId, reference: 'dup-grant' })
+        expect(grantRows).toHaveLength(1)
+    })
+
+    it('sums concurrent grants with distinct references', async () => {
+        await Promise.all([service.credit(organizationId, 3, 'grant-a'), service.credit(organizationId, 7, 'grant-b')])
+
+        await expect(service.getBalance(organizationId)).resolves.toBe(20)
+        const grantRows = await schemaDataSource.getRepository(CreditGrant).findBy({ organizationId })
+        expect(grantRows).toHaveLength(2)
     })
 })

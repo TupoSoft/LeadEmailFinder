@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 import { HumanIdentityResolver } from './application/human-identity-resolver.service'
 import { AuditLogEntry } from './infrastructure/persistence/audit-log-entry.entity'
 import { CreditDebit } from './infrastructure/persistence/credit-debit.entity'
+import { CreditGrant } from './infrastructure/persistence/credit-grant.entity'
 import { ExternalIdentity } from './infrastructure/persistence/external-identity.entity'
 import { OrganizationCreditAccount } from './infrastructure/persistence/organization-credit-account.entity'
 import { OrganizationInvitation } from './infrastructure/persistence/organization-invitation.entity'
@@ -19,6 +20,7 @@ import { ServiceCredential } from './infrastructure/persistence/service-credenti
             ServiceCredential,
             OrganizationCreditAccount,
             CreditDebit,
+            CreditGrant,
             OrganizationInvitation,
             AuditLogEntry,
         ]),

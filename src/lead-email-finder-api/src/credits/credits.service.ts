@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
-import { CreditDebit, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
+import { CreditDebit, CreditGrant, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
 import { InsufficientCreditsException } from './credits.error'
 
 @Injectable()
@@ -37,14 +37,23 @@ export class CreditsService {
         })
     }
 
-    async addCredits(organizationId: string, amount: number): Promise<number> {
-        const account =
-            (await this.organizationCreditAccountRepo.findOneBy({ organizationId })) ??
-            this.organizationCreditAccountRepo.create({ organizationId, balance: 0 })
-        account.balance += amount
+    async credit(organizationId: string, amount: number, reference: string): Promise<number> {
+        return this.dataSource.transaction(async manager => {
+            const account =
+                (await manager.findOne(OrganizationCreditAccount, {
+                    where: { organizationId },
+                    lock: { mode: 'pessimistic_write' },
+                })) ?? Object.assign(new OrganizationCreditAccount(), { organizationId, balance: 0 })
 
-        const saved = await this.organizationCreditAccountRepo.save(account)
-        return saved.balance
+            if (await manager.existsBy(CreditGrant, { organizationId, reference })) {
+                return account.balance
+            }
+
+            account.balance += amount
+            const saved = await manager.save(OrganizationCreditAccount, account)
+            await manager.insert(CreditGrant, { organizationId, reference, amount })
+            return saved.balance
+        })
     }
 
     async getBalance(organizationId: string): Promise<number> {

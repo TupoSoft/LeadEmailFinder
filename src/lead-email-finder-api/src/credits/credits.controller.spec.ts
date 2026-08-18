@@ -15,7 +15,7 @@ describe('CreditsController', () => {
                     provide: CreditsService,
                     useValue: {
                         getBalance: jest.fn(),
-                        addCredits: jest.fn(),
+                        credit: jest.fn(),
                         setBalance: jest.fn(),
                     },
                 },
@@ -39,10 +39,10 @@ describe('CreditsController', () => {
     })
 
     it('adds credits to an organization', async () => {
-        service.addCredits.mockResolvedValue(15)
+        service.credit.mockResolvedValue(15)
 
         await expect(controller.addCredits({ organizationId }, { amount: 5 })).resolves.toEqual({ balance: 15 })
-        expect(service.addCredits).toHaveBeenCalledWith(organizationId, 5)
+        expect(service.credit).toHaveBeenCalledWith(organizationId, 5, expect.any(String))
     })
 
     it('sets the balance for an organization', async () => {

@@ -2,6 +2,7 @@ import { DataSource, DataSourceOptions, getMetadataArgsStorage } from 'typeorm'
 import { AUTH_ROLES } from '../../domain/auth-principal'
 import { AuditLogEntry } from './audit-log-entry.entity'
 import { CreditDebit } from './credit-debit.entity'
+import { CreditGrant } from './credit-grant.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { OrganizationInvitation } from './organization-invitation.entity'
@@ -29,6 +30,7 @@ describe('identity and organization entities', () => {
         [ServiceCredential, 'service_credentials'],
         [OrganizationCreditAccount, 'organization_credit_accounts'],
         [CreditDebit, 'credit_debits'],
+        [CreditGrant, 'credit_grants'],
         [OrganizationInvitation, 'organization_invitations'],
         [AuditLogEntry, 'audit_log_entries'],
     ])('maps %p to %s', (entity, tableName) => {
@@ -92,6 +94,18 @@ describe('identity and organization entities', () => {
         expect(referenceColumn?.options.primary).toBe(true)
     })
 
+    it('uniquely identifies a credit grant by organization and reference, so retrying a reference is a no-op', () => {
+        const organizationIdColumn = metadata.columns.find(
+            column => column.target === CreditGrant && column.propertyName === 'organizationId',
+        )
+        const referenceColumn = metadata.columns.find(
+            column => column.target === CreditGrant && column.propertyName === 'reference',
+        )
+
+        expect(organizationIdColumn?.options.primary).toBe(true)
+        expect(referenceColumn?.options.primary).toBe(true)
+    })
+
     it('uniquely identifies an organization invitation by its token hash', () => {
         const uniqueIndex = metadata.indices.find(index => index.target === OrganizationInvitation && index.unique)
 
@@ -133,12 +147,13 @@ describe('identity and organization entities', () => {
                 ServiceCredential,
                 OrganizationCreditAccount,
                 CreditDebit,
+                CreditGrant,
                 OrganizationInvitation,
                 AuditLogEntry,
             ],
         })
 
         await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
-        expect(dataSource.entityMetadatas).toHaveLength(8)
+        expect(dataSource.entityMetadatas).toHaveLength(9)
     })
 })

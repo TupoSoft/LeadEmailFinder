@@ -3,6 +3,7 @@ import { ApiExcludeController } from '@nestjs/swagger'
 import { CreditsService } from './credits.service'
 import { AddCreditsDto, CreditResponseDto, CreditsAccountParamsDto, SetBalanceDto } from './credits.dto'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { randomUUID } from 'node:crypto'
 
 @UseGuards(PermissionsGuard)
 @RequirePermissions('platform:admin')
@@ -24,7 +25,7 @@ export class CreditsController {
         @Param() { organizationId }: CreditsAccountParamsDto,
         @Body() { amount }: AddCreditsDto,
     ): Promise<CreditResponseDto> {
-        const balance = await this.creditsService.addCredits(organizationId, amount)
+        const balance = await this.creditsService.credit(organizationId, amount, randomUUID())
         return { balance }
     }
 

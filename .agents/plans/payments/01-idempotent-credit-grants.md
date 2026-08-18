@@ -8,11 +8,12 @@ Make adding credits as safe as spending them. After this change, replaying the s
 
 ## Progress
 
-- [ ] Add the `CreditGrant` entity and register it with `IdentityModule`.
-- [ ] Add `CreditsService.credit(organizationId, amount, reference)` mirroring `debit`.
-- [ ] Route the admin `POST /credits/:organizationId` endpoint through the new method.
-- [ ] Add unit and integration coverage for replay and concurrency.
-- [ ] Run typecheck, lint, jest, and the relevant Bruno collection.
+- [x] (2026-08-18) Add the `CreditGrant` entity and register it with `IdentityModule`.
+- [x] (2026-08-18) Add `CreditsService.credit(organizationId, amount, reference)` mirroring `debit`.
+- [x] (2026-08-18) Route the admin `POST /credits/:organizationId` endpoint through the new method.
+- [x] (2026-08-18) Add unit and integration coverage for replay and concurrency.
+- [x] (2026-08-18) Run typecheck, lint, Jest, focused PostgreSQL integration tests, build, formatting, and diff checks.
+- [x] (2026-08-18) Run the relevant Bruno collection against the worktree API; all 6 requests and all 6 tests passed.
 
 ## Plan dependencies
 
@@ -20,7 +21,8 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- The sandbox disallows local socket listeners, so the first full Jest attempt failed six unrelated HTTP/socket suites with `listen EPERM`. Re-running the same command with local socket permission passed all non-environment-gated suites.
+- The Bruno CLI was available outside `PATH` at `/run/user/1000/fnm_multishells/3739842_1787055660237/bin/bru`; using that binary allowed the SMTP development collection to run against a worktree-built API image.
 
 ## Decision Log
 
@@ -39,7 +41,7 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented a separate `credit_grants` ledger and replaced the non-idempotent `CreditsService.addCredits` path with a transactional `credit` operation. The admin endpoint keeps its existing request and response contract while supplying a server-generated reference. Unit, metadata, real-PostgreSQL replay/concurrency, typecheck, lint, full Jest, build, formatting, diff, container runtime, and Bruno validation pass.
 
 ## Context and Orientation
 
@@ -85,7 +87,8 @@ The grant ledger makes repeated execution safe by construction. Adding `credit_g
 
 ## Artifacts and Notes
 
-Record the concurrent-grant integration test's observed final balance with synthetic identifiers only.
+- The concurrent distinct-reference integration scenario started at 10 credits, granted 3 and 7 credits, and observed a final balance of 20 with two grant rows.
+- The `bruno/smtp-dev` collection completed 6 requests with 6 passing tests, including the admin credit grant and the SMTP proxy drain-and-restore workflow.
 
 ## Plan readiness
 
