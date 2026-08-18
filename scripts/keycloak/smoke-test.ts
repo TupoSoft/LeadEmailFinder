@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { BFF_CLIENT_ID, ServiceClientCredentials } from './provisioning'
+import { BffClientCredentials, ServiceClientCredentials } from './provisioning'
 
 interface TokenResponse {
     access_token?: string
@@ -32,6 +32,8 @@ async function waitForRealm(issuer: string): Promise<void> {
 async function main(): Promise<void> {
     const secretsFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
     const credentials = JSON.parse(await readFile(secretsFile, 'utf8')) as ServiceClientCredentials
+    const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
+    const bffCredentials = JSON.parse(await readFile(bffSecretsFile, 'utf8')) as BffClientCredentials
     await waitForRealm(credentials.issuer)
     const tokenResponse = await fetch(`${credentials.issuer}/protocol/openid-connect/token`, {
         method: 'POST',
@@ -54,10 +56,10 @@ async function main(): Promise<void> {
         throw new Error(`Unexpected token issuer or audience: ${JSON.stringify({ iss: claims.iss, aud: claims.aud })}`)
     }
 
-    const callback = 'http://localhost:3001/api/auth/callback'
+    const callback = bffCredentials.redirectUris[0]
     const authorizationUrl = new URL(`${credentials.issuer}/protocol/openid-connect/auth`)
     authorizationUrl.search = new URLSearchParams({
-        client_id: BFF_CLIENT_ID,
+        client_id: bffCredentials.clientId,
         redirect_uri: callback,
         response_type: 'code',
         scope: 'openid',

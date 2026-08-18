@@ -32,6 +32,10 @@ describe('LegacyApiKeyCredentialAuthenticator', () => {
         it('does not support a JWT-shaped bearer token', () => {
             expect(authenticator.supports({ scheme: 'bearer', token: 'a.b.c' })).toBe(false)
         })
+
+        it('does not support a session-cookie credential', () => {
+            expect(authenticator.supports({ scheme: 'session-cookie', token: 'session-id-value' })).toBe(false)
+        })
     })
 
     describe('authenticate', () => {

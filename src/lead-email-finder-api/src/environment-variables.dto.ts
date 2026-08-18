@@ -57,6 +57,32 @@ export class EnvironmentVariablesDto {
     @IsString()
     OIDC_AUDIENCE: string
 
+    @IsUrl({ require_protocol: true, require_tld: false })
+    APP_BASE_URL: string
+
+    @IsString()
+    BFF_CLIENT_ID: string
+
+    @IsFileVar()
+    @IsString()
+    BFF_CLIENT_SECRET: string
+
+    @IsFileVar()
+    @IsString()
+    SESSION_ENCRYPTION_KEY: string
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    SESSION_IDLE_TIMEOUT_MS?: number
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    SESSION_ABSOLUTE_TIMEOUT_MS?: number
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()

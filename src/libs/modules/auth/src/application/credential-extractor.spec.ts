@@ -1,4 +1,4 @@
-import { CredentialExtractor, isJwtShapedToken } from './credential-extractor'
+import { BFF_SESSION_COOKIE_NAME, CredentialExtractor, isJwtShapedToken } from './credential-extractor'
 
 describe('CredentialExtractor', () => {
     const extractor = new CredentialExtractor()
@@ -35,6 +35,44 @@ describe('CredentialExtractor', () => {
 
     it('returns undefined when no credential header is present', () => {
         const credential = extractor.extract({})
+
+        expect(credential).toBeUndefined()
+    })
+
+    it('extracts a session cookie when no bearer or x-api-key header is present', () => {
+        const credential = extractor.extract({ cookie: `${BFF_SESSION_COOKIE_NAME}=session-id-value` })
+
+        expect(credential).toEqual({ scheme: 'session-cookie', token: 'session-id-value' })
+    })
+
+    it('extracts a session cookie among multiple cookies', () => {
+        const credential = extractor.extract({
+            cookie: `other_cookie=irrelevant; ${BFF_SESSION_COOKIE_NAME}=session-id-value; lef_csrf_token=csrf-value`,
+        })
+
+        expect(credential).toEqual({ scheme: 'session-cookie', token: 'session-id-value' })
+    })
+
+    it('prefers the bearer token over a session cookie when both are present', () => {
+        const credential = extractor.extract({
+            authorization: 'Bearer token-value',
+            cookie: `${BFF_SESSION_COOKIE_NAME}=session-id-value`,
+        })
+
+        expect(credential).toEqual({ scheme: 'bearer', token: 'token-value' })
+    })
+
+    it('prefers the x-api-key header over a session cookie when both are present', () => {
+        const credential = extractor.extract({
+            'x-api-key': 'key-value',
+            cookie: `${BFF_SESSION_COOKIE_NAME}=session-id-value`,
+        })
+
+        expect(credential).toEqual({ scheme: 'x-api-key', token: 'key-value' })
+    })
+
+    it('returns undefined when the cookie header has no session cookie', () => {
+        const credential = extractor.extract({ cookie: 'other_cookie=irrelevant' })
 
         expect(credential).toBeUndefined()
     })

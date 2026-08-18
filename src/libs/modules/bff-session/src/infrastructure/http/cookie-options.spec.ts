@@ -1,0 +1,40 @@
+import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { buildCsrfCookieOptions, buildLoginStateCookieOptions, buildSessionCookieOptions } from './cookie-options'
+
+function configWith(isSecureCookie: boolean): BffSessionConfiguration {
+    return {
+        appBaseUrl: isSecureCookie ? 'https://app.example.com' : 'http://localhost:53000',
+        issuer: 'https://issuer',
+        clientId: 'lef-web-bff',
+        clientSecret: 'secret',
+        sessionIdleTimeoutMs: 1000,
+        sessionAbsoluteTimeoutMs: 2000,
+        isSecureCookie,
+    }
+}
+
+describe('cookie-options', () => {
+    it('builds an HttpOnly session cookie scoped to the whole app', () => {
+        const options = buildSessionCookieOptions(configWith(false))
+
+        expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/', secure: false, maxAge: 2000 })
+    })
+
+    it('builds a non-HttpOnly CSRF cookie so the frontend can read it', () => {
+        const options = buildCsrfCookieOptions(configWith(false))
+
+        expect(options).toMatchObject({ httpOnly: false, sameSite: 'lax', path: '/', secure: false })
+    })
+
+    it('builds a login-state cookie scoped to /v1/auth with a 10-minute lifetime', () => {
+        const options = buildLoginStateCookieOptions(configWith(false))
+
+        expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/v1/auth', maxAge: 600_000 })
+    })
+
+    it('marks cookies secure when the app base URL is https', () => {
+        expect(buildSessionCookieOptions(configWith(true)).secure).toBe(true)
+        expect(buildCsrfCookieOptions(configWith(true)).secure).toBe(true)
+        expect(buildLoginStateCookieOptions(configWith(true)).secure).toBe(true)
+    })
+})

@@ -35,6 +35,11 @@ services:
       OIDC_ISSUER_URL: http://localhost:58080/realms/lead-email-finder
       OIDC_AUDIENCE: lead-email-finder-api
 
+      APP_BASE_URL: http://localhost:53000
+      BFF_CLIENT_ID: lef-web-bff
+      BFF_CLIENT_SECRET_FILE: /run/secrets/bff_client_secret
+      SESSION_ENCRYPTION_KEY_FILE: /run/secrets/session_encryption_key
+
       ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
 
       REDIS_URL_FILE: /run/secrets/redis_url
@@ -61,6 +66,8 @@ services:
       - redis_url
       - s3_access_key_id
       - s3_secret_key
+      - session_encryption_key
+      - bff_client_secret
 
 secrets:
   postgres_url:
