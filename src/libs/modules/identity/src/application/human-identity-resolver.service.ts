@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
-import { ExternalIdentity } from '@tuposoft/lead-email-finder/modules/identity'
+import { EntityManager, Repository } from 'typeorm'
+import { ExternalIdentity } from '../infrastructure/persistence/external-identity.entity'
 
 const POSTGRES_UNIQUE_VIOLATION = '23505'
 
@@ -11,22 +11,28 @@ export class HumanIdentityResolver {
         @InjectRepository(ExternalIdentity) private readonly externalIdentityRepo: Repository<ExternalIdentity>,
     ) {}
 
-    async resolveOrCreate(issuer: string, subject: string, email: string | null): Promise<ExternalIdentity> {
-        const existing = await this.externalIdentityRepo.findOne({ where: { issuer, subject } })
+    async resolveOrCreate(
+        issuer: string,
+        subject: string,
+        email: string | null,
+        manager?: EntityManager,
+    ): Promise<ExternalIdentity> {
+        const repo = manager ? manager.getRepository(ExternalIdentity) : this.externalIdentityRepo
+        const existing = await repo.findOne({ where: { issuer, subject } })
 
         if (existing) {
             if (existing.email !== email) {
                 existing.email = email
-                return this.externalIdentityRepo.save(existing)
+                return repo.save(existing)
             }
             return existing
         }
 
         try {
-            return await this.externalIdentityRepo.save(this.externalIdentityRepo.create({ issuer, subject, email }))
+            return await repo.save(repo.create({ issuer, subject, email }))
         } catch (error) {
             if (this.isUniqueViolation(error)) {
-                const raced = await this.externalIdentityRepo.findOne({ where: { issuer, subject } })
+                const raced = await repo.findOne({ where: { issuer, subject } })
                 if (raced) {
                     return raced
                 }

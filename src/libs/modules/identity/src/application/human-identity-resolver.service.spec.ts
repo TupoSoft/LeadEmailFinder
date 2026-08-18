@@ -1,5 +1,5 @@
-import { Repository } from 'typeorm'
-import { ExternalIdentity } from '@tuposoft/lead-email-finder/modules/identity'
+import { EntityManager, Repository } from 'typeorm'
+import { ExternalIdentity } from '../infrastructure/persistence/external-identity.entity'
 import { HumanIdentityResolver } from './human-identity-resolver.service'
 
 describe('HumanIdentityResolver', () => {
@@ -62,5 +62,24 @@ describe('HumanIdentityResolver', () => {
         externalIdentityRepo.save.mockRejectedValue(new Error('connection reset'))
 
         await expect(resolver.resolveOrCreate('iss', 'sub', null)).rejects.toThrow('connection reset')
+    })
+
+    it('uses the repository from the given transaction manager instead of its own when provided', async () => {
+        const managedRepo: jest.Mocked<Pick<Repository<ExternalIdentity>, 'findOne' | 'save' | 'create'>> = {
+            findOne: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+        }
+        const created = { id: 'id-1', issuer: 'iss', subject: 'sub', email: null } as ExternalIdentity
+        managedRepo.findOne.mockResolvedValue(null)
+        managedRepo.create.mockReturnValue(created)
+        managedRepo.save.mockResolvedValue(created)
+        const manager = { getRepository: jest.fn().mockReturnValue(managedRepo) } as unknown as EntityManager
+
+        const result = await resolver.resolveOrCreate('iss', 'sub', null, manager)
+
+        expect(result).toBe(created)
+        expect(manager.getRepository).toHaveBeenCalledWith(ExternalIdentity)
+        expect(externalIdentityRepo.findOne).not.toHaveBeenCalled()
     })
 })

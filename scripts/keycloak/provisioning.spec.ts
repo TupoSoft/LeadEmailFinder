@@ -1,4 +1,10 @@
-import { createBffClient, createRealmRepresentation, createServiceClient, reconcileResource } from './provisioning'
+import {
+    createBffClient,
+    createOrgAdminClient,
+    createRealmRepresentation,
+    createServiceClient,
+    reconcileResource,
+} from './provisioning'
 
 describe('reconcileResource', (): void => {
     it('creates a missing resource once and updates it on repeated provisioning', async (): Promise<void> => {
@@ -55,6 +61,15 @@ describe('Keycloak provisioning model', (): void => {
 
     it('allows only Client Credentials on the seeded service client', (): void => {
         expect(createServiceClient()).toMatchObject({
+            standardFlowEnabled: false,
+            implicitFlowEnabled: false,
+            directAccessGrantsEnabled: false,
+            serviceAccountsEnabled: true,
+        })
+    })
+
+    it('allows only Client Credentials on the seeded organization administration client', (): void => {
+        expect(createOrgAdminClient()).toMatchObject({
             standardFlowEnabled: false,
             implicitFlowEnabled: false,
             directAccessGrantsEnabled: false,

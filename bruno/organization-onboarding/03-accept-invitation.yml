@@ -1,0 +1,28 @@
+info:
+  name: 03-accept-invitation
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/invitations/{{invitationToken}}/accept"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "password": "bruno-test-password-123"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('accepts the invitation without an existing session', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.organizationId).to.equal(bru.getVar('organizationId'));
+          expect(res.body.role).to.equal('owner');
+          bru.setVar('firstAcceptResponse', JSON.stringify(res.body));
+        });

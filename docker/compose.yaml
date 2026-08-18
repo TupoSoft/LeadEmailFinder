@@ -40,6 +40,9 @@ services:
       BFF_CLIENT_SECRET_FILE: /run/secrets/bff_client_secret
       SESSION_ENCRYPTION_KEY_FILE: /run/secrets/session_encryption_key
 
+      KEYCLOAK_ORG_ADMIN_CLIENT_ID: lef-org-admin-service
+      KEYCLOAK_ORG_ADMIN_CLIENT_SECRET_FILE: /run/secrets/keycloak_org_admin_client_secret
+
       ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
 
       REDIS_URL_FILE: /run/secrets/redis_url
@@ -68,6 +71,7 @@ services:
       - s3_secret_key
       - session_encryption_key
       - bff_client_secret
+      - keycloak_org_admin_client_secret
 
 secrets:
   postgres_url:
