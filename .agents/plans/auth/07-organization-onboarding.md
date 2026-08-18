@@ -12,6 +12,10 @@ Allow platform operators to create customer organizations and allow organization
 - [ ] Add the narrow Keycloak administration adapter.
 - [ ] Add lifecycle, authorization, and recovery tests.
 
+## Plan dependencies
+
+- `auth/06`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -70,4 +74,4 @@ Record the endpoint shapes and synthetic onboarding transcript during implementa
 
 ## Plan readiness
 
-Ready to implement after PR 6.
+Ready to implement.

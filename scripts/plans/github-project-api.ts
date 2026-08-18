@@ -37,6 +37,7 @@ export interface LabelDefinition {
  * inside the adapter is what lets the synchronizer be tested without a GitHub account.
  */
 export interface GitHubProjectPort {
+    validateStatusOptions(statuses: readonly ProjectStatus[]): Promise<void>
     ensureLabels(labels: LabelDefinition[]): Promise<void>
     listExecPlanIssues(): Promise<IssueSummary[]>
     createIssue(content: IssueContent): Promise<IssueSummary>
@@ -77,7 +78,7 @@ interface GhProjectItem {
 
 export const EXECPLAN_LABEL_DEFINITIONS: LabelDefinition[] = [
     { name: EXECPLAN_LABEL, color: '0E8A16', description: 'Generated from an ExecPlan under .agents/plans/' },
-    { name: BLOCKED_LABEL, color: 'B60205', description: 'ExecPlan is not ready to implement' },
+    { name: BLOCKED_LABEL, color: 'B60205', description: 'ExecPlan requires a decision or missing evidence' },
 ]
 
 export class GitHubCliProjectApi implements GitHubProjectPort {
@@ -235,6 +236,17 @@ export class GitHubCliProjectApi implements GitHubProjectPort {
         }
 
         return this.statusField
+    }
+
+    async validateStatusOptions(statuses: readonly ProjectStatus[]): Promise<void> {
+        const { optionIds } = await this.resolveStatusField()
+        const missing = statuses.filter(status => !optionIds.has(status))
+
+        if (missing.length > 0) {
+            throw new Error(
+                `Project ${this.options.projectOwner}/${this.options.projectNumber} Status is missing: ${missing.join(', ')}`,
+            )
+        }
     }
 
     async setItemStatus(itemId: string, status: ProjectStatus): Promise<void> {

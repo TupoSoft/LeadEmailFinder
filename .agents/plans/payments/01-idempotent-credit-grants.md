@@ -14,6 +14,10 @@ Make adding credits as safe as spending them. After this change, replaying the s
 - [ ] Add unit and integration coverage for replay and concurrency.
 - [ ] Run typecheck, lint, jest, and the relevant Bruno collection.
 
+## Plan dependencies
+
+None.
+
 ## Surprises & Discoveries
 
 None yet.

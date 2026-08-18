@@ -12,6 +12,10 @@ Provide one immutable 3proxy image that can safely expose several authenticated 
 - [ ] 2026-08-15 — Build the pinned 3proxy runtime and deterministic configuration renderer.
 - [ ] 2026-08-15 — Add container health and authenticated CONNECT smoke coverage.
 
+## Plan dependencies
+
+None.
+
 ## Surprises & Discoveries
 
 - The merged local fixture uses one static SOCKS5 listener in `docker/smtp-dev/3proxy.cfg`. It proves the application path but does not model multiple host egress IPs or fleet secret handling.
