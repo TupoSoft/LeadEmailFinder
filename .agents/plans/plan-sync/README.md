@@ -3,6 +3,7 @@
 This roadmap makes the ExecPlans under `.agents/plans/` visible on the `TupoSoft/LeadEmailFinder` GitHub project (project number 9) without anyone copying work items by hand. Plan files stay authoritative; the project board is a generated mirror.
 
 1. [Sync ExecPlans to the GitHub project](01-sync-execplans-to-github-project.md)
+2. [Distinguish actionable ExecPlans from dependency backlog](02-actionable-project-backlog.md)
 
 Shared decisions:
 

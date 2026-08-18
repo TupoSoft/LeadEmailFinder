@@ -14,7 +14,7 @@ Make roadmap progress visible without maintaining it twice. After this change, e
 - [x] Add the `plans:sync` script entry point and dry-run mode.
 - [x] Add the `Sync ExecPlans` workflow on pushes to `master`.
 - [x] Validate with `pnpm typecheck`, `pnpm lint`, `pnpm test`, and a dry run against project 9.
-- [ ] Perform the first live run and confirm the board.
+- [x] Perform the first live run and confirm the board. (2026-08-17)
 
 ## Surprises & Discoveries
 
@@ -58,7 +58,10 @@ Implementation complete; the first live run is deliberately outstanding.
 - The full `jest` suite passes: 65 suites, 348 tests, with 4 live-gated suites skipped. 29 of those tests are new and cover key derivation, section parsing, checkbox counting, readiness classification, label selection, status derivation, body rendering, and the synchronizer's create, update, unchanged, rename, missing-item, already-`Done`, dry-run, and multi-plan paths.
 - `PLANS_DRY_RUN=true pnpm plans:sync` ran against the real project 9 and reported 24 plans on `master`, all as `created`, with statuses matching merge history.
 
-Remaining: the first live run, which requires a decision on whether to mirror completed plans as `Done` issues or only the open ones, and the `PROJECT_SYNC_TOKEN` secret, which cannot be committed.
+The first live run completed successfully in GitHub Actions run `32062454564`; the follow-up payments-plan
+sync also completed successfully in run `32068481622`. The generated mirror exposed a follow-up need: unstarted
+dependency-gated plans were indistinguishable from immediately actionable work in `Todo`. Plan 02 addresses that
+queue-shaping concern without changing this plan's one-way source-of-truth decision.
 
 ## Context and Orientation
 

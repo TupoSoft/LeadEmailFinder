@@ -12,6 +12,11 @@ Deploy the declared 3proxy listeners through Docker Swarm and reconcile healthy 
 - [ ] 2026-08-15 — Implement health-gated, idempotent proxy-registry reconciliation.
 - [ ] 2026-08-15 — Prove activation, failure isolation, draining, and repeat deployment in a disposable Swarm.
 
+## Plan dependencies
+
+- `proxy-fleet/11`
+- `proxy-fleet/12`
+
 ## Surprises & Discoveries
 
 - A single global Swarm service receives one service-level set of configs and secrets, so it cannot safely provide different credentials and topology to every node without sharing the fleet's secrets.
@@ -104,4 +109,4 @@ Record the generated stack without secrets, service placement, immutable image d
 
 ## Plan readiness
 
-Ready to implement after plans 11 and 12.
+Ready to implement.

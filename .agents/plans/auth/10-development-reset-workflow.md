@@ -12,6 +12,10 @@ Give developers one safe, repeatable way to recreate all disposable application 
 - [ ] Add deterministic application and Keycloak reseeding.
 - [ ] Add the final authenticated smoke test and documentation.
 
+## Plan dependencies
+
+- `auth/09`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -70,4 +74,4 @@ Record the exact named resources, sanitized seed summary, health results, and sm
 
 ## Plan readiness
 
-Ready to implement after PR 9.
+Ready to implement.

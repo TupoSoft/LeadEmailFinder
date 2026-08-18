@@ -1,4 +1,4 @@
-import { ExecPlan, parseExecPlan, ProjectStatus, renderIssueBody } from './execplan'
+import { ExecPlan, parseExecPlan, ProjectStatus, renderIssueBody, resolvePlanStates } from './execplan'
 import { GitHubProjectPort, IssueContent, IssueSummary, ProjectItemSummary } from './github-project-api'
 import { ExecPlanSynchronizer } from './sync'
 
@@ -18,6 +18,10 @@ function buildPlan(path = '.agents/plans/payments/01-idempotent-credit-grants.md
             '',
             progress,
             '',
+            '## Plan dependencies',
+            '',
+            'None.',
+            '',
             '## Plan readiness',
             '',
             'Ready to implement.',
@@ -31,12 +35,18 @@ class FakeGitHub implements GitHubProjectPort {
     readonly updated: { issueNumber: number; content: IssueContent }[] = []
     readonly statuses: { itemId: string; status: ProjectStatus }[] = []
     readonly addedUrls: string[] = []
+    readonly validatedStatuses: ProjectStatus[][] = []
     ensureLabelsCalls = 0
 
     constructor(
         private readonly issues: IssueSummary[] = [],
         private readonly items: ProjectItemSummary[] = [],
     ) {}
+
+    validateStatusOptions(statuses: readonly ProjectStatus[]): Promise<void> {
+        this.validatedStatuses.push([...statuses])
+        return Promise.resolve()
+    }
 
     ensureLabels(): Promise<void> {
         this.ensureLabelsCalls += 1
@@ -80,11 +90,17 @@ class FakeGitHub implements GitHubProjectPort {
 }
 
 function existingIssue(plan: ExecPlan, overrides: Partial<IssueSummary> = {}): IssueSummary {
+    const state = resolvePlanStates([plan]).get(plan.key)
+
+    if (!state) {
+        throw new Error(`No state for ${plan.key}`)
+    }
+
     return {
         number: 42,
         url: 'https://github.com/TupoSoft/LeadEmailFinder/issues/42',
         title: plan.title,
-        body: renderIssueBody(plan, BLOB_BASE_URL),
+        body: renderIssueBody(plan, state, BLOB_BASE_URL),
         ...overrides,
     }
 }
@@ -102,6 +118,7 @@ describe('ExecPlanSynchronizer', (): void => {
         expect(outcome).toMatchObject({ key: 'payments/01', issueAction: 'created', status: 'Todo' })
         expect(github.created).toHaveLength(1)
         expect(github.created[0].labels).toEqual(['execplan'])
+        expect(github.validatedStatuses).toEqual([['Backlog', 'Todo', 'In Progress', 'Done']])
         expect(github.addedUrls).toHaveLength(1)
         expect(github.statuses).toEqual([{ itemId: 'item-1', status: 'Todo' }])
     })
@@ -177,6 +194,18 @@ describe('ExecPlanSynchronizer', (): void => {
         expect(github.created).toHaveLength(0)
         expect(github.addedUrls).toHaveLength(0)
         expect(github.statuses).toHaveLength(0)
+        expect(github.validatedStatuses).toHaveLength(1)
+    })
+
+    it('aborts before labels or issues when project status preflight fails', async (): Promise<void> => {
+        const github = new FakeGitHub()
+        github.validateStatusOptions = (): Promise<void> => Promise.reject(new Error('Status is missing: Backlog'))
+
+        await expect(synchronizer(github).sync([buildPlan()])).rejects.toThrow('Status is missing: Backlog')
+
+        expect(github.ensureLabelsCalls).toBe(0)
+        expect(github.created).toHaveLength(0)
+        expect(github.updated).toHaveLength(0)
     })
 
     it('keeps plans independent so one new issue does not disturb another', async (): Promise<void> => {

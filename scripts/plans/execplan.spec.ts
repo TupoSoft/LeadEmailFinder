@@ -1,15 +1,15 @@
 import {
     BLOCKED_LABEL,
-    desiredStatus,
     EXECPLAN_LABEL,
     execPlanMarker,
     labelsFor,
     parseExecPlan,
     planKeyFromPath,
     renderIssueBody,
+    resolvePlanStates,
 } from './execplan'
 
-function buildPlanFile(overrides: { progress?: string; readiness?: string } = {}): string {
+function buildPlanFile(overrides: { dependencies?: string; progress?: string; readiness?: string } = {}): string {
     return [
         '# Grant credits idempotently',
         '',
@@ -22,6 +22,10 @@ function buildPlanFile(overrides: { progress?: string; readiness?: string } = {}
         '## Progress',
         '',
         overrides.progress ?? '- [ ] Add the entity.\n- [ ] Add the service method.',
+        '',
+        '## Plan dependencies',
+        '',
+        overrides.dependencies ?? 'None.',
         '',
         '## Decision Log',
         '',
@@ -54,6 +58,7 @@ describe('parseExecPlan', (): void => {
             key: 'payments/01',
             title: 'Grant credits idempotently',
             purpose: 'Make adding credits as safe as spending them.',
+            dependencies: [],
             readiness: { state: 'ready', text: 'Ready to implement.' },
             progress: { total: 2, completed: 0 },
         })
@@ -70,7 +75,7 @@ describe('parseExecPlan', (): void => {
 
     it.each([
         ['Ready to implement.', 'ready'],
-        ['Ready to implement after plan 01.', 'ready'],
+        ['Ready to implement after plan 01.', 'unknown'],
         ['Ready after the clawback policy decision.', 'conditional'],
         ['Blocked by missing sandbox credentials.', 'blocked'],
         ['Something nobody expected.', 'unknown'],
@@ -87,21 +92,121 @@ describe('parseExecPlan', (): void => {
             'no level-one heading',
         )
     })
+
+    it('reads stable dependency keys and preserves their order', (): void => {
+        const plan = parseExecPlan(
+            '.agents/plans/payments/03-a.md',
+            buildPlanFile({ dependencies: '- `payments/01`\n- `payments/02`' }),
+        )
+
+        expect(plan.dependencies).toEqual(['payments/01', 'payments/02'])
+    })
+
+    it('accepts a missing dependency section for completed legacy plans', (): void => {
+        const contents = buildPlanFile().replace('## Plan dependencies\n\nNone.\n\n', '')
+
+        expect(parseExecPlan('.agents/plans/f/01-a.md', contents).dependencies).toEqual([])
+    })
+
+    it.each([
+        ['- payments/01', 'invalid Plan dependencies entry'],
+        ['- `payments/01`\n- `payments/01`', 'declares dependency payments/01 more than once'],
+    ])('rejects invalid dependencies: %s', (dependencies, message): void => {
+        expect(() =>
+            parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ dependencies })),
+        ).toThrow(message)
+    })
 })
 
-describe('desiredStatus', (): void => {
+function stateFor(progress: string, readiness = 'Ready to implement.'): string | undefined {
+    const plan = parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ progress, readiness }))
+    return resolvePlanStates([plan]).get(plan.key)?.status
+}
+
+describe('resolvePlanStates', (): void => {
     it.each([
         ['- [ ] One.\n- [ ] Two.', 'Todo'],
         ['- [x] One.\n- [ ] Two.', 'In Progress'],
         ['- [x] One.\n- [x] Two.', 'Done'],
     ])('maps %s to %s', (progress, expected): void => {
-        expect(desiredStatus(parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ progress })))).toBe(expected)
+        expect(stateFor(progress)).toBe(expected)
     })
 
-    it('treats a plan with no checkboxes as Todo rather than complete', (): void => {
-        expect(desiredStatus(parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ progress: 'None yet.' })))).toBe(
-            'Todo',
+    it.each(['Ready after a decision.', 'Blocked by missing evidence.', 'Unexpected wording.'])(
+        'keeps unready plan wording in Backlog: %s',
+        (readiness): void => {
+            expect(stateFor('- [ ] Work.', readiness)).toBe('Backlog')
+        },
+    )
+
+    it('keeps a ready root with no progress checkboxes in Todo without treating it as complete', (): void => {
+        expect(stateFor('None yet.')).toBe('Todo')
+    })
+
+    it('promotes a plan only after every dependency is complete', (): void => {
+        const first = parseExecPlan(
+            '.agents/plans/f/01-a.md',
+            buildPlanFile({ progress: '- [x] Complete.' }),
         )
+        const second = parseExecPlan(
+            '.agents/plans/f/02-b.md',
+            buildPlanFile({ dependencies: '- `f/01`', progress: '- [ ] Work.' }),
+        )
+
+        expect(resolvePlanStates([first, second]).get('f/02')).toEqual({ status: 'Todo' })
+
+        first.progress.completed = 0
+        expect(resolvePlanStates([first, second]).get('f/02')).toEqual({
+            status: 'Backlog',
+            detail: 'Waiting for `f/01`.',
+        })
+    })
+
+    it('does not satisfy a dependency that has no progress checkboxes', (): void => {
+        const first = parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ progress: 'None yet.' }))
+        const second = parseExecPlan(
+            '.agents/plans/f/02-b.md',
+            buildPlanFile({ dependencies: '- `f/01`', progress: '- [ ] Work.' }),
+        )
+
+        expect(resolvePlanStates([first, second]).get('f/02')?.status).toBe('Backlog')
+    })
+
+    it('keeps started work In Progress even when a dependency is incomplete', (): void => {
+        const first = parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ progress: '- [ ] Work.' }))
+        const second = parseExecPlan(
+            '.agents/plans/f/02-b.md',
+            buildPlanFile({ dependencies: '- `f/01`', progress: '- [x] Started.\n- [ ] Finish.' }),
+        )
+
+        expect(resolvePlanStates([first, second]).get('f/02')?.status).toBe('In Progress')
+    })
+
+    it.each([
+        [
+            [parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ dependencies: '- `f/99`' }))],
+            'depends on missing ExecPlan f/99',
+        ],
+        [
+            [parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ dependencies: '- `f/01`' }))],
+            'cannot depend on itself',
+        ],
+        [
+            [
+                parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ dependencies: '- `f/02`' })),
+                parseExecPlan('.agents/plans/f/02-b.md', buildPlanFile({ dependencies: '- `f/01`' })),
+            ],
+            'ExecPlan dependency cycle: f/01 -> f/02 -> f/01',
+        ],
+        [
+            [
+                parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile()),
+                parseExecPlan('.agents/plans/f/01-renamed.md', buildPlanFile()),
+            ],
+            'Duplicate ExecPlan key f/01',
+        ],
+    ])('rejects an invalid dependency graph', (plans, message): void => {
+        expect(() => resolvePlanStates(plans)).toThrow(message)
     })
 })
 
@@ -117,13 +222,24 @@ describe('labelsFor', (): void => {
 
         expect(labelsFor(plan)).toEqual([EXECPLAN_LABEL, BLOCKED_LABEL])
     })
+
+    it('does not apply the blocked label to unknown readiness wording', (): void => {
+        const plan = parseExecPlan(
+            '.agents/plans/f/01-a.md',
+            buildPlanFile({ readiness: 'Unexpected readiness wording.' }),
+        )
+
+        expect(labelsFor(plan)).toEqual([EXECPLAN_LABEL])
+    })
 })
 
 describe('renderIssueBody', (): void => {
     it('embeds the marker, a link to the plan, and the overwrite warning', (): void => {
         const plan = parseExecPlan('.agents/plans/payments/01-idempotent-credit-grants.md', buildPlanFile())
+        const state = resolvePlanStates([plan]).get(plan.key)
 
-        const body = renderIssueBody(plan, 'https://github.com/TupoSoft/LeadEmailFinder/blob/master')
+        expect(state).toBeDefined()
+        const body = renderIssueBody(plan, state!, 'https://github.com/TupoSoft/LeadEmailFinder/blob/master')
 
         expect(body).toContain(execPlanMarker('payments/01'))
         expect(body).toContain(
@@ -131,20 +247,24 @@ describe('renderIssueBody', (): void => {
         )
         expect(body).toContain('overwritten on the next sync')
         expect(body).toContain('Make adding credits as safe as spending them.')
+        expect(body).toContain('- Dependencies: None.')
         expect(body).toContain('- Progress: 0 of 2 tasks complete.')
+        expect(body).toContain('- Effective status: Todo')
     })
 
     it('renders identically for identical input so repeated syncs do not edit issues', (): void => {
         const plan = parseExecPlan('.agents/plans/payments/01-a.md', buildPlanFile())
         const baseUrl = 'https://github.com/TupoSoft/LeadEmailFinder/blob/master'
+        const state = resolvePlanStates([plan]).get(plan.key)!
 
-        expect(renderIssueBody(plan, baseUrl)).toBe(renderIssueBody(plan, baseUrl))
+        expect(renderIssueBody(plan, state, baseUrl)).toBe(renderIssueBody(plan, state, baseUrl))
     })
 
     it('tolerates a base URL with a trailing slash', (): void => {
         const plan = parseExecPlan('.agents/plans/payments/01-a.md', buildPlanFile())
+        const state = resolvePlanStates([plan]).get(plan.key)!
 
-        expect(renderIssueBody(plan, 'https://example.test/blob/master/')).toContain(
+        expect(renderIssueBody(plan, state, 'https://example.test/blob/master/')).toContain(
             '(https://example.test/blob/master/.agents/plans/payments/01-a.md)',
         )
     })

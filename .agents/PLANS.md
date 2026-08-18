@@ -48,6 +48,14 @@ Use timestamped checkboxes. This is the only section where checklists are requir
 
 - [ ] Planned work.
 
+## Plan dependencies
+
+List prerequisite ExecPlans by their stable `<feature>/<NN>` keys, one bullet per dependency. Use `None.`
+when the plan can start independently. This section is required for every new or edited incomplete plan;
+completed legacy plans may omit it.
+
+- `example/01`
+
 ## Surprises & Discoveries
 
 Record unexpected facts and concise evidence. Use `None yet.` until implementation begins.
@@ -95,3 +103,6 @@ Capture only concise evidence needed to resume or verify the work.
 ## Plan readiness
 
 Before implementation begins, confirm that the plan is decision-complete, has no hidden product choice, maps to one pull request, and can be validated independently. End the plan with one of: `Ready to implement`, `Ready after <decision>`, or `Blocked by <evidence>`.
+
+Dependency ordering belongs in `Plan dependencies`, not in this readiness sentence. `Ready to implement`
+means the plan itself is decision-complete even when an incomplete prerequisite keeps it in the project backlog.

@@ -14,6 +14,10 @@ Establish the payments seam before any provider SDK exists. After this change th
 - [ ] Add `StubPaymentProvider` and the shared provider contract test suite.
 - [ ] Run typecheck, lint, and jest.
 
+## Plan dependencies
+
+- `payments/01`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -92,4 +96,4 @@ Record the pack catalog JSON shape with synthetic pack identifiers and prices on
 
 ## Plan readiness
 
-Ready to implement after plan 01.
+Ready to implement.

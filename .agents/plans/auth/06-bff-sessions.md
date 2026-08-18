@@ -12,6 +12,12 @@ Allow a browser user to sign in through Keycloak without exposing OAuth tokens t
 - [ ] Add encrypted Redis sessions and CSRF protection.
 - [ ] Add browser-flow and failure-path integration tests.
 
+## Plan dependencies
+
+- `auth/02`
+- `auth/04`
+- `auth/05`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -70,4 +76,4 @@ Record sanitized redirect URLs, cookie attributes, and test transcripts without 
 
 ## Plan readiness
 
-Ready to implement after PRs 2, 4, and 5.
+Ready to implement.
