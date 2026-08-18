@@ -37,7 +37,11 @@ describe('EnvironmentVariablesDto', (): void => {
     })
 
     it('transforms a configured SMTP port from an environment variable', (): void => {
-        const environment = plainToInstance(EnvironmentVariablesDto, { SMTP_PORT: '2525' }, { enableImplicitConversion: true })
+        const environment = plainToInstance(
+            EnvironmentVariablesDto,
+            { SMTP_PORT: '2525' },
+            { enableImplicitConversion: true },
+        )
 
         expect(environment.SMTP_PORT).toBe(2525)
     })
@@ -135,6 +139,50 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(errors).toEqual(
             expect.arrayContaining(['KEYCLOAK_ORG_ADMIN_CLIENT_ID', 'KEYCLOAK_ORG_ADMIN_CLIENT_SECRET']),
+        )
+    })
+
+    it('accepts a valid stub payments configuration', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_PROVIDER: 'stub',
+            PAYMENTS_CREDIT_PACKS: JSON.stringify({
+                starter: { credits: 100, amountMinor: 500, currency: 'USD', providerPriceId: 'price_stub' },
+            }),
+            PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:53000/billing/complete',
+            PAYMENTS_STUB_WEBHOOK_SECRET: 'development-only-secret',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('requires the stub webhook secret only for the stub provider', (): void => {
+        const stubEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'stub' })
+        const paddleEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'paddle' })
+
+        const stubErrors = validateSync(stubEnvironment).map(error => error.property)
+        const paddleErrors = validateSync(paddleEnvironment).map(error => error.property)
+
+        expect(stubErrors).toContain('PAYMENTS_STUB_WEBHOOK_SECRET')
+        expect(paddleErrors).not.toContain('PAYMENTS_STUB_WEBHOOK_SECRET')
+        expect(paddleErrors).not.toContain('PAYMENTS_STUB_WEBHOOK_SECRET_FILE')
+    })
+
+    it('accepts a secret file for the stub provider', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_PROVIDER: 'stub',
+            PAYMENTS_STUB_WEBHOOK_SECRET_FILE: '/run/secrets/payments_stub_webhook_secret',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects missing required payments configuration', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {})
+
+        const errors = validateSync(environment).map(error => error.property)
+
+        expect(errors).toEqual(
+            expect.arrayContaining(['PAYMENTS_PROVIDER', 'PAYMENTS_CREDIT_PACKS', 'PAYMENTS_CHECKOUT_RETURN_URL']),
         )
     })
 })

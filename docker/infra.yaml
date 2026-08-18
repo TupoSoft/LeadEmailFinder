@@ -127,6 +127,8 @@ secrets:
     file: secrets/bff_client_secret.txt
   keycloak_org_admin_client_secret:
     file: secrets/keycloak_org_admin_client_secret.txt
+  payments_stub_webhook_secret:
+    file: secrets/payments_stub_webhook_secret.txt
 
 volumes:
   postgres-data:

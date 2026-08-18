@@ -1,9 +1,14 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator'
+import { IsBoolean, IsEnum, IsInt, IsJSON, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { Transform, Type } from 'class-transformer'
 
 function transformBoolean(value: unknown): boolean {
     return value === true || value === 'true'
+}
+
+export enum PaymentsProviderName {
+    STUB = 'stub',
+    PADDLE = 'paddle',
 }
 
 @WithFileVars()
@@ -108,4 +113,17 @@ export class EnvironmentVariablesDto {
     @Min(1)
     @Max(65535)
     SMTP_PORT?: number
+
+    @IsEnum(PaymentsProviderName)
+    PAYMENTS_PROVIDER: PaymentsProviderName
+
+    @IsJSON()
+    PAYMENTS_CREDIT_PACKS: string
+
+    @IsUrl({ require_protocol: true, require_tld: false })
+    PAYMENTS_CHECKOUT_RETURN_URL: string
+
+    @IsFileVar(environment => environment['PAYMENTS_PROVIDER'] === PaymentsProviderName.STUB)
+    @IsString()
+    PAYMENTS_STUB_WEBHOOK_SECRET?: string
 }
