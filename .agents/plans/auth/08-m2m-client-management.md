@@ -12,6 +12,10 @@ Allow organization owners and admins to create and manage least-privilege OAuth 
 - [ ] Provision Keycloak clients through the administration adapter.
 - [ ] Add secret, scope, isolation, and failure tests.
 
+## Plan dependencies
+
+- `auth/07`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -70,4 +74,4 @@ Record only synthetic client IDs and redacted secret responses.
 
 ## Plan readiness
 
-Ready to implement after PR 7.
+Ready to implement.

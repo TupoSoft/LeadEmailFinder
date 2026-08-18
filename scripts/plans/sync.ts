@@ -1,4 +1,13 @@
-import { desiredStatus, ExecPlan, execPlanMarker, labelsFor, ProjectStatus, renderIssueBody } from './execplan'
+import {
+    ExecPlan,
+    ExecPlanState,
+    execPlanMarker,
+    labelsFor,
+    PROJECT_STATUSES,
+    ProjectStatus,
+    renderIssueBody,
+    resolvePlanStates,
+} from './execplan'
 import { EXECPLAN_LABEL_DEFINITIONS, GitHubProjectPort, IssueSummary } from './github-project-api'
 
 export type IssueAction = 'created' | 'updated' | 'unchanged'
@@ -25,6 +34,9 @@ export class ExecPlanSynchronizer {
     ) {}
 
     async sync(plans: ExecPlan[]): Promise<SyncOutcome[]> {
+        const states = resolvePlanStates(plans)
+        await this.github.validateStatusOptions(PROJECT_STATUSES)
+
         if (!this.options.dryRun) {
             await this.github.ensureLabels(EXECPLAN_LABEL_DEFINITIONS)
         }
@@ -34,7 +46,13 @@ export class ExecPlanSynchronizer {
         const outcomes: SyncOutcome[] = []
 
         for (const plan of plans) {
-            outcomes.push(await this.syncPlan(plan, issues, items))
+            const state = states.get(plan.key)
+
+            if (!state) {
+                throw new Error(`No resolved state for ${plan.key}`)
+            }
+
+            outcomes.push(await this.syncPlan(plan, state, issues, items))
         }
 
         return outcomes
@@ -42,6 +60,7 @@ export class ExecPlanSynchronizer {
 
     private async syncPlan(
         plan: ExecPlan,
+        state: ExecPlanState,
         issues: IssueSummary[],
         items: Awaited<ReturnType<GitHubProjectPort['listProjectItems']>>,
     ): Promise<SyncOutcome> {
@@ -49,10 +68,10 @@ export class ExecPlanSynchronizer {
         const existing = issues.find(issue => issue.body.includes(marker))
         const content = {
             title: plan.title,
-            body: renderIssueBody(plan, this.options.blobBaseUrl),
+            body: renderIssueBody(plan, state, this.options.blobBaseUrl),
             labels: labelsFor(plan),
         }
-        const status = desiredStatus(plan)
+        const status = state.status
 
         if (!existing) {
             if (this.options.dryRun) {

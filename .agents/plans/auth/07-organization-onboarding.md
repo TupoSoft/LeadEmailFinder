@@ -13,6 +13,10 @@ Allow platform operators to create customer organizations and allow organization
 - [x] Add lifecycle, authorization, and recovery tests.
 - [x] Run full validation (typecheck, lint, jest, live-stack pass, Bruno) and commit.
 
+## Plan dependencies
+
+- `auth/06`
+
 ## Surprises & Discoveries
 
 - MFA enrollment on promotion turned out to already be solved at the realm level by PR 6's own `ensurePrivilegedBrowserFlow()` (the `mfa_required` composite role + conditional-OTP `lef-browser` flow), not by Keycloak's `requiredActions` mechanism as initially assumed. "Promotion requests MFA enrollment" is just assigning the matching Keycloak realm role (`owner`/`admin`) to the user — nothing new to provision.
@@ -97,4 +101,4 @@ Record the endpoint shapes and synthetic onboarding transcript during implementa
 
 ## Plan readiness
 
-Ready to implement after PR 6.
+Ready to implement.

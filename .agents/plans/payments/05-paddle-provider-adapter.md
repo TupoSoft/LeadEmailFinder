@@ -14,6 +14,12 @@ Take real money. After this change, setting `PAYMENTS_PROVIDER=paddle` routes ch
 - [ ] Run the shared provider contract suite against the adapter.
 - [ ] Verify a sandbox purchase end to end and record the result.
 
+## Plan dependencies
+
+- `payments/02`
+- `payments/03`
+- `payments/04`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -93,4 +99,4 @@ Record redacted sandbox event payloads and the observed signature tolerance. Nev
 
 ## Plan readiness
 
-Ready to implement after plan 04.
+Ready to implement.

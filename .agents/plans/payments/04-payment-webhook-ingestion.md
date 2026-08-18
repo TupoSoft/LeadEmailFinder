@@ -14,6 +14,12 @@ Turn a completed payment into credits. After this change a signed provider event
 - [ ] Add replay, out-of-order, unknown-reference, and bad-signature coverage.
 - [ ] Extend the Bruno collection and run it against the stub provider.
 
+## Plan dependencies
+
+- `payments/01`
+- `payments/02`
+- `payments/03`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -93,4 +99,4 @@ Record one signed stub event payload with synthetic identifiers. Never record a 
 
 ## Plan readiness
 
-Ready to implement after plan 03.
+Ready to implement.

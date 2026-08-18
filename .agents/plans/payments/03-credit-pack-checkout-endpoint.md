@@ -14,6 +14,11 @@ Give a customer a way to start paying. After this change an authenticated organi
 - [ ] Add controller, service, and permission tests.
 - [ ] Add the Bruno collection and run it against the stub provider.
 
+## Plan dependencies
+
+- `payments/01`
+- `payments/02`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -92,4 +97,4 @@ Record a sample request and response with synthetic identifiers. Never record a 
 
 ## Plan readiness
 
-Ready to implement after plan 02.
+Ready to implement.
