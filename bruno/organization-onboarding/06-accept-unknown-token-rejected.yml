@@ -1,0 +1,25 @@
+info:
+  name: 06-accept-unknown-token-rejected
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/invitations/this-token-does-not-exist/accept"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "password": "bruno-test-password-123"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects an unknown invitation token', function() {
+          expect(res.status).to.equal(404);
+        });

@@ -17,9 +17,16 @@ export const BFF_CLIENT_ID = 'lef-web-bff'
 // instance. Setting an explicit secret on the client sidesteps that chicken-and-egg problem entirely.
 export const BFF_CLIENT_DEV_SECRET = 'lef-web-bff-development-only-client-secret'
 export const SERVICE_CLIENT_ID = 'lef-development-service'
+export const ORG_ADMIN_CLIENT_ID = 'lef-org-admin-service'
+// Same fixed-dev-secret trick as BFF_CLIENT_DEV_SECRET: the running api service needs
+// KEYCLOAK_ORG_ADMIN_CLIENT_SECRET to call Keycloak's Admin API, but Keycloak's own auto-generated
+// secret isn't known until provisioning runs, so we set an explicit one instead.
+export const ORG_ADMIN_CLIENT_DEV_SECRET = 'lef-org-admin-service-development-only-client-secret'
 export const AUDIENCE_SCOPE = 'lef-api-audience'
 export const BROWSER_FLOW = 'lef-browser'
 export const DEVELOPMENT_ORGANIZATION = 'development'
+const REALM_MANAGEMENT_CLIENT_ID = 'realm-management'
+const ORG_ADMIN_SERVICE_ACCOUNT_ROLES = ['manage-users', 'view-users', 'query-users', 'view-realm']
 
 export interface ProvisioningOptions {
     bffRedirectUris: string[]
@@ -41,9 +48,16 @@ export interface BffClientCredentials {
     redirectUris: string[]
 }
 
+export interface OrgAdminClientCredentials {
+    issuer: string
+    clientId: string
+    clientSecret: string
+}
+
 export interface ProvisioningResult {
     service: ServiceClientCredentials
     bff: BffClientCredentials
+    orgAdmin: OrgAdminClientCredentials
 }
 
 interface NamedRepository<T extends IdentifiedRepresentation> {
@@ -103,6 +117,21 @@ export function createServiceClient(): ClientRepresentation {
     }
 }
 
+export function createOrgAdminClient(): ClientRepresentation {
+    return {
+        clientId: ORG_ADMIN_CLIENT_ID,
+        name: 'Lead Email Finder organization administration service',
+        enabled: true,
+        protocol: 'openid-connect',
+        publicClient: false,
+        secret: ORG_ADMIN_CLIENT_DEV_SECRET,
+        standardFlowEnabled: false,
+        implicitFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+        serviceAccountsEnabled: true,
+    }
+}
+
 export async function reconcileResource<T extends IdentifiedRepresentation>(
     repository: NamedRepository<T>,
 ): Promise<T> {
@@ -134,9 +163,11 @@ export class KeycloakProvisioner {
         const audienceScope = await this.ensureClientScope(API_AUDIENCE)
         const bffClient = await this.ensureClient(createBffClient(this.options))
         const serviceClient = await this.ensureClient(createServiceClient())
+        const orgAdminClient = await this.ensureClient(createOrgAdminClient())
         await this.assignDefaultScope(bffClient.id as string, audienceScope.id as string)
         await this.assignDefaultScope(serviceClient.id as string, audienceScope.id as string)
         await this.ensurePrivilegedBrowserFlow()
+        await this.ensureOrgAdminServiceAccountRoles(orgAdminClient.id as string)
 
         const issuer = `${this.baseUrl}/realms/${REALM}`
 
@@ -156,6 +187,14 @@ export class KeycloakProvisioner {
             throw new Error('Keycloak did not return a BFF client secret')
         }
 
+        const orgAdminSecret = await this.api.request<{ value: string }>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${orgAdminClient.id}/client-secret`,
+        )
+        if (!orgAdminSecret.value) {
+            throw new Error('Keycloak did not return an organization administration client secret')
+        }
+
         return {
             service: {
                 issuer,
@@ -169,6 +208,11 @@ export class KeycloakProvisioner {
                 clientSecret: bffSecret.value,
                 audience: API_AUDIENCE,
                 redirectUris: this.options.bffRedirectUris,
+            },
+            orgAdmin: {
+                issuer,
+                clientId: ORG_ADMIN_CLIENT_ID,
+                clientSecret: orgAdminSecret.value,
             },
         }
     }
@@ -223,6 +267,40 @@ export class KeycloakProvisioner {
             create: () => this.api.request('POST', `/admin/realms/${REALM}/organizations`, desired),
             update: existing => this.api.request('PUT', `/admin/realms/${REALM}/organizations/${existing.id}`, desired),
         })
+    }
+
+    private async ensureOrgAdminServiceAccountRoles(orgAdminClientId: string): Promise<void> {
+        const [realmManagementClient] = await this.api.request<ClientRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/clients?clientId=${encodeURIComponent(REALM_MANAGEMENT_CLIENT_ID)}`,
+        )
+        if (!realmManagementClient) {
+            throw new Error(`Keycloak client ${REALM_MANAGEMENT_CLIENT_ID} was not found`)
+        }
+        const serviceAccountUser = await this.api.request<IdentifiedRepresentation>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${orgAdminClientId}/service-account-user`,
+        )
+        const availableRoles = await this.api.request<NamedRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${realmManagementClient.id}/roles`,
+        )
+        const existingRoles = await this.api.request<NamedRepresentation[]>(
+            'GET',
+            `/admin/realms/${REALM}/users/${serviceAccountUser.id}/role-mappings/clients/${realmManagementClient.id}`,
+        )
+        const existingRoleNames = new Set(existingRoles.map(role => role.name))
+        const rolesToGrant = availableRoles.filter(
+            role => ORG_ADMIN_SERVICE_ACCOUNT_ROLES.includes(role.name) && !existingRoleNames.has(role.name),
+        )
+        if (rolesToGrant.length > 0) {
+            await this.api.request(
+                'POST',
+                `/admin/realms/${REALM}/users/${serviceAccountUser.id}/role-mappings/clients/${realmManagementClient.id}`,
+                rolesToGrant,
+                [204],
+            )
+        }
     }
 
     private async ensureClient(desired: ClientRepresentation): Promise<ClientRepresentation> {
