@@ -8,11 +8,11 @@ Establish the payments seam before any provider SDK exists. After this change th
 
 ## Progress
 
-- [ ] Add the `PaymentsModule` with the `CreditPurchase` entity.
-- [ ] Define the `PaymentProvider` port and its event and checkout contracts.
-- [ ] Add the server-side credit pack catalog and its configuration.
-- [ ] Add `StubPaymentProvider` and the shared provider contract test suite.
-- [ ] Run typecheck, lint, and jest.
+- [x] (2026-08-18) Add the `PaymentsModule` with the `CreditPurchase` entity.
+- [x] (2026-08-18) Define the `PaymentProvider` port and its event and checkout contracts.
+- [x] (2026-08-18) Add the server-side credit pack catalog and its configuration.
+- [x] (2026-08-18) Add `StubPaymentProvider` and the shared provider contract test suite.
+- [x] (2026-08-18) Run typecheck, lint, Jest, build, Compose configuration validation, formatting, and diff checks.
 
 ## Plan dependencies
 
@@ -20,7 +20,8 @@ Establish the payments seam before any provider SDK exists. After this change th
 
 ## Surprises & Discoveries
 
-None yet.
+- `@IsFileVar()` originally supported only secrets required in every configuration. Payments needs the stub webhook secret only when `PAYMENTS_PROVIDER=stub`, so the decorator now accepts a backwards-compatible condition and applies it to both the direct and `_FILE` alternatives.
+- The first sandboxed full Jest run could not open local HTTP and SOCKS listeners (`listen EPERM`). With local socket permission, one unrelated randomized session-encryptor assertion initially performed a no-op mutation; it passed in isolation and the subsequent complete run passed all 98 executed suites.
 
 ## Decision Log
 
@@ -39,10 +40,13 @@ None yet.
 - Decision: `CreditPurchase` lives in the payments module rather than in the identity library.
   Rationale: `src/proxy/src/proxy.entity.ts` establishes that a feature module owns its entity and registers it with `TypeOrmModule.forFeature`, and `autoLoadEntities: true` means no central registry needs editing. Credit accounts stay in identity because they are shared across modules; a purchase record is used only by payments.
   Date/Author: 2026-08-17, project planning.
+- Decision: The stub checkout redirect appends the purchase id and deterministic provider reference to the configured return URL.
+  Rationale: This keeps the adapter network-free and makes the result observable without adding the customer-facing route reserved for plan 03.
+  Date/Author: 2026-08-18, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the application-owned payment provider port, immutable server-side credit pack catalog, payments-owned purchase entity, and HMAC-verifying stub adapter without adding an HTTP surface or provider SDK. The module exposes only the catalog and provider token, while provider-specific behavior remains under `payments/infrastructure/`. Focused and full Jest, typecheck, lint, build, Compose configuration, formatting, and diff validation pass.
 
 ## Context and Orientation
 
@@ -92,7 +96,8 @@ All work is additive. `credit_purchases` is created by `TYPEORM_SYNCHRONIZE=true
 
 ## Artifacts and Notes
 
-Record the pack catalog JSON shape with synthetic pack identifiers and prices only. Never record a live provider key.
+- Local Compose uses synthetic `starter` and `growth` pack identifiers, prices, and a development-only HMAC secret.
+- Focused payments and environment validation completed 5 suites and 39 tests. The final full Jest run completed 98 suites and 584 tests, with 6 environment-gated suites skipped and one pre-existing todo.
 
 ## Plan readiness
 
