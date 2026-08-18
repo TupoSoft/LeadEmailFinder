@@ -1,0 +1,14 @@
+name: local
+variables:
+    - name: baseUrl
+      value: http://localhost:53000
+    - name: ownerAccessToken
+      value: '{{process.env.OWNER_ACCESS_TOKEN}}'
+    - name: packId
+      value: starter
+    - name: expectedCredits
+      value: 100
+    - name: expectedAmountMinor
+      value: 500
+    - name: expectedCurrency
+      value: USD

@@ -8,11 +8,11 @@ Give a customer a way to start paying. After this change an authenticated organi
 
 ## Progress
 
-- [ ] Add `CreditPurchaseService` with purchase creation.
-- [ ] Add the `billing:manage` permission and grant it to `owner`.
-- [ ] Add `POST /v1/credit-purchases` and `GET /v1/credit-purchases`.
-- [ ] Add controller, service, and permission tests.
-- [ ] Add the Bruno collection and run it against the stub provider.
+- [x] (2026-08-18) Add `CreditPurchaseService` with purchase creation.
+- [x] (2026-08-18) Add the `billing:manage` permission and grant it to `owner`.
+- [x] (2026-08-18) Add `POST /v1/credit-purchases` and `GET /v1/credit-purchases`.
+- [x] (2026-08-18) Add controller, service, and permission tests.
+- [x] (2026-08-18) Add the Bruno collection and run it against the stub provider.
 
 ## Plan dependencies
 
@@ -21,7 +21,8 @@ Give a customer a way to start paying. After this change an authenticated organi
 
 ## Surprises & Discoveries
 
-None yet.
+- The isolated `PaymentsModule` wiring test needed repository and `CreditsService` doubles after the plan-required `CreditsModule` and `IdentityModule` imports. Production wiring was unchanged.
+- The first container startup exposed that TypeORM reflects the nullable union `providerReference?: string | null` as `Object`, which PostgreSQL does not support. Declaring the column as `varchar` explicitly fixed startup; the entity metadata test now locks the type.
 
 ## Decision Log
 
@@ -37,10 +38,16 @@ None yet.
 - Decision: Service clients may hold `billing:manage` but the flow targets browser users.
   Rationale: `RolePermissionPolicy` returns a service client's own permissions rather than role-derived ones, so an M2M client can be provisioned for purchasing if an operator chooses. Hosted checkout still requires a human to complete payment, so nothing special is built for that case.
   Date/Author: 2026-08-17, project planning.
+- Decision: Keep catalog and provider failures framework-neutral in the payments service and map them to HTTP `400` and `502` in the controller.
+  Rationale: Purchase orchestration remains testable without HTTP concerns while the controller owns transport semantics.
+  Date/Author: 2026-08-18, Codex.
+- Decision: Declare `CreditPurchase.providerReference` as an explicit TypeORM `varchar`.
+  Rationale: The property is nullable, so decorator reflection reports `Object`; PostgreSQL needs an explicit supported column type.
+  Date/Author: 2026-08-18, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and runtime-verified the checkout start and organization-scoped history flow, including owner-only purchase permission, pending/failed persistence, server-owned catalog values, DTO serialization, PostgreSQL-compatible entity metadata, module wiring, focused tests, and a four-request Bruno workflow. Typecheck, repository lint, focused tests, the full Jest suite, container startup, and Bruno pass.
 
 ## Context and Orientation
 
@@ -93,7 +100,27 @@ Repeated posts create separate purchases, which is correct: a customer may genui
 
 ## Artifacts and Notes
 
-Record a sample request and response with synthetic identifiers. Never record a live provider key or a real checkout URL.
+Synthetic example:
+
+    POST /v1/credit-purchases
+    { "packId": "starter" }
+
+    201 Created
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "status": "pending",
+      "redirectUrl": "http://localhost:53000/billing/complete?purchaseId=20000000-0000-4000-8000-000000000001&providerReference=stub_20000000-0000-4000-8000-000000000001"
+    }
+
+Validation evidence from 2026-08-18:
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with two pre-existing warnings in unrelated config and Redis tests.
+- Focused purchase, permission, identity, and module tests passed (24 tests).
+- Full Jest suite passed outside the sandbox (100 suites and 594 tests passed; 6 suites skipped, 20 tests skipped, 1 todo).
+- `git diff --check` passed.
+- Local Compose API reached healthy status with TypeORM synchronization enabled.
+- Bruno CLI 3.4.2 passed all four requests and tests: unauthenticated `401`, checkout `201`, unknown pack `400`, and history `200`.
 
 ## Plan readiness
 

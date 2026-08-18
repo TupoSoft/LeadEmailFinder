@@ -1,0 +1,25 @@
+info:
+    name: 01-unauthorized-purchase
+    type: http
+    seq: 1
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/credit-purchases'
+    headers:
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {
+              "packId": "{{packId}}"
+            }
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('rejects an unauthenticated purchase', function() {
+                expect(res.status).to.equal(401);
+              });

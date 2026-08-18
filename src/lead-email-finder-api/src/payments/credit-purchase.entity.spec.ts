@@ -15,7 +15,7 @@ describe('CreditPurchase', () => {
             )
         })
 
-        expect(providerReference?.options).toMatchObject({ nullable: true, unique: true })
+        expect(providerReference?.options).toMatchObject({ type: 'varchar', nullable: true, unique: true })
         expect(organizationIndex).toBeDefined()
     })
 })

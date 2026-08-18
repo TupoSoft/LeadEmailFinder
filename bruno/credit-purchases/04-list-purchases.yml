@@ -1,0 +1,30 @@
+info:
+    name: 04-list-purchases
+    type: http
+    seq: 4
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/credit-purchases'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{ownerAccessToken}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('lists the created purchase with server-side catalog values', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body).to.be.an('array');
+                var purchase = res.body.find(function(candidate) {
+                  return candidate.id === bru.getVar('purchaseId');
+                });
+                expect(purchase).to.be.an('object');
+                expect(purchase.packId).to.equal(bru.getEnvVar('packId'));
+                expect(purchase.credits).to.equal(Number(bru.getEnvVar('expectedCredits')));
+                expect(purchase.amountMinor).to.equal(Number(bru.getEnvVar('expectedAmountMinor')));
+                expect(purchase.currency).to.equal(bru.getEnvVar('expectedCurrency'));
+                expect(purchase.status).to.equal('pending');
+                expect(purchase).not.to.have.property('organizationId');
+              });

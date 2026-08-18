@@ -21,10 +21,28 @@ describe('RolePermissionPolicy', () => {
         it.each<[AuthRole, readonly AuthPermission[]]>([
             ['member', ['verification:run', 'verification:read']],
             ['admin', ['verification:run', 'verification:read', 'members:manage', 'credentials:manage']],
-            ['owner', ['verification:run', 'verification:read', 'members:manage', 'credentials:manage', 'billing:read']],
+            [
+                'owner',
+                [
+                    'verification:run',
+                    'verification:read',
+                    'members:manage',
+                    'credentials:manage',
+                    'billing:read',
+                    'billing:manage',
+                ],
+            ],
             [
                 'platform_admin',
-                ['verification:run', 'verification:read', 'members:manage', 'credentials:manage', 'billing:read', 'platform:admin'],
+                [
+                    'verification:run',
+                    'verification:read',
+                    'members:manage',
+                    'credentials:manage',
+                    'billing:read',
+                    'billing:manage',
+                    'platform:admin',
+                ],
             ],
         ])('grants the documented permission set for %s', (membershipRole, expectedPermissions) => {
             const principal = principalWith({ credentialKind: 'legacy_api_key', membershipRole, permissions: [] })
@@ -61,7 +79,11 @@ describe('RolePermissionPolicy', () => {
         })
 
         it('returns no permissions when none are configured', () => {
-            const principal = principalWith({ credentialKind: 'service_client', membershipRole: 'admin', permissions: [] })
+            const principal = principalWith({
+                credentialKind: 'service_client',
+                membershipRole: 'admin',
+                permissions: [],
+            })
 
             expect(policy.effectivePermissionsFor(principal)).toEqual([])
         })

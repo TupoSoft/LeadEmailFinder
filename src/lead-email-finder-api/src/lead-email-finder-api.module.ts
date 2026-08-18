@@ -17,6 +17,7 @@ import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { OrganizationOnboardingModule } from './organization-onboarding'
+import { PaymentsModule } from './payments'
 
 @Module({
     imports: [
@@ -49,6 +50,7 @@ import { OrganizationOnboardingModule } from './organization-onboarding'
         AuthModule,
         ApiKeyModule,
         OrganizationOnboardingModule,
+        PaymentsModule,
         ProxyModule,
         HealthModule,
         S3Module.forRootAsync({

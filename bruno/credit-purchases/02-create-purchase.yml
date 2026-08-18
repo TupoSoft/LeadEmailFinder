@@ -1,0 +1,33 @@
+info:
+    name: 02-create-purchase
+    type: http
+    seq: 2
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/credit-purchases'
+    headers:
+        - name: Content-Type
+          value: application/json
+        - name: Authorization
+          value: 'Bearer {{ownerAccessToken}}'
+    body:
+        type: json
+        data: |-
+            {
+              "packId": "{{packId}}",
+              "credits": 999999,
+              "amountMinor": 1
+            }
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('creates a pending purchase and returns a checkout redirect', function() {
+                expect(res.status).to.equal(201);
+                expect(res.body.id).to.be.a('string');
+                expect(res.body.status).to.equal('pending');
+                expect(res.body.redirectUrl).to.be.a('string');
+                bru.setVar('purchaseId', res.body.id);
+              });
