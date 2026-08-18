@@ -1,0 +1,119 @@
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Post,
+    SerializeOptions,
+    UseGuards,
+} from '@nestjs/common'
+import { ApiExcludeController } from '@nestjs/swagger'
+import { AuthPrincipal, ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { ServiceClientCreationService } from './service-client-creation.service'
+import { ServiceClientDeletionService } from './service-client-deletion.service'
+import { ServiceClientDisablementService } from './service-client-disablement.service'
+import { ServiceClientListingService } from './service-client-listing.service'
+import { ServiceClientRotationService } from './service-client-rotation.service'
+import {
+    CreateServiceClientDto,
+    ServiceClientMemberParamsDto,
+    ServiceClientParamsDto,
+    ServiceClientResponseDto,
+    ServiceClientSecretResponseDto,
+} from './service-clients.dto'
+
+function toResponse(credential: ServiceCredential): ServiceClientResponseDto {
+    return {
+        id: credential.id,
+        clientId: credential.keycloakClientId,
+        description: credential.description,
+        permissions: credential.permissions,
+        status: credential.status,
+        createdAt: credential.createdAt,
+        updatedAt: credential.updatedAt,
+    }
+}
+
+@UseGuards(PermissionsGuard)
+@ApiExcludeController()
+@Controller('v1/organizations/:organizationId/service-clients')
+export class ServiceClientsController {
+    constructor(
+        private readonly serviceClientCreation: ServiceClientCreationService,
+        private readonly serviceClientListing: ServiceClientListingService,
+        private readonly serviceClientRotation: ServiceClientRotationService,
+        private readonly serviceClientDisablement: ServiceClientDisablementService,
+        private readonly serviceClientDeletion: ServiceClientDeletionService,
+    ) {}
+
+    @Post()
+    @RequirePermissions('credentials:manage')
+    @SerializeOptions({ type: ServiceClientSecretResponseDto })
+    async create(
+        @Param() { organizationId }: ServiceClientParamsDto,
+        @Body() { description, permissions }: CreateServiceClientDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<ServiceClientSecretResponseDto> {
+        const { credential, secret } = await this.serviceClientCreation.create(
+            principal,
+            organizationId,
+            description ?? null,
+            permissions,
+        )
+
+        return { ...toResponse(credential), clientSecret: secret }
+    }
+
+    @Get()
+    @RequirePermissions('credentials:manage')
+    @SerializeOptions({ type: ServiceClientResponseDto })
+    async list(
+        @Param() { organizationId }: ServiceClientParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<ServiceClientResponseDto[]> {
+        const credentials = await this.serviceClientListing.list(principal, organizationId)
+
+        return credentials.map(toResponse)
+    }
+
+    @Post(':serviceClientId/rotate')
+    @RequirePermissions('credentials:manage')
+    @HttpCode(HttpStatus.OK)
+    @SerializeOptions({ type: ServiceClientSecretResponseDto })
+    async rotate(
+        @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<ServiceClientSecretResponseDto> {
+        const { credential, secret } = await this.serviceClientRotation.rotate(
+            principal,
+            organizationId,
+            serviceClientId,
+        )
+
+        return { ...toResponse(credential), clientSecret: secret }
+    }
+
+    @Post(':serviceClientId/disable')
+    @RequirePermissions('credentials:manage')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async disable(
+        @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<void> {
+        await this.serviceClientDisablement.disable(principal, organizationId, serviceClientId)
+    }
+
+    @Delete(':serviceClientId')
+    @RequirePermissions('credentials:manage')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async remove(
+        @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<void> {
+        await this.serviceClientDeletion.delete(principal, organizationId, serviceClientId)
+    }
+}

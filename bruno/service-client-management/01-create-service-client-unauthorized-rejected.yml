@@ -1,0 +1,25 @@
+info:
+  name: 01-create-service-client-unauthorized-rejected
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "permissions": ["verification:run"]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects service client creation without a credential', function() {
+          expect(res.status).to.equal(401);
+        });

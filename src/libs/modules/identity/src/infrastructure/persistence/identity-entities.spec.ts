@@ -72,6 +72,14 @@ describe('identity and organization entities', () => {
         expect(permissions?.options).toEqual(expect.objectContaining({ enumName: 'auth_permission', array: true }))
     })
 
+    it('uniquely identifies a service credential by its Keycloak client id', () => {
+        const uniqueIndex = metadata.indices.find(
+            index => index.target === ServiceCredential && index.name === 'UQ_service_credentials_keycloak_client_id',
+        )
+
+        expect(uniqueIndex?.columns).toEqual(['keycloakClientId'])
+    })
+
     it('uses one non-negative credit account per organization', () => {
         const primaryColumn = metadata.columns.find(
             column => column.target === OrganizationCreditAccount && column.propertyName === 'organizationId',

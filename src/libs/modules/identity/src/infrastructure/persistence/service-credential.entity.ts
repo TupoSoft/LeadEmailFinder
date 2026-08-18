@@ -14,6 +14,7 @@ import { Organization } from './organization.entity'
 
 @Entity('service_credentials')
 @Index('UQ_service_credentials_issuer_subject', ['issuer', 'subject'], { unique: true })
+@Index('UQ_service_credentials_keycloak_client_id', ['keycloakClientId'], { unique: true })
 export class ServiceCredential {
     @PrimaryGeneratedColumn('uuid')
     id: string
@@ -30,6 +31,11 @@ export class ServiceCredential {
 
     @Column()
     subject: string
+
+    // The literal Keycloak clientId string (e.g. 'lef-svc-<uuid>'), distinct from `subject` (the service-account
+    // user UUID). Needed to address /admin/realms/{realm}/clients?clientId= for rotate/delete.
+    @Column()
+    keycloakClientId: string
 
     @Column({ type: 'varchar', nullable: true })
     description: string | null
