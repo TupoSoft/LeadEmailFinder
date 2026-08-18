@@ -70,4 +70,52 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(errors).toEqual(expect.arrayContaining(['OIDC_ISSUER_URL', 'OIDC_AUDIENCE']))
     })
+
+    it('accepts a valid BFF session configuration', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            APP_BASE_URL: 'http://localhost:53000',
+            BFF_CLIENT_ID: 'lef-web-bff',
+            BFF_CLIENT_SECRET: 'bff-secret',
+            SESSION_ENCRYPTION_KEY: 'a-base64url-encoded-key',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects a malformed APP_BASE_URL', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { APP_BASE_URL: 'not-a-url' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
+    })
+
+    it('rejects a configuration missing APP_BASE_URL, BFF_CLIENT_ID, BFF_CLIENT_SECRET, or SESSION_ENCRYPTION_KEY', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {})
+
+        const errors = validateSync(environment).map(error => error.property)
+
+        expect(errors).toEqual(
+            expect.arrayContaining(['APP_BASE_URL', 'BFF_CLIENT_ID', 'BFF_CLIENT_SECRET', 'SESSION_ENCRYPTION_KEY']),
+        )
+    })
+
+    it('transforms session timeout values from environment variables', (): void => {
+        const environment = plainToInstance(
+            EnvironmentVariablesDto,
+            {
+                SESSION_IDLE_TIMEOUT_MS: '28800000',
+                SESSION_ABSOLUTE_TIMEOUT_MS: '86400000',
+            },
+            { enableImplicitConversion: true },
+        )
+
+        expect(environment.SESSION_IDLE_TIMEOUT_MS).toBe(28_800_000)
+        expect(environment.SESSION_ABSOLUTE_TIMEOUT_MS).toBe(86_400_000)
+    })
+
+    it('leaves session timeouts undefined when not configured', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {}, { enableImplicitConversion: true })
+
+        expect(environment.SESSION_IDLE_TIMEOUT_MS).toBeUndefined()
+        expect(environment.SESSION_ABSOLUTE_TIMEOUT_MS).toBeUndefined()
+    })
 })

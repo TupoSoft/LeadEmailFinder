@@ -121,6 +121,10 @@ secrets:
     file: secrets/s3_access_key_id.txt
   s3_secret_key:
     file: secrets/s3_secret_key.txt
+  session_encryption_key:
+    file: secrets/session_encryption_key.txt
+  bff_client_secret:
+    file: secrets/bff_client_secret.txt
 
 volumes:
   postgres-data:

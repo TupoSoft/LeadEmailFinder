@@ -11,6 +11,11 @@ import {
 export const REALM = 'lead-email-finder'
 export const API_AUDIENCE = 'lead-email-finder-api'
 export const BFF_CLIENT_ID = 'lef-web-bff'
+// Fixed, checked-in dev-only secret (same convention as docker/secrets/admin_apikey.txt): the containerized
+// api service needs BFF_CLIENT_SECRET to boot (it is a required, non-optional config value), but Keycloak's
+// own auto-generated per-realm client secret is not known until provisioning runs against a live Keycloak
+// instance. Setting an explicit secret on the client sidesteps that chicken-and-egg problem entirely.
+export const BFF_CLIENT_DEV_SECRET = 'lef-web-bff-development-only-client-secret'
 export const SERVICE_CLIENT_ID = 'lef-development-service'
 export const AUDIENCE_SCOPE = 'lef-api-audience'
 export const BROWSER_FLOW = 'lef-browser'
@@ -26,6 +31,19 @@ export interface ServiceClientCredentials {
     clientId: string
     clientSecret: string
     audience: string
+}
+
+export interface BffClientCredentials {
+    issuer: string
+    clientId: string
+    clientSecret: string
+    audience: string
+    redirectUris: string[]
+}
+
+export interface ProvisioningResult {
+    service: ServiceClientCredentials
+    bff: BffClientCredentials
 }
 
 interface NamedRepository<T extends IdentifiedRepresentation> {
@@ -57,6 +75,7 @@ export function createBffClient(options: ProvisioningOptions): ClientRepresentat
         enabled: true,
         protocol: 'openid-connect',
         publicClient: false,
+        secret: BFF_CLIENT_DEV_SECRET,
         standardFlowEnabled: true,
         implicitFlowEnabled: false,
         directAccessGrantsEnabled: false,
@@ -107,7 +126,7 @@ export class KeycloakProvisioner {
         private readonly options: ProvisioningOptions,
     ) {}
 
-    async provision(): Promise<ServiceClientCredentials> {
+    async provision(): Promise<ProvisioningResult> {
         await this.ensureRealm()
         await this.ensureRoles()
         await this.ensureOrganization()
@@ -118,18 +137,39 @@ export class KeycloakProvisioner {
         await this.assignDefaultScope(bffClient.id as string, audienceScope.id as string)
         await this.assignDefaultScope(serviceClient.id as string, audienceScope.id as string)
         await this.ensurePrivilegedBrowserFlow()
-        const secret = await this.api.request<{ value: string }>(
+
+        const issuer = `${this.baseUrl}/realms/${REALM}`
+
+        const serviceSecret = await this.api.request<{ value: string }>(
             'GET',
             `/admin/realms/${REALM}/clients/${serviceClient.id}/client-secret`,
         )
-        if (!secret.value) {
+        if (!serviceSecret.value) {
             throw new Error('Keycloak did not return a service client secret')
         }
+
+        const bffSecret = await this.api.request<{ value: string }>(
+            'GET',
+            `/admin/realms/${REALM}/clients/${bffClient.id}/client-secret`,
+        )
+        if (!bffSecret.value) {
+            throw new Error('Keycloak did not return a BFF client secret')
+        }
+
         return {
-            issuer: `${this.baseUrl}/realms/${REALM}`,
-            clientId: SERVICE_CLIENT_ID,
-            clientSecret: secret.value,
-            audience: API_AUDIENCE,
+            service: {
+                issuer,
+                clientId: SERVICE_CLIENT_ID,
+                clientSecret: serviceSecret.value,
+                audience: API_AUDIENCE,
+            },
+            bff: {
+                issuer,
+                clientId: BFF_CLIENT_ID,
+                clientSecret: bffSecret.value,
+                audience: API_AUDIENCE,
+                redirectUris: this.options.bffRedirectUris,
+            },
         }
     }
 
