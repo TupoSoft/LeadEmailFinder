@@ -3,7 +3,7 @@ import { AuthPermission, AuthPrincipal, AuthRole } from '@tuposoft/lead-email-fi
 
 const MEMBER_PERMISSIONS: readonly AuthPermission[] = ['verification:run', 'verification:read']
 const ADMIN_PERMISSIONS: readonly AuthPermission[] = [...MEMBER_PERMISSIONS, 'members:manage', 'credentials:manage']
-const OWNER_PERMISSIONS: readonly AuthPermission[] = [...ADMIN_PERMISSIONS, 'billing:read']
+const OWNER_PERMISSIONS: readonly AuthPermission[] = [...ADMIN_PERMISSIONS, 'billing:read', 'billing:manage']
 const PLATFORM_ADMIN_PERMISSIONS: readonly AuthPermission[] = [...OWNER_PERMISSIONS, 'platform:admin']
 
 export const ROLE_PERMISSIONS: Readonly<Record<AuthRole, readonly AuthPermission[]>> = {

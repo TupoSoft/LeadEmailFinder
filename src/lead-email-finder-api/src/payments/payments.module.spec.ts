@@ -2,6 +2,18 @@ import { ConfigService } from '@nestjs/config'
 import { MODULE_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
+import {
+    AuditLogEntry,
+    CreditDebit,
+    CreditGrant,
+    ExternalIdentity,
+    Organization,
+    OrganizationCreditAccount,
+    OrganizationInvitation,
+    OrganizationMembership,
+    ServiceCredential,
+} from '@tuposoft/lead-email-finder/modules/identity'
+import { CreditsService } from '../credits/credits.service'
 import { PaymentProvider, PAYMENT_PROVIDER } from './payment-provider'
 import { CreditPurchase } from './credit-purchase.entity'
 import { PaymentsModule } from './payments.module'
@@ -35,11 +47,32 @@ describe('PaymentsModule', () => {
                 }),
             ],
             ['PAYMENTS_STUB_WEBHOOK_SECRET', 'module-test-secret'],
+            ['PAYMENTS_CHECKOUT_RETURN_URL', 'http://localhost:3000/payment-return'],
         ])
         const moduleRef = await Test.createTestingModule({ imports: [PaymentsModule] })
             .overrideProvider(ConfigService)
             .useValue({ getOrThrow: (key: string) => config.get(key) })
             .overrideProvider(getRepositoryToken(CreditPurchase))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(Organization))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(ExternalIdentity))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(OrganizationMembership))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(ServiceCredential))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(OrganizationCreditAccount))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(CreditDebit))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(CreditGrant))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(OrganizationInvitation))
+            .useValue({})
+            .overrideProvider(getRepositoryToken(AuditLogEntry))
+            .useValue({})
+            .overrideProvider(CreditsService)
             .useValue({})
             .compile()
 

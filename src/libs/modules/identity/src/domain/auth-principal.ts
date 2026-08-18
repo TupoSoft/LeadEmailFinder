@@ -8,6 +8,7 @@ export const AUTH_PERMISSIONS = [
     'members:manage',
     'credentials:manage',
     'billing:read',
+    'billing:manage',
     'platform:admin',
 ] as const
 

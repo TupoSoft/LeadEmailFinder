@@ -31,7 +31,7 @@ export class CreditPurchase {
     @Column()
     provider: string
 
-    @Column({ nullable: true, unique: true })
+    @Column({ type: 'varchar', nullable: true, unique: true })
     providerReference?: string | null
 
     @Column({ type: 'enum', enum: CreditPurchaseStatus, default: CreditPurchaseStatus.PENDING })

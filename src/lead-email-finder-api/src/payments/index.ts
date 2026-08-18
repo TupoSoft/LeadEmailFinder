@@ -1,4 +1,7 @@
 export * from './credit-pack-catalog'
+export * from './credit-purchase.controller'
+export * from './credit-purchase.dto'
 export * from './credit-purchase.entity'
+export * from './credit-purchase.service'
 export * from './payment-provider'
 export * from './payments.module'

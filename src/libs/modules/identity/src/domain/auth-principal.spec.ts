@@ -30,6 +30,7 @@ describe('AuthPrincipal', () => {
             'members:manage',
             'credentials:manage',
             'billing:read',
+            'billing:manage',
             'platform:admin',
         ])
         expect(AUTH_CREDENTIAL_KINDS).toEqual(['human_session', 'service_client', 'legacy_api_key'])
