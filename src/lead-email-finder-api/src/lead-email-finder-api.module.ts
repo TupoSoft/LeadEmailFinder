@@ -16,6 +16,7 @@ import { ProxyModule } from '../../proxy/src/proxy.module'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
+import { OrganizationOnboardingModule } from './organization-onboarding'
 
 @Module({
     imports: [
@@ -47,6 +48,7 @@ import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
         IdentityModule,
         AuthModule,
         ApiKeyModule,
+        OrganizationOnboardingModule,
         ProxyModule,
         HealthModule,
         S3Module.forRootAsync({

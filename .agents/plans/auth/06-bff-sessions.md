@@ -13,6 +13,12 @@ Allow a browser user to sign in through Keycloak without exposing OAuth tokens t
 - [x] Add browser-flow and failure-path integration tests.
 - [x] Run full validation (typecheck, lint, jest, live-stack pass, Bruno) and commit.
 
+## Plan dependencies
+
+- `auth/02`
+- `auth/04`
+- `auth/05`
+
 ## Surprises & Discoveries
 
 - `BFF_CLIENT_SECRET` is a required (non-optional) config value, so the containerized `api` service in `docker/compose.yaml` needs a real, working secret to boot at all — even before anyone exercises the BFF flow. Keycloak's own auto-generated per-client secret isn't known until `pnpm keycloak:provision` runs against a live realm, which happens after Compose brings the container up, so a static value can't be read from that. Fixed by having `createBffClient()` set an explicit, fixed, checked-in dev-only secret (`BFF_CLIENT_DEV_SECRET`) on the Keycloak client itself, matching `docker/secrets/admin_apikey.txt`'s existing precedent for fixed dev-only secrets, and wiring `docker/secrets/bff_client_secret.txt` with the same value. `provision()` still fetches and returns the secret via the client-secret endpoint (now just confirming what was set, not discovering a random value).
@@ -107,4 +113,4 @@ Record sanitized redirect URLs, cookie attributes, and test transcripts without 
 
 ## Plan readiness
 
-Ready to implement after PRs 2, 4, and 5.
+Ready to implement.

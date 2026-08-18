@@ -83,6 +83,13 @@ export class EnvironmentVariablesDto {
     @Min(1)
     SESSION_ABSOLUTE_TIMEOUT_MS?: number
 
+    @IsString()
+    KEYCLOAK_ORG_ADMIN_CLIENT_ID: string
+
+    @IsFileVar()
+    @IsString()
+    KEYCLOAK_ORG_ADMIN_CLIENT_SECRET: string
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()

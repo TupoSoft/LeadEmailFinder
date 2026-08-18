@@ -12,6 +12,10 @@ Complete the development cutover so every browser user authenticates through a B
 - [ ] Update Bruno collections and bootstrap scripts to OAuth.
 - [ ] Remove obsolete configuration and verify the clean cutover.
 
+## Plan dependencies
+
+- `auth/08`
+
 ## Surprises & Discoveries
 
 None yet.
@@ -67,4 +71,4 @@ Record the final repository-search patterns and Bruno smoke-test results.
 
 ## Plan readiness
 
-Ready to implement after PR 8.
+Ready to implement.

@@ -15,6 +15,10 @@ Make adding credits as safe as spending them. After this change, replaying the s
 - [x] (2026-08-18) Run typecheck, lint, Jest, focused PostgreSQL integration tests, build, formatting, and diff checks.
 - [x] (2026-08-18) Run the relevant Bruno collection against the worktree API; all 6 requests and all 6 tests passed.
 
+## Plan dependencies
+
+None.
+
 ## Surprises & Discoveries
 
 - The sandbox disallows local socket listeners, so the first full Jest attempt failed six unrelated HTTP/socket suites with `listen EPERM`. Re-running the same command with local socket permission passed all non-environment-gated suites.

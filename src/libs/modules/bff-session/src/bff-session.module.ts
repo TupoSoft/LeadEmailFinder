@@ -3,7 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { BffSessionFlowService } from './application/bff-session-flow.service'
 import { BffSessionCredentialAuthenticator } from './application/bff-session-credential-authenticator'
-import { HumanIdentityResolver } from './application/human-identity-resolver.service'
 import { HumanMembershipResolver } from './application/human-membership-resolver.service'
 import { ID_TOKEN_VERIFIER } from './application/id-token-verifier'
 import { OAUTH_PROVIDER_CLIENT } from './application/oauth-provider-client'
@@ -40,7 +39,6 @@ import { RedisSessionStore } from './infrastructure/redis/redis-session-store'
         SessionEncryptor,
         RedisSessionStore,
         RedisPendingLoginStateStore,
-        HumanIdentityResolver,
         HumanMembershipResolver,
         SessionTokenRefresher,
         BffSessionFlowService,

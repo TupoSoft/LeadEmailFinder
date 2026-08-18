@@ -1,8 +1,10 @@
 import { DataSource } from 'typeorm'
+import { AuditLogEntry } from './audit-log-entry.entity'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
+import { OrganizationInvitation } from './organization-invitation.entity'
 import { OrganizationMembership } from './membership.entity'
 import { Organization } from './organization.entity'
 import { ServiceCredential } from './service-credential.entity'
@@ -32,6 +34,8 @@ describeWithPostgres('identity schema synchronization', () => {
                 OrganizationCreditAccount,
                 CreditDebit,
                 CreditGrant,
+                OrganizationInvitation,
+                AuditLogEntry,
             ],
         })
         await dataSource.initialize()
@@ -50,10 +54,12 @@ describeWithPostgres('identity schema synchronization', () => {
         )
 
         expect(tables.map(({ table_name }) => table_name)).toEqual([
+            'audit_log_entries',
             'credit_debits',
             'credit_grants',
             'external_identities',
             'organization_credit_accounts',
+            'organization_invitations',
             'organization_memberships',
             'organizations',
             'service_credentials',

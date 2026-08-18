@@ -1,0 +1,26 @@
+info:
+  name: 04-accept-invitation-duplicate-is-idempotent
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/invitations/{{invitationToken}}/accept"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "password": "a-different-password-123"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('resubmitting the same token is a no-op that returns the original result', function() {
+          expect(res.status).to.equal(201);
+          expect(JSON.stringify(res.body)).to.equal(bru.getVar('firstAcceptResponse'));
+        });

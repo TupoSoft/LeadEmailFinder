@@ -12,6 +12,10 @@ Make proxy-node setup reproducible from versioned, non-secret inventory. A devel
 - [ ] 2026-08-15 — Implement idempotent host, WireGuard, firewall, and Swarm roles.
 - [ ] 2026-08-15 — Validate check mode, repeat application, and safe lab reset.
 
+## Plan dependencies
+
+- `proxy-fleet/11`
+
 ## Surprises & Discoveries
 
 - Public-IP allocation and persistent secondary-IP binding are cloud-provider-specific. No provider has been selected, so generic automation cannot safely create those resources.
@@ -91,4 +95,4 @@ Record sanitized inventory validation, the first and second play recaps, node-la
 
 ## Plan readiness
 
-Ready to implement after plan 11.
+Ready to implement.

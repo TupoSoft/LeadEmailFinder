@@ -1,0 +1,36 @@
+info:
+  name: 02-create-organization-with-first-owner
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Bruno Test Org {{uniqueSuffix}}",
+        "ownerEmail": "owner-{{uniqueSuffix}}@example.test"
+      }
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        bru.setVar('uniqueSuffix', Date.now().toString());
+    - type: tests
+      code: |-
+        test('creates an organization with a pending owner invitation', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.organizationId).to.be.a('string');
+          expect(res.body.invitation.role).to.equal('owner');
+          expect(res.body.invitation.token).to.be.a('string');
+          bru.setVar('organizationId', res.body.organizationId);
+          bru.setVar('invitationToken', res.body.invitation.token);
+        });

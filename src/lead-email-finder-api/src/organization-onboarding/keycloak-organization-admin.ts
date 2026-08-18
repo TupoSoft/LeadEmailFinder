@@ -1,0 +1,18 @@
+export const KEYCLOAK_ORGANIZATION_ADMIN = Symbol('KEYCLOAK_ORGANIZATION_ADMIN')
+
+export interface EnsureKeycloakUserInput {
+    readonly email: string
+    readonly password: string
+}
+
+export interface KeycloakUserRef {
+    readonly subject: string
+}
+
+export interface KeycloakOrganizationAdmin {
+    /** Idempotent find-or-create by email; always (re)sets the given password credential. */
+    ensureUser(input: EnsureKeycloakUserInput): Promise<KeycloakUserRef>
+
+    /** Idempotent add of a realm role named 'owner' or 'admin'; never retracts a previously granted role. */
+    assignRealmRole(subject: string, role: 'owner' | 'admin'): Promise<void>
+}

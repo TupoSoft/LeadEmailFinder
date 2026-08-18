@@ -118,4 +118,23 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(environment.SESSION_IDLE_TIMEOUT_MS).toBeUndefined()
         expect(environment.SESSION_ABSOLUTE_TIMEOUT_MS).toBeUndefined()
     })
+
+    it('accepts a valid Keycloak organization administration client configuration', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            KEYCLOAK_ORG_ADMIN_CLIENT_ID: 'lef-org-admin-service',
+            KEYCLOAK_ORG_ADMIN_CLIENT_SECRET: 'org-admin-secret',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects a configuration missing KEYCLOAK_ORG_ADMIN_CLIENT_ID or KEYCLOAK_ORG_ADMIN_CLIENT_SECRET', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {})
+
+        const errors = validateSync(environment).map(error => error.property)
+
+        expect(errors).toEqual(
+            expect.arrayContaining(['KEYCLOAK_ORG_ADMIN_CLIENT_ID', 'KEYCLOAK_ORG_ADMIN_CLIENT_SECRET']),
+        )
+    })
 })

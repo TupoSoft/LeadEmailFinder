@@ -14,6 +14,11 @@ Stop refunds from being free credits. After this change, an approved Paddle refu
 - [ ] Add coverage for full, partial, insufficient-balance, and replayed reversals.
 - [ ] Run typecheck, lint, jest, Bruno, and a sandbox refund pass.
 
+## Plan dependencies
+
+- `payments/04`
+- `payments/05`
+
 ## Surprises & Discoveries
 
 None yet.

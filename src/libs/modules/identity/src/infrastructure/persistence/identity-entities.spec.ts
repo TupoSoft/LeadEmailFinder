@@ -1,9 +1,11 @@
 import { DataSource, DataSourceOptions, getMetadataArgsStorage } from 'typeorm'
 import { AUTH_ROLES } from '../../domain/auth-principal'
+import { AuditLogEntry } from './audit-log-entry.entity'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
+import { OrganizationInvitation } from './organization-invitation.entity'
 import { OrganizationMembership } from './membership.entity'
 import { Organization } from './organization.entity'
 import { ServiceCredential } from './service-credential.entity'
@@ -29,6 +31,8 @@ describe('identity and organization entities', () => {
         [OrganizationCreditAccount, 'organization_credit_accounts'],
         [CreditDebit, 'credit_debits'],
         [CreditGrant, 'credit_grants'],
+        [OrganizationInvitation, 'organization_invitations'],
+        [AuditLogEntry, 'audit_log_entries'],
     ])('maps %p to %s', (entity, tableName) => {
         expect(metadata.tables.find(table => table.target === entity)?.name).toBe(tableName)
     })
@@ -102,6 +106,37 @@ describe('identity and organization entities', () => {
         expect(referenceColumn?.options.primary).toBe(true)
     })
 
+    it('uniquely identifies an organization invitation by its token hash', () => {
+        const uniqueIndex = metadata.indices.find(index => index.target === OrganizationInvitation && index.unique)
+
+        expect(uniqueIndex?.columns).toEqual(['tokenHash'])
+    })
+
+    it('stores exactly one supported role on each organization invitation', () => {
+        const role = metadata.columns.find(
+            column => column.target === OrganizationInvitation && column.propertyName === 'role',
+        )
+
+        expect(role?.options).toEqual(expect.objectContaining({ enum: AUTH_ROLES }))
+        expect(role?.options.array).not.toBe(true)
+    })
+
+    it('binds each audit log entry to one required organization', () => {
+        const organizationRelation = metadata.relations.find(
+            relation => relation.target === AuditLogEntry && relation.propertyName === 'organization',
+        )
+
+        expect(organizationRelation?.options).toEqual(expect.objectContaining({ nullable: false }))
+    })
+
+    it('never updates an audit log entry once written', () => {
+        const updatedAtColumn = metadata.columns.find(
+            column => column.target === AuditLogEntry && column.propertyName === 'updatedAt',
+        )
+
+        expect(updatedAtColumn).toBeUndefined()
+    })
+
     it('builds complete TypeORM metadata without a database connection', async () => {
         const dataSource = new MetadataDataSource({
             type: 'postgres',
@@ -113,10 +148,12 @@ describe('identity and organization entities', () => {
                 OrganizationCreditAccount,
                 CreditDebit,
                 CreditGrant,
+                OrganizationInvitation,
+                AuditLogEntry,
             ],
         })
 
         await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
-        expect(dataSource.entityMetadatas).toHaveLength(7)
+        expect(dataSource.entityMetadatas).toHaveLength(9)
     })
 })
