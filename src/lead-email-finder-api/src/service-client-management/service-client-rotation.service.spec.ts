@@ -42,7 +42,7 @@ describe('ServiceClientRotationService', () => {
     it('rejects an actor who does not belong to the target organization', async () => {
         const actor = principalFixture({ organizationId: 'a-different-org' })
 
-        await expect(service.rotate(actor, 'org-1', 'sc-1')).rejects.toThrow(ForbiddenException)
+        await expect(service.rotate(actor, 'org-1', 'sc-1')).rejects.toThrow(NotFoundException)
         expect(repoMock.findOneBy).not.toHaveBeenCalled()
     })
 

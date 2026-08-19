@@ -12,7 +12,7 @@ export class ServiceClientDisablementService {
 
     async disable(actor: AuthPrincipal, organizationId: string, serviceClientId: string): Promise<void> {
         if (actor.organizationId !== organizationId) {
-            throw new ForbiddenException('Principal does not belong to this organization')
+            throw new NotFoundException('Service client not found')
         }
         if (actor.credentialKind !== 'human_session') {
             throw new ForbiddenException('Only a human session may manage service clients')

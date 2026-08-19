@@ -123,6 +123,17 @@ describe('service client management HTTP boundary', () => {
                 .expect(400)
         })
 
+        it('rejects duplicate permissions with 400', async () => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
+
+            await request(app.getHttpServer())
+                .post(`/v1/organizations/${organizationId}/service-clients`)
+                .send({ permissions: ['verification:run', 'verification:run'] })
+                .expect(400)
+
+            expect(creationMock.create).not.toHaveBeenCalled()
+        })
+
         it('creates a service client and returns exactly the expected JSON shape, including the one-time secret', async () => {
             authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
             creationMock.create.mockResolvedValue({ credential: credentialFixture(), secret: 'a-secret' })

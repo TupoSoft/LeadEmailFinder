@@ -21,6 +21,6 @@ export class ServiceClientListingService {
         }
 
         // Disabled clients remain visible with their status; only hard-deleted rows are absent.
-        return this.serviceCredentialRepo.find({ where: { organizationId } })
+        return this.serviceCredentialRepo.find({ where: { organizationId }, order: { createdAt: 'ASC' } })
     }
 }

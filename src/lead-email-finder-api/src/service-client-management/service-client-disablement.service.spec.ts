@@ -37,7 +37,7 @@ describe('ServiceClientDisablementService', () => {
     it('rejects an actor who does not belong to the target organization', async () => {
         const actor = principalFixture({ organizationId: 'a-different-org' })
 
-        await expect(service.disable(actor, 'org-1', 'sc-1')).rejects.toThrow(ForbiddenException)
+        await expect(service.disable(actor, 'org-1', 'sc-1')).rejects.toThrow(NotFoundException)
     })
 
     it('rejects a non-human-session actor', async () => {

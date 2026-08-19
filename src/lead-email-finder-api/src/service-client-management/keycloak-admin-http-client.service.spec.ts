@@ -78,6 +78,20 @@ describe('KeycloakAdminHttpClient', () => {
 
             await expect(client.request('DELETE', '/admin/realms/lead-email-finder/clients/1', undefined, [204])).resolves.toBeUndefined()
         })
+
+        it('returns undefined when 404 is accepted for an idempotent delete', async () => {
+            mockTokenResponse()
+            fetchMock.mockResolvedValueOnce({
+                ok: false,
+                status: 404,
+                headers: { get: () => null },
+                text: () => Promise.resolve('not found'),
+            })
+
+            await expect(
+                client.request('DELETE', '/admin/realms/lead-email-finder/clients/missing', undefined, [204, 404]),
+            ).resolves.toBeUndefined()
+        })
     })
 
     describe('requestOrUndefined', () => {
