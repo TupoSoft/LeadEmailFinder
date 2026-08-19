@@ -50,36 +50,48 @@ export class ServiceClientCreationService {
 
         const { subject, secret } = await this.keycloakAdmin.provisionClient({ keycloakClientId, description })
 
-        const credential = await this.dataSource.transaction(async manager => {
-            const credential = await manager.save(
-                ServiceCredential,
-                manager.create(ServiceCredential, {
-                    id,
+        let credential: ServiceCredential
+        try {
+            credential = await this.dataSource.transaction(async manager => {
+                const credential = await manager.save(
+                    ServiceCredential,
+                    manager.create(ServiceCredential, {
+                        id,
+                        organizationId,
+                        issuer,
+                        subject,
+                        keycloakClientId,
+                        description,
+                        permissions,
+                        status: 'active',
+                    }),
+                )
+
+                await manager.insert(AuditLogEntry, {
                     organizationId,
-                    issuer,
-                    subject,
-                    keycloakClientId,
-                    description,
-                    permissions,
-                    status: 'active',
-                }),
-            )
+                    actorCredentialKind: actor.credentialKind,
+                    actorIssuer: actor.issuer,
+                    actorSubject: actor.subject,
+                    actorCredentialId: actor.credentialId,
+                    action: 'service_client.created',
+                    targetType: 'service_credential',
+                    targetId: credential.id,
+                    outcome: 'success',
+                    metadata: { permissions },
+                })
 
-            await manager.insert(AuditLogEntry, {
-                organizationId,
-                actorCredentialKind: actor.credentialKind,
-                actorIssuer: actor.issuer,
-                actorSubject: actor.subject,
-                actorCredentialId: actor.credentialId,
-                action: 'service_client.created',
-                targetType: 'service_credential',
-                targetId: credential.id,
-                outcome: 'success',
-                metadata: { permissions },
+                return credential
             })
-
-            return credential
-        })
+        } catch (error) {
+            // The generated client id is unique to this request, so compensating here cannot remove a client
+            // owned by another operation. Keep the original persistence error if best-effort cleanup also fails.
+            try {
+                await this.keycloakAdmin.deleteClient(keycloakClientId)
+            } catch {
+                // The client remains inert because its secret was never returned and it has no local binding.
+            }
+            throw error
+        }
 
         return { credential, secret }
     }

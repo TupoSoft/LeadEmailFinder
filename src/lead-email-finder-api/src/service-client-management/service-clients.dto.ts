@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer'
-import { ArrayNotEmpty, IsArray, IsIn, IsOptional, IsString, IsUUID, Length } from 'class-validator'
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsIn, IsOptional, IsString, IsUUID, Length } from 'class-validator'
 import { AUTH_PERMISSIONS, AuthPermission, ServiceCredentialStatus } from '@tuposoft/lead-email-finder/modules/identity'
 
 export class ServiceClientParamsDto {
@@ -20,6 +20,7 @@ export class CreateServiceClientDto {
 
     @IsArray()
     @ArrayNotEmpty()
+    @ArrayUnique()
     @IsIn(AUTH_PERMISSIONS, { each: true })
     permissions: AuthPermission[]
 }

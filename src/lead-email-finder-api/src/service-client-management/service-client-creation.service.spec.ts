@@ -91,6 +91,24 @@ describe('ServiceClientCreationService', () => {
         expect(dataSourceMock.transaction).not.toHaveBeenCalled()
     })
 
+    it('deletes the newly provisioned Keycloak client when the local transaction fails', async () => {
+        const actor = principalFixture()
+        keycloakAdminMock.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
+        dataSourceMock.transaction.mockRejectedValue(new Error('database unavailable'))
+
+        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow('database unavailable')
+        expect(keycloakAdminMock.deleteClient).toHaveBeenCalledWith(expect.stringMatching(/^lef-svc-/))
+    })
+
+    it('preserves the local transaction error when compensating Keycloak deletion also fails', async () => {
+        const actor = principalFixture()
+        keycloakAdminMock.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
+        dataSourceMock.transaction.mockRejectedValue(new Error('database unavailable'))
+        keycloakAdminMock.deleteClient.mockRejectedValue(new Error('cleanup unavailable'))
+
+        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow('database unavailable')
+    })
+
     it('creates the local row and writes an audit entry on success', async () => {
         const actor = principalFixture()
         keycloakAdminMock.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })

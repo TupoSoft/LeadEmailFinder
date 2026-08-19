@@ -1,0 +1,27 @@
+info:
+  name: 04-create-service-client-duplicate-permissions-rejected
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "permissions": ["verification:run", "verification:run"]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects duplicate permissions before provisioning a client', function() {
+          expect(res.status).to.equal(400);
+        });

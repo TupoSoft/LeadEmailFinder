@@ -1,6 +1,6 @@
 # Service Client Management Bruno Collection
 
-This collection proves the HTTP-boundary rejection behavior of ExecPlan `.agents/plans/auth/08-m2m-client-management.md`: creating a service client without a credential is rejected, an actor whose organization does not match the target organization is rejected, and a permission outside the supported set is rejected.
+This collection proves the HTTP-boundary rejection behavior of ExecPlan `.agents/plans/auth/08-m2m-client-management.md`: creating a service client without a credential is rejected, an actor whose organization does not match the target organization is rejected, and unsupported or duplicate permissions are rejected.
 
 **Every success path in this feature (create/list/rotate/disable/delete) requires a genuine owner/admin human browser session** — enforced by this plan's own decision that only a `human_session` credential kind may manage service clients (see the ExecPlan's Decision Log). Bruno has no way to mint a real browser session, the same limitation `bruno/bff-sessions/README.md` already documents, so none of the 2xx/204 lifecycle responses are reachable from this collection. The admin API key used for the rejection requests above (`legacy_api_key`, `platform_admin`) is deliberately the wrong credential kind for every success path, which is exactly why it's useful for proving the rejection paths and nothing else.
 

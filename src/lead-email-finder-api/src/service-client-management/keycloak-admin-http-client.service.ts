@@ -36,7 +36,7 @@ export class KeycloakAdminHttpClient {
             throw new Error(`${method} ${path} failed with HTTP ${response.status}: ${await response.text()}`)
         }
 
-        if (response.status === 204 || response.headers.get('content-length') === '0') {
+        if (response.status === 204 || response.status === 404 || response.headers.get('content-length') === '0') {
             return undefined as T
         }
 

@@ -49,7 +49,10 @@ describe('ServiceClientListingService', () => {
 
         const result = await service.list(actor, 'org-1')
 
-        expect(repoMock.find).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } })
+        expect(repoMock.find).toHaveBeenCalledWith({
+            where: { organizationId: 'org-1' },
+            order: { createdAt: 'ASC' },
+        })
         expect(result).toEqual([{ id: 'sc-1', status: 'disabled' }])
     })
 })
