@@ -18,6 +18,7 @@ Stop refunds from being free credits. After this change, an approved Paddle refu
 
 - `payments/04`
 - `payments/05`
+- `payments/07`
 
 ## Surprises & Discoveries
 
@@ -48,7 +49,7 @@ Not started.
 
 ## Context and Orientation
 
-Plan 04 grants credits on `purchase_paid` and maps everything else to `ignored`. Plan 05's adapter explicitly maps `adjustment.created` to `ignored`, leaving that event free for this plan to claim.
+Plan 04 grants credits on `purchase_paid` and maps everything else to `ignored`. Plan 05's adapter explicitly maps `adjustment.created` to `ignored`, leaving that event free for this plan to claim. Plan 07 provides the reusable Paddle sandbox checkout, webhook tunnel, secret mounts, and recorded purchase flow that this plan extends for its required refund pass.
 
 Paddle delivers refunds, credits, and chargebacks as `adjustment.created` with an `action` of `refund`, `credit`, `chargeback`, or one of the reversal variants, and a `status` of `pending_approval`, `approved`, `rejected`, or `reversed`. An adjustment references its transaction, and amounts may be partial. `adjustment.updated` carries later status changes, so an approval that follows a `pending_approval` creation arrives on that event.
 
@@ -70,7 +71,7 @@ Extend the Bruno collection with a stub reversal case asserting the balance fall
 
 ## Interfaces and Dependencies
 
-New event kind `purchase_reversed` on the port. Schema additions to `CreditPurchase` for reversed credits, plus whatever the settled policy requires to record a shortfall. No new endpoint and no new configuration. Depends on plans 04 and 05.
+New event kind `purchase_reversed` on the port. Schema additions to `CreditPurchase` for reversed credits, plus whatever the settled policy requires to record a shortfall. No new endpoint and no new configuration. Depends on plans 04, 05, and 07.
 
 ## Acceptance Criteria
 
@@ -86,7 +87,7 @@ New event kind `purchase_reversed` on the port. Schema additions to `CreditPurch
 
 ## Validation
 
-Add handler unit tests for full, partial, repeated-partial, replayed, pending, rejected, and insufficient-balance reversals, and adapter tests for each Paddle adjustment mapping. Add an integration test against a real PostgreSQL database proving a reversal against a spent balance behaves as the policy states and never violates the check constraint. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`. Run `bru run --env local` for `bruno/credit-purchases`. Finish with a manual sandbox pass: buy a pack, refund it in the Paddle sandbox dashboard, and confirm the balance falls once.
+Add handler unit tests for full, partial, repeated-partial, replayed, pending, rejected, and insufficient-balance reversals, and adapter tests for each Paddle adjustment mapping. Add an integration test against a real PostgreSQL database proving a reversal against a spent balance behaves as the policy states and never violates the check constraint. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`. Run `bru run --env local` for `bruno/credit-purchases`. Finish with a manual sandbox pass through the plan 07 fixture: buy a pack, refund it in the Paddle sandbox dashboard, and confirm the balance falls once.
 
 ## Idempotence and Recovery
 

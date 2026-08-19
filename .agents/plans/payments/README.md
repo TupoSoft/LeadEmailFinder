@@ -2,14 +2,15 @@
 
 This roadmap lets a customer pay for credits instead of waiting for a `platform:admin` top-up through the internal `/credits` endpoints. Customers buy fixed one-time credit packs through Paddle Billing; Paddle acts as merchant of record and owns tax registration, calculation, and remittance. It is development-only: PostgreSQL, Redis, BullMQ, S3, credit, and purchase data is disposable, and TypeORM synchronization replaces migrations until a production environment exists.
 
-Implement the plans in order. Each plan follows `.agents/PLANS.md` and represents one pull request with its own acceptance criteria and validation.
+Follow the dependency graph below. Numeric prefixes are stable plan identities, so dependency order takes precedence over numeric order when the roadmap branches. Each plan follows `.agents/PLANS.md` and represents one pull request with its own acceptance criteria and validation.
 
 1. [Grant credits idempotently](01-idempotent-credit-grants.md)
 2. [Add the payment provider port and stub adapter](02-payment-provider-port-and-stub.md)
 3. [Sell credit packs through a checkout endpoint](03-credit-pack-checkout-endpoint.md)
 4. [Ingest payment webhooks idempotently](04-payment-webhook-ingestion.md)
 5. [Add the Paddle provider adapter](05-paddle-provider-adapter.md)
-6. [Claw back refunded credits](06-refund-clawbacks.md)
+6. [Provide a reusable Paddle sandbox purchase fixture](07-paddle-sandbox-purchase-fixture.md)
+7. [Claw back refunded credits](06-refund-clawbacks.md)
 
 Shared decisions:
 
