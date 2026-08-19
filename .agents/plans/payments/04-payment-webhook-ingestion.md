@@ -8,11 +8,11 @@ Turn a completed payment into credits. After this change a signed provider event
 
 ## Progress
 
-- [ ] Enable raw body capture in the application bootstrap.
-- [ ] Add the public, signature-verified webhook route.
-- [ ] Add `PaymentEventHandler` granting credits through `CreditsService.credit`.
-- [ ] Add replay, out-of-order, unknown-reference, and bad-signature coverage.
-- [ ] Extend the Bruno collection and run it against the stub provider.
+- [x] (2026-08-19) Enable raw body capture in the application bootstrap.
+- [x] (2026-08-19) Add the public, signature-verified webhook route.
+- [x] (2026-08-19) Add `PaymentEventHandler` granting credits through `CreditsService.credit`.
+- [x] (2026-08-19) Add replay, out-of-order, unknown-reference, and bad-signature coverage.
+- [x] (2026-08-19) Extend the Bruno collection and run it against the stub provider.
 
 ## Plan dependencies
 
@@ -22,7 +22,10 @@ Turn a completed payment into credits. After this change a signed provider event
 
 ## Surprises & Discoveries
 
-None yet.
+- The long-running Compose API compiled changed files but did not reload its Nest process, so `POST /v1/payments/webhook` returned `404` during Bruno execution. Restarting it would first require reconciling unrelated stale auth-schema state, and the full authenticated collection also returned `401` because the container's host-facing OIDC issuer is unreachable from inside that container. The synthetic purchase used for the attempted public run was removed.
+- The local `keycloak:bootstrap-credential` attempt exposed an unrelated stale unique constraint (`UQ_service_credentials_keycloak_client_id`) that conflicts with the current issuer-scoped entity index. It created the conventional disposable platform organization and one credential before failing; no repository auth code was changed in this plan.
+- The first full Jest run inside the restricted sandbox failed only where existing tests needed to bind sockets (`listen EPERM`). Re-running outside that restriction passed all non-gated suites.
+- Recreating and provisioning the disposable Compose stack resolved the earlier stale API and OIDC fixture state. Because the SMTP-development API uses the container-internal Keycloak issuer, Bruno had to run inside `lef_default`, matching the established `bruno/smtp-dev` execution pattern.
 
 ## Decision Log
 
@@ -41,10 +44,13 @@ None yet.
 - Decision: Status transitions never move a purchase out of `paid`.
   Rationale: Events can arrive out of order, and a late `purchase_failed` after a real payment must not silently unwind a granted purchase. Refund handling is plan 06's job and goes through an explicit clawback, not a status regression.
   Date/Author: 2026-08-17, project planning.
+- Decision: Put locked TypeORM status transitions behind `PaymentPurchaseStore`, then invoke the idempotent credit ledger after the status transaction commits.
+  Rationale: `PaymentEventHandler` remains application policy rather than a TypeORM adapter. Returning an already-paid purchase makes replay retry the same purchase-id grant, so a failure between the status commit and credit grant converges safely without double credit.
+  Date/Author: 2026-08-19, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and runtime-verified raw-body capture, a public `Paddle-Signature`-verified webhook endpoint, provider-event orchestration, a narrow TypeORM purchase store, idempotent credit granting, failure monotonicity, focused unit coverage, and a real PostgreSQL concurrency test. Typecheck, lint, the full Jest suite, the dedicated PostgreSQL test, and all 11 Bruno requests pass. Bruno proves valid payment, stored-credit ownership, replay idempotency, and tamper rejection against the stub provider.
 
 ## Context and Orientation
 
@@ -66,13 +72,13 @@ Change the bootstrap in `src/main.ts` to `NestFactory.create<NestExpressApplicat
 
 Add `PaymentWebhookController` with a single `@Public()` `POST /v1/payments/webhook`. It takes `@Req() request: RawBodyRequest<Request>` and the provider's signature header, rejects a missing raw body or missing signature with `400`, calls `parseEvent`, and delegates to `PaymentEventHandler`. It maps `InvalidPaymentSignatureError` to `400` and returns `200` with a minimal acknowledgement body otherwise. The route declares no body DTO.
 
-Add `PaymentEventHandler`. For `purchase_paid`, it looks up the `CreditPurchase` by `providerReference`. A miss is logged and acknowledged, because an event for a purchase this environment never created is expected when several environments share a provider account. On a hit, it runs one transaction: re-read the purchase, return early if it is already `paid`, set `paid`, then call `CreditsService.credit(purchase.organizationId, purchase.credits, purchase.id)`. Because the grant ledger is keyed by `(organizationId, reference)`, a redelivery that races the first request still grants once. For `purchase_failed`, it sets `failed` only when the purchase is still `pending`. For `ignored`, it does nothing.
+Add `PaymentEventHandler` and an injected `PaymentPurchaseStore` implemented by a TypeORM adapter. For `purchase_paid`, the store locks the `CreditPurchase` by `providerReference`, marks it `paid` when necessary, commits, and returns only its grant fields. A miss is logged and acknowledged, because an event for a purchase this environment never created is expected when several environments share a provider account. The handler then calls `CreditsService.credit(purchase.organizationId, purchase.credits, purchase.id)`. An already-paid purchase is returned too, so replay retries a grant that may have failed after the status commit; the grant ledger keyed by `(organizationId, reference)` prevents double credit. For `purchase_failed`, the store sets `failed` only when the purchase is still `pending`. For `ignored`, the handler does nothing.
 
 Extend `bruno/credit-purchases/` with webhook cases built on the stub provider's HMAC scheme, using a `PAYMENTS_STUB_WEBHOOK_SECRET` supplied through the Bruno environment: a valid paid event granting credits, the same event replayed leaving the balance unchanged, and a tampered body returning `400`. Read the balance through the existing admin `GET /credits/:organizationId` endpoint to assert the effect.
 
 ## Interfaces and Dependencies
 
-New endpoint: `POST /v1/payments/webhook`, public, signature-verified, returning `200`, `400` for an unverifiable request, or `500` for an unexpected failure. New provider: `PaymentEventHandler`. Changed: `src/main.ts` gains `{ rawBody: true }`. Depends on plans 01, 02, and 03; unlocks plans 05 and 06.
+New endpoint: `POST /v1/payments/webhook`, public, signature-verified, returning `200`, `400` for an unverifiable request, or `500` for an unexpected failure. New providers: `PaymentEventHandler` and the `PAYMENT_PURCHASE_STORE` port backed by `TypeOrmPaymentPurchaseStore`. Changed: `src/main.ts` gains `{ rawBody: true }`. Depends on plans 01, 02, and 03; unlocks plans 05 and 06.
 
 ## Acceptance Criteria
 
@@ -91,11 +97,21 @@ Add handler unit tests for the paid, replayed, unknown-reference, out-of-order-f
 
 ## Idempotence and Recovery
 
-Redelivery is the normal case and is safe: the purchase status check is the fast path and the grant ledger is the backstop. A webhook lost entirely leaves a `pending` purchase, recoverable by replaying the event from the provider dashboard or by an admin top-up through `POST /credits/:organizationId`. Reset by dropping and re-synchronizing the development database.
+Redelivery is the normal case and is safe: every paid replay may retry the purchase-id grant, and the grant ledger makes that retry idempotent. If the status commit succeeds but crediting fails, the provider receives `500`; its retry finds the paid purchase and safely retries the missing grant. A webhook lost entirely leaves a `pending` purchase, recoverable by replaying the event from the provider dashboard or by an admin top-up through `POST /credits/:organizationId`. Reset by dropping and re-synchronizing the development database.
 
 ## Artifacts and Notes
 
 Record one signed stub event payload with synthetic identifiers. Never record a live signature, secret, or provider event body.
+
+Validation evidence from 2026-08-19:
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with two pre-existing warnings in unrelated config and Redis tests.
+- Focused handler, TypeORM store, controller, and module tests passed (18 tests).
+- The dedicated PostgreSQL concurrency test passed and observed one grant for two concurrent deliveries.
+- Full Jest passed outside the socket-restricted sandbox: 107 suites and 640 tests passed; 8 suites and 22 tests skipped; 1 todo.
+- `git diff --check` passed.
+- Bruno CLI 3.4.2 passed all 11 requests and tests inside `lef_default`: unauthenticated purchase `401`, checkout `201`, unknown pack `400`, history and balance reads `200`, signed payment and replay `200`, tampered body `400`, one stored-credit balance increase, and no balance change after replay or tampering.
 
 ## Plan readiness
 

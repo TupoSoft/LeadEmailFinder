@@ -112,9 +112,13 @@ export class ExecPlanSynchronizer {
             addedToProject = true
         }
 
-        // A plan whose file is edited after completion must not reopen on the board, and a human
-        // marking something Done ahead of the file should not be overruled by a generated process.
-        const statusNeedsApplying = item?.status !== status && item?.status !== 'Done'
+        // Preserve explicit human signals that work is already active or complete. An assigned
+        // In Progress item may still advance to Done, but repository lag must not move it backwards.
+        const preservesAssignedWork =
+            item?.status === 'In Progress' &&
+            existing.assignees.length > 0 &&
+            (status === 'Todo' || status === 'Backlog')
+        const statusNeedsApplying = item?.status !== status && item?.status !== 'Done' && !preservesAssignedWork
         const statusApplied = Boolean(itemId) && statusNeedsApplying && !this.options.dryRun
 
         if (statusApplied && itemId) {

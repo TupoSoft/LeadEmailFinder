@@ -7,7 +7,7 @@ import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
 
 async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule)
+    const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
     app.disable('x-powered-by')
     app.enable('trust proxy')
     app.useLogger(app.get(Logger))

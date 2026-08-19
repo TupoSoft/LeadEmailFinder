@@ -18,6 +18,8 @@ import { PaymentProvider, PAYMENT_PROVIDER } from './payment-provider'
 import { CreditPurchase } from './credit-purchase.entity'
 import { PaymentsModule } from './payments.module'
 import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
+import { PaymentEventHandler } from './payment-event.handler'
+import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
 
 describe('PaymentsModule', () => {
     it('registers the purchase repository with TypeORM', () => {
@@ -73,6 +75,10 @@ describe('PaymentsModule', () => {
             .overrideProvider(getRepositoryToken(AuditLogEntry))
             .useValue({})
             .overrideProvider(CreditsService)
+            .useValue({})
+            .overrideProvider(PaymentEventHandler)
+            .useValue({})
+            .overrideProvider(TypeOrmPaymentPurchaseStore)
             .useValue({})
             .compile()
 

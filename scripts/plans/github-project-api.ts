@@ -12,6 +12,7 @@ export interface IssueSummary {
     url: string
     title: string
     body: string
+    assignees: string[]
 }
 
 export interface ProjectItemSummary {
@@ -76,6 +77,14 @@ interface GhProjectItem {
     content?: { url?: string }
 }
 
+interface GhIssueSummary {
+    number: number
+    url: string
+    title: string
+    body: string
+    assignees: { login: string }[]
+}
+
 export const EXECPLAN_LABEL_DEFINITIONS: LabelDefinition[] = [
     { name: EXECPLAN_LABEL, color: '0E8A16', description: 'Generated from an ExecPlan under .agents/plans/' },
     { name: BLOCKED_LABEL, color: 'B60205', description: 'ExecPlan requires a decision or missing evidence' },
@@ -123,7 +132,7 @@ export class GitHubCliProjectApi implements GitHubProjectPort {
     }
 
     async listExecPlanIssues(): Promise<IssueSummary[]> {
-        return this.ghJson<IssueSummary[]>([
+        const issues = await this.ghJson<GhIssueSummary[]>([
             'issue',
             'list',
             '--repo',
@@ -135,8 +144,16 @@ export class GitHubCliProjectApi implements GitHubProjectPort {
             '--limit',
             '500',
             '--json',
-            'number,url,title,body',
+            'number,url,title,body,assignees',
         ])
+
+        return issues.map(issue => ({
+            number: issue.number,
+            url: issue.url,
+            title: issue.title,
+            body: issue.body,
+            assignees: issue.assignees.map(assignee => assignee.login),
+        }))
     }
 
     async createIssue(content: IssueContent): Promise<IssueSummary> {
@@ -162,7 +179,7 @@ export class GitHubCliProjectApi implements GitHubProjectPort {
             throw new Error(`Could not read an issue number from gh issue create output: ${url}`)
         }
 
-        return { number: issueNumber, url, title: content.title, body: content.body }
+        return { number: issueNumber, url, title: content.title, body: content.body, assignees: [] }
     }
 
     async updateIssue(issueNumber: number, content: IssueContent): Promise<void> {

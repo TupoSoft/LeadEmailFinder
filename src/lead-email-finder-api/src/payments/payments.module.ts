@@ -11,13 +11,20 @@ import { CreditPurchase } from './credit-purchase.entity'
 import { CreditPurchaseService } from './credit-purchase.service'
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider'
 import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
+import { PaymentEventHandler } from './payment-event.handler'
+import { PaymentWebhookController } from './payment-webhook.controller'
+import { PAYMENT_PURCHASE_STORE } from './payment-purchase.store'
+import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([CreditPurchase]), CreditsModule, IdentityModule],
-    controllers: [CreditPurchaseController],
+    controllers: [CreditPurchaseController, PaymentWebhookController],
     providers: [
         CreditPackCatalog,
         CreditPurchaseService,
+        PaymentEventHandler,
+        TypeOrmPaymentPurchaseStore,
+        { provide: PAYMENT_PURCHASE_STORE, useExisting: TypeOrmPaymentPurchaseStore },
         RolePermissionPolicy,
         PermissionsGuard,
         StubPaymentProvider,
