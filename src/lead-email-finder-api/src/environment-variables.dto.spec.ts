@@ -75,6 +75,21 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(errors).toEqual(expect.arrayContaining(['OIDC_ISSUER_URL', 'OIDC_AUDIENCE']))
     })
 
+    it('accepts a configuration with no OIDC_JWKS_URI set (optional)', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            OIDC_ISSUER_URL: 'http://localhost:58080/realms/lead-email-finder',
+            OIDC_AUDIENCE: 'lead-email-finder-api',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects a malformed OIDC_JWKS_URI when provided', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { OIDC_JWKS_URI: 'not-a-url' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
+    })
+
     it('accepts a valid BFF session configuration', (): void => {
         const environment = plainToInstance(EnvironmentVariablesDto, {
             APP_BASE_URL: 'http://localhost:53000',
@@ -140,6 +155,12 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(errors).toEqual(
             expect.arrayContaining(['KEYCLOAK_ORG_ADMIN_CLIENT_ID', 'KEYCLOAK_ORG_ADMIN_CLIENT_SECRET']),
         )
+    })
+
+    it('rejects a malformed KEYCLOAK_ADMIN_API_BASE_URL when provided', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { KEYCLOAK_ADMIN_API_BASE_URL: 'not-a-url' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 
     it('accepts a valid stub payments configuration', (): void => {

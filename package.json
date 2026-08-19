@@ -12,8 +12,11 @@
         "test:ci": "jest --runInBand",
         "keycloak:provision": "ts-node scripts/keycloak/provision.ts",
         "keycloak:bootstrap-credential": "ts-node scripts/keycloak/bootstrap-credential.ts",
+        "keycloak:bootstrap-operator": "ts-node scripts/keycloak/bootstrap-operator.ts",
+        "keycloak:seed-customer-fixture": "ts-node scripts/keycloak/seed-customer-fixture.ts",
         "plans:sync": "ts-node scripts/plans/sync-project.ts",
         "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
+        "dev:reset": "sh docker/scripts/dev-reset.sh",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true"

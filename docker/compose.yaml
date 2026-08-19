@@ -34,6 +34,10 @@ services:
 
       OIDC_ISSUER_URL: http://localhost:58080/realms/lead-email-finder
       OIDC_AUDIENCE: lead-email-finder-api
+      # OIDC_ISSUER_URL is host-facing (the browser redirect target and the token issuer-claim check), and is
+      # unreachable from inside this container's own network namespace. Fetch JWKS via the container-internal
+      # Keycloak hostname instead so this service can actually verify incoming OAuth bearer tokens.
+      OIDC_JWKS_URI: http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs
 
       APP_BASE_URL: http://localhost:53000
       BFF_CLIENT_ID: lef-web-bff
@@ -47,6 +51,7 @@ services:
 
       KEYCLOAK_ORG_ADMIN_CLIENT_ID: lef-org-admin-service
       KEYCLOAK_ORG_ADMIN_CLIENT_SECRET_FILE: /run/secrets/keycloak_org_admin_client_secret
+      KEYCLOAK_ADMIN_API_BASE_URL: http://keycloak:8080
 
       REDIS_URL_FILE: /run/secrets/redis_url
 

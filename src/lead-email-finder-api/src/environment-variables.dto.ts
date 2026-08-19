@@ -66,6 +66,13 @@ export class EnvironmentVariablesDto {
     @IsString()
     OIDC_AUDIENCE: string
 
+    // Optional: overrides where this server fetches JWKS from, independently of OIDC_ISSUER_URL (which stays
+    // host-facing for the browser redirect and the token issuer-claim check). Only set where the containerized
+    // api can't reach OIDC_ISSUER_URL directly — see oidc-configuration.ts.
+    @IsOptional()
+    @IsUrl({ require_protocol: true, require_tld: false })
+    OIDC_JWKS_URI?: string
+
     @IsUrl({ require_protocol: true, require_tld: false })
     APP_BASE_URL: string
 
@@ -98,6 +105,12 @@ export class EnvironmentVariablesDto {
     @IsFileVar()
     @IsString()
     KEYCLOAK_ORG_ADMIN_CLIENT_SECRET: string
+
+    // Optional: overrides where this server reaches Keycloak's Admin REST API, independently of
+    // OIDC_ISSUER_URL (which stays host-facing) — same reasoning as OIDC_JWKS_URI above.
+    @IsOptional()
+    @IsUrl({ require_protocol: true, require_tld: false })
+    KEYCLOAK_ADMIN_API_BASE_URL?: string
 
     @IsOptional()
     @Type(() => Number)
