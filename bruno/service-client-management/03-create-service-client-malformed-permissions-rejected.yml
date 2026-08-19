@@ -1,0 +1,27 @@
+info:
+  name: 03-create-service-client-malformed-permissions-rejected
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Api-Key
+      value: "{{adminApiKey}}"
+  body:
+    type: json
+    data: |-
+      {
+        "permissions": ["not-a-real-permission"]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects a permission that is not in the supported set', function() {
+          expect(res.status).to.equal(400);
+        });

@@ -26,7 +26,14 @@ export const AUDIENCE_SCOPE = 'lef-api-audience'
 export const BROWSER_FLOW = 'lef-browser'
 export const DEVELOPMENT_ORGANIZATION = 'development'
 const REALM_MANAGEMENT_CLIENT_ID = 'realm-management'
-const ORG_ADMIN_SERVICE_ACCOUNT_ROLES = ['manage-users', 'view-users', 'query-users', 'view-realm']
+const ORG_ADMIN_SERVICE_ACCOUNT_ROLES = [
+    'manage-users',
+    'view-users',
+    'query-users',
+    'view-realm',
+    'manage-clients',
+    'view-clients',
+]
 
 export interface ProvisioningOptions {
     bffRedirectUris: string[]

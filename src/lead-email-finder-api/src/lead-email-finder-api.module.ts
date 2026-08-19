@@ -18,6 +18,7 @@ import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { OrganizationOnboardingModule } from './organization-onboarding'
 import { PaymentsModule } from './payments'
+import { ServiceClientManagementModule } from './service-client-management'
 
 @Module({
     imports: [
@@ -50,6 +51,7 @@ import { PaymentsModule } from './payments'
         AuthModule,
         ApiKeyModule,
         OrganizationOnboardingModule,
+        ServiceClientManagementModule,
         PaymentsModule,
         ProxyModule,
         HealthModule,

@@ -1,0 +1,8 @@
+name: local
+variables:
+  - name: baseUrl
+    value: http://localhost:53000
+  - name: adminApiKey
+    value: "{{process.env.ADMIN_API_KEY}}"
+  - name: organizationId
+    value: "5b92ded1-7eba-4c66-b72e-a5fea465da68"
