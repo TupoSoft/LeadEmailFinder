@@ -4,15 +4,15 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
-Take real money. After this change, setting `PAYMENTS_PROVIDER=paddle` routes checkout and webhook verification through Paddle Billing sandbox, and a completed sandbox payment grants credits through the flow plans 03 and 04 already built. A developer can observe it by buying a pack in the Paddle sandbox and watching the balance rise.
+Route Paddle Billing through the existing payment-provider port. After this change, setting `PAYMENTS_PROVIDER=paddle` resolves a sandbox-only adapter that creates hosted checkout transactions and verifies and maps Paddle webhooks. A developer can observe it through the shared provider contract and module-wiring tests; plan `payments/07` owns the reusable local fixture and live sandbox purchase proof.
 
 ## Progress
 
-- [ ] Add the `@paddle/paddle-node-sdk` dependency and client configuration.
-- [ ] Implement `PaddlePaymentProvider` against the existing port.
-- [ ] Map Paddle events onto the application event union.
-- [ ] Run the shared provider contract suite against the adapter.
-- [ ] Verify a sandbox purchase end to end and record the result.
+- [x] (2026-08-19) Add the `@paddle/paddle-node-sdk` dependency and client configuration.
+- [x] (2026-08-19) Implement `PaddlePaymentProvider` against the existing port.
+- [x] (2026-08-19) Map Paddle events onto the application event union.
+- [x] (2026-08-19) Run the shared provider contract suite against the adapter.
+- [x] (2026-08-19) Move reusable sandbox checkout infrastructure and live purchase verification to plan `payments/07` so this adapter PR remains independently reviewable.
 
 ## Plan dependencies
 
@@ -22,7 +22,10 @@ Take real money. After this change, setting `PAYMENTS_PROVIDER=paddle` routes ch
 
 ## Surprises & Discoveries
 
-None yet.
+- The official Node SDK and Paddle signature documentation both confirm that webhook verification is asynchronous and applies a five-second timestamp tolerance. Contract tests therefore generate fresh signed payloads rather than relying on stale signatures.
+- Paddle's transaction `checkout.url` input is an approved payment-link page, not a post-payment redirect. The existing application setting remains named `PAYMENTS_CHECKOUT_RETURN_URL` for compatibility, so the Bruno guide now explains that Paddle Checkout's success redirect must be configured separately.
+- No Paddle sandbox credentials, checkout page, or publicly reachable webhook destination are present in the repository. Rather than make those account-bound prerequisites part of the adapter PR, plan `payments/07` now owns the reusable fixture and live purchase and notification-replay evidence.
+- The checked-in Compose issuer is host-facing and cannot validate tokens from inside the API container. The stub Bruno regression passed after applying a runtime-only issuer override (`http://keycloak:8080`) to the isolated API and Keycloak containers; no Compose file was changed in this plan.
 
 ## Decision Log
 
@@ -41,10 +44,13 @@ None yet.
 - Decision: Only sandbox is exercised by this roadmap.
   Rationale: The project has no production environment, and `.agents/PLANS.md` places production rollout out of scope for every plan.
   Date/Author: 2026-08-17, project planning.
+- Decision: Reusable checkout and tunnel infrastructure and live Paddle verification move to plan `payments/07`.
+  Rationale: The adapter, its provider contract, and conditional configuration form one independently reviewable PR. A committed development fixture, checkout-URL compatibility policy, external Paddle catalog provisioning, and live purchase evidence are a second observable capability that must have its own ExecPlan and PR.
+  Date/Author: 2026-08-19, project owner and planning.
 
 ## Outcomes & Retrospective
 
-Not started.
+The Paddle Billing SDK, sandbox-only client factory, hosted-checkout adapter, event mapping, conditional configuration, shared provider contract coverage, and sandbox setup guide are implemented. Static and automated validation are recorded below. The independently useful local fixture and live Paddle sandbox proof continue in plan `payments/07`.
 
 ## Context and Orientation
 
@@ -56,7 +62,7 @@ Secrets follow the `@IsFileVar()` and `_FILE` convention validated by `src/libs/
 
 ## Scope and Non-Goals
 
-Add the Paddle adapter and its configuration, and prove it against sandbox. Do not change the port, the purchase flow, the webhook handler, or the catalog's meaning. Do not handle `adjustment.created`, subscriptions, customer records, or invoices. Do not add production configuration or rollout.
+Add the Paddle adapter and its conditional sandbox configuration, and prove its contract without live network calls. Do not add reusable checkout or tunnel infrastructure; that belongs to plan `payments/07`. Do not change the port, the purchase flow, the webhook handler, or the catalog's meaning. Do not handle `adjustment.created`, subscriptions, customer records, or invoices. Do not add production configuration or rollout.
 
 ## Plan of Work
 
@@ -80,14 +86,13 @@ New dependency: `@paddle/paddle-node-sdk`. New configuration: `PADDLE_API_KEY`, 
 - The shared provider contract suite passes against the Paddle adapter with no live network calls, using recorded payloads and a test notification secret.
 - A genuine `Paddle-Signature` header verifies; a tampered body or altered signature raises `InvalidPaymentSignatureError`.
 - `transaction.completed` maps to `purchase_paid` carrying the Paddle transaction id; `adjustment.created` maps to `ignored`.
-- A sandbox purchase returns a working Paddle checkout URL and, once paid, marks the purchase `paid` and grants exactly the catalog's credits.
-- Redelivering the sandbox event from the Paddle dashboard does not grant twice.
 - The Paddle SDK is imported only under `payments/infrastructure/paddle/`.
 - Startup fails with a clear validation error when `PAYMENTS_PROVIDER=paddle` and a Paddle variable is missing.
+- Plan `payments/07` can consume the adapter without changing the provider port, purchase endpoints, or webhook endpoint.
 
 ## Validation
 
-Run the contract suite and adapter unit tests over recorded sandbox payloads with a known test secret, covering signature success and failure and each event mapping. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`. Then run one manual sandbox pass: start the stack with `PAYMENTS_PROVIDER=paddle`, expose the webhook to Paddle, buy a pack with a sandbox test card, and confirm through `GET /credits/:organizationId` that the balance rose once. Re-run `bru run --env local` for `bruno/credit-purchases` under the stub provider to confirm the stub path still passes.
+Run the contract suite and adapter unit tests over representative sandbox payloads with a known test secret, covering signature success and failure and each event mapping. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test`. Re-run `bru run --env local` for `bruno/credit-purchases` under the stub provider to confirm the existing local path still passes. Plan `payments/07` separately performs the account-bound live sandbox purchase and notification replay.
 
 ## Idempotence and Recovery
 
@@ -95,7 +100,17 @@ Checkout creation is not idempotent at the provider: retrying `start` creates a 
 
 ## Artifacts and Notes
 
-Record redacted sandbox event payloads and the observed signature tolerance. Never commit an API key, notification secret, or live transaction payload.
+The SDK's observed and documented signature tolerance is five seconds. Automated tests use representative Paddle event envelopes and fresh genuine signatures. Plan `payments/07` records redacted live evidence without committing an API key, notification secret, customer data, or raw transaction payload.
+
+Validation completed on 2026-08-19:
+
+- `corepack pnpm typecheck` passed.
+- `corepack pnpm lint` passed with two pre-existing explicit-return-type warnings outside the changed files.
+- `corepack pnpm test --runInBand` passed 108 suites and 654 tests; 8 suites were skipped and 1 test remains marked todo by the repository.
+- `corepack pnpm build` passed.
+- `docker compose ... config --quiet` passed using the existing local environment file.
+- `/run/user/1000/fnm_multishells/125294_1787124153492/bin/bru run --env local --sandbox developer` passed all 11 credit-purchase requests against a disposable isolated stub stack.
+- `git diff --check` passed.
 
 ## Plan readiness
 

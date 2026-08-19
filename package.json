@@ -73,6 +73,7 @@
         "@nestjs/swagger": "^11.2.0",
         "@nestjs/terminus": "^11.0.0",
         "@nestjs/typeorm": "^11.0.1",
+        "@paddle/paddle-node-sdk": "^3.10.0",
         "axios": "1.13.5",
         "bullmq": "^5.58.4",
         "cheerio": "^1.1.2",

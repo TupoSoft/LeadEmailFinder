@@ -19,7 +19,11 @@ function sign(rawBody: Buffer): string {
     return createHmac('sha256', webhookSecret).update(rawBody).digest('hex')
 }
 
-paymentProviderContract('StubPaymentProvider', { createProvider, sign })
+paymentProviderContract('StubPaymentProvider', {
+    createProvider,
+    serializeEvent: event => Buffer.from(JSON.stringify(event)),
+    sign,
+})
 
 describe('StubPaymentProvider', () => {
     it('creates a deterministic local checkout', async () => {
