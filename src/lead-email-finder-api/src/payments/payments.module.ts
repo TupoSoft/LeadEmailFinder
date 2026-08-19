@@ -15,6 +15,8 @@ import { PaymentEventHandler } from './payment-event.handler'
 import { PaymentWebhookController } from './payment-webhook.controller'
 import { PAYMENT_PURCHASE_STORE } from './payment-purchase.store'
 import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
+import { createPaddleProviderDependencies } from './infrastructure/paddle/paddle-client'
+import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-provider'
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([CreditPurchase]), CreditsModule, IdentityModule],
@@ -41,7 +43,12 @@ import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-pu
                     return stubProvider
                 }
 
-                throw new Error(`Payment provider is not implemented: ${provider}`)
+                if (provider === PaymentsProviderName.PADDLE) {
+                    const { client, webhookSecret } = createPaddleProviderDependencies(configService)
+                    return new PaddlePaymentProvider(client, webhookSecret)
+                }
+
+                throw new Error('Unsupported payment provider')
             },
         },
     ],

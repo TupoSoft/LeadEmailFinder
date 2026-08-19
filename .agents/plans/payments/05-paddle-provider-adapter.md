@@ -8,10 +8,10 @@ Take real money. After this change, setting `PAYMENTS_PROVIDER=paddle` routes ch
 
 ## Progress
 
-- [ ] Add the `@paddle/paddle-node-sdk` dependency and client configuration.
-- [ ] Implement `PaddlePaymentProvider` against the existing port.
-- [ ] Map Paddle events onto the application event union.
-- [ ] Run the shared provider contract suite against the adapter.
+- [x] (2026-08-19) Add the `@paddle/paddle-node-sdk` dependency and client configuration.
+- [x] (2026-08-19) Implement `PaddlePaymentProvider` against the existing port.
+- [x] (2026-08-19) Map Paddle events onto the application event union.
+- [x] (2026-08-19) Run the shared provider contract suite against the adapter.
 - [ ] Verify a sandbox purchase end to end and record the result.
 
 ## Plan dependencies
@@ -22,7 +22,10 @@ Take real money. After this change, setting `PAYMENTS_PROVIDER=paddle` routes ch
 
 ## Surprises & Discoveries
 
-None yet.
+- The official Node SDK and Paddle signature documentation both confirm that webhook verification is asynchronous and applies a five-second timestamp tolerance. Contract tests therefore generate fresh signed payloads rather than relying on stale signatures.
+- Paddle's transaction `checkout.url` input is an approved payment-link page, not a post-payment redirect. The existing application setting remains named `PAYMENTS_CHECKOUT_RETURN_URL` for compatibility, so the Bruno guide now explains that Paddle Checkout's success redirect must be configured separately.
+- No Paddle sandbox credentials or publicly reachable webhook destination are present in the repository, so the manual sandbox purchase and notification redelivery remain unverified.
+- The checked-in Compose issuer is host-facing and cannot validate tokens from inside the API container. The stub Bruno regression passed after applying a runtime-only issuer override (`http://keycloak:8080`) to the isolated API and Keycloak containers; no Compose file was changed in this plan.
 
 ## Decision Log
 
@@ -44,7 +47,7 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The Paddle Billing SDK, sandbox-only client factory, hosted-checkout adapter, event mapping, conditional configuration, shared provider contract coverage, and sandbox setup guide are implemented. Static and automated validation are recorded below. A live Paddle sandbox purchase remains outstanding because it requires account credentials, an approved payment-link page, and a public notification destination.
 
 ## Context and Orientation
 
@@ -95,7 +98,17 @@ Checkout creation is not idempotent at the provider: retrying `start` creates a 
 
 ## Artifacts and Notes
 
-Record redacted sandbox event payloads and the observed signature tolerance. Never commit an API key, notification secret, or live transaction payload.
+The SDK's observed and documented signature tolerance is five seconds. Automated tests use representative Paddle event envelopes and fresh genuine signatures; no live transaction payload was available to record. Never commit an API key, notification secret, or live transaction payload.
+
+Validation completed on 2026-08-19:
+
+- `corepack pnpm typecheck` passed.
+- `corepack pnpm lint` passed with two pre-existing explicit-return-type warnings outside the changed files.
+- `corepack pnpm test --runInBand` passed 108 suites and 654 tests; 8 suites were skipped and 1 test remains marked todo by the repository.
+- `corepack pnpm build` passed.
+- `docker compose ... config --quiet` passed using the existing local environment file.
+- `/run/user/1000/fnm_multishells/125294_1787124153492/bin/bru run --env local --sandbox developer` passed all 11 credit-purchase requests against a disposable isolated stub stack.
+- `git diff --check` passed.
 
 ## Plan readiness
 

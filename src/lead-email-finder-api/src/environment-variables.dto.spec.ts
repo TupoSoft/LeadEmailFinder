@@ -167,6 +167,58 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(paddleErrors).not.toContain('PAYMENTS_STUB_WEBHOOK_SECRET_FILE')
     })
 
+    it('accepts a valid Paddle sandbox configuration', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_PROVIDER: 'paddle',
+            PADDLE_API_KEY: 'paddle-test-api-key',
+            PADDLE_WEBHOOK_SECRET: 'paddle-test-webhook-secret',
+            PADDLE_ENVIRONMENT: 'sandbox',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('requires Paddle secrets and environment only for the Paddle provider', (): void => {
+        const paddleEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'paddle' })
+        const stubEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'stub' })
+
+        const paddleErrors = validateSync(paddleEnvironment).map(error => error.property)
+        const stubErrors = validateSync(stubEnvironment).map(error => error.property)
+
+        expect(paddleErrors).toEqual(
+            expect.arrayContaining(['PADDLE_API_KEY', 'PADDLE_WEBHOOK_SECRET', 'PADDLE_ENVIRONMENT']),
+        )
+        expect(stubErrors).not.toContain('PADDLE_API_KEY')
+        expect(stubErrors).not.toContain('PADDLE_API_KEY_FILE')
+        expect(stubErrors).not.toContain('PADDLE_WEBHOOK_SECRET')
+        expect(stubErrors).not.toContain('PADDLE_WEBHOOK_SECRET_FILE')
+        expect(stubErrors).not.toContain('PADDLE_ENVIRONMENT')
+    })
+
+    it('accepts secret files for the Paddle provider', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_PROVIDER: 'paddle',
+            PADDLE_API_KEY_FILE: '/run/secrets/paddle_api_key',
+            PADDLE_WEBHOOK_SECRET_FILE: '/run/secrets/paddle_webhook_secret',
+            PADDLE_ENVIRONMENT: 'sandbox',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects non-sandbox Paddle environments', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_PROVIDER: 'paddle',
+            PADDLE_API_KEY: 'paddle-test-api-key',
+            PADDLE_WEBHOOK_SECRET: 'paddle-test-webhook-secret',
+            PADDLE_ENVIRONMENT: 'production',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            'PADDLE_ENVIRONMENT',
+        )
+    })
+
     it('accepts a secret file for the stub provider', (): void => {
         const environment = plainToInstance(EnvironmentVariablesDto, {
             PAYMENTS_PROVIDER: 'stub',
