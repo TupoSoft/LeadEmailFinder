@@ -8,9 +8,9 @@ Provide one immutable 3proxy image that can safely expose several authenticated 
 
 ## Progress
 
-- [ ] 2026-08-15 — Define and validate the listener-manifest and credential contracts.
-- [ ] 2026-08-15 — Build the pinned 3proxy runtime and deterministic configuration renderer.
-- [ ] 2026-08-15 — Add container health and authenticated CONNECT smoke coverage.
+- [x] 2026-08-19 — Define and validate the listener-manifest and credential contracts.
+- [x] 2026-08-19 — Build the pinned 3proxy runtime and deterministic configuration renderer.
+- [x] 2026-08-19 — Add container health and authenticated CONNECT smoke coverage.
 
 ## Plan dependencies
 
@@ -20,6 +20,9 @@ None.
 
 - The merged local fixture uses one static SOCKS5 listener in `docker/smtp-dev/3proxy.cfg`. It proves the application path but does not model multiple host egress IPs or fleet secret handling.
 - The socket library already supports authenticated HTTP CONNECT in `src/libs/socket/src/http-proxy-connect.ts`, and `ProxyProtocol.HTTP` already maps into the allocator. No application transport change is needed.
+- 3proxy's `allow`/`deny` ACL operation keyword for the HTTP `proxy` service's CONNECT method is `HTTP_CONNECT`, not the bare `CONNECT` used by `docker/smtp-dev/3proxy.cfg`'s SOCKS5 `allow` line (SOCKS and HTTP services use different operation-name vocabularies for the same underlying tunnel behavior). Using `CONNECT` in the HTTP service's ACL silently rejects every request with `403 Forbidden` regardless of otherwise-correct credentials, source, or ACL scoping — discovered empirically while live-testing the smoke harness against a real rendered config; the official 3proxy config reference linked from this plan's "Interfaces and Dependencies" section does not surface this distinction directly.
+- `ghcr.io/3proxy/3proxy` publishes three release variants per tag, not one: the bare `:0.9.8` tag (used by the existing `docker/smtp-dev/3proxy.cfg` fixture) is `Dockerfile.full` — `FROM scratch`, glibc-linked, fully distroless (no shell, no package manager). A second `:0.9.8.busybox` tag is `Dockerfile.busybox` — musl-linked (built via an Alpine build environment), full plugin support, layered on `busybox:musl`, and bundles its own musl loader/libs under `/usr/local/3proxy/libexec`. The fleet image needed `jq`/`iproute2` inside the final image (for manifest validation and the health check), which the glibc/scratch variant cannot support without a nontrivial glibc-on-musl relinking step (`patchelf`, ABI risk). Using the `.busybox` tag as the build source instead avoids that entirely: its binary runs directly against a plain Alpine base's own musl loader with zero relinking, confirmed empirically (`3proxy -v` runs unmodified on `alpine:3.22` with only `apk add jq iproute2` layered on top, no `/lib` overwrite needed at all — simpler than even the initial design pass anticipated).
+- The root project directory's `.dockerignore` excludes `docker/*` entirely except for one explicit `!docker/garage-entrypoint.sh` negation; new files under `docker/proxy-fleet/` needed the same negation pattern added or the Docker build context silently omitted them (a build failure with a clear "not found" message, not a silent misbehavior, but worth flagging for the next image added under `docker/`).
 
 ## Decision Log
 
@@ -32,10 +35,21 @@ None.
 - Decision: Keep listener topology non-secret and credentials in a separate file contract.
   Rationale: Swarm configs and inventory may safely describe topology, while usernames and passwords must not appear in manifests, generated stack files, logs, or source control.
   Date/Author: 2026-08-15, project planning.
+- Decision: Implement the manifest/credential validator and config renderer in POSIX `sh` + `jq`, entirely under `docker/proxy-fleet/`, rather than TypeScript under `scripts/`.
+  Rationale: `tsconfig.json`'s `include` covers `src/**/*.ts` and `scripts/**/*.ts` only, not `docker/**`; a TS renderer placed under `docker/proxy-fleet/` would sit outside `pnpm typecheck` silently, and this plan's own "Interfaces and Dependencies" section scopes new files to `docker/proxy-fleet/`. Shell+jq also matches this repo's only other purpose-built minimal image, `docker/garage.Dockerfile`, which is deliberately Node-free.
+  Date/Author: 2026-08-19, implementation.
+- Decision: Build the fleet image from `ghcr.io/3proxy/3proxy:0.9.8.busybox` (pinned to its immutable digest), not the bare `:0.9.8` tag already used by `docker/smtp-dev/3proxy.cfg`.
+  Rationale: the bare tag is `Dockerfile.full` (glibc, `FROM scratch`, distroless — no shell/package manager), which cannot host `jq`/`iproute2` without a nontrivial glibc-on-musl relink. The `.busybox` tag is musl-linked and its binary runs directly against a plain Alpine base's own musl loader with zero relinking, confirmed empirically. See Surprises & Discoveries.
+  Date/Author: 2026-08-19, implementation.
+- Decision: Resolved digest for `ghcr.io/3proxy/3proxy:0.9.8.busybox` is `sha256:5cd3650349be841b88c5742336d1f8031edd9596b3e8c113c6e62bb911fb48bb` (multi-platform manifest-list digest, via `docker buildx imagetools inspect`). Hardcoded literally in `docker/proxy-fleet/Dockerfile`'s `FROM` line.
+  Date/Author: 2026-08-19, implementation.
+- Decision: The HTTP `proxy` service's `allow`/`deny` ACL operation keyword is `HTTP_CONNECT`, not `CONNECT`.
+  Rationale: empirically confirmed via live smoke testing — see Surprises & Discoveries. `docker/smtp-dev/3proxy.cfg`'s `CONNECT` keyword is correct only for its own SOCKS5 service, not for this plan's HTTP CONNECT service.
+  Date/Author: 2026-08-19, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated. `docker/proxy-fleet/Dockerfile` builds a `jq`/`iproute2`-equipped Alpine image carrying a pinned, digest-locked 3proxy 0.9.8 binary (musl-linked `.busybox` release variant); `render-config.sh` validates a listener manifest and credentials file and renders `/run/3proxy/3proxy.cfg` (one `flush`-scoped `allow`/`deny`/`maxconn`/`proxy` block per listener); `entrypoint.sh` wires validation into container start (`umask 077`, mode-600 rendered config, `exec 3proxy` as PID 1); `healthcheck.sh` checks both process liveness and per-listener TCP acceptance. All eight malformed-manifest/credential rejection cases plus the two-listener happy path are covered by `docker/proxy-fleet/tests/render-config.table-test.sh` (15/15 passing, no Docker required). The disposable three-network smoke harness (`docker/proxy-fleet/smoke/`) proves, against a real running container: an allowlisted worker with correct credentials successfully tunnels to the SMTP target; wrong/missing credentials are rejected; a non-worker source is rejected; a destination port outside the allowlist is rejected; and two listeners render genuinely distinct `-e` egress bindings — verified twice (fresh run and idempotent re-run), with clean teardown of all named containers/networks/temp files confirmed both times. Full repo validation (`pnpm lint`, `pnpm typecheck`, `pnpm test:ci` — 680/680 non-skipped tests passing, `pnpm build`, `git diff --check`) is clean; the one pre-existing lint/typecheck friction found (an unrelated Paddle-provider lint backlog, and this workstation's root-owned `dist/` requiring a scratch-tsconfig workaround) predates this PR and was worked around without modifying unrelated files.
 
 ## Context and Orientation
 
@@ -88,8 +102,47 @@ Rendering the same manifest and credential input produces the same runtime confi
 
 ## Artifacts and Notes
 
-Record the selected upstream digest, an example redacted manifest, the rendered non-secret listener summary, and smoke output proving allowed and denied behavior. Never record the credential file or full rendered configuration.
+**Selected upstream digest**: `ghcr.io/3proxy/3proxy:0.9.8.busybox@sha256:5cd3650349be841b88c5742336d1f8031edd9596b3e8c113c6e62bb911fb48bb` (multi-platform manifest-list digest).
+
+**Example manifest** (non-secret, matches `docker/proxy-fleet/smoke/fixtures/listeners.json`):
+```json
+{
+  "workerCidrs": ["172.29.10.0/28"],
+  "allowedDestinationPorts": [2525],
+  "listeners": [
+    {"egressId": "egress-a", "bindIp": "172.29.10.2", "port": 13001, "egressIp": "172.29.23.2", "maxConnections": 50},
+    {"egressId": "egress-b", "bindIp": "172.29.10.2", "port": 13002, "egressIp": "172.29.24.2", "maxConnections": 100}
+  ]
+}
+```
+
+**Rendered non-secret listener summary** (derived from the manifest above; the credential-bearing `users`/`allow` lines are omitted here — see Acceptance Criteria for the mode-0600 requirement on the real rendered file):
+```
+listener egress-a: bind 172.29.10.2:13001 -> egress 172.29.23.2, maxconn 50
+listener egress-b: bind 172.29.10.2:13002 -> egress 172.29.24.2, maxconn 100
+```
+
+**Smoke output** (from `sh docker/proxy-fleet/smoke/run.sh`, two independent runs including an idempotent re-run):
+```
+1. allowed CONNECT with correct credentials
+ok   - allowed CONNECT with correct credentials reaches the allowlisted SMTP target
+
+2. missing/wrong credentials rejected
+ok   - missing and wrong credentials are rejected
+
+3. non-worker source rejected
+ok   - a non-worker source is rejected
+
+4. disallowed destination port rejected
+ok   - a destination port outside the allowlist is rejected
+
+5. two listeners render distinct -e egress bindings
+ok   - two listeners render distinct -e egress bindings
+
+All proxy-fleet smoke assertions passed.
+```
+Table-test run (`sh docker/proxy-fleet/tests/render-config.table-test.sh`): `15 passed, 0 failed`.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented (PR pending; see Progress and Outcomes & Retrospective).

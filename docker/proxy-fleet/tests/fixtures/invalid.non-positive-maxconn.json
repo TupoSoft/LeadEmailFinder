@@ -1,0 +1,7 @@
+{
+  "workerCidrs": ["172.29.10.0/28"],
+  "allowedDestinationPorts": [2525],
+  "listeners": [
+    {"egressId": "egress-a", "bindIp": "172.29.10.2", "port": 13001, "egressIp": "172.29.23.2", "maxConnections": 0}
+  ]
+}

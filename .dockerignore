@@ -32,6 +32,11 @@ docker
 !docker/
 docker/*
 !docker/garage-entrypoint.sh
+!docker/proxy-fleet/
+docker/proxy-fleet/*
+!docker/proxy-fleet/entrypoint.sh
+!docker/proxy-fleet/render-config.sh
+!docker/proxy-fleet/healthcheck.sh
 Makefile
 eslint.config.mjs
 swarm.yml

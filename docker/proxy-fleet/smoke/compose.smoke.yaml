@@ -1,0 +1,72 @@
+name: lef-proxy-fleet-smoke
+
+# Disposable smoke topology for docker/proxy-fleet/Dockerfile. See
+# .agents/plans/proxy-fleet/11-fleet-capable-3proxy-image.md and docker/proxy-fleet/smoke/run.sh, which drives
+# this file. Not part of the application stack; brought up and torn down only by run.sh.
+services:
+  fleet:
+    build:
+      context: ../../..
+      dockerfile: docker/proxy-fleet/Dockerfile
+    networks:
+      access-net:
+        ipv4_address: 172.29.10.2
+      egress-a-net:
+        ipv4_address: 172.29.23.2
+      egress-b-net:
+        ipv4_address: 172.29.24.2
+    volumes:
+      - ./fixtures/listeners.json:/etc/lead-email-finder/proxy-fleet/listeners.json:ro
+      - ${LEF_PROXY_FLEET_CREDENTIALS_FILE}:/run/secrets/proxy_credentials:ro
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
+  worker:
+    image: curlimages/curl:8.16.0
+    networks:
+      access-net:
+        ipv4_address: 172.29.10.10
+    entrypoint: ["sleep", "infinity"]
+
+  non-worker:
+    image: curlimages/curl:8.16.0
+    networks:
+      access-net:
+        ipv4_address: 172.29.10.100
+    entrypoint: ["sleep", "infinity"]
+
+  smtp-target:
+    image: axllent/mailpit:v1.30.7
+    environment:
+      MP_DISABLE_VERSION_CHECK: true
+      MP_SMTP_BIND_ADDR: 0.0.0.0:2525
+      MP_SMTP_DISABLE_RDNS: true
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      egress-a-net:
+        ipv4_address: 172.29.23.3
+      egress-b-net:
+        ipv4_address: 172.29.24.3
+
+networks:
+  access-net:
+    ipam:
+      config:
+        - subnet: 172.29.10.0/24
+  egress-a-net:
+    ipam:
+      config:
+        - subnet: 172.29.23.0/28
+  egress-b-net:
+    ipam:
+      config:
+        - subnet: 172.29.24.0/28
