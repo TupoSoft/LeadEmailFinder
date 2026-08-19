@@ -9,22 +9,10 @@ describe('CredentialExtractor', () => {
         expect(credential).toEqual({ scheme: 'bearer', token: 'token-value' })
     })
 
-    it('extracts an x-api-key token when no bearer token is present', () => {
-        const credential = extractor.extract({ 'x-api-key': 'key-value' })
-
-        expect(credential).toEqual({ scheme: 'x-api-key', token: 'key-value' })
-    })
-
-    it('prefers the bearer token when both headers are present', () => {
-        const credential = extractor.extract({ authorization: 'Bearer token-value', 'x-api-key': 'key-value' })
-
-        expect(credential).toEqual({ scheme: 'bearer', token: 'token-value' })
-    })
-
     it('takes the first value when a header is repeated', () => {
-        const credential = extractor.extract({ 'x-api-key': ['first-value', 'second-value'] })
+        const credential = extractor.extract({ authorization: ['Bearer first-value', 'Bearer second-value'] })
 
-        expect(credential).toEqual({ scheme: 'x-api-key', token: 'first-value' })
+        expect(credential).toEqual({ scheme: 'bearer', token: 'first-value' })
     })
 
     it('returns undefined when the Authorization header has no Bearer prefix', () => {
@@ -39,7 +27,7 @@ describe('CredentialExtractor', () => {
         expect(credential).toBeUndefined()
     })
 
-    it('extracts a session cookie when no bearer or x-api-key header is present', () => {
+    it('extracts a session cookie when no bearer header is present', () => {
         const credential = extractor.extract({ cookie: `${BFF_SESSION_COOKIE_NAME}=session-id-value` })
 
         expect(credential).toEqual({ scheme: 'session-cookie', token: 'session-id-value' })
@@ -60,15 +48,6 @@ describe('CredentialExtractor', () => {
         })
 
         expect(credential).toEqual({ scheme: 'bearer', token: 'token-value' })
-    })
-
-    it('prefers the x-api-key header over a session cookie when both are present', () => {
-        const credential = extractor.extract({
-            'x-api-key': 'key-value',
-            cookie: `${BFF_SESSION_COOKIE_NAME}=session-id-value`,
-        })
-
-        expect(credential).toEqual({ scheme: 'x-api-key', token: 'key-value' })
     })
 
     it('returns undefined when the cookie header has no session cookie', () => {

@@ -57,13 +57,13 @@ class AuthIntegrationTestModule {}
 
 function principalWith(overrides: Partial<AuthPrincipal>): AuthPrincipal {
     return {
-        credentialKind: 'legacy_api_key',
-        issuer: 'internal:legacy-api-key',
-        subject: 'key-id',
+        credentialKind: 'human_session',
+        issuer: 'https://issuer',
+        subject: 'human-1',
         organizationId: 'org-id',
         membershipRole: 'member',
         permissions: [],
-        credentialId: 'key-id',
+        credentialId: 'identity-1',
         ...overrides,
     }
 }
@@ -102,19 +102,19 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
 
     it('resolves @CurrentPrincipal() from the authenticated request', async () => {
         const principal = {
-            credentialKind: 'legacy_api_key',
-            issuer: 'internal:legacy-api-key',
-            subject: 'key-id',
+            credentialKind: 'human_session',
+            issuer: 'https://issuer',
+            subject: 'human-1',
             organizationId: 'org-id',
             membershipRole: 'member',
             permissions: [],
-            credentialId: 'key-id',
+            credentialId: 'identity-1',
         } as const satisfies AuthPrincipal
         authenticationServiceMock.authenticate.mockResolvedValue(principal)
 
         const response = await request(app.getHttpServer())
             .get('/auth-integration-test/protected')
-            .set('x-api-key', 'irrelevant-because-authenticate-is-mocked')
+            .set('authorization', 'Bearer irrelevant-because-authenticate-is-mocked')
             .expect(200)
 
         expect(response.body).toEqual(principal)
@@ -131,7 +131,7 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
 
         await request(app.getHttpServer())
             .get('/auth-integration-test/admin-only')
-            .set('x-api-key', 'irrelevant-because-authenticate-is-mocked')
+            .set('authorization', 'Bearer irrelevant-because-authenticate-is-mocked')
             .expect(403)
     })
 
@@ -151,12 +151,12 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
 
         await request(app.getHttpServer())
             .get('/auth-integration-test/admin-only')
-            .set('x-api-key', 'irrelevant-because-authenticate-is-mocked')
+            .set('authorization', 'Bearer irrelevant-because-authenticate-is-mocked')
             .expect(200)
 
         await request(app.getHttpServer())
             .get('/auth-integration-test/members-managed')
-            .set('x-api-key', 'irrelevant-because-authenticate-is-mocked')
+            .set('authorization', 'Bearer irrelevant-because-authenticate-is-mocked')
             .expect(200)
     })
 })

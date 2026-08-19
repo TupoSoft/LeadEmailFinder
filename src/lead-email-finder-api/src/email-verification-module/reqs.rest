@@ -3,7 +3,7 @@
 ### Verify (Old Response)
 # temporarily_blocked lindsay.loftusx(at)anheuser-busch.com
 GET {{url}}/verify?email=kyrylo.kupin@gmail.com
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}
 
 ### Verify
 POST {{url}}/verify
@@ -17,7 +17,7 @@ Authorization: Bearer {{token}}
 ### Verify Async
 POST {{url}}/verifyAsync
 Content-Type: application/json
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}
 
 {
   "email": "igor.mihajlov@tuposoft.com"
@@ -33,12 +33,12 @@ X-Api-Key: {{token}}
 ### Get Async Verification Status
 GET {{url}}/verifyAsync/{{jobId}}
 Content-Type: application/json
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}
 
 ### Verify Batch
 POST {{url}}/verifyBatch/csv
 Content-Type: multipart/form-data; boundary=boundary
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}
 
 --boundary
 Content-Disposition: form-data; name="file"; filename="test.csv"
@@ -60,8 +60,8 @@ igor.mihajlov@gmail.com
 
 ### Get Verify Batch Status
 GET {{url}}/verifyBatch/{{id}}
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}
 
 ### Get Verify Batch Results
 GET {{url}}/verifyBatch/{{id}}/results
-X-Api-Key: {{token}}
+Authorization: Bearer {{token}}

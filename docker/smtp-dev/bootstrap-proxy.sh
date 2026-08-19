@@ -2,12 +2,27 @@
 
 set -eu
 
-admin_api_key="$(cat /run/secrets/admin_apikey)"
+client_id="$(sed -n 's/.*"clientId": *"\([^"]*\)".*/\1/p' /service-client.json)"
+client_secret="$(sed -n 's/.*"clientSecret": *"\([^"]*\)".*/\1/p' /service-client.json)"
 action="${1:-reconcile}"
+
+access_token="$(
+    curl --fail --silent --show-error \
+        --data-urlencode "grant_type=client_credentials" \
+        --data-urlencode "client_id=${client_id}" \
+        --data-urlencode "client_secret=${client_secret}" \
+        "http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/token" \
+        | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+)"
+
+if [ -z "${access_token}" ]; then
+    printf 'Failed to obtain a Client Credentials token\n' >&2
+    exit 1
+fi
 
 proxies="$(
     curl --fail --silent --show-error \
-        --header "X-Api-Key: ${admin_api_key}" \
+        --header "Authorization: Bearer ${access_token}" \
         "http://api:3000/v1/proxies?pageSize=100"
 )"
 proxy_id="$(
@@ -19,7 +34,7 @@ if [ "${action}" = "cleanup" ]; then
     if [ -n "${proxy_id}" ]; then
         curl --fail --silent --show-error \
             --request DELETE \
-            --header "X-Api-Key: ${admin_api_key}" \
+            --header "Authorization: Bearer ${access_token}" \
             "http://api:3000/v1/proxies/${proxy_id}" >/dev/null
     fi
 
@@ -45,14 +60,14 @@ if [ -n "${proxy_id}" ]; then
     curl --fail --silent --show-error \
         --request PATCH \
         --header "Content-Type: application/json" \
-        --header "X-Api-Key: ${admin_api_key}" \
+        --header "Authorization: Bearer ${access_token}" \
         --data "${proxy_payload}" \
         "http://api:3000/v1/proxies/${proxy_id}" >/dev/null
 else
     curl --fail --silent --show-error \
         --request POST \
         --header "Content-Type: application/json" \
-        --header "X-Api-Key: ${admin_api_key}" \
+        --header "Authorization: Bearer ${access_token}" \
         --data "${proxy_payload}" \
         "http://api:3000/v1/proxies" >/dev/null
 fi

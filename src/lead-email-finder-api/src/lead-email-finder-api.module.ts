@@ -15,7 +15,6 @@ import { EnvironmentVariablesDto } from './environment-variables.dto'
 import { ProxyModule } from '../../proxy/src/proxy.module'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
-import { ApiKeyModule } from '@tuposoft/lead-email-finder/modules/api-key'
 import { OrganizationOnboardingModule } from './organization-onboarding'
 import { PaymentsModule } from './payments'
 import { ServiceClientManagementModule } from './service-client-management'
@@ -49,7 +48,6 @@ import { ServiceClientManagementModule } from './service-client-management'
         EmailVerificationModule,
         IdentityModule,
         AuthModule,
-        ApiKeyModule,
         OrganizationOnboardingModule,
         ServiceClientManagementModule,
         PaymentsModule,

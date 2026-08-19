@@ -15,17 +15,20 @@ port=53000 NODE_ENV=development API_URL=http://localhost:53000 APP_BASE_URL=http
   BFF_CLIENT_ID=lef-web-bff BFF_CLIENT_SECRET=lef-web-bff-development-only-client-secret \
   SESSION_ENCRYPTION_KEY=<value from docker/secrets/session_encryption_key.txt> \
   KEYCLOAK_ORG_ADMIN_CLIENT_ID=lef-org-admin-service KEYCLOAK_ORG_ADMIN_CLIENT_SECRET=<value from docker/secrets/keycloak_org_admin_client_secret.txt> \
-  ADMIN_API_KEY=<value from docker/secrets/admin_apikey.txt> \
   REDIS_URL=redis://localhost:56379 POSTGRES_URL=postgresql://postgres:postgres@localhost:55432/lef \
   S3_ACCESS_KEY_ID=minioadmin S3_SECRET_KEY=minioadmin-local S3_URL=http://localhost:59000 S3_REGION=us-east-1 S3_FORCE_PATH_STYLE=true S3_BUCKET=batch-email-verification \
   node .local-dist/main.js
 ```
 
-Use `port=53000` (matching the Compose-published port) so it lines up with the `lef-web-bff` Keycloak client's already-registered `redirect_uri`. Then, with the host instance up:
+Use `port=53000` (matching the Compose-published port) so it lines up with the `lef-web-bff` Keycloak client's already-registered `redirect_uri`. Requests 02/05 authenticate as the pre-provisioned `lef-development-service` M2M client via OAuth Client Credentials (`platform:admin`, granted by `pnpm keycloak:bootstrap-credential` — see `.agents/plans/auth/09-remove-api-key-authentication.md`), obtained by a collection-root `before-request` script and cached as `{{serviceClientToken}}`. Then, with the host instance up:
 
 ```shell
+pnpm keycloak:bootstrap-credential
+export OIDC_ISSUER_URL=$(jq -r .issuer .dev/keycloak/service-client.json)
+export KEYCLOAK_SERVICE_CLIENT_ID=$(jq -r .clientId .dev/keycloak/service-client.json)
+export KEYCLOAK_SERVICE_CLIENT_SECRET=$(jq -r .clientSecret .dev/keycloak/service-client.json)
 cd bruno/organization-onboarding
-ADMIN_API_KEY=<value from docker/secrets/admin_apikey.txt> npx @usebruno/cli run --env local
+npx @usebruno/cli run --env local --sandbox developer
 ```
 
 Restart the containerized `api` service afterward (`docker compose -f docker/compose.yaml start api`) to restore the normal stack.

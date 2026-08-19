@@ -11,7 +11,7 @@ import {
 export const REALM = 'lead-email-finder'
 export const API_AUDIENCE = 'lead-email-finder-api'
 export const BFF_CLIENT_ID = 'lef-web-bff'
-// Fixed, checked-in dev-only secret (same convention as docker/secrets/admin_apikey.txt): the containerized
+// Fixed, checked-in dev-only secret: the containerized
 // api service needs BFF_CLIENT_SECRET to boot (it is a required, non-optional config value), but Keycloak's
 // own auto-generated per-realm client secret is not known until provisioning runs against a live Keycloak
 // instance. Setting an explicit secret on the client sidesteps that chicken-and-egg problem entirely.

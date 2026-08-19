@@ -15,7 +15,6 @@ import {
     OrganizationCreditAccount,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { Key } from '@tuposoft/lead-email-finder/modules/api-key/models/key.entity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 
 // Deliberately its own env vars, not TEST_OIDC_*/TEST_POSTGRES_URL: this test drives a real Keycloak
@@ -36,7 +35,7 @@ const describeWithKeycloakRedisAndPostgres =
         : describe.skip
 
 const appBaseUrl = 'http://localhost:53000'
-const identityEntities = [Key, Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
+const identityEntities = [Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
 
 // AuthModule -> BffSessionModule injects Redis without importing RedisModule itself, relying on it being
 // registered globally elsewhere in the real app (via DnsModule). This test's module graph has no such

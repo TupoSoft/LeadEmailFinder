@@ -7,8 +7,8 @@ http:
   method: GET
   url: "{{baseUrl}}/v1/proxies/healthy?mxHost=smtp.lef.test"
   headers:
-    - name: X-Api-Key
-      value: "{{adminApiKey}}"
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
 
 runtime:
   scripts:

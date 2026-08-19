@@ -35,12 +35,6 @@ export class CredentialExtractor {
             return { scheme: 'bearer', token: bearerToken }
         }
 
-        const apiKey = this.firstValue(headers['x-api-key'])
-
-        if (apiKey) {
-            return { scheme: 'x-api-key', token: apiKey }
-        }
-
         const sessionId = parseCookieHeader(this.firstValue(headers['cookie']))[BFF_SESSION_COOKIE_NAME]
 
         if (sessionId) {

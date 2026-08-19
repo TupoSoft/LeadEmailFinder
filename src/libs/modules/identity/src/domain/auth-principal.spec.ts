@@ -33,7 +33,7 @@ describe('AuthPrincipal', () => {
             'billing:manage',
             'platform:admin',
         ])
-        expect(AUTH_CREDENTIAL_KINDS).toEqual(['human_session', 'service_client', 'legacy_api_key'])
+        expect(AUTH_CREDENTIAL_KINDS).toEqual(['human_session', 'service_client'])
     })
 
     it('does not import framework, persistence, cache, or identity-provider types', () => {

@@ -14,7 +14,7 @@ export const AUTH_PERMISSIONS = [
 
 export type AuthPermission = (typeof AUTH_PERMISSIONS)[number]
 
-export const AUTH_CREDENTIAL_KINDS = ['human_session', 'service_client', 'legacy_api_key'] as const
+export const AUTH_CREDENTIAL_KINDS = ['human_session', 'service_client'] as const
 
 export type AuthCredentialKind = (typeof AUTH_CREDENTIAL_KINDS)[number]
 

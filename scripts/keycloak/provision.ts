@@ -27,10 +27,13 @@ async function main(): Promise<void> {
     })
     const { service, bff, orgAdmin } = await provisioner.provision()
 
+    // World-readable (not 0o600 like the other secrets files here): docker/compose.smtp-dev.yaml bind-mounts
+    // this file read-only into the smtp-dev-proxy-bootstrap/cleanup containers, which run as their own
+    // non-root image user and need to read it.
     const secretsFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
     await mkdir(dirname(secretsFile), { recursive: true })
-    await writeFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, { mode: 0o600 })
-    await chmod(secretsFile, 0o600)
+    await writeFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, { mode: 0o644 })
+    await chmod(secretsFile, 0o644)
 
     const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
     await mkdir(dirname(bffSecretsFile), { recursive: true })

@@ -23,8 +23,8 @@ describe('OidcCredentialAuthenticator', () => {
             expect(authenticator.supports({ scheme: 'bearer', token: 'api_legacykey' })).toBe(false)
         })
 
-        it('does not support an x-api-key credential', () => {
-            expect(authenticator.supports({ scheme: 'x-api-key', token: 'a.b.c' })).toBe(false)
+        it('does not support a session-cookie credential', () => {
+            expect(authenticator.supports({ scheme: 'session-cookie', token: 'a.b.c' })).toBe(false)
         })
     })
 
