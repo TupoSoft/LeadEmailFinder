@@ -13,6 +13,7 @@ Lead Email Finder is an API for finding email addresses.
     - [Running the Application](#running-the-application)
     - [Debugging the Application](#debugging-the-application)
     - [Local Services](#local-services)
+    - [Resetting the Development Stack](#resetting-the-development-stack)
 
 ---
 
@@ -131,3 +132,33 @@ The development Compose stack starts the following supporting services:
 | Bull Board | http://localhost:54000 | Queue dashboard |
 | MinIO API | http://localhost:59000 | S3-compatible object storage |
 | MinIO Console | http://localhost:59001 | Object storage console |
+
+### Resetting the Development Stack
+
+`pnpm dev:reset` is the one safe, repeatable way to recreate the entire disposable development stack — PostgreSQL, Keycloak's own PostgreSQL, Redis, and the Garage/S3 container — after an incompatible schema or realm change. It stops and removes the named `LEF` Compose containers, deletes only the three named volumes this stack owns (`lef_postgres-data`, `lef_redis-data`, `lef_keycloak-postgres-data` — object storage has no volume and is already ephemeral), rebuilds and starts everything back up, reprovisions Keycloak, seeds deterministic fixtures, and ends with an authenticated API request.
+
+It always asks for confirmation before deleting anything:
+
+```shell
+pnpm dev:reset
+# Type LEF to continue:
+```
+
+For CI or scripted use, pass the Compose project name as an explicit flag instead of answering interactively:
+
+```shell
+pnpm dev:reset -- --confirm-project=LEF
+```
+
+Any other value is rejected outright, never falls back to a prompt.
+
+Each run seeds:
+
+| Fixture | Identity | Notes |
+| --- | --- | --- |
+| Platform M2M credential | `lef-development-service` (Client Credentials) | `platform:admin`; see `scripts/keycloak/bootstrap-credential.ts` |
+| Platform operator (human) | `platform-operator@lef.test` | `platform_admin`; password is the fixed dev-only constant in `scripts/keycloak/platform-operator.ts` |
+| Customer organization | "Acme Development Customer" | Owner `owner@acme.lef.test`, 1000 starting credits |
+| Customer M2M credential | `lef-svc-dev-fixture` (Client Credentials) | Scoped to `verification:run`/`verification:read` only |
+
+Generated secrets (Keycloak client secrets, id summaries) are written only to the gitignored `.dev/keycloak/*.json` files, never printed in full.
