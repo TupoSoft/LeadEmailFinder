@@ -49,9 +49,6 @@ describe('BffSessionCredentialAuthenticator', () => {
             expect(authenticator.supports({ scheme: 'bearer', token: 'a.b.c' })).toBe(false)
         })
 
-        it('does not support an x-api-key credential', () => {
-            expect(authenticator.supports({ scheme: 'x-api-key', token: 'api_key' })).toBe(false)
-        })
     })
 
     describe('authenticate', () => {

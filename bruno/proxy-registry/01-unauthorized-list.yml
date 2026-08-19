@@ -11,6 +11,6 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('rejects requests without an API key', function() {
+        test('rejects requests without a credential', function() {
           expect(res.status).to.equal(401);
         });

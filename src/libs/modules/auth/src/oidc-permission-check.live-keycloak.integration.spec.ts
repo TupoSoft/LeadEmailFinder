@@ -14,7 +14,6 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { Key } from '@tuposoft/lead-email-finder/modules/api-key/models/key.entity'
 import { RolePermissionPolicy } from './application/role-permission-policy.service'
 import { AuthModule } from './auth.module'
 import { CurrentPrincipal } from './infrastructure/http/current-principal.decorator'
@@ -33,7 +32,7 @@ const audience = process.env['TEST_OIDC_AUDIENCE']
 const describeWithKeycloakAndPostgres =
     postgresUrl && issuer && clientId && clientSecret && audience ? describe : describe.skip
 
-const identityEntities = [Key, Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
+const identityEntities = [Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
 
 interface TokenResponse {
     access_token?: string

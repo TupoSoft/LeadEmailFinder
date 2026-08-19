@@ -21,8 +21,6 @@
             "@tuposoft/lead-email-finder/redis/*": ["src/libs/redis/src/*"],
             "@tuposoft/lead-email-finder/socket": ["src/libs/socket/src"],
             "@tuposoft/lead-email-finder/socket/*": ["src/libs/socket/src/*"],
-            "@tuposoft/lead-email-finder/modules/api-key": ["src/libs/modules/api-key/src"],
-            "@tuposoft/lead-email-finder/modules/api-key/*": ["src/libs/modules/api-key/src/*"],
             "@tuposoft/lead-email-finder/modules/auth": ["src/libs/modules/auth/src"],
             "@tuposoft/lead-email-finder/modules/auth/*": ["src/libs/modules/auth/src/*"],
             "@tuposoft/lead-email-finder/modules/bff-session": ["src/libs/modules/bff-session/src"],

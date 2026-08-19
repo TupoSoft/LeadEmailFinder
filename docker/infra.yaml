@@ -115,8 +115,6 @@ secrets:
     file: secrets/redis_url.txt
   tokens.json:
     file: secrets/tokens.json
-  admin_apikey:
-    file: secrets/admin_apikey.txt
   s3_access_key_id:
     file: secrets/s3_access_key_id.txt
   s3_secret_key:

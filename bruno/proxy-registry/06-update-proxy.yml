@@ -9,8 +9,8 @@ http:
   headers:
     - name: Content-Type
       value: application/json
-    - name: X-Api-Key
-      value: "{{adminApiKey}}"
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
   body:
     type: json
     data: |-

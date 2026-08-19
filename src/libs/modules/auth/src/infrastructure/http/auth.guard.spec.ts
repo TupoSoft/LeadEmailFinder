@@ -41,9 +41,9 @@ describe('AuthGuard', () => {
 
     it('attaches the resolved principal to the request and allows the route', async () => {
         reflector.getAllAndOverride.mockReturnValue(false)
-        const principal = { credentialKind: 'legacy_api_key' } as never
+        const principal = { credentialKind: 'human_session' } as never
         authenticationService.authenticate.mockResolvedValue(principal)
-        const request = { headers: { 'x-api-key': 'key' } }
+        const request = { headers: { authorization: 'Bearer token' } }
 
         const result = await guard.canActivate(contextFor(request))
 

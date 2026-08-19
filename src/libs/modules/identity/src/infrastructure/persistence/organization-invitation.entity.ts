@@ -51,8 +51,8 @@ export class OrganizationInvitation {
     @JoinColumn({ name: 'acceptedByExternalIdentityId' })
     acceptedByExternalIdentity: ExternalIdentity | null
 
-    // Denormalized actor snapshot, not an FK: the inviter may be a human_session (ExternalIdentity),
-    // legacy_api_key (Key), or service_client (ServiceCredential) principal, and no single FK target fits.
+    // Denormalized actor snapshot, not an FK: the inviter may be a human_session (ExternalIdentity)
+    // or service_client (ServiceCredential) principal, and no single FK target fits.
     @Column({ type: 'enum', enum: AUTH_CREDENTIAL_KINDS, enumName: 'auth_credential_kind' })
     invitedByCredentialKind: AuthCredentialKind
 

@@ -5,12 +5,12 @@ info:
 
 http:
   method: POST
-  url: "{{baseUrl}}/credits/{{bridgeOrganizationId}}"
+  url: "{{baseUrl}}/credits/{{organizationId}}"
   headers:
     - name: Content-Type
       value: application/json
-    - name: X-Api-Key
-      value: "{{adminApiKey}}"
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
   body:
     type: json
     data: |-
@@ -22,7 +22,7 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('adds one verification credit to the legacy-bridge organization', function() {
+        test('adds one verification credit to the bootstrap-seeded platform organization', function() {
           expect(res.status).to.equal(201);
           expect(res.body.balance).to.be.a('number');
           expect(res.body.balance).to.be.at.least(1);

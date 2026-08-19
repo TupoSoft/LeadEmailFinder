@@ -4,13 +4,13 @@ import { OrganizationCreationService } from './organization-creation.service'
 
 function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal {
     return {
-        credentialKind: 'legacy_api_key',
-        issuer: 'internal:legacy-api-key',
-        subject: 'key-1',
-        organizationId: 'bridge-org',
+        credentialKind: 'service_client',
+        issuer: 'https://issuer',
+        subject: 'service-account-1',
+        organizationId: 'platform-org',
         membershipRole: 'platform_admin',
-        permissions: [],
-        credentialId: 'key-1',
+        permissions: ['platform:admin'],
+        credentialId: 'credential-1',
         ...overrides,
     }
 }

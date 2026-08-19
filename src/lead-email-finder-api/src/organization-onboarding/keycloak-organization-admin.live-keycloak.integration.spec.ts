@@ -98,13 +98,13 @@ async function deleteKeycloakUser(adminToken: string, userId: string): Promise<v
 
 function actorFixture(): AuthPrincipal {
     return {
-        credentialKind: 'legacy_api_key',
-        issuer: 'internal:legacy-api-key',
-        subject: 'admin-key-1',
+        credentialKind: 'service_client',
+        issuer: 'https://issuer',
+        subject: 'bootstrap-service-account-1',
         organizationId: 'unused-for-org-creation',
         membershipRole: 'platform_admin',
-        permissions: [],
-        credentialId: 'admin-key-1',
+        permissions: ['platform:admin'],
+        credentialId: 'bootstrap-service-account-1',
     }
 }
 

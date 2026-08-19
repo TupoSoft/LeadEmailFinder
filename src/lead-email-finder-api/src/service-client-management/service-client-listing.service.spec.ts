@@ -32,7 +32,7 @@ describe('ServiceClientListingService', () => {
     })
 
     it('rejects a non-human-session actor', async () => {
-        const actor = principalFixture({ credentialKind: 'legacy_api_key', membershipRole: 'platform_admin' })
+        const actor = principalFixture({ credentialKind: 'service_client', membershipRole: 'platform_admin' })
 
         await expect(service.list(actor, 'org-1')).rejects.toThrow(ForbiddenException)
     })

@@ -48,8 +48,6 @@ services:
       KEYCLOAK_ORG_ADMIN_CLIENT_ID: lef-org-admin-service
       KEYCLOAK_ORG_ADMIN_CLIENT_SECRET_FILE: /run/secrets/keycloak_org_admin_client_secret
 
-      ADMIN_API_KEY_FILE: /run/secrets/admin_apikey
-
       REDIS_URL_FILE: /run/secrets/redis_url
 
       POSTGRES_URL_FILE: /run/secrets/postgres_url
@@ -69,7 +67,6 @@ services:
       garage:
         condition: service_healthy
     secrets:
-      - admin_apikey
       - postgres_url
       - redis_url
       - s3_access_key_id

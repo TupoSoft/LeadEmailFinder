@@ -4,9 +4,18 @@ services:
       - 172.28.0.53
     environment:
       SMTP_PORT: 2525
+      # The base stack's OIDC_ISSUER_URL (http://localhost:58080/...) is host-facing, for the browser-driven
+      # BFF login redirect (see docker/compose.yaml). Inside this container's own network namespace, "localhost"
+      # is the container itself, not Keycloak, so the containerized api can neither fetch JWKS nor validate an
+      # incoming token's issuer claim against that URL. Override to the container-internal Keycloak service
+      # name for this overlay only, which never drives a browser login (see bootstrap-proxy.sh, which requests
+      # its own tokens from this same host so the issued token's iss claim matches).
+      OIDC_ISSUER_URL: http://keycloak:8080/realms/lead-email-finder
     depends_on:
       coredns:
         condition: service_started
+      keycloak:
+        condition: service_healthy
       mailpit:
         condition: service_healthy
       smtp-dev-proxy:
@@ -64,8 +73,10 @@ services:
     entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "reconcile"]
     volumes:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
-    secrets:
-      - admin_apikey
+      # Written by `pnpm keycloak:provision` (clientId/clientSecret for the seeded lef-development-service
+      # M2M client), not a fixed checked-in Docker secret: run `pnpm keycloak:provision` and
+      # `pnpm keycloak:bootstrap-credential` before bringing this overlay up.
+      - ../.dev/keycloak/service-client.json:/service-client.json:ro
 
   smtp-dev-proxy-cleanup:
     image: curlimages/curl:8.16.0
@@ -77,8 +88,7 @@ services:
     entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "cleanup"]
     volumes:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
-    secrets:
-      - admin_apikey
+      - ../.dev/keycloak/service-client.json:/service-client.json:ro
 
 networks:
   default:

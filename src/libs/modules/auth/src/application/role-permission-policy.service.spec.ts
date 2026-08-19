@@ -3,13 +3,13 @@ import { ROLE_PERMISSIONS, RolePermissionPolicy } from './role-permission-policy
 
 function principalWith(overrides: Partial<AuthPrincipal>): AuthPrincipal {
     return {
-        credentialKind: 'legacy_api_key',
-        issuer: 'internal:legacy-api-key',
-        subject: 'key-id',
+        credentialKind: 'human_session',
+        issuer: 'https://issuer',
+        subject: 'human-1',
         organizationId: 'org-id',
         membershipRole: 'member',
         permissions: [],
-        credentialId: 'key-id',
+        credentialId: 'identity-1',
         ...overrides,
     }
 }
@@ -17,7 +17,7 @@ function principalWith(overrides: Partial<AuthPrincipal>): AuthPrincipal {
 describe('RolePermissionPolicy', () => {
     const policy = new RolePermissionPolicy()
 
-    describe('role-based principals (human_session, legacy_api_key)', () => {
+    describe('role-based principals (human_session)', () => {
         it.each<[AuthRole, readonly AuthPermission[]]>([
             ['member', ['verification:run', 'verification:read']],
             ['admin', ['verification:run', 'verification:read', 'members:manage', 'credentials:manage']],
@@ -45,20 +45,19 @@ describe('RolePermissionPolicy', () => {
                 ],
             ],
         ])('grants the documented permission set for %s', (membershipRole, expectedPermissions) => {
-            const principal = principalWith({ credentialKind: 'legacy_api_key', membershipRole, permissions: [] })
+            const principal = principalWith({ membershipRole, permissions: [] })
 
             expect(policy.effectivePermissionsFor(principal)).toEqual(expectedPermissions)
         })
 
         it('grants platform_admin the union of every permission', () => {
-            const principal = principalWith({ credentialKind: 'human_session', membershipRole: 'platform_admin' })
+            const principal = principalWith({ membershipRole: 'platform_admin' })
 
             expect(policy.effectivePermissionsFor(principal)).toEqual([...AUTH_PERMISSIONS])
         })
 
-        it('ignores whatever is stored on principal.permissions for legacy_api_key principals', () => {
+        it('ignores whatever is stored on principal.permissions for human_session principals', () => {
             const principal = principalWith({
-                credentialKind: 'legacy_api_key',
                 membershipRole: 'member',
                 permissions: ['platform:admin'],
             })
