@@ -4,6 +4,7 @@ This roadmap makes the ExecPlans under `.agents/plans/` visible on the `TupoSoft
 
 1. [Sync ExecPlans to the GitHub project](01-sync-execplans-to-github-project.md)
 2. [Distinguish actionable ExecPlans from dependency backlog](02-actionable-project-backlog.md)
+3. [Preserve assigned work in progress](03-preserve-assigned-work-in-progress.md)
 
 Shared decisions:
 
@@ -12,6 +13,8 @@ Shared decisions:
 - Issues are matched by a hidden marker keyed to `<feature>/<NN>`, not by title or filename, so retitling or renaming a plan updates its issue instead of orphaning it.
 - Generated issue bodies are overwritten on every run. Discussion belongs in issue comments.
 - The board's `Priority`, `Size`, `Iteration`, and assignee fields are never written by the sync; those are human judgments.
+- An assigned item already in `In Progress` is not moved backwards to `Todo` or `Backlog`; completed repository
+  progress can still advance it to `Done`.
 
 ## Setup
 
