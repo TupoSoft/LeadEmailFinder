@@ -64,6 +64,7 @@ class FakeGitHub implements GitHubProjectPort {
             url: `https://github.com/TupoSoft/LeadEmailFinder/issues/${100 + this.created.length}`,
             title: content.title,
             body: content.body,
+            assignees: [],
         }
         this.issues.push(issue)
         return Promise.resolve(issue)
@@ -101,6 +102,7 @@ function existingIssue(plan: ExecPlan, overrides: Partial<IssueSummary> = {}): I
         url: 'https://github.com/TupoSoft/LeadEmailFinder/issues/42',
         title: plan.title,
         body: renderIssueBody(plan, state, BLOB_BASE_URL),
+        assignees: [],
         ...overrides,
     }
 }
@@ -170,6 +172,72 @@ describe('ExecPlanSynchronizer', (): void => {
 
         expect(outcome.statusApplied).toBe(false)
         expect(github.statuses).toHaveLength(0)
+    })
+
+    it('does not move assigned active work back to Todo', async (): Promise<void> => {
+        const plan = buildPlan()
+        const issue = existingIssue(plan, { assignees: ['developer'] })
+        const github = new FakeGitHub([issue], [{ id: 'item-9', contentUrl: issue.url, status: 'In Progress' }])
+
+        const [outcome] = await synchronizer(github).sync([plan])
+
+        expect(outcome).toMatchObject({ status: 'Todo', statusApplied: false })
+        expect(github.statuses).toHaveLength(0)
+    })
+
+    it('does not move assigned active work back to Backlog', async (): Promise<void> => {
+        const plan = parseExecPlan(
+            '.agents/plans/payments/01-a.md',
+            [
+                '# Grant credits idempotently',
+                '',
+                '## Purpose / Big Picture',
+                '',
+                'Make adding credits as safe as spending them.',
+                '',
+                '## Progress',
+                '',
+                '- [ ] Work.',
+                '',
+                '## Plan dependencies',
+                '',
+                'None.',
+                '',
+                '## Plan readiness',
+                '',
+                'Blocked by a product decision.',
+                '',
+            ].join('\n'),
+        )
+        const issue = existingIssue(plan, { assignees: ['developer'] })
+        const github = new FakeGitHub([issue], [{ id: 'item-9', contentUrl: issue.url, status: 'In Progress' }])
+
+        const [outcome] = await synchronizer(github).sync([plan])
+
+        expect(outcome).toMatchObject({ status: 'Backlog', statusApplied: false })
+        expect(github.statuses).toHaveLength(0)
+    })
+
+    it('moves unassigned active work to the repository-derived status', async (): Promise<void> => {
+        const plan = buildPlan()
+        const issue = existingIssue(plan)
+        const github = new FakeGitHub([issue], [{ id: 'item-9', contentUrl: issue.url, status: 'In Progress' }])
+
+        const [outcome] = await synchronizer(github).sync([plan])
+
+        expect(outcome).toMatchObject({ status: 'Todo', statusApplied: true })
+        expect(github.statuses).toEqual([{ itemId: 'item-9', status: 'Todo' }])
+    })
+
+    it('moves assigned active work forward to Done', async (): Promise<void> => {
+        const plan = buildPlan('.agents/plans/payments/01-a.md', '- [x] Complete.')
+        const issue = existingIssue(plan, { assignees: ['developer'] })
+        const github = new FakeGitHub([issue], [{ id: 'item-9', contentUrl: issue.url, status: 'In Progress' }])
+
+        const [outcome] = await synchronizer(github).sync([plan])
+
+        expect(outcome).toMatchObject({ status: 'Done', statusApplied: true })
+        expect(github.statuses).toEqual([{ itemId: 'item-9', status: 'Done' }])
     })
 
     it('adds an existing issue that is missing from the project', async (): Promise<void> => {
