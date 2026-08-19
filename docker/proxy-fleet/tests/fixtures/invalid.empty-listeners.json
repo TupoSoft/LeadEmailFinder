@@ -1,0 +1,5 @@
+{
+  "workerCidrs": ["172.29.10.0/28"],
+  "allowedDestinationPorts": [2525],
+  "listeners": []
+}
