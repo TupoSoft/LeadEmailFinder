@@ -6,7 +6,7 @@ import importPlugin from 'eslint-plugin-import'
 
 export default tseslint.config(
     {
-        ignores: ['eslint.config.mjs', 'docker/scripts/**', 'dist/**'],
+        ignores: ['eslint.config.mjs', 'docker/scripts/**', 'dist/**', 'deploy/**'],
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,

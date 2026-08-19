@@ -1,0 +1,8 @@
+---
+# Duplicated from roles/proxy_topology and roles/swarm's own defaults rather than cross-role coupling
+# -- each role owns its own path constants, matching this repo's per-module duplication convention
+# (see e.g. src/lead-email-finder-api/src/*/keycloak-admin-http-configuration.ts).
+proxy_fleet_state_dir: /etc/lead-email-finder/proxy-fleet
+proxy_fleet_manifest_path: /etc/lead-email-finder/proxy-fleet/listeners.json
+proxy_fleet_credentials_dir: /var/lib/lead-email-finder/proxy-fleet
+proxy_fleet_credentials_path: /var/lib/lead-email-finder/proxy-fleet/credentials.json

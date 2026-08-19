@@ -1,0 +1,13 @@
+---
+profile: production
+exclude_paths:
+  - .cache/
+skip_list:
+  # This rule wants every role-internal variable prefixed with that role's own name. This role
+  # tree deliberately shares a single `proxy_fleet_` prefix and a handful of path constants
+  # (proxy_fleet_state_dir, proxy_fleet_manifest_path, proxy_fleet_credentials_path/dir) across
+  # swarm/proxy_topology/proxy_fleet_reset, specifically so they can't silently drift apart --
+  # these roles are not meant for independent reuse outside this fleet, only composed together by
+  # playbooks/proxy-fleet.yml and playbooks/reset.yml. Per-role prefixing would force duplicated,
+  # independently-driftable constants instead of one shared source of truth.
+  - var-naming[no-role-prefix]

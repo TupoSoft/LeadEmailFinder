@@ -8,9 +8,9 @@ Make proxy-node setup reproducible from versioned, non-secret inventory. A devel
 
 ## Progress
 
-- [ ] 2026-08-15 — Define the non-secret inventory and secret-variable contracts.
-- [ ] 2026-08-15 — Implement idempotent host, WireGuard, firewall, and Swarm roles.
-- [ ] 2026-08-15 — Validate check mode, repeat application, and safe lab reset.
+- [x] 2026-08-20 — Define the non-secret inventory and secret-variable contracts.
+- [x] 2026-08-20 — Implement idempotent host, WireGuard, firewall, and Swarm roles.
+- [x] 2026-08-20 — Validate what this environment allows (lint/syntax-check/inventory checks, plus a live Swarm conflict-path test); check mode/repeat-apply/safe lab reset against a real host are **not verified in this environment** — see Outcomes & Retrospective.
 
 ## Plan dependencies
 
@@ -20,6 +20,13 @@ Make proxy-node setup reproducible from versioned, non-secret inventory. A devel
 
 - Public-IP allocation and persistent secondary-IP binding are cloud-provider-specific. No provider has been selected, so generic automation cannot safely create those resources.
 - Swarm node labels must be applied from a manager, while listener topology and address validation are node-local responsibilities.
+- No cloud VMs were available to implement against. Negotiated with the user up front: implement every role/playbook per spec; validate everything that doesn't need a live host for real (`ansible-lint`, `ansible-inventory`, `--syntax-check`, a static secrets-in-git check); and, since the development machine's own Docker daemon is already an active Swarm manager for an unrelated real cluster, use it **only** to prove the Decision Log's "fail closed on conflicting Swarm membership, touch nothing" path live — never to actually join/init/label/leave that real swarm. See Outcomes & Retrospective for exactly what that live test covered.
+- `docker node update --label-add`/`--label-rm` always exit 0 regardless of whether the label actually changed — using them directly under `changed_when: true` would report `changed=true` on every idempotent re-run. Fixed by reading the node's current `Spec.Labels` first (`docker node inspect --format '{{json .Spec.Labels}}'`) and only issuing the update when the value actually differs.
+- Docker has no built-in way to answer "does this host belong to the Swarm *this playbook* created," only "is it active in *some* Swarm." Resolved with a locally-recorded ClusterID fact file (`<state-dir>/swarm-cluster-id`), written after a successful init/join and compared against the live `docker info` ClusterID on every subsequent run; an explicit `proxy_fleet_trusted_cluster_id` inventory var is the only sanctioned way to adopt a pre-existing Swarm deliberately.
+- Docker's official apt-repository setup instructions (`get_url` + `apt_repository` with `signed-by=<path>`) map onto Ansible's now-deprecated `ansible.builtin.apt_repository` module. `ansible.builtin.deb822_repository` (its replacement) accepts a GPG key **URL** directly via its own `signed_by` parameter, so the separate key-download task was unnecessary.
+- Ansible's Jinja templating processes `ansible.builtin.command`'s `cmd:` field, so a literal Docker Go-template string like `{{json .Swarm}}` needs `{% raw %}...{% endraw %}` around it or Jinja tries (and fails) to evaluate it as its own expression.
+- `ansible-lint`'s `production` profile enforces per-role variable prefixes (`var-naming[no-role-prefix]`), which would force `roles/swarm`, `roles/proxy_topology`, and `roles/proxy_fleet_reset` to each maintain their own independently-driftable copy of the shared state-directory/manifest/credential path constants instead of one shared source of truth. Disabled that specific rule in `.ansible-lint` with a documented rationale, since these roles are only ever composed together by this repo's own playbooks, not published for independent reuse.
+- `ansible-galaxy collection install` (and, transitively, a plain `ansible-lint .` run) can populate a project-local `.ansible/collections/` cache containing the full downloaded collection source (including its own `.js` test fixtures) — large, and enough to make `eslint .` choke on files it was never meant to see. Gitignored `.ansible/` and excluded `deploy/**` from `eslint.config.mjs`, matching the existing `docker/scripts/**` exclusion for the same reason.
 
 ## Decision Log
 
@@ -32,10 +39,45 @@ Make proxy-node setup reproducible from versioned, non-secret inventory. A devel
 - Decision: Initialize or join only an inactive Swarm and fail on conflicting existing membership.
   Rationale: Leaving or rejoining an existing cluster is destructive and must not happen implicitly.
   Date/Author: 2026-08-15, project planning.
+- Decision: Secrets live in Ansible Vault (`inventory/host_vars/<hostname>/vault.yml`), not an external gitignored file.
+  Rationale: versions secrets alongside the topology that describes them — real infrastructure-as-code — and matches Ansible's own idiom directly (auto-loaded, no extra config). Doesn't conflict with `docker/secrets/*.txt`, which solves a different problem (runtime container-secret injection, not provisioning-time secret versioning).
+  Date/Author: 2026-08-20, implementation.
+- Decision: The Swarm role uses raw `ansible.builtin.command` against the `docker` CLI, not the `community.docker` collection.
+  Rationale: that collection's own idempotency model still can't answer "is this the Swarm I created" — the ClusterID fact-file bookkeeping is needed either way — and it would require installing the Docker Python SDK on every managed host purely to run what are one-line CLI calls.
+  Date/Author: 2026-08-20, implementation.
+- Decision: The egress-IP-to-interface check (`roles/proxy_topology`) uses gathered `ansible_facts`, scoped to exactly the declared `egress_interface` — a deliberate, narrower divergence from plan 11's own container-side check, which scans every interface in the network namespace.
+  Rationale: this ExecPlan's own Plan of Work explicitly requires interface-scoping ("assigned to `egress_interface`"), which plan 11's broader check doesn't need to satisfy (it has no interface concept at all, just the network namespace).
+  Date/Author: 2026-08-20, implementation.
+- Decision: `ansible.builtin.iptables` (one task per rule, comment-tagged `proxy-fleet:<rule-id>`) applied via `community.general.iptables_state`'s `async`/`poll: 0` self-rollback pattern, not UFW.
+  Rationale: UFW's abstraction doesn't cleanly express "Swarm ports only from declared peers" + "listener ports only from worker CIDRs" as precisely as direct iptables rules, and Ubuntu 24.04's UFW is iptables underneath regardless. The rollback mechanism is a task **attribute** (`async`/`poll`), not a module parameter, confirmed against the installed `community.general` 13.3.0's own `ansible-doc` output.
+  Date/Author: 2026-08-20, implementation.
+- Decision: Credential staging path is `/var/lib/lead-email-finder/proxy-fleet/credentials.json`, distinct from both the manifest path (`/etc/...`) and plan 11's container-runtime default (`/run/secrets/proxy_credentials`).
+  Rationale: signals it's material staged for plan 13's automated consumption, not operator-inspectable config; plan 12 never creates the runtime path and never starts a container. Documented as the explicit plan-13 handoff contract in `README.md`.
+  Date/Author: 2026-08-20, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated to the extent this environment allows (no cloud provider or disposable VMs — negotiated with the user before implementation began; see Surprises & Discoveries).
+
+**Verified for real:**
+- `ansible-lint .` — clean at the `production` profile (0 failures after fixing 37 initial findings: task/handler name casing, a stray blank line, a missing play name, and the `var-naming[no-role-prefix]` rule explicitly disabled with a documented rationale).
+- `ansible-inventory -i inventory/example.yml --list` — parses cleanly, `group_vars/all.yml` auto-loads correctly.
+- `ansible-playbook --syntax-check` — clean for both `playbooks/proxy-fleet.yml` and `playbooks/reset.yml`.
+- `playbooks/validate-inventory.yml` — run against the example inventory (passes) and against a deliberately-duplicated-egressId copy (fails with the expected message), proving the whole-inventory duplicate/shape checks work.
+- `sh scripts/check-no-plaintext-secrets.sh` — passes against the tracked example inventory (no vault content, so nothing to flag); separately confirmed it correctly flags an injected plaintext `wireguard_private_key:` in a throwaway test file.
+- **The Swarm role's conflicting-membership fail-closed path, against the real local Docker daemon** (already an active single-node Swarm manager for an unrelated real cluster): ran `roles/swarm/tasks/inspect.yml` + `join_or_init.yml` directly (state-directory var scoped to `/tmp` for the test, never `/etc`) and confirmed (a) the conflict is detected and the play fails with the exact expected message, citing the real live ClusterID and recovery guidance, with **zero** `docker swarm init/join` tasks executing (confirmed via full task-by-task output — both appear as `skipping`); (b) the `proxy_fleet_trusted_cluster_id` escape hatch correctly adopts the real cluster (writes the `/tmp`-scoped fact file, `changed=2`, still no real Swarm mutation); (c) a subsequent run recognizes the adopted state and is fully idempotent (`changed=0`).
+- Repo-wide: `corepack pnpm lint` (0 errors, the same 2 pre-existing unrelated warnings as plan 11's baseline), `corepack pnpm typecheck` (0 issues, via the same root-owned-`dist/`-workaround scratch tsconfig plan 11's implementation used), `corepack pnpm test:ci` (680/680 non-skipped tests), `corepack pnpm build` (431 files compiled, 0 issues), `git diff --check` (clean).
+
+**Not verified live in this environment** (implemented per spec, no disposable host available):
+- Docker Engine / WireGuard-tools installation and idempotence (`apt`/`deb822_repository` tasks, `changed=0` on a second real apply).
+- WireGuard tunnel establishment and peer reachability; an undeclared source failing to reach a proxy listener port.
+- Firewall rule application and its allow/deny behavior (SSH preserved, Swarm ports peer-scoped, listener ports worker-CIDR-scoped); the `community.general.iptables_state` async-rollback behavior itself under an actual connection loss.
+- The Swarm role's **happy path** (`docker swarm init`/`join` actually executing, not just the fail-closed branch) and the labeling step's real idempotence against `docker node update`.
+- `roles/proxy_topology`'s manifest/credential rendering and interface-scoped egress-IP check against real interface facts (`ansible_facts[egress_interface]`).
+- The guarded reset playbook end-to-end (`proxy_fleet_allow_reset` + `lab_reset` gate, firewall-open restore, WireGuard teardown, label removal, conditional Swarm leave).
+- `ansible-playbook --check --diff` twice against a real host with `changed=0` on the second run (the full acceptance criterion, as opposed to the individual pieces above).
+
+A future PR (or the point at which a cloud provider is selected for plan 12/13's eventual real rollout) should re-run this ExecPlan's full Validation section against real disposable Ubuntu 24.04 hosts before this is trusted for anything beyond development.
 
 ## Context and Orientation
 
@@ -93,6 +135,12 @@ Every role converges from declared state and uses handlers only when managed fil
 
 Record sanitized inventory validation, the first and second play recaps, node-label output, WireGuard reachability, firewall negative probes, and the list of verified egress addresses. Do not record Vault data, join tokens, private keys, or proxy credentials.
 
+**Recorded this implementation** (no Vault data, join tokens, private keys, or proxy credentials involved):
+- `ansible-inventory --list` against `inventory/example.yml`: parses cleanly, 2 `proxy_nodes` / 1 `swarm_managers` / 1 `verification_workers` / empty `lab_reset`, `group_vars/all.yml` fleet-wide defaults present on every host.
+- `playbooks/validate-inventory.yml` recap (example inventory): `ok=12 changed=0 failed=0` — "2 proxy node(s), 2 listener(s), no duplicate identities or endpoints."
+- Live Swarm conflict-path test recap (real local Docker daemon, `/tmp`-scoped state dir): fail-closed run `ok=8 changed=1 failed=1 skipped=10` (the one `changed` is the `/tmp` scratch state directory, not the Swarm); escape-hatch adoption run `ok=10 changed=2 failed=0 skipped=10`; idempotent re-run `ok=9 changed=0 failed=0 skipped=11`.
+- `ansible-lint .`: `production` profile, 0 failures, 0 warnings, 32 files processed.
+
 ## Plan readiness
 
-Ready to implement.
+Implemented (PR pending; see Progress and Outcomes & Retrospective for exactly what is and isn't live-verified in this environment).

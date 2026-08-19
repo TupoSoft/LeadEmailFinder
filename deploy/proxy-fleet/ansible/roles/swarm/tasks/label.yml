@@ -1,0 +1,34 @@
+# Applies proxy.egress=true and proxy.node-id=<proxy_node_id> labels to a proxy_nodes host, from the
+# primary manager. `docker node update --label-add` always exits 0 and would report changed=true on
+# every run if used blindly, breaking idempotence -- so read the current label values first and only
+# update when they actually differ. Never touches any other label.
+---
+- name: Label this proxy node from the primary Swarm manager
+  when: inventory_hostname in groups['proxy_nodes']
+  delegate_to: "{{ groups['swarm_managers'][0] }}"
+  vars:
+    proxy_fleet_node_ref: "{{ ansible_facts['nodename'] }}"
+  block:
+    - name: Read this node's current proxy.* labels
+      ansible.builtin.command:
+        cmd: >-
+          docker node inspect {{ proxy_fleet_node_ref }}
+          --format '{% raw %}{{json .Spec.Labels}}{% endraw %}'
+      changed_when: false
+      register: proxy_fleet_node_labels_raw
+
+    - name: Parse current labels
+      ansible.builtin.set_fact:
+        proxy_fleet_node_labels: "{{ proxy_fleet_node_labels_raw.stdout | from_json }}"
+
+    - name: Add proxy.egress=true
+      ansible.builtin.command:
+        cmd: "docker node update --label-add proxy.egress=true {{ proxy_fleet_node_ref }}"
+      changed_when: true
+      when: proxy_fleet_node_labels.get('proxy.egress') != 'true'
+
+    - name: Add proxy.node-id=<proxy_node_id>
+      ansible.builtin.command:
+        cmd: "docker node update --label-add proxy.node-id={{ proxy_node_id }} {{ proxy_fleet_node_ref }}"
+      changed_when: true
+      when: proxy_fleet_node_labels.get('proxy.node-id') != proxy_node_id
