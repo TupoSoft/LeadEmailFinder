@@ -4,6 +4,16 @@ variables:
       value: http://localhost:53000
     - name: ownerAccessToken
       value: '{{process.env.OWNER_ACCESS_TOKEN}}'
+    - name: oidcIssuerUrl
+      value: '{{process.env.OIDC_ISSUER_URL}}'
+    - name: serviceClientId
+      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_ID}}'
+    - name: serviceClientSecret
+      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}'
+    - name: organizationId
+      value: '{{process.env.PLATFORM_ORGANIZATION_ID}}'
+    - name: webhookSecret
+      value: '{{process.env.PAYMENTS_STUB_WEBHOOK_SECRET}}'
     - name: packId
       value: starter
     - name: expectedCredits
