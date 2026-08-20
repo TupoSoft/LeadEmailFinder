@@ -1,0 +1,32 @@
+# Main proxy-fleet provisioning playbook. Validates the whole inventory first, then provisions the
+# primary Swarm manager (so join tokens are available), then proxy nodes, then verification workers.
+# See .agents/plans/proxy-fleet/12-ansible-proxy-node-provisioning.md for the full ExecPlan.
+---
+- name: Validate the whole inventory before touching any host
+  import_playbook: validate-inventory.yml
+
+- name: Provision Swarm managers
+  hosts: swarm_managers
+  become: true
+  roles:
+    - docker_engine
+    - wireguard
+    - firewall
+    - swarm
+
+- name: Provision proxy nodes
+  hosts: proxy_nodes
+  become: true
+  roles:
+    - docker_engine
+    - wireguard
+    - firewall
+    - swarm
+    - proxy_topology
+
+- name: Provision verification workers
+  hosts: verification_workers
+  become: true
+  roles:
+    - wireguard
+    - firewall

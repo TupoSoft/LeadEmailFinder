@@ -1,0 +1,15 @@
+# Vault password files must never be committed. Real vault.yml files ARE committed (encrypted).
+.vault_pass
+*.vault_pass
+
+# Guard against an operator accidentally leaving a decrypted scratch copy of a vault file.
+*.dec.yml
+*.decrypted
+
+# Collections fetched by `ansible-galaxy collection install -r requirements.yml` -- a local tool
+# cache, not vendored into the repo.
+.ansible/
+
+# Python bytecode cache from filter_plugins/.
+__pycache__/
+*.pyc

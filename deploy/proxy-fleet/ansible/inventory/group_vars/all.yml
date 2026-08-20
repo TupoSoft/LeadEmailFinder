@@ -1,0 +1,22 @@
+---
+# WireGuard private overlay CIDR shared by all fleet members.
+proxy_fleet_wireguard_cidr: "172.29.10.0/28"
+proxy_fleet_wireguard_port: 51820
+
+# Plan-11 manifest-global fields (see roles/proxy_topology).
+proxy_fleet_worker_cidrs:
+  - "172.29.10.0/28"
+proxy_fleet_allowed_destination_ports:
+  - 2525
+  - 587
+
+# Guarded reset gate. Only ever set true in a dedicated, non-tracked lab inventory alongside
+# membership in the lab_reset group -- see playbooks/reset.yml.
+proxy_fleet_allow_reset: false
+
+# Docker Swarm control/data-plane ports, opened by roles/firewall only between declared WireGuard
+# peers in swarm_managers and proxy_nodes -- never exposed to verification_workers.
+proxy_fleet_swarm_control_port: 2377
+proxy_fleet_swarm_data_tcp_port: 7946
+proxy_fleet_swarm_data_udp_port: 7946
+proxy_fleet_swarm_vxlan_port: 4789

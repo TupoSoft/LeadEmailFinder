@@ -1,0 +1,103 @@
+# Requires inspect.yml's facts to already be set. Branches on exactly the state machine in this
+# ExecPlan's Decision Log: initialize or join only an inactive Swarm; fail loud, touching nothing,
+# on conflicting existing membership.
+---
+- name: Initialize the primary Swarm manager (currently inactive)
+  when:
+    - not proxy_fleet_swarm_is_active
+    - inventory_hostname == groups['swarm_managers'][0]
+  block:
+    - name: Run `docker swarm init` on the primary manager
+      ansible.builtin.command:
+        cmd: "docker swarm init --advertise-addr {{ wireguard_address.split('/')[0] }}"
+      changed_when: true
+
+    - name: Read back this swarm's ClusterID
+      ansible.builtin.command:
+        cmd: "docker info --format '{% raw %}{{.Swarm.Cluster.ID}}{% endraw %}'"
+      changed_when: false
+      register: proxy_fleet_swarm_new_cluster_id
+
+    - name: Record this swarm's ClusterID and mark this host bootstrapped
+      ansible.builtin.copy:
+        content: "{{ proxy_fleet_swarm_new_cluster_id.stdout }}"
+        dest: "{{ proxy_fleet_state_dir }}/swarm-cluster-id"
+        mode: "0600"
+
+    - name: Mark this host as bootstrapped this run
+      ansible.builtin.set_fact:
+        proxy_fleet_swarm_bootstrapped: true
+        proxy_fleet_swarm_live_cluster_id: "{{ proxy_fleet_swarm_new_cluster_id.stdout }}"
+
+- name: Join an inactive non-primary node to the primary manager's Swarm
+  when:
+    - not proxy_fleet_swarm_is_active
+    - not (inventory_hostname == groups['swarm_managers'][0])
+  vars:
+    proxy_fleet_swarm_primary_manager: "{{ groups['swarm_managers'][0] }}"
+    proxy_fleet_swarm_join_role: "{{ 'manager' if inventory_hostname in groups['swarm_managers'] else 'worker' }}"
+  block:
+    - name: Fetch a join token from the primary manager
+      ansible.builtin.command:
+        cmd: "docker swarm join-token {{ proxy_fleet_swarm_join_role }} -q"
+      changed_when: false
+      delegate_to: "{{ proxy_fleet_swarm_primary_manager }}"
+      register: proxy_fleet_swarm_join_token
+
+    - name: Run `docker swarm join` using the fetched token
+      ansible.builtin.command:
+        cmd: >-
+          docker swarm join
+          --token {{ proxy_fleet_swarm_join_token.stdout }}
+          {{ hostvars[proxy_fleet_swarm_primary_manager].wireguard_address.split('/')[0] }}:2377
+      changed_when: true
+
+    - name: Read back this swarm's ClusterID
+      ansible.builtin.command:
+        cmd: "docker info --format '{% raw %}{{.Swarm.Cluster.ID}}{% endraw %}'"
+      changed_when: false
+      register: proxy_fleet_swarm_new_cluster_id
+
+    - name: Record this swarm's ClusterID
+      ansible.builtin.copy:
+        content: "{{ proxy_fleet_swarm_new_cluster_id.stdout }}"
+        dest: "{{ proxy_fleet_state_dir }}/swarm-cluster-id"
+        mode: "0600"
+
+    - name: Mark this host as bootstrapped this run
+      ansible.builtin.set_fact:
+        proxy_fleet_swarm_bootstrapped: true
+        proxy_fleet_swarm_live_cluster_id: "{{ proxy_fleet_swarm_new_cluster_id.stdout }}"
+
+- name: Already active and recognized as this playbook's swarm -- idempotent no-op
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }} is already an active member of the managed swarm ({{ proxy_fleet_swarm_live_cluster_id }})."
+  when:
+    - not (proxy_fleet_swarm_bootstrapped | default(false))
+    - proxy_fleet_swarm_is_active
+    - proxy_fleet_swarm_recognized
+
+- name: Fail closed on conflicting existing Swarm membership -- touch nothing
+  ansible.builtin.fail:
+    msg: >-
+      {{ inventory_hostname }} already belongs to a Docker Swarm this playbook did not create
+      (live ClusterID: {{ proxy_fleet_swarm_live_cluster_id }}, recorded: {{ proxy_fleet_swarm_recorded_cluster_id or 'none' }}).
+      Nothing was changed. To reuse it deliberately, verify its existing workloads first, then
+      either `docker swarm leave` manually and re-run, or set
+      proxy_fleet_trusted_cluster_id: {{ proxy_fleet_swarm_live_cluster_id }} for this host in
+      inventory to adopt it explicitly.
+  when:
+    - not (proxy_fleet_swarm_bootstrapped | default(false))
+    - proxy_fleet_swarm_is_active
+    - not proxy_fleet_swarm_recognized
+
+- name: Persist the trusted ClusterID when adopted via the explicit escape hatch
+  ansible.builtin.copy:
+    content: "{{ proxy_fleet_swarm_live_cluster_id }}"
+    dest: "{{ proxy_fleet_state_dir }}/swarm-cluster-id"
+    mode: "0600"
+  when:
+    - not (proxy_fleet_swarm_bootstrapped | default(false))
+    - proxy_fleet_swarm_is_active
+    - proxy_fleet_swarm_recognized
+    - proxy_fleet_swarm_live_cluster_id != proxy_fleet_swarm_recorded_cluster_id

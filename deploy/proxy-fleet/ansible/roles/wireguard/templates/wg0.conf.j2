@@ -1,0 +1,20 @@
+{{ ansible_managed | comment }}
+[Interface]
+Address = {{ wireguard_address }}
+ListenPort = {{ proxy_fleet_wireguard_port }}
+PrivateKey = {{ wireguard_private_key }}
+
+{% for peer in proxy_fleet_wireguard_peers %}
+[Peer]
+# {{ peer.inventory_hostname }}
+PublicKey = {{ peer.wireguard_public_key }}
+{% if peer.wireguard_preshared_key is defined %}
+PresharedKey = {{ peer.wireguard_preshared_key }}
+{% endif %}
+AllowedIPs = {{ peer.wireguard_address.split('/')[0] }}/32
+Endpoint = {{ peer.ansible_host }}:{{ proxy_fleet_wireguard_port }}
+{% if peer.wireguard_persistent_keepalive is defined %}
+PersistentKeepalive = {{ peer.wireguard_persistent_keepalive }}
+{% endif %}
+
+{% endfor %}

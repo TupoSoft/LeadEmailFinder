@@ -1,0 +1,20 @@
+# Guarded lab-only reset. Refuses to run unless BOTH proxy_fleet_allow_reset=true AND the host is an
+# explicit member of the lab_reset inventory group -- never the tracked example inventory, never a
+# host that hasn't opted in both ways. See roles/proxy_fleet_reset for exactly what is removed.
+---
+- name: Guarded proxy-fleet lab reset
+  hosts: lab_reset
+  gather_facts: true
+  become: true
+  pre_tasks:
+    - name: Refuse to run outside an explicit, fully opted-in lab reset
+      ansible.builtin.assert:
+        that:
+          - proxy_fleet_allow_reset | default(false) | bool
+          - "'lab_reset' in group_names"
+        fail_msg: >-
+          Refusing to reset {{ inventory_hostname }}: proxy_fleet_allow_reset must be true AND
+          this host must be a member of the explicit lab_reset inventory group. This playbook is
+          never run against the tracked example inventory or any host not opted in both ways.
+  roles:
+    - proxy_fleet_reset

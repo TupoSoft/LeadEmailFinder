@@ -1,0 +1,5 @@
+{
+  "workerCidrs": {{ proxy_fleet_worker_cidrs | to_json }},
+  "allowedDestinationPorts": {{ proxy_fleet_allowed_destination_ports | to_json }},
+  "listeners": {{ proxy_listeners | map('proxy_fleet_strip_registry_fields') | list | to_json }}
+}
