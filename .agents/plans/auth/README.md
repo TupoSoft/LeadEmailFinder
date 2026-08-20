@@ -15,6 +15,13 @@ Implement the plans in order. Each plan follows `.agents/PLANS.md` and represent
 9. [Remove API-key authentication](09-remove-api-key-authentication.md)
 10. [Add the unified development reset workflow](10-development-reset-workflow.md)
 
+Security and consistency follow-ups discovered during the 2026-08-20 source audit are independently deliverable
+after their named prerequisites:
+
+11. [Preserve existing Keycloak credentials during invitation acceptance](11-preserve-existing-user-credentials.md)
+12. [Enforce CSRF protection for browser-session mutations](12-enforce-browser-session-csrf.md)
+13. [Serialize final-owner membership mutations](13-serialize-final-owner-mutations.md)
+
 Shared decisions:
 
 - Keycloak is the identity provider; LeadEmailFinder owns product authorization, organization-resource ownership, and credits.
