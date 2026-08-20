@@ -5,6 +5,6 @@ variables:
     - name: oidcIssuerUrl
       value: '{{process.env.OIDC_ISSUER_URL}}'
     - name: serviceClientId
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_ID}}'
+      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_ID}}'
     - name: serviceClientSecret
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}'
+      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_SECRET}}'

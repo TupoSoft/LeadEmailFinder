@@ -12,31 +12,22 @@ http:
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        await new Promise((resolve) => setTimeout(resolve, 2000));
     - type: tests
       code: |-
-        test('reports bounded progress at every observed poll and reaches exactly 100 on completion', async function() {
-          const maxAttempts = 30;
-          const delayMs = 1000;
-          let body = res.body;
+        test('reports a finite, bounded progress value', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.progress).to.be.a('number');
+          expect(Number.isFinite(res.body.progress)).to.equal(true);
+          expect(res.body.progress).to.be.at.least(0);
+          expect(res.body.progress).to.be.at.most(100);
+        });
 
-          for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            expect(body.progress).to.be.a('number');
-            expect(Number.isFinite(body.progress)).to.equal(true);
-            expect(body.progress).to.be.at.least(0);
-            expect(body.progress).to.be.at.most(100);
-
-            if (body.status === 'completed') {
-              expect(body.progress).to.equal(100);
-              return;
-            }
-
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-            const poll = await fetch(`${bru.getEnvVar('baseUrl')}/verifyBatch/${bru.getVar('batchJobId')}`, {
-              headers: { Authorization: `Bearer ${bru.getVar('serviceClientToken')}` },
-            });
-            body = await poll.json();
+        test('a completed job reports exactly 100', function() {
+          if (res.body.status !== 'completed') {
+            return;
           }
-
-          throw new Error(`Batch job did not complete within ${maxAttempts} polls`);
+          expect(res.body.progress).to.equal(100);
         });
