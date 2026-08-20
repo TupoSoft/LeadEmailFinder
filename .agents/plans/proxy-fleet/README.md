@@ -23,6 +23,10 @@ Remaining pull-request sequence:
 12. [Provision disposable proxy nodes with Ansible](12-ansible-proxy-node-provisioning.md)
 13. [Deploy and reconcile a Swarm proxy fleet](13-swarm-fleet-reconciliation.md)
 
+Application hardening follow-up, independently deliverable after plan 08:
+
+14. [Enforce SMTP connection deadlines](14-enforce-smtp-connection-deadlines.md)
+
 Shared decisions:
 
 - One authenticated HTTP CONNECT listener maps to exactly one egress IP and one proxy-registry capacity unit.

@@ -11,6 +11,7 @@ Follow the dependency graph below. Numeric prefixes are stable plan identities, 
 5. [Add the Paddle provider adapter](05-paddle-provider-adapter.md)
 6. [Provide a reusable Paddle sandbox purchase fixture](07-paddle-sandbox-purchase-fixture.md)
 7. [Claw back refunded credits](06-refund-clawbacks.md)
+8. [Correlate early payment webhooks to pending purchases](08-correlate-early-payment-webhooks.md)
 
 Shared decisions:
 
