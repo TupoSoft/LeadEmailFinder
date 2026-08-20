@@ -19,6 +19,10 @@ import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
 import { ReadableStream } from 'node:stream/web'
 
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value))
+}
+
 @Injectable()
 export class BatchEmailVerificationServiceImpl implements BatchEmailVerificationService {
     constructor(
@@ -77,20 +81,26 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
 
         const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
 
+        const total = processed + unprocessed
+
         const stats = {
-            total: processed + unprocessed,
+            total,
             processed,
             unprocessed,
             progress: 0,
         }
 
-        if (step === BatchEmailVerificationJobStep.Validate || step === BatchEmailVerificationJobStep.Process) {
-            return stats
+        switch (step) {
+            case BatchEmailVerificationJobStep.Validate:
+            case BatchEmailVerificationJobStep.Process:
+                return stats
+            case BatchEmailVerificationJobStep.Finish:
+                stats.progress = 100
+                return stats
+            default:
+                stats.progress = total > 0 ? clamp((processed / total) * 100, 0, 100) : 100
+                return stats
         }
-
-        stats.progress = (processed / unprocessed) * 100
-
-        return stats
     }
 
     async uploadFile(

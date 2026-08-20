@@ -10,9 +10,9 @@ and completed jobs report exactly `100` rather than `Infinity`.
 
 ## Progress
 
-- [ ] (2026-08-20) Define step-aware progress semantics and correct the denominator.
-- [ ] (2026-08-20) Add boundary and HTTP serialization tests.
-- [ ] (2026-08-20) Extend batch Bruno assertions and run validation.
+- [x] (2026-08-21) Define step-aware progress semantics and correct the denominator.
+- [x] (2026-08-21) Add boundary and HTTP serialization tests.
+- [x] (2026-08-21) Extend batch Bruno assertions; static validation only — see Outcomes & Retrospective.
 
 ## Plan dependencies
 
@@ -23,6 +23,17 @@ and completed jobs report exactly `100` rather than `Infinity`.
 - `getStats()` calculates `processed / unprocessed * 100`; this exceeds 100 whenever processed exceeds pending and
   divides by zero after all children complete.
 - Existing tests assert counts but do not assert progress for active, empty, or completed jobs.
+- `Finish` was not special-cased at all before this change — it fell into the same buggy division branch as
+  `WaitForChildren`/`UploadResults`, so a completed batch with `processed === unprocessed` (e.g. both `0` after
+  queue cleanup) could report something other than `100` even after this plan's denominator fix, unless `Finish`
+  is handled unconditionally. Fixed by returning `100` for `Finish` before any division happens.
+- `bruno/batch-verification` did not exist yet (plan 02, which was expected to create it, has not landed) — created
+  it fresh per this plan's own explicit allowance ("create only the minimal status collection files if
+  implementation order is reversed").
+- The local development stack was not running in this environment when implementation happened (stopped in an
+  earlier, unrelated session action). Bruno execution against a live API was not attempted; the collection was
+  statically validated instead (see Outcomes & Retrospective) — matches `AGENTS.md`'s Bruno policy fallback:
+  "perform available static validation and clearly report that Bruno execution remains unverified."
 
 ## Decision Log
 
@@ -42,7 +53,37 @@ and completed jobs report exactly `100` rather than `Infinity`.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated to the extent this environment allows.
+
+**Verified for real:**
+- `batch-email-verification-service-impl.service.ts`'s `getStats()` rewritten as a step-aware, clamped calculation:
+  `Validate`/`Process` → `0`; `Finish` → always `100` regardless of counts; everything else → `100` when `total`
+  is `0` (no division), otherwise `clamp(processed / total * 100, 0, 100)`. No division by `unprocessed` remains,
+  so no `Infinity` or out-of-range value can be produced.
+- `batch-email-verification.service.spec.ts`: 9 new table-driven cases covering every acceptance criterion (8/2→80,
+  0/10→0, 10/0→100 not `Infinity`, empty upload/finish→100, `Finish` always 100 regardless of counts, and a
+  defensive negative-count case), each asserting the value is finite and within `[0, 100]`.
+- `batch-email-verification.controller.spec.ts`: new `GET /verifyBatch/:id` test block (the service mock previously
+  only stubbed `uploadFile`) proving the HTTP-serialized `progress` is finite JSON.
+- `bruno/batch-verification/` (new collection): both request files parsed and loaded correctly under
+  `npx @usebruno/cli run --env local --sandbox developer` (confirmed via a run against an unreachable local
+  Keycloak — the only failures were `fetch failed` from the auth pre-request script, not schema/parse errors, so
+  the multipart-form upload body and the polling test script are structurally valid). The exact multipart-form
+  schema (`type: multipart-form`, file entries as `{name, type: file, value: [<path>]}`, paths resolved relative
+  to the collection root) was confirmed directly against `@usebruno/cli`'s own source, since no prior multipart
+  example existed anywhere in this repo's other Bruno collections.
+- Repo-wide: `corepack pnpm lint` (0 errors, the same 2 pre-existing unrelated warnings as prior plans' baseline),
+  `corepack pnpm typecheck` (0 issues), `corepack pnpm test:ci` (690/690 non-skipped tests, up from 680 before this
+  plan), `corepack pnpm build` (431 files, 0 issues), `git diff --check` (clean).
+
+**Not verified live** (no disposable local stack running in this environment at implementation time — stopped in
+an earlier, unrelated session action; bringing it back up was out of scope for this plan):
+- The actual runtime poll against a live API (`bru run --env local` against a real Keycloak/API/Postgres/Redis
+  stack), including the CSV upload actually enqueuing a real BullMQ job and the poll loop observing real progress
+  values through `WaitForChildren`/`UploadResults`/`Finish` transitions end to end.
+
+A follow-up run of `pnpm dev:reset` followed by `cd bruno/batch-verification && npx @usebruno/cli run --env local
+--sandbox developer` (with the environment variables in the collection's `README.md`) would close this last gap.
 
 ## Context and Orientation
 
@@ -99,6 +140,20 @@ the latest BullMQ counts. Reverting the calculation restores prior display behav
 
 Record a compact table of step, processed, unprocessed, total, and progress from the focused tests and runtime poll.
 
+**Recorded this implementation** (from the focused unit tests; no runtime poll available, see Outcomes & Retrospective):
+
+| step | processed | unprocessed | total | progress |
+|---|---|---|---|---|
+| Validate | 0 | 0 | 0 | 0 |
+| Process | 0 | 0 | 0 | 0 |
+| WaitForChildren | 0 | 10 | 10 | 0 |
+| WaitForChildren | 8 | 2 | 10 | 80 |
+| WaitForChildren | 10 | 0 | 10 | 100 (not `Infinity`) |
+| UploadResults | 0 | 0 | 0 | 100 |
+| Finish | 0 | 0 | 0 | 100 |
+| Finish | 5 | 5 | 10 | 100 (always, regardless of counts) |
+| WaitForChildren | -1 | -1 | -2 | 100 (defensive, never `NaN`) |
+
 ## Plan readiness
 
-Ready to implement.
+Implemented (PR pending; see Progress and Outcomes & Retrospective for exactly what is and isn't live-verified in this environment).

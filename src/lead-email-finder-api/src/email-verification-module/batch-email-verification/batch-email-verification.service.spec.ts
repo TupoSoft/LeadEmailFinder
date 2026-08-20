@@ -118,6 +118,33 @@ describe('BatchEmailVerificationService', () => {
                 }),
             )
         })
+
+        it.each([
+            ['before children exist, Validate', BatchEmailVerificationJobStep.Validate, 0, 0, 0],
+            ['before children exist, Process', BatchEmailVerificationJobStep.Process, 0, 0, 0],
+            ['no children processed yet', BatchEmailVerificationJobStep.WaitForChildren, 0, 10, 0],
+            ['some children processed', BatchEmailVerificationJobStep.WaitForChildren, 8, 2, 80],
+            ['all children processed, not Infinity', BatchEmailVerificationJobStep.WaitForChildren, 10, 0, 100],
+            ['empty batch at upload stage', BatchEmailVerificationJobStep.UploadResults, 0, 0, 100],
+            ['finish with no children', BatchEmailVerificationJobStep.Finish, 0, 0, 100],
+            ['finish always reports 100 regardless of counts', BatchEmailVerificationJobStep.Finish, 5, 5, 100],
+            ['defensive: inconsistent negative counts never escape as NaN/Infinity', BatchEmailVerificationJobStep.WaitForChildren, -1, -1, 100],
+        ])('reports bounded progress: %s', async (_description, step, processed, unprocessed, expectedProgress) => {
+            const id = randomUUID()
+
+            queue.getJob.mockResolvedValueOnce({
+                data: { organizationId: 'org-1', step },
+                getState: jest.fn().mockResolvedValue('active'),
+                getDependenciesCount: jest.fn().mockResolvedValue({ processed, unprocessed }),
+            })
+
+            const status = await service.getBatchStatus(id, principal)
+
+            expect(status.progress).toBe(expectedProgress)
+            expect(Number.isFinite(status.progress)).toBe(true)
+            expect(status.progress).toBeGreaterThanOrEqual(0)
+            expect(status.progress).toBeLessThanOrEqual(100)
+        })
     })
 
     describe('getBatchResults', () => {
