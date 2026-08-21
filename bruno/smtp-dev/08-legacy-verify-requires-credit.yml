@@ -1,0 +1,19 @@
+info:
+  name: 08-legacy-verify-requires-credit
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/verify?email=person@lef.test"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects the deprecated legacy verification route with 402 at zero balance', function() {
+          expect(res.status).to.equal(402);
+        });
