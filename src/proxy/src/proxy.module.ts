@@ -12,10 +12,12 @@ import {
     ALLOCATION_OBSERVER_TOKEN,
     PROXY_ALLOCATOR_TOKEN,
     PROXY_LEASE_SERVICE_TOKEN,
+    PROXY_SERVICE_TOKEN,
 } from '@tuposoft/lead-email-finder/common'
 import { PROXY_CANDIDATE_REPOSITORY_TOKEN } from './proxy-candidate.repository'
 import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repository'
 import { StructuredLoggingAllocationObserver } from './structured-logging-allocation-observer'
+import { ProxyRegistryService } from './proxy-registry.service'
 
 @Module({
     imports: [
@@ -27,6 +29,7 @@ import { StructuredLoggingAllocationObserver } from './structured-logging-alloca
         ProxyService,
         ProxyLeaseService,
         ProxyAllocatorService,
+        ProxyRegistryService,
         TypeOrmProxyCandidateRepository,
         StructuredLoggingAllocationObserver,
         RolePermissionPolicy,
@@ -47,8 +50,12 @@ import { StructuredLoggingAllocationObserver } from './structured-logging-alloca
             provide: ALLOCATION_OBSERVER_TOKEN,
             useExisting: StructuredLoggingAllocationObserver,
         },
+        {
+            provide: PROXY_SERVICE_TOKEN,
+            useExisting: ProxyRegistryService,
+        },
     ],
     controllers: [ProxyController],
-    exports: [PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN],
+    exports: [PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN, PROXY_SERVICE_TOKEN],
 })
 export class ProxyModule {}

@@ -5,6 +5,7 @@ import {
     ALLOCATION_OBSERVER_TOKEN,
     PROXY_ALLOCATOR_TOKEN,
     PROXY_LEASE_SERVICE_TOKEN,
+    PROXY_SERVICE_TOKEN,
 } from '@tuposoft/lead-email-finder/common'
 
 describe('ProxyModule', () => {
@@ -26,9 +27,10 @@ describe('ProxyModule', () => {
                 expect.objectContaining({ provide: PROXY_LEASE_SERVICE_TOKEN }),
                 expect.objectContaining({ provide: PROXY_ALLOCATOR_TOKEN }),
                 expect.objectContaining({ provide: ALLOCATION_OBSERVER_TOKEN }),
+                expect.objectContaining({ provide: PROXY_SERVICE_TOKEN }),
             ]),
         )
-        expect(exports).toEqual([PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN])
+        expect(exports).toEqual([PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN, PROXY_SERVICE_TOKEN])
         expect(exports).not.toContain(PROXY_LEASE_SERVICE_TOKEN)
     })
 })

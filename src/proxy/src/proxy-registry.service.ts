@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { IProxy, IProxyService } from '@tuposoft/lead-email-finder/common'
-import { Proxy } from '../../../../../proxy/src/proxy.entity'
-import { ProxyLifecycle, ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
+import { Proxy } from './proxy.entity'
+import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 
 const PROTOCOL_TO_TYPE: Record<ProxyProtocol, IProxy['type']> = {
