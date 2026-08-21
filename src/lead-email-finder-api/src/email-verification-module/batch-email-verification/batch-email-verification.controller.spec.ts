@@ -10,6 +10,8 @@ import { setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { NextFunction, Request, Response } from 'express'
+import { JobState } from '@tuposoft/lead-email-finder/common'
+import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
@@ -28,6 +30,7 @@ class FixturePrincipalMiddleware implements NestMiddleware {
             provide: batchEmailVerificationServiceToken,
             useValue: {
                 uploadFile: jest.fn(),
+                getBatchStatus: jest.fn(),
             },
         },
     ],
@@ -125,5 +128,26 @@ describe('BatchEmailVerificationController', () => {
 
             expect(response.status).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
         }, 10000)
+    })
+
+    describe('GET /verifyBatch/:id', () => {
+        it('serializes a finite, bounded progress value', async () => {
+            const id = randomUUID()
+            batchEmailVerificationService.getBatchStatus.mockResolvedValueOnce({
+                id,
+                status: JobState.ACTIVE,
+                total: 10,
+                processed: 8,
+                unprocessed: 2,
+                progress: 80,
+            })
+
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}`)
+            const body = response.body as GetBatchStatusResponseDto
+
+            expect(response.status).toBe(HttpStatus.OK)
+            expect(body.progress).toBe(80)
+            expect(Number.isFinite(body.progress)).toBe(true)
+        })
     })
 })

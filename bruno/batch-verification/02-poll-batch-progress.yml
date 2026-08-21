@@ -1,0 +1,33 @@
+info:
+  name: 02-poll-batch-progress
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/verifyBatch/{{batchJobId}}"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+    - type: tests
+      code: |-
+        test('reports a finite, bounded progress value', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.progress).to.be.a('number');
+          expect(Number.isFinite(res.body.progress)).to.equal(true);
+          expect(res.body.progress).to.be.at.least(0);
+          expect(res.body.progress).to.be.at.most(100);
+        });
+
+        test('a completed job reports exactly 100', function() {
+          if (res.body.status !== 'completed') {
+            return;
+          }
+          expect(res.body.progress).to.equal(100);
+        });

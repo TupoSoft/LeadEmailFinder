@@ -1,0 +1,28 @@
+info:
+  name: 01-upload-csv
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/verifyBatch/csv"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: multipart-form
+    data:
+      - name: file
+        type: file
+        value:
+          - ./fixtures/sample.csv
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('enqueues a batch verification job', function() {
+          expect(res.status).to.equal(202);
+          expect(res.body.id).to.be.a('string');
+          bru.setVar('batchJobId', res.body.id);
+        });
