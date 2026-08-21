@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 import { SmtpVerification } from './smtp-verification.entity'
 import { DNS_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpVerifier } from './smtp-verifier'
-import { ProxyModule } from '../../../../../proxy/src/proxy.module'
+import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { SmtpClientFactory } from './smtp-client.factory'
 
 @Module({

@@ -23,6 +23,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/auth/(.*)': '<rootDir>/src/libs/modules/auth/src/$1',
         '@tuposoft/lead-email-finder/modules/bff-session/(.*)': '<rootDir>/src/libs/modules/bff-session/src/$1',
         '@tuposoft/lead-email-finder/modules/identity/(.*)': '<rootDir>/src/libs/modules/identity/src/$1',
+        '@tuposoft/lead-email-finder/modules/proxy/(.*)': '<rootDir>/src/libs/modules/proxy/src/$1',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
         '@tuposoft/lead-email-finder/redis': '<rootDir>/src/libs/redis/src',
         '@tuposoft/lead-email-finder/key': '<rootDir>/src/libs/key/src',
@@ -33,6 +34,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/auth': '<rootDir>/src/libs/modules/auth/src',
         '@tuposoft/lead-email-finder/modules/bff-session': '<rootDir>/src/libs/modules/bff-session/src',
         '@tuposoft/lead-email-finder/modules/identity': '<rootDir>/src/libs/modules/identity/src',
+        '@tuposoft/lead-email-finder/modules/proxy': '<rootDir>/src/libs/modules/proxy/src',
         '@tuposoft/lead-email-finder/config': '<rootDir>/src/libs/config/src',
     },
 }
