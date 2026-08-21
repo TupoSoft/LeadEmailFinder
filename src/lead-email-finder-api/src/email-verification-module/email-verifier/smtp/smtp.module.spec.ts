@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config'
 import { SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpClientFactory } from './smtp-client.factory'
 import { SmtpModule } from './smtp.module'
+import { ProxyModule } from '../../../../../proxy/src/proxy.module'
 
 describe('SmtpModule', () => {
     it('wires the configurable SMTP client factory', () => {
@@ -18,5 +19,15 @@ describe('SmtpModule', () => {
             provide: SMTP_CLIENT_FACTORY_TOKEN,
             useExisting: SmtpClientFactory,
         })
+    })
+
+    it('resolves proxy registry access through the proxy module boundary, not its own persistence', () => {
+        const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, SmtpModule) as unknown[]
+        const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, SmtpModule) as unknown[]
+
+        expect(imports).toContain(ProxyModule)
+        expect(providers.map(provider => (typeof provider === 'function' ? provider.name : provider))).not.toContain(
+            'ProxyRegistryService',
+        )
     })
 })

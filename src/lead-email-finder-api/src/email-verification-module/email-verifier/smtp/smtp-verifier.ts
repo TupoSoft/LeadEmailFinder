@@ -13,12 +13,13 @@ import {
     ISmtpVerifier,
     LeasedProxy,
     PROXY_ALLOCATOR_TOKEN,
+    PROXY_SERVICE_TOKEN,
 } from '@tuposoft/lead-email-finder/common'
 import { SmtpVerification } from './smtp-verification.entity'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
-import { DNS_SERVICE_TOKEN, PROXY_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
+import { DNS_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 import { getDomain } from 'tldts'

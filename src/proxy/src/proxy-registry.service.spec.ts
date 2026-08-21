@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
-import { Proxy } from '../../../../../proxy/src/proxy.entity'
-import { ProxyLifecycle, ProxyProtocol } from '../../../../../proxy/src/proxy.dto'
+import { Proxy } from './proxy.entity'
+import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
 import { ProxyNotFoundException } from './proxy-not-found.exception'
 import { ProxyRegistryService } from './proxy-registry.service'
 
