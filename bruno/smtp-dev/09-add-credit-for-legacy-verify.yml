@@ -1,0 +1,28 @@
+info:
+  name: 09-add-credit-for-legacy-verify
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 1
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('adds one credit for the legacy verification request', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.balance).to.equal(1);
+        });

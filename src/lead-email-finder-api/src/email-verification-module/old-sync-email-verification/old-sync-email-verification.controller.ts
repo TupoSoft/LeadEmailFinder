@@ -7,9 +7,10 @@ import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { CreditGuard } from '../../credits'
 
 @UseGuards(PermissionsGuard)
-@RequirePermissions('verification:read')
+@RequirePermissions('verification:run')
 @Controller('verify')
 export class OldSyncEmailVerificationController {
     constructor(
@@ -18,6 +19,7 @@ export class OldSyncEmailVerificationController {
     ) {}
 
     @Get()
+    @UseGuards(CreditGuard)
     @ApiOperation({ deprecated: true })
     async verifyEmail(
         @Query() emailVerificationRequestDto: OldSyncEmailVerificationRequestQueryDto,

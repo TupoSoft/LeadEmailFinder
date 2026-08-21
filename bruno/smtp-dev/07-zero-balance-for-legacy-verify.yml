@@ -1,0 +1,28 @@
+info:
+  name: 07-zero-balance-for-legacy-verify
+  type: http
+  seq: 7
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 0
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('resets the balance to zero so the legacy 402 check is deterministic', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.balance).to.equal(0);
+        });
