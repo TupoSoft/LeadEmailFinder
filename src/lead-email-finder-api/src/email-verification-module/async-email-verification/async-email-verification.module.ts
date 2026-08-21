@@ -9,7 +9,7 @@ import {
 } from './async-email-verification.constants'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsModule } from '../../credits'
+import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [

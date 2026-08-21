@@ -1,4 +1,4 @@
-import { CreditsService } from '../credits/credits.service'
+import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentEventHandler } from './payment-event.handler'
 import { PaidPurchase, PaymentPurchaseStore } from './payment-purchase.store'
 

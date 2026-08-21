@@ -22,7 +22,7 @@ import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exce
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditGuard } from '../../credits'
+import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 
 @UseGuards(PermissionsGuard)
 @Controller('/verifyAsync')

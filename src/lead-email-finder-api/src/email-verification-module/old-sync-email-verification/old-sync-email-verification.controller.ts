@@ -7,7 +7,7 @@ import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard } from '../../credits'
+import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 
 @UseGuards(PermissionsGuard)
 @RequirePermissions('verification:run')

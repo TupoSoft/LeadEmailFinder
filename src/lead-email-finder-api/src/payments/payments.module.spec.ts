@@ -13,7 +13,7 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditsService } from '../credits/credits.service'
+import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentProvider, PAYMENT_PROVIDER } from './payment-provider'
 import { CreditPurchase } from './credit-purchase.entity'
 import { PaymentsModule } from './payments.module'

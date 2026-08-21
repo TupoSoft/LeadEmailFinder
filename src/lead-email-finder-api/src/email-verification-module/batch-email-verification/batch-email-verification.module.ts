@@ -9,7 +9,7 @@ import { SyncEmailVerificationModule } from '../sync-email-verification'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { ConfigModule } from '@nestjs/config'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsModule } from '../../credits'
+import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [
