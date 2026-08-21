@@ -6,11 +6,12 @@ export async function readUntil(
     readable: Readable,
     matchPattern: RegExp | string,
     maxBufferSize = KILOBYTE,
+    signal?: AbortSignal,
 ): Promise<string> {
     let buffer = ''
     const pattern = typeof matchPattern === 'string' ? new RegExp(matchPattern) : matchPattern
 
-    for await (const event of on(readable, 'readable', { close: ['end'] })) {
+    for await (const event of on(readable, 'readable', { close: ['end'], signal })) {
         void event
 
         buffer = appendChunk(buffer, readable.read())

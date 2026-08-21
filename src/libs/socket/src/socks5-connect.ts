@@ -21,7 +21,7 @@ export async function connectViaSocks5Proxy(options: ConnectThroughProxyOptions)
     const BYTES_TO_READ = 0x02
     const PORT_BYTES = 0x02
 
-    const { host, proxy, port, signal, socket: existingSocket } = options
+    const { host, proxy, port, signal, socket: existingSocket, onSocket } = options
     const { host: proxyHost, port: proxyPort, user, password } = proxy
 
     ok(user != null && password != null, new Error('SOCKS5 proxy credentials are required'))
@@ -32,13 +32,14 @@ export async function connectViaSocks5Proxy(options: ConnectThroughProxyOptions)
         proxy,
         signal,
         socket: existingSocket,
+        onSocket,
     })
 
     const handshake = Buffer.from([SOCKS_VERSION, AUTH_METHOD_COUNT, USERNAME_PASSWORD_AUTH_METHOD])
 
-    await write(socket, handshake)
+    await write(socket, handshake, signal)
 
-    const [socksVersion, authMethod] = await readBytes(socket, BYTES_TO_READ)
+    const [socksVersion, authMethod] = await readBytes(socket, BYTES_TO_READ, signal)
 
     const authMethodNotAcceptedError = new Error('SOCKS5 authentication method not accepted')
 
@@ -56,9 +57,9 @@ export async function connectViaSocks5Proxy(options: ConnectThroughProxyOptions)
         passwordBuffer,
     ])
 
-    await write(socket, credentials)
+    await write(socket, credentials, signal)
 
-    const [subnegotiationVersion, status] = await readBytes(socket, BYTES_TO_READ)
+    const [subnegotiationVersion, status] = await readBytes(socket, BYTES_TO_READ, signal)
 
     if (subnegotiationVersion !== SUBNEGOTIATION_VERSION || status !== STATUS_SUCCESS) {
         throw new Error('SOCKS5 authentication failed')
@@ -74,15 +75,15 @@ export async function connectViaSocks5Proxy(options: ConnectThroughProxyOptions)
         portBuffer,
     ])
 
-    await write(socket, request)
+    await write(socket, request, signal)
 
-    const [responseVersion, connectStatus, reserved, responseAddressType] = await readBytes(socket, 4)
+    const [responseVersion, connectStatus, reserved, responseAddressType] = await readBytes(socket, 4, signal)
     ok(responseVersion === SOCKS_VERSION, new Error('Invalid SOCKS5 connection response'))
     ok(connectStatus === STATUS_SUCCESS, new Error('SOCKS5 connection request failed'))
     ok(reserved === RESERVED, new Error('Invalid SOCKS5 connection response'))
 
-    await consumeBoundAddress(socket, responseAddressType as SocksAddressType)
-    await readBytes(socket, PORT_BYTES)
+    await consumeBoundAddress(socket, responseAddressType as SocksAddressType, signal)
+    await readBytes(socket, PORT_BYTES, signal)
 
     return socket
 }
@@ -108,17 +109,21 @@ function encodeAddress(host: string): { addressType: SocksAddressType; addressBu
     }
 }
 
-async function consumeBoundAddress(socket: Socket, addressType: SocksAddressType): Promise<void> {
+async function consumeBoundAddress(
+    socket: Socket,
+    addressType: SocksAddressType,
+    signal?: AbortSignal,
+): Promise<void> {
     switch (addressType) {
         case SocksAddressType.IPv4:
-            await readBytes(socket, 4)
+            await readBytes(socket, 4, signal)
             return
         case SocksAddressType.IPv6:
-            await readBytes(socket, 16)
+            await readBytes(socket, 16, signal)
             return
         case SocksAddressType.Domain: {
-            const [domainLength] = await readBytes(socket, 1)
-            await readBytes(socket, domainLength)
+            const [domainLength] = await readBytes(socket, 1, signal)
+            await readBytes(socket, domainLength, signal)
             return
         }
         default:

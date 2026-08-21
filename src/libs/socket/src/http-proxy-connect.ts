@@ -7,7 +7,7 @@ function generateAuthTokenFromCredentials(user: string, password: string): strin
 }
 
 export async function connectThroughHttpProxy(options: ConnectThroughProxyOptions): Promise<Socket> {
-    const { host, port, signal, proxy, socket: existingSocket } = options
+    const { host, port, signal, proxy, socket: existingSocket, onSocket } = options
     const { type, host: proxyHost, port: proxyPort, user, password } = proxy
     const path = `${host}:${port}`
 
@@ -17,6 +17,7 @@ export async function connectThroughHttpProxy(options: ConnectThroughProxyOption
         host: proxyHost,
         port: proxyPort,
         signal,
+        onSocket,
     })
 
     const connectRequestLines = [`CONNECT ${path} HTTP/1.1`, `Host: ${path}`]
@@ -29,9 +30,9 @@ export async function connectThroughHttpProxy(options: ConnectThroughProxyOption
 
     const connectRequest = connectRequestLines.join('\r\n') + '\r\n\r\n'
 
-    await write(socket, connectRequest)
+    await write(socket, connectRequest, signal)
 
-    await readUntil(socket, 'HTTP/1.1 200 Connection established\r\n\r\n')
+    await readUntil(socket, 'HTTP/1.1 200 Connection established\r\n\r\n', undefined, signal)
 
     return socket
 }

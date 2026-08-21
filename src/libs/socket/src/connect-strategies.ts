@@ -29,7 +29,7 @@ export async function connectThroughProxy(options: ConnectThroughProxyOptions): 
 }
 
 export async function directConnect(options: ConnectOptions): Promise<Socket> {
-    const { host, port, socket: existingSocket, signal, secure } = options
+    const { host, port, socket: existingSocket, signal, secure, onSocket } = options
 
     const netConnectOptions = {
         host,
@@ -37,10 +37,19 @@ export async function directConnect(options: ConnectOptions): Promise<Socket> {
         signal,
     }
 
-    const socket =
-        existingSocket !== undefined
-            ? await connectAsync(existingSocket, netConnectOptions)
-            : await createConnectionAsync(netConnectOptions)
+    let socket: Socket
+    if (existingSocket !== undefined) {
+        onSocket?.(existingSocket)
+        socket = await connectAsync(existingSocket, netConnectOptions)
+    } else {
+        socket = await createConnectionAsync(netConnectOptions, onSocket)
+    }
 
-    return secure === true ? await tlsConnectAsync({ socket }) : socket
+    if (secure !== true) {
+        return socket
+    }
+
+    const tlsSocket = await tlsConnectAsync({ socket }, signal)
+    onSocket?.(tlsSocket)
+    return tlsSocket
 }

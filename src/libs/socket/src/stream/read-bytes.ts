@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream'
 import { ok } from 'node:assert'
 import { on } from 'node:events'
 
-export async function readBytes(readable: Readable, size: number): Promise<Buffer> {
+export async function readBytes(readable: Readable, size: number, signal?: AbortSignal): Promise<Buffer> {
     ok(size > 0, new Error(`Invalid size: ${size}. Size must be a positive number.`))
 
     let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0)
@@ -16,7 +16,7 @@ export async function readBytes(readable: Readable, size: number): Promise<Buffe
         return buffer
     }
 
-    for await (const event of on(readable, 'readable', { close: ['end'] })) {
+    for await (const event of on(readable, 'readable', { close: ['end'], signal })) {
         void event
 
         const chunk: unknown = readable.read(size)

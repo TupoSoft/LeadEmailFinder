@@ -44,6 +44,18 @@ describe('SmtpVerifier lease-aware allocation', () => {
         expect(client.connect).toHaveBeenCalledTimes(1)
     })
 
+    it('destroys the connect-phase client when connect() rejects', async () => {
+        const proxy = createAllocation('proxy-id').proxy
+        const client = {
+            connect: jest.fn().mockRejectedValue(new Error('boom')),
+            end: jest.fn(),
+        } as unknown as ISmtpClient
+        smtpClientFactory.create.mockReturnValue(client)
+
+        await expect(internals.tryConnect('mx.example.com', proxy)).rejects.toThrow('boom')
+        expect(client.end).toHaveBeenCalledTimes(1)
+    })
+
     it('tries leased proxies serially and releases a failed allocation before the next attempt', async () => {
         const first = createAllocation('first-proxy')
         const second = createAllocation('second-proxy')
