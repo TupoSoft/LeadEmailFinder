@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config'
 import { SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpClientFactory } from './smtp-client.factory'
 import { SmtpModule } from './smtp.module'
-import { ProxyModule } from '../../../../../proxy/src/proxy.module'
+import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 
 describe('SmtpModule', () => {
     it('wires the configurable SMTP client factory', () => {

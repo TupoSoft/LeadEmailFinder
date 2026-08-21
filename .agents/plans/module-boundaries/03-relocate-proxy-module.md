@@ -10,9 +10,9 @@ retains the same proxy administration, registry, allocation, lease, persistence,
 
 ## Progress
 
-- [ ] (2026-08-21) Move the proxy module and its tests without changing implementation behavior.
-- [ ] (2026-08-21) Add the public alias/barrel and replace all legacy relative imports.
-- [ ] (2026-08-21) Verify source, compiled output, runtime wiring, and proxy/SMTP HTTP regression behavior.
+- [x] (2026-08-21) Move the proxy module and its tests without changing implementation behavior.
+- [x] (2026-08-21) Add the public alias/barrel and replace all legacy relative imports.
+- [x] (2026-08-21) Verify source, compiled output, runtime wiring, and proxy/SMTP HTTP regression behavior.
 
 ## Plan dependencies
 
@@ -23,6 +23,19 @@ retains the same proxy administration, registry, allocation, lease, persistence,
 - `src/proxy` is not an executable application; `LeadEmailFinderApiModule` and `SmtpModule` import it directly.
 - Unlike `auth`, `identity`, and `bff-session`, proxy has no TypeScript package alias and consumers reach into
   `src/proxy/src` with relative paths.
+- Only 2 non-spec source files imported `ProxyModule` via relative path (`lead-email-finder-api.module.ts`,
+  `smtp.module.ts`), plus one spec file (`smtp.module.spec.ts`) -- the shared `IProxy`/`IProxyService`/tokens
+  established in `module-boundaries/02` already live in `@tuposoft/lead-email-finder/common`, not in proxy
+  itself, so nothing else needed updating. The relocation's actual blast radius was much smaller than the
+  directory size suggested.
+- No file inside `src/proxy/src` imported anything via a relative path reaching outside its own directory, so the
+  whole-directory move needed zero internal import-depth adjustments -- every internal reference was already
+  same-directory or alias-based.
+- `jest.config.ts`'s `moduleNameMapper` needed both a wildcard and bare entry for the new alias, in that order
+  (per the file's own documented ordering rule: a bare entry has no capture group, so if it matched first it
+  would collapse any deep import down to the bare directory). `tsconfig.json`'s `paths` and ESLint's
+  `typescript: true` resolver needed no equivalent care -- they don't have this first-match-wins ordering
+  sensitivity.
 
 ## Decision Log
 
@@ -37,7 +50,13 @@ retains the same proxy administration, registry, allocation, lease, persistence,
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including live regression against both affected Bruno collections.
+
+`src/proxy/src` moved to `src/libs/modules/proxy/src` via `git mv` (all 20 files recorded as renames, internal organization untouched). New `index.ts` barrel exports only `ProxyModule` — deliberately narrow, per the plan's own "do not export persistence internals merely to make compilation convenient": nothing else was needed, since the cross-module contracts/tokens established in `module-boundaries/02` already live in `@tuposoft/lead-email-finder/common`. Added the `@tuposoft/lead-email-finder/modules/proxy` alias (exact + wildcard) to `tsconfig.json`'s `paths` and `jest.config.ts`'s `moduleNameMapper` (wildcard entry before the bare one, per that file's own documented first-match-wins ordering rule), matching the `auth`/`bff-session`/`identity` convention exactly. Updated the 3 files that referenced the old relative path (`lead-email-finder-api.module.ts`, `smtp.module.ts`, `smtp.module.spec.ts`) to import from the new alias. ESLint's `typescript: true` resolver picked up the new alias automatically — no config change needed there.
+
+Validation: `rg -n "src/proxy|proxy/src|\.\./.*proxy" src scripts docker` returns zero matches; confirmed no file inside the moved directory has a relative import reaching outside it either. Focused suite (`src/libs/modules/proxy/src` + `email-verifier/smtp`, `--runInBand`): 12/12 suites, 61/61 tests. Repo-wide: `lint` clean (baseline only), `test:ci` 707/707 non-skipped (unchanged from before the move, as expected for a pure relocation), `typecheck`/`build` clean (436 files, verified via `find` that compiled output lands under `libs/modules/proxy/src` with no stale top-level `proxy/` directory), `git diff --check` clean.
+
+Live Bruno regression, same two-stack-configuration approach as `module-boundaries/02` (the two collections need mutually exclusive Keycloak issuer wiring): `bruno/proxy-registry` against the plain base stack — 8/8 passing. `bruno/smtp-dev` against the `smtp-dev` overlay, run from inside the Docker network per its own README — 6/6 passing, confirming the API actually boots and resolves `ProxyModule` through the new package alias at runtime, not just at compile time. The same pre-existing, already-diagnosed-as-unrelated ~133s delay on `02-verify-local-email` (traced in the `proxy-fleet/14` PR to a dead external `CATCH_ALL_HTTP_PROXY_URL`) reappeared again, consistent with the two prior PRs — not investigated further.
 
 ## Context and Orientation
 
@@ -95,6 +114,16 @@ deleted, and untracked files, then complete or reverse only this plan's paths. N
 
 Record the final legacy-path search, alias-resolution evidence, focused test counts, and redacted Bruno statuses.
 
+**Final legacy-path search** (`rg -n "src/proxy|proxy/src|\.\./.*proxy" src scripts docker`): zero matches.
+
+**Alias-resolution evidence**: a clean `corepack pnpm build` (436 files, 0 issues) with compiled output confirmed under `libs/modules/proxy/src/*.js`, no top-level `proxy/` directory in `dist`; both `lead-email-finder-api.module.ts` and `smtp.module.ts` import `ProxyModule` from `@tuposoft/lead-email-finder/modules/proxy` and resolve it correctly at runtime (proven by the live Bruno regression below, which requires the API to actually boot).
+
+**Focused test counts**: `src/libs/modules/proxy/src` + `email-verifier/smtp` (`--runInBand`): 12 suites / 61 tests, all passing.
+
+**Bruno statuses** (redacted — no credentials recorded):
+- `bruno/proxy-registry` (plain base stack): 8/8 requests passing.
+- `bruno/smtp-dev` (smtp-dev overlay, run from inside `lef_default`): 6/6 requests passing.
+
 ## Plan readiness
 
-Ready to implement.
+Implemented and live-verified. See Progress and Outcomes & Retrospective.
