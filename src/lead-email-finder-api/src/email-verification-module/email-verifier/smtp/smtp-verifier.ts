@@ -343,8 +343,10 @@ export class SmtpVerifier implements ISmtpVerifier {
     }
 
     private async tryConnect(exchange: string, proxy: IProxy): Promise<ISmtpClient> {
+        let client: ISmtpClient | undefined
+
         try {
-            const client = this.smtpClientFactory.create({
+            client = this.smtpClientFactory.create({
                 host: exchange,
                 proxy,
             })
@@ -353,6 +355,8 @@ export class SmtpVerifier implements ISmtpVerifier {
 
             return client
         } catch (error) {
+            client?.end()
+
             ok(isNativeError(error), new Error(String(error)))
 
             if (error instanceof SmtpException) {

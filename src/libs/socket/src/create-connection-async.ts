@@ -3,12 +3,17 @@ import { createConnection } from 'net'
 import { isNetConnectOpts, isStringOrUndefined } from './type-guards'
 import { once } from 'node:events'
 
-export async function createConnectionAsync(path: string | NetConnectOpts): Promise<Socket>
+export async function createConnectionAsync(
+    path: string | NetConnectOpts,
+    onSocket?: (socket: Socket) => void,
+): Promise<Socket>
 export async function createConnectionAsync(port: number, host?: string): Promise<Socket>
 export async function createConnectionAsync(
     param1: NetConnectOpts | string | number,
-    param2?: string,
+    param2?: string | ((socket: Socket) => void),
 ): Promise<Socket> {
+    const onSocket = typeof param2 === 'function' ? param2 : undefined
+
     const createSocket = (): Socket => {
         if (typeof param1 === 'number' && isStringOrUndefined(param2)) {
             return createConnection(param1, param2)
@@ -22,6 +27,7 @@ export async function createConnectionAsync(
     }
 
     const socket = createSocket()
-    await once(socket, 'connect')
+    onSocket?.(socket)
+    await once(socket, 'connect', { signal: isNetConnectOpts(param1) ? param1.signal : undefined })
     return socket
 }

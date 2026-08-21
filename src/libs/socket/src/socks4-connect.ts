@@ -10,7 +10,7 @@ export async function connectViaSocks4Proxy(options: ConnectThroughProxyOptions)
     const IPV4_BYTES = 0x04
     const PORT_BYTES = 0x02
 
-    const { host, port, proxy, signal } = options
+    const { host, port, proxy, signal, socket: existingSocket, onSocket } = options
     const { host: proxyHost, port: proxyPort, user = '' } = proxy
 
     const ipBytes = host.split('.').map(Number)
@@ -22,6 +22,8 @@ export async function connectViaSocks4Proxy(options: ConnectThroughProxyOptions)
         host: proxyHost,
         port: proxyPort,
         signal,
+        socket: existingSocket,
+        onSocket,
     })
 
     const portBuffer = Buffer.alloc(PORT_BYTES)
@@ -36,10 +38,10 @@ export async function connectViaSocks4Proxy(options: ConnectThroughProxyOptions)
         Buffer.from([NULL]),
     ])
 
-    await write(socket, request)
+    await write(socket, request, signal)
 
     const BYTES_TO_READ = 0x02
-    const [, secondByte] = await readBytes(socket, BYTES_TO_READ)
+    const [, secondByte] = await readBytes(socket, BYTES_TO_READ, signal)
 
     if (secondByte !== STATUS_SUCCESS) {
         const RADIX = 0x0f

@@ -19,7 +19,7 @@ export async function connectAsync(
         throw new Error(`Arguments don't match any of the function signatures`)
     }
 
-    await once(socket, 'connect')
+    await once(socket, 'connect', { signal: isNetConnectOpts(param1) ? param1.signal : undefined })
 
     return socket
 }

@@ -8,9 +8,10 @@ import {
     SMTP_RESPONSE_REGEX,
 } from './smtp.constants'
 import { hostname as osHostname } from 'os'
-import { connect, readUntil, write } from '@tuposoft/lead-email-finder/socket'
+import { connect, ConnectionTimeoutError, readUntil, write } from '@tuposoft/lead-email-finder/socket'
 import { parseSmtpResponse, promiseWithTimeout } from './smtp.util'
 import { Logger } from '@nestjs/common'
+import { isNativeError } from 'node:util/types'
 import { IProxy } from '@tuposoft/lead-email-finder/common'
 import { ISmtpClient } from './smtp-client.interface'
 import { SmtpClientTimeoutException } from './smtp-client-timeout.exception'
@@ -61,6 +62,12 @@ export class SmtpClient implements ISmtpClient {
         this.socket = new Socket({
             signal,
         })
+
+        // Destroying a socket with an error (see destroySocket()) makes it emit that error asynchronously;
+        // without a listener, Node treats an unconsumed socket 'error' event as an uncaught exception.
+        this.socket.on('error', error => {
+            this.logger.debug(`Socket error: ${error.message}`)
+        })
     }
 
     private static isNegativeStatusCode(code: SmtpStatusCode): code is SmtpErrorStatusCode {
@@ -70,28 +77,45 @@ export class SmtpClient implements ISmtpClient {
     connect: () => Promise<void> = async () => {
         const { exchange, port, proxy, signal } = this
 
-        this.socket.once('timeout', () => {
-            this.logger.error(`Socket timed out`)
-            this.socket.end()
-        })
+        try {
+            await connect({
+                host: exchange,
+                port,
+                proxy,
+                signal,
+                timeout: DEFAULT_SMTP_CLIENT_TIMEOUT,
+                socket: this.socket,
+            })
+        } catch (error) {
+            this.destroySocket(error)
+            throw error instanceof ConnectionTimeoutError ? new SmtpClientTimeoutException() : error
+        }
 
-        await connect({
-            host: exchange,
-            port,
-            proxy,
-            signal,
-            timeout: DEFAULT_SMTP_CLIENT_TIMEOUT,
-            socket: this.socket,
-        })
+        try {
+            const { code, enhancedCode, message } = await promiseWithTimeout(
+                greetingSignal => this.readResponse(greetingSignal),
+                this.timeouts.greeting,
+                new SmtpClientTimeoutException(),
+            )
 
-        const { code, enhancedCode, message } = await promiseWithTimeout(
-            this.readResponse(),
-            this.timeouts.greeting,
-            new SmtpClientTimeoutException(),
-        )
+            if (SmtpClient.isNegativeStatusCode(code)) {
+                throw new SmtpException({
+                    code,
+                    enhancedCode,
+                    message,
+                    targetExchange: this.exchange,
+                    proxyId: proxy?.id,
+                })
+            }
+        } catch (error) {
+            this.destroySocket(error)
+            throw error
+        }
+    }
 
-        if (SmtpClient.isNegativeStatusCode(code)) {
-            throw new SmtpException({ code, enhancedCode, message, targetExchange: this.exchange, proxyId: proxy?.id })
+    private destroySocket(error: unknown): void {
+        if (!this.socket.destroyed) {
+            this.socket.destroy(isNativeError(error) ? error : undefined)
         }
     }
 
@@ -117,8 +141,8 @@ export class SmtpClient implements ISmtpClient {
         this.socket.end()
     }
 
-    private async readResponse(): Promise<SmtpResponse> {
-        const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX)
+    private async readResponse(signal?: AbortSignal): Promise<SmtpResponse> {
+        const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX, undefined, signal)
         this.logger.log(`Response: ${response}`)
 
         const smtpResponse = parseSmtpResponse(response)
@@ -142,14 +166,23 @@ export class SmtpClient implements ISmtpClient {
         return smtpResponse
     }
 
-    private async sendCommand(command: string): Promise<void> {
+    private async sendCommand(command: string, signal?: AbortSignal): Promise<void> {
         this.logger.log(`Sending command: ${command}`)
 
-        await write(this.socket, `${command}\r\n`)
-        await this.readResponse()
+        await write(this.socket, `${command}\r\n`, signal)
+        await this.readResponse(signal)
     }
 
     private async sendCommandWithTimeout(command: string, timeout: number): Promise<void> {
-        await promiseWithTimeout(this.sendCommand(command), timeout, new SmtpClientTimeoutException())
+        try {
+            await promiseWithTimeout(
+                signal => this.sendCommand(command, signal),
+                timeout,
+                new SmtpClientTimeoutException(),
+            )
+        } catch (error) {
+            this.destroySocket(error)
+            throw error
+        }
     }
 }
