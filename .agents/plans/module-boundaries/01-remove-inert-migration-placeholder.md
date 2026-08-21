@@ -10,9 +10,9 @@ the documented reset/reseed workflow remains the only recovery path for incompat
 
 ## Progress
 
-- [ ] (2026-08-21) Remove the empty migration barrel and verify that no build or runtime input references it.
-- [ ] (2026-08-21) Document the current synchronization and disposable-data boundary where developers discover it.
-- [ ] (2026-08-21) Run focused static and container-startup validation and record the result.
+- [x] (2026-08-21) Remove the empty migration barrel and verify that no build or runtime input references it.
+- [x] (2026-08-21) Document the current synchronization and disposable-data boundary where developers discover it.
+- [x] (2026-08-21) Run focused static and container-startup validation and record the result.
 
 ## Plan dependencies
 
@@ -23,6 +23,11 @@ None.
 - `src/db/migrations/index.ts` contains only `export {}`.
 - `LeadEmailFinderApiModule` configures TypeORM with `autoLoadEntities: true` and the validated
   `TYPEORM_SYNCHRONIZE` flag; it does not configure a migrations list or run migrations.
+- A full `rg -n "db/migrations|src/db|migrations:" src scripts docker README.md package.json nest-cli.json
+  tsconfig*.json` found zero references anywhere outside this plan's own documents. `AGENTS.md` already states
+  the synchronization/reset policy correctly without ever mentioning `src/db`, so there was no stale statement
+  anywhere in the codebase to update — the "document where developers discover it" step is satisfied by there
+  being nothing left that describes the deleted directory as active.
 
 ## Decision Log
 
@@ -36,7 +41,15 @@ None.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including live container startup. `src/db/migrations/index.ts` (and the now-empty
+`src/db`) deleted; the reference search found nothing else to update. `corepack pnpm lint`/`typecheck` clean (only
+the 2 pre-existing unrelated warnings); `corepack pnpm test:ci` unchanged at 690/690 non-skipped tests (no coverage
+was ever attached to the dead file); `corepack pnpm build` compiled one fewer file (430 vs. 431) with 0 issues, and
+the build output directory contains no `db` reference at all. Ran `pnpm dev:reset` end to end against the real
+Docker stack: the API container built and started cleanly, all entities registered correctly through
+`autoLoadEntities`/`TYPEORM_SYNCHRONIZE`, the built-in Keycloak provisioning/seed/smoke steps passed, and
+`GET /health` returned `{"status":"ok","info":{"postgres":{"status":"up"}}}`. Stack torn down afterward
+(`docker compose -p lef -f docker/compose.yaml down`), data volumes preserved. `git diff --check` clean.
 
 ## Context and Orientation
 
@@ -93,6 +106,13 @@ unexpected consumer is discovered. No database reset is required by this PR.
 
 Record the final reference search and, when run, the redacted API health result. Do not include connection strings.
 
+**Final reference search** (`rg -n "db/migrations|src/db|migrations:" src scripts docker README.md package.json nest-cli.json tsconfig*.json`): zero matches.
+
+**API health result** (`GET /health` against the `pnpm dev:reset` stack, redacted):
+```json
+{"status":"ok","info":{"postgres":{"status":"up"}},"error":{},"details":{"postgres":{"status":"up"}}}
+```
+
 ## Plan readiness
 
-Ready to implement.
+Implemented and live-verified. See Progress and Outcomes & Retrospective.
