@@ -1,6 +1,6 @@
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentEventHandler } from './payment-event.handler'
-import { PaidPurchase, PaymentPurchaseStore } from './payment-purchase.store'
+import { PaidPurchase, PaymentPurchaseStore, PurchaseReferenceConflictError } from './payment-purchase.store'
 
 const paidEvent = {
     kind: 'purchase_paid' as const,
@@ -30,8 +30,22 @@ describe('PaymentEventHandler', () => {
 
         await handler.handle(paidEvent)
 
-        expect(purchases.recordPaid).toHaveBeenCalledWith(paidEvent.providerReference)
+        expect(purchases.recordPaid).toHaveBeenCalledWith({
+            providerReference: paidEvent.providerReference,
+            purchaseId: undefined,
+        })
         expect(credits.credit).toHaveBeenCalledWith(purchase.organizationId, purchase.credits, purchase.id)
+    })
+
+    it('forwards the event purchase id as a correlation fallback', async () => {
+        purchases.recordPaid.mockResolvedValue(purchase)
+
+        await handler.handle({ ...paidEvent, purchaseId: purchase.id })
+
+        expect(purchases.recordPaid).toHaveBeenCalledWith({
+            providerReference: paidEvent.providerReference,
+            purchaseId: purchase.id,
+        })
     })
 
     it('retries the idempotent grant when a paid event is replayed', async () => {
@@ -61,7 +75,10 @@ describe('PaymentEventHandler', () => {
             providerReference: paidEvent.providerReference,
         })
 
-        expect(purchases.recordFailed).toHaveBeenCalledWith(paidEvent.providerReference)
+        expect(purchases.recordFailed).toHaveBeenCalledWith({
+            providerReference: paidEvent.providerReference,
+            purchaseId: undefined,
+        })
         expect(credits.credit).not.toHaveBeenCalled()
     })
 
@@ -70,5 +87,14 @@ describe('PaymentEventHandler', () => {
 
         expect(purchases.recordPaid).not.toHaveBeenCalled()
         expect(purchases.recordFailed).not.toHaveBeenCalled()
+    })
+
+    it('lets a purchase-reference conflict surface for provider retry without granting credits', async () => {
+        const conflict = new PurchaseReferenceConflictError(purchase.id, 'established-reference')
+        purchases.recordPaid.mockRejectedValue(conflict)
+
+        await expect(handler.handle({ ...paidEvent, purchaseId: purchase.id })).rejects.toBe(conflict)
+
+        expect(credits.credit).not.toHaveBeenCalled()
     })
 })

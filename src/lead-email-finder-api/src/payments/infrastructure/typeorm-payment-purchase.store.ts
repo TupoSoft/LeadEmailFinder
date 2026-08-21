@@ -1,23 +1,32 @@
 import { Injectable } from '@nestjs/common'
-import { DataSource } from 'typeorm'
+import { DataSource, EntityManager } from 'typeorm'
 import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
-import { PaidPurchase, PaymentPurchaseStore } from '../payment-purchase.store'
+import {
+    PaidPurchase,
+    PaymentPurchaseStore,
+    PurchaseCorrelation,
+    PurchaseReferenceConflictError,
+} from '../payment-purchase.store'
+
+interface ResolvedPurchase {
+    purchase: CreditPurchase
+    bound: boolean
+}
 
 @Injectable()
 export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
     constructor(private readonly dataSource: DataSource) {}
 
-    recordPaid(providerReference: string): Promise<PaidPurchase | null> {
+    recordPaid(correlation: PurchaseCorrelation): Promise<PaidPurchase | null> {
         return this.dataSource.transaction(async manager => {
-            const purchase = await manager.findOne(CreditPurchase, {
-                where: { providerReference },
-                lock: { mode: 'pessimistic_write' },
-            })
+            const resolved = await this.resolvePurchase(manager, correlation)
+            if (!resolved) return null
 
-            if (!purchase) return null
+            const { purchase } = resolved
+            const statusChanged = purchase.status !== CreditPurchaseStatus.PAID
+            if (statusChanged) purchase.status = CreditPurchaseStatus.PAID
 
-            if (purchase.status !== CreditPurchaseStatus.PAID) {
-                purchase.status = CreditPurchaseStatus.PAID
+            if (resolved.bound || statusChanged) {
                 await manager.save(CreditPurchase, purchase)
             }
 
@@ -29,21 +38,50 @@ export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
         })
     }
 
-    recordFailed(providerReference: string): Promise<boolean> {
+    recordFailed(correlation: PurchaseCorrelation): Promise<boolean> {
         return this.dataSource.transaction(async manager => {
-            const purchase = await manager.findOne(CreditPurchase, {
-                where: { providerReference },
-                lock: { mode: 'pessimistic_write' },
-            })
+            const resolved = await this.resolvePurchase(manager, correlation)
+            if (!resolved) return false
 
-            if (!purchase) return false
+            const { purchase } = resolved
+            const statusChanged = purchase.status === CreditPurchaseStatus.PENDING
+            if (statusChanged) purchase.status = CreditPurchaseStatus.FAILED
 
-            if (purchase.status === CreditPurchaseStatus.PENDING) {
-                purchase.status = CreditPurchaseStatus.FAILED
+            if (resolved.bound || statusChanged) {
                 await manager.save(CreditPurchase, purchase)
             }
 
             return true
         })
+    }
+
+    // Resolves by provider reference first; a purchase ID is only a fallback for a completion event
+    // that arrives before checkout creation persists the reference, and never overrides an established one.
+    private async resolvePurchase(
+        manager: EntityManager,
+        { providerReference, purchaseId }: PurchaseCorrelation,
+    ): Promise<ResolvedPurchase | null> {
+        const byReference = await manager.findOne(CreditPurchase, {
+            where: { providerReference },
+            lock: { mode: 'pessimistic_write' },
+        })
+        if (byReference) return { purchase: byReference, bound: false }
+
+        if (purchaseId === undefined) return null
+
+        const byId = await manager.findOne(CreditPurchase, {
+            where: { id: purchaseId },
+            lock: { mode: 'pessimistic_write' },
+        })
+        if (!byId) return null
+
+        if (byId.providerReference === providerReference) return { purchase: byId, bound: false }
+
+        if (byId.providerReference != null) {
+            throw new PurchaseReferenceConflictError(purchaseId, byId.providerReference)
+        }
+
+        byId.providerReference = providerReference
+        return { purchase: byId, bound: true }
     }
 }

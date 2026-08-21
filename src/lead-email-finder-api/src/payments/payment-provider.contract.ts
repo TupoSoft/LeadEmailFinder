@@ -17,6 +17,12 @@ export function paymentProviderContract(name: string, options: PaymentProviderCo
         it.each<PaymentEvent>([
             { kind: 'purchase_paid', providerEventId: 'event-paid', providerReference: 'provider-purchase' },
             { kind: 'purchase_failed', providerEventId: 'event-failed', providerReference: 'provider-purchase' },
+            {
+                kind: 'purchase_paid',
+                providerEventId: 'event-paid-with-purchase-id',
+                providerReference: 'provider-purchase',
+                purchaseId: '20000000-0000-4000-8000-000000000001',
+            },
         ])('parses a valid $kind event', async expected => {
             const rawBody = options.serializeEvent(expected)
 

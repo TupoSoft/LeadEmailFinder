@@ -54,6 +54,7 @@ export class PaddlePaymentProvider implements PaymentProvider {
                     kind: 'purchase_paid',
                     providerEventId: event.eventId,
                     providerReference: event.data.id,
+                    purchaseId: extractPurchaseId(event.data.customData),
                 }
             case EventName.TransactionCanceled:
             case EventName.TransactionPastDue:
@@ -61,9 +62,19 @@ export class PaddlePaymentProvider implements PaymentProvider {
                     kind: 'purchase_failed',
                     providerEventId: event.eventId,
                     providerReference: event.data.id,
+                    purchaseId: extractPurchaseId(event.data.customData),
                 }
             default:
                 return { kind: 'ignored', providerEventId: event.eventId }
         }
     }
+}
+
+// The signed event has already been verified by this point; customData is otherwise untyped provider input,
+// so this purchase ID is a correlation fallback only, never a source of organization or credit amounts.
+function extractPurchaseId(customData: unknown): string | undefined {
+    if (customData === null || typeof customData !== 'object') return undefined
+
+    const purchaseId = (customData as Record<string, unknown>)['purchaseId']
+    return typeof purchaseId === 'string' && purchaseId.length > 0 ? purchaseId : undefined
 }

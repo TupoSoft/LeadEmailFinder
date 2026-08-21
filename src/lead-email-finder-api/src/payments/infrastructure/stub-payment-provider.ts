@@ -48,6 +48,7 @@ export class StubPaymentProvider implements PaymentProvider {
                 kind: payload['kind'],
                 providerEventId: payload['providerEventId'],
                 providerReference: payload['providerReference'],
+                purchaseId: typeof payload['purchaseId'] === 'string' ? payload['purchaseId'] : undefined,
             }
         })
     }
