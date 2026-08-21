@@ -11,9 +11,9 @@ unchanged.
 
 ## Progress
 
-- [ ] (2026-08-21) Move the credits module and colocated tests without changing business behavior.
-- [ ] (2026-08-21) Publish a narrow module barrel/alias and update all consumers.
-- [ ] (2026-08-21) Verify credit, payment, verification, build, and HTTP regression behavior.
+- [x] (2026-08-21) Move the credits module and colocated tests without changing business behavior.
+- [x] (2026-08-21) Publish a narrow module barrel/alias and update all consumers.
+- [x] (2026-08-21) Verify credit, payment, verification, build, and HTTP regression behavior.
 
 ## Plan dependencies
 
@@ -26,6 +26,22 @@ unchanged.
   operations and imports `IdentityModule` to receive their repositories.
 - Payments, synchronous verification, asynchronous verification, and batch verification import credits through
   relative paths inside the API host.
+- 17 files across `email-verification-module` (12) and `payments` (5) imported credits by relative path -- the
+  payments imports reached two directory levels deeper still (`../credits/credits.service`,
+  `../credits/credits.module`) than the email-verification ones (`../../credits`), since payments sits one level
+  higher in the API host tree. Both patterns were mechanical `sed` replacements to the new alias.
+- Restricting the barrel per the Decision Log (drop `credits.dto`) required checking every DTO/controller export was
+  genuinely unused outside the directory first (`rg` confirmed zero external references to any DTO or to
+  `CreditsController`) -- nothing needed re-adding.
+- `payments.module.spec.ts` compiles the real `PaymentsModule` (which imports `CreditsModule`) through
+  `Test.createTestingModule(...).compile()`, so the full repo-wide Jest run already proves the relocated module
+  resolves correctly through Nest's DI container, not just at the TypeScript level -- this made a live
+  `bruno/credit-purchases` run a belt-and-suspenders check rather than the only evidence of runtime wiring.
+- `bruno/credit-purchases` needs an `OWNER_ACCESS_TOKEN` for a `human_session` principal with `billing:manage`,
+  which (unlike every other collection touched by this session's module-boundaries work) has no established
+  service-client-based minting path in this repo's scripts -- obtaining one requires the BFF's real OIDC/PKCE login
+  flow. Recorded as unverified live per this plan's own Validation section, with the Jest DI-resolution proof above
+  as the substitute evidence.
 
 ## Decision Log
 
@@ -39,7 +55,28 @@ unchanged.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including live where feasible. `src/lead-email-finder-api/src/credits` moved to
+`src/libs/modules/credits/src` via `git mv` (all 11 files recorded as renames). Restricted `index.ts` to
+`CreditsModule`, `CreditGuard`, `CreditsService`, and `InsufficientCreditsException` -- dropped the `credits.dto`
+re-export since nothing outside the directory used any DTO. Credit persistence entities
+(`OrganizationCreditAccount`, `CreditDebit`, `CreditGrant`) were already owned by `modules/identity`, per the plan's
+own Decision Log, and were untouched. Added the `@tuposoft/lead-email-finder/modules/credits` alias (exact +
+wildcard) to `tsconfig.json` and `jest.config.ts`, matching the auth/identity/proxy convention. Updated all 17
+consumer files (12 in `email-verification-module`, 5 in `payments`) from relative imports to the new alias.
+
+Validation: `rg` confirms zero remaining references to `src/credits` or `credits/credits.` anywhere in `src`,
+`scripts`, `docker`, or `bruno`. Focused suite (credits + payments + email-verification-module): 33/35 suites
+passing (2 pre-existing DB-integration skips), 158/164 tests. Repo-wide: `typecheck`/`lint` (2 pre-existing baseline
+warnings only)/`build` (437 files, verified via `find` that compiled output lands under `libs/modules/credits/src`
+with no stale `lead-email-finder-api/src/credits`) all clean; `test:ci` 711/711 non-skipped, unchanged from before
+the move; `git diff --check` clean.
+
+Live Bruno regression: `bruno/smtp-dev` against the `smtp-dev` overlay -- 11/11 passing, exercising both the credit
+top-up endpoint and both verification routes' `CreditGuard` debits through the new alias at runtime.
+`bruno/credit-purchases` could not be run live in this environment (see Surprises & Discoveries -- it needs a
+human-session owner token with no established minting path here); its DI wiring is instead proven by
+`payments.module.spec.ts`'s real `TestingModule.compile()` of `PaymentsModule`, which is part of the repo-wide Jest
+run above.
 
 ## Context and Orientation
 
@@ -99,9 +136,18 @@ required.
 
 ## Artifacts and Notes
 
-Record the cross-module import search, focused test counts, and redacted HTTP statuses/balances. Never record bearer
-tokens, webhook secrets, or organization credentials.
+**Final legacy-path search** (`rg -n "src/credits|credits/credits\." src scripts docker bruno`): zero matches.
+
+**Focused test counts**: credits + payments + email-verification-module (`--runInBand`): 33/35 suites, 158/164
+tests (2 suites / 6 tests are pre-existing, environment-gated DB-integration skips, unrelated to this move).
+
+**Bruno statuses** (redacted -- no credentials recorded):
+- `bruno/smtp-dev` (smtp-dev overlay, run from inside `lef_default`): 11/11 requests passing.
+- `bruno/credit-purchases`: not run live (missing an owner-role human-session token minting path in this
+  environment); DI wiring proven instead via `payments.module.spec.ts`'s real module compile, included in the
+  711/711 repo-wide Jest pass.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and live-verified (credits' HTTP surface via `bruno/smtp-dev`; payments' DI wiring via Jest). See
+Progress and Outcomes & Retrospective.

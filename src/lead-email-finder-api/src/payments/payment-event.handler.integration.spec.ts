@@ -8,7 +8,7 @@ import {
     Organization,
     OrganizationCreditAccount,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditsService } from '../credits/credits.service'
+import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
 import { PaymentEventHandler } from './payment-event.handler'
 import { PAYMENT_PURCHASE_STORE } from './payment-purchase.store'

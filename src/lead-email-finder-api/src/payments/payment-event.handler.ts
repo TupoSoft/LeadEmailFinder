@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
-import { CreditsService } from '../credits/credits.service'
+import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentEvent } from './payment-provider'
 import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore } from './payment-purchase.store'
 

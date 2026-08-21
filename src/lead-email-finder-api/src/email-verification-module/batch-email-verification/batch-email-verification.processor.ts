@@ -18,7 +18,7 @@ import { DataSource, Repository } from 'typeorm'
 import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
-import { CreditsService } from '../../credits'
+import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
 import { deriveResultsKey } from './derive-results-key'
 

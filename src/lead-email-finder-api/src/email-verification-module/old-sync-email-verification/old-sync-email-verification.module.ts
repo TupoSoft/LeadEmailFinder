@@ -3,7 +3,7 @@ import { OldSyncEmailVerificationController } from './old-sync-email-verificatio
 import { EmailVerificationService, SyncEmailVerificationModule } from '../sync-email-verification'
 import { OldSyncEmailVerificationProfile } from './old-sync-email-verification.profile'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsModule } from '../../credits'
+import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [SyncEmailVerificationModule, CreditsModule],

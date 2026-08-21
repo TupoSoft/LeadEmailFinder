@@ -4,7 +4,7 @@ import { EmailVerificationRequestDto } from './email-verification-request.dto'
 import { EmailVerificationResponseDto } from './email-verification-response.dto'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard } from '../../credits'
+import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 
 @UseGuards(PermissionsGuard)
 @RequirePermissions('verification:run')

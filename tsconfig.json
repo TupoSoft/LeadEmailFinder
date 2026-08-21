@@ -25,6 +25,8 @@
             "@tuposoft/lead-email-finder/modules/auth/*": ["src/libs/modules/auth/src/*"],
             "@tuposoft/lead-email-finder/modules/bff-session": ["src/libs/modules/bff-session/src"],
             "@tuposoft/lead-email-finder/modules/bff-session/*": ["src/libs/modules/bff-session/src/*"],
+            "@tuposoft/lead-email-finder/modules/credits": ["src/libs/modules/credits/src"],
+            "@tuposoft/lead-email-finder/modules/credits/*": ["src/libs/modules/credits/src/*"],
             "@tuposoft/lead-email-finder/modules/identity": ["src/libs/modules/identity/src"],
             "@tuposoft/lead-email-finder/modules/identity/*": ["src/libs/modules/identity/src/*"],
             "@tuposoft/lead-email-finder/modules/proxy": ["src/libs/modules/proxy/src"],

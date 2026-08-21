@@ -13,7 +13,7 @@ import { EmailVerifier, EmailVerifierModule } from '../email-verifier'
 import { EmailVerificationService } from './email-verification.service'
 import { SyncEmailVerificationController } from './sync-email-verification.controller'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsModule } from '../../credits'
+import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [

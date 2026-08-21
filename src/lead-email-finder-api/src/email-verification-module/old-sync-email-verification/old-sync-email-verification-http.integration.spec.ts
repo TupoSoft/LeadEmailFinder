@@ -7,7 +7,7 @@ import { getMapperToken } from '@automapper/nestjs'
 import { IEmailVerificationService } from '@tuposoft/lead-email-finder/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard, CreditsService, InsufficientCreditsException } from '../../credits'
+import { CreditGuard, CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { OldSyncEmailVerificationController } from './old-sync-email-verification.controller'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 
