@@ -62,4 +62,19 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-assignment': 'off',
         },
     },
+    {
+        name: 'documentation-tooling',
+        files: ['scripts/docs/*.mjs'],
+        languageOptions: {
+            sourceType: 'module',
+            parserOptions: {
+                project: false,
+                projectService: false,
+            },
+        },
+        rules: {
+            ...tseslint.configs.disableTypeChecked.rules,
+            '@typescript-eslint/explicit-function-return-type': 'off',
+        },
+    },
 )

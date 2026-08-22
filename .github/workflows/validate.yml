@@ -29,6 +29,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -39,6 +41,15 @@ jobs:
 
       - name: Install dependencies
         run: corepack pnpm install --frozen-lockfile
+
+      - name: Test documentation linter
+        run: corepack pnpm test:docs-lint
+
+      - name: Lint changed documentation with Harper
+        continue-on-error: true
+        env:
+          HARPER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm docs:lint:changed
 
       - name: Lint
         run: corepack pnpm lint
