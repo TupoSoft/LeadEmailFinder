@@ -27,6 +27,10 @@ Application hardening follow-up, independently deliverable after plan 08:
 
 14. [Enforce SMTP connection deadlines](14-enforce-smtp-connection-deadlines.md)
 
+Dev-workflow fix discovered during a 2026-08-22 full E2E pass, independently deliverable:
+
+15. [Reset the DNS cache when bringing up the smtp-dev overlay](15-reset-dns-cache-for-smtp-dev-overlay.md)
+
 Shared decisions:
 
 - One authenticated HTTP CONNECT listener maps to exactly one egress IP and one proxy-registry capacity unit.

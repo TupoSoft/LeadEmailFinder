@@ -22,6 +22,10 @@ after their named prerequisites:
 12. [Enforce CSRF protection for browser-session mutations](12-enforce-browser-session-csrf.md)
 13. [Serialize final-owner membership mutations](13-serialize-final-owner-mutations.md)
 
+Documentation fix discovered during a 2026-08-22 full E2E pass, independently deliverable:
+
+14. [Correct stale "containerized API can't reach Keycloak" Bruno docs](14-correct-stale-containerized-api-bruno-docs.md)
+
 Shared decisions:
 
 - Keycloak is the identity provider; LeadEmailFinder owns product authorization, organization-resource ownership, and credits.
