@@ -7,10 +7,11 @@ export interface EnsureKeycloakUserInput {
 
 export interface KeycloakUserRef {
     readonly subject: string
+    readonly created: boolean
 }
 
 export interface KeycloakOrganizationAdmin {
-    /** Idempotent find-or-create by email; always (re)sets the given password credential. */
+    /** Idempotent find-or-create by email; sets the password only when creating a user. */
     ensureUser(input: EnsureKeycloakUserInput): Promise<KeycloakUserRef>
 
     /** Idempotent add of a realm role named 'owner' or 'admin'; never retracts a previously granted role. */

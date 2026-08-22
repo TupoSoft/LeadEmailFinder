@@ -48,22 +48,8 @@ export class InvitationAcceptanceService {
         let keycloakUser: KeycloakUserRef
         try {
             keycloakUser = await this.keycloakAdmin.ensureUser({ email: invitation.email, password })
-            if (invitation.role === 'owner' || invitation.role === 'admin') {
-                await this.keycloakAdmin.assignRealmRole(keycloakUser.subject, invitation.role)
-            }
         } catch (error) {
-            await this.invitationRepo.manager.insert(AuditLogEntry, {
-                organizationId: invitation.organizationId,
-                actorCredentialKind: 'human_session',
-                actorIssuer: issuer,
-                actorSubject: invitation.email,
-                actorCredentialId: invitation.id,
-                action: 'invitation.accept_failed',
-                targetType: 'invitation',
-                targetId: invitation.id,
-                outcome: 'failure',
-                metadata: { reason: 'keycloak_call_failed' },
-            })
+            await this.recordKeycloakFailure(invitation, issuer)
             throw error
         }
 
@@ -79,11 +65,29 @@ export class InvitationAcceptanceService {
                 lock: { mode: 'pessimistic_write' },
             })
 
+            const freshInvitation = await manager.findOneByOrFail(OrganizationInvitation, { id: invitation.id })
+            if (freshInvitation.status === 'accepted') {
+                return {
+                    organizationId: freshInvitation.organizationId,
+                    role: freshInvitation.role,
+                    email: freshInvitation.email,
+                }
+            }
+
             const activeMembershipCount = await manager.count(OrganizationMembership, {
                 where: { externalIdentityId: externalIdentity.id, status: 'active' },
             })
             if (activeMembershipCount > 0) {
                 throw new ConflictException('This identity already holds an active organization membership')
+            }
+
+            if (invitation.role === 'owner' || invitation.role === 'admin') {
+                try {
+                    await this.keycloakAdmin.assignRealmRole(keycloakUser.subject, invitation.role)
+                } catch (error) {
+                    await this.recordKeycloakFailure(invitation, issuer)
+                    throw error
+                }
             }
 
             const updateResult = await manager.update(
@@ -92,8 +96,12 @@ export class InvitationAcceptanceService {
                 { status: 'accepted', acceptedAt: new Date(), acceptedByExternalIdentityId: externalIdentity.id },
             )
             if (updateResult.affected === 0) {
-                const fresh = await manager.findOneByOrFail(OrganizationInvitation, { id: invitation.id })
-                return { organizationId: fresh.organizationId, role: fresh.role, email: fresh.email }
+                const winningInvitation = await manager.findOneByOrFail(OrganizationInvitation, { id: invitation.id })
+                return {
+                    organizationId: winningInvitation.organizationId,
+                    role: winningInvitation.role,
+                    email: winningInvitation.email,
+                }
             }
 
             const membership = await manager.save(
@@ -120,6 +128,21 @@ export class InvitationAcceptanceService {
             })
 
             return { organizationId: invitation.organizationId, role: invitation.role, email: invitation.email }
+        })
+    }
+
+    private async recordKeycloakFailure(invitation: OrganizationInvitation, issuer: string): Promise<void> {
+        await this.invitationRepo.manager.insert(AuditLogEntry, {
+            organizationId: invitation.organizationId,
+            actorCredentialKind: 'human_session',
+            actorIssuer: issuer,
+            actorSubject: invitation.email,
+            actorCredentialId: invitation.id,
+            action: 'invitation.accept_failed',
+            targetType: 'invitation',
+            targetId: invitation.id,
+            outcome: 'failure',
+            metadata: { reason: 'keycloak_call_failed' },
         })
     }
 }

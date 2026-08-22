@@ -16,7 +16,7 @@ http:
     data: |-
       {
         "name": "Bruno Test Org {{uniqueSuffix}}",
-        "ownerEmail": "owner-{{uniqueSuffix}}@example.test"
+        "ownerEmail": "{{ownerEmail}}"
       }
 
 runtime:
@@ -24,6 +24,7 @@ runtime:
     - type: before-request
       code: |-
         bru.setVar('uniqueSuffix', Date.now().toString());
+        bru.setVar('ownerEmail', `owner-${bru.getVar('uniqueSuffix')}@example.test`);
     - type: tests
       code: |-
         test('creates an organization with a pending owner invitation', function() {
