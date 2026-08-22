@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { ConflictException } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { ConfigModule } from '@nestjs/config'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
@@ -71,6 +72,23 @@ async function authenticateKeycloakAdmin(): Promise<string> {
     return payload.access_token
 }
 
+async function authenticateRealmUser(email: string, password: string): Promise<Response> {
+    return fetch(`${issuer}/protocol/openid-connect/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'password', client_id: 'admin-cli', username: email, password }),
+    })
+}
+
+async function expectPasswordAuthentication(email: string, password: string, expected: boolean): Promise<void> {
+    const response = await authenticateRealmUser(email, password)
+    if (response.ok !== expected) {
+        throw new Error(
+            `Expected password authentication success=${expected}, received HTTP ${response.status}: ${await response.text()}`,
+        )
+    }
+}
+
 async function findUserByEmail(adminToken: string, email: string): Promise<{ id: string } | undefined> {
     const response = await fetch(
         `${keycloakBaseUrl()}/admin/realms/${realmName()}/users?email=${encodeURIComponent(email)}&exact=true`,
@@ -115,6 +133,8 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
     let invitationAcceptance: InvitationAcceptanceService
     let organizationRepo: Repository<Organization>
     let externalIdentityRepo: Repository<ExternalIdentity>
+    let membershipRepo: Repository<OrganizationMembership>
+    let invitationRepo: Repository<OrganizationInvitation>
     let adminToken: string
     const createdUserIds: string[] = []
 
@@ -156,6 +176,8 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
         invitationAcceptance = moduleRef.get(InvitationAcceptanceService)
         organizationRepo = moduleRef.get(getRepositoryToken(Organization))
         externalIdentityRepo = moduleRef.get(getRepositoryToken(ExternalIdentity))
+        membershipRepo = moduleRef.get(getRepositoryToken(OrganizationMembership))
+        invitationRepo = moduleRef.get(getRepositoryToken(OrganizationInvitation))
 
         adminToken = await authenticateKeycloakAdmin()
     }, 60_000)
@@ -168,7 +190,7 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
     }, 30_000)
 
     it(
-        'ensureUser creates a real Keycloak user and is idempotent on retry',
+        'ensureUser creates a real Keycloak user and preserves its credential on retry',
         async () => {
             const email = `org-admin-test-${randomUUID()}@example.test`
 
@@ -176,9 +198,58 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
             const second = await keycloakAdmin.ensureUser({ email, password: 'second-password-123' })
             createdUserIds.push(first.subject)
 
-            expect(second.subject).toBe(first.subject)
+            expect(first).toEqual({ subject: expect.any(String), created: true })
+            expect(second).toEqual({ subject: first.subject, created: false })
             const foundUser = await findUserByEmail(adminToken, email)
             expect(foundUser?.id).toBe(first.subject)
+
+            await expectPasswordAuthentication(email, 'first-password-123', true)
+            await expectPasswordAuthentication(email, 'second-password-123', false)
+        },
+        30_000,
+    )
+
+    it(
+        'rejects an invitation for an active member before assigning a realm role or changing the password',
+        async () => {
+            const email = `org-admin-conflict-${randomUUID()}@example.test`
+            const originalPassword = 'original-password-123'
+            const replacementPassword = 'replacement-password-123'
+            const existingUser = await keycloakAdmin.ensureUser({ email, password: originalPassword })
+            createdUserIds.push(existingUser.subject)
+
+            const existingOrganization = await organizationRepo.save(
+                organizationRepo.create({ name: `existing-org-${randomUUID()}` }),
+            )
+            const externalIdentity = await externalIdentityRepo.save(
+                externalIdentityRepo.create({ issuer: issuer!, subject: existingUser.subject, email }),
+            )
+            await membershipRepo.save(
+                membershipRepo.create({
+                    organizationId: existingOrganization.id,
+                    externalIdentityId: externalIdentity.id,
+                    role: 'member',
+                    status: 'active',
+                }),
+            )
+
+            const invitedOrganization = await organizationRepo.save(
+                organizationRepo.create({ name: `invited-org-${randomUUID()}` }),
+            )
+            const { invitation, rawToken } = await invitationIssuance.issue(
+                { ...actorFixture(), organizationId: invitedOrganization.id, membershipRole: 'owner' },
+                invitedOrganization.id,
+                email,
+                'owner',
+            )
+
+            await expect(invitationAcceptance.accept(rawToken, replacementPassword)).rejects.toThrow(ConflictException)
+
+            const unchangedInvitation = await invitationRepo.findOneByOrFail({ id: invitation.id })
+            expect(unchangedInvitation.status).toBe('pending')
+            expect(await getRealmRoleNames(adminToken, existingUser.subject)).not.toContain('owner')
+            await expectPasswordAuthentication(email, originalPassword, true)
+            await expectPasswordAuthentication(email, replacementPassword, false)
         },
         30_000,
     )

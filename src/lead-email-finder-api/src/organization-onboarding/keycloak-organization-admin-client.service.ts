@@ -1,9 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { KeycloakAdminHttpClient } from './keycloak-admin-http-client.service'
-import {
-    KEYCLOAK_ADMIN_HTTP_CONFIGURATION,
-    KeycloakAdminHttpConfiguration,
-} from './keycloak-admin-http-configuration'
+import { KEYCLOAK_ADMIN_HTTP_CONFIGURATION, KeycloakAdminHttpConfiguration } from './keycloak-admin-http-configuration'
 import { EnsureKeycloakUserInput, KeycloakOrganizationAdmin, KeycloakUserRef } from './keycloak-organization-admin'
 
 interface KeycloakUserRepresentation {
@@ -28,27 +25,31 @@ export class KeycloakOrganizationAdminClient implements KeycloakOrganizationAdmi
 
         let [user] = await this.findByEmail(email)
 
-        if (!user) {
-            await this.http.request(
-                'POST',
-                `/admin/realms/${realm}/users`,
-                { username: email, email, enabled: true, emailVerified: true, requiredActions: [] },
-                [201],
-            )
-            ;[user] = await this.findByEmail(email)
-            if (!user) {
-                throw new Error('Keycloak user was not visible after creation')
-            }
+        if (user) {
+            return { subject: user.id, created: false }
         }
 
         await this.http.request(
-            'PUT',
-            `/admin/realms/${realm}/users/${user.id}/reset-password`,
-            { type: 'password', value: password, temporary: false },
-            [204],
+            'POST',
+            `/admin/realms/${realm}/users`,
+            {
+                username: email,
+                email,
+                firstName: 'Invited',
+                lastName: 'User',
+                enabled: true,
+                emailVerified: true,
+                requiredActions: [],
+                credentials: [{ type: 'password', value: password, temporary: false }],
+            },
+            [201],
         )
+        ;[user] = await this.findByEmail(email)
+        if (!user) {
+            throw new Error('Keycloak user was not visible after creation')
+        }
 
-        return { subject: user.id }
+        return { subject: user.id, created: true }
     }
 
     async assignRealmRole(subject: string, role: 'owner' | 'admin'): Promise<void> {

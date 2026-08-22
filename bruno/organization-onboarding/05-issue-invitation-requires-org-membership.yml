@@ -1,7 +1,7 @@
 info:
   name: 05-issue-invitation-requires-org-membership
   type: http
-  seq: 5
+  seq: 7
 
 http:
   method: POST

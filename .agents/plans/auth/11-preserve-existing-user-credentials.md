@@ -11,10 +11,11 @@ returns `409` without changing either credentials or realm roles.
 
 ## Progress
 
-- [ ] (2026-08-20) Separate existing-user lookup from new-user creation in the Keycloak adapter.
-- [ ] (2026-08-20) Reorder invitation acceptance so local membership validation precedes realm-role mutation.
-- [ ] (2026-08-20) Add adapter, service, live-Keycloak, and Bruno regression coverage.
-- [ ] (2026-08-20) Run focused and full validation and record the outcome.
+- [x] (2026-08-22) Separate existing-user lookup from new-user creation in the Keycloak adapter.
+- [x] (2026-08-22) Reorder invitation acceptance so local membership validation precedes realm-role mutation.
+- [x] (2026-08-22) Add adapter, service, live-Keycloak, and Bruno regression coverage.
+- [x] (2026-08-22) Complete live-Keycloak credential verification and the Bruno collection run against the
+      disposable local stack.
 
 ## Plan dependencies
 
@@ -26,6 +27,9 @@ returns `409` without changing either credentials or realm roles.
   including when `findByEmail()` returned an existing user.
 - `InvitationAcceptanceService.accept()` performs both password and realm-role mutations before its transaction
   checks the single-active-membership invariant, so a later `409` does not undo those identity-provider changes.
+- The provisioned Keycloak realm's declarative user profile automatically blocks password login when a user has no
+  `firstName` or `lastName`, even if `requiredActions` is empty. The existing BFF live test documents the same realm
+  behavior, and the new invitation live test reproduced it before the adapter supplied neutral placeholder names.
 
 ## Decision Log
 
@@ -41,18 +45,29 @@ returns `409` without changing either credentials or realm roles.
 - Decision: Check and lock the local identity's active-membership state before assigning an owner/admin realm role.
   Rationale: A rejected invitation must not leave privileged Keycloak state behind.
   Date/Author: 2026-08-20, source-audit planning.
+- Decision: Supply `Invited` / `User` as neutral Keycloak profile names for newly created invitees.
+  Rationale: The public invitation contract has no name fields, while the realm requires both values before the
+  initial password can authenticate; existing users and their profile attributes remain untouched.
+  Date/Author: 2026-08-22, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The adapter now returns existing users without a credential write and creates missing users with their initial
+non-temporary credential in the creation request. Invitation acceptance locks the local identity, rechecks a
+concurrent winner, rejects an active membership before privileged realm-role assignment, and preserves the
+conditional-update race fallback. Unit, HTTP integration, live-Keycloak, typecheck, lint, ExecPlan validation, the
+full Jest suite, and the updated Bruno workflow pass. The local Docker runtime was restarted to align its running
+containerd version with the installed shim before the final live checks; the normal containerized API was restored
+healthy afterward.
 
 ## Context and Orientation
 
 `src/lead-email-finder-api/src/organization-onboarding/invitation-acceptance.service.ts` hashes the invitation token,
-calls `KeycloakOrganizationAdmin.ensureUser`, optionally assigns an owner/admin realm role, and then creates the
-local `ExternalIdentity` and `OrganizationMembership`. The active-membership check currently occurs only inside
-that final transaction. `keycloak-organization-admin-client.service.ts` implements `ensureUser` by finding or
-creating a Keycloak user and then unconditionally calling `reset-password`.
+calls `KeycloakOrganizationAdmin.ensureUser`, and then resolves and locks the local `ExternalIdentity` inside the
+membership transaction. It rechecks concurrent invitation acceptance and active membership before optionally
+assigning an owner/admin realm role and creating the `OrganizationMembership`.
+`keycloak-organization-admin-client.service.ts` implements `ensureUser` by returning an exact-email match unchanged
+or creating a missing Keycloak user with its initial password credential.
 
 The local single-active-membership rule remains authoritative. Keycloak owns login credentials; the application
 owns invitation validity, membership, and product authorization.
@@ -123,6 +138,16 @@ the local transaction fails, retry the same invitation token. Reset disposable d
 
 Record synthetic Keycloak subjects and HTTP statuses only. Never record invitation tokens, passwords, client
 secrets, session cookies, or access tokens.
+
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm lint`: passed with two pre-existing `explicit-function-return-type` warnings in Redis/config specs.
+- Focused adapter and acceptance specs: 15 tests passed.
+- Organization-onboarding HTTP integration spec: 12 tests passed with listener permission.
+- Full Jest suite: 118 suites passed, 8 skip-gated; 721 tests passed, 24 skipped, and 1 existing todo.
+- Live-Keycloak integration spec: all 4 tests passed, including original-password success, replacement-password
+  rejection, pending-invitation preservation, and absence of the owner realm role after the active-membership `409`.
+- Bruno CLI 3.4.2: all 8 requests and 8 tests passed against the issue-branch API build, including the new
+  existing-owner conflict workflow.
 
 ## Plan readiness
 
