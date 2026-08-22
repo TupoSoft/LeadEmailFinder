@@ -17,7 +17,10 @@
         "plans:sync": "ts-node scripts/plans/sync-project.ts",
         "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
         "dev:reset": "sh docker/scripts/dev-reset.sh",
+        "docs:lint": "node scripts/docs/lint.mjs",
+        "docs:lint:changed": "node scripts/docs/lint-changed.mjs",
         "lint": "eslint .",
+        "test:docs-lint": "node --test --test-isolation=none scripts/docs/*.test.mjs",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true"
     },
@@ -48,6 +51,7 @@
         "eslint-import-resolver-typescript": "^4.4.4",
         "eslint-plugin-import": "^2.32.0",
         "globals": "^16.3.0",
+        "harper.js": "2.7.0",
         "husky": "^9.1.7",
         "jest": "^30.1.1",
         "pnpm": "10.33.0",
