@@ -6,7 +6,22 @@ export interface PaidPurchase {
     credits: number
 }
 
+export interface PurchaseCorrelation {
+    providerReference: string
+    purchaseId?: string
+}
+
+export class PurchaseReferenceConflictError extends Error {
+    constructor(
+        public readonly purchaseId: string,
+        public readonly existingProviderReference: string,
+    ) {
+        super(`Purchase ${purchaseId} is already bound to a different provider reference`)
+        this.name = PurchaseReferenceConflictError.name
+    }
+}
+
 export interface PaymentPurchaseStore {
-    recordPaid(providerReference: string): Promise<PaidPurchase | null>
-    recordFailed(providerReference: string): Promise<boolean>
+    recordPaid(correlation: PurchaseCorrelation): Promise<PaidPurchase | null>
+    recordFailed(correlation: PurchaseCorrelation): Promise<boolean>
 }

@@ -19,6 +19,7 @@ export type PaymentEvent =
           kind: 'purchase_paid' | 'purchase_failed'
           providerEventId: string
           providerReference: string
+          purchaseId?: string
       }
     | {
           kind: 'ignored'

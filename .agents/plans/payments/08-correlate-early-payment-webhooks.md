@@ -11,10 +11,10 @@ event is rejected for retry/investigation rather than acknowledged as an unknown
 
 ## Progress
 
-- [ ] (2026-08-20) Carry verified purchase correlation through the provider event contract.
-- [ ] (2026-08-20) Atomically resolve and bind pending purchases by purchase ID or provider reference.
-- [ ] (2026-08-20) Add early-delivery, conflict, replay, Paddle, stub, PostgreSQL, and Bruno coverage.
-- [ ] (2026-08-20) Run focused, full, and runtime validation and record the outcome.
+- [x] (2026-08-21) Carry verified purchase correlation through the provider event contract.
+- [x] (2026-08-21) Atomically resolve and bind pending purchases by purchase ID or provider reference.
+- [x] (2026-08-21) Add early-delivery, conflict, replay, Paddle, stub, PostgreSQL, and Bruno coverage.
+- [x] (2026-08-21) Run focused, full, and runtime validation and record the outcome.
 
 ## Plan dependencies
 
@@ -29,6 +29,23 @@ event is rejected for retry/investigation rather than acknowledged as an unknown
 - `CreditPurchaseService.start()` saves the provider reference only after `transactions.create()` returns.
 - Unknown references are intentionally acknowledged with `200`; therefore an event delivered inside that window is
   not retried and the paid purchase can remain pending forever.
+- A real concurrency hazard in the ID-fallback path itself, found only by writing the real-Postgres concurrent
+  test: two concurrent deliveries of the same early paid event both miss the provider-reference lookup (neither
+  has committed yet), so both fall through to the purchase-ID lookup. The second one to acquire the row lock sees
+  the reference the first one just committed. Comparing only "is the stored reference non-null" would misclassify
+  this as a genuine conflict and reject the second, identical delivery with `500` -- fixed by comparing the stored
+  reference against the *incoming* one and only conflicting when they differ.
+- `PaddleClient`'s SDK deserializes the webhook's raw snake_case `custom_data` into a camelCase `customData`
+  property (confirmed by reading the SDK's own transaction entity mapping, not assumed), and types it as
+  `Record<string, any>` -- so extracting `purchaseId` from it needs its own runtime type guard, same as the stub
+  provider's already-`unknown` JSON payload.
+- `bruno/credit-purchases` needs an `OWNER_ACCESS_TOKEN` for a `human_session` principal with `billing:manage`.
+  Every Keycloak client in this repo has `directAccessGrantsEnabled: false` by design (see `auth/09`), and
+  `bruno/bff-sessions/README.md` documents that a full human login round trip is *not* drivable through Bruno's
+  plain HTTP model at all -- the repo's own established substitute for that gap is a dedicated Jest live-Keycloak
+  integration test with direct database access, not a Bruno run. This is the same gap already recorded in
+  `module-boundaries/04`'s Surprises & Discoveries; recorded again here since it also applies to this plan's own
+  Validation section.
 
 ## Decision Log
 
@@ -48,7 +65,38 @@ event is rejected for retry/investigation rather than acknowledged as an unknown
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including a real-Postgres concurrency proof of the exact race this plan closes.
+`PaymentEvent`'s paid/failed variants gained an optional `purchaseId`. `PaymentPurchaseStore.recordPaid`/`recordFailed`
+now take a `PurchaseCorrelation` (`{ providerReference, purchaseId? }`) instead of a bare reference string.
+`TypeOrmPaymentPurchaseStore` gained a shared `resolvePurchase` step used by both: lock and look up by provider
+reference first; if not found and a purchase ID is present, lock and look up by ID; if that purchase's stored
+reference is null, bind the incoming reference; if it already equals the incoming reference, treat it as already
+resolved (no-op, not a conflict -- see Surprises & Discoveries for why this equality check, not just a
+null-check, is required); if it's a genuinely different non-null reference, throw `PurchaseReferenceConflictError`.
+The existing status-transition and idempotent-save behavior is unchanged and only saves once per outcome (binding
+and status change share one `save` call, not two). `PaymentEventHandler` threads the correlation through and logs
+(then rethrows) on conflict, matching the plan's "redacted identifiers, not raw payloads" logging intent; the
+`PaymentWebhookController` needed no change; a rethrown, uncaught error already surfaces as `500` via Nest's default
+exception filter, proven by an existing spec (`payment-webhook.controller.spec.ts`'s "lets event-handling failures
+surface for provider retry").
+
+`PaddlePaymentProvider.parseEvent` now extracts and type-guards `purchaseId` from the verified event's `customData`
+for both paid and failed event kinds, never trusting it for anything but correlation. `StubPaymentProvider.parseEvent`
+does the same from its already-`unknown`-typed JSON payload. The shared `payment-provider.contract.ts` gained a
+case proving a purchase ID round-trips through parsing unchanged, exercised by both adapters.
+
+Every touched or newly-relevant spec was updated or added: `typeorm-payment-purchase.store.spec.ts` (bind-on-fallback,
+unknown-ID, same-reference-is-not-a-conflict, and genuine-conflict cases, alongside the untouched original
+reference-only cases), `payment-event.handler.spec.ts` (correlation forwarding and conflict pass-through),
+`paddle-payment-provider.spec.ts` (its `serializeEvent` helper now embeds `custom_data.purchaseId` when present),
+and `payment-event.handler.integration.spec.ts` (a new real-Postgres case: seed a purchase with a null reference,
+deliver the same early paid event concurrently twice, assert one bound reference, one paid status, and exactly one
+credit grant -- this is what surfaced the equality-vs-null-check concurrency bug above). `bruno/credit-purchases`'s
+`06-deliver-paid-webhook.yml` now sends `purchaseId` alongside the existing `providerReference`.
+
+Amount, organization, and credit values are still read only from the stored purchase row, never from event-supplied
+data (`claimedCredits` in the stub Bruno payload and the request-body `credits: 999999` in `02-create-purchase.yml`
+both continue to be ignored, unchanged from before this plan).
 
 ## Context and Orientation
 
@@ -117,9 +165,25 @@ redacted identifiers; operators can inspect the stored purchase before replaying
 
 ## Artifacts and Notes
 
-Record synthetic purchase/reference/event IDs, transition outcomes, and grant counts. Never record real webhook
-bodies, signatures, secrets, or customer data.
+**Focused Jest** (`src/lead-email-finder-api/src/payments`, `--runInBand`): 10/11 suites, 58/60 tests (the 11th
+suite is this plan's own Postgres integration spec, environment-gated and run separately below).
+
+**Real-Postgres integration** (`TEST_PAYMENT_WEBHOOK_POSTGRES_URL` against a disposable `lef_payments_test`
+database, dropped afterward): 2/2 tests passing --
+- Pre-existing case (unchanged): concurrent delivery of an already-referenced paid event grants exactly once.
+- New case: a purchase seeded with `providerReference: null`, delivered the same synthetic paid event
+  (`event-paid-early`, a fresh synthetic `stub_<uuid>` reference, real `purchaseId`) concurrently twice -> exactly
+  one bound reference, one `paid` status, one `CreditGrant` row, balance moved by exactly the pack's credits once.
+
+Repo-wide: `lint` (2 pre-existing baseline warnings only), `typecheck`, `build` (437 files) all clean; `test:ci`
+719/719 non-skipped (up from 711 -- the 8 new unit/contract tests added by this plan); `git diff --check` clean.
+
+**Bruno**: `bruno/credit-purchases`'s `06-deliver-paid-webhook.yml` now sends `purchaseId` alongside
+`providerReference`; not run live in this environment (see Surprises & Discoveries -- no `OWNER_ACCESS_TOKEN`
+minting path exists here, same gap already recorded in `module-boundaries/04`). Substituted with the real-Postgres
+integration evidence above, which exercises the exact same store/handler code path the webhook controller calls.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated (unit, contract, and live real-Postgres concurrency proof). `bruno/credit-purchases`
+itself unverified live for the environment reason above. See Progress and Outcomes & Retrospective.

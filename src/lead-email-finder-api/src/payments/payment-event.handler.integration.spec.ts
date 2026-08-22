@@ -97,4 +97,29 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
             schemaDataSource.getRepository(CreditGrant).findBy({ organizationId, reference: purchase.id }),
         ).resolves.toHaveLength(1)
     })
+
+    it('correlates by purchase id, binds the reference, and grants once when a paid event arrives before checkout saves it', async () => {
+        await schemaDataSource
+            .getRepository(CreditPurchase)
+            .update({ id: purchase.id }, { providerReference: null })
+        const providerReference = `stub_${randomUUID()}`
+        const event = {
+            kind: 'purchase_paid' as const,
+            providerEventId: 'event-paid-early',
+            providerReference,
+            purchaseId: purchase.id,
+        }
+
+        await Promise.all([handler.handle(event), handler.handle(event)])
+
+        await expect(
+            schemaDataSource.getRepository(CreditPurchase).findOneByOrFail({ id: purchase.id }),
+        ).resolves.toMatchObject({ status: CreditPurchaseStatus.PAID, providerReference })
+        await expect(
+            schemaDataSource.getRepository(OrganizationCreditAccount).findOneByOrFail({ organizationId }),
+        ).resolves.toMatchObject({ balance: 110 })
+        await expect(
+            schemaDataSource.getRepository(CreditGrant).findBy({ organizationId, reference: purchase.id }),
+        ).resolves.toHaveLength(1)
+    })
 })

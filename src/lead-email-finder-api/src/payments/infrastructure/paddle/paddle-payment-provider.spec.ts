@@ -22,6 +22,8 @@ function serializeEvent(event: PaymentEvent): Buffer {
               : 'test.unrecognized'
     const providerReference = event.kind === 'ignored' ? 'ignored-reference' : event.providerReference
 
+    const purchaseId = event.kind === 'ignored' ? undefined : event.purchaseId
+
     return Buffer.from(
         JSON.stringify({
             event_id: event.providerEventId,
@@ -32,6 +34,7 @@ function serializeEvent(event: PaymentEvent): Buffer {
                 id: providerReference,
                 items: [],
                 payments: [],
+                custom_data: purchaseId === undefined ? null : { purchaseId },
             },
         }),
     )

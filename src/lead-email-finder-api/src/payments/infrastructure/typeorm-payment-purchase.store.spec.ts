@@ -1,13 +1,14 @@
 import { DataSource, EntityManager } from 'typeorm'
 import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
+import { PurchaseReferenceConflictError } from '../payment-purchase.store'
 import { TypeOrmPaymentPurchaseStore } from './typeorm-payment-purchase.store'
 
-function purchaseWith(status: CreditPurchaseStatus): CreditPurchase {
+function purchaseWith(status: CreditPurchaseStatus, providerReference: string | null = 'provider-purchase-1'): CreditPurchase {
     return {
         id: '20000000-0000-4000-8000-000000000001',
         organizationId: '10000000-0000-4000-8000-000000000001',
         credits: 100,
-        providerReference: 'provider-purchase-1',
+        providerReference,
         status,
     } as CreditPurchase
 }
@@ -28,7 +29,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordPaid(purchase.providerReference!)).resolves.toEqual({
+        await expect(store.recordPaid({ providerReference: purchase.providerReference! })).resolves.toEqual({
             id: purchase.id,
             organizationId: purchase.organizationId,
             credits: purchase.credits,
@@ -47,14 +48,78 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PAID)
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordPaid(purchase.providerReference!)).resolves.toMatchObject({ id: purchase.id })
+        await expect(store.recordPaid({ providerReference: purchase.providerReference! })).resolves.toMatchObject({
+            id: purchase.id,
+        })
         expect(manager.save).not.toHaveBeenCalled()
     })
 
-    it('returns null for an unknown paid reference', async () => {
+    it('returns null for an unknown paid reference with no purchase id fallback', async () => {
         manager.findOne.mockResolvedValue(null)
 
-        await expect(store.recordPaid('unknown')).resolves.toBeNull()
+        await expect(store.recordPaid({ providerReference: 'unknown' })).resolves.toBeNull()
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the purchase id and binds the reference when it arrives before checkout saves it', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PENDING, null)
+        manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
+
+        await expect(
+            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: purchase.id }),
+        ).resolves.toEqual({
+            id: purchase.id,
+            organizationId: purchase.organizationId,
+            credits: purchase.credits,
+        })
+        expect(manager.findOne).toHaveBeenNthCalledWith(1, CreditPurchase, {
+            where: { providerReference: 'provider-purchase-1' },
+            lock: { mode: 'pessimistic_write' },
+        })
+        expect(manager.findOne).toHaveBeenNthCalledWith(2, CreditPurchase, {
+            where: { id: purchase.id },
+            lock: { mode: 'pessimistic_write' },
+        })
+        expect(manager.save).toHaveBeenCalledWith(
+            CreditPurchase,
+            expect.objectContaining({ providerReference: 'provider-purchase-1', status: CreditPurchaseStatus.PAID }),
+        )
+    })
+
+    it('returns null for an unknown purchase id fallback', async () => {
+        manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+
+        await expect(
+            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: 'unknown-purchase' }),
+        ).resolves.toBeNull()
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('treats a purchase id already bound to the same reference as already resolved, not a conflict', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PAID, 'provider-purchase-1')
+        manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
+
+        await expect(
+            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: purchase.id }),
+        ).resolves.toEqual({
+            id: purchase.id,
+            organizationId: purchase.organizationId,
+            credits: purchase.credits,
+        })
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('rejects rebinding a purchase id already bound to a different provider reference', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PENDING, 'established-reference')
+        manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
+
+        const promise = store.recordPaid({ providerReference: 'different-reference', purchaseId: purchase.id })
+
+        await expect(promise).rejects.toBeInstanceOf(PurchaseReferenceConflictError)
+        await expect(promise).rejects.toMatchObject({
+            purchaseId: purchase.id,
+            existingProviderReference: 'established-reference',
+        })
         expect(manager.save).not.toHaveBeenCalled()
     })
 
@@ -62,7 +127,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordFailed(purchase.providerReference!)).resolves.toBe(true)
+        await expect(store.recordFailed({ providerReference: purchase.providerReference! })).resolves.toBe(true)
         expect(manager.save).toHaveBeenCalledWith(
             CreditPurchase,
             expect.objectContaining({ status: CreditPurchaseStatus.FAILED }),
@@ -73,7 +138,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PAID)
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordFailed(purchase.providerReference!)).resolves.toBe(true)
+        await expect(store.recordFailed({ providerReference: purchase.providerReference! })).resolves.toBe(true)
         expect(manager.save).not.toHaveBeenCalled()
     })
 })
