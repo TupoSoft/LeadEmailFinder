@@ -1,0 +1,30 @@
+info:
+  name: 05-create-conflicting-invitation-for-existing-owner
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Conflicting Bruno Test Org {{uniqueSuffix}}",
+        "ownerEmail": "{{ownerEmail}}"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('creates a second pending invitation for the existing owner email', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.invitation.email).to.equal(bru.getVar('ownerEmail'));
+          bru.setVar('conflictingInvitationToken', res.body.invitation.token);
+        });

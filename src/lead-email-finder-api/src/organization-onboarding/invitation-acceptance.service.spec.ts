@@ -58,7 +58,10 @@ describe('InvitationAcceptanceService', () => {
             insert: jest.fn(),
         }
         managerMock.create.mockImplementation((entity, data) => data as never)
-        managerMock.save.mockImplementation((entity: any, data: any) => Promise.resolve({ id: 'membership-1', ...data }))
+        managerMock.save.mockImplementation((entity: any, data: any) =>
+            Promise.resolve({ id: 'membership-1', ...data }),
+        )
+        managerMock.findOneByOrFail.mockResolvedValue(invitationFixture())
         dataSourceMock = {
             transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
         }
@@ -67,7 +70,7 @@ describe('InvitationAcceptanceService', () => {
             id: 'external-identity-1',
         } as ExternalIdentity)
         keycloakAdminMock = { ensureUser: jest.fn(), assignRealmRole: jest.fn() }
-        keycloakAdminMock.ensureUser.mockResolvedValue({ subject: 'keycloak-subject-1' })
+        keycloakAdminMock.ensureUser.mockResolvedValue({ subject: 'keycloak-subject-1', created: false })
         configServiceMock = { getOrThrow: jest.fn().mockReturnValue(issuer) }
 
         service = new InvitationAcceptanceService(
@@ -121,7 +124,11 @@ describe('InvitationAcceptanceService', () => {
         )
         expect(managerMock.create).toHaveBeenCalledWith(
             OrganizationMembership,
-            expect.objectContaining({ organizationId: 'org-1', externalIdentityId: 'external-identity-1', role: 'member' }),
+            expect.objectContaining({
+                organizationId: 'org-1',
+                externalIdentityId: 'external-identity-1',
+                role: 'member',
+            }),
         )
         expect(managerMock.insert).toHaveBeenCalledWith(
             AuditLogEntry,
@@ -144,6 +151,9 @@ describe('InvitationAcceptanceService', () => {
         await service.accept('the-raw-token', 'password12345')
 
         expect(keycloakAdminMock.assignRealmRole).toHaveBeenCalledWith('keycloak-subject-1', 'owner')
+        expect(managerMock.count.mock.invocationCallOrder[0]).toBeLessThan(
+            keycloakAdminMock.assignRealmRole.mock.invocationCallOrder[0],
+        )
     })
 
     it('leaves the invitation pending and writes a failure audit row when the Keycloak call fails', async () => {
@@ -161,19 +171,52 @@ describe('InvitationAcceptanceService', () => {
     })
 
     it('rejects with ConflictException when the identity already holds an active membership elsewhere', async () => {
-        invitationRepoMock.findOne.mockResolvedValue(invitationFixture())
+        invitationRepoMock.findOne.mockResolvedValue(invitationFixture({ role: 'owner' }))
         managerMock.count.mockResolvedValue(1)
 
         await expect(service.accept('the-raw-token', 'password12345')).rejects.toThrow(ConflictException)
         expect(managerMock.update).not.toHaveBeenCalled()
+        expect(keycloakAdminMock.assignRealmRole).not.toHaveBeenCalled()
+        expect(invitationRepoMock.manager.insert).not.toHaveBeenCalled()
+    })
+
+    it('leaves the invitation retryable and audits a realm-role assignment failure', async () => {
+        invitationRepoMock.findOne.mockResolvedValue(invitationFixture({ role: 'owner' }))
+        keycloakAdminMock.assignRealmRole.mockRejectedValue(new Error('keycloak unreachable'))
+
+        await expect(service.accept('the-raw-token', 'password12345')).rejects.toThrow('keycloak unreachable')
+
+        expect(invitationRepoMock.manager.insert).toHaveBeenCalledWith(
+            AuditLogEntry,
+            expect.objectContaining({ action: 'invitation.accept_failed', outcome: 'failure' }),
+        )
+        expect(managerMock.update).not.toHaveBeenCalled()
+        expect(managerMock.save).not.toHaveBeenCalled()
     })
 
     it('returns the winning result without a second membership insert when two acceptances race', async () => {
         invitationRepoMock.findOne.mockResolvedValue(invitationFixture())
-        managerMock.update.mockResolvedValue({ affected: 0 } as never)
-        managerMock.findOneByOrFail.mockResolvedValue(
+        managerMock.findOneByOrFail.mockResolvedValueOnce(
             invitationFixture({ status: 'accepted', role: 'member', email: 'invitee@example.test' }),
         )
+
+        const result = await service.accept('the-raw-token', 'password12345')
+
+        expect(result).toEqual({ organizationId: 'org-1', role: 'member', email: 'invitee@example.test' })
+        expect(managerMock.count).not.toHaveBeenCalled()
+        expect(managerMock.update).not.toHaveBeenCalled()
+        expect(managerMock.save).not.toHaveBeenCalled()
+        expect(managerMock.insert).not.toHaveBeenCalled()
+    })
+
+    it('returns the winning result when the conditional invitation update loses a race', async () => {
+        invitationRepoMock.findOne.mockResolvedValue(invitationFixture())
+        managerMock.update.mockResolvedValue({ affected: 0 } as never)
+        managerMock.findOneByOrFail
+            .mockResolvedValueOnce(invitationFixture())
+            .mockResolvedValueOnce(
+                invitationFixture({ status: 'accepted', role: 'member', email: 'invitee@example.test' }),
+            )
 
         const result = await service.accept('the-raw-token', 'password12345')
 

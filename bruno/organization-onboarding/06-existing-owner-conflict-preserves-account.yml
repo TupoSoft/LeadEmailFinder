@@ -1,0 +1,25 @@
+info:
+  name: 06-existing-owner-conflict-preserves-account
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/invitations/{{conflictingInvitationToken}}/accept"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "password": "replacement-password-must-not-be-used-123"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects an invitation when the existing identity already has an active membership', function() {
+          expect(res.status).to.equal(409);
+        });

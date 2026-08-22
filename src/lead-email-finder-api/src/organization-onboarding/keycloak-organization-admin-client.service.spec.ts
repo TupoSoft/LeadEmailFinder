@@ -19,38 +19,37 @@ describe('KeycloakOrganizationAdminClient', () => {
     })
 
     describe('ensureUser', () => {
-        it('resets the password of an existing user without creating a new one', async () => {
+        it('returns an existing user without changing credentials or creating a new one', async () => {
             httpMock.request.mockResolvedValueOnce([{ id: 'existing-user-1', email: 'person@example.test' }])
-            httpMock.request.mockResolvedValueOnce(undefined)
 
             const result = await client.ensureUser({ email: 'person@example.test', password: 'password12345' })
 
-            expect(result).toEqual({ subject: 'existing-user-1' })
-            expect(httpMock.request).toHaveBeenCalledWith(
-                'PUT',
-                '/admin/realms/lead-email-finder/users/existing-user-1/reset-password',
-                { type: 'password', value: 'password12345', temporary: false },
-                [204],
-            )
-            expect(httpMock.request).toHaveBeenCalledTimes(2)
+            expect(result).toEqual({ subject: 'existing-user-1', created: false })
+            expect(httpMock.request).toHaveBeenCalledTimes(1)
         })
 
-        it('creates the user first when none exists, then resets the password', async () => {
+        it('creates a missing user with its initial non-temporary password', async () => {
             httpMock.request.mockResolvedValueOnce([])
             httpMock.request.mockResolvedValueOnce(undefined)
             httpMock.request.mockResolvedValueOnce([{ id: 'new-user-1', email: 'person@example.test' }])
-            httpMock.request.mockResolvedValueOnce(undefined)
 
             const result = await client.ensureUser({ email: 'person@example.test', password: 'password12345' })
 
-            expect(result).toEqual({ subject: 'new-user-1' })
+            expect(result).toEqual({ subject: 'new-user-1', created: true })
             expect(httpMock.request).toHaveBeenNthCalledWith(
                 2,
                 'POST',
                 '/admin/realms/lead-email-finder/users',
-                expect.objectContaining({ username: 'person@example.test', email: 'person@example.test' }),
+                expect.objectContaining({
+                    username: 'person@example.test',
+                    email: 'person@example.test',
+                    firstName: 'Invited',
+                    lastName: 'User',
+                    credentials: [{ type: 'password', value: 'password12345', temporary: false }],
+                }),
                 [201],
             )
+            expect(httpMock.request).toHaveBeenCalledTimes(3)
         })
 
         it('throws when the created user is still not findable by email', async () => {
@@ -58,9 +57,9 @@ describe('KeycloakOrganizationAdminClient', () => {
             httpMock.request.mockResolvedValueOnce(undefined)
             httpMock.request.mockResolvedValueOnce([])
 
-            await expect(client.ensureUser({ email: 'person@example.test', password: 'password12345' })).rejects.toThrow(
-                'not visible after creation',
-            )
+            await expect(
+                client.ensureUser({ email: 'person@example.test', password: 'password12345' }),
+            ).rejects.toThrow('not visible after creation')
         })
     })
 
