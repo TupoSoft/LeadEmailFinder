@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { EnvironmentVariablesDto, PaymentsProviderName } from '../environment-variables.dto'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
@@ -17,6 +16,7 @@ import { PAYMENT_PURCHASE_STORE } from './payment-purchase.store'
 import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
 import { createPaddleProviderDependencies } from './infrastructure/paddle/paddle-client'
 import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-provider'
+import { PaymentConfiguration, PaymentsProviderName } from './payment-configuration'
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([CreditPurchase]), CreditsModule, IdentityModule],
@@ -34,7 +34,7 @@ import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-pr
             provide: PAYMENT_PROVIDER,
             inject: [ConfigService, StubPaymentProvider],
             useFactory: (
-                configService: ConfigService<EnvironmentVariablesDto, true>,
+                configService: ConfigService<PaymentConfiguration, true>,
                 stubProvider: StubPaymentProvider,
             ): PaymentProvider => {
                 const provider = configService.getOrThrow<PaymentsProviderName>('PAYMENTS_PROVIDER')

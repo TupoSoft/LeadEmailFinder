@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from '../environment-variables.dto'
 import { CreditPackCatalog, CreditPackNotFoundError } from './credit-pack-catalog'
+import { PaymentConfiguration } from './payment-configuration'
 
 describe('CreditPackCatalog', () => {
     const configuredPacks = JSON.stringify({
@@ -56,7 +56,7 @@ describe('CreditPackCatalog', () => {
 function createCatalog(value: string): CreditPackCatalog {
     const configService = {
         getOrThrow: jest.fn().mockReturnValue(value),
-    } as unknown as ConfigService<EnvironmentVariablesDto, true>
+    } as unknown as ConfigService<PaymentConfiguration, true>
 
     return new CreditPackCatalog(configService)
 }
