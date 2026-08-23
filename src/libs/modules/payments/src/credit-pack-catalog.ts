@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import type { EnvironmentVariablesDto } from '../environment-variables.dto'
+import type { PaymentConfiguration } from './payment-configuration'
 
 export interface CreditPack {
     id: string
@@ -21,7 +21,7 @@ export class CreditPackNotFoundError extends Error {
 export class CreditPackCatalog {
     private readonly packs: Readonly<Record<string, CreditPack>>
 
-    constructor(configService: ConfigService<EnvironmentVariablesDto, true>) {
+    constructor(configService: ConfigService<PaymentConfiguration, true>) {
         this.packs = parseCreditPacks(configService.getOrThrow('PAYMENTS_CREDIT_PACKS'))
     }
 

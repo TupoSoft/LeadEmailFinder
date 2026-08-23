@@ -1,6 +1,6 @@
 import { Environment, EventEntity, Paddle, Transaction } from '@paddle/paddle-node-sdk'
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from '../../../environment-variables.dto'
+import { PaddleEnvironmentName, PaymentConfiguration } from '../../payment-configuration'
 
 export interface PaddleClient {
     readonly transactions: {
@@ -17,13 +17,13 @@ export interface PaddleProviderDependencies {
 }
 
 export function createPaddleProviderDependencies(
-    configService: ConfigService<EnvironmentVariablesDto, true>,
+    configService: ConfigService<PaymentConfiguration, true>,
 ): PaddleProviderDependencies {
     const apiKey = configService.getOrThrow<string>('PADDLE_API_KEY')
     const webhookSecret = configService.getOrThrow<string>('PADDLE_WEBHOOK_SECRET')
     const configuredEnvironment = configService.getOrThrow<string>('PADDLE_ENVIRONMENT')
 
-    if (configuredEnvironment !== 'sandbox') {
+    if (configuredEnvironment !== String(PaddleEnvironmentName.SANDBOX)) {
         throw new Error(`Unsupported Paddle environment: ${configuredEnvironment}`)
     }
 

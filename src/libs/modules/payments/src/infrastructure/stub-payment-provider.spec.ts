@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from '../../environment-variables.dto'
 import { CreditPack } from '../credit-pack-catalog'
+import { PaymentConfiguration } from '../payment-configuration'
 import { paymentProviderContract } from '../payment-provider.contract'
 import { StubPaymentProvider } from './stub-payment-provider'
 
@@ -10,7 +10,7 @@ const webhookSecret = 'contract-test-secret'
 function createProvider(): StubPaymentProvider {
     const configService = {
         getOrThrow: jest.fn().mockReturnValue(webhookSecret),
-    } as unknown as ConfigService<EnvironmentVariablesDto, true>
+    } as unknown as ConfigService<PaymentConfiguration, true>
 
     return new StubPaymentProvider(configService)
 }

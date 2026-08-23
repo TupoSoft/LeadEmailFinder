@@ -1,10 +1,10 @@
 import { ConfigService } from '@nestjs/config'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Repository } from 'typeorm'
-import { EnvironmentVariablesDto } from '../environment-variables.dto'
 import { CreditPack, CreditPackCatalog, CreditPackNotFoundError } from './credit-pack-catalog'
 import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
 import { CreditPurchaseService, PaymentCheckoutError } from './credit-purchase.service'
+import { PaymentConfiguration } from './payment-configuration'
 import { PaymentProvider } from './payment-provider'
 
 const principal: AuthPrincipal = {
@@ -45,7 +45,7 @@ describe('CreditPurchaseService', () => {
                 if (key === 'PAYMENTS_CHECKOUT_RETURN_URL') return 'http://localhost:3000/payment-return'
                 throw new Error(`Unexpected configuration key: ${key}`)
             }),
-        } as unknown as ConfigService<EnvironmentVariablesDto, true>
+        } as unknown as ConfigService<PaymentConfiguration, true>
 
         service = new CreditPurchaseService(
             purchaseRepo as unknown as Repository<CreditPurchase>,
