@@ -6,7 +6,7 @@ This collection proves the HTTP-boundary rejection behavior of ExecPlan `.agents
 
 The full lifecycle — create a real Keycloak client, mint a client_credentials token against it, use that token against a protected route, rotate (old secret stops working, new one works), disable (a token minted before disabling is rejected on its very next use), delete (the Keycloak client is actually gone) — is covered instead by `src/lead-email-finder-api/src/service-client-management/service-client-management.live-keycloak.integration.spec.ts` (skip-gated on `TEST_SVC_*`). Authorization/tenant-isolation/scope-ceiling business rules that don't require live Keycloak are covered by the unit specs and `service-client-management-http.integration.spec.ts` (real `PermissionsGuard`/`ClassSerializerInterceptor`, mocked services).
 
-**Known limitation (same one documented in `bruno/organization-onboarding/README.md`): the containerized `api` service cannot reach Keycloak (Admin REST API or JWKS) from inside its own Docker network namespace.** Every request in this collection now sends a real OAuth Client Credentials bearer token, which the api service must verify against Keycloak's JWKS endpoint — if that fails against the containerized stack, run the API on the host instead, following `bruno/organization-onboarding/README.md`'s exact workaround.
+Run it against the normal containerized stack:
 
 ```shell
 pnpm keycloak:provision

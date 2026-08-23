@@ -12,8 +12,8 @@ workaround is removed rather than left to mislead the next developer who hits it
 
 ## Progress
 
-- [ ] Remove the stale "known limitation" section and host-run workaround from both READMEs.
-- [ ] Replace it with the plain containerized run instructions, confirmed live.
+- [x] (2026-08-23) Remove the stale "known limitation" section and host-run workaround from both READMEs.
+- [x] (2026-08-23) Replace it with the plain containerized run instructions, confirmed live.
 
 ## Plan dependencies
 
@@ -45,7 +45,21 @@ None.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated live. Removed the "Known limitation" paragraph and its fenced host-run shell block
+(the `docker compose stop api`, scratch `.nest-cli.local.json`/`tsconfig.local.json` build, and long
+hand-copied environment variable list) from `bruno/organization-onboarding/README.md`, replacing it with a
+one-sentence statement that the collection runs against the normal containerized stack; the already-correct
+`pnpm keycloak:bootstrap-credential` / env-export / `npx @usebruno/cli run` block and its explanatory sentence
+about requests 02/05 were kept unchanged. Removed the trailing "restart the containerized `api` service
+afterward" sentence, which no longer applied. Removed the analogous, shorter "Known limitation" paragraph from
+`bruno/service-client-management/README.md` (which only pointed at the other README's workaround), replacing it
+with the same one-sentence statement; its own run block was already correct and untouched.
+
+From a fresh `pnpm dev:reset`, ran both collections against the plain containerized stack exactly as their
+updated READMEs now instruct: `bruno/organization-onboarding` 8/8 requests passing (including request 03,
+`accept`, the exact request the stale doc claimed would fail with a `500`); `bruno/service-client-management`
+4/4 requests passing (every request verifies a real OAuth bearer token against the containerized API's JWKS
+endpoint, the exact mechanism the stale doc claimed would fail).
 
 ## Context and Orientation
 
@@ -94,10 +108,11 @@ Documentation-only change with no runtime state. Re-editing is trivially safe.
 
 ## Artifacts and Notes
 
-Live confirmation this session (2026-08-22, plain containerized `docker compose -f docker/compose.yaml` stack,
-no host-run workaround): `bruno/organization-onboarding` 8/8 requests passing; `bruno/service-client-management`
-4/4 requests passing.
+Live confirmation, run twice: first during the 2026-08-22 E2E audit that discovered the staleness, and again
+on 2026-08-23 from a fresh `pnpm dev:reset` following the updated READMEs verbatim — both times plain
+containerized `docker compose -f docker/compose.yaml` stack, no host-run workaround, `bruno/organization-onboarding`
+8/8 requests passing and `bruno/service-client-management` 4/4 requests passing.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and live-verified. See Progress and Outcomes & Retrospective.
