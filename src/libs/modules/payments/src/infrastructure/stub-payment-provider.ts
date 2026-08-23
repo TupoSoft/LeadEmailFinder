@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import type { EnvironmentVariablesDto } from '../../environment-variables.dto'
+import type { PaymentConfiguration } from '../payment-configuration'
 import {
     CheckoutInput,
     CheckoutResult,
@@ -14,7 +14,7 @@ import {
 export class StubPaymentProvider implements PaymentProvider {
     private readonly webhookSecret: string
 
-    constructor(configService: ConfigService<EnvironmentVariablesDto, true>) {
+    constructor(configService: ConfigService<PaymentConfiguration, true>) {
         this.webhookSecret = configService.getOrThrow('PAYMENTS_STUB_WEBHOOK_SECRET')
     }
 

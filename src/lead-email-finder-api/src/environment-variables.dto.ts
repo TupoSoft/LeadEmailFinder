@@ -1,18 +1,13 @@
 import { IsBoolean, IsEnum, IsInt, IsJSON, IsOptional, IsString, IsUrl, Max, Min, ValidateIf } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
+import {
+    PaddleEnvironmentName,
+    PaymentsProviderName,
+} from '@tuposoft/lead-email-finder/modules/payments'
 import { Transform, Type } from 'class-transformer'
 
 function transformBoolean(value: unknown): boolean {
     return value === true || value === 'true'
-}
-
-export enum PaymentsProviderName {
-    STUB = 'stub',
-    PADDLE = 'paddle',
-}
-
-export enum PaddleEnvironmentName {
-    SANDBOX = 'sandbox',
 }
 
 @WithFileVars()

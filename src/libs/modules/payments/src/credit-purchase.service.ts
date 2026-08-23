@@ -3,9 +3,9 @@ import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Repository } from 'typeorm'
-import { EnvironmentVariablesDto, PaymentsProviderName } from '../environment-variables.dto'
 import { CreditPackCatalog } from './credit-pack-catalog'
 import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
+import { PaymentConfiguration, PaymentsProviderName } from './payment-configuration'
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider'
 
 export interface StartedCreditPurchase {
@@ -29,7 +29,7 @@ export class CreditPurchaseService {
         @InjectRepository(CreditPurchase) private readonly purchaseRepo: Repository<CreditPurchase>,
         private readonly catalog: CreditPackCatalog,
         @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
-        configService: ConfigService<EnvironmentVariablesDto, true>,
+        configService: ConfigService<PaymentConfiguration, true>,
     ) {
         this.providerName = configService.getOrThrow('PAYMENTS_PROVIDER')
         this.returnUrl = configService.getOrThrow('PAYMENTS_CHECKOUT_RETURN_URL')

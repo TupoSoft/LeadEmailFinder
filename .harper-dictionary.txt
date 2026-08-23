@@ -3,11 +3,13 @@ BullMQ
 CommonJS
 CoreDNS
 CSRF
+DTO
 DTOs
 EEST
 ESM
 ExecPlan
 ExecPlans
+Idempotence
 JWKS
 Keycloak
 LeadEmailFinder

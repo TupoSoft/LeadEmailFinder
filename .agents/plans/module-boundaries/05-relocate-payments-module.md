@@ -10,9 +10,9 @@ deliberate public API, own their provider configuration types, and preserve chec
 
 ## Progress
 
-- [ ] (2026-08-21) Separate payment configuration contracts from the host environment DTO.
-- [ ] (2026-08-21) Move payment source/tests and publish the module alias/barrel.
-- [ ] (2026-08-21) Rewire the host and verify stub/Paddle, persistence, credit grant, and HTTP regressions.
+- [x] (2026-08-23) Separate payment configuration contracts from the host environment DTO.
+- [x] (2026-08-23) Move payment source/tests and publish the module alias/barrel.
+- [x] (2026-08-23) Rewire the host and verify stub/Paddle, persistence, credit grant, and HTTP regressions.
 
 ## Plan dependencies
 
@@ -26,6 +26,10 @@ deliberate public API, own their provider configuration types, and preserve chec
 - `PaymentsProviderName` and `PaddleEnvironmentName` are declared in that host DTO even though only the payment
   capability gives them meaning.
 - The module already has explicit provider and purchase-store ports with stub, Paddle, and TypeORM adapters.
+- A full `pnpm test:ci` run needs local-listener permission for the repository's HTTP integration suites. The
+  sandboxed run failed with `listen EPERM`, while the same command passed after that permission was granted.
+- The local Compose stack was running, but none of the six required `bruno/credit-purchases` environment variables
+  was present, including `OWNER_ACCESS_TOKEN`; live Bruno execution therefore remained unavailable.
 
 ## Decision Log
 
@@ -39,21 +43,33 @@ deliberate public API, own their provider configuration types, and preserve chec
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated. All 27 payment source and test files moved to `src/libs/modules/payments/src` with their
+existing responsibilities and Nest tokens intact. The new `PaymentConfiguration` contract owns the seven payment
+keys, plus `PaymentsProviderName` and `PaddleEnvironmentName`; the API host imports the enums for aggregate
+environment validation, while payment code no longer imports the host DTO. The exact and wildcard payment aliases
+are registered for TypeScript and Jest, and the public barrel exposes only the configuration contract and
+`PaymentsModule`.
+
+`LeadEmailFinderApiModule` now composes payments through the public alias. Focused payment, credit, and environment
+tests passed with 107 tests and seven environment-gated skips. Type checking and build passed, lint passed with two
+preexisting warnings, and the full Jest suite passed 721 tests with 24 environment-gated skips and one pending test.
+Bruno was not run because the running local stack had none of the collection's required environment variables,
+including the owner access token.
 
 ## Context and Orientation
 
-`src/lead-email-finder-api/src/payments` owns the credit-pack catalog, checkout controller/service, webhook
-controller/handler, `CreditPurchase` entity, payment provider and purchase-store ports, stub provider, Paddle adapter,
-TypeORM store, and focused tests. `PaymentsModule` imports configuration, TypeORM, credits, identity, and auth. The
-root `EnvironmentVariablesDto` validates payment provider selection, catalog, return URL, stub secret, and Paddle
-credentials.
+Before this change, `src/lead-email-finder-api/src/payments` owned the credit-pack catalog, purchase
+controller/service, webhook controller/handler, `CreditPurchase` entity, payment provider and purchase-store ports,
+stub provider, Paddle adapter, TypeORM store, and focused tests. They now live under
+`src/libs/modules/payments/src`. `PaymentsModule` imports configuration, TypeORM, credits, identity, and auth. The
+root `EnvironmentVariablesDto` still validates payment provider selection, catalog, return URL, stub secret, and
+Paddle credentials through configuration enums imported from the payment module.
 
 ## Scope and Non-Goals
 
 Move payments to `src/libs/modules/payments/src`, add its alias and public barrel, move payment-owned configuration
 enums/types inward, and update the API host plus tests. Preserve routes, DTOs, raw webhook body handling, signature
-verification, idempotent event correlation, credit grants, provider selection, checkout URLs, and persistence schema.
+verification, idempotent event correlation, credit grants, provider selection, payment URLs, and persistence schema.
 Do not change catalog contents, prices, Paddle API behavior, webhook semantics, or add migrations.
 
 ## Plan of Work
@@ -79,8 +95,8 @@ entity metadata, and Nest tokens retain behavior.
 - Payment source/tests live under `src/libs/modules/payments/src`; no payment implementation imports the API host.
 - The root environment validator accepts/rejects the same payment configurations as before.
 - Stub and Paddle provider selection resolves the same adapter for the same `PAYMENTS_PROVIDER` value.
-- Checkout, webhook verification, early-event correlation, idempotent purchase updates, and credit grants retain
-  existing behavior and schemas.
+- Payment session creation, webhook verification, early-event correlation, idempotent purchase updates, and credit
+  grants retain existing behavior and schemas.
 - No table, column, route, status code, or environment variable changes.
 - A clean build and API bootstrap resolve the relocated module and both provider configurations in focused tests.
 
@@ -89,7 +105,7 @@ entity metadata, and Nest tokens retain behavior.
 Run `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- src/libs/modules/payments/src
 src/libs/modules/credits/src src/lead-email-finder-api/src/environment-variables.dto.spec.ts --runInBand`. Run
 `corepack pnpm typecheck`, `corepack pnpm build`, `corepack pnpm lint`,
-`TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- --runInBand`, and `git diff --check`. From
+`TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci`, and `git diff --check`. From
 `bruno/credit-purchases`, run `bru run --env local` against its documented stub fixture. Paddle live/sandbox
 validation is not required for a source-only move; retain existing adapter tests and report live verification
 accurately.
@@ -102,9 +118,17 @@ fixture is contaminated, never against non-disposable data.
 
 ## Artifacts and Notes
 
-Record provider-selection test results, focused suite counts, build output, and redacted Bruno statuses. Never record
-Paddle API keys, webhook secrets, checkout URLs containing sensitive query data, or bearer tokens.
+Focused Jest: 14 suites passed and two environment-gated suites skipped; 107 tests passed and seven skipped.
+
+Repository validation: type checking passed; build compiled 438 files; lint passed with two preexisting warnings;
+full Jest passed 118 suites and skipped eight environment-gated suites, with 721 tests passed, 24 skipped, and one
+pending test; `git diff --check` passed.
+
+Bruno: not run. `docker compose -f docker/compose.yaml ps --status running --services` confirmed the local stack was
+running, but `OWNER_ACCESS_TOKEN`, `OIDC_ISSUER_URL`, `KEYCLOAK_SERVICE_CLIENT_ID`,
+`KEYCLOAK_SERVICE_CLIENT_SECRET`, `PLATFORM_ORGANIZATION_ID`, and `PAYMENTS_STUB_WEBHOOK_SECRET` were all absent from
+the process environment. No credentials or secrets were recorded.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated, except for live Bruno execution because its required environment variables were absent.
