@@ -29,6 +29,8 @@
             "@tuposoft/lead-email-finder/modules/credits/*": ["src/libs/modules/credits/src/*"],
             "@tuposoft/lead-email-finder/modules/identity": ["src/libs/modules/identity/src"],
             "@tuposoft/lead-email-finder/modules/identity/*": ["src/libs/modules/identity/src/*"],
+            "@tuposoft/lead-email-finder/modules/organization-onboarding": ["src/libs/modules/organization-onboarding/src"],
+            "@tuposoft/lead-email-finder/modules/organization-onboarding/*": ["src/libs/modules/organization-onboarding/src/*"],
             "@tuposoft/lead-email-finder/modules/payments": ["src/libs/modules/payments/src"],
             "@tuposoft/lead-email-finder/modules/payments/*": ["src/libs/modules/payments/src/*"],
             "@tuposoft/lead-email-finder/modules/proxy": ["src/libs/modules/proxy/src"],
