@@ -1,6 +1,12 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { DataSource, EntityManager, Repository } from 'typeorm'
-import { AuditLogEntry, AuthPrincipal, ExternalIdentity, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { DataSource, EntityManager } from 'typeorm'
+import {
+    AuditLogEntry,
+    AuthPrincipal,
+    ExternalIdentity,
+    Organization,
+    OrganizationMembership,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { KeycloakOrganizationAdmin } from './keycloak-organization-admin'
 import { MembershipRoleChangeService } from './membership-role-change.service'
 
@@ -30,22 +36,22 @@ function membershipFixture(overrides: Partial<OrganizationMembership> = {}): Org
 }
 
 describe('MembershipRoleChangeService', () => {
-    let membershipRepoMock: jest.Mocked<Pick<Repository<OrganizationMembership>, 'findOne' | 'count'>>
-    let managerMock: jest.Mocked<Pick<EntityManager, 'save' | 'insert'>>
+    let managerMock: jest.Mocked<Pick<EntityManager, 'findOne' | 'count' | 'save' | 'insert'>>
     let dataSourceMock: { transaction: jest.Mock }
     let keycloakAdminMock: jest.Mocked<KeycloakOrganizationAdmin>
     let service: MembershipRoleChangeService
 
     beforeEach(() => {
-        membershipRepoMock = { findOne: jest.fn(), count: jest.fn() }
-        managerMock = { save: jest.fn(), insert: jest.fn() }
+        managerMock = { findOne: jest.fn(), count: jest.fn(), save: jest.fn(), insert: jest.fn() }
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture()),
+        )
         managerMock.save.mockImplementation((entity, data) => Promise.resolve(data as never))
         dataSourceMock = {
             transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
         }
         keycloakAdminMock = { ensureUser: jest.fn(), assignRealmRole: jest.fn() }
         service = new MembershipRoleChangeService(
-            membershipRepoMock as unknown as Repository<OrganizationMembership>,
             dataSourceMock as unknown as DataSource,
             keycloakAdminMock,
         )
@@ -64,7 +70,9 @@ describe('MembershipRoleChangeService', () => {
     })
 
     it('throws NotFoundException when the membership does not exist in this organization', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(null)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(entity === Organization ? ({ id: 'org-1' } as Organization) : null),
+        )
 
         await expect(service.changeRole(principalFixture(), 'org-1', 'missing', 'admin')).rejects.toThrow(
             NotFoundException,
@@ -72,22 +80,29 @@ describe('MembershipRoleChangeService', () => {
     })
 
     it('rejects an admin who tries to grant the owner role', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'member' }))
         const actor = principalFixture({ membershipRole: 'admin' })
 
         await expect(service.changeRole(actor, 'org-1', 'membership-1', 'owner')).rejects.toThrow(ForbiddenException)
     })
 
     it('rejects an admin who tries to modify an existing owner', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'owner' }))
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
         const actor = principalFixture({ membershipRole: 'admin' })
 
         await expect(service.changeRole(actor, 'org-1', 'membership-1', 'admin')).rejects.toThrow(ForbiddenException)
     })
 
     it('rejects demoting the final active owner', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'owner' }))
-        membershipRepoMock.count.mockResolvedValue(1)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
+        managerMock.count.mockResolvedValue(1)
 
         await expect(service.changeRole(principalFixture(), 'org-1', 'membership-1', 'admin')).rejects.toThrow(
             ConflictException,
@@ -95,8 +110,12 @@ describe('MembershipRoleChangeService', () => {
     })
 
     it('allows demoting an owner when another active owner exists', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'owner' }))
-        membershipRepoMock.count.mockResolvedValue(2)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
+        managerMock.count.mockResolvedValue(2)
 
         const result = await service.changeRole(principalFixture(), 'org-1', 'membership-1', 'admin')
 
@@ -104,16 +123,17 @@ describe('MembershipRoleChangeService', () => {
     })
 
     it('assigns the Keycloak realm role on promotion but not otherwise', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'member' }))
-
         await service.changeRole(principalFixture(), 'org-1', 'membership-1', 'admin')
 
         expect(keycloakAdminMock.assignRealmRole).toHaveBeenCalledWith('target-subject-1', 'admin')
     })
 
     it('does not call Keycloak when demoting to member', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'admin' }))
-        membershipRepoMock.count.mockResolvedValue(0)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'admin' }),
+            ),
+        )
 
         await service.changeRole(principalFixture(), 'org-1', 'membership-1', 'member')
 
@@ -121,13 +141,36 @@ describe('MembershipRoleChangeService', () => {
     })
 
     it('writes an audit row recording the role transition', async () => {
-        membershipRepoMock.findOne.mockResolvedValue(membershipFixture({ role: 'member' }))
-
         await service.changeRole(principalFixture(), 'org-1', 'membership-1', 'admin')
 
         expect(managerMock.insert).toHaveBeenCalledWith(
             AuditLogEntry,
             expect.objectContaining({ action: 'membership.role_changed', metadata: { fromRole: 'member', toRole: 'admin' } }),
         )
+    })
+
+    it('locks the organization before reloading the membership', async () => {
+        await service.changeRole(principalFixture(), 'org-1', 'membership-1', 'member')
+
+        expect(managerMock.findOne.mock.calls).toEqual([
+            [Organization, { where: { id: 'org-1' }, lock: { mode: 'pessimistic_write' } }],
+            [
+                OrganizationMembership,
+                {
+                    where: { id: 'membership-1', organizationId: 'org-1' },
+                    relations: ['externalIdentity'],
+                },
+            ],
+        ])
+    })
+
+    it('does not save local state when Keycloak role assignment fails', async () => {
+        keycloakAdminMock.assignRealmRole.mockRejectedValue(new Error('Keycloak unavailable'))
+
+        await expect(service.changeRole(principalFixture(), 'org-1', 'membership-1', 'admin')).rejects.toThrow(
+            'Keycloak unavailable',
+        )
+        expect(managerMock.save).not.toHaveBeenCalled()
+        expect(managerMock.insert).not.toHaveBeenCalled()
     })
 })

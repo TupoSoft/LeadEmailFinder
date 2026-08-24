@@ -1,6 +1,11 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { DataSource, EntityManager, Repository } from 'typeorm'
-import { AuditLogEntry, AuthPrincipal, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { DataSource, EntityManager } from 'typeorm'
+import {
+    AuditLogEntry,
+    AuthPrincipal,
+    Organization,
+    OrganizationMembership,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { MembershipRemovalService } from './membership-removal.service'
 
 function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal {
@@ -28,22 +33,20 @@ function membershipFixture(overrides: Partial<OrganizationMembership> = {}): Org
 }
 
 describe('MembershipRemovalService', () => {
-    let membershipRepoMock: jest.Mocked<Pick<Repository<OrganizationMembership>, 'findOneBy' | 'count'>>
-    let managerMock: jest.Mocked<Pick<EntityManager, 'save' | 'insert'>>
+    let managerMock: jest.Mocked<Pick<EntityManager, 'findOne' | 'count' | 'save' | 'insert'>>
     let dataSourceMock: { transaction: jest.Mock }
     let service: MembershipRemovalService
 
     beforeEach(() => {
-        membershipRepoMock = { findOneBy: jest.fn(), count: jest.fn() }
-        managerMock = { save: jest.fn(), insert: jest.fn() }
+        managerMock = { findOne: jest.fn(), count: jest.fn(), save: jest.fn(), insert: jest.fn() }
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture()),
+        )
         managerMock.save.mockImplementation((entity, data) => Promise.resolve(data as never))
         dataSourceMock = {
             transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
         }
-        service = new MembershipRemovalService(
-            membershipRepoMock as unknown as Repository<OrganizationMembership>,
-            dataSourceMock as unknown as DataSource,
-        )
+        service = new MembershipRemovalService(dataSourceMock as unknown as DataSource)
     })
 
     it('rejects an actor outside the target organization', async () => {
@@ -59,13 +62,19 @@ describe('MembershipRemovalService', () => {
     })
 
     it('throws NotFoundException when the membership does not exist in this organization', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(null)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(entity === Organization ? ({ id: 'org-1' } as Organization) : null),
+        )
 
         await expect(service.remove(principalFixture(), 'org-1', 'missing')).rejects.toThrow(NotFoundException)
     })
 
     it('is an idempotent no-op when the membership is already disabled', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(membershipFixture({ status: 'disabled' }))
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ status: 'disabled' }),
+            ),
+        )
 
         await service.remove(principalFixture(), 'org-1', 'membership-1')
 
@@ -74,23 +83,35 @@ describe('MembershipRemovalService', () => {
     })
 
     it('rejects an admin who tries to remove an owner', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(membershipFixture({ role: 'owner' }))
-        membershipRepoMock.count.mockResolvedValue(2)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
+        managerMock.count.mockResolvedValue(2)
         const actor = principalFixture({ membershipRole: 'admin' })
 
         await expect(service.remove(actor, 'org-1', 'membership-1')).rejects.toThrow(ForbiddenException)
     })
 
     it('rejects removing the final active owner', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(membershipFixture({ role: 'owner' }))
-        membershipRepoMock.count.mockResolvedValue(1)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
+        managerMock.count.mockResolvedValue(1)
 
         await expect(service.remove(principalFixture(), 'org-1', 'membership-1')).rejects.toThrow(ConflictException)
     })
 
     it('allows removing an owner when another active owner exists, and writes an audit row', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(membershipFixture({ role: 'owner' }))
-        membershipRepoMock.count.mockResolvedValue(2)
+        managerMock.findOne.mockImplementation(entity =>
+            Promise.resolve(
+                entity === Organization ? ({ id: 'org-1' } as Organization) : membershipFixture({ role: 'owner' }),
+            ),
+        )
+        managerMock.count.mockResolvedValue(2)
 
         await service.remove(principalFixture(), 'org-1', 'membership-1')
 
@@ -105,8 +126,20 @@ describe('MembershipRemovalService', () => {
     })
 
     it('allows an owner to remove a member without any Keycloak-adjacent dependency', async () => {
-        membershipRepoMock.findOneBy.mockResolvedValue(membershipFixture({ role: 'member' }))
-
         await expect(service.remove(principalFixture(), 'org-1', 'membership-1')).resolves.toBeUndefined()
+    })
+
+    it('locks the organization before reloading the membership', async () => {
+        await service.remove(principalFixture(), 'org-1', 'membership-1')
+
+        expect(managerMock.findOne.mock.calls).toEqual([
+            [Organization, { where: { id: 'org-1' }, lock: { mode: 'pessimistic_write' } }],
+            [
+                OrganizationMembership,
+                {
+                    where: { id: 'membership-1', organizationId: 'org-1' },
+                },
+            ],
+        ])
     })
 })
