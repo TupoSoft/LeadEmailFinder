@@ -15,6 +15,7 @@ import { SESSION_ENCRYPTION_KEY, SessionEncryptor } from './infrastructure/crypt
 import { JoseIdTokenVerifier } from './infrastructure/jose/jose-id-token-verifier'
 import { KeycloakOAuthClient } from './infrastructure/keycloak/keycloak-oauth-client'
 import { BffSessionController } from './infrastructure/http/bff-session.controller'
+import { BrowserSessionMutationGuard } from './infrastructure/http/browser-session-mutation.guard'
 import { CsrfGuard } from './infrastructure/http/csrf.guard'
 import { OriginGuard } from './infrastructure/http/origin.guard'
 import { RedisPendingLoginStateStore } from './infrastructure/redis/redis-pending-login-state-store'
@@ -45,7 +46,8 @@ import { RedisSessionStore } from './infrastructure/redis/redis-session-store'
         BffSessionCredentialAuthenticator,
         OriginGuard,
         CsrfGuard,
+        BrowserSessionMutationGuard,
     ],
-    exports: [BffSessionCredentialAuthenticator],
+    exports: [BffSessionCredentialAuthenticator, BrowserSessionMutationGuard],
 })
 export class BffSessionModule {}

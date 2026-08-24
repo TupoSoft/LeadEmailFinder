@@ -1,4 +1,12 @@
-import { ClassSerializerInterceptor, INestApplication, Module, UnauthorizedException } from '@nestjs/common'
+import {
+    ClassSerializerInterceptor,
+    Controller,
+    INestApplication,
+    Module,
+    Post,
+    SerializeOptions,
+    UnauthorizedException,
+} from '@nestjs/common'
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
@@ -6,12 +14,31 @@ import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService } from '@tuposoft/lead-email-finder/modules/auth/application/authentication.service'
 import { AuthGuard } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/auth.guard'
 import { BFF_SESSION_COOKIE_NAME } from '@tuposoft/lead-email-finder/modules/auth/application/credential-extractor'
+import { CurrentPrincipal } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/current-principal.decorator'
+import { Public } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/public.decorator'
 import { BffSessionFlowService } from './application/bff-session-flow.service'
 import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from './infrastructure/config/bff-session-configuration'
 import { BFF_CSRF_COOKIE_NAME } from './infrastructure/http/bff-cookie-names'
 import { BffSessionController } from './infrastructure/http/bff-session.controller'
+import { BrowserSessionMutationGuard } from './infrastructure/http/browser-session-mutation.guard'
+import { SessionResponseDto } from './infrastructure/http/bff-session.dto'
 import { CsrfGuard } from './infrastructure/http/csrf.guard'
 import { OriginGuard } from './infrastructure/http/origin.guard'
+
+@Controller('mutation-probe')
+class MutationProbeController {
+    @Public()
+    @Post('public')
+    publicMutate(): { ok: boolean } {
+        return { ok: true }
+    }
+
+    @Post('protected')
+    @SerializeOptions({ type: SessionResponseDto })
+    protectedMutate(@CurrentPrincipal() principal: AuthPrincipal): AuthPrincipal {
+        return principal
+    }
+}
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
     authenticate: jest.fn(),
@@ -45,15 +72,17 @@ function principalFixture(): AuthPrincipal {
 }
 
 @Module({
-    controllers: [BffSessionController],
+    controllers: [BffSessionController, MutationProbeController],
     providers: [
         Reflector,
         OriginGuard,
         CsrfGuard,
+        BrowserSessionMutationGuard,
         { provide: BffSessionFlowService, useValue: bffSessionFlowMock },
         { provide: BFF_SESSION_CONFIGURATION, useValue: configuration },
         { provide: AuthenticationService, useValue: authenticationServiceMock },
         { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useExisting: BrowserSessionMutationGuard },
     ],
 })
 class BffSessionGuardWiringTestModule {}
@@ -154,5 +183,46 @@ describe('BFF session guard wiring', () => {
             .expect(204)
 
         expect(bffSessionFlowMock.logout).toHaveBeenCalledWith('session-id')
+    })
+
+    it('allows a @Public() mutation without authentication, origin, or CSRF checks', async () => {
+        await request(app.getHttpServer()).post('/mutation-probe/public').expect(201)
+
+        expect(authenticationServiceMock.authenticate).not.toHaveBeenCalled()
+    })
+
+    it('rejects an authenticated human_session mutation with 403 when Origin and CSRF are missing', async () => {
+        authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
+
+        await request(app.getHttpServer())
+            .post('/mutation-probe/protected')
+            .set('cookie', `${BFF_SESSION_COOKIE_NAME}=session-id`)
+            .expect(403)
+    })
+
+    it('allows an authenticated human_session mutation with a matching Origin and CSRF token', async () => {
+        const principal = principalFixture()
+        authenticationServiceMock.authenticate.mockResolvedValue(principal)
+
+        const response = await request(app.getHttpServer())
+            .post('/mutation-probe/protected')
+            .set('origin', 'http://localhost:53000')
+            .set('cookie', `${BFF_SESSION_COOKIE_NAME}=session-id; ${BFF_CSRF_COOKIE_NAME}=csrf-token`)
+            .set('x-csrf-token', 'csrf-token')
+            .expect(201)
+
+        expect(response.body).toEqual(principal)
+    })
+
+    it('allows an authenticated service_client bearer mutation without an Origin or CSRF token', async () => {
+        const principal: AuthPrincipal = { ...principalFixture(), credentialKind: 'service_client' }
+        authenticationServiceMock.authenticate.mockResolvedValue(principal)
+
+        const response = await request(app.getHttpServer())
+            .post('/mutation-probe/protected')
+            .set('authorization', 'Bearer irrelevant-because-authenticate-is-mocked')
+            .expect(201)
+
+        expect(response.body).toEqual(principal)
     })
 })
