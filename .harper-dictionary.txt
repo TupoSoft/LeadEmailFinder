@@ -1,3 +1,4 @@
+BFF
 Bruno
 BullMQ
 CommonJS
@@ -13,6 +14,7 @@ Idempotence
 JWKS
 Keycloak
 LeadEmailFinder
+logout
 M2M
 Mailpit
 MinIO
@@ -22,7 +24,10 @@ OpenCollection
 OTP
 PKCE
 pnpm
+referer
+S256
 S3
+SameSite
 SMTP
 SOCKS5
 Swagger

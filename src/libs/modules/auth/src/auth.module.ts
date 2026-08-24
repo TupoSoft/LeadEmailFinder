@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { BffSessionModule } from '@tuposoft/lead-email-finder/modules/bff-session/bff-session.module'
 import { BffSessionCredentialAuthenticator } from '@tuposoft/lead-email-finder/modules/bff-session/application/bff-session-credential-authenticator'
+import { BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session/infrastructure/http/browser-session-mutation.guard'
 import { AuthenticationService } from './application/authentication.service'
 import { CREDENTIAL_AUTHENTICATORS } from './application/credential-authenticator'
 import { CredentialExtractor } from './application/credential-extractor'
@@ -32,6 +33,7 @@ import { createOidcConfiguration, OIDC_CONFIGURATION } from './infrastructure/jo
             inject: [OidcCredentialAuthenticator, BffSessionCredentialAuthenticator],
         },
         { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useExisting: BrowserSessionMutationGuard },
     ],
     exports: [AuthenticationService],
 })

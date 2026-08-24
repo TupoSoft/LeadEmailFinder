@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Inject, Post, Query, Req, Res, SerializeOptions, UseGuards } from '@nestjs/common'
+import { Controller, Get, HttpStatus, Inject, Post, Query, Req, Res, SerializeOptions } from '@nestjs/common'
 import { Request, Response } from 'express'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Public } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/public.decorator'
@@ -9,8 +9,6 @@ import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bf
 import { BFF_CSRF_COOKIE_NAME, BFF_LOGIN_STATE_COOKIE_NAME } from './bff-cookie-names'
 import { AuthCallbackQueryDto, SessionResponseDto } from './bff-session.dto'
 import { buildCsrfCookieOptions, buildLoginStateCookieOptions, buildSessionCookieOptions } from './cookie-options'
-import { CsrfGuard } from './csrf.guard'
-import { OriginGuard } from './origin.guard'
 import { firstHeaderValue, parseCookieHeader } from './parse-cookie-header'
 
 @Controller('v1/auth')
@@ -54,7 +52,6 @@ export class BffSessionController {
     }
 
     @Post('logout')
-    @UseGuards(OriginGuard, CsrfGuard)
     async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
         const cookies = parseCookieHeader(firstHeaderValue(req.headers['cookie']))
 

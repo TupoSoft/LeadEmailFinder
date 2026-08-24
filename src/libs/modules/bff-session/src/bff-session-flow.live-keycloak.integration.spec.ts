@@ -16,6 +16,7 @@ import {
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
+import { BFF_CSRF_COOKIE_NAME } from './infrastructure/http/bff-cookie-names'
 
 // Deliberately its own env vars, not TEST_OIDC_*/TEST_POSTGRES_URL: this test drives a real Keycloak
 // browser login (distinct from the M2M client-credentials tests) and does its own dropSchema+synchronize
@@ -318,6 +319,86 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
             expect(JSON.stringify(sessionResponse.body)).not.toMatch(/access_token|refresh_token|id_token/i)
 
             await membershipRepo.update(membership.id, { status: 'disabled' })
+
+            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
+        },
+        30_000,
+    )
+
+    it(
+        'enforces the global Origin/CSRF guard for a genuinely authenticated browser-session mutation',
+        async () => {
+            const username = `bff-test-csrf-${randomUUID()}`
+            const password = randomBytes(12).toString('base64url')
+            const userId = await createKeycloakUser(adminToken, username, password)
+            createdUserIds.push(userId)
+
+            const organization = await organizationRepo.save(organizationRepo.create({ name: `bff-test-csrf-org-${randomUUID()}` }))
+            const externalIdentity = await externalIdentityRepo.save(
+                externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
+            )
+            await membershipRepo.save(
+                membershipRepo.create({
+                    organizationId: organization.id,
+                    externalIdentityId: externalIdentity.id,
+                    role: 'member',
+                    status: 'active',
+                }),
+            )
+
+            const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
+            expect(result.reachedCallback).toBe(true)
+
+            const callbackResponse = await request(app.getHttpServer())
+                .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
+                .set('cookie', loginStateCookie)
+                .redirects(0)
+            expect(callbackResponse.status).toBe(302)
+
+            const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
+            const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+            const csrfCookie = setCookies.find(cookie => cookie.startsWith(`${BFF_CSRF_COOKIE_NAME}=`))!.split(';')[0]
+            const csrfToken = csrfCookie.split('=')[1]
+            const bothCookies = `${sessionCookie}; ${csrfCookie}`
+
+            // Missing Origin/Referer entirely.
+            await request(app.getHttpServer()).post('/v1/auth/logout').set('cookie', bothCookies).expect(403)
+
+            // A cross-origin attacker page sending the victim's cookie and a spoofed CSRF header pair it made
+            // up itself: this is the exact attack this guard exists to stop, so it must fail even though the
+            // attacker can freely choose a header value that "matches" a cookie it also controls.
+            await request(app.getHttpServer())
+                .post('/v1/auth/logout')
+                .set('origin', 'https://evil.example.test')
+                .set('cookie', bothCookies)
+                .set('x-csrf-token', csrfToken)
+                .expect(403)
+
+            // Correct Origin, missing CSRF header.
+            await request(app.getHttpServer())
+                .post('/v1/auth/logout')
+                .set('origin', appBaseUrl)
+                .set('cookie', bothCookies)
+                .expect(403)
+
+            // Correct Origin, CSRF header present but not matching the cookie.
+            await request(app.getHttpServer())
+                .post('/v1/auth/logout')
+                .set('origin', appBaseUrl)
+                .set('cookie', bothCookies)
+                .set('x-csrf-token', 'not-the-real-token')
+                .expect(403)
+
+            // Every rejected mutation above must have left the session intact.
+            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
+
+            // Matching Origin and CSRF token reaches the controller and actually logs out.
+            await request(app.getHttpServer())
+                .post('/v1/auth/logout')
+                .set('origin', appBaseUrl)
+                .set('cookie', bothCookies)
+                .set('x-csrf-token', csrfToken)
+                .expect(204)
 
             await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
         },
