@@ -93,6 +93,46 @@ fallback in "Plan of Work" and "Idempotence and Recovery".
 Focused (`browser-session-mutation.guard.spec.ts`, `bff-session-guard-wiring.integration.spec.ts`) and full validation
 all pass; see Validation below for exact commands and results.
 
+**Follow-up live-stack pass (2026-08-24):** the mocked/wired specs above prove the guard's logic and its Nest
+wiring. Nothing had yet driven the guard against a real Keycloak login and a real double-submit cookie pair issued
+by the actual running server. Ran `pnpm dev:reset -- --confirm-project=LEF` to get a fresh disposable stack, then
+added a new case, "enforces the global Origin/CSRF guard for a genuinely authenticated browser-session mutation",
+to `bff-session-flow.live-keycloak.integration.spec.ts`.
+
+The new case creates a real Keycloak user and `member`-role membership (same pattern as the file's existing first
+test) and completes a real hosted-login-form round trip. It then drives `POST /v1/auth/logout` five times through
+the real `AuthModule` (this file's `beforeAll` imports the genuine module, so the new global guard is live):
+
+1. No Origin/Referer at all — expects `403`.
+2. A spoofed cross-origin `Origin` header carrying a CSRF token an attacker could only obtain by also controlling
+   the cookie, the actual attack this guard exists to stop — expects `403`.
+3. A correct Origin with no CSRF header — expects `403`.
+4. A correct Origin with a wrong CSRF header — expects `403`.
+5. A matching Origin and CSRF token — expects `204`, with the session genuinely invalidated afterward
+   (`GET /v1/auth/session` → `401`).
+
+Between steps 4 and 5 it also checks that the session is still valid after all four rejections
+(`GET /v1/auth/session` → `200`).
+
+Verified the new test is not vacuous by temporarily removing the second `APP_GUARD` binding from `auth.module.ts`
+and rerunning only that test: it failed exactly as expected (first assertion got `204` instead of `403`), then
+restored the binding and confirmed the full file passes again.
+
+The containerized `api` service itself could not be used to drive this. Confirmed the already-documented PR 3/PR 6
+gap still applies: `OIDC_ISSUER_URL` is unreachable from inside the container's own network namespace during token
+exchange (`401 Authorization code exchange failed`), which is not a regression and matches this plan's own Context
+section and the discoveries recorded in `auth/06`. This ran the same way the existing tests in `auth/06` do
+instead: a host-side NestJS test process against the real Postgres/Redis/Keycloak containers.
+
+Also ran the full set of previously live-gated specs together against this same stack:
+`keycloak-organization-admin.live-keycloak`, `service-client-management.live-keycloak` (which also imports the
+real `AuthModule` and drives bearer-authenticated mutations through the new global guard),
+`oidc-permission-check.live-keycloak`, `jose-oidc-token-verifier.live-keycloak`, `credits.service.integration`, and
+`identity-schema.integration`. All 7 suites and 22 tests passed, confirming no regression to bearer/M2M mutation
+paths. All ad hoc Keycloak users, organizations, and membership rows created directly against the dev database for
+a manual curl-driven login attempt (abandoned once the container networking gap was confirmed) were deleted
+afterward; see Validation for exact results.
+
 ## Context and Orientation
 
 `AuthModule` registers `AuthGuard` as an `APP_GUARD`. It authenticates the request and stores `AuthPrincipal` on
@@ -170,6 +210,27 @@ available and always run `bruno/credit-purchases` to verify the M2M mutation pat
 - `bru run --env local` — not run. No local Compose stack (API/Keycloak) was running and the `bru` CLI is not
   installed in this environment. Performed static review only (see Outcomes & Retrospective); Bruno execution
   remains unverified for this change.
+
+**Follow-up live-stack results (2026-08-24):** with `pnpm dev:reset -- --confirm-project=LEF` bringing up a fresh
+disposable stack:
+
+- `bff-session-flow.live-keycloak.integration.spec.ts` with `TEST_BFF_*` pointed at the real stack — 4/4 passed,
+  including the new genuine-cookie CSRF round trip and the deliberate malicious-Origin case.
+- The same file with the second `APP_GUARD` binding temporarily removed from `auth.module.ts` — the new CSRF test
+  failed exactly as expected (`403` assertion got `204`), confirming the test is a real regression check; binding
+  restored and the file rerun clean afterward.
+- All seven previously live-gated suites together (`TEST_BFF_*`, `TEST_ORG_*`, `TEST_SVC_*`, `TEST_OIDC_*`,
+  `TEST_CREDITS_POSTGRES_URL`, `TEST_POSTGRES_URL`), `--runInBand` — 22/22 passed. Notably
+  `service-client-management.live-keycloak.integration.spec.ts` imports the real `AuthModule` and drives
+  bearer-authenticated mutations through the new global guard end to end; it passed unchanged.
+- Full `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm jest --runInBand` with every `TEST_*` var set — 756/759
+  passed, 1 suite skipped (`payment-event.handler.integration.spec.ts`, gated on `TEST_POSTGRES_URL` naming and
+  unrelated to auth), 1 preexisting `todo`.
+- `npx tsc --noEmit` and `corepack pnpm lint` rerun clean after the live-spec addition.
+- Manually attempted the same login round trip through the containerized `api` service at `localhost:53000` first;
+  confirmed it hits the already-documented PR 3/PR 6 container-to-Keycloak networking gap (`401 Authorization code
+  exchange failed`), not a regression from this change. Fell back to the host-side test-process approach the
+  existing `auth/06` tests already use.
 
 ## Idempotence and Recovery
 
