@@ -1,14 +1,15 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { InjectRepository } from '@nestjs/typeorm'
-import { DataSource, Repository } from 'typeorm'
-import { AuditLogEntry, AuthPrincipal, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { DataSource } from 'typeorm'
+import {
+    AuditLogEntry,
+    AuthPrincipal,
+    Organization,
+    OrganizationMembership,
+} from '@tuposoft/lead-email-finder/modules/identity'
 
 @Injectable()
 export class MembershipRemovalService {
-    constructor(
-        @InjectRepository(OrganizationMembership) private readonly membershipRepo: Repository<OrganizationMembership>,
-        private readonly dataSource: DataSource,
-    ) {}
+    constructor(private readonly dataSource: DataSource) {}
 
     async remove(actor: AuthPrincipal, organizationId: string, membershipId: string): Promise<void> {
         if (actor.organizationId !== organizationId) {
@@ -18,30 +19,37 @@ export class MembershipRemovalService {
             throw new ForbiddenException('Only an owner or admin may remove members')
         }
 
-        const membership = await this.membershipRepo.findOneBy({ id: membershipId, organizationId })
-        if (!membership) {
-            throw new NotFoundException('Membership not found')
-        }
-        if (membership.status === 'disabled') {
-            return
-        }
-
-        if (actor.membershipRole === 'admin' && membership.role === 'owner') {
-            throw new ForbiddenException('Admins cannot remove an owner')
-        }
-
-        if (membership.role === 'owner') {
-            const activeOwnerCount = await this.membershipRepo.count({
-                where: { organizationId, role: 'owner', status: 'active' },
-            })
-            if (activeOwnerCount <= 1) {
-                throw new ConflictException('Cannot remove the final owner of an organization')
-            }
-        }
-
         // Deliberately no Keycloak call here: membership status is authoritative for product access
         // (ExecPlan 07's own Decision Log), so removing local access must not depend on any external call.
         await this.dataSource.transaction(async manager => {
+            await manager.findOne(Organization, {
+                where: { id: organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+
+            const membership = await manager.findOne(OrganizationMembership, {
+                where: { id: membershipId, organizationId },
+            })
+            if (!membership) {
+                throw new NotFoundException('Membership not found')
+            }
+            if (membership.status === 'disabled') {
+                return
+            }
+
+            if (actor.membershipRole === 'admin' && membership.role === 'owner') {
+                throw new ForbiddenException('Admins cannot remove an owner')
+            }
+
+            if (membership.role === 'owner') {
+                const activeOwnerCount = await manager.count(OrganizationMembership, {
+                    where: { organizationId, role: 'owner', status: 'active' },
+                })
+                if (activeOwnerCount <= 1) {
+                    throw new ConflictException('Cannot remove the final owner of an organization')
+                }
+            }
+
             membership.status = 'disabled'
             await manager.save(OrganizationMembership, membership)
 
