@@ -17,7 +17,7 @@ import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { PaymentsModule } from '@tuposoft/lead-email-finder/modules/payments'
 import { OrganizationOnboardingModule } from '@tuposoft/lead-email-finder/modules/organization-onboarding'
-import { ServiceClientManagementModule } from './service-client-management'
+import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modules/service-client-management'
 
 @Module({
     imports: [
