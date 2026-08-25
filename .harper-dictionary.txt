@@ -3,6 +3,7 @@ Bruno
 BullMQ
 CommonJS
 CoreDNS
+Corepack
 CSRF
 DTO
 DTOs

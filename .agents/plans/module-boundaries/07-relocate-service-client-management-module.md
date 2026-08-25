@@ -1,4 +1,4 @@
-# Relocate service-client management into the standard module hierarchy
+# Relocate Service-Client Management into the Standard Module Hierarchy
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
@@ -11,11 +11,11 @@ Keycloak recovery behavior remain unchanged.
 
 ## Progress
 
-- [ ] (2026-08-21) Move service-client source/tests and add its public alias/barrel.
-- [ ] (2026-08-21) Rewire host composition while retaining narrow Keycloak and identity dependencies.
-- [ ] (2026-08-21) Verify unit, HTTP, live-Keycloak-optional, static, and Bruno regressions.
+- [x] (2026-08-25) Move service-client source/tests and add its public alias/barrel.
+- [x] (2026-08-25) Rewire host composition while retaining narrow Keycloak and identity dependencies.
+- [x] (2026-08-25) Verify unit, HTTP, live-Keycloak-optional, static, and Bruno regressions.
 
-## Plan dependencies
+## Plan Dependencies
 
 - `module-boundaries/06`
 - `service-client-hardening/01`
@@ -26,6 +26,10 @@ Keycloak recovery behavior remain unchanged.
   from the auth and identity modules that define its security boundary.
 - Its Keycloak HTTP configuration/client resembles organization onboarding structurally, but the two capabilities
   expose different provider operations and recovery rules.
+- All 24 feature files use either local relative imports or public auth/identity aliases. The relocation therefore
+  required no edits inside the feature, and a byte comparison against `HEAD` confirmed every moved file is unchanged.
+- No local Compose services or Bruno CLI are available in this workspace session. The optional live-Keycloak suite
+  remained skip-gated, and the unchanged Bruno requests could not run against a local API.
 
 ## Decision Log
 
@@ -39,14 +43,25 @@ Keycloak recovery behavior remain unchanged.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated. All 24 service-client-management source and test files now live under
+`src/libs/modules/service-client-management/src` without content changes. TypeScript and Jest resolve the new exact
+and wildcard aliases, while `LeadEmailFinderApiModule` imports only the public barrel. The existing barrel continues
+to expose only `ServiceClientManagementModule`; the Keycloak provider port, adapter, HTTP client, application
+services, controller, and DTOs remain private to the module.
+
+The focused service-client/auth/identity suite, full Jest suite, type check, build, lint, documentation lint, and
+diff whitespace check passed. The optional live-Keycloak test remained skipped because its disposable fixture was
+not running. Bruno execution was not applicable to this internal relocation and was unavailable because neither a
+Bruno CLI nor a local Compose stack was present; the unchanged HTTP integration suite passed in both focused and
+full validation.
 
 ## Context and Orientation
 
-`src/lead-email-finder-api/src/service-client-management` owns `ServiceClientsController`, five lifecycle services,
-DTOs, a Keycloak provider port, HTTP configuration/client/adapter, focused unit tests, HTTP integration coverage, and
-an optional live-Keycloak flow. It imports auth and identity modules. Local `ServiceCredential` state is authoritative
-for authorization after provider provisioning.
+Before this change, `src/lead-email-finder-api/src/service-client-management` owned `ServiceClientsController`, five
+life cycle services, DTOs, a Keycloak provider port, HTTP configuration/client/adapter, focused unit tests, HTTP
+integration coverage, and an optional live-Keycloak flow. The capability now lives under
+`src/libs/modules/service-client-management/src` and imports the public auth and identity modules. Local
+`ServiceCredential` state remains authoritative for authorization after provider provisioning.
 
 ## Scope and Non-Goals
 
@@ -90,6 +105,24 @@ Run the relocated live-Keycloak integration test only with its documented dispos
 `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- --runInBand`, and `git diff --check`. From
 `bruno/service-client-management`, run `bru run --env local` when available.
 
+**Results (2026-08-25):**
+
+- Focused Jest command with `COREPACK_HOME=/tmp/lef-corepack` added for the workspace's writable Corepack cache:
+  23 suites and 151 tests passed; four suites and ten tests were skipped by their live-fixture gates.
+- `COREPACK_HOME=/tmp/lef-corepack corepack pnpm typecheck` passed with zero errors.
+- `COREPACK_HOME=/tmp/lef-corepack corepack pnpm build` found zero TypeScript issues and compiled 441 files.
+- `COREPACK_HOME=/tmp/lef-corepack corepack pnpm lint` passed with zero errors and two unrelated, previously present
+  explicit-return-type warnings.
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp ./node_modules/.bin/jest --runInBand` passed 119 suites and 736 tests; nine suites
+  and 27 tests were skip-gated, with one previously recorded to-do item.
+- `COREPACK_HOME=/tmp/lef-corepack corepack pnpm docs:lint -- bruno/service-client-management/README.md
+  .agents/plans/module-boundaries/07-relocate-service-client-management-module.md` passed both files.
+- `git diff --check` passed. The old source directory is absent, and a source/configuration search found no stale
+  references to it.
+- The live-Keycloak test was not run because no disposable Compose stack or `TEST_SVC_*` fixture was available.
+  Bruno was not run because no Bruno CLI or local API stack was available. Its request definitions are unchanged;
+  only the integration-test path in the README moved.
+
 ## Idempotence and Recovery
 
 Moving source changes no local credentials or Keycloak clients. Reconcile an interrupted move from `git status` and
@@ -101,6 +134,11 @@ an interrupted live run instead of manually changing credential rows.
 Record final old-path searches, focused suite counts, and redacted HTTP/live-Keycloak statuses. Never record client
 secrets, admin credentials, provider-internal identifiers returned only internally, or bearer tokens.
 
-## Plan readiness
+Final evidence: all 24 relocated files are byte-identical to their `HEAD` versions; the host has exactly one import
+from `@tuposoft/lead-email-finder/modules/service-client-management`; focused HTTP integration and controller specs
+passed; no live credentials, tokens, or provider identifiers were recorded.
 
-Ready to implement.
+## Plan Readiness
+
+Implemented and validated, except for optional live-Keycloak and Bruno execution because their disposable runtime
+dependencies were unavailable.

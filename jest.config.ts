@@ -26,6 +26,8 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/identity/(.*)': '<rootDir>/src/libs/modules/identity/src/$1',
         '@tuposoft/lead-email-finder/modules/organization-onboarding/(.*)':
             '<rootDir>/src/libs/modules/organization-onboarding/src/$1',
+        '@tuposoft/lead-email-finder/modules/service-client-management/(.*)':
+            '<rootDir>/src/libs/modules/service-client-management/src/$1',
         '@tuposoft/lead-email-finder/modules/payments/(.*)': '<rootDir>/src/libs/modules/payments/src/$1',
         '@tuposoft/lead-email-finder/modules/proxy/(.*)': '<rootDir>/src/libs/modules/proxy/src/$1',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
@@ -41,6 +43,8 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/identity': '<rootDir>/src/libs/modules/identity/src',
         '@tuposoft/lead-email-finder/modules/organization-onboarding':
             '<rootDir>/src/libs/modules/organization-onboarding/src',
+        '@tuposoft/lead-email-finder/modules/service-client-management':
+            '<rootDir>/src/libs/modules/service-client-management/src',
         '@tuposoft/lead-email-finder/modules/payments': '<rootDir>/src/libs/modules/payments/src',
         '@tuposoft/lead-email-finder/modules/proxy': '<rootDir>/src/libs/modules/proxy/src',
         '@tuposoft/lead-email-finder/config': '<rootDir>/src/libs/config/src',
