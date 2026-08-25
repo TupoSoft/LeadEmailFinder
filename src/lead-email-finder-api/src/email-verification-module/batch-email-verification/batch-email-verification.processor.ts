@@ -3,9 +3,10 @@ import { Job, Queue, WaitingChildrenError } from 'bullmq'
 import { BatchEmailVerificationJobData } from './batch-email-verification-job-data.interface'
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
-import { Inject, Logger } from '@nestjs/common'
+import { Inject } from '@nestjs/common'
 import { ok } from 'node:assert'
 import { PassThrough, Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { ReadableStream } from 'node:stream/web'
 import { parse, Parser } from 'csv-parse'
 import { plainToInstance } from 'class-transformer'
@@ -16,18 +17,17 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { EmailVerification } from '../sync-email-verification'
 import { DataSource, Repository } from 'typeorm'
 import { stringify } from 'csv-stringify'
-import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
 import { deriveResultsKey } from './derive-results-key'
+import { BATCH_RESULT_UPLOADER, BatchResultUploader } from './batch-result-uploader'
 
 @Processor(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
 export class BatchEmailVerificationProcessor extends WorkerHost {
-    private readonly logger = new Logger(BatchEmailVerificationProcessor.name)
-
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
+        @Inject(BATCH_RESULT_UPLOADER) private readonly batchResultUploader: BatchResultUploader,
         @InjectQueue('async-email-verification')
         private readonly asyncEmailVerificationQueue: Queue<AsyncEmailVerificationJobData>,
         @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
@@ -82,22 +82,20 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         const Body = new PassThrough()
         const Key = deriveResultsKey(key)
 
-        const upload = new Upload({
-            client: this.s3,
-            params: {
-                Bucket: bucket,
-                Key,
-                Body,
-                ContentType: 'text/csv',
-            },
-        })
+        const upload = this.batchResultUploader.startCsvUpload({ bucket, key: Key, body: Body })
 
-        cursor.pipe(stringifier).pipe(Body)
+        const pipelineCompletion = pipeline(cursor, stringifier, Body)
+        const uploadCompletion = upload.done()
 
         try {
-            await upload.done()
+            await Promise.all([pipelineCompletion, uploadCompletion])
         } catch (error) {
-            this.logger.error(error)
+            cursor.destroy()
+            stringifier.destroy()
+            Body.destroy()
+            await upload.abort().catch(() => undefined)
+            await Promise.allSettled([pipelineCompletion, uploadCompletion])
+            throw error
         }
 
         await job.updateData({

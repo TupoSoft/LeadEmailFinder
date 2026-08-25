@@ -24,6 +24,7 @@ OpenCollection
 OTP
 PKCE
 pnpm
+PassThrough
 referer
 S256
 S3
@@ -31,6 +32,7 @@ SameSite
 SMTP
 SOCKS5
 Swagger
+stringifier
 TupoSoft
 TypeORM
 UUID

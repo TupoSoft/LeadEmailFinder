@@ -128,7 +128,13 @@ describe('BatchEmailVerificationService', () => {
             ['empty batch at upload stage', BatchEmailVerificationJobStep.UploadResults, 0, 0, 100],
             ['finish with no children', BatchEmailVerificationJobStep.Finish, 0, 0, 100],
             ['finish always reports 100 regardless of counts', BatchEmailVerificationJobStep.Finish, 5, 5, 100],
-            ['defensive: inconsistent negative counts never escape as NaN/Infinity', BatchEmailVerificationJobStep.WaitForChildren, -1, -1, 100],
+            [
+                'defensive: inconsistent negative counts never escape as NaN/Infinity',
+                BatchEmailVerificationJobStep.WaitForChildren,
+                -1,
+                -1,
+                100,
+            ],
         ])('reports bounded progress: %s', async (_description, step, processed, unprocessed, expectedProgress) => {
             const id = randomUUID()
 
@@ -192,8 +198,25 @@ describe('BatchEmailVerificationService', () => {
             expect(readable).toBeDefined()
             expect(s3.getObject).toHaveBeenCalledWith({
                 Bucket: 'bucket',
-                Key: '/organizations/org-1/results/result.csv',
+                Key: 'organizations/org-1/results/result.csv',
             })
         })
+
+        it.each(['not a URL', 'https://bucket/result.csv', 's3://bucket/'])(
+            'rejects malformed result location %s without requesting S3',
+            async returnvalue => {
+                queue.getJob.mockResolvedValueOnce({
+                    data: { organizationId: 'org-1' },
+                    getState: jest.fn().mockResolvedValue('completed'),
+                    returnvalue,
+                })
+
+                await expect(service.getBatchResults(randomUUID(), principal)).rejects.toThrow(
+                    'Invalid S3 result location',
+                )
+
+                expect(s3.getObject).not.toHaveBeenCalled()
+            },
+        )
     })
 })

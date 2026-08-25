@@ -10,6 +10,8 @@ import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.
 import { ConfigModule } from '@nestjs/config'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
+import { BATCH_RESULT_UPLOADER } from './batch-result-uploader'
+import { S3BatchResultUploader } from './s3-batch-result-uploader.service'
 
 @Module({
     imports: [
@@ -29,6 +31,10 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
         {
             provide: 'BatchEmailVerificationServiceToken',
             useExisting: BatchEmailVerificationServiceImpl,
+        },
+        {
+            provide: BATCH_RESULT_UPLOADER,
+            useClass: S3BatchResultUploader,
         },
         RolePermissionPolicy,
         PermissionsGuard,

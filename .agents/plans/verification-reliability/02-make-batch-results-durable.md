@@ -1,4 +1,4 @@
-# Complete batch jobs only after durable result upload
+# Complete Batch Jobs Only After Durable Result Upload
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
@@ -10,12 +10,12 @@ fails/retries the BullMQ job instead of publishing a false `completed` state and
 
 ## Progress
 
-- [ ] (2026-08-20) Make result-location parsing preserve the exact uploaded S3 key.
-- [ ] (2026-08-20) Propagate upload failures and advance to Finish only after upload success.
-- [ ] (2026-08-20) Add service, processor, HTTP, and batch Bruno coverage.
-- [ ] (2026-08-20) Run focused and full validation and record the outcome.
+- [x] (2026-08-25) Make result-location parsing preserve the exact uploaded S3 key.
+- [x] (2026-08-25) Propagate upload failures and advance to Finish only after upload success.
+- [x] (2026-08-25) Add service, processor, HTTP, and batch Bruno coverage.
+- [x] (2026-08-25) Run focused and full validation and record the outcome.
 
-## Plan dependencies
+## Plan Dependencies
 
 - `auth/05`
 
@@ -26,6 +26,8 @@ fails/retries the BullMQ job instead of publishing a false `completed` state and
 - `BatchEmailVerificationProcessor.uploadResults()` catches `upload.done()` errors, logs them, and then writes the
   `Finish` step and result path anyway.
 - The current service spec asserts the leading-slash key, so it protects the defect rather than the contract.
+- The `bruno/batch-verification` workflow already existed for upload and progress coverage; this change extends it
+  with bounded request chaining and result-download assertions instead of creating another collection.
 
 ## Decision Log
 
@@ -37,10 +39,25 @@ fails/retries the BullMQ job instead of publishing a false `completed` state and
 - Decision: S3 upload success is a prerequisite for `Finish`; upload errors propagate to BullMQ retry/failure.
   Rationale: A completed state promises downloadable results and must not be emitted for best-effort storage.
   Date/Author: 2026-08-20, source-audit planning.
+- Decision: Coordinate the database cursor, CSV stringifier, upload body, and multipart upload with a stream pipeline;
+  abort and settle both operations before propagating any failure.
+  Rationale: Stream errors must reject the BullMQ processor without leaving an upload or stream running in the
+  background.
+  Date/Author: 2026-08-25, Codex implementation.
+- Decision: Inject a purpose-specific `BatchResultUploader` into the processor and keep AWS `Upload` construction in
+  `S3BatchResultUploader`.
+  Rationale: The processor owns workflow state, while the adapter owns provider-specific multipart upload details and
+  supplies a deterministic failure boundary for tests.
+  Date/Author: 2026-08-25, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Completed. Result retrieval now parses and validates the stored S3 URL before requesting the exact uploaded key.
+The processor advances to `Finish` only after both CSV streaming and multipart upload complete; either failure aborts
+the upload, settles the streams, and rejects processing for BullMQ retry/failure handling. AWS upload construction is
+isolated behind an injected batch-result uploader. Focused and full automated tests, type checking, linting,
+formatting, and prose validation pass. The Bruno workflow now polls with a bound and downloads the result CSV, but
+runtime execution remains unverified because the local Compose stack and generated credentials were unavailable.
 
 ## Context and Orientation
 
@@ -62,10 +79,10 @@ credit charging.
 ## Plan of Work
 
 Add a small result-location parser beside `derive-results-key.ts` or in the batch service boundary. Require the
-`s3:` protocol, a non-empty hostname/bucket, and a non-empty decoded key; remove only the URL pathname's structural
-leading slash. Use that helper from `getBatchResults()` and change the existing spec expectation to the exact key
-used during upload. Reject malformed completed-job results as an internal consistency error without issuing an S3
-request.
+`s3:` protocol, a hostname/bucket that is not empty, and a decoded key that is not empty. Remove only the structural
+leading slash from the URL pathname. Use that helper from `getBatchResults()` and change the existing spec
+expectation to the exact key used during upload. Reject malformed completed-job results as an internal consistency
+error without issuing an S3 request.
 
 Remove the catch-and-continue behavior around `upload.done()`. Let storage failure reject processing so BullMQ can
 apply its retry/failure semantics, and call `job.updateData({ step: Finish, ... })` only after upload completion.
@@ -79,9 +96,11 @@ expected rows. Keep forced storage failure deterministic below HTTP using the mo
 
 ## Interfaces and Dependencies
 
-No endpoint or schema changes. Internal additions may include `parseS3ResultLocation(value): { bucket; key }`.
-`GET /verifyBatch/:id/results` retains `text/csv`; failed uploads leave the BullMQ job retrying or failed instead of
-completed. Reuse the existing S3 client, `Upload`, job-data union, and `deriveResultsKey`.
+No endpoint or schema changes. Internal additions include `parseS3ResultLocation(value): { bucket; key }` and the
+injected `BatchResultUploader` contract with its `S3BatchResultUploader` implementation.
+`GET /verifyBatch/:id/results` retains `text/csv`. An upload error keeps the job queued for retry or moves it to the
+failed state instead of completing it. Reuse the existing S3 client, `Upload`, job-data union, and
+`deriveResultsKey`.
 
 ## Acceptance Criteria
 
@@ -102,14 +121,22 @@ Run batch service, processor, key-derivation/result-location, and controller spe
 ## Idempotence and Recovery
 
 Retry uploads the same deterministic result key, so a successful retry replaces or converges on the same object
-without publishing a second location. Failed jobs remain inspectable/retryable in BullMQ. Development recovery may
-delete the synthetic S3 object and reset the disposable stack with `pnpm dev:reset -- --confirm-project=LEF`.
+without publishing a second location. Failed jobs remain available for inspection and retry in BullMQ. Development
+recovery may delete the synthetic S3 object and reset the disposable stack with
+`pnpm dev:reset -- --confirm-project=LEF`.
 
 ## Artifacts and Notes
 
-Record the synthetic job ID, bucket name, redacted object key, job state transitions, and CSV row count. Never
-record credentials or customer email data.
+- Focused Jest: 7 suites and 42 tests passed.
+- Full Jest: 122 suites and 751 tests passed; 9 suites and 27 tests remained skipped by existing environment gates,
+  with 1 existing pending test.
+- `pnpm typecheck` passed. `pnpm lint` passed with two preexisting explicit-return-type warnings outside this scope.
+- Harper passed for both changed Markdown files. Prettier and `git diff --check` passed.
+- Bruno runtime: not run because no local Compose services or generated Keycloak credentials were present. The two
+  changed OpenCollection YAML files passed Prettier validation.
+- No synthetic job ID, bucket, object key, or customer data was produced because Bruno runtime validation was not
+  available.
 
-## Plan readiness
+## Plan Readiness
 
 Ready to implement.

@@ -1,22 +1,22 @@
 # Batch Verification Bruno Collection
 
 Uploads a small fixture CSV through `POST /verifyBatch/csv`, then polls `GET /verifyBatch/:id` until the
-job completes, asserting every observed `progress` value is a finite number within `[0, 100]` and that
-the completed job reports exactly `100`.
+job completes. It asserts every observed `progress` value is a finite number within `[0, 100]`, the completed
+job reports exactly `100`, and `GET /verifyBatch/:id/results` downloads a CSV containing both fixture rows.
 
-Run it against the local Compose API, authenticating as the seeded **customer** M2M client
-`lef-svc-dev-fixture` (organization "Acme Development Customer", 1000 seeded credits) via OAuth Client
-Credentials — **not** the platform-operations `lef-development-service` client used by most other
-collections in this repo: `verification:run` debits a credit from the caller's own organization, and the
-platform-operations organization is deliberately seeded with zero credits, so authenticating as
-`lef-development-service` here fails every upload with `InsufficientCreditsException`.
+Run it against the local Compose API with the seeded **customer** M2M client `lef-svc-dev-fixture`
+(organization "Acme Development Customer", 1000 seeded credits) via OAuth Client Credentials. Do **not** use the
+platform-operations `lef-development-service` client used by most other collections in this repo.
+`verification:run` debits a credit from the caller's own organization, while the platform-operations organization
+is deliberately seeded with zero credits. Authenticating as `lef-development-service` therefore fails every upload
+with `InsufficientCreditsException`.
 
 ```shell
 pnpm dev:reset
 ```
 
-`lef-svc-dev-fixture`'s secret is never written to disk (unlike `service-client.json`) — fetch it live from
-the Keycloak Admin API using the org-admin service credentials `pnpm dev:reset` already wrote:
+The secret for `lef-svc-dev-fixture` is never written to disk (unlike `service-client.json`). Fetch it live from the
+Keycloak Admin API using the org-admin service credentials `pnpm dev:reset` already wrote:
 
 ```shell
 export OIDC_ISSUER_URL=$(jq -r .issuer .dev/keycloak/service-client.json)

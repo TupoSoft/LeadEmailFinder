@@ -12,6 +12,7 @@ import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { NextFunction, Request, Response } from 'express'
 import { JobState } from '@tuposoft/lead-email-finder/common'
 import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
+import { Readable } from 'node:stream'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
@@ -31,6 +32,7 @@ class FixturePrincipalMiddleware implements NestMiddleware {
             useValue: {
                 uploadFile: jest.fn(),
                 getBatchStatus: jest.fn(),
+                getBatchResults: jest.fn(),
             },
         },
     ],
@@ -66,7 +68,10 @@ describe('BatchEmailVerificationController', () => {
     it('requires verification:run to upload and verification:read to check status/results', () => {
         expect(Reflect.getMetadata(GUARDS_METADATA, BatchEmailVerificationController)).toEqual([PermissionsGuard])
         expect(
-            Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, BatchEmailVerificationController.prototype.uploadFile),
+            Reflect.getMetadata(
+                REQUIRED_PERMISSIONS_METADATA_KEY,
+                BatchEmailVerificationController.prototype.uploadFile,
+            ),
         ).toEqual(['verification:run'])
         expect(
             Reflect.getMetadata(
@@ -148,6 +153,20 @@ describe('BatchEmailVerificationController', () => {
             expect(response.status).toBe(HttpStatus.OK)
             expect(body.progress).toBe(80)
             expect(Number.isFinite(body.progress)).toBe(true)
+        })
+    })
+
+    describe('GET /verifyBatch/:id/results', () => {
+        it('streams the completed batch CSV returned for the caller organization', async () => {
+            const id = randomUUID()
+            batchEmailVerificationService.getBatchResults.mockResolvedValueOnce(Readable.from(['email\n']))
+
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}/results`)
+
+            expect(response.status).toBe(HttpStatus.OK)
+            expect(response.headers['content-type']).toContain('text/csv')
+            expect(response.text).toBe('email\n')
+            expect(batchEmailVerificationService.getBatchResults).toHaveBeenCalledWith(id, principal)
         })
     })
 })
