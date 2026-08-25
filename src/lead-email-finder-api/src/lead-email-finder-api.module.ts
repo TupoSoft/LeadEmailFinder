@@ -16,7 +16,7 @@ import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { PaymentsModule } from '@tuposoft/lead-email-finder/modules/payments'
-import { OrganizationOnboardingModule } from './organization-onboarding'
+import { OrganizationOnboardingModule } from '@tuposoft/lead-email-finder/modules/organization-onboarding'
 import { ServiceClientManagementModule } from './service-client-management'
 
 @Module({
