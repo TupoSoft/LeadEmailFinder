@@ -192,8 +192,22 @@ describe('BatchEmailVerificationService', () => {
             expect(readable).toBeDefined()
             expect(s3.getObject).toHaveBeenCalledWith({
                 Bucket: 'bucket',
-                Key: '/organizations/org-1/results/result.csv',
+                Key: 'organizations/org-1/results/result.csv',
             })
         })
+
+        it.each(['not-a-valid-s3-url', ''])(
+            'rejects and never calls S3 when the job return value is a malformed result location (%p)',
+            async result => {
+                queue.getJob.mockResolvedValueOnce({
+                    data: { organizationId: 'org-1' },
+                    getState: jest.fn().mockResolvedValue('completed'),
+                    returnvalue: result,
+                })
+
+                await expect(service.getBatchResults(randomUUID(), principal)).rejects.toThrow()
+                expect(s3.getObject).not.toHaveBeenCalled()
+            },
+        )
     })
 })

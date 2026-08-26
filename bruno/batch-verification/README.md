@@ -2,7 +2,9 @@
 
 Uploads a small fixture CSV through `POST /verifyBatch/csv`, then polls `GET /verifyBatch/:id` until the
 job completes, asserting every observed `progress` value is a finite number within `[0, 100]` and that
-the completed job reports exactly `100`.
+the completed job reports exactly `100`. A third request independently polls `GET /verifyBatch/:id` to
+completion (a fixed wait is not reliable here) and then downloads `GET /verifyBatch/:id/results`, asserting
+the returned CSV's `email` column matches the uploaded fixture addresses exactly.
 
 Run it against the local Compose API, authenticating as the seeded **customer** M2M client
 `lef-svc-dev-fixture` (organization "Acme Development Customer", 1000 seeded credits) via OAuth Client

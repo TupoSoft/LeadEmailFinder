@@ -11,7 +11,9 @@ import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/l
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { NextFunction, Request, Response } from 'express'
 import { JobState } from '@tuposoft/lead-email-finder/common'
+import { Readable } from 'node:stream'
 import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
+import { JobNotFoundException } from './job-not-found.exception'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
@@ -31,6 +33,7 @@ class FixturePrincipalMiddleware implements NestMiddleware {
             useValue: {
                 uploadFile: jest.fn(),
                 getBatchStatus: jest.fn(),
+                getBatchResults: jest.fn(),
             },
         },
     ],
@@ -148,6 +151,29 @@ describe('BatchEmailVerificationController', () => {
             expect(response.status).toBe(HttpStatus.OK)
             expect(body.progress).toBe(80)
             expect(Number.isFinite(body.progress)).toBe(true)
+        })
+    })
+
+    describe('GET /verifyBatch/:id/results', () => {
+        it('streams the CSV body with a text/csv content type for a completed job', async () => {
+            const id = randomUUID()
+            const csvContent = 'email\nperson@lef.test\n'
+            batchEmailVerificationService.getBatchResults.mockResolvedValueOnce(Readable.from([csvContent]))
+
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}/results`)
+
+            expect(response.status).toBe(HttpStatus.OK)
+            expect(response.headers['content-type']).toContain('text/csv')
+            expect(response.text).toBe(csvContent)
+        })
+
+        it('returns 404 when the service reports the job as not found or not owned', async () => {
+            const id = randomUUID()
+            batchEmailVerificationService.getBatchResults.mockRejectedValueOnce(new JobNotFoundException(id))
+
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}/results`)
+
+            expect(response.status).toBe(HttpStatus.NOT_FOUND)
         })
     })
 })
