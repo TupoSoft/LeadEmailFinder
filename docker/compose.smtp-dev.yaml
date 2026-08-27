@@ -18,6 +18,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
+      smtp-dev-dns-cache-reset:
+        condition: service_completed_successfully
       smtp-dev-proxy:
         condition: service_started
 
@@ -58,6 +60,21 @@ services:
       default:
         ipv4_address: 172.28.0.108
 
+  smtp-dev-dns-cache-reset:
+    image: redis:alpine
+    restart: "no"
+    depends_on:
+      redis:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        keys="$$(redis-cli -h redis --scan --pattern 'DNS_CACHE:*')"
+        if [ -n "$$keys" ]; then
+          printf '%s\n' "$$keys" | xargs -r redis-cli -h redis del
+        fi
+
   smtp-dev-proxy-bootstrap:
     image: curlimages/curl:8.16.0
     restart: "no"
@@ -68,6 +85,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
+      smtp-dev-dns-cache-reset:
+        condition: service_completed_successfully
       smtp-dev-proxy:
         condition: service_started
     entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "reconcile"]

@@ -7,6 +7,7 @@ Corepack
 CSRF
 DTO
 DTOs
+deliverability
 EEST
 ESM
 ExecPlan
@@ -19,6 +20,7 @@ logout
 M2M
 Mailpit
 MinIO
+MX
 NestJS
 OIDC
 OpenCollection
