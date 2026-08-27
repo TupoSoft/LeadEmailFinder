@@ -1,8 +1,16 @@
 # Local SMTP Development Bruno Collection
 
-This collection verifies `person@lef.test` through the opt-in, Docker-network-only SMTP fixture. The fixture accepts every recipient, so this checks application, DNS, proxy, and SMTP wiring rather than real-world deliverability. It then drains the fixture's proxy, confirms it's excluded from proxy selection, and restores it so the collection can be run again without restarting the fixture. Finally, it exercises the deprecated `GET /verify` compatibility route, proving it requires the same credit as `POST /verify` (`402` at zero balance) and debits exactly one credit on success.
+This collection verifies `person@lef.test` through the opt-in, Docker-network-only SMTP fixture. The fixture
+accepts every recipient, so this checks application, DNS, proxy, and SMTP wiring rather than real-world
+deliverability. The collection then drains the fixture proxy, confirms that proxy selection excludes it, and
+restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
+that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
+a successful request.
 
-The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again: `SmtpVerifier` caches its internal catch-all probe per domain, so a second `/verify` call for the same domain never re-attempts allocation regardless of proxy state. `/v1/proxies/healthy` runs the same `state = active` eligibility query the allocator uses, without that cache in the way.
+The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
+internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another
+proxy. `/v1/proxies/healthy` runs the same `state = active` eligibility query as the allocator without that
+cache in the way.
 
 Start the fixture from the repository root:
 
@@ -13,9 +21,22 @@ pnpm keycloak:provision
 pnpm keycloak:bootstrap-credential
 ```
 
-`keycloak:bootstrap-credential` seeds a `Platform Operations (development)` organization and grants the pre-provisioned `lef-development-service` M2M client every permission (including `platform:admin`), issued under both the host-facing and the smtp-dev overlay's container-internal Keycloak issuer — this fixture's own `bootstrap-proxy.sh` and this Bruno collection both authenticate as that client via OAuth Client Credentials, not a raw API key.
+The overlay runs `smtp-dev-dns-cache-reset` before starting the API or reconciling the fixture proxy. This
+one-shot service clears the shared Redis `DNS_CACHE:*` namespace so answers cached by the base stack cannot
+override the overlay's CoreDNS fixture. It is safe when the cache is already empty; DNS answers are populated
+again on demand.
 
-**This collection must run from inside the smtp-dev Docker network, not from the host.** `docker/compose.smtp-dev.yaml` overrides the `api` service's own `OIDC_ISSUER_URL` to the container-internal `http://keycloak:8080/realms/lead-email-finder` (the same reason `bootstrap-proxy.sh` had to move off `X-Api-Key` — see `.agents/plans/auth/09-remove-api-key-authentication.md`'s Decision Log): a token minted from the host-published `http://localhost:58080/...` carries a different `iss` claim and is rejected. Run it in a throwaway container attached to the same network instead:
+`keycloak:bootstrap-credential` seeds a `Platform Operations (development)` organization. It grants the
+pre-provisioned `lef-development-service` M2M client every permission, including `platform:admin`, under both
+the host-facing Keycloak issuer and the container-internal issuer used by `smtp-dev`. Both `bootstrap-proxy.sh`
+and this collection authenticate as that client through OAuth Client Credentials instead of a raw API key.
+
+**This collection must run inside the Docker network created for `smtp-dev`, not on the host.** The
+`docker/compose.smtp-dev.yaml` file overrides `OIDC_ISSUER_URL` for `api` with the container-internal
+`http://keycloak:8080/realms/lead-email-finder` URL. The same constraint required `bootstrap-proxy.sh` to move
+away from `X-Api-Key`; see the Decision Log in `.agents/plans/auth/09-remove-api-key-authentication.md`. A
+token minted from the host-published `http://localhost:58080/...` URL has a different `iss` claim and is
+rejected. Run the collection in a throwaway container attached to the same network:
 
 ```shell
 docker run --rm --network lef_default \
@@ -27,4 +48,7 @@ docker run --rm --network lef_default \
   node:22-alpine sh -c "cd /collection && npm install -g @usebruno/cli && bru run --env local --sandbox developer --env-var baseUrl=http://api:3000"
 ```
 
-`--sandbox developer` is required (the default `safe` sandbox has no `fetch`, which the collection's token-minting `before-request` script needs). `--env-var baseUrl=http://api:3000` overrides the `local` environment's host-facing `baseUrl` with the container-internal one, since `localhost:53000` isn't reachable from inside this throwaway container either.
+`--sandbox developer` is required because the default `safe` sandbox does not provide the `fetch` function
+needed by the token-minting `before-request` script. `--env-var baseUrl=http://api:3000` replaces the
+host-facing `baseUrl` from the `local` environment with the container-internal URL. The host address
+`localhost:53000` is not reachable from this throwaway container.
