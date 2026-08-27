@@ -16,6 +16,10 @@
         "keycloak:seed-customer-fixture": "ts-node scripts/keycloak/seed-customer-fixture.ts",
         "plans:sync": "ts-node scripts/plans/sync-project.ts",
         "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
+        "proxy-fleet:render": "ts-node scripts/proxy-fleet-swarm/render-stack-cli.ts",
+        "proxy-fleet:deploy": "ts-node scripts/proxy-fleet-swarm/deploy-cli.ts",
+        "proxy-fleet:reconcile": "ts-node scripts/proxy-fleet-swarm/reconcile-cli.ts",
+        "proxy-fleet:smtp-peer-probe": "ts-node scripts/proxy-fleet-swarm/smtp-peer-probe-cli.ts",
         "dev:reset": "sh docker/scripts/dev-reset.sh",
         "docs:lint": "node scripts/docs/lint.mjs",
         "docs:lint:changed": "node scripts/docs/lint-changed.mjs",
@@ -101,6 +105,7 @@
         "rxjs": "^7.8.2",
         "tldts": "^7.0.12",
         "typeorm": "^0.3.28",
+        "yaml": "^2.9.0",
         "zod": "^4.1.5"
     }
 }
