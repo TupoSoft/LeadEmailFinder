@@ -34,9 +34,9 @@ and preserve all existing HTTP, queue, storage, DNS, SMTP, billing, and persiste
   feature in this PR.
 - The Git index associated with this worktree is read-only, so `git mv` could not acquire its lock. A filesystem rename preserved all
   source contents, and Git's rename detection can represent the relocation without staging the files.
-- No disposable development stack is running, and the Bruno CLI is not installed. Starting the documented stack
-  requires an explicitly confirmed destructive reset, so live API, worker, SMTP, S3, and Bruno checks remain
-  unverified in this workspace session.
+- The documented reset and SMTP-development overlay provide the disposable runtime needed for the remaining live
+  checks. Bruno can run from the official CLI container on `lef_default`, which preserves the overlay's internal API
+  and OIDC addresses without installing the CLI on the host or in the project.
 
 ## Decision Log
 
@@ -66,8 +66,9 @@ the new exact and wildcard aliases.
 
 The focused and full Jest suites, root environment validation tests, type check, production build, lint, documentation
 lint, and whitespace checks passed. The compiled host imports the relocated module from its emitted library path. No
-externally observable HTTP behavior changed, so Bruno definitions did not require edits; live Bruno and container
-checks remain unverified because no disposable stack or Bruno CLI is available.
+externally observable HTTP behavior changed, so Bruno definitions did not require edits. The disposable base stack
+and SMTP-development overlay started successfully, `/health` reported PostgreSQL up, and the existing SMTP-development
+and batch-verification Bruno workflows passed from the official Bruno CLI 4.0.0 container.
 
 ## Context and Orientation
 
@@ -152,9 +153,14 @@ record those runtime checks as unverified rather than green.
   consumers, and no missing files. Searches found no API host import, deep module source import, or stale old source
   path in the implementation.
 - `git diff --check` and an explicit trailing-whitespace scan of the untracked destination passed.
-- No `lef` Compose services are running, and no Bruno CLI is installed. The destructive `pnpm dev:reset` workflow was
-  not invoked without its explicit project confirmation, so `/health`, processor logs, SMTP/S3 fixtures, and the
-  unchanged Bruno collections remain unverified.
+- The confirmed disposable reset, Keycloak bootstrap, customer fixture seed, and SMTP-development overlay completed.
+  The API, Garage, Keycloak, Mailpit, PostgreSQL, and Redis reported healthy; `/health` returned `status: ok` with
+  PostgreSQL up.
+- `bruno/smtp-dev` passed 11 of 11 requests and 11 of 11 tests from
+  `ghcr.io/usebruno/cli:4-alpine` (Bruno CLI 4.0.0) on `lef_default`.
+- `bruno/batch-verification` passed three of three requests and five of five tests from the same disposable Bruno
+  container. Its completed upload, polling, and result-download workflow also exercises the relocated batch worker
+  and S3 result path.
 
 ## Idempotence and Recovery
 
@@ -176,5 +182,6 @@ credentials, tokens, proxy secrets, or uploaded files were recorded.
 
 ## Plan Readiness
 
-Implemented and validated, except for live container and Bruno execution because their disposable runtime and CLI
-were unavailable.
+Implemented and validated, including the live disposable stack, API health, SMTP-development workflow, and batch
+upload, worker, storage, and result-download workflow. Bruno ran from the official disposable CLI container, so no
+host or project installation was required.
