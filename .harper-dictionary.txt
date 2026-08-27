@@ -5,6 +5,7 @@ CommonJS
 CoreDNS
 Corepack
 CSRF
+DI
 DTO
 DTOs
 deliverability
@@ -12,14 +13,18 @@ EEST
 ESM
 ExecPlan
 ExecPlans
+idempotently
 Idempotence
+IPs
 JWKS
 Keycloak
 LeadEmailFinder
 logout
 M2M
 Mailpit
+MB
 MinIO
+multer
 MX
 NestJS
 OIDC

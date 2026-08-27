@@ -15,3 +15,26 @@ Each module in this directory must include the following subdirectories:
 
 1. **Dependency Rule**: Dependencies should point inwards. Infrastructure and API layers can depend on Application and Domain, but the Domain layer should have no dependencies on outer layers.
 2. **Business vs. Technical**: This directory is for business domain logic. Generic technical utilities should reside in the parent `libs/` directory (e.g., `libs/redis`, `libs/socket`).
+
+## Module Documentation
+
+Every module below has a `README.md`. Each one documents what the module owns and explicitly does not own, its
+intentional public API, and the modules it depends on. It also covers any HTTP routes or BullMQ queues the
+module exposes, the persistence it owns, the runtime configuration keys it reads (never values), and links to
+focused tests and Bruno coverage.
+
+A module's public API is exactly what its `src/index.ts` barrel exports. Importing a deeper path from another
+module is an internal coupling, not a supported integration point, even where it currently exists in this
+codebase; a module README calls that out explicitly rather than presenting it as a contract.
+
+## Module Catalog
+
+- [`auth`](auth/README.md) — default-deny credential authentication and permission-based authorization
+- [`bff-session`](bff-session/README.md) — browser session login, callback, refresh, logout, and CSRF/Origin protection
+- [`credits`](credits/README.md) — organization credit balance lookup and administration
+- [`email-verification`](email-verification/README.md) — synchronous, async, and batch email verification
+- [`identity`](identity/README.md) — organizations, memberships, credentials, credit ledger, and audit persistence
+- [`organization-onboarding`](organization-onboarding/README.md) — organization creation and invitation-based membership management
+- [`payments`](payments/README.md) — credit-pack checkout and payment webhook ingestion
+- [`proxy`](proxy/README.md) — proxy registry, health-based selection, and leased allocation
+- [`service-client-management`](service-client-management/README.md) — organization-owned M2M client life cycle
