@@ -20,7 +20,7 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 
 ## Surprises & Discoveries
 
-- On 2026-08-28, the project owner installed the Paddle plugin and connected `paddle-sandbox` with a sandbox API key provisioned for `product.write` and `price.write`. An authenticated read-only inventory found no active or archived products or prices, so implementation can create the starter catalog without reconciling existing entities. No Paddle catalog mutation was made during this readiness check.
+- On 2026-08-28, the project owner installed the Paddle plugin and connected `paddle-sandbox`. An authenticated inventory found no active or archived products or prices. A write canary then created product `pro_01m12qn3y81cr37x0mv2ygkgf0` and one-time USD price `pri_01m12qn40atyzfsrapsw2gy9xc`, read both back, and archived the price followed by the product. Both finished with `archived` status, confirming product and price create and update access without leaving active catalog entries.
 
 ## Decision Log
 
@@ -111,7 +111,7 @@ Quick Tunnel URLs are ephemeral. When the tunnel restarts, update the Paddle not
 
 Record the final redacted live verification result here. Do not claim runtime validation until each command and external observation has completed successfully.
 
-Readiness evidence recorded on 2026-08-28: Paddle plugin `0.1.0` is installed, the `paddle-sandbox` MCP server receives `PADDLE_SANDBOX_API_KEY`, and read-only product and price listing succeeded with an empty catalog. The API key's configured write scopes were supplied by the project owner; write access will be exercised only by the plan's catalog-provisioning step.
+Readiness evidence recorded on 2026-08-28: Paddle plugin `0.1.0` is installed, the `paddle-sandbox` MCP server receives `PADDLE_SANDBOX_API_KEY`, and product and price listing succeeded with an empty catalog. A sandbox write canary created, retrieved, and archived product `pro_01m12qn3y81cr37x0mv2ygkgf0` and one-time USD price `pri_01m12qn40atyzfsrapsw2gy9xc`. This directly confirms the product and price write access required for catalog provisioning; both canary objects remain only as archived records.
 
 ## Plan readiness
 
