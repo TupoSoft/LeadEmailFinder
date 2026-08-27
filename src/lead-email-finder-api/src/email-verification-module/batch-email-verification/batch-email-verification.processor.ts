@@ -3,9 +3,10 @@ import { Job, Queue, WaitingChildrenError } from 'bullmq'
 import { BatchEmailVerificationJobData } from './batch-email-verification-job-data.interface'
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
-import { Inject, Logger } from '@nestjs/common'
+import { Inject } from '@nestjs/common'
 import { ok } from 'node:assert'
 import { PassThrough, Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { ReadableStream } from 'node:stream/web'
 import { parse, Parser } from 'csv-parse'
 import { plainToInstance } from 'class-transformer'
@@ -24,8 +25,6 @@ import { deriveResultsKey } from './derive-results-key'
 
 @Processor(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
 export class BatchEmailVerificationProcessor extends WorkerHost {
-    private readonly logger = new Logger(BatchEmailVerificationProcessor.name)
-
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
         @InjectQueue('async-email-verification')
@@ -69,10 +68,16 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
 
         const { bucket, key, organizationId, credentialId } = job.data
 
-        const columns = this.dataSource.getMetadata(EmailVerification).columns.map(c => c.propertyName)
+        // `.stream()` returns raw driver rows keyed by TypeORM's generated hydration aliases (e.g. `ev_email`
+        // for the `email` column of the `ev`-aliased query below), not bare entity property names. `key` tells
+        // the stringifier which raw column to read; `header` keeps the CSV's own column names unprefixed.
+        const queryAlias = 'ev'
+        const columns = this.dataSource
+            .getMetadata(EmailVerification)
+            .columns.map(c => ({ key: `${queryAlias}_${c.propertyName}`, header: c.propertyName }))
         const cursor = await this.emailVerificationRepo
-            .createQueryBuilder('ev')
-            .where('ev.batchId = :batchId', { batchId: job.id })
+            .createQueryBuilder(queryAlias)
+            .where(`${queryAlias}.batchId = :batchId`, { batchId: job.id })
             .stream()
         const stringifier = stringify({
             columns,
@@ -92,13 +97,11 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             },
         })
 
-        cursor.pipe(stringifier).pipe(Body)
-
-        try {
-            await upload.done()
-        } catch (error) {
-            this.logger.error(error)
-        }
+        // `.pipe()` does not forward `error` events between streams. If `cursor` or `stringifier` errors,
+        // a bare `.pipe()` chain would leave `Body` open forever and `upload.done()` would never settle
+        // (the AWS SDK's `Upload` consumes `Body` via `for await`). `pipeline()` forwards the error and
+        // destroys every stream in the chain, so a failure here correctly rejects instead of hanging.
+        await Promise.all([pipeline(cursor, stringifier, Body), upload.done()])
 
         await job.updateData({
             step: BatchEmailVerificationJobStep.Finish,

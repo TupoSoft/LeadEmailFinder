@@ -18,6 +18,7 @@ import { Readable } from 'stream'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
 import { ReadableStream } from 'node:stream/web'
+import { parseS3ResultLocation } from './parse-s3-result-location'
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value))
@@ -44,7 +45,7 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
 
         const { returnvalue: result } = job
 
-        const { hostname: Bucket, pathname: Key } = new URL(result)
+        const { bucket: Bucket, key: Key } = parseS3ResultLocation(result)
 
         const { Body } = await this.s3.getObject({ Bucket, Key })
 
