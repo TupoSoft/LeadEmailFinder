@@ -11,6 +11,7 @@ import {
 import { EmailVerifier } from './email-verifier.service'
 import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
 import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { CatchAllProxyConfiguration } from '../email-verification-configuration'
 
 export function catchAllVerifiersForProxy(
     proxyUrl: string | undefined,
@@ -30,7 +31,7 @@ export function catchAllVerifiersForProxy(
         {
             provide: CATCH_ALL_VERIFIERS_TOKEN,
             useFactory: (
-                configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL?: string }, true>,
+                configService: ConfigService<CatchAllProxyConfiguration, true>,
                 ...catchAllVerifiers: ICatchAllVerifier[]
             ) => catchAllVerifiersForProxy(configService.get('CATCH_ALL_HTTP_PROXY_URL'), catchAllVerifiers),
             inject: [ConfigService, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],

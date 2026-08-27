@@ -36,3 +36,4 @@ TupoSoft
 TypeORM
 UUID
 WebStorm
+worktree
