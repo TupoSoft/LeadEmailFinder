@@ -20,7 +20,7 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 
 ## Surprises & Discoveries
 
-None yet.
+- On 2026-08-28, the project owner installed the Paddle plugin and connected `paddle-sandbox` with a sandbox API key provisioned for `product.write` and `price.write`. An authenticated read-only inventory found no active or archived products or prices, so implementation can create the starter catalog without reconciling existing entities. No Paddle catalog mutation was made during this readiness check.
 
 ## Decision Log
 
@@ -111,6 +111,8 @@ Quick Tunnel URLs are ephemeral. When the tunnel restarts, update the Paddle not
 
 Record the final redacted live verification result here. Do not claim runtime validation until each command and external observation has completed successfully.
 
+Readiness evidence recorded on 2026-08-28: Paddle plugin `0.1.0` is installed, the `paddle-sandbox` MCP server receives `PADDLE_SANDBOX_API_KEY`, and read-only product and price listing succeeded with an empty catalog. The API key's configured write scopes were supplied by the project owner; write access will be exercised only by the plan's catalog-provisioning step.
+
 ## Plan readiness
 
-Ready after the Paddle plugin is installed and connected with product and price read/write access.
+Ready to implement.
