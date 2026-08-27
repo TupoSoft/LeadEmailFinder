@@ -23,6 +23,8 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/auth/(.*)': '<rootDir>/src/libs/modules/auth/src/$1',
         '@tuposoft/lead-email-finder/modules/bff-session/(.*)': '<rootDir>/src/libs/modules/bff-session/src/$1',
         '@tuposoft/lead-email-finder/modules/credits/(.*)': '<rootDir>/src/libs/modules/credits/src/$1',
+        '@tuposoft/lead-email-finder/modules/email-verification/(.*)':
+            '<rootDir>/src/libs/modules/email-verification/src/$1',
         '@tuposoft/lead-email-finder/modules/identity/(.*)': '<rootDir>/src/libs/modules/identity/src/$1',
         '@tuposoft/lead-email-finder/modules/organization-onboarding/(.*)':
             '<rootDir>/src/libs/modules/organization-onboarding/src/$1',
@@ -40,6 +42,8 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/auth': '<rootDir>/src/libs/modules/auth/src',
         '@tuposoft/lead-email-finder/modules/bff-session': '<rootDir>/src/libs/modules/bff-session/src',
         '@tuposoft/lead-email-finder/modules/credits': '<rootDir>/src/libs/modules/credits/src',
+        '@tuposoft/lead-email-finder/modules/email-verification':
+            '<rootDir>/src/libs/modules/email-verification/src',
         '@tuposoft/lead-email-finder/modules/identity': '<rootDir>/src/libs/modules/identity/src',
         '@tuposoft/lead-email-finder/modules/organization-onboarding':
             '<rootDir>/src/libs/modules/organization-onboarding/src',

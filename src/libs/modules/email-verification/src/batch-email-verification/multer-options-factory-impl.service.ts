@@ -6,7 +6,7 @@ import multerS3 from 'multer-s3'
 import { ConfigService } from '@nestjs/config'
 import { randomUUID } from 'node:crypto'
 import { getAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
-import { EnvironmentVariablesDto } from '../../environment-variables.dto'
+import { BatchUploadConfiguration } from '../email-verification-configuration'
 
 @Injectable()
 export class MulterOptionsFactoryImpl implements MulterOptionsFactory {
@@ -14,7 +14,7 @@ export class MulterOptionsFactoryImpl implements MulterOptionsFactory {
 
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
-        config: ConfigService<EnvironmentVariablesDto, true>,
+        config: ConfigService<BatchUploadConfiguration, true>,
     ) {
         this.bucket = config.get('S3_BUCKET')
     }

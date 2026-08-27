@@ -1,4 +1,4 @@
-# Relocate email verification into the standard module hierarchy
+# Relocate Email Verification into the Standard Module Hierarchy
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
@@ -11,12 +11,12 @@ and preserve all existing HTTP, queue, storage, DNS, SMTP, billing, and persiste
 
 ## Progress
 
-- [ ] (2026-08-21) Isolate verification-owned configuration types from the API host DTO.
-- [ ] (2026-08-21) Move the complete verification subtree and add its public alias/barrel.
-- [ ] (2026-08-21) Rewire credits, proxy, queues, S3, DNS, catch-all, and root composition.
-- [ ] (2026-08-21) Verify focused, full, build, runtime, and Bruno regression behavior.
+- [x] (2026-08-27) Isolate verification-owned configuration types from the API host DTO.
+- [x] (2026-08-27) Move the complete verification subtree and add its public alias/barrel.
+- [x] (2026-08-27) Rewire credits, proxy, queues, S3, DNS, catch-all, and root composition.
+- [x] (2026-08-27) Verify focused, full, build, static, runtime-availability, and Bruno-applicability behavior.
 
-## Plan dependencies
+## Plan Dependencies
 
 - `module-boundaries/07`
 - `verification-reliability/02`
@@ -32,6 +32,11 @@ and preserve all existing HTTP, queue, storage, DNS, SMTP, billing, and persiste
   SMTP consumes both proxy registry and allocator behavior.
 - `src/libs/catch-all`, `dns`, `socket`, `redis`, and `common` are reusable dependencies and need not move with the
   feature in this PR.
+- The Git index associated with this worktree is read-only, so `git mv` could not acquire its lock. A filesystem rename preserved all
+  source contents, and Git's rename detection can represent the relocation without staging the files.
+- The documented reset and SMTP-development overlay provide the disposable runtime needed for the remaining live
+  checks. Bruno can run from the official CLI container on `lef_default`, which preserves the overlay's internal API
+  and OIDC addresses without installing the CLI on the host or in the project.
 
 ## Decision Log
 
@@ -46,19 +51,33 @@ and preserve all existing HTTP, queue, storage, DNS, SMTP, billing, and persiste
   Rationale: This plan fixes business-module ownership; reclassifying each technical/provider library is independent
   cleanup with no requirement for the target consistency outcome.
   Date/Author: 2026-08-21, Codex planning.
+- Decision: Model batch upload, catch-all proxy, and SMTP configuration as three private, purpose-specific interfaces.
+  Rationale: Each adapter now declares only the environment keys it consumes and no longer depends on the API host's
+  aggregate validation DTO; the root validation contract remains unchanged.
+  Date/Author: 2026-08-27, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and statically validated. All 111 existing verification source and test files now live under
+`src/libs/modules/email-verification/src`; 107 are byte-identical to their versions at `HEAD`, and the four edited
+files only replace the API host environment DTO with three private, purpose-specific configuration interfaces. The
+public barrel still exports only `EmailVerificationModule`, while TypeScript, Jest, and the API host resolve it through
+the new exact and wildcard aliases.
+
+The focused and full Jest suites, root environment validation tests, type check, production build, lint, documentation
+lint, and whitespace checks passed. The compiled host imports the relocated module from its emitted library path. No
+externally observable HTTP behavior changed, so Bruno definitions did not require edits. The disposable base stack
+and SMTP-development overlay started successfully, `/health` reported PostgreSQL up, and the existing SMTP-development
+and batch-verification Bruno workflows passed from the official Bruno CLI 4.0.0 container.
 
 ## Context and Orientation
 
-`src/lead-email-finder-api/src/email-verification-module` composes sync, deprecated sync, async, and batch verification.
-It also contains domain/email persistence, verification orchestration, SMTP connection/client logic, BullMQ producers
-and processors, S3 upload handling, DTOs, profiles, decorators, and extensive focused tests. The root imports only
-`EmailVerificationModule`, but nested code reaches outward to host environment types and former host-local credits,
-and historically reached into proxy persistence. Plans 02 through 04 establish public proxy and credits dependencies
-before this move.
+Before this change, `src/lead-email-finder-api/src/email-verification-module` composed sync, deprecated sync, async,
+and batch verification. The capability now lives under `src/libs/modules/email-verification/src` and contains its
+domain/email persistence, verification orchestration, SMTP connection/client logic, BullMQ producers and processors,
+S3 upload handling, DTOs, profiles, decorators, and focused tests. The API host imports only
+`EmailVerificationModule` through the public alias. Nested code depends on feature-owned configuration types and the
+public credits and proxy contracts established by the prerequisite plans.
 
 ## Scope and Non-Goals
 
@@ -75,7 +94,7 @@ Define small configuration interfaces for the S3 keys read by batch upload code,
 selection. Type `ConfigService` against those shapes so no verification file imports the root aggregate environment
 DTO; keep root validation unchanged.
 
-Move the subtree and all colocated specs with Git-aware renames. Add
+Move the subtree and all nearby specs with Git-aware renames. Add
 `@tuposoft/lead-email-finder/modules/email-verification` aliases and export only `EmailVerificationModule` plus an
 existing contract proven necessary outside the feature. Update nested credits and proxy imports to the public aliases
 from earlier plans. Preserve internal relative imports within the feature rather than forcing every sibling through
@@ -119,6 +138,30 @@ Start the disposable development stack when available and run `bru run --env loc
 inspect worker logs for processor registration. If listener, Docker, S3, or SMTP fixture access is unavailable,
 record those runtime checks as unverified rather than green.
 
+**Results (2026-08-27):**
+
+- The focused Jest command passed 33 suites and 169 tests; one suite and five tests remained skip-gated.
+- `./node_modules/.bin/tsc --noEmit -p tsconfig.json` passed with zero errors.
+- `./node_modules/.bin/nest build` found zero TypeScript issues and compiled 445 files. The emitted API host requires
+  `dist/libs/modules/email-verification/src`, proving that the build rewrites the new public alias correctly.
+- `./node_modules/.bin/eslint .` passed with zero errors and two unrelated, previously present warnings in
+  `src/libs/config/src/load-secrets.spec.ts` and
+  `src/libs/redis/src/parse-connection-string-options.factory.spec.ts`.
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp ./node_modules/.bin/jest --runInBand` passed 121 suites and 752 tests; nine suites
+  and 27 tests remained skip-gated, with one to-do item already recorded.
+- A comparison against `HEAD` found 107 byte-identical relocated files, four intentionally edited configuration
+  consumers, and no missing files. Searches found no API host import, deep module source import, or stale old source
+  path in the implementation.
+- `git diff --check` and an explicit trailing-whitespace scan of the untracked destination passed.
+- The confirmed disposable reset, Keycloak bootstrap, customer fixture seed, and SMTP-development overlay completed.
+  The API, Garage, Keycloak, Mailpit, PostgreSQL, and Redis reported healthy; `/health` returned `status: ok` with
+  PostgreSQL up.
+- `bruno/smtp-dev` passed 11 of 11 requests and 11 of 11 tests from
+  `ghcr.io/usebruno/cli:4-alpine` (Bruno CLI 4.0.0) on `lef_default`.
+- `bruno/batch-verification` passed three of three requests and five of five tests from the same disposable Bruno
+  container. Its completed upload, polling, and result-download workflow also exercises the relocated batch worker
+  and S3 result path.
+
 ## Idempotence and Recovery
 
 The source move changes no rows, jobs, objects, or proxy leases. Complete or reverse interrupted renames using the
@@ -132,6 +175,13 @@ Record the old-path/deep-import search, focused/full test counts, build output, 
 redacted Bruno statuses. Never record uploaded customer data, email lists, proxy credentials, storage secrets, or
 bearer tokens.
 
-## Plan readiness
+Final evidence: the destination contains the 111 relocated files plus one private configuration file, and the old
+source directory is absent. The public barrel exports only `EmailVerificationModule`; focused HTTP and queue/SMTP/S3
+unit coverage passed; and the production build emitted all relocated controllers and processors. No customer data,
+credentials, tokens, proxy secrets, or uploaded files were recorded.
 
-Ready to implement.
+## Plan Readiness
+
+Implemented and validated, including the live disposable stack, API health, SMTP-development workflow, and batch
+upload, worker, storage, and result-download workflow. Bruno ran from the official disposable CLI container, so no
+host or project installation was required.

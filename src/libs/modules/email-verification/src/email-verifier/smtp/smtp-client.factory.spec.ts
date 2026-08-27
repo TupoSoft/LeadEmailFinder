@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config'
-import { EnvironmentVariablesDto } from '../../../environment-variables.dto'
+import { SmtpConfiguration } from '../../email-verification-configuration'
 import { SmtpClientFactory } from './smtp-client.factory'
 
 describe('SmtpClientFactory', () => {
@@ -19,7 +19,7 @@ describe('SmtpClientFactory', () => {
 function createFactory(port: number | undefined): SmtpClientFactory {
     const configService = {
         get: jest.fn().mockReturnValue(port),
-    } as unknown as ConfigService<EnvironmentVariablesDto, true>
+    } as unknown as ConfigService<SmtpConfiguration, true>
 
     return new SmtpClientFactory(configService)
 }
