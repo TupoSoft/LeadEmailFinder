@@ -1,0 +1,74 @@
+# Proxy
+
+Owns the proxy registry: administrative CRUD, blacklist reporting, health-based selection, and rate-limited
+leased allocation for outbound SMTP connections that must originate from a rotating set of egress IPs.
+
+## Responsibility
+
+- Administrative CRUD over registered proxies, including reporting a proxy as blacklisted by a remote mail
+  server.
+- Health-based proxy selection (`GET /v1/proxies/healthy`) using the same eligibility query the allocator uses.
+- Rate-limited, lease-based allocation (`ProxyAllocatorService`/`ProxyLeaseService`) so no single proxy exceeds
+  its configured requests-per-minute budget while a connection is in flight.
+- Structured allocation/lease/connection-outcome observability (`StructuredLoggingAllocationObserver`).
+
+## Non-Responsibilities
+
+- No SMTP verification itself — [`email-verification`](../email-verification/README.md) is the only consumer of
+  proxy allocation, through the shared contracts described below.
+- No organization or credit concepts — proxies are a global resource, not scoped to any organization.
+
+## Public API
+
+[`src/index.ts`](src/index.ts) exports only `ProxyModule`. `ProxyController`, the two internal services
+(`ProxyService` for CRUD/admin, `ProxyRegistryService` for the lookup contract other modules consume), the
+`Proxy` entity, and its DTOs are all internal.
+
+The actual integration surface other modules use — `IProxy`, `IProxyService`, `IProxyAllocator`,
+`IProxyLeaseService`, `LeasedProxy`, `ProxyLease`, and the `PROXY_SERVICE_TOKEN`/`PROXY_ALLOCATOR_TOKEN` DI
+tokens — lives in the shared `@tuposoft/lead-email-finder/common` package, not in this module's own barrel.
+Depend on those contracts, not on any deep import into the implementation of `proxy` itself.
+
+## Dependencies
+
+- [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `RequirePermissions`.
+- `@tuposoft/lead-email-finder/common` — the shared proxy contracts and DI tokens this module implements and
+  exports bindings for.
+- Redis, injected directly (via the technical `libs/redis` package registered at the composition root) for
+  lease bookkeeping — an infrastructure dependency, not a business-module one.
+
+## HTTP Surface
+
+`ProxyController` at `v1/proxies`, restricted to the `platform:admin` permission:
+
+| Method   | Path                        | Notes                                     |
+| -------- | --------------------------- | ----------------------------------------- |
+| `POST`   | `v1/proxies`                | Create                                    |
+| `GET`    | `v1/proxies`                | List                                      |
+| `GET`    | `v1/proxies/healthy`        | Same eligibility query the allocator uses |
+| `GET`    | `v1/proxies/:id`            | Read one                                  |
+| `PATCH`  | `v1/proxies/:id`            | Update (state, weight, limits, and so on) |
+| `DELETE` | `v1/proxies/:id`            | Delete                                    |
+| `POST`   | `v1/proxies/:id/blacklists` | Report a blacklist; `204 No Content`      |
+
+## Persistence
+
+Owns one entity: `Proxy` → `proxy_registry`.
+
+## Configuration
+
+- `PROXY_MX_REQUESTS_PER_MINUTE` (optional, default 10)
+- `PROXY_LEASE_TTL_MS` (optional, default 60000)
+
+## Validation
+
+Focused tests live in `src/`: `proxy.controller.spec.ts`, `proxy.service.spec.ts`,
+`proxy-registry.service.spec.ts`, `proxy-allocator.service.spec.ts`, `proxy-lease.service.spec.ts`,
+`structured-logging-allocation-observer.spec.ts`, `typeorm-proxy-candidate.repository.spec.ts`, and
+`proxy.module.spec.ts`.
+
+[`bruno/proxy-registry`](../../../../bruno/proxy-registry/README.md) exercises the secured CRUD life cycle above
+end to end and removes the proxy it creates. In addition,
+[`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) proves the health-selection and allocation behavior
+live: it drains the fixture proxy, confirms selection excludes it, and drives a real SMTP verification through
+the allocator.

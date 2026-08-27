@@ -11,9 +11,9 @@ and the modules directory README links to the complete catalog.
 
 ## Progress
 
-- [ ] (2026-08-22) Define the module README contract in the modules directory guide.
-- [ ] (2026-08-22) Add code-backed README files for all nine final business modules.
-- [ ] (2026-08-22) Verify coverage, links, paths, public surfaces, and formatting.
+- [x] (2026-08-27) Define the module README contract in the modules directory guide.
+- [x] (2026-08-27) Add code-backed README files for all nine final business modules.
+- [x] (2026-08-27) Verify coverage, links, paths, public surfaces, and formatting.
 
 ## Plan dependencies
 
@@ -54,7 +54,36 @@ and the modules directory README links to the complete catalog.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated. Added `src/libs/modules/<module>/README.md` for all nine modules (`auth`,
+`bff-session`, `credits`, `email-verification`, `identity`, `organization-onboarding`, `payments`, `proxy`,
+`service-client-management`). Each one covers responsibility and explicit non-responsibilities, the intentional
+public API (exactly what `src/index.ts` exports), and direct module dependencies. Each also covers owned HTTP
+routes or BullMQ queues, owned persistence, runtime configuration by key name only, and a link to focused tests
+plus the relevant Bruno README(s). `src/libs/modules/README.md` gained a "Module Documentation" contract
+paragraph and an alphabetized "Module Catalog" linking to all nine, with its preexisting architecture guidance
+left untouched.
+
+Every module's content was written directly from the current code: root Nest module `imports`/`controllers`/
+`providers`/`exports`, controller route decorators, `ConfigService` read sites, `@Entity` classes, and BullMQ
+`registerQueue`/`@Processor` bindings — not from the plan's own summary. Several details came out more specific
+than the plan anticipated. For example, `organization-onboarding` and `service-client-management` both have no
+`exports` array at all, so nothing from either is re-injected elsewhere, and the routes of
+`service-client-management` are additionally restricted to a `human_session` credential kind at the service
+layer, unreachable via M2M bearer tokens regardless of permission.
+
+Two real cross-module couplings were found and documented as internal, not public, per the plan's own rule that
+a deep import must never be presented as a supported contract. `bff-session` reaches into `auth` for `Public`,
+`CurrentPrincipal`, `BFF_SESSION_COOKIE_NAME`, and `getAuthPrincipal` by deep import rather than through the
+barrel `auth` exposes (`BFF_SESSION_COOKIE_NAME` is genuinely internal to `auth`, the rest are barrel-present
+but still reached the wrong way). And the real integration surface `proxy` offers other modules
+(`IProxyService`/`IProxyAllocator`/tokens) lives in `@tuposoft/lead-email-finder/common`, not in the barrel
+`proxy` owns, which exports only `ProxyModule`.
+
+Harper flagged 25 genuinely new issues across the ten touched files during review; all were fixed by rewording
+or by adding legitimate technical terms (`DI`, `idempotently`, `IPs`, `MB`, `multer`) to `.harper-dictionary.txt`
+— the four preexisting issues in the untouched "Standard Folder Structure" section of `src/libs/modules/README.md`
+were deliberately left alone. `corepack pnpm exec prettier --write` reformatted every new Markdown table for
+column alignment; no content changed.
 
 ## Context and Orientation
 
@@ -181,7 +210,27 @@ link with a repository-local link checker if one is available; otherwise resolve
 record the manual link audit.
 
 No Jest, build, container, database, or Bruno execution is required because the implementation is Markdown-only and
-does not alter HTTP behavior. If any non-documentation file changes during implementation, stop and split or expand
+does not alter HTTP behavior.
+
+**Results (2026-08-27):**
+
+- README coverage loop above — all nine modules present, no output/failures.
+- `git status --porcelain | grep -v '\.md$'` — only `.harper-dictionary.txt` (adding legitimate terminology per
+  this repo's Prose Validation rule); no source, configuration, or test file changed.
+- `git diff --check` — clean.
+- `corepack pnpm exec prettier --check 'src/libs/modules/**/*.md'` — clean after one `--write` pass that only
+  reformatted new Markdown table column widths.
+- `corepack pnpm docs:lint` on all ten touched Markdown files — clean except the four preexisting issues in
+  the untouched "Standard Folder Structure" section of `src/libs/modules/README.md` (verified preexisting by linting
+  the pre-change file from `git show HEAD:...`).
+- Manual link audit: every relative link in all ten files resolved with a `test -e`-based script run from each
+  file's own directory — no failures.
+- Exports, routes, configuration, persistence, and queues were compared against source directly while writing
+  each README (see Outcomes & Retrospective), not audited as a separate pass after the fact. The content was
+  authored from three independent research passes over the actual code, not transcribed from this plan's own
+  summary, and each claim was traced to a specific file, decorator, or `ConfigService` call.
+
+If any non-documentation file changes during implementation, stop and split or expand
 validation rather than relying on this exemption.
 
 ## Idempotence and Recovery
@@ -196,6 +245,12 @@ code inside this documentation pull request.
 Record the final module-to-README coverage list, changed-file list, Prettier result, `git diff --check` result, and
 link-audit result. Runtime test output is not an expected artifact for this documentation-only plan.
 
+Final coverage: `auth`, `bff-session`, `credits`, `email-verification`, `identity`, `organization-onboarding`,
+`payments`, `proxy`, `service-client-management` — all nine present. Changed files: `src/libs/modules/README.md`,
+the nine new module `README.md` files, and `.harper-dictionary.txt` (terminology additions only). Prettier:
+clean after one formatting pass. `git diff --check`: clean. Link audit: every relative link in all ten files
+resolved; none broken.
+
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated.
