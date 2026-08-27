@@ -31,6 +31,7 @@
 - Keep each ExecPlan current as implementation progresses, including its progress, discoveries, decisions, and outcomes.
 - Express acceptance criteria as observable pass-or-fail behavior and state exact focused validation separately.
 - While the project has no production environment, do not add database migrations. Use TypeORM synchronization against disposable development data and document reset and reseed steps for incompatible schema changes.
+- When starting implementation on an ExecPlan, put its synced GitHub issue in progress instead of leaving this to the user. Find the issue by its `<!-- execplan: <feature>/<NN> -->` marker (`gh issue list --label execplan --search "<feature>/<NN> in:body"`) and assign it with `gh issue edit <number> --add-assignee @me`. Then move the project-9 board item's `Status` field (project id `PVT_kwDOBrt0As4At_e6`, field id `PVTSSF_lADOBrt0As4At_e6zgkqTaY`) to `In Progress` via `gh api graphql`; the automated `plans:sync` job deliberately never writes assignees or status itself. Look up the `In Progress` option id at run time rather than assuming it, since it is not recorded anywhere in the repo. If `gh auth status` lacks the `project`/`read:project` scope the Status write needs, tell the user to run `gh auth refresh -s project` and skip only the Status update — the assignee edit needs no extra scope.
 
 # Prose Validation
 

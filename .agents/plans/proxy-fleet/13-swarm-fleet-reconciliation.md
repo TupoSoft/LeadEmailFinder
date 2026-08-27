@@ -8,9 +8,13 @@ Deploy the declared 3proxy listeners through Docker Swarm and reconcile healthy 
 
 ## Progress
 
-- [ ] 2026-08-15 — Render and deploy node-constrained Swarm services from inventory.
-- [ ] 2026-08-15 — Implement health-gated, idempotent proxy-registry reconciliation.
-- [ ] 2026-08-15 — Prove activation, failure isolation, draining, and repeat deployment in a disposable Swarm.
+- [x] 2026-08-28 — Render and deploy node-constrained Swarm services from inventory.
+- [x] 2026-08-28 — Implement health-gated, idempotent proxy-registry reconciliation.
+- [x] 2026-08-28 — Prove what this environment allows: unit tests against fakes/mocks, real `docker
+      stack config` validation, and a real loopback SMTP peer probe. Activation, failure isolation,
+      draining, and repeat deployment against a live disposable multi-node Swarm are **not verified in
+      this environment**. See Outcomes & Retrospective, which follows the same environment constraint
+      `proxy-fleet/12` already hit and documented.
 
 ## Plan dependencies
 
@@ -23,6 +27,12 @@ Deploy the declared 3proxy listeners through Docker Swarm and reconcile healthy 
 - The current proxy API has no external inventory ID or unique endpoint constraint. Reconciliation must therefore be a single writer, match the existing `(protocol, host, port)` endpoint, and fail closed on duplicates.
 - The registry exposes no active-lease count. Automation can mark removed endpoints `draining`, but it cannot safely decide when to delete them.
 - `Proxy.auth` is currently persisted as PostgreSQL JSONB. Swarm secret handling protects deployment inputs but does not provide database encryption at rest.
+- The original plan text called the reconciler's registry credential an "admin key file." Between this plan's authoring (2026-08-15) and implementation (2026-08-28), `.agents/plans/auth/09-remove-api-key-authentication.md` merged and removed static API keys entirely: the API now authenticates only via OIDC. The reconcile CLI instead reads a file shaped `{issuer, clientId, clientSecret}` (matching the `ServiceClientCredentials` shape in `scripts/keycloak/provisioning.ts`) and exchanges it for a bearer token itself via the client-credentials grant.
+- `ProxyDto` excludes `auth` entirely (`@Exclude() auth?: never`), so the reconciler can never read back a registry record's current credentials to detect drift. Credential sync therefore cannot independently trigger a mutation; see the credential-bundling decision below.
+- `docker stack deploy` already versions `configs`/`secrets` declared with a `file:` source by content hash and creates a new immutable object whenever the file changes. This is a built-in Compose-stack behavior, not something the renderer needs to hand-roll. The renderer only needs to emit `file:`-referenced configs/secrets with the ownership label; `docker config prune`/`docker secret prune --filter label=...` remove the orphaned old versions.
+- This development machine runs its own Docker daemon that is already an active Swarm manager (`docker info` reports a real, unrelated single-node cluster), the same constraint `proxy-fleet/12` hit. No disposable multi-node Swarm or cloud host was available in this environment. Live deployment, convergence, pruning, and a real cross-host authenticated CONNECT could not be exercised here without mutating real infrastructure that must never be touched by this tooling. Negotiated with the user before implementation began, the same way plan 12 was.
+- `docker stack config` (Compose-v3 merge and validation) needs no live Swarm mutation and runs safely even against this machine's real Swarm daemon. Confirmed empirically by rendering a real sample stack (host networking via the predefined `host` network, `file:`-referenced configs/secrets, per-node placement constraints) and validating it, with no `docker stack deploy`/`config create`/`secret create` ever invoked.
+- This workstation's root-owned `dist/` (the same friction plans 11 and 12 recorded) blocks both `tsc --noEmit -p tsconfig.json` and `nest build` from writing their output/build-info files. Worked around locally with a scratch `tsconfig.json` extension pointing `outDir`/`tsBuildInfoFile` at `/tmp`, never committed.
 
 ## Decision Log
 
@@ -38,10 +48,57 @@ Deploy the declared 3proxy listeners through Docker Swarm and reconcile healthy 
 - Decision: Never delete registry entries automatically.
   Rationale: Existing observability proves that draining blocks new leases, but there is no lease-count API that can prove deletion safety.
   Date/Author: 2026-08-15, project planning.
+- Decision: The testable renderer/reconcile-engine/adapters live under `scripts/proxy-fleet-swarm/` (TypeScript, unit-tested), not `deploy/proxy-fleet/swarm/`. The `include` list in `tsconfig.json` and the ignore list in `eslint.config.mjs` both exclude `deploy/**`, so TypeScript placed there would sit outside `pnpm typecheck`/`pnpm lint` silently. This is the same reasoning plan 11 recorded for keeping its shell renderer under `docker/proxy-fleet/` rather than `scripts/`. `deploy/proxy-fleet/swarm/` holds only the generated (gitignored) stack artifacts and this plan's README, matching how `deploy/proxy-fleet/ansible/` splits versioned non-secret topology from its own `README.md`.
+  Date/Author: 2026-08-28, implementation.
+- Decision: Host networking is expressed as a top-level `networks: hostnet: {external: true, name: host}` referenced by each service, not `network_mode: host` (a plain Compose/`docker-compose` concept that Swarm stack files do not support).
+  Rationale: confirmed against a real Docker daemon: `docker network ls` already lists a node-local `host` network (driver `host`, scope `local`), and `docker stack config` accepts the `external: true`/`name: host` reference without error.
+  Date/Author: 2026-08-28, implementation.
+- Decision: The deployment wrapper relies on the content-hashed config/secret versioning `docker stack deploy` already performs (via `file:`-referenced `configs:`/`secrets:` entries) instead of computing and naming content-digest objects itself, and calls `docker config prune`/`docker secret prune --filter label=proxy-fleet.owner=true` to remove orphaned versions after a successful deploy.
+  Rationale: this is Docker's own built-in behavior for stack-managed configs/secrets (see Surprises & Discoveries); reimplementing it would duplicate logic Docker already guarantees is correct and immutable.
+  Date/Author: 2026-08-28, implementation.
+- Decision: Per-node credential files are supplied as a flat `<credentials-dir>/<proxy_node_id>.json` directory, matching the exact shape plan 12 renders. This is the plan-12 staging output, collected onto the machine running the renderer/reconciler using whatever transport the operator prefers: `scp`, a configuration-management pull, or equivalent.
+  Rationale: plan 12 explicitly scopes VM/IP provisioning to the operator as outside the repository. Collecting node-local files onto a control host is the same category of provider-specific transport concern. This plan's Scope section limits it to "per-node external config/secret *preparation*," not a new remote-collection mechanism.
+  Date/Author: 2026-08-28, implementation.
+- Decision: Credential drift alone never triggers a registry mutation. When any other observable field (protocol/host/port/weight/maxConcurrent/requestsPerMinute/description) differs and an update is issued for that reason, the desired credentials are bundled into the same `PATCH` call so they stay in lockstep with inventory.
+  Rationale: `ProxyDto` excludes `auth`, so the reconciler has no way to observe whether a registry record's stored credentials already match the desired ones (see Surprises & Discoveries). Always sending credentials would defeat the "no unnecessary registry mutations" acceptance criterion on every run; bundling them only when another field already justified a write is the closest achievable approximation without an application-side change to expose a credential digest.
+  Date/Author: 2026-08-28, implementation.
+- Decision: For a `desiredState: active` listener, the health check reruns on every reconciliation regardless of the record's current state. The post-check state transition depends on the state *before* this run: success always moves to `active`; failure moves an `active` record to `draining` and leaves any other state at `disabled`.
+  Rationale: this is the literal reading of the Plan of Work ("a new or disabled endpoint that fails remains disabled; an active endpoint that fails becomes draining"), generalized to repeat runs. It is the only rule that lets a `draining` listener recover to `active` once its health check passes again, without a separate manual step.
+  Date/Author: 2026-08-28, implementation.
+- Decision: The disposable SMTP peer probe (`scripts/proxy-fleet-swarm/smtp-peer-probe.ts`) records only the most recently accepted TCP connection's peer address, exposed over a small HTTP status endpoint. The health check function documents that callers must run checks sequentially, one listener at a time.
+  Rationale: matches the reconcile engine's own single-writer design (see the existing "single writer" decision below); a probe that tracked concurrent connections per source listener would need correlation state this plan's scope does not otherwise require.
+  Date/Author: 2026-08-28, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated to the extent this environment allows (no cloud provider or disposable multi-node Swarm — this development machine's own Docker daemon is already an active Swarm manager for an unrelated real cluster; see Surprises & Discoveries).
+
+**Verified for real:**
+- `pnpm typecheck`: 0 issues, via a local, uncommitted scratch-tsconfig workaround for this workstation's root-owned `dist/` (same friction plans 11/12 recorded).
+- `pnpm lint`: 0 errors; the same 2 preexisting unrelated `explicit-function-return-type` warnings as the established baseline.
+- `pnpm test:ci`: 834/862 tests passing, 27 skipped live-gated plus 1 previously pending case, 129/138 suites, all new suites included and passing.
+- `pnpm build`: 445 files compiled via the `nest build`/swc pipeline, 0 typecheck issues, same scratch-tsconfig workaround.
+- `git diff --check`: clean.
+- 82 new focused unit tests across 8 suites in `scripts/proxy-fleet-swarm/`:
+  - Inventory parsing and every cross-host duplicate/validation rule.
+  - Stack rendering: one service per node, correct placement constraints, host networking, no ingress ports, no `build` key, per-node config/secret isolation, deterministic output, digest-pinning enforcement, credential/listener 1:1 enforcement.
+  - The `ProxyRegistryAdmin` HTTP adapter: pagination, owned-prefix filtering, request shapes, error surfacing.
+  - The M2M token provider: caching, expiry, failure.
+  - The reconcile engine's acceptance-criteria scenarios: create-disabled, health-gated activation, reactivation of a draining listener, and active-to-draining on health failure.
+  - The reconcile engine's remaining scenarios: disabled-forces-disabled without a health check, unchanged-state no-ops, field-change plus bundled-credential updates, and removed-listener draining with its own no-op.
+  - The reconcile engine's safety scenarios: manually created records left untouched, duplicate desired/owned endpoints rejected before any mutation, and strictly sequential per-listener health checks.
+  - The Docker Swarm CLI adapter: stack validation, deploy, convergence polling and its timeout, pruning.
+  - The disposable SMTP peer probe: peer-address normalization, tracking, and a real loopback end-to-end TCP-connect-then-HTTP-status-fetch test.
+- A real rendered two-field sample stack validated against `docker stack config` on a live Docker daemon, read-only, with no Swarm mutation. It was accepted cleanly, confirming the host-network, placement-constraint, and `file:`-config-secret syntax is genuinely valid Swarm stack syntax, not just internally self-consistent.
+
+**Not verified live in this environment** (implemented per spec, no disposable multi-node Swarm or cloud host available — same negotiated constraint as `proxy-fleet/12`):
+- Actual `docker stack deploy`, service convergence, and config/secret pruning against a live fleet.
+- Multi-node placement via real `proxy.node-id`/`proxy.egress` Swarm labels.
+- A real authenticated CONNECT through a deployed listener asserting its declared egress IP against a real SMTP peer probe reachable over a real WireGuard overlay.
+- Repeat deployment/reconciliation against live infrastructure remaining a true no-op.
+- Two concurrent verification-worker processes respecting the existing per-proxy/per-MX Redis limits through deployed listeners.
+
+A future PR should rerun this plan's full Validation section against a real disposable multi-node Swarm, once a cloud provider is selected for the fleet's real rollout (the same prerequisite `proxy-fleet/12` named). Do this before trusting the plan for anything beyond development. See `deploy/proxy-fleet/swarm/README.md` for the operator-facing workflow and this same environment-limits summary.
 
 ## Context and Orientation
 
@@ -109,4 +166,4 @@ Record the generated stack without secrets, service placement, immutable image d
 
 ## Plan readiness
 
-Ready to implement.
+Implemented (PR pending; see Progress and Outcomes & Retrospective for exactly what is and is not live-verified in this environment).
