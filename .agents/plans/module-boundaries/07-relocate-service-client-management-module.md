@@ -15,7 +15,7 @@ Keycloak recovery behavior remain unchanged.
 - [x] (2026-08-25) Rewire host composition while retaining narrow Keycloak and identity dependencies.
 - [x] (2026-08-25) Verify unit, HTTP, live-Keycloak-optional, static, and Bruno regressions.
 
-## Plan Dependencies
+## Plan dependencies
 
 - `module-boundaries/06`
 - `service-client-hardening/01`
@@ -138,7 +138,7 @@ Final evidence: all 24 relocated files are byte-identical to their `HEAD` versio
 from `@tuposoft/lead-email-finder/modules/service-client-management`; focused HTTP integration and controller specs
 passed; no live credentials, tokens, or provider identifiers were recorded.
 
-## Plan Readiness
+## Plan readiness
 
 Implemented and validated, except for optional live-Keycloak and Bruno execution because their disposable runtime
 dependencies were unavailable.

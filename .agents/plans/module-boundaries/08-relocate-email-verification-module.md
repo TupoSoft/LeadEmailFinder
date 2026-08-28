@@ -16,7 +16,7 @@ and preserve all existing HTTP, queue, storage, DNS, SMTP, billing, and persiste
 - [x] (2026-08-27) Rewire credits, proxy, queues, S3, DNS, catch-all, and root composition.
 - [x] (2026-08-27) Verify focused, full, build, static, runtime-availability, and Bruno-applicability behavior.
 
-## Plan Dependencies
+## Plan dependencies
 
 - `module-boundaries/07`
 - `verification-reliability/02`
@@ -180,7 +180,7 @@ source directory is absent. The public barrel exports only `EmailVerificationMod
 unit coverage passed; and the production build emitted all relocated controllers and processors. No customer data,
 credentials, tokens, proxy secrets, or uploaded files were recorded.
 
-## Plan Readiness
+## Plan readiness
 
 Implemented and validated, including the live disposable stack, API health, SMTP-development workflow, and batch
 upload, worker, storage, and result-download workflow. Bruno ran from the official disposable CLI container, so no

@@ -12,10 +12,10 @@ metadata exactly.
 
 ## Progress
 
-- [ ] (2026-08-28) Normalize malformed ExecPlan headings and reconcile stale delivery status against merged history.
-- [ ] (2026-08-28) Reject near-miss required headings and align prose validation with the canonical headings.
-- [ ] (2026-08-28) Add parser, rendering, dependency, and repository-fixture regression coverage.
-- [ ] (2026-08-28) Run focused, repository, documentation, and live read-only sync validation.
+- [x] (2026-08-28) Normalize malformed ExecPlan headings and reconcile stale delivery status against merged history.
+- [x] (2026-08-28) Reject near-miss required headings and align prose validation with the canonical headings.
+- [x] (2026-08-28) Add parser, rendering, dependency, and repository-fixture regression coverage.
+- [x] (2026-08-28) Run focused, repository, documentation, and live read-only sync validation.
 
 ## Plan dependencies
 
@@ -36,6 +36,19 @@ metadata exactly.
   itself, proof that source parsing is complete.
 - Harper's `UseTitleCase` rule flags the exact `Plan dependencies` and `Plan readiness` headings required by
   `.agents/PLANS.md`. Without a narrow prose-linter exception, a valid edited ExecPlan cannot satisfy both validators.
+- `payments/07-paddle-sandbox-purchase-fixture.md` has the identical title-case heading defect, discovered by
+  grepping the whole tree rather than trusting the four-plan list above: it merged (as #421) after this audit was
+  authored, so it was never in scope for the original survey.
+- Narrowing a TypeScript union after a helper function throws on one branch does not narrow for the compiler.
+  That requires the helper to be declared with an `asserts` return type. A plain `void`-returning check left
+  `lookup.text` typed `error` downstream, surfaced by `@typescript-eslint/no-unsafe-*` rather than by `tsc` itself,
+  since the assignment stays structurally valid at the type level once the discriminant is wrong. Fixed by
+  declaring `requireCanonicalHeading` as `asserts lookup is ResolvedSection`.
+- The installed `gh` CLI (2.4.0, from 2022) has no `gh project` subcommand at all, so the required live dry run
+  (`PLANS_DRY_RUN=true pnpm plans:sync`) cannot run in this environment — it fails immediately on `gh project view`
+  before reaching any of this plan's own code. Substituted a local, read-only rendering of `parseExecPlan` +
+  `renderIssueBody` + `resolvePlanStates` against the real repository for every repaired plan, which exercises the
+  same parsing and rendering code path the live sync would use, without needing `gh project`.
 
 ## Decision Log
 
@@ -67,7 +80,54 @@ metadata exactly.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated to the extent this environment's `gh` CLI allows.
+
+- Sentence-cased the malformed `## Plan Dependencies`/`## Plan Readiness` headings in `auth/13`,
+  `module-boundaries/07`, `module-boundaries/08`, `proxy-fleet/15`, and (found independently, see Surprises &
+  Discoveries) `payments/07`.
+- Replaced stale "PR pending" and "ready for a pull request" readiness text in `proxy-fleet/11`, `12`, `13`, and `15`
+  with their verified merged PR numbers (#373, #374, #419, #417), moved plans 11–13 into the road map's completed
+  section, and annotated 15 the same way. Also fixed a self-contradiction in the `plan-sync/01` Outcomes text,
+  which said "the first live run is deliberately outstanding" directly above a paragraph recording that the run
+  had completed. A repository-wide search for the same phrasing found no other occurrences.
+- Refactored `scripts/plans/execplan.ts`. `findRequiredSection` now distinguishes an exact canonical heading, a
+  case-insensitive near-match, and true absence. `requireCanonicalHeading` (an `asserts` function) fails with the
+  source path and exact expected spelling on a near-match. `readDependencies` allows a truly absent section only
+  when the plan's own progress checkboxes are 100% complete, and `readRequiredReadiness` requires a nonempty
+  canonical section for every plan, whether complete or not. `discoverExecPlans` moved from `sync-project.ts` into
+  `execplan.ts` so both the sync entry point and the new repository-fixture test share one discovery
+  implementation.
+- Added a narrow, source-aware Harper exemption (`scripts/docs/harper-lint.mjs`): `isExemptTitleCaseHeading`
+  suppresses `UseTitleCase` only for the literal strings `## Plan dependencies` and `## Plan readiness`. Every
+  other heading, including one with different wrong capitalization, is still flagged.
+- Test coverage: `scripts/plans/execplan.spec.ts` gained near-miss-heading, missing/empty-readiness, and
+  complete-vs-incomplete missing-dependencies cases (45 tests total, up from 36). Added
+  `scripts/plans/execplan-repository-fixture.spec.ts`, which discovers and parses every checked-in plan and resolves
+  the complete dependency graph against the real repository. Added four Harper regression tests in
+  `scripts/docs/harper-lint.test.mjs` (13 total) proving the exemption is exact and narrow, using the real
+  `LocalLinter`, not a mock.
+- `pnpm typecheck` (0 issues, via the same local, uncommitted scratch-tsconfig `dist/`-permission workaround plans
+  11–13 used), `pnpm lint` (0 errors, the same 2 preexisting unrelated warnings), `pnpm test:ci` (853/881, 27
+  preexisting live-gated skips, 1 preexisting pending `test.todo` case), `pnpm build` (445 files, 0 issues), and
+  `pnpm test:docs-lint` (13 passing) all ran clean. So did `git diff --check`.
+- `pnpm docs:lint --` ran against every changed plan and road-map file. The only remaining diagnostics are on
+  preexisting lines this repair did not touch: established `config`/`configs` style preferences, `maxConcurrent`
+  and `requestsPerMinute` API field names, and similar. This matches the review policy of fixing only
+  newly-created or materially-edited prose.
+
+**Not verified live in this environment:** the installed `gh` CLI (2.4.0, from 2022) has no `gh project`
+subcommand, so `PLANS_DRY_RUN=true pnpm plans:sync` fails immediately on `gh project view` before reaching any of
+this plan's code (see Surprises & Discoveries). Substituted a local read-only rendering of `parseExecPlan` +
+`renderIssueBody` + `resolvePlanStates` for every repaired plan (`auth/13`, `module-boundaries/07`,
+`module-boundaries/08`, `proxy-fleet/11`, `12`, `13`, `15`, and `payments/07`), confirming each now renders its
+correct source `Dependencies`, `Readiness`, and `Done` status instead of the previously silently-dropped values.
+This exercises the same parsing and rendering path the live sync uses. It does not prove the `gh`-backed adapter
+itself still behaves correctly, and it does not perform the acceptance criterion's literal "second dry run after
+synchronization reports no metadata update" check. A future run with an upgraded `gh` CLI should perform the live
+dry run this plan's Validation section specifies, both before and after the ordinary post-merge workflow sync.
+
+No write sync was run from this feature branch, and no GitHub issue, label, or project-board state was edited by
+hand.
 
 ## Context and Orientation
 
@@ -171,4 +231,5 @@ project secrets, or unrelated issue content into the plan.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated in this environment; see Outcomes & Retrospective for what the installed `gh` CLI could
+not verify live. Pull request not yet opened.

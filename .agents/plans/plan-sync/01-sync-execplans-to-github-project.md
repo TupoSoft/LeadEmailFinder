@@ -52,7 +52,7 @@ Make roadmap progress visible without maintaining it twice. After this change, e
 
 ## Outcomes & Retrospective
 
-Implementation complete; the first live run is deliberately outstanding.
+Implementation complete, including the first live run.
 
 - `pnpm typecheck` and `pnpm lint` are clean, with only the two pre-existing warnings in `load-secrets.spec.ts` and `parse-connection-string-options.factory.spec.ts`.
 - The full `jest` suite passes: 65 suites, 348 tests, with 4 live-gated suites skipped. 29 of those tests are new and cover key derivation, section parsing, checkbox counting, readiness classification, label selection, status derivation, body rendering, and the synchronizer's create, update, unchanged, rename, missing-item, already-`Done`, dry-run, and multi-plan paths.
