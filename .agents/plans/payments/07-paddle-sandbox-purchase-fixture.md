@@ -19,7 +19,7 @@ credits, and a replay leave that balance unchanged.
   authentication, purchase, replay, and cleanup.
 - [x] (2026-08-28) Complete one live sandbox purchase and notification replay and record redacted evidence.
 - [x] (2026-08-28) Run configuration, unit, Compose, build, full Jest, stub Bruno regression, and diff validation.
-- [ ] (2026-08-28) Deactivate the exact fixture-owned notification destination and verify safe cleanup.
+- [x] (2026-08-28) Deactivate the exact fixture-owned notification destination and verify safe cleanup.
 
 ## Plan Dependencies
 
@@ -38,6 +38,10 @@ credits, and a replay leave that balance unchanged.
   destination is neither repeatable nor clean recovery.
 - Each notification destination has its own signature secret. Deleting the local secret while leaving the destination
   active can make later deliveries unverifiable and leaves no safe identifier for targeted cleanup.
+- On 2026-08-28, restoring the base stub stack after the Paddle overlay required rerunning the idempotent Keycloak
+  provisioning command before credential bootstrap. The overlay had written the container-internal issuer to the
+  generated service-client file, so bootstrapping that file alone seeded the same internal issuer twice and
+  host-minted tokens remained unknown to the API.
 
 ## Decision Log
 
@@ -90,7 +94,9 @@ operator procedure are implemented. Focused configuration and payment tests, iso
 the repository-wide regression commands and stub Bruno workflow pass. Developer-supplied sandbox secrets enabled
 account-bound testing, which revealed and corrected Paddle's public-domain requirement. A live sandbox purchase
 then moved from pending to paid, granted exactly 100 credits, and accepted a replay without granting again. The
-fixture outcome is `PASS`.
+project owner confirmed that the exact Platform notification destination ending in `h61dbq` was inactive after
+cleanup. The Paddle overlay was stopped without deleting shared volumes, the base stub stack was restored, and its
+credit-purchase regression passed. The fixture outcome is `PASS`.
 
 ## Context and Orientation
 
@@ -224,7 +230,15 @@ Implementation validation recorded on 2026-08-28:
 - After merging current `master`, typecheck and build passed, lint passed with the same two preexisting warnings, and
   the full Jest run passed 130 suites and 843 tests; 9 suites and 27 tests were skipped, and 1 test remains pending.
   The merged Compose model, Harper documentation lint, and `git diff --check` also passed.
+- After Paddle verification, the project owner confirmed in the sandbox dashboard that the exact Platform
+  notification destination ending in `h61dbq` was inactive. The Paddle checkout and tunnel containers were absent,
+  the base API reported `PAYMENTS_PROVIDER=stub`, and its health endpoint returned 200. No unrelated destination was
+  changed.
+- The first Bruno attempt after cleanup exposed the generated Keycloak issuer mismatch described above. After the
+  documented idempotent `keycloak:provision` and `keycloak:bootstrap-credential` recovery, the authenticated smoke
+  request returned 200 and Bruno CLI 4.0.0 passed all 11 requests and all 11 tests, including paid-webhook replay and
+  tampered-body rejection.
 
 ## Plan Readiness
 
-Pending safe notification-destination deactivation and verification.
+Complete.
