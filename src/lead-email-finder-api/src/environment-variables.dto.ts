@@ -10,6 +10,23 @@ function transformBoolean(value: unknown): boolean {
     return value === true || value === 'true'
 }
 
+export function normalizePaymentCheckoutUrlConfiguration(
+    config: Record<string, unknown>,
+): Record<string, unknown> {
+    const checkoutUrl = config['PAYMENTS_CHECKOUT_URL']
+    const legacyCheckoutUrl = config['PAYMENTS_CHECKOUT_RETURN_URL']
+
+    if (checkoutUrl !== undefined && legacyCheckoutUrl !== undefined && checkoutUrl !== legacyCheckoutUrl) {
+        throw new Error('PAYMENTS_CHECKOUT_URL and PAYMENTS_CHECKOUT_RETURN_URL must match when both are set')
+    }
+
+    if (checkoutUrl === undefined && legacyCheckoutUrl !== undefined) {
+        return { ...config, PAYMENTS_CHECKOUT_URL: legacyCheckoutUrl }
+    }
+
+    return config
+}
+
 @WithFileVars()
 export class EnvironmentVariablesDto {
     @IsEnum(Environment)
@@ -133,7 +150,11 @@ export class EnvironmentVariablesDto {
     PAYMENTS_CREDIT_PACKS: string
 
     @IsUrl({ require_protocol: true, require_tld: false })
-    PAYMENTS_CHECKOUT_RETURN_URL: string
+    PAYMENTS_CHECKOUT_URL: string
+
+    @IsOptional()
+    @IsUrl({ require_protocol: true, require_tld: false })
+    PAYMENTS_CHECKOUT_RETURN_URL?: string
 
     @IsFileVar(environment => environment['PAYMENTS_PROVIDER'] === PaymentsProviderName.STUB)
     @IsString()

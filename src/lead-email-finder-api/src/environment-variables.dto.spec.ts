@@ -1,6 +1,9 @@
 import { plainToInstance } from 'class-transformer'
 import { validateSync } from 'class-validator'
-import { EnvironmentVariablesDto } from './environment-variables.dto'
+import {
+    EnvironmentVariablesDto,
+    normalizePaymentCheckoutUrlConfiguration,
+} from './environment-variables.dto'
 
 describe('EnvironmentVariablesDto', (): void => {
     it.each([
@@ -169,11 +172,54 @@ describe('EnvironmentVariablesDto', (): void => {
             PAYMENTS_CREDIT_PACKS: JSON.stringify({
                 starter: { credits: 100, amountMinor: 500, currency: 'USD', providerPriceId: 'price_stub' },
             }),
-            PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:53000/billing/complete',
+            PAYMENTS_CHECKOUT_URL: 'http://localhost:53000/billing/complete',
             PAYMENTS_STUB_WEBHOOK_SECRET: 'development-only-secret',
         })
 
         expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it.each([
+        {
+            name: 'the canonical checkout URL only',
+            configuration: { PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html' },
+        },
+        {
+            name: 'the legacy checkout URL only',
+            configuration: { PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:57000/checkout.html' },
+        },
+        {
+            name: 'matching canonical and legacy checkout URLs',
+            configuration: {
+                PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html',
+                PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:57000/checkout.html',
+            },
+        },
+    ])('normalizes and accepts $name', ({ configuration }): void => {
+        const normalized = normalizePaymentCheckoutUrlConfiguration(configuration)
+        const environment = plainToInstance(EnvironmentVariablesDto, normalized)
+
+        expect(environment.PAYMENTS_CHECKOUT_URL).toBe('http://localhost:57000/checkout.html')
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects conflicting canonical and legacy checkout URLs', (): void => {
+        expect(() =>
+            normalizePaymentCheckoutUrlConfiguration({
+                PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html',
+                PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:53000/billing/complete',
+            }),
+        ).toThrow('PAYMENTS_CHECKOUT_URL and PAYMENTS_CHECKOUT_RETURN_URL must match when both are set')
+    })
+
+    it.each([
+        ['canonical', { PAYMENTS_CHECKOUT_URL: 'not-a-url' }],
+        ['legacy', { PAYMENTS_CHECKOUT_RETURN_URL: 'not-a-url' }],
+    ])('rejects an invalid %s checkout URL', (_name, configuration): void => {
+        const normalized = normalizePaymentCheckoutUrlConfiguration(configuration)
+        const environment = plainToInstance(EnvironmentVariablesDto, normalized)
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 
     it('requires the stub webhook secret only for the stub provider', (): void => {
@@ -255,7 +301,7 @@ describe('EnvironmentVariablesDto', (): void => {
         const errors = validateSync(environment).map(error => error.property)
 
         expect(errors).toEqual(
-            expect.arrayContaining(['PAYMENTS_PROVIDER', 'PAYMENTS_CREDIT_PACKS', 'PAYMENTS_CHECKOUT_RETURN_URL']),
+            expect.arrayContaining(['PAYMENTS_PROVIDER', 'PAYMENTS_CREDIT_PACKS', 'PAYMENTS_CHECKOUT_URL']),
         )
     })
 })

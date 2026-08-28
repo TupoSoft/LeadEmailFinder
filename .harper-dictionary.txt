@@ -3,6 +3,8 @@ Bruno
 BullMQ
 chargeback
 chargebacks
+checkout
+Checkout
 CIDRs
 clawback
 ClusterID
@@ -12,6 +14,7 @@ configs
 CoreDNS
 Corepack
 CSRF
+CVC
 DI
 DTO
 DTOs
@@ -42,6 +45,7 @@ multer
 MX
 NestJS
 Nginx
+Node.js
 OIDC
 OpenCollection
 OTP
@@ -60,6 +64,7 @@ S3
 SameSite
 SMTP
 SOCKS5
+Startup
 swc
 Swagger
 TupoSoft

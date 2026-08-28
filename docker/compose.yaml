@@ -47,7 +47,7 @@ services:
 
       PAYMENTS_PROVIDER: stub
       PAYMENTS_CREDIT_PACKS: '{"starter":{"credits":100,"amountMinor":500,"currency":"USD","providerPriceId":"stub_starter"},"growth":{"credits":500,"amountMinor":2000,"currency":"USD","providerPriceId":"stub_growth"}}'
-      PAYMENTS_CHECKOUT_RETURN_URL: http://localhost:53000/billing/complete
+      PAYMENTS_CHECKOUT_URL: http://localhost:53000/billing/complete
       PAYMENTS_STUB_WEBHOOK_SECRET_FILE: /run/secrets/payments_stub_webhook_secret
 
       KEYCLOAK_ORG_ADMIN_CLIENT_ID: lef-org-admin-service

@@ -11,7 +11,7 @@ import { HealthModule } from './health'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
-import { EnvironmentVariablesDto } from './environment-variables.dto'
+import { EnvironmentVariablesDto, normalizePaymentCheckoutUrlConfiguration } from './environment-variables.dto'
 import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
@@ -23,7 +23,7 @@ import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modul
     imports: [
         ConfigModule.forRoot({
             load: [loadSecrets],
-            validate: config => validate(EnvironmentVariablesDto, config),
+            validate: config => validate(EnvironmentVariablesDto, normalizePaymentCheckoutUrlConfiguration(config)),
         }),
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],

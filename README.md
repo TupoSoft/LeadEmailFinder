@@ -124,6 +124,19 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down
 
 The cleanup command removes the fixture proxy from the persistent registry before its container and DNS name disappear.
 
+### Paddle Sandbox Purchase Verification
+
+To exercise a real Paddle sandbox checkout and signed webhook without changing the default stub stack, use the
+opt-in Paddle development overlay. It serves the local Paddle browser payment-link page on
+`http://localhost:57000/checkout.html` and starts an ephemeral Cloudflare Quick Tunnel for a Paddle-approved
+public checkout URL and webhook delivery.
+
+The fixture requires sandbox account credentials, a client-side token, an approved temporary website, one locally
+identified notification destination, and an active starter price. Follow the complete, repeatable setup and purchase/replay procedure in
+[`docker/paddle-dev/README.md`](docker/paddle-dev/README.md). The tunnel exposes only the checkout, health, and
+exact webhook routes at a temporary public URL. Deactivate and verify the fixture-owned notification destination
+before stopping the tunnel or deleting its local ID and signature secret.
+
 ### Local Services
 
 The development Compose stack starts the following supporting services:
@@ -136,6 +149,9 @@ The development Compose stack starts the following supporting services:
 | Bull Board | http://localhost:54000 | Queue dashboard |
 | MinIO API | http://localhost:59000 | S3-compatible object storage |
 | MinIO Console | http://localhost:59001 | Object storage console |
+
+The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
+the ordinary development stack.
 
 ### Resetting the Development Stack
 
