@@ -11,7 +11,7 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 - [x] (2026-08-28) Introduce the canonical checkout payment-link configuration with a compatible legacy alias.
 - [x] (2026-08-28) Add the opt-in Paddle checkout and webhook-tunnel Compose fixture.
 - [x] (2026-08-28) Document Paddle plugin catalog provisioning, local secrets, startup, authentication, purchase, replay, and cleanup.
-- [ ] Complete one live sandbox purchase and notification replay and record redacted evidence.
+- [x] (2026-08-28) Complete one live sandbox purchase and notification replay and record redacted evidence.
 - [x] (2026-08-28) Run configuration, unit, Compose, build, full Jest, stub Bruno regression, and diff validation.
 
 ## Plan Dependencies
@@ -59,8 +59,9 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 The canonical checkout setting, compatibility normalization, opt-in Compose services, sandbox catalog, and full
 operator procedure are implemented. Focused configuration and payment tests, isolated checkout rendering, and
 the repository-wide regression commands and stub Bruno workflow pass. Developer-supplied sandbox secrets enabled
-account-bound testing, which revealed and corrected Paddle's public-domain requirement. The live purchase and
-replay remain in progress while the replacement tunnel domain is configured in the sandbox dashboard.
+account-bound testing, which revealed and corrected Paddle's public-domain requirement. A live sandbox purchase
+then moved from pending to paid, granted exactly 100 credits, and accepted a replay without granting again. The
+fixture outcome is `PASS`.
 
 ## Context and Orientation
 
@@ -142,8 +143,10 @@ Implementation validation recorded on 2026-08-28:
 - During initial implementation, a real checkout, webhook delivery, exact `+100` live balance proof, and notification replay could not run because all three `.dev/paddle/` sandbox files were absent.
 - After the sandbox secret files became available, the API key listed transactions successfully and transaction preview returned USD 5.00 for the configured price. Transaction creation reached Paddle but rejected the local checkout URL as an unapproved domain; no provider transaction was created.
 - After routing the Quick Tunnel through the checkout gateway, both local and public probes returned 200 for health and checkout, 400 for an unsigned exact webhook request, and 404 for an unrelated API route. The effective Compose model used the public checkout URL, targeted `http://paddle-checkout:80`, depended only on the checkout service, and contained no host-gateway mapping. `nginx -t` and `git diff --check` passed.
-- The real checkout, webhook delivery, exact `+100` live balance proof, and notification replay are still pending. No successful live result is claimed yet.
+- Live verification completed on 2026-08-28 for purchase `ab5a60e5-0ed7-4a40-9c54-1b9a8d0d2026` and Paddle transaction ending in `p40xde`. The purchase started `pending`; the original Paddle delivery reached the gateway at 13:08:39 UTC and returned HTTP 200 with a 17-byte acknowledgment body. The purchase became `paid`, and the balance moved from 0 to 100 for an exact `+100` delta.
+- The original notification was replayed from the Paddle dashboard. The second Paddle delivery reached the gateway at 13:10:58 UTC and returned HTTP 200 with the same 17-byte acknowledgment body. The purchase remained `paid`, the balance remained 100, and the replay delta was exactly zero. Final live result: `PASS`.
+- Both the connected Paddle plugin key and the developer-supplied API key returned HTTP 403 for notification listing, so event and notification ID suffixes were unavailable programmatically. No raw webhook body or customer data was logged or copied into the repository; the two Paddle-originated gateway deliveries and application state provide the replay evidence.
 
 ## Plan Readiness
 
-Ready to implement.
+Complete.
