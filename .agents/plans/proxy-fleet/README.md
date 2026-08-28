@@ -31,7 +31,11 @@ Dev-workflow fix discovered during a 2026-08-22 full E2E pass, independently del
 
 15. [Reset the DNS cache when bringing up the SMTP development overlay](15-reset-dns-cache-for-smtp-dev-overlay.md)
 
-Live-validation follow-up, blocked until an authorized disposable four-host lab is available:
+Portable Vagrant lab for live validation:
+
+17. [Provision a portable Vagrant proxy-fleet lab](17-provision-portable-vagrant-lab.md)
+
+Live-validation follow-up, dependent on plan 17:
 
 16. [Validate the disposable proxy fleet end to end](16-validate-disposable-multi-node-fleet.md)
 
@@ -44,7 +48,12 @@ Shared decisions:
 - 3proxy tasks use host networking so `-i` can bind the node's WireGuard address and `-e` can bind the declared host egress IP. Swarm routing mesh is not used for proxy listeners.
 - Each proxy node receives its own constrained Swarm service, configuration, and credential secret. This is behaviorally equivalent to one global task per labeled node while avoiding fleet-wide credentials and node-conditional configuration inside a global service.
 - Images are built before deployment and referenced by immutable digest because `docker stack deploy` does not build images.
-- Cloud VM creation and public-IP allocation remain provider-specific and outside this repository. Ansible verifies declared egress IPs rather than creating provider resources.
+- Plan 17 owns only four disposable local Vagrant VMs, their isolated networks, generated lab inventory, and three
+  nonpublic RFC 2544 egress identities. The same topology must pass on WSL2 with Windows VirtualBox and on native
+  AMD64 Linux with libvirt/KVM; Hyper-V, PowerShell, ARM, and production hosting are outside its scope.
+- Plan 16 accepts lab-routed egress as proof of listener source binding, routing, and reconciliation. Cloud VM
+  creation, public-IP allocation, Internet routing, SMTP reputation, and provider-address lifecycle remain outside
+  this repository and unverified by the disposable lab.
 - These plans provide disposable/lab infrastructure only. They do not add database migrations, production rollout, high availability, backups, or production recovery.
 - The current registry stores proxy authentication in PostgreSQL JSONB. That is accepted only for disposable development data in this road map; encryption or an external credential resolver is a prerequisite for any later production plan.
 - The initial capacity target remains approximately 100 verifications per minute, but inventory limits remain the source of configured capacity.
