@@ -1,13 +1,13 @@
 # Paddle Sandbox Purchase Fixture
 
 This opt-in fixture proves the real Paddle purchase path while keeping the ordinary Compose stack on the
-deterministic stub provider. It serves the configured Paddle payment-link page at
-`http://localhost:57000/checkout.html`, runs the API with the sandbox adapter, and creates a temporary public
-Cloudflare Quick Tunnel for Paddle notifications.
+deterministic stub provider. It serves a Paddle payment-link page, runs the API with the sandbox adapter, and
+creates a temporary public Cloudflare Quick Tunnel for the checkout and Paddle notifications. The checkout is
+also available locally at `http://localhost:57000/checkout.html` for inspecting the rendered fixture.
 
-The Quick Tunnel exposes the whole API published on host port 53000, not only the webhook route. Its URL changes
-on every restart. Start it only for this verification, do not share or record the URL, and stop it immediately
-afterward.
+The Quick Tunnel exposes only `/checkout.html`, `/health`, and the exact `/v1/payments/webhook` proxy route. Its
+URL changes on every restart. Start it only for this verification, do not share or record the URL, and stop it
+immediately afterward.
 
 ## 1. Provision the Starter Catalog
 
@@ -56,9 +56,9 @@ Only use sandbox values: API keys start with `pdl_sdbx_apikey_`, and client-side
 `.dev/paddle/` is gitignored. Never put these values, an access token, an account-specific price identifier, a
 customer payload, or a raw webhook body in a tracked file.
 
-## 3. Start the Tunnel and Notification Destination
+## 3. Start the Tunnel and Configure Paddle
 
-Start the tunnel by itself. It has no API dependency and can run before the rest of the stack:
+Start the tunnel and its checkout dependency before the rest of the stack:
 
 ```shell
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d paddle-webhook-tunnel
@@ -66,7 +66,18 @@ docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml logs -f 
 ```
 
 Copy the temporary `https://...trycloudflare.com` URL from the logs, then stop following them with `Ctrl+C`.
-In the Paddle sandbox dashboard, create a Platform notification destination at:
+Keep it in the same shell that will start the full overlay:
+
+```shell
+export PADDLE_PUBLIC_URL=https://replace-with-the-quick-tunnel.trycloudflare.com
+export PADDLE_CHECKOUT_URL="$PADDLE_PUBLIC_URL/checkout.html"
+```
+
+In the Paddle sandbox dashboard, add the tunnel's fully qualified domain under **Checkout > Website approval**.
+Do not enter `localhost`: the website approval field requires a fully qualified domain even in sandbox. Set the
+account's default payment link to the public checkout URL held in `PADDLE_CHECKOUT_URL`.
+
+Create a Platform notification destination at:
 
 ```text
 https://replace-with-the-quick-tunnel.trycloudflare.com/v1/payments/webhook
@@ -83,17 +94,20 @@ printf '\n'
 chmod 600 .dev/paddle/webhook-secret.txt
 ```
 
-If the tunnel restarts, update the destination URL before testing again. A destination secret belongs to that
-destination and must not be replaced with an API key or a secret from another environment.
+If the tunnel restarts, update the approved website, default payment link, notification destination URL, and
+both shell variables before testing again. A destination secret belongs to that destination and must not be
+replaced with an API key or a secret from another environment.
 
 ## 4. Start and Inspect the Fixture
 
-Start the full overlay after all three files exist and `PADDLE_STARTER_PRICE_ID` is exported:
+Start the full overlay after all three files exist and both `PADDLE_STARTER_PRICE_ID` and
+`PADDLE_CHECKOUT_URL` are exported:
 
 ```shell
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d --build
 curl --fail --silent --show-error http://localhost:57000/health
+curl --fail --silent --show-error "$PADDLE_PUBLIC_URL/health"
 curl --fail --silent --show-error http://localhost:53000/health | jq -e '.status == "ok"'
 ```
 
@@ -212,7 +226,9 @@ test "$LEF_REPLAYED_BALANCE" -eq "$LEF_PAID_BALANCE"
 ```
 
 A missed notification is recoverable by replaying the original after the API and tunnel are healthy. Starting a
-purchase is not idempotent; abandon any unpaid duplicate and create a fresh purchase for a retry.
+purchase is not idempotent; abandon any unpaid duplicate and create a fresh purchase for a retry. If Paddle
+rejects a transaction with `transaction_checkout_url_domain_is_not_approved`, confirm that `PADDLE_CHECKOUT_URL`
+uses the current tunnel domain and that the same fully qualified domain is approved in the sandbox dashboard.
 
 ## 8. Restore the Stub Stack
 
@@ -223,7 +239,7 @@ files when they are no longer needed:
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml down
 unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
 unset LEF_PURCHASE_ID LEF_CHECKOUT_URL LEF_PURCHASE_RESPONSE LEF_PAID_PURCHASE LEF_REPLAYED_PURCHASE
-unset PADDLE_STARTER_PRICE_ID
+unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL
 rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt
 docker compose -f docker/compose.yaml up -d --build
 ```

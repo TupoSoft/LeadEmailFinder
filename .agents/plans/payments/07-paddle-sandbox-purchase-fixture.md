@@ -4,7 +4,7 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
-Let a developer verify the real Paddle purchase path locally without rebuilding checkout hosting, container overrides, authentication wiring, and webhook tunneling for every run. After this change, an opt-in Compose overlay serves a Paddle checkout page, starts a temporary public webhook tunnel, configures the API for Paddle sandbox with local secret files, and documents one repeatable purchase and notification-replay procedure. A developer can observe a pending purchase become paid, the organization balance rise by exactly the configured credits, and a replay leave that balance unchanged.
+Let a developer verify the real Paddle purchase path locally without rebuilding checkout hosting, container overrides, authentication wiring, and webhook tunneling for every run. After this change, an opt-in Compose overlay serves a Paddle checkout page, starts one temporary public checkout-and-webhook tunnel, configures the API for Paddle sandbox with local secret files, and documents one repeatable purchase and notification-replay procedure. A developer can observe a pending purchase become paid, the organization balance rise by exactly the configured credits, and a replay leave that balance unchanged.
 
 ## Progress
 
@@ -25,6 +25,7 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 - On 2026-08-28, `.dev/paddle/api-key.txt`, `webhook-secret.txt`, and `client-token.txt` were absent. Disposable placeholder values were sufficient for Compose and payment-page rendering checks, but a real Paddle transaction and notification delivery cannot run without developer-supplied sandbox values.
 - On 2026-08-28, the running `LEF` Compose project belonged to `/home/kyrylo/Projects/TupoSoft/LeadEmailFinder/docker`, not this worktree. Payment-page runtime validation therefore used isolated project `lef-paddle-372`; starting the Quick Tunnel was deliberately skipped because it would have exposed the other checkout's API on host port 53000.
 - On 2026-08-28, GitHub issue #372 was already assigned to the project owner. The active GitHub token lacked `project` and `read:project`, so the required project-9 Status update could not be performed; implementation continued after skipping only that board-field mutation.
+- On 2026-08-28, live sandbox transaction preview succeeded for the configured USD 5.00 price, but transaction creation rejected `http://localhost:57000/checkout.html` with `transaction_checkout_url_domain_is_not_approved`. Paddle's Website approval form also rejected bare `localhost` as an invalid domain. The fixture therefore needs its temporary HTTPS hostname for the checkout URL as well as the webhook destination.
 
 ## Decision Log
 
@@ -40,8 +41,8 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 - Decision: Inject Paddle credentials and the client-side token from gitignored `.dev/paddle/` files and inject the sandbox price id through an environment variable.
   Rationale: No account-specific credential or catalog identifier belongs in source control. A Paddle client-side token is safe in browser code but still belongs to the developer's sandbox account and should be supplied at runtime.
   Date/Author: 2026-08-19, project planning.
-- Decision: Use `cloudflare/cloudflared:2026.7.2` as a development-only Quick Tunnel forwarding to host port 53000.
-  Rationale: The pinned image makes the fixture reproducible, requires no Cloudflare account, and can start before the API so its temporary URL is available when creating the Paddle notification destination.
+- Decision: Use `cloudflare/cloudflared:2026.7.2` as a development-only Quick Tunnel forwarding to the checkout Nginx service, which serves the payment page and proxies only the exact webhook path to the API.
+  Rationale: The pinned image makes the fixture reproducible, requires no Cloudflare account, and provides the fully qualified HTTPS domain Paddle requires for transaction checkout URLs. Routing through Nginx exposes only the checkout, health, and webhook paths instead of the whole local API.
   Date/Author: 2026-08-19, project planning.
 - Decision: Use the Paddle plugin only for catalog provisioning and reuse matching catalog entities on repeated runs.
   Rationale: Catalog creation is durable external state and benefits from structured provider tooling. Completing a purchase remains an intentional browser action, and the notification destination depends on the runtime tunnel URL.
@@ -56,9 +57,10 @@ Let a developer verify the real Paddle purchase path locally without rebuilding 
 ## Outcomes & Retrospective
 
 The canonical checkout setting, compatibility normalization, opt-in Compose services, sandbox catalog, and full
-operator procedure are implemented. Focused configuration and payment tests and isolated checkout rendering pass.
-The repository-wide regression commands and stub Bruno workflow pass. The account-bound live purchase and replay
-remain incomplete because the required local sandbox secret files were not available.
+operator procedure are implemented. Focused configuration and payment tests, isolated checkout rendering, and
+the repository-wide regression commands and stub Bruno workflow pass. Developer-supplied sandbox secrets enabled
+account-bound testing, which revealed and corrected Paddle's public-domain requirement. The live purchase and
+replay remain in progress while the replacement tunnel domain is configured in the sandbox dashboard.
 
 ## Context and Orientation
 
@@ -78,9 +80,9 @@ Add `PAYMENTS_CHECKOUT_URL` to `EnvironmentVariablesDto` as the required canonic
 
 Add `docker/compose.paddle-dev.yaml` and a small `docker/paddle-dev/` payment-page fixture. The overlay configures `PAYMENTS_PROVIDER=paddle`, `PADDLE_ENVIRONMENT=sandbox`, a one-pack catalog using `${PADDLE_STARTER_PRICE_ID}`, the canonical checkout URL, Paddle API and webhook secret files, and the container-internal Keycloak issuer. An Nginx service publishes the page on host port 57000 and renders a committed HTML template with a client-side token read from `/run/secrets`. The page loads Paddle's browser library directly from its CDN, selects sandbox before initialization, and uses overlay display defaults; it does not call `Checkout.open` with its own items or transaction id, so Paddle's `_ptxn` parameter remains authoritative.
 
-Add a `paddle-webhook-tunnel` service using the pinned Cloudflare image. It forwards to `http://host.docker.internal:53000`, includes the Linux host-gateway mapping, has no API dependency, and runs in the foreground so a developer can start it first and copy its random `trycloudflare.com` URL. Document that the tunnel exposes the whole local API, changes URL on restart, and must be stopped after verification.
+Add a `paddle-webhook-tunnel` service using the pinned Cloudflare image. It forwards to the checkout service, depends only on that service becoming healthy, and runs in the foreground so a developer can start it first and copy its random `trycloudflare.com` URL. The checkout Nginx configuration serves `/checkout.html` and `/health`, proxies only the exact `/v1/payments/webhook` path to the API through Docker DNS, and returns 404 for every other path. Document that the tunnel changes URL on restart and must be stopped after verification.
 
-Extend the payment and local-development documentation. The setup creates `.dev/paddle/api-key.txt`, `webhook-secret.txt`, and `client-token.txt` with mode `0600`, exports `PADDLE_STARTER_PRICE_ID`, and starts the tunnel. It creates a Platform notification destination for `transaction.completed`, `transaction.canceled`, and `transaction.past_due`, then starts the overlay and bootstraps Keycloak. It mints one M2M token, captures the starting balance, completes a `starter` purchase, checks the result, replays the delivered notification, and cleans up Compose and local secrets.
+Extend the payment and local-development documentation. The setup creates `.dev/paddle/api-key.txt`, `webhook-secret.txt`, and `client-token.txt` with mode `0600`, exports `PADDLE_STARTER_PRICE_ID`, and starts the tunnel. It approves the tunnel hostname for checkout, sets that public page as the default payment link and `PADDLE_CHECKOUT_URL`, and creates a Platform notification destination for `transaction.completed`, `transaction.canceled`, and `transaction.past_due`. It then starts the overlay, bootstraps Keycloak, mints one M2M token, captures the starting balance, completes a `starter` purchase, checks the result, replays the delivered notification, and cleans up Compose and local secrets.
 
 Once the Paddle plugin is installed and connected with product and price read/write access, list existing sandbox catalog entities before writing. Reuse an active product carrying `custom_data.lefPackId=starter` and `credits=100` when its tax category is `saas`. Otherwise, create `LeadEmailFinder Starter Credits`, description `100 LeadEmailFinder email-verification credits`, type `standard`, tax category `saas`, and that custom data without altering unrelated entities. Reuse an active one-time USD 5.00 price fixed to quantity one; otherwise create `Starter — 100 credits` with amount `500`, currency `USD`, `billing_cycle=null`, and quantity minimum and maximum one. Do not silently substitute another tax category if `saas` is unavailable.
 
@@ -88,7 +90,7 @@ Record only redacted runtime evidence in this ExecPlan: date, purchase UUID, suf
 
 ## Interfaces and Dependencies
 
-New canonical configuration: `PAYMENTS_CHECKOUT_URL`. Deprecated compatible alias: `PAYMENTS_CHECKOUT_RETURN_URL`. New local-only inputs: `PADDLE_STARTER_PRICE_ID` and secret files under `.dev/paddle/`. New development services: `paddle-checkout` on host port 57000 and `paddle-webhook-tunnel`. No endpoint, provider-port, or persistence interface changes. Depends on `payments/05` and unlocks the live sandbox validation in `payments/06`.
+New canonical configuration: `PAYMENTS_CHECKOUT_URL`. Deprecated compatible alias: `PAYMENTS_CHECKOUT_RETURN_URL`. New local-only inputs: `PADDLE_STARTER_PRICE_ID`, `PADDLE_CHECKOUT_URL`, and secret files under `.dev/paddle/`. New development services: `paddle-checkout` on host port 57000 and `paddle-webhook-tunnel`. No endpoint, provider-port, or persistence interface changes. Depends on `payments/05` and unlocks the live sandbox validation in `payments/06`.
 
 ## Acceptance Criteria
 
@@ -96,7 +98,7 @@ New canonical configuration: `PAYMENTS_CHECKOUT_URL`. Deprecated compatible alia
 - The application fails to start clearly when neither checkout URL exists, either URL is invalid, or both values differ.
 - The base stub stack continues to create its deterministic checkout using the canonical configuration.
 - The opt-in overlay serves a checkout page on `http://localhost:57000/checkout.html` that initializes Paddle's browser library in sandbox mode from the runtime client-side token and contains no API key or unresolved template variable.
-- The tunnel service can start without the API, prints a temporary HTTPS URL, and forwards Paddle requests to the API after it becomes healthy.
+- The tunnel service can start without the API, prints a temporary HTTPS URL, serves the checkout page, proxies the exact webhook route after the API becomes healthy, and returns 404 for unrelated API routes.
 - No Paddle API key, webhook secret, client-side token, access token, account-specific price id, customer data, tunnel URL, or raw webhook body is tracked by Git.
 - Repeated Paddle catalog setup reuses a matching starter product and price rather than creating duplicates and does not modify unrelated catalog entries.
 - A real sandbox checkout starts as `pending`, receives a valid `transaction.completed` webhook with HTTP 200 and `{ "received": true }`, becomes `paid`, and increases the target organization's balance by exactly 100.
@@ -107,7 +109,7 @@ New canonical configuration: `PAYMENTS_CHECKOUT_URL`. Deprecated compatible alia
 
 Add focused environment and purchase-service tests for canonical-only, legacy-only, matching dual values, conflicting values, invalid values, missing values, and resolved checkout use. Run `corepack pnpm typecheck`, `corepack pnpm lint`, `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test --runInBand`, and `corepack pnpm build`.
 
-With disposable `.dev/paddle/` files and a test price id, run `docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet`. Start `paddle-checkout`, assert its health endpoint returns 200, and inspect the rendered HTML without printing the token. Start `paddle-webhook-tunnel` independently and confirm it emits an HTTPS Quick Tunnel URL. Start the full overlay and confirm API health and the effective `paddle` and `sandbox` selections without printing secrets.
+With disposable `.dev/paddle/` files and a test price id, run `docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet`. Start `paddle-checkout`, assert its health endpoint returns 200, inspect the rendered HTML without printing the token, confirm the exact webhook route reaches the API, and confirm unrelated API routes return 404. Start `paddle-webhook-tunnel` independently and confirm it emits an HTTPS Quick Tunnel URL and has only the checkout dependency. Start the full overlay with the public `PADDLE_CHECKOUT_URL` and confirm API health and the effective `paddle` and `sandbox` selections without printing secrets.
 
 Run the live workflow described above with Paddle's standard sandbox card, verify the notification delivery log, purchase status, exact balance delta, and notification replay, and record redacted evidence. Restore the stub stack and run `/run/user/1000/fnm_multishells/125294_1787124153492/bin/bru run --env local --sandbox developer` from `bruno/credit-purchases`; all 11 requests must pass. Finish with `git diff --check`, a tracked-file secret scan, and `PLANS_DRY_RUN=true corepack pnpm plans:sync` to validate the new dependency graph without changing GitHub Project state.
 
@@ -115,7 +117,7 @@ Run the live workflow described above with Paddle's standard sandbox card, verif
 
 Catalog setup lists before creating and reuses matching active entities. Paddle products and prices are durable sandbox state; if this plan creates an unusable entity, archive only that explicitly identified entity rather than changing an unrelated one. Creating a checkout is not idempotent, so abandon unpaid duplicate transactions and use a fresh purchase id for a retry. Webhook replay is safe through the existing credit-grant reference.
 
-Quick Tunnel URLs are ephemeral. When the tunnel restarts, update the Paddle notification destination before retrying. A missed completed event is recoverable by replaying the original notification after the API and tunnel are healthy. Stop the overlay with Compose, delete `.dev/paddle/` when credentials should be discarded, and restart the base stack to return to the stub provider. Development data remains disposable and uses TypeORM synchronization; no migration or backfill is introduced.
+Quick Tunnel URLs are ephemeral. When the tunnel restarts, approve the new hostname and update the default payment link, `PADDLE_CHECKOUT_URL`, and Paddle notification destination before retrying. A missed completed event is recoverable by replaying the original notification after the API and tunnel are healthy. Stop the overlay with Compose, delete `.dev/paddle/` when credentials should be discarded, and restart the base stack to return to the stub provider. Development data remains disposable and uses TypeORM synchronization; no migration or backfill is introduced.
 
 ## Artifacts and Notes
 
@@ -137,7 +139,10 @@ Implementation validation recorded on 2026-08-28:
 - The stub credit-purchase Bruno collection passed 11 of 11 requests and tests against the disposable running stack, including webhook replay and tampered-body rejection.
 - `COREPACK_HOME=/tmp/lef-corepack corepack pnpm docs:lint -- README.md bruno/credit-purchases/README.md docker/paddle-dev/README.md src/libs/modules/payments/README.md .agents/plans/payments/07-paddle-sandbox-purchase-fixture.md` passed all five files.
 - `PLANS_DRY_RUN=true COREPACK_HOME=/tmp/lef-corepack corepack pnpm plans:sync`, `git diff --check`, the changed-file secret scan, and the `.dev/paddle/` ignore checks passed.
-- A real checkout, webhook delivery, exact `+100` live balance proof, and notification replay were not run because all three `.dev/paddle/` sandbox files were absent. No live result is claimed.
+- During initial implementation, a real checkout, webhook delivery, exact `+100` live balance proof, and notification replay could not run because all three `.dev/paddle/` sandbox files were absent.
+- After the sandbox secret files became available, the API key listed transactions successfully and transaction preview returned USD 5.00 for the configured price. Transaction creation reached Paddle but rejected the local checkout URL as an unapproved domain; no provider transaction was created.
+- After routing the Quick Tunnel through the checkout gateway, both local and public probes returned 200 for health and checkout, 400 for an unsigned exact webhook request, and 404 for an unrelated API route. The effective Compose model used the public checkout URL, targeted `http://paddle-checkout:80`, depended only on the checkout service, and contained no host-gateway mapping. `nginx -t` and `git diff --check` passed.
+- The real checkout, webhook delivery, exact `+100` live balance proof, and notification replay are still pending. No successful live result is claimed yet.
 
 ## Plan Readiness
 

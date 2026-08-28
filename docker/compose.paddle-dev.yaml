@@ -6,7 +6,7 @@ services:
       OIDC_ISSUER_URL: http://keycloak:8080/realms/lead-email-finder
       PAYMENTS_PROVIDER: paddle
       PAYMENTS_CREDIT_PACKS: '{"starter":{"credits":100,"amountMinor":500,"currency":"USD","providerPriceId":"${PADDLE_STARTER_PRICE_ID:?Set PADDLE_STARTER_PRICE_ID to the sandbox pri_ identifier}"}}'
-      PAYMENTS_CHECKOUT_URL: http://localhost:57000/checkout.html
+      PAYMENTS_CHECKOUT_URL: ${PADDLE_CHECKOUT_URL:-http://localhost:57000/checkout.html}
       PADDLE_API_KEY_FILE: /run/secrets/paddle_api_key
       PADDLE_WEBHOOK_SECRET_FILE: /run/secrets/paddle_webhook_secret
       PADDLE_ENVIRONMENT: sandbox
@@ -39,9 +39,10 @@ services:
   paddle-webhook-tunnel:
     image: cloudflare/cloudflared:2026.7.2
     restart: "no"
-    command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:53000"]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    command: ["tunnel", "--no-autoupdate", "--url", "http://paddle-checkout:80"]
+    depends_on:
+      paddle-checkout:
+        condition: service_healthy
 
 secrets:
   paddle_api_key:

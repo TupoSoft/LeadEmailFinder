@@ -124,12 +124,14 @@ The cleanup command removes the fixture proxy from the persistent registry befor
 
 To exercise a real Paddle sandbox checkout and signed webhook without changing the default stub stack, use the
 opt-in Paddle development overlay. It serves the local Paddle browser payment-link page on
-`http://localhost:57000/checkout.html` and starts an ephemeral Cloudflare Quick Tunnel for webhook delivery.
+`http://localhost:57000/checkout.html` and starts an ephemeral Cloudflare Quick Tunnel for a Paddle-approved
+public checkout URL and webhook delivery.
 
-The fixture requires sandbox account credentials, a client-side token, a notification destination, and an active
-starter price. Follow the complete, repeatable setup and purchase/replay procedure in
-[`docker/paddle-dev/README.md`](docker/paddle-dev/README.md). The tunnel exposes the whole local API at a temporary
-public URL, so keep it running only while testing and stop it immediately afterward.
+The fixture requires sandbox account credentials, a client-side token, an approved temporary website, a
+notification destination, and an active starter price. Follow the complete, repeatable setup and purchase/replay procedure in
+[`docker/paddle-dev/README.md`](docker/paddle-dev/README.md). The tunnel exposes only the checkout, health, and
+exact webhook routes at a temporary public URL, so keep it running only while testing and stop it immediately
+afterward.
 
 ### Local Services
 
