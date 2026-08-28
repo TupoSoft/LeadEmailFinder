@@ -1,3 +1,4 @@
+AMD64
 BFF
 Bruno
 BullMQ
@@ -5,6 +6,7 @@ chargeback
 chargebacks
 checkout
 Checkout
+CIDR
 CIDRs
 clawback
 ClusterID
@@ -34,6 +36,7 @@ JSONB
 JWKS
 Keycloak
 LeadEmailFinder
+libvirt
 lifecycle
 logout
 loopback
@@ -44,14 +47,20 @@ MinIO
 multer
 MX
 NestJS
+NIC
 Nginx
 Node.js
+OCI
 OIDC
 OpenCollection
+OS
 OTP
+PID
 PKCE
 pnpm
 proration
+provisioner
+provisioners
 Paddle.js
 reachability
 redelivery
@@ -62,9 +71,11 @@ roadmap
 S256
 S3
 SameSite
+ShellCheck
 SMTP
 SOCKS5
 Startup
+sshuttle
 swc
 Swagger
 TupoSoft
@@ -72,8 +83,12 @@ tsconfig
 typecheck
 typechecked
 TypeORM
+unowned
+untestable
 unreferenced
 UUID
 v2
+VMs
 WebStorm
 worktree
+WSL2
