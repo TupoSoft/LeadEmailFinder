@@ -94,8 +94,14 @@ services:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
       # Written by `pnpm keycloak:provision` (clientId/clientSecret for the seeded lef-development-service
       # M2M client), not a fixed checked-in Docker secret: run `pnpm keycloak:provision` and
-      # `pnpm keycloak:bootstrap-credential` before bringing this overlay up.
-      - ../.dev/keycloak/service-client.json:/service-client.json:ro
+      # `pnpm keycloak:bootstrap-credential` before bringing this overlay up. Disabling implicit host-path
+      # creation keeps Docker from turning a missing credentials file into a directory.
+      - type: bind
+        source: ../.dev/keycloak/service-client.json
+        target: /service-client.json
+        read_only: true
+        bind:
+          create_host_path: false
 
   smtp-dev-proxy-cleanup:
     image: curlimages/curl:8.16.0
@@ -107,7 +113,12 @@ services:
     entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "cleanup"]
     volumes:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
-      - ../.dev/keycloak/service-client.json:/service-client.json:ro
+      - type: bind
+        source: ../.dev/keycloak/service-client.json
+        target: /service-client.json
+        read_only: true
+        bind:
+          create_host_path: false
 
 networks:
   default:

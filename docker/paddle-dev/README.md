@@ -36,7 +36,8 @@ export PADDLE_STARTER_PRICE_ID=pri_replace_with_the_sandbox_price_id
 
 Create a sandbox API key and client-side token under **Paddle > Developer tools > Authentication**. Enter them
 through hidden prompts so they do not enter shell history. The webhook secret is added after the notification
-destination is created in the next section.
+destination is created or safely reused in the next section. Its destination ID is recorded beside the secret so
+cleanup can target the exact external resource owned by this fixture.
 
 ```shell
 mkdir -p .dev/paddle
@@ -77,26 +78,40 @@ In the Paddle sandbox dashboard, add the tunnel's fully qualified domain under *
 Do not enter `localhost`: the website approval field requires a fully qualified domain even in sandbox. Set the
 account's default payment link to the public checkout URL held in `PADDLE_CHECKOUT_URL`.
 
-Create a Platform notification destination at:
+Before changing notification settings, list the existing Platform destinations in the sandbox dashboard. This
+fixture owns only a destination described as `LeadEmailFinder paddle-dev` whose exact ID is recorded in
+`.dev/paddle/notification-setting-id.txt`.
+
+- If that local ID and the corresponding `webhook-secret.txt` both exist, update that exact destination, set it active,
+  and reuse it.
+- If a stale `LeadEmailFinder paddle-dev` destination exists but its local ID or secret is unavailable, deactivate
+  it before creating a replacement. Do not adopt it by description alone.
+- Never deactivate or modify an unrelated destination, even when its URL or subscriptions look similar.
+
+Create a Platform notification destination when no safely reusable destination remains. Use the description
+`LeadEmailFinder paddle-dev` and this URL:
 
 ```text
 https://replace-with-the-quick-tunnel.trycloudflare.com/v1/payments/webhook
 ```
 
-Subscribe only to `transaction.completed`, `transaction.canceled`, and `transaction.past_due`. Copy that
-destination's secret into its local file without putting it in shell history:
+Subscribe only to `transaction.completed`, `transaction.canceled`, and `transaction.past_due`. Copy the exact
+destination ID and its secret into local files without putting the secret in shell history:
 
 ```shell
+read -r -p 'Paddle notification destination ID: ' LEF_PADDLE_SETTING_ID
+printf '%s' "$LEF_PADDLE_SETTING_ID" > .dev/paddle/notification-setting-id.txt
+unset LEF_PADDLE_SETTING_ID
 read -r -s -p 'Paddle notification destination secret: ' LEF_PADDLE_SECRET
 printf '%s' "$LEF_PADDLE_SECRET" > .dev/paddle/webhook-secret.txt
 unset LEF_PADDLE_SECRET
 printf '\n'
-chmod 600 .dev/paddle/webhook-secret.txt
+chmod 600 .dev/paddle/notification-setting-id.txt .dev/paddle/webhook-secret.txt
 ```
 
 If the tunnel restarts, update the approved website, default payment link, notification destination URL, and
-both shell variables before testing again. A destination secret belongs to that destination and must not be
-replaced with an API key or a secret from another environment.
+both shell variables before testing again. Update only the destination whose ID is recorded locally. A destination
+secret belongs to that destination and must not be replaced with an API key or a secret from another environment.
 
 ## 4. Start and Inspect the Fixture
 
@@ -230,19 +245,28 @@ purchase is not idempotent; abandon any unpaid duplicate and create a fresh purc
 rejects a transaction with `transaction_checkout_url_domain_is_not_approved`, confirm that `PADDLE_CHECKOUT_URL`
 uses the current tunnel domain and that the same fully qualified domain is approved in the sandbox dashboard.
 
-## 8. Restore the Stub Stack
+## 8. Deactivate the Destination and Restore the Stub Stack
 
-Stop the public tunnel and all overlay services, clear sensitive shell variables, and discard the local Paddle
-files when they are no longer needed:
+Before stopping the public tunnel, open the Platform destination whose ID is stored in
+`.dev/paddle/notification-setting-id.txt`, deactivate it, and reload the destination list. Confirm that the exact
+destination is inactive and that no other active `LeadEmailFinder paddle-dev` destination exists. Deactivation
+preserves its delivery logs while preventing retries and avoiding consumption of Paddle's active-destination limit.
+
+Only after that verification, stop the overlay, clear sensitive shell variables, and discard its local files:
 
 ```shell
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml down
 unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
 unset LEF_PURCHASE_ID LEF_CHECKOUT_URL LEF_PURCHASE_RESPONSE LEF_PAID_PURCHASE LEF_REPLAYED_PURCHASE
 unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL
-rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt
+rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt \
+  .dev/paddle/notification-setting-id.txt
 docker compose -f docker/compose.yaml up -d --build
 ```
+
+If deactivation fails, keep the tunnel running while diagnosing delivery, retain both the notification-setting ID
+and webhook secret, and do not run the removal block or claim cleanup complete. Retry deactivation against that
+exact ID; never compensate by deleting or disabling another destination.
 
 The sandbox product and price are durable provider state. Keep matching active entries for the next run. If an
 unusable entry was created, archive only that explicitly identified entry; do not modify unrelated catalog data.

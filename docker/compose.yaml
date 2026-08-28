@@ -29,6 +29,7 @@ services:
       retries: 3
       start_period: 10s
     environment:
+      NODE_ENV: ${NODE_ENV:-development}
       API_URL: http://localhost:3000
       TYPEORM_SYNCHRONIZE: true
 
@@ -63,7 +64,9 @@ services:
       S3_REGION: us-east-1
       S3_FORCE_PATH_STYLE: true
       S3_BUCKET: batch-email-verification
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
