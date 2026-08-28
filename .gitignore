@@ -138,6 +138,7 @@ http-client.private.env.json
 tmp
 **/src/metadata.ts
 .dev/keycloak/
+.dev/paddle/
 
 # Protobuf
 **/*.proto

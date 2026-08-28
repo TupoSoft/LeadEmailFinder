@@ -34,7 +34,7 @@ const baseConfig = new Map<string, string>([
             },
         }),
     ],
-    ['PAYMENTS_CHECKOUT_RETURN_URL', 'http://localhost:3000/payment-return'],
+    ['PAYMENTS_CHECKOUT_URL', 'http://localhost:3000/payment-return'],
 ])
 
 async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string>): Promise<TestingModule> {

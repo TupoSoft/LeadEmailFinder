@@ -55,11 +55,15 @@ Owns one entity: `CreditPurchase` → `credit_purchases`, indexed on `organizati
 
 - `PAYMENTS_PROVIDER` — selects `stub` or `paddle`
 - `PAYMENTS_CREDIT_PACKS` — JSON catalog of purchasable packs
-- `PAYMENTS_CHECKOUT_RETURN_URL`
+- `PAYMENTS_CHECKOUT_URL` — canonical payment-link page URL used to create provider checkouts
+- `PAYMENTS_CHECKOUT_RETURN_URL` — deprecated alias accepted only when the canonical value is absent or identical
 - `PAYMENTS_STUB_WEBHOOK_SECRET` (required only when `PAYMENTS_PROVIDER=stub`)
 - `PADDLE_API_KEY` (required only when `PAYMENTS_PROVIDER=paddle`)
 - `PADDLE_WEBHOOK_SECRET` (required only when `PAYMENTS_PROVIDER=paddle`)
 - `PADDLE_ENVIRONMENT` (required only when `PAYMENTS_PROVIDER=paddle`; must be `sandbox`)
+
+The reusable Paddle sandbox checkout, tunnel, and notification-replay workflow is documented in
+[`docker/paddle-dev/README.md`](../../../../docker/paddle-dev/README.md).
 
 ## Validation
 

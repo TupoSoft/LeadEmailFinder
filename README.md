@@ -24,7 +24,7 @@ Before running the project, ensure you have the following installed on your syst
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/) v2
 
-Node.js is only needed when running the package scripts outside Docker. The development containers use the pnpm version pinned in `package.json`.
+The Node runtime is only needed when running the package scripts outside Docker. The development containers use the pnpm version pinned in `package.json`.
 
 ---
 
@@ -54,9 +54,9 @@ PROXY_LEASE_TTL_MS=60000
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
-#### Draining a proxy
+#### Draining a Proxy
 
-To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it's excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60s by default) after draining, then check the application logs for that proxy's ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it's safe to `PATCH` its state to `"disabled"` or `DELETE` it.
+To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it is excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60 seconds by default) after draining, then check the application logs for that proxy ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it is safe to `PATCH` its state to `"disabled"` or `DELETE` it.
 
 ### Running the Application
 
@@ -87,13 +87,13 @@ To run the application in debugging mode:
   docker compose -f docker/compose.yaml -f docker/compose.debug.yaml up -d --build
 ```
 
-Once running, connect your preferred debugging client using the Node.js Inspector protocol. Detailed instructions for
+Once running, connect your preferred debugging client using the Node Inspector protocol. Detailed instructions for
 setting up a client can be found in
-the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
+the [Node debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
 
 Attach the client to `localhost:59229`.
 
-### ISP-safe SMTP verification
+### ISP-Safe SMTP Verification
 
 To exercise DNS lookup, proxy allocation, SOCKS5 transport, and SMTP verification without using outbound port 25, start the opt-in local fixture:
 
@@ -120,6 +120,17 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down
 
 The cleanup command removes the fixture proxy from the persistent registry before its container and DNS name disappear.
 
+### Paddle Sandbox Purchase Verification
+
+To exercise a real Paddle sandbox checkout and signed webhook without changing the default stub stack, use the
+opt-in Paddle development overlay. It serves the local Paddle browser payment-link page on
+`http://localhost:57000/checkout.html` and starts an ephemeral Cloudflare Quick Tunnel for webhook delivery.
+
+The fixture requires sandbox account credentials, a client-side token, a notification destination, and an active
+starter price. Follow the complete, repeatable setup and purchase/replay procedure in
+[`docker/paddle-dev/README.md`](docker/paddle-dev/README.md). The tunnel exposes the whole local API at a temporary
+public URL, so keep it running only while testing and stop it immediately afterward.
+
 ### Local Services
 
 The development Compose stack starts the following supporting services:
@@ -133,9 +144,12 @@ The development Compose stack starts the following supporting services:
 | MinIO API | http://localhost:59000 | S3-compatible object storage |
 | MinIO Console | http://localhost:59001 | Object storage console |
 
+The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
+the ordinary development stack.
+
 ### Resetting the Development Stack
 
-`pnpm dev:reset` is the one safe, repeatable way to recreate the entire disposable development stack — PostgreSQL, Keycloak's own PostgreSQL, Redis, and the Garage/S3 container — after an incompatible schema or realm change. It stops and removes the named `LEF` Compose containers, deletes only the three named volumes this stack owns (`lef_postgres-data`, `lef_redis-data`, `lef_keycloak-postgres-data` — object storage has no volume and is already ephemeral), rebuilds and starts everything back up, reprovisions Keycloak, seeds deterministic fixtures, and ends with an authenticated API request.
+`pnpm dev:reset` is the one safe, repeatable way to recreate the entire disposable development stack — PostgreSQL, the PostgreSQL database owned by Keycloak, Redis, and the Garage/S3 container — after an incompatible schema or realm change. It stops and removes the named `LEF` Compose containers. It deletes only the three named volumes this stack owns (`lef_postgres-data`, `lef_redis-data`, and `lef_keycloak-postgres-data`); object storage has no volume and is already ephemeral. It then rebuilds and starts everything, provisions Keycloak again, seeds deterministic fixtures, and ends with an authenticated API request.
 
 It always asks for confirmation before deleting anything:
 

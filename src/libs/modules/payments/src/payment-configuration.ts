@@ -10,7 +10,8 @@ export enum PaddleEnvironmentName {
 export interface PaymentConfiguration {
     PAYMENTS_PROVIDER: PaymentsProviderName
     PAYMENTS_CREDIT_PACKS: string
-    PAYMENTS_CHECKOUT_RETURN_URL: string
+    PAYMENTS_CHECKOUT_URL: string
+    PAYMENTS_CHECKOUT_RETURN_URL?: string
     PAYMENTS_STUB_WEBHOOK_SECRET?: string
     PADDLE_API_KEY?: string
     PADDLE_WEBHOOK_SECRET?: string

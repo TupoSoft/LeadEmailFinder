@@ -42,7 +42,7 @@ describe('CreditPurchaseService', () => {
         const configService = {
             getOrThrow: jest.fn((key: string) => {
                 if (key === 'PAYMENTS_PROVIDER') return 'stub'
-                if (key === 'PAYMENTS_CHECKOUT_RETURN_URL') return 'http://localhost:3000/payment-return'
+                if (key === 'PAYMENTS_CHECKOUT_URL') return 'http://localhost:3000/payment-return'
                 throw new Error(`Unexpected configuration key: ${key}`)
             }),
         } as unknown as ConfigService<PaymentConfiguration, true>

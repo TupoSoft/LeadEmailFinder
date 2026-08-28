@@ -23,7 +23,7 @@ export class PaymentCheckoutError extends Error {
 @Injectable()
 export class CreditPurchaseService {
     private readonly providerName: PaymentsProviderName
-    private readonly returnUrl: string
+    private readonly checkoutUrl: string
 
     constructor(
         @InjectRepository(CreditPurchase) private readonly purchaseRepo: Repository<CreditPurchase>,
@@ -32,7 +32,7 @@ export class CreditPurchaseService {
         configService: ConfigService<PaymentConfiguration, true>,
     ) {
         this.providerName = configService.getOrThrow('PAYMENTS_PROVIDER')
-        this.returnUrl = configService.getOrThrow('PAYMENTS_CHECKOUT_RETURN_URL')
+        this.checkoutUrl = configService.getOrThrow('PAYMENTS_CHECKOUT_URL')
     }
 
     async start(principal: AuthPrincipal, packId: string): Promise<StartedCreditPurchase> {
@@ -54,7 +54,7 @@ export class CreditPurchaseService {
                 purchaseId: purchase.id,
                 organizationId: principal.organizationId,
                 pack,
-                returnUrl: this.returnUrl,
+                returnUrl: this.checkoutUrl,
             })
             purchase.providerReference = checkout.providerReference
             const savedPurchase = await this.purchaseRepo.save(purchase)
