@@ -1,5 +1,5 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import { writeDevelopmentSecretFile } from './development-secret-file'
 import { KeycloakAdminApi } from './keycloak-admin-api'
 import { KeycloakProvisioner } from './provisioning'
 
@@ -31,21 +31,15 @@ async function main(): Promise<void> {
     // this file read-only into the smtp-dev-proxy-bootstrap/cleanup containers, which run as their own
     // non-root image user and need to read it.
     const secretsFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
-    await mkdir(dirname(secretsFile), { recursive: true })
-    await writeFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, { mode: 0o644 })
-    await chmod(secretsFile, 0o644)
+    await writeDevelopmentSecretFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, 0o644)
 
     const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
-    await mkdir(dirname(bffSecretsFile), { recursive: true })
-    await writeFile(bffSecretsFile, `${JSON.stringify(bff, undefined, 2)}\n`, { mode: 0o600 })
-    await chmod(bffSecretsFile, 0o600)
+    await writeDevelopmentSecretFile(bffSecretsFile, `${JSON.stringify(bff, undefined, 2)}\n`, 0o600)
 
     const orgAdminSecretsFile = resolve(
         process.env.KEYCLOAK_DEV_ORG_ADMIN_SECRETS_FILE ?? '.dev/keycloak/org-admin-client.json',
     )
-    await mkdir(dirname(orgAdminSecretsFile), { recursive: true })
-    await writeFile(orgAdminSecretsFile, `${JSON.stringify(orgAdmin, undefined, 2)}\n`, { mode: 0o600 })
-    await chmod(orgAdminSecretsFile, 0o600)
+    await writeDevelopmentSecretFile(orgAdminSecretsFile, `${JSON.stringify(orgAdmin, undefined, 2)}\n`, 0o600)
 
     console.log(
         `Keycloak realm provisioned; development service credentials written to ${secretsFile}, BFF credentials written to ${bffSecretsFile}, and organization administration credentials written to ${orgAdminSecretsFile}`,

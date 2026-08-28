@@ -24,7 +24,7 @@ Before running the project, ensure you have the following installed on your syst
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/) v2
 
-Node.js is only needed when running the package scripts outside Docker. The development containers use the pnpm version pinned in `package.json`.
+The Node runtime is only needed when running the package scripts outside Docker. The development containers use the pnpm version pinned in `package.json`.
 
 ---
 
@@ -41,22 +41,24 @@ Clone this repository:
 
 ### Environment Variables
 
-Docker Compose loads `docker/.env` for the API container. Before the first start, create this file and configure:
+The development Compose stack defaults `NODE_ENV` to `development`. It also loads `docker/.env` when that optional,
+gitignored file exists. Create it only when you need to configure local overrides such as:
 
 ```dotenv
-NODE_ENV=development
 CATCH_ALL_HTTP_PROXY_URL=<HTTP proxy URL reachable from the API container>
 PROXY_MX_REQUESTS_PER_MINUTE=10
 PROXY_LEASE_TTL_MS=60000
 ```
 
-`CATCH_ALL_HTTP_PROXY_URL` is required for catch-all verification. The Compose stack also reads its database, Redis, and S3 settings from files in `docker/secrets/`; keep those files available locally and never commit real production credentials.
+`CATCH_ALL_HTTP_PROXY_URL` is optional; catch-all verifiers remain inactive when it is unset. The Compose stack reads
+its database, Redis, and S3 settings from files in `docker/secrets/`; keep those files available locally and never
+commit real production credentials.
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
-#### Draining a proxy
+#### Draining a Proxy
 
-To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it's excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60s by default) after draining, then check the application logs for that proxy's ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it's safe to `PATCH` its state to `"disabled"` or `DELETE` it.
+To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it's excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60 seconds by default) after draining, then check the application logs for that proxy's ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it's safe to `PATCH` its state to `"disabled"` or `DELETE` it.
 
 ### Running the Application
 
@@ -87,23 +89,25 @@ To run the application in debugging mode:
   docker compose -f docker/compose.yaml -f docker/compose.debug.yaml up -d --build
 ```
 
-Once running, connect your preferred debugging client using the Node.js Inspector protocol. Detailed instructions for
+Once running, connect your preferred debugging client using the Node Inspector protocol. Detailed instructions for
 setting up a client can be found in
-the [Node.js debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
+the [Node debugging guide](https://nodejs.org/en/learn/getting-started/debugging#inspector-clients).
 
 Attach the client to `localhost:59229`.
 
-### ISP-safe SMTP verification
+### ISP-Safe SMTP Verification
 
-To exercise DNS lookup, proxy allocation, SOCKS5 transport, and SMTP verification without using outbound port 25, start the opt-in local fixture:
+To exercise DNS lookup, proxy allocation, SOCKS5 transport, and SMTP verification without using outbound port 25,
+prepare the base development stack first. The reset generates the gitignored Keycloak credentials that the fixture
+bind-mounts; the overlay now fails fast if this prerequisite is missing instead of creating a directory at the
+expected location.
 
-If the base stack is already running, stop it first so Compose can recreate the default network with the fixture subnet:
+Then stop the base stack so Compose can recreate the default network with the fixture subnet, and start the opt-in
+local fixture:
 
 ```shell
+pnpm dev:reset
 docker compose -f docker/compose.yaml down
-```
-
-```shell
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
 
@@ -135,7 +139,12 @@ The development Compose stack starts the following supporting services:
 
 ### Resetting the Development Stack
 
-`pnpm dev:reset` is the one safe, repeatable way to recreate the entire disposable development stack — PostgreSQL, Keycloak's own PostgreSQL, Redis, and the Garage/S3 container — after an incompatible schema or realm change. It stops and removes the named `LEF` Compose containers, deletes only the three named volumes this stack owns (`lef_postgres-data`, `lef_redis-data`, `lef_keycloak-postgres-data` — object storage has no volume and is already ephemeral), rebuilds and starts everything back up, reprovisions Keycloak, seeds deterministic fixtures, and ends with an authenticated API request.
+`pnpm dev:reset` is the one safe, repeatable way to recreate the entire disposable development stack — PostgreSQL,
+the Keycloak PostgreSQL database, Redis, and the Garage/S3 container — after an incompatible schema or realm change.
+It stops and removes the named `LEF` Compose containers and deletes only the three named volumes this stack owns:
+`lef_postgres-data`, `lef_redis-data`, and `lef_keycloak-postgres-data`. Object storage has no volume and is already
+ephemeral. The command then rebuilds and starts the stack, provisions Keycloak again, seeds deterministic fixtures,
+and ends with an authenticated API request.
 
 It always asks for confirmation before deleting anything:
 

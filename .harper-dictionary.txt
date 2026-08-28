@@ -69,5 +69,6 @@ typechecked
 TypeORM
 unreferenced
 UUID
+v2
 WebStorm
 worktree

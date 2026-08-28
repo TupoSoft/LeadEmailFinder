@@ -131,7 +131,12 @@ run_api_smoke_test() {
     printf 'Authenticated API smoke test passed: organization %s has balance %s\n' "${customer_org_id}" "${balance}"
 }
 
-resolved_name="$(${COMPOSE} config --format json | jq -r '.name')"
+if ! resolved_config="$(${COMPOSE} config --format json)"; then
+    printf 'Unable to resolve the %s Docker Compose configuration; no containers or volumes were changed.\n' \
+        "${PROJECT_NAME}" >&2
+    exit 1
+fi
+resolved_name="$(printf '%s' "${resolved_config}" | jq -r '.name')"
 if [ "${resolved_name}" != "${COMPOSE_PROJECT_ID}" ]; then
     printf 'Unexpected Compose project id: %s (expected %s; check for a COMPOSE_PROJECT_NAME override)\n' \
         "${resolved_name}" "${COMPOSE_PROJECT_ID}" >&2
