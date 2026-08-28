@@ -11,6 +11,7 @@ import { Dialect, LocalLinter } from 'harper.js'
 import {
     changedMarkdownFiles,
     diagnosticFromLint,
+    isExemptTitleCaseHeading,
     lintFiles,
     normalizeTargets,
     parseDictionary,
@@ -200,5 +201,89 @@ test('Harper detects grammar errors and accepts workspace words', async () => {
         assert.ok(lints.every(lint => lint.get_problem_text() !== 'TupoSoft'))
     } finally {
         await linter.dispose()
+    }
+})
+
+test('isExemptTitleCaseHeading exempts only the two canonical ExecPlan headings', () => {
+    const titleCaseDiagnostic = problem => ({
+        kind: 'Capitalization',
+        message: 'Try to use title case in headings.',
+        problem,
+    })
+
+    assert.ok(isExemptTitleCaseHeading(titleCaseDiagnostic('## Plan dependencies')))
+    assert.ok(isExemptTitleCaseHeading(titleCaseDiagnostic('## Plan readiness')))
+    assert.ok(!isExemptTitleCaseHeading(titleCaseDiagnostic('## Plan Dependencies')))
+    assert.ok(!isExemptTitleCaseHeading(titleCaseDiagnostic('## Surprises & discoveries')))
+    assert.ok(
+        !isExemptTitleCaseHeading({ kind: 'Spelling', message: 'Did you mean...', problem: '## Plan dependencies' }),
+    )
+})
+
+test('the canonical ExecPlan headings satisfy both the parser and the title-case exemption, while other malformed headings still get flagged', async () => {
+    const linter = new LocalLinter({ binary, dialect: Dialect.American })
+
+    try {
+        const source = [
+            '## Plan dependencies',
+            '',
+            'None.',
+            '',
+            '## Plan readiness',
+            '',
+            'Ready to implement.',
+            '',
+            '## surprises and discoveries',
+            '',
+            'Nothing yet.',
+        ].join('\n')
+
+        const lints = await linter.lint(source, { language: 'markdown' })
+        const diagnostics = lints.map(lint => diagnosticFromLint('plan.md', source, lint))
+
+        assert.ok(
+            diagnostics.every(diagnostic => !isExemptTitleCaseHeading(diagnostic) || diagnostic.problem !== '## surprises and discoveries'),
+        )
+        assert.ok(
+            diagnostics.some(
+                diagnostic =>
+                    diagnostic.kind === 'Capitalization' && diagnostic.problem === '## surprises and discoveries',
+            ),
+        )
+        assert.ok(diagnostics.filter(isExemptTitleCaseHeading).every(diagnostic =>
+            ['## Plan dependencies', '## Plan readiness'].includes(diagnostic.problem),
+        ))
+    } finally {
+        await linter.dispose()
+    }
+})
+
+test('lintFiles never reports the two exempted canonical headings but still reports other findings', async () => {
+    const directory = await mkdtemp(path.join(temporaryRoot, 'harper-execplan-'))
+    const file = path.join(directory, 'plan.md')
+    const reports = []
+
+    try {
+        await writeFile(
+            file,
+            ['## Plan dependencies', '', 'None.', '', '## Plan readiness', '', 'Ready to implement.', ''].join('\n'),
+        )
+        const linter = new LocalLinter({ binary, dialect: Dialect.American })
+
+        try {
+            const count = await lintFiles({
+                files: [file],
+                linter,
+                projectRoot: directory,
+                report: diagnostic => reports.push(diagnostic),
+            })
+
+            assert.equal(count, 0)
+            assert.deepEqual(reports, [])
+        } finally {
+            await linter.dispose()
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true })
     }
 })

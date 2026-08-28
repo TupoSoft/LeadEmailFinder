@@ -21,7 +21,7 @@ credits, and a replay leave that balance unchanged.
 - [x] (2026-08-28) Run configuration, unit, Compose, build, full Jest, stub Bruno regression, and diff validation.
 - [x] (2026-08-28) Deactivate the exact fixture-owned notification destination and verify safe cleanup.
 
-## Plan Dependencies
+## Plan dependencies
 
 - `payments/05`
 
@@ -239,6 +239,6 @@ Implementation validation recorded on 2026-08-28:
   request returned 200 and Bruno CLI 4.0.0 passed all 11 requests and all 11 tests, including paid-webhook replay and
   tampered-body rejection.
 
-## Plan Readiness
+## Plan readiness
 
 Complete.

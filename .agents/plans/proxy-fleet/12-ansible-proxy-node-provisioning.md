@@ -143,4 +143,4 @@ Record sanitized inventory validation, the first and second play recaps, node-la
 
 ## Plan readiness
 
-Implemented (PR pending; see Progress and Outcomes & Retrospective for exactly what is and isn't live-verified in this environment).
+Implemented and merged as PR #374. See Progress and Outcomes & Retrospective for exactly what is and is not live-verified in this environment.

@@ -102,10 +102,18 @@ describe('parseExecPlan', (): void => {
         expect(plan.dependencies).toEqual(['payments/01', 'payments/02'])
     })
 
-    it('accepts a missing dependency section for completed legacy plans', (): void => {
-        const contents = buildPlanFile().replace('## Plan dependencies\n\nNone.\n\n', '')
+    it('accepts a missing dependency section for a fully completed legacy plan', (): void => {
+        const contents = buildPlanFile({ progress: '- [x] Done.' }).replace('## Plan dependencies\n\nNone.\n\n', '')
 
         expect(parseExecPlan('.agents/plans/f/01-a.md', contents).dependencies).toEqual([])
+    })
+
+    it('rejects a missing dependency section for an incomplete plan', (): void => {
+        const contents = buildPlanFile({ progress: '- [ ] Not done.' }).replace('## Plan dependencies\n\nNone.\n\n', '')
+
+        expect(() => parseExecPlan('.agents/plans/f/01-a.md', contents)).toThrow(
+            'is missing a "## Plan dependencies" section',
+        )
     })
 
     it.each([
@@ -115,6 +123,47 @@ describe('parseExecPlan', (): void => {
         expect(() =>
             parseExecPlan('.agents/plans/f/01-a.md', buildPlanFile({ dependencies })),
         ).toThrow(message)
+    })
+
+    it.each(['## Plan Dependencies', '## PLAN DEPENDENCIES', '## plan dependencies'])(
+        'rejects a near-miss "Plan dependencies" heading: %s',
+        (heading): void => {
+            const contents = buildPlanFile().replace('## Plan dependencies', heading)
+
+            expect(() => parseExecPlan('.agents/plans/f/01-a.md', contents)).toThrow(
+                `malformed heading "${heading.trim()}"; expected exactly "## Plan dependencies"`,
+            )
+        },
+    )
+
+    it.each(['## Plan Readiness', '## PLAN READINESS', '## plan readiness'])(
+        'rejects a near-miss "Plan readiness" heading: %s',
+        (heading): void => {
+            const contents = buildPlanFile().replace('## Plan readiness', heading)
+
+            expect(() => parseExecPlan('.agents/plans/f/01-a.md', contents)).toThrow(
+                `malformed heading "${heading.trim()}"; expected exactly "## Plan readiness"`,
+            )
+        },
+    )
+
+    it('rejects a missing "Plan readiness" section even for a fully completed plan', (): void => {
+        const contents = buildPlanFile({ progress: '- [x] Done.' }).replace(
+            '## Plan readiness\n\nReady to implement.\n',
+            '',
+        )
+
+        expect(() => parseExecPlan('.agents/plans/f/01-a.md', contents)).toThrow(
+            'is missing a nonempty "## Plan readiness" section',
+        )
+    })
+
+    it('rejects an empty "Plan readiness" section', (): void => {
+        const contents = buildPlanFile({ readiness: '' })
+
+        expect(() => parseExecPlan('.agents/plans/f/01-a.md', contents)).toThrow(
+            'is missing a nonempty "## Plan readiness" section',
+        )
     })
 })
 

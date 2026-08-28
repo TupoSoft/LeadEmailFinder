@@ -166,4 +166,4 @@ Record the generated stack without secrets, service placement, immutable image d
 
 ## Plan readiness
 
-Implemented (PR pending; see Progress and Outcomes & Retrospective for exactly what is and is not live-verified in this environment).
+Implemented and merged as PR #419. See Progress and Outcomes & Retrospective for exactly what is and is not live-verified in this environment; `proxy-fleet/16` tracks the remaining live-validation follow-up.

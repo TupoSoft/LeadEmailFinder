@@ -1,3 +1,6 @@
+import { readdir, readFile } from 'node:fs/promises'
+import { join, relative } from 'node:path'
+
 export const EXECPLAN_LABEL = 'execplan'
 export const BLOCKED_LABEL = 'blocked'
 
@@ -55,18 +58,56 @@ export function planKeyFromPath(planPath: string): string | undefined {
     return numericPrefix ? `${feature}/${numericPrefix[1]}` : undefined
 }
 
+function sectionBody(lines: string[], headingIndex: number): string {
+    const rest = lines.slice(headingIndex + 1)
+    const end = rest.findIndex(line => line.startsWith('## '))
+
+    return (end === -1 ? rest : rest.slice(0, end)).join('\n').trim()
+}
+
 function readSection(contents: string, heading: string): string {
     const lines = contents.split('\n')
     const start = lines.findIndex(line => line.trim() === `## ${heading}`)
 
-    if (start === -1) {
-        return ''
+    return start === -1 ? '' : sectionBody(lines, start)
+}
+
+type RequiredSectionLookup =
+    | { kind: 'exact'; text: string }
+    | { kind: 'near-match'; foundHeading: string }
+    | { kind: 'absent' }
+
+type ResolvedSection = { kind: 'exact'; text: string } | { kind: 'absent' }
+
+/**
+ * Distinguishes an exact canonical heading from a case-insensitive near-match and true absence, so a
+ * malformed heading fails loudly instead of being silently treated the same as a missing section (see
+ * `.agents/plans/plan-sync/04-enforce-truthful-execplan-metadata.md`).
+ */
+function findRequiredSection(contents: string, heading: string): RequiredSectionLookup {
+    const lines = contents.split('\n')
+    const canonical = `## ${heading}`
+    const exactIndex = lines.findIndex(line => line.trim() === canonical)
+
+    if (exactIndex !== -1) {
+        return { kind: 'exact', text: sectionBody(lines, exactIndex) }
     }
 
-    const rest = lines.slice(start + 1)
-    const end = rest.findIndex(line => line.startsWith('## '))
+    const nearIndex = lines.findIndex(line => line.trim().toLowerCase() === canonical.toLowerCase())
 
-    return (end === -1 ? rest : rest.slice(0, end)).join('\n').trim()
+    return nearIndex === -1 ? { kind: 'absent' } : { kind: 'near-match', foundHeading: lines[nearIndex].trim() }
+}
+
+function requireCanonicalHeading(
+    lookup: RequiredSectionLookup,
+    planPath: string,
+    heading: string,
+): asserts lookup is ResolvedSection {
+    if (lookup.kind === 'near-match') {
+        throw new Error(
+            `${planPath} has a malformed heading "${lookup.foundHeading}"; expected exactly "## ${heading}"`,
+        )
+    }
 }
 
 function classifyReadiness(text: string): ReadinessState {
@@ -85,8 +126,23 @@ function classifyReadiness(text: string): ReadinessState {
     return 'unknown'
 }
 
-function readDependencies(contents: string, planPath: string): string[] {
-    const section = readSection(contents, 'Plan dependencies')
+function readDependencies(contents: string, planPath: string, progress: ExecPlanProgress): string[] {
+    const lookup = findRequiredSection(contents, 'Plan dependencies')
+    requireCanonicalHeading(lookup, planPath, 'Plan dependencies')
+
+    if (lookup.kind === 'absent') {
+        const isFullyComplete = progress.total > 0 && progress.completed === progress.total
+
+        if (!isFullyComplete) {
+            throw new Error(
+                `${planPath} is missing a "## Plan dependencies" section; only a fully completed legacy plan may omit it`,
+            )
+        }
+
+        return []
+    }
+
+    const section = lookup.text
 
     // Completed legacy plans predate the structured section and remain valid.
     if (!section || section === 'None.') {
@@ -110,6 +166,18 @@ function readDependencies(contents: string, planPath: string): string[] {
     }
 
     return dependencies
+}
+
+/** Unlike `Plan dependencies`, `Plan readiness` has no legacy-omission allowance: every plan renders it into the generated issue. */
+function readRequiredReadiness(contents: string, planPath: string): string {
+    const lookup = findRequiredSection(contents, 'Plan readiness')
+    requireCanonicalHeading(lookup, planPath, 'Plan readiness')
+
+    if (lookup.kind === 'absent' || lookup.text === '') {
+        throw new Error(`${planPath} is missing a nonempty "## Plan readiness" section`)
+    }
+
+    return lookup.text
 }
 
 function readProgress(contents: string): ExecPlanProgress {
@@ -137,16 +205,17 @@ export function parseExecPlan(planPath: string, contents: string): ExecPlan {
         throw new Error(`${planPath} has no level-one heading to use as an issue title`)
     }
 
-    const readinessText = readSection(contents, 'Plan readiness')
+    const progress = readProgress(contents)
+    const readinessText = readRequiredReadiness(contents, planPath)
 
     return {
         key,
         path: planPath.replace(/\\/g, '/'),
         title,
         purpose: readSection(contents, 'Purpose / Big Picture'),
-        dependencies: readDependencies(contents, planPath),
+        dependencies: readDependencies(contents, planPath, progress),
         readiness: { state: classifyReadiness(readinessText), text: readinessText },
-        progress: readProgress(contents),
+        progress,
     }
 }
 
@@ -291,4 +360,30 @@ export function renderIssueBody(plan: ExecPlan, state: ExecPlanState, blobBaseUr
         `- Effective status: ${effectiveStatus}`,
         '',
     ].join('\n')
+}
+
+/**
+ * Discovers and parses every ExecPlan file under `plansRoot`. Shared by the sync entry point and the
+ * repository-fixture test, so a malformed real plan cannot be hidden behind synthetic unit fixtures.
+ */
+export async function discoverExecPlans(plansRoot: string, repositoryRoot: string): Promise<ExecPlan[]> {
+    const features = await readdir(plansRoot, { withFileTypes: true })
+    const plans: ExecPlan[] = []
+
+    for (const feature of features.filter(entry => entry.isDirectory())) {
+        const featureDir = join(plansRoot, feature.name)
+
+        for (const entry of await readdir(featureDir, { withFileTypes: true })) {
+            const planPath = join(featureDir, entry.name)
+            const repositoryRelativePath = relative(repositoryRoot, planPath).replace(/\\/g, '/')
+
+            if (!entry.isFile() || !planKeyFromPath(repositoryRelativePath)) {
+                continue
+            }
+
+            plans.push(parseExecPlan(repositoryRelativePath, await readFile(planPath, 'utf8')))
+        }
+    }
+
+    return plans.sort((left, right) => left.key.localeCompare(right.key))
 }

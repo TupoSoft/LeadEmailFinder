@@ -1,6 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
-import { ExecPlan, parseExecPlan, planKeyFromPath } from './execplan'
+import { resolve } from 'node:path'
+import { discoverExecPlans } from './execplan'
 import { GitHubCliProjectApi } from './github-project-api'
 import { ExecPlanSynchronizer } from './sync'
 
@@ -9,28 +8,6 @@ const DEFAULT_REPOSITORY = 'TupoSoft/LeadEmailFinder'
 const DEFAULT_PROJECT_OWNER = 'TupoSoft'
 const DEFAULT_PROJECT_NUMBER = '9'
 const DEFAULT_BRANCH = 'master'
-
-async function discoverExecPlans(plansRoot: string, repositoryRoot: string): Promise<ExecPlan[]> {
-    const features = await readdir(plansRoot, { withFileTypes: true })
-    const plans: ExecPlan[] = []
-
-    for (const feature of features.filter(entry => entry.isDirectory())) {
-        const featureDir = join(plansRoot, feature.name)
-
-        for (const entry of await readdir(featureDir, { withFileTypes: true })) {
-            const planPath = join(featureDir, entry.name)
-            const repositoryRelativePath = relative(repositoryRoot, planPath).replace(/\\/g, '/')
-
-            if (!entry.isFile() || !planKeyFromPath(repositoryRelativePath)) {
-                continue
-            }
-
-            plans.push(parseExecPlan(repositoryRelativePath, await readFile(planPath, 'utf8')))
-        }
-    }
-
-    return plans.sort((left, right) => left.key.localeCompare(right.key))
-}
 
 async function main(): Promise<void> {
     const dryRun = process.env.PLANS_DRY_RUN === 'true'
