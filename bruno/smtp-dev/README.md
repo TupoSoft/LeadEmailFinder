@@ -15,11 +15,15 @@ cache in the way.
 Start the fixture from the repository root:
 
 ```shell
+pnpm dev:reset
 docker compose -f docker/compose.yaml down
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
-pnpm keycloak:provision
-pnpm keycloak:bootstrap-credential
 ```
+
+`dev:reset` provisions Keycloak and seeds the platform service credential before the overlay bind-mounts the
+generated `.dev/keycloak/service-client.json` file. If the file is missing, the overlay fails without creating a
+directory in its place. Provisioning also repairs an empty directory left by older Compose configurations, while
+refusing to remove a nonempty directory.
 
 The overlay runs `smtp-dev-dns-cache-reset` before starting the API or reconciling the fixture proxy. This
 one-shot service clears the shared Redis `DNS_CACHE:*` namespace so answers cached by the base stack cannot
