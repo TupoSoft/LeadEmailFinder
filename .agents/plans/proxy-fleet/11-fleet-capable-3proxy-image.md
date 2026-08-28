@@ -145,4 +145,4 @@ Table-test run (`sh docker/proxy-fleet/tests/render-config.table-test.sh`): `15 
 
 ## Plan readiness
 
-Implemented (PR pending; see Progress and Outcomes & Retrospective).
+Implemented and merged as PR #373. See Progress and Outcomes & Retrospective.

@@ -14,7 +14,7 @@ returns `409`, while ordinary member changes preserve their current HTTP behavio
 - [x] (2026-08-24) Add real PostgreSQL concurrency coverage for removal and demotion races.
 - [x] (2026-08-24) Run focused and full validation and record the outcome.
 
-## Plan Dependencies
+## Plan dependencies
 
 - `auth/07`
 
@@ -128,6 +128,6 @@ synchronization and the guarded test database; local recovery uses `pnpm dev:res
 Record the two operation outcomes, final active-owner count, and audit-row count from the PostgreSQL test. Do not
 record real user identity data.
 
-## Plan Readiness
+## Plan readiness
 
 Implemented and validated.

@@ -26,6 +26,21 @@ export function sourcePosition(source, scalarOffset) {
     }
 }
 
+// `.agents/PLANS.md` requires ExecPlans to use these exact, sentence-case headings, but Harper's
+// `UseTitleCase` rule wants headings in title case -- a valid ExecPlan cannot satisfy both without this
+// narrow, source-aware exemption. Only these two exact strings are exempt; any other heading, including
+// a differently-miscapitalized one, still gets flagged normally.
+export const TITLE_CASE_HEADING_EXEMPTIONS = new Set(['## Plan dependencies', '## Plan readiness'])
+const TITLE_CASE_HEADING_MESSAGE = 'Try to use title case in headings.'
+
+export function isExemptTitleCaseHeading(diagnostic) {
+    return (
+        diagnostic.kind === 'Capitalization' &&
+        diagnostic.message === TITLE_CASE_HEADING_MESSAGE &&
+        TITLE_CASE_HEADING_EXEMPTIONS.has(diagnostic.problem)
+    )
+}
+
 export function diagnosticFromLint(file, source, lint) {
     const span = lint.span()
     const position = sourcePosition(source, span.start)
@@ -142,8 +157,14 @@ export async function lintFiles({ files, linter, projectRoot, report = console.l
         const displayFile = path.relative(projectRoot, file) || path.basename(file)
 
         for (const lint of lints) {
+            const diagnostic = diagnosticFromLint(displayFile, source, lint)
+
+            if (isExemptTitleCaseHeading(diagnostic)) {
+                continue
+            }
+
             if (diagnosticCount < maxReportedDiagnostics) {
-                report(formatDiagnostic(diagnosticFromLint(displayFile, source, lint)))
+                report(formatDiagnostic(diagnostic))
             }
             diagnosticCount += 1
         }

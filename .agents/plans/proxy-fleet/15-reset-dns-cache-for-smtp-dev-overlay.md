@@ -21,7 +21,7 @@ instead of failing with `no_mx_records`.
 - [x] (2026-08-27 16:47 +02:00) Seed the stale `DNS_CACHE:MX:lef.test` value, run the final reset service through
   Compose, and pass the complete `bruno/smtp-dev` collection on the first attempt.
 
-## Plan Dependencies
+## Plan dependencies
 
 None.
 
@@ -152,6 +152,6 @@ Before the fix, `DNS_CACHE:MX:lef.test` was `[]` with `TTL ~86399726` (ms) insid
 `02-verify-local-email` failed with `reason: "no_mx_records"`. With the final service, the seeded key returned
 `EXISTS = 0` before Bruno ran, and `02-verify-local-email` returned `201 Created` on the first attempt.
 
-## Plan Readiness
+## Plan readiness
 
-Implementation complete and ready for a pull request.
+Implemented and merged as PR #417.

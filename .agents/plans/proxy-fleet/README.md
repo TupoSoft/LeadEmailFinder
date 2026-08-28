@@ -16,12 +16,9 @@ Completed pull requests:
 8. [Add a configurable SMTP client factory](08-add-configurable-smtp-client-factory.md) — completed by PR #309
 9. [Add an ISP-safe local SMTP fixture](09-add-isp-safe-local-smtp-fixture.md) — completed by PR #310
 10. [Add allocation observability and prove draining](10-add-allocation-observability-and-draining.md) — completed by PR #311
-
-Remaining pull-request sequence:
-
-11. [Build a fleet-capable 3proxy image](11-fleet-capable-3proxy-image.md)
-12. [Provision disposable proxy nodes with Ansible](12-ansible-proxy-node-provisioning.md)
-13. [Deploy and reconcile a Swarm proxy fleet](13-swarm-fleet-reconciliation.md)
+11. [Build a fleet-capable 3proxy image](11-fleet-capable-3proxy-image.md) — completed by PR #373
+12. [Provision disposable proxy nodes with Ansible](12-ansible-proxy-node-provisioning.md) — completed by PR #374
+13. [Deploy and reconcile a Swarm proxy fleet](13-swarm-fleet-reconciliation.md) — completed by PR #419
 
 Application hardening follow-up, independently deliverable after plan 08:
 
@@ -29,7 +26,7 @@ Application hardening follow-up, independently deliverable after plan 08:
 
 Dev-workflow fix discovered during a 2026-08-22 full E2E pass, independently deliverable:
 
-15. [Reset the DNS cache when bringing up the SMTP development overlay](15-reset-dns-cache-for-smtp-dev-overlay.md)
+15. [Reset the DNS cache when bringing up the SMTP development overlay](15-reset-dns-cache-for-smtp-dev-overlay.md) — completed by PR #417
 
 Live-validation follow-up, blocked until an authorized disposable four-host lab is available:
 
