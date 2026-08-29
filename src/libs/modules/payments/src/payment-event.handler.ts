@@ -26,7 +26,11 @@ export class PaymentEventHandler {
 
         try {
             if (event.kind === 'purchase_paid') {
-                const purchase = await this.purchases.recordPaid(correlation)
+                const purchase = await this.purchases.recordPaid({
+                    ...correlation,
+                    providerTotalMinor: event.providerTotalMinor,
+                    currency: event.currency,
+                })
                 if (!purchase) return this.logUnknown(event)
 
                 await this.credits.credit(purchase.organizationId, purchase.credits, purchase.id)

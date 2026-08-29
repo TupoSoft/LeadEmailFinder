@@ -25,6 +25,8 @@ runtime:
                 providerEventId: `stub-paid-${bru.getVar('purchaseId')}`,
                 providerReference: bru.getVar('providerReference'),
                 purchaseId: bru.getVar('purchaseId'),
+                providerTotalMinor: Number(bru.getEnvVar('expectedProviderTotalMinor')),
+                currency: bru.getEnvVar('expectedCurrency'),
                 claimedCredits: 999999,
               });
               const signature = CryptoJS.HmacSHA256(payload, bru.getEnvVar('webhookSecret')).toString(CryptoJS.enc.Hex);

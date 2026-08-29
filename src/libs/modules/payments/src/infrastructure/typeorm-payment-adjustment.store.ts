@@ -12,6 +12,7 @@ import {
 } from '../payment-adjustment-accounting'
 import {
     ClaimedPaymentAdjustment,
+    PaymentAdjustmentBasisMissingError,
     PaymentAdjustmentClaimInput,
     PaymentAdjustmentCurrencyMismatchError,
     PaymentAdjustmentDirection,
@@ -35,6 +36,9 @@ export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {
 
             if (purchase.status !== CreditPurchaseStatus.PAID || !purchase.creditsGrantedAt) {
                 throw new PaymentAdjustmentPurchaseNotReadyError(input.providerReference)
+            }
+            if (purchase.providerTotalMinor == null) {
+                throw new PaymentAdjustmentBasisMissingError(input.providerReference)
             }
             if (purchase.currency !== input.currency) {
                 throw new PaymentAdjustmentCurrencyMismatchError(
@@ -74,10 +78,11 @@ export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {
 
             const accountingRecords = adjustments.map(candidate => this.toAccountingRecord(candidate))
             const accounting = calculatePaymentAdjustmentClaim(
-                { amountMinor: purchase.amountMinor, credits: purchase.credits },
+                { basisMinor: purchase.providerTotalMinor, credits: purchase.credits },
                 accountingRecords,
                 input.direction,
                 input.amountMinor,
+                input.isFull,
             )
             const adjustment = Object.assign(new CreditPurchaseAdjustment(), {
                 providerAdjustmentId: input.providerAdjustmentId,
@@ -85,6 +90,7 @@ export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {
                 providerEventId: input.providerEventId,
                 direction: entityDirection,
                 amountMinor: input.amountMinor,
+                isFull: input.isFull,
                 effectiveAmountMinor: accounting.effectiveAmountMinor,
                 currency: input.currency,
                 requestedCredits: accounting.requestedCredits,
@@ -176,6 +182,7 @@ export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {
             existing.purchaseId !== purchaseId ||
             existing.direction !== this.toEntityDirection(input.direction) ||
             existing.amountMinor !== input.amountMinor ||
+            existing.isFull !== input.isFull ||
             existing.currency !== input.currency
         ) {
             throw new PaymentAdjustmentReplayConflictError(input.providerAdjustmentId)
@@ -214,6 +221,7 @@ export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {
                     ? PaymentAdjustmentDirection.DEBIT
                     : PaymentAdjustmentDirection.RESTORE,
             amountMinor: adjustment.amountMinor,
+            isFull: adjustment.isFull,
             operationCredits: adjustment.operationCredits,
             appliedDebit: adjustment.appliedDebit,
             shortfallCredits: adjustment.shortfallCredits,

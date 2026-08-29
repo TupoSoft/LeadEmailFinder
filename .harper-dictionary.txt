@@ -91,4 +91,5 @@ v2
 VMs
 WebStorm
 worktree
+worktrees
 WSL2

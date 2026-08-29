@@ -1,9 +1,9 @@
 # Credit Purchases Bruno Collection
 
-This 19-request collection verifies the credit-pack checkout and signed webhook workflow against the local stub
+This 22-request collection verifies the credit-pack checkout and signed webhook workflow against the local stub
 payment provider. It covers unauthenticated and invalid purchases, purchase creation and listing, one-time credit
-granting, tampered-body rejection, full credit clawback and replay, and inverse restoration and replay. Every balance
-transition is read back through the administrative credits API.
+granting, tampered-body and signed malformed-event rejection, full credit clawback and replay, and inverse restoration
+and replay. Every balance transition is read back through the administrative credits API.
 
 Start the local stack with `PAYMENTS_PROVIDER=stub`, then provision the development machine-to-machine credential.
 The bootstrapped service client belongs to the target organization and has `billing:read`, `billing:manage`, and
@@ -22,9 +22,9 @@ bru run --env local
 ```
 
 The checked-in local Compose catalog defines the `starter` pack as 100 credits for 500 USD minor units. Override
-`packId`, `expectedCredits`, `expectedAmountMinor`, and `expectedCurrency` when running against a different disposable
-catalog. The collection keeps its minted token in a runtime variable. Never commit an access token, client secret, or
-provider secret.
+`packId`, `expectedCredits`, `expectedAmountMinor`, `expectedProviderTotalMinor`, and `expectedCurrency` when running
+against a different disposable catalog or settled provider total. The collection keeps its minted token in a runtime
+variable. Never commit an access token, client secret, or provider secret.
 
 ## Paddle Sandbox Setup
 

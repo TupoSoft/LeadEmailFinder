@@ -30,6 +30,7 @@ export class PaymentAdjustmentHandler {
             providerAdjustmentId: event.providerAdjustmentId,
             direction,
             amountMinor: event.amountMinor,
+            isFull: event.isFull,
             currency: event.currency,
         })
         if (!claim) return false

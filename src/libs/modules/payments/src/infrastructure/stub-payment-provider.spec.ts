@@ -53,6 +53,7 @@ describe('StubPaymentProvider', () => {
         { override: { amountMinor: -1, currency: 'USD' }, description: 'negative amount' },
         { override: { amountMinor: 100.5, currency: 'USD' }, description: 'fractional amount' },
         { override: { amountMinor: 100, currency: 'usd' }, description: 'malformed currency' },
+        { override: { amountMinor: 100, currency: 'USD', isFull: 'yes' }, description: 'non-boolean scope' },
     ])('rejects a signed adjustment with a $description', async ({ override }) => {
         const payload = Buffer.from(
             JSON.stringify({
@@ -60,12 +61,32 @@ describe('StubPaymentProvider', () => {
                 providerEventId: 'event-id',
                 providerReference: 'purchase-reference',
                 providerAdjustmentId: 'adjustment-id',
+                isFull: false,
                 ...override,
             }),
         )
 
         await expect(createProvider().parseEvent(payload, sign(payload))).rejects.toThrow(
             'Invalid stub payment adjustment event',
+        )
+    })
+
+    it.each([
+        { providerTotalMinor: 0, currency: 'USD', description: 'zero provider total' },
+        { providerTotalMinor: 500.5, currency: 'USD', description: 'fractional provider total' },
+        { providerTotalMinor: 500, currency: 'usd', description: 'malformed currency' },
+    ])('rejects a signed paid event with a $description', async invalid => {
+        const payload = Buffer.from(
+            JSON.stringify({
+                kind: 'purchase_paid',
+                providerEventId: 'event-id',
+                providerReference: 'purchase-reference',
+                ...invalid,
+            }),
+        )
+
+        await expect(createProvider().parseEvent(payload, sign(payload))).rejects.toThrow(
+            'Invalid stub paid event',
         )
     })
 })

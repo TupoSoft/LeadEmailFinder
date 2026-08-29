@@ -11,6 +11,7 @@ export interface PaymentAdjustmentClaimInput {
     providerAdjustmentId: string
     direction: PaymentAdjustmentDirection
     amountMinor: number
+    isFull: boolean
     currency: string
 }
 
@@ -45,6 +46,13 @@ export class PaymentAdjustmentPurchaseNotReadyError extends Error {
     constructor(public readonly providerReference: string) {
         super(`Payment adjustment purchase ${providerReference} has not completed its credit grant`)
         this.name = PaymentAdjustmentPurchaseNotReadyError.name
+    }
+}
+
+export class PaymentAdjustmentBasisMissingError extends Error {
+    constructor(public readonly providerReference: string) {
+        super(`Payment adjustment purchase ${providerReference} has no provider total`)
+        this.name = PaymentAdjustmentBasisMissingError.name
     }
 }
 

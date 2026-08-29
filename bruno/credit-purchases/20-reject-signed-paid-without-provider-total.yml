@@ -1,0 +1,37 @@
+info:
+    name: 20-reject-signed-paid-without-provider-total
+    type: http
+    seq: 20
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/payments/webhook'
+    headers:
+        - name: Content-Type
+          value: application/json
+        - name: Paddle-Signature
+          value: '{{invalidPaidWebhookSignature}}'
+    body:
+        type: text
+        data: '{{invalidPaidWebhookBody}}'
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const CryptoJS = require('crypto-js');
+              const payload = JSON.stringify({
+                kind: 'purchase_paid',
+                providerEventId: `stub-invalid-paid-${bru.getVar('purchaseId')}`,
+                providerReference: bru.getVar('providerReference'),
+                purchaseId: bru.getVar('purchaseId'),
+                currency: bru.getEnvVar('expectedCurrency'),
+              });
+              const signature = CryptoJS.HmacSHA256(payload, bru.getEnvVar('webhookSecret')).toString(CryptoJS.enc.Hex);
+              bru.setVar('invalidPaidWebhookBody', payload);
+              bru.setVar('invalidPaidWebhookSignature', signature);
+        - type: tests
+          code: |-
+              test('rejects a signed paid event without its provider total', function() {
+                expect(res.status).to.equal(500);
+              });

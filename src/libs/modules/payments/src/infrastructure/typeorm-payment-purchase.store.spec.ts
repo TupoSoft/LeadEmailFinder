@@ -1,6 +1,11 @@
 import { DataSource, EntityManager } from 'typeorm'
 import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
-import { PurchaseReferenceConflictError } from '../payment-purchase.store'
+import {
+    PaidPurchaseCorrelation,
+    PurchaseCurrencyMismatchError,
+    PurchaseProviderTotalConflictError,
+    PurchaseReferenceConflictError,
+} from '../payment-purchase.store'
 import { TypeOrmPaymentPurchaseStore } from './typeorm-payment-purchase.store'
 
 function purchaseWith(status: CreditPurchaseStatus, providerReference: string | null = 'provider-purchase-1'): CreditPurchase {
@@ -8,9 +13,20 @@ function purchaseWith(status: CreditPurchaseStatus, providerReference: string | 
         id: '20000000-0000-4000-8000-000000000001',
         organizationId: '10000000-0000-4000-8000-000000000001',
         credits: 100,
+        currency: 'USD',
         providerReference,
+        providerTotalMinor: null,
         status,
     } as CreditPurchase
+}
+
+function paidInput(overrides: Partial<PaidPurchaseCorrelation> = {}): PaidPurchaseCorrelation {
+    return {
+        providerReference: 'provider-purchase-1',
+        providerTotalMinor: 500,
+        currency: 'USD',
+        ...overrides,
+    }
 }
 
 describe('TypeOrmPaymentPurchaseStore', () => {
@@ -29,7 +45,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordPaid({ providerReference: purchase.providerReference! })).resolves.toEqual({
+        await expect(store.recordPaid(paidInput({ providerReference: purchase.providerReference! }))).resolves.toEqual({
             id: purchase.id,
             organizationId: purchase.organizationId,
             credits: purchase.credits,
@@ -40,15 +56,15 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         })
         expect(manager.save).toHaveBeenCalledWith(
             CreditPurchase,
-            expect.objectContaining({ status: CreditPurchaseStatus.PAID }),
+            expect.objectContaining({ status: CreditPurchaseStatus.PAID, providerTotalMinor: 500 }),
         )
     })
 
     it('returns an already paid purchase without rewriting it', async () => {
-        const purchase = purchaseWith(CreditPurchaseStatus.PAID)
+        const purchase = Object.assign(purchaseWith(CreditPurchaseStatus.PAID), { providerTotalMinor: 500 })
         manager.findOne.mockResolvedValue(purchase)
 
-        await expect(store.recordPaid({ providerReference: purchase.providerReference! })).resolves.toMatchObject({
+        await expect(store.recordPaid(paidInput({ providerReference: purchase.providerReference! }))).resolves.toMatchObject({
             id: purchase.id,
         })
         expect(manager.save).not.toHaveBeenCalled()
@@ -57,7 +73,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
     it('returns null for an unknown paid reference with no purchase id fallback', async () => {
         manager.findOne.mockResolvedValue(null)
 
-        await expect(store.recordPaid({ providerReference: 'unknown' })).resolves.toBeNull()
+        await expect(store.recordPaid(paidInput({ providerReference: 'unknown' }))).resolves.toBeNull()
         expect(manager.save).not.toHaveBeenCalled()
     })
 
@@ -66,7 +82,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
 
         await expect(
-            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: purchase.id }),
+            store.recordPaid(paidInput({ providerReference: 'provider-purchase-1', purchaseId: purchase.id })),
         ).resolves.toEqual({
             id: purchase.id,
             organizationId: purchase.organizationId,
@@ -82,7 +98,11 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         })
         expect(manager.save).toHaveBeenCalledWith(
             CreditPurchase,
-            expect.objectContaining({ providerReference: 'provider-purchase-1', status: CreditPurchaseStatus.PAID }),
+            expect.objectContaining({
+                providerReference: 'provider-purchase-1',
+                providerTotalMinor: 500,
+                status: CreditPurchaseStatus.PAID,
+            }),
         )
     })
 
@@ -90,17 +110,19 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
 
         await expect(
-            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: 'unknown-purchase' }),
+            store.recordPaid(paidInput({ providerReference: 'provider-purchase-1', purchaseId: 'unknown-purchase' })),
         ).resolves.toBeNull()
         expect(manager.save).not.toHaveBeenCalled()
     })
 
     it('treats a purchase id already bound to the same reference as already resolved, not a conflict', async () => {
-        const purchase = purchaseWith(CreditPurchaseStatus.PAID, 'provider-purchase-1')
+        const purchase = Object.assign(purchaseWith(CreditPurchaseStatus.PAID, 'provider-purchase-1'), {
+            providerTotalMinor: 500,
+        })
         manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
 
         await expect(
-            store.recordPaid({ providerReference: 'provider-purchase-1', purchaseId: purchase.id }),
+            store.recordPaid(paidInput({ providerReference: 'provider-purchase-1', purchaseId: purchase.id })),
         ).resolves.toEqual({
             id: purchase.id,
             organizationId: purchase.organizationId,
@@ -113,13 +135,47 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         const purchase = purchaseWith(CreditPurchaseStatus.PENDING, 'established-reference')
         manager.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(purchase)
 
-        const promise = store.recordPaid({ providerReference: 'different-reference', purchaseId: purchase.id })
+        const promise = store.recordPaid(
+            paidInput({ providerReference: 'different-reference', purchaseId: purchase.id }),
+        )
 
         await expect(promise).rejects.toBeInstanceOf(PurchaseReferenceConflictError)
         await expect(promise).rejects.toMatchObject({
             purchaseId: purchase.id,
             existingProviderReference: 'established-reference',
         })
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('backfills a missing provider total on a paid replay', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PAID)
+        manager.findOne.mockResolvedValue(purchase)
+
+        await expect(store.recordPaid(paidInput())).resolves.toMatchObject({ id: purchase.id })
+
+        expect(manager.save).toHaveBeenCalledWith(
+            CreditPurchase,
+            expect.objectContaining({ providerTotalMinor: 500 }),
+        )
+    })
+
+    it('rejects a paid replay with a different provider total', async () => {
+        const purchase = Object.assign(purchaseWith(CreditPurchaseStatus.PAID), { providerTotalMinor: 500 })
+        manager.findOne.mockResolvedValue(purchase)
+
+        await expect(store.recordPaid(paidInput({ providerTotalMinor: 615 }))).rejects.toBeInstanceOf(
+            PurchaseProviderTotalConflictError,
+        )
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('rejects a paid event whose provider currency differs from the purchase', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
+        manager.findOne.mockResolvedValue(purchase)
+
+        await expect(store.recordPaid(paidInput({ currency: 'EUR' }))).rejects.toBeInstanceOf(
+            PurchaseCurrencyMismatchError,
+        )
         expect(manager.save).not.toHaveBeenCalled()
     })
 

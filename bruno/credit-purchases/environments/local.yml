@@ -18,5 +18,7 @@ variables:
       value: 100
     - name: expectedAmountMinor
       value: 500
+    - name: expectedProviderTotalMinor
+      value: 500
     - name: expectedCurrency
       value: USD

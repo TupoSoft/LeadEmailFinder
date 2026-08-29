@@ -19,12 +19,21 @@ export interface PaymentAdjustmentEvent {
     providerReference: string
     providerAdjustmentId: string
     amountMinor: number
+    isFull: boolean
     currency: string
 }
 
 export type PaymentEvent =
     | {
-          kind: 'purchase_paid' | 'purchase_failed'
+          kind: 'purchase_paid'
+          providerEventId: string
+          providerReference: string
+          purchaseId?: string
+          providerTotalMinor: number
+          currency: string
+      }
+    | {
+          kind: 'purchase_failed'
           providerEventId: string
           providerReference: string
           purchaseId?: string

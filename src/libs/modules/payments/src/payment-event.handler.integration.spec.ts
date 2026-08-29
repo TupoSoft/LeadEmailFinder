@@ -122,11 +122,13 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
         })
     })
 
-    async function settlePurchase(): Promise<void> {
+    async function settlePurchase(providerTotalMinor = 500): Promise<void> {
         await handler.handle({
             kind: 'purchase_paid',
             providerEventId: `paid-${purchase.id}`,
             providerReference: purchase.providerReference!,
+            providerTotalMinor,
+            currency: 'USD',
         })
     }
 
@@ -134,6 +136,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
         kind: 'purchase_adjustment_debit' | 'purchase_adjustment_restore',
         providerAdjustmentId: string,
         amountMinor = 500,
+        isFull = amountMinor === 500,
     ): AdjustmentEvent {
         return {
             kind,
@@ -141,6 +144,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
             providerReference: purchase.providerReference!,
             providerAdjustmentId,
             amountMinor,
+            isFull,
             currency: 'USD',
         }
     }
@@ -150,6 +154,8 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
             kind: 'purchase_paid' as const,
             providerEventId: 'event-paid-concurrent',
             providerReference: purchase.providerReference!,
+            providerTotalMinor: 500,
+            currency: 'USD',
         }
 
         await Promise.all([handler.handle(event), handler.handle(event)])
@@ -175,6 +181,8 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
             providerEventId: 'event-paid-early',
             providerReference,
             purchaseId: purchase.id,
+            providerTotalMinor: 500,
+            currency: 'USD',
         }
 
         await Promise.all([handler.handle(event), handler.handle(event)])
@@ -215,6 +223,43 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
                 reference: 'payment-adjustment:adjustment-restore:restore',
             }),
         ).resolves.toEqual([expect.objectContaining({ amount: 100 })])
+    })
+
+    it('uses the provider gross total for partial tax accounting and normalizes a full remainder', async () => {
+        await settlePurchase(615)
+        const partial = adjustmentEvent('purchase_adjustment_debit', 'adjustment-tax-partial', 308, false)
+        const fullRemainder = adjustmentEvent('purchase_adjustment_debit', 'adjustment-tax-full', 307, true)
+
+        await handler.handle(partial)
+        await expect(credits.getBalance(organizationId)).resolves.toBe(60)
+
+        await handler.handle(fullRemainder)
+        await handler.handle(partial)
+        await handler.handle(fullRemainder)
+
+        await expect(credits.getBalance(organizationId)).resolves.toBe(10)
+        await expect(
+            schemaDataSource.getRepository(CreditPurchase).findOneByOrFail({ id: purchase.id }),
+        ).resolves.toMatchObject({ amountMinor: 500, providerTotalMinor: 615 })
+        const adjustments = await schemaDataSource.getRepository(CreditPurchaseAdjustment).findBy({
+            purchaseId: purchase.id,
+        })
+        expect(adjustments).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    providerAdjustmentId: 'adjustment-tax-partial',
+                    amountMinor: 308,
+                    isFull: false,
+                    requestedCredits: 50,
+                }),
+                expect.objectContaining({
+                    providerAdjustmentId: 'adjustment-tax-full',
+                    amountMinor: 307,
+                    isFull: true,
+                    requestedCredits: 50,
+                }),
+            ]),
+        )
     })
 
     it('records exact shortfall, preserves strict debit behavior, and clears shortfall before restore', async () => {
@@ -396,7 +441,11 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
     })
 
     it('keeps a known adjustment retryable until the original credit grant is marked complete', async () => {
-        await purchaseStore.recordPaid({ providerReference: purchase.providerReference! })
+        await purchaseStore.recordPaid({
+            providerReference: purchase.providerReference!,
+            providerTotalMinor: 500,
+            currency: 'USD',
+        })
         const event = adjustmentEvent('purchase_adjustment_debit', 'adjustment-before-grant')
 
         await expect(handler.handle(event)).rejects.toThrow('has not completed its credit grant')
@@ -415,6 +464,8 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
             kind: 'purchase_paid' as const,
             providerEventId: `paid-race-${purchase.id}`,
             providerReference: purchase.providerReference!,
+            providerTotalMinor: 500,
+            currency: 'USD',
         }
         const adjustment = adjustmentEvent('purchase_adjustment_debit', 'adjustment-paid-race')
 

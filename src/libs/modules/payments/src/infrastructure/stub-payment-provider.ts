@@ -51,11 +51,29 @@ export class StubPaymentProvider implements PaymentProvider {
                 throw new Error('Invalid stub payment event')
             }
 
-            return {
-                kind: payload['kind'],
+            const correlation = {
                 providerEventId: payload['providerEventId'],
                 providerReference: payload['providerReference'],
                 purchaseId: typeof payload['purchaseId'] === 'string' ? payload['purchaseId'] : undefined,
+            }
+
+            if (payload['kind'] === 'purchase_failed') {
+                return { kind: 'purchase_failed', ...correlation }
+            }
+            if (
+                !Number.isSafeInteger(payload['providerTotalMinor']) ||
+                (payload['providerTotalMinor'] as number) <= 0 ||
+                typeof payload['currency'] !== 'string' ||
+                !/^[A-Z]{3}$/.test(payload['currency'])
+            ) {
+                throw new Error('Invalid stub paid event')
+            }
+
+            return {
+                kind: 'purchase_paid',
+                ...correlation,
+                providerTotalMinor: payload['providerTotalMinor'] as number,
+                currency: payload['currency'],
             }
         })
     }
@@ -66,6 +84,7 @@ export class StubPaymentProvider implements PaymentProvider {
             typeof payload['providerAdjustmentId'] !== 'string' ||
             !Number.isSafeInteger(payload['amountMinor']) ||
             (payload['amountMinor'] as number) < 0 ||
+            typeof payload['isFull'] !== 'boolean' ||
             typeof payload['currency'] !== 'string' ||
             !/^[A-Z]{3}$/.test(payload['currency'])
         ) {
@@ -78,6 +97,7 @@ export class StubPaymentProvider implements PaymentProvider {
             providerReference: payload['providerReference'],
             providerAdjustmentId: payload['providerAdjustmentId'],
             amountMinor: payload['amountMinor'] as number,
+            isFull: payload['isFull'],
             currency: payload['currency'],
         }
     }

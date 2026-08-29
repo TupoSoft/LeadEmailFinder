@@ -24,7 +24,7 @@ function serializeEvent(event: PaymentEvent): Buffer {
                 data: {
                     id: event.providerAdjustmentId,
                     action: event.kind === 'purchase_adjustment_debit' ? 'refund' : 'credit_reverse',
-                    type: 'partial',
+                    type: event.isFull ? 'full' : 'partial',
                     transaction_id: event.providerReference,
                     subscription_id: null,
                     customer_id: 'customer-id',
@@ -68,9 +68,34 @@ function serializeEvent(event: PaymentEvent): Buffer {
             notification_id: `notification-${event.providerEventId}`,
             data: {
                 id: providerReference,
+                currency_code: event.kind === 'purchase_paid' ? event.currency : 'USD',
                 items: [],
                 payments: [],
                 custom_data: purchaseId === undefined ? null : { purchaseId },
+                details:
+                    event.kind === 'purchase_paid'
+                        ? {
+                              tax_rates_used: [],
+                              line_items: [],
+                              totals: {
+                                  subtotal: String(event.providerTotalMinor),
+                                  discount: '0',
+                                  tax: '0',
+                                  total: String(event.providerTotalMinor),
+                                  credit: '0',
+                                  credit_to_balance: '0',
+                                  balance: String(event.providerTotalMinor),
+                                  grand_total: String(event.providerTotalMinor),
+                                  grand_total_tax: '0',
+                                  fee: null,
+                                  earnings: null,
+                                  currency_code: event.currency,
+                              },
+                              adjusted_totals: null,
+                              payout_totals: null,
+                              adjusted_payout_totals: null,
+                          }
+                        : null,
             },
         }),
     )
@@ -146,6 +171,66 @@ describe('PaddlePaymentProvider', () => {
         ).rejects.toBeInstanceOf(PaddleCheckoutUrlMissingError)
     })
 
+    it('maps the completed transaction grand total as the adjustment basis', async () => {
+        const provider = new PaddlePaymentProvider(
+            {
+                transactions: { create: jest.fn() },
+                webhooks: {
+                    unmarshal: jest.fn().mockResolvedValue({
+                        eventId: 'event-paid',
+                        eventType: 'transaction.completed',
+                        data: {
+                            id: 'transaction-id',
+                            customData: { purchaseId: 'purchase-id' },
+                            currencyCode: 'USD',
+                            details: {
+                                totals: {
+                                    subtotal: '407',
+                                    tax: '93',
+                                    total: '500',
+                                    grandTotal: '500',
+                                    currencyCode: 'USD',
+                                },
+                            },
+                        },
+                    }),
+                },
+            } as unknown as PaddleClient,
+            webhookSecret,
+        )
+
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual({
+            kind: 'purchase_paid',
+            providerEventId: 'event-paid',
+            providerReference: 'transaction-id',
+            purchaseId: 'purchase-id',
+            providerTotalMinor: 500,
+            currency: 'USD',
+        })
+    })
+
+    it.each([
+        [{ totals: null }, 'USD', 'Paddle completed transaction has no totals'],
+        [{ totals: { grandTotal: 'not-money', currencyCode: 'USD' } }, 'USD', 'Invalid Paddle transaction total'],
+        [{ totals: { grandTotal: '500', currencyCode: 'EUR' } }, 'USD', 'Paddle transaction currency mismatch'],
+    ])('rejects malformed completed transaction accounting fields', async (details, currencyCode, message) => {
+        const provider = new PaddlePaymentProvider(
+            {
+                transactions: { create: jest.fn() },
+                webhooks: {
+                    unmarshal: jest.fn().mockResolvedValue({
+                        eventId: 'event-paid',
+                        eventType: 'transaction.completed',
+                        data: { id: 'transaction-id', customData: null, currencyCode, details },
+                    }),
+                },
+            } as unknown as PaddleClient,
+            webhookSecret,
+        )
+
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).rejects.toThrow(message)
+    })
+
     const adjustmentActions = [
         'refund',
         'credit',
@@ -175,10 +260,11 @@ describe('PaddlePaymentProvider', () => {
                         data: {
                             id: 'adjustment-id',
                             action,
+                            type: 'partial',
                             status,
                             transactionId: 'transaction-id',
                             currencyCode: 'USD',
-                            totals: { subtotal: '250', total: '300' },
+                            totals: { subtotal: '250', tax: '50', total: '300', currencyCode: 'USD' },
                         },
                     }),
                 },
@@ -195,7 +281,8 @@ describe('PaddlePaymentProvider', () => {
                       providerEventId: 'event-adjustment',
                       providerReference: 'transaction-id',
                       providerAdjustmentId: 'adjustment-id',
-                      amountMinor: 250,
+                      amountMinor: 300,
+                      isFull: false,
                       currency: 'USD',
                   }
                 : { kind: 'ignored', providerEventId: 'event-adjustment' }
@@ -203,10 +290,106 @@ describe('PaddlePaymentProvider', () => {
         await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual(expected)
     })
 
+    it('maps a tax-inclusive full refund to its gross amount and full scope', async () => {
+        const provider = new PaddlePaymentProvider(
+            {
+                transactions: { create: jest.fn() },
+                webhooks: {
+                    unmarshal: jest.fn().mockResolvedValue({
+                        eventId: 'event-full-refund',
+                        eventType: 'adjustment.updated',
+                        data: {
+                            id: 'adjustment-id',
+                            action: 'refund',
+                            type: 'full',
+                            status: 'approved',
+                            transactionId: 'transaction-id',
+                            currencyCode: 'USD',
+                            totals: { subtotal: '407', tax: '93', total: '500', currencyCode: 'USD' },
+                        },
+                    }),
+                },
+            } as unknown as PaddleClient,
+            webhookSecret,
+        )
+
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual({
+            kind: 'purchase_adjustment_debit',
+            providerEventId: 'event-full-refund',
+            providerReference: 'transaction-id',
+            providerAdjustmentId: 'adjustment-id',
+            amountMinor: 500,
+            isFull: true,
+            currency: 'USD',
+        })
+    })
+
+    it('treats a nullable adjustment type as Paddle\'s default partial scope', async () => {
+        const provider = new PaddlePaymentProvider(
+            {
+                transactions: { create: jest.fn() },
+                webhooks: {
+                    unmarshal: jest.fn().mockResolvedValue({
+                        eventId: 'event-default-partial-refund',
+                        eventType: 'adjustment.created',
+                        data: {
+                            id: 'adjustment-id',
+                            action: 'refund',
+                            type: null,
+                            status: 'approved',
+                            transactionId: 'transaction-id',
+                            currencyCode: 'USD',
+                            totals: { subtotal: '407', tax: '93', total: '500', currencyCode: 'USD' },
+                        },
+                    }),
+                },
+            } as unknown as PaddleClient,
+            webhookSecret,
+        )
+
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual({
+            kind: 'purchase_adjustment_debit',
+            providerEventId: 'event-default-partial-refund',
+            providerReference: 'transaction-id',
+            providerAdjustmentId: 'adjustment-id',
+            amountMinor: 500,
+            isFull: false,
+            currency: 'USD',
+        })
+    })
+
     it.each([
-        [{ subtotal: 'not-money' }, 'USD', 'Invalid Paddle adjustment amount'],
-        [{ subtotal: '250' }, 'usd', 'Invalid Paddle adjustment currency'],
-    ])('rejects malformed approved adjustment accounting fields', async (totals, currencyCode, message) => {
+        [
+            { subtotal: '250', tax: '0', total: 'not-money', currencyCode: 'USD' },
+            'partial',
+            'USD',
+            'Invalid Paddle adjustment amount',
+        ],
+        [
+            { subtotal: '250', tax: '0', total: '250', currencyCode: 'USD' },
+            'unknown',
+            'USD',
+            'Invalid Paddle adjustment type',
+        ],
+        [
+            { subtotal: '250', tax: '0', total: '250', currencyCode: 'usd' },
+            'partial',
+            'usd',
+            'Invalid Paddle adjustment currency',
+        ],
+        [
+            { subtotal: '250', tax: '0', total: '250', currencyCode: 'EUR' },
+            'partial',
+            'USD',
+            'Paddle adjustment currency mismatch',
+        ],
+        [
+            { subtotal: '250', tax: '50', total: '250', currencyCode: 'USD' },
+            'partial',
+            'USD',
+            'Invalid Paddle adjustment totals',
+        ],
+    ])('rejects malformed approved adjustment accounting fields', async (totals, type, currencyCode, message) => {
         const provider = new PaddlePaymentProvider(
             {
                 transactions: { create: jest.fn() },
@@ -217,6 +400,7 @@ describe('PaddlePaymentProvider', () => {
                         data: {
                             id: 'adjustment-id',
                             action: 'refund',
+                            type,
                             status: 'approved',
                             transactionId: 'transaction-id',
                             currencyCode,

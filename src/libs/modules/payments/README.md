@@ -54,15 +54,18 @@ Paddle) are internal.
 
 Owns two entities:
 
-- `CreditPurchase` → `credit_purchases`, indexed on `organizationId`. Its internal `creditsGrantedAt` marker fences
-  adjustment handling from the gap between recording a paid purchase and committing its credit grant.
+- `CreditPurchase` → `credit_purchases`, indexed on `organizationId`. Its nullable internal `providerTotalMinor` is
+  filled by a verified paid event with the settled gross amount used as the adjustment denominator, while
+  `creditsGrantedAt` fences adjustment handling from the gap between recording a paid purchase and committing its
+  credit grant.
 - `CreditPurchaseAdjustment` → `credit_purchase_adjustments`, keyed by the provider adjustment ID and indexed on the
-  purchase ID. It stores the requested movement, applied debit or restore, original and outstanding shortfall, and
-  processing state.
+  purchase ID. It stores the provider's gross amount, whether the provider marked the adjustment full, requested
+  movement, applied debit or restore, original and outstanding shortfall, and processing state.
 
-Adjustment claims lock the purchase row before cumulative proportional accounting. This serializes distinct partial
-events, rounds debit targets in the customer's favor, caps debits at the purchase grant, and makes replay and
-partial-process recovery converge through namespaced ledger references.
+Adjustment claims lock the purchase row before cumulative proportional gross accounting. This serializes distinct
+partial events, rounds debit targets in the customer's favor, normalizes a full adjustment to the provider total,
+caps debits at the purchase grant, and makes replay and partial-process recovery converge through namespaced ledger
+references.
 
 ## Configuration
 

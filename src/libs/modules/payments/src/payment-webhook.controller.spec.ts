@@ -26,6 +26,8 @@ describe('PaymentWebhookController', () => {
             kind: 'purchase_paid' as const,
             providerEventId: 'event-1',
             providerReference: 'purchase-1',
+            providerTotalMinor: 500,
+            currency: 'USD',
         }
         provider.parseEvent.mockResolvedValue(event)
 
@@ -62,6 +64,8 @@ describe('PaymentWebhookController', () => {
             kind: 'purchase_paid',
             providerEventId: 'event-1',
             providerReference: 'purchase-1',
+            providerTotalMinor: 500,
+            currency: 'USD',
         })
         handler.handle.mockRejectedValue(new Error('credit grant unavailable'))
 

@@ -6,6 +6,7 @@ import {
 } from '../credit-purchase-adjustment.entity'
 import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
 import {
+    PaymentAdjustmentBasisMissingError,
     PaymentAdjustmentCurrencyMismatchError,
     PaymentAdjustmentDirection,
     PaymentAdjustmentDirectionInProgressError,
@@ -22,6 +23,7 @@ const purchase = {
     creditsGrantedAt: new Date(),
     credits: 100,
     amountMinor: 500,
+    providerTotalMinor: 500,
     currency: 'USD',
 } as CreditPurchase
 
@@ -30,7 +32,8 @@ const debitInput = {
     providerReference: purchase.providerReference!,
     providerAdjustmentId: 'adjustment-1',
     direction: PaymentAdjustmentDirection.DEBIT,
-    amountMinor: 500,
+    amountMinor: 407,
+    isFull: true,
     currency: 'USD',
 }
 
@@ -42,7 +45,8 @@ function adjustment(
         purchaseId: purchase.id,
         providerEventId: debitInput.providerEventId,
         direction: CreditPurchaseAdjustmentDirection.DEBIT,
-        amountMinor: 500,
+        amountMinor: 407,
+        isFull: true,
         effectiveAmountMinor: 500,
         currency: 'USD',
         requestedCredits: 100,
@@ -99,7 +103,8 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
         expect(manager.save).toHaveBeenCalledWith(
             CreditPurchaseAdjustment,
             expect.objectContaining({
-                amountMinor: 500,
+                amountMinor: 407,
+                isFull: true,
                 effectiveAmountMinor: 500,
                 requestedCredits: 100,
                 operationCredits: 100,
@@ -121,6 +126,14 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
         manager.findOne.mockResolvedValue({ ...purchase, creditsGrantedAt: null } as CreditPurchase)
 
         await expect(store.claim(debitInput)).rejects.toBeInstanceOf(PaymentAdjustmentPurchaseNotReadyError)
+
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('keeps an adjustment retryable until the paid provider total is known', async () => {
+        manager.findOne.mockResolvedValue({ ...purchase, providerTotalMinor: null } as CreditPurchase)
+
+        await expect(store.claim(debitInput)).rejects.toBeInstanceOf(PaymentAdjustmentBasisMissingError)
 
         expect(manager.save).not.toHaveBeenCalled()
     })
@@ -148,6 +161,33 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
 
         await expect(store.claim({ ...debitInput, amountMinor: 499 })).rejects.toBeInstanceOf(
             PaymentAdjustmentReplayConflictError,
+        )
+    })
+
+    it('rejects a replay whose full-adjustment scope differs', async () => {
+        manager.findOne.mockResolvedValueOnce(purchase).mockResolvedValueOnce(adjustment())
+
+        await expect(store.claim({ ...debitInput, isFull: false })).rejects.toBeInstanceOf(
+            PaymentAdjustmentReplayConflictError,
+        )
+    })
+
+    it('uses the provider total rather than the catalog amount for partial accounting', async () => {
+        manager.findOne
+            .mockResolvedValueOnce({ ...purchase, providerTotalMinor: 615 } as CreditPurchase)
+            .mockResolvedValueOnce(null)
+
+        await expect(
+            store.claim({ ...debitInput, amountMinor: 308, isFull: false }),
+        ).resolves.toMatchObject({ operationCredits: 50 })
+        expect(manager.save).toHaveBeenCalledWith(
+            CreditPurchaseAdjustment,
+            expect.objectContaining({
+                amountMinor: 308,
+                isFull: false,
+                effectiveAmountMinor: 308,
+                requestedCredits: 50,
+            }),
         )
     })
 

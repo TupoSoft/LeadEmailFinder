@@ -11,6 +11,7 @@ const debitEvent = {
     providerReference: 'transaction-1',
     providerAdjustmentId: 'adjustment-1',
     amountMinor: 500,
+    isFull: true,
     currency: 'USD',
 }
 
@@ -44,6 +45,7 @@ describe('PaymentAdjustmentHandler', () => {
             providerAdjustmentId: debitEvent.providerAdjustmentId,
             direction: PaymentAdjustmentDirection.DEBIT,
             amountMinor: debitEvent.amountMinor,
+            isFull: debitEvent.isFull,
             currency: debitEvent.currency,
         })
         expect(credits.debitUpTo).toHaveBeenCalledWith(

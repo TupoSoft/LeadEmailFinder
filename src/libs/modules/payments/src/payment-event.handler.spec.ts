@@ -7,6 +7,8 @@ const paidEvent = {
     kind: 'purchase_paid' as const,
     providerEventId: 'event-paid-1',
     providerReference: 'provider-purchase-1',
+    providerTotalMinor: 500,
+    currency: 'USD',
 }
 
 const purchase: PaidPurchase = {
@@ -40,6 +42,8 @@ describe('PaymentEventHandler', () => {
         expect(purchases.recordPaid).toHaveBeenCalledWith({
             providerReference: paidEvent.providerReference,
             purchaseId: undefined,
+            providerTotalMinor: paidEvent.providerTotalMinor,
+            currency: paidEvent.currency,
         })
         expect(credits.credit).toHaveBeenCalledWith(purchase.organizationId, purchase.credits, purchase.id)
         expect(purchases.recordCreditsGranted).toHaveBeenCalledWith(purchase.id)
@@ -53,6 +57,8 @@ describe('PaymentEventHandler', () => {
         expect(purchases.recordPaid).toHaveBeenCalledWith({
             providerReference: paidEvent.providerReference,
             purchaseId: purchase.id,
+            providerTotalMinor: paidEvent.providerTotalMinor,
+            currency: paidEvent.currency,
         })
     })
 
@@ -127,6 +133,7 @@ describe('PaymentEventHandler', () => {
             providerReference: paidEvent.providerReference,
             providerAdjustmentId: 'adjustment-1',
             amountMinor: 250,
+            isFull: false,
             currency: 'USD',
         }
         adjustmentHandler.handle.mockResolvedValue(true)

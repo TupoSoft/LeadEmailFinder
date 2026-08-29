@@ -47,6 +47,9 @@ export class CreditPurchaseAdjustment {
     @Column({ type: 'int' })
     amountMinor: number
 
+    @Column()
+    isFull: boolean
+
     @Column({ type: 'int' })
     effectiveAmountMinor: number
 

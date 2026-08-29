@@ -33,10 +33,14 @@ describe('CreditPurchaseAdjustment', () => {
         const state = metadata.columns.find(
             column => column.target === CreditPurchaseAdjustment && column.propertyName === 'state',
         )
+        const isFull = metadata.columns.find(
+            column => column.target === CreditPurchaseAdjustment && column.propertyName === 'isFull',
+        )
         const check = metadata.checks.find(candidate => candidate.target === CreditPurchaseAdjustment)
 
         expect(direction?.options.enum).toBe(CreditPurchaseAdjustmentDirection)
         expect(state?.options.enum).toBe(CreditPurchaseAdjustmentState)
+        expect(isFull).toBeDefined()
         expect(check?.expression).toContain('"shortfallCredits" >= 0')
         expect(check?.expression).toContain('"originalShortfallCredits" >= 0')
     })

@@ -1,7 +1,7 @@
 import { PaymentAdjustmentDirection } from './payment-adjustment.store'
 
 export interface PaymentAdjustmentPurchaseTerms {
-    amountMinor: number
+    basisMinor: number
     credits: number
 }
 
@@ -9,6 +9,7 @@ export interface PaymentAdjustmentAccountingRecord {
     providerAdjustmentId: string
     direction: PaymentAdjustmentDirection
     amountMinor: number
+    isFull: boolean
     operationCredits: number
     appliedDebit: number
     shortfallCredits: number
@@ -32,6 +33,7 @@ export function calculatePaymentAdjustmentClaim(
     existing: PaymentAdjustmentAccountingRecord[],
     direction: PaymentAdjustmentDirection,
     amountMinor: number,
+    isFull: boolean,
 ): PaymentAdjustmentClaimAccounting {
     assertPurchaseTerms(purchase)
     assertNonNegativeInteger(amountMinor, 'amountMinor')
@@ -43,6 +45,7 @@ export function calculatePaymentAdjustmentClaim(
             providerAdjustmentId: 'pending',
             direction,
             amountMinor,
+            isFull,
             operationCredits: 0,
             appliedDebit: 0,
             shortfallCredits: 0,
@@ -104,19 +107,19 @@ function calculateTarget(
 ): { amountMinor: number; credits: number } {
     let netMinor = 0n
     for (const adjustment of adjustments) {
-        const amount = BigInt(adjustment.amountMinor)
+        const amount = BigInt(adjustment.isFull ? purchase.basisMinor : adjustment.amountMinor)
         netMinor += adjustment.direction === PaymentAdjustmentDirection.DEBIT ? amount : -amount
     }
 
     const cappedMinor =
-        netMinor < 0n ? 0n : netMinor > BigInt(purchase.amountMinor) ? BigInt(purchase.amountMinor) : netMinor
-    const credits = Number((cappedMinor * BigInt(purchase.credits)) / BigInt(purchase.amountMinor))
+        netMinor < 0n ? 0n : netMinor > BigInt(purchase.basisMinor) ? BigInt(purchase.basisMinor) : netMinor
+    const credits = Number((cappedMinor * BigInt(purchase.credits)) / BigInt(purchase.basisMinor))
     return { amountMinor: Number(cappedMinor), credits }
 }
 
 function assertPurchaseTerms(purchase: PaymentAdjustmentPurchaseTerms): void {
-    if (!Number.isSafeInteger(purchase.amountMinor) || purchase.amountMinor <= 0) {
-        throw new Error('Payment purchase amountMinor must be a positive safe integer')
+    if (!Number.isSafeInteger(purchase.basisMinor) || purchase.basisMinor <= 0) {
+        throw new Error('Payment purchase basisMinor must be a positive safe integer')
     }
     assertNonNegativeInteger(purchase.credits, 'credits')
 }
