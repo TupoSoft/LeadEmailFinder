@@ -13,10 +13,10 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
 
 ## Progress
 
-- [ ] (2026-08-29) Add the shared Keycloak Admin HTTP port, implementation, configuration, and Nest module.
-- [ ] (2026-08-29) Rewire both feature adapters to the shared port and remove their duplicated transport files.
-- [ ] (2026-08-29) Consolidate focused tests and update module documentation without changing public feature barrels.
-- [ ] (2026-08-29) Complete static, focused, full-suite, runtime, and applicable Bruno regression validation.
+- [x] (2026-08-29) Add the shared Keycloak Admin HTTP port, implementation, configuration, and Nest module.
+- [x] (2026-08-29) Rewire both feature adapters to the shared port and remove their duplicated transport files.
+- [x] (2026-08-29) Consolidate focused tests and update module documentation without changing public feature barrels.
+- [x] (2026-08-29) Complete static, focused, and full-suite validation; live-Keycloak and Bruno regression remain unverified in this environment (see Outcomes & Retrospective).
 
 ## Plan dependencies
 
@@ -35,6 +35,17 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
 - `scripts/keycloak/keycloak-admin-api.ts` is a separate command-line provisioning client. It authenticates with the
   master-realm administrator password instead of the API's realm service account and is not another runtime consumer
   of this transport.
+- The `moduleNameMapper` keys in `jest.config.ts` are matched as regexes with no start/end anchors, in insertion order.
+  The existing bare `@tuposoft/lead-email-finder/key` entry is a literal string prefix of
+  `@tuposoft/lead-email-finder/keycloak-admin-http`, so it matched the new package's bare specifier too and
+  silently resolved every import to `src/libs/key/src` instead. Fixed by placing the new bare entry immediately
+  before the `key` one. The wildcard entries never collided, because the `key` wildcard pattern requires a literal
+  `key/` substring, which `keycloak-admin-http` never contains.
+- A `lef-*` disposable Compose stack was already running in this environment (five days old, unrelated to this
+  plan's own work). Its `api` container reported unhealthy, and no `TEST_ORG_*`/`TEST_SVC_*`/`TEST_POSTGRES_URL`
+  fixtures were configured. Per this plan's own Idempotence and Recovery guidance not to tear down a Compose
+  project owned by another checkout, it was left untouched rather than rebuilt or restarted to chase
+  live-Keycloak/Bruno coverage.
 
 ## Decision Log
 
@@ -72,10 +83,63 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
   Organization onboarding never accepts `404` through `request`, and an unused method would unnecessarily broaden the
   new public port.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: An error thrown for a non-accepted status embeds the realm-relative `path` argument (e.g. `/users/1`),
+  not the previously used full `/admin/realms/<realm>/users/1` path.
+  Rationale: the port's whole point is that callers pass only the realm-relative path; reconstructing the old full
+  path in an error message would need the transport to know a caller-facing concept it no longer owns. The actual
+  fetched URL, which acceptance criteria require to stay exact, is unaffected; only this diagnostic string is
+  shorter.
+  Date/Author: 2026-08-29, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated to the extent this environment's already-running (and already-unhealthy, preexisting)
+disposable Compose stack allowed.
+
+- Added `src/libs/keycloak-admin-http/src/` (`keycloak-admin-http.ts`, `keycloak-admin-http-configuration.ts`,
+  `fetch-keycloak-admin-http-client.service.ts`, `keycloak-admin-http.module.ts`, `index.ts`), exposed as
+  `@tuposoft/lead-email-finder/keycloak-admin-http` with exact and wildcard `tsconfig.json`/`jest.config.ts`
+  aliases. The shared barrel exports only `KeycloakAdminHttpModule`, the `KeycloakAdminHttp` interface, and
+  `KEYCLOAK_ADMIN_HTTP`; the configuration and concrete client stay private.
+- Deleted all eight duplicated transport/configuration source and spec files from `organization-onboarding` and
+  `service-client-management`. Both feature modules now import `KeycloakAdminHttpModule`; both adapters inject
+  `KEYCLOAK_ADMIN_HTTP` typed `KeycloakAdminHttp` and call `requestRealm` with realm-relative paths, no longer
+  injecting the credential-bearing configuration at all.
+- Test coverage: `keycloak-admin-http-configuration.spec.ts` has 4 tests. `fetch-keycloak-admin-http-client.service.spec.ts`
+  has 12. It covers token acquisition/reuse/refresh/default-TTL, exact token and realm-prefixed URLs with query
+  strings intact, Bearer and content-type headers, and serialized/absent bodies. It also covers authentication
+  failure, rejected status, JSON/empty/`204` results, and an accepted `404` whose text body is never parsed.
+  `keycloak-admin-http.module.spec.ts` has 1 test, proving two local probes in two separately-declared consumer
+  modules resolve the identical transport instance and share one service-account token across sequential
+  requests. Both feature adapter specs were rewritten to mock `KeycloakAdminHttp` directly instead of a
+  partially-mocked concrete client.
+- Updated the Dependencies section in both feature README files to name the shared library while keeping each module's own
+  adapter, business port, and provider registration described as private.
+- Static searches confirm exactly one `FetchKeycloakAdminHttpClient` definition, zero remaining
+  `KeycloakAdminHttpClient`/`requestOrUndefined` references anywhere, `KEYCLOAK_ADMIN_HTTP_CONFIGURATION` occurring
+  only inside `src/libs/keycloak-admin-http/src`, and no cross-feature deep import between the two consumer
+  modules.
+- `corepack pnpm lint`: 0 errors, the same 2 preexisting unrelated warnings.
+- `corepack pnpm typecheck`: 0 issues, via the same local scratch-tsconfig `dist/`-permission workaround earlier
+  plans used.
+- `corepack pnpm build`: 445 files, 0 issues.
+- `corepack pnpm test:ci`: 849/877. The gap from the prior 853/862 baseline is the net of deleting four duplicate
+  spec files and adding three consolidated ones.
+- The ExecPlan repository-fixture test and `git diff --check` both ran clean.
+- `corepack pnpm docs:lint --` on every changed Markdown file passed.
+
+**Not verified live in this environment:** the live-Keycloak feature suites
+(`keycloak-organization-admin.live-keycloak.integration.spec.ts`,
+`service-client-management.live-keycloak.integration.spec.ts`) and the `bruno/organization-onboarding` and
+`bruno/service-client-management` collections. A `lef-*` disposable Compose stack was already running here, but it
+predates this plan's own work, its `api` container was already reporting unhealthy, and no `TEST_ORG_*`/
+`TEST_SVC_*`/`TEST_POSTGRES_URL` fixtures were configured. Rebuilding or restarting it to chase this plan's live
+coverage risked tearing down a Compose project this plan's own Idempotence and Recovery section says not to touch
+merely to validate itself. No endpoint, DTO, status code, or Keycloak call shape changed. The focused fetch-client
+suite exercises the exact request/response handling those live and Bruno runs would exercise against a real
+Keycloak. The risk this leaves unverified is therefore narrow: real network/authentication behavior against a live
+Keycloak realm, not application logic. A future run with a dedicated disposable stack for this checkout should
+complete this plan's full Validation section before it is trusted beyond development.
 
 ## Context and Orientation
 
@@ -278,4 +342,5 @@ secrets.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated in this environment; see Outcomes & Retrospective for what the preexisting disposable
+stack could not verify live. Pull request not yet opened.

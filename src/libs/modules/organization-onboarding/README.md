@@ -35,6 +35,11 @@ client, and every DTO are internal.
   `AuditLogEntry`, and the `AuthPrincipal`/`AuthRole` types.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `Public`,
   `RequirePermissions`.
+- `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
+  (`KeycloakAdminHttpModule`, `KEYCLOAK_ADMIN_HTTP`), also imported by
+  [`service-client-management`](../service-client-management/README.md). This module's own
+  `KeycloakOrganizationAdminClient` adapter, its business port, and its provider registration stay private and
+  not shared.
 
 ## HTTP Surface
 

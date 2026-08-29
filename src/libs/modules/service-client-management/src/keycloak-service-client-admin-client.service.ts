@@ -1,9 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { KeycloakAdminHttpClient } from './keycloak-admin-http-client.service'
-import {
-    KEYCLOAK_ADMIN_HTTP_CONFIGURATION,
-    KeycloakAdminHttpConfiguration,
-} from './keycloak-admin-http-configuration'
+import { KEYCLOAK_ADMIN_HTTP, KeycloakAdminHttp } from '@tuposoft/lead-email-finder/keycloak-admin-http'
 import {
     CreateServiceClientInput,
     KeycloakServiceClientAdmin,
@@ -30,53 +26,46 @@ interface SecretRepresentation {
 
 @Injectable()
 export class KeycloakServiceClientAdminClient implements KeycloakServiceClientAdmin {
-    constructor(
-        private readonly http: KeycloakAdminHttpClient,
-        @Inject(KEYCLOAK_ADMIN_HTTP_CONFIGURATION) private readonly configuration: KeycloakAdminHttpConfiguration,
-    ) {}
+    constructor(@Inject(KEYCLOAK_ADMIN_HTTP) private readonly http: KeycloakAdminHttp) {}
 
     async provisionClient({ keycloakClientId }: CreateServiceClientInput): Promise<ProvisionedServiceClient> {
-        const realm = this.configuration.realm
-
         const internalId = await this.ensureClient(keycloakClientId)
         const audienceScope = await this.findAudienceScope()
         await this.assignDefaultScope(internalId, audienceScope.id as string)
 
-        const secret = await this.http.request<SecretRepresentation>(
+        const secret = await this.http.requestRealm<SecretRepresentation>(
             'GET',
-            `/admin/realms/${realm}/clients/${internalId}/client-secret`,
+            `/clients/${internalId}/client-secret`,
         )
-        const serviceAccountUser = await this.http.request<{ id: string }>(
+        const serviceAccountUser = await this.http.requestRealm<{ id: string }>(
             'GET',
-            `/admin/realms/${realm}/clients/${internalId}/service-account-user`,
+            `/clients/${internalId}/service-account-user`,
         )
 
         return { subject: serviceAccountUser.id, secret: secret.value }
     }
 
     async rotateSecret(keycloakClientId: string): Promise<string> {
-        const realm = this.configuration.realm
         const internalId = await this.findClientInternalId(keycloakClientId)
         if (!internalId) {
             throw new Error(`Keycloak client ${keycloakClientId} was not found`)
         }
 
-        const secret = await this.http.request<SecretRepresentation>(
+        const secret = await this.http.requestRealm<SecretRepresentation>(
             'POST',
-            `/admin/realms/${realm}/clients/${internalId}/client-secret`,
+            `/clients/${internalId}/client-secret`,
         )
 
         return secret.value
     }
 
     async deleteClient(keycloakClientId: string): Promise<void> {
-        const realm = this.configuration.realm
         const internalId = await this.findClientInternalId(keycloakClientId)
         if (!internalId) {
             return
         }
 
-        await this.http.request('DELETE', `/admin/realms/${realm}/clients/${internalId}`, undefined, [204, 404])
+        await this.http.requestRealm('DELETE', `/clients/${internalId}`, undefined, [204, 404])
     }
 
     private async ensureClient(keycloakClientId: string): Promise<string> {
@@ -85,9 +74,9 @@ export class KeycloakServiceClientAdminClient implements KeycloakServiceClientAd
             return existingId
         }
 
-        await this.http.request(
+        await this.http.requestRealm(
             'POST',
-            `/admin/realms/${this.configuration.realm}/clients`,
+            '/clients',
             {
                 clientId: keycloakClientId,
                 name: `Lead Email Finder service client ${keycloakClientId}`,
@@ -111,19 +100,16 @@ export class KeycloakServiceClientAdminClient implements KeycloakServiceClientAd
     }
 
     private async findClientInternalId(keycloakClientId: string): Promise<string | undefined> {
-        const clients = await this.http.request<KeycloakClientRepresentation[]>(
+        const clients = await this.http.requestRealm<KeycloakClientRepresentation[]>(
             'GET',
-            `/admin/realms/${this.configuration.realm}/clients?clientId=${encodeURIComponent(keycloakClientId)}`,
+            `/clients?clientId=${encodeURIComponent(keycloakClientId)}`,
         )
 
         return clients.find(client => client.clientId === keycloakClientId)?.id
     }
 
     private async findAudienceScope(): Promise<NamedRepresentation> {
-        const scopes = await this.http.request<NamedRepresentation[]>(
-            'GET',
-            `/admin/realms/${this.configuration.realm}/client-scopes`,
-        )
+        const scopes = await this.http.requestRealm<NamedRepresentation[]>('GET', '/client-scopes')
         const scope = scopes.find(candidate => candidate.name === AUDIENCE_SCOPE_NAME)
         if (!scope) {
             throw new Error(`Keycloak client scope ${AUDIENCE_SCOPE_NAME} was not found`)
@@ -133,15 +119,14 @@ export class KeycloakServiceClientAdminClient implements KeycloakServiceClientAd
     }
 
     private async assignDefaultScope(clientInternalId: string, scopeId: string): Promise<void> {
-        const realm = this.configuration.realm
-        const scopes = await this.http.request<NamedRepresentation[]>(
+        const scopes = await this.http.requestRealm<NamedRepresentation[]>(
             'GET',
-            `/admin/realms/${realm}/clients/${clientInternalId}/default-client-scopes`,
+            `/clients/${clientInternalId}/default-client-scopes`,
         )
         if (!scopes.some(scope => scope.id === scopeId)) {
-            await this.http.request(
+            await this.http.requestRealm(
                 'PUT',
-                `/admin/realms/${realm}/clients/${clientInternalId}/default-client-scopes/${scopeId}`,
+                `/clients/${clientInternalId}/default-client-scopes/${scopeId}`,
                 undefined,
                 [204],
             )
