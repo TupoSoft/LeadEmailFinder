@@ -12,7 +12,8 @@ and then exercising an inverse adjustment without any duplicate balance movement
 
 ## Progress
 
-- [ ] (2026-08-28) Decide the clawback policy for a balance that cannot absorb the debit.
+- [x] (2026-08-29) Settle the insufficient-balance policy: clamp the debit to the available balance, record the
+  shortfall, and never make the credit balance negative.
 - [ ] (2026-08-28) Normalize Paddle debit, restore, and ignored adjustment actions into explicit provider-event variants.
 - [ ] (2026-08-28) Add a durable adjustment state machine that serializes purchase accounting and converges after partial failure.
 - [ ] (2026-08-28) Add full, partial, inverse, insufficient-balance, replay, and concurrent-adjustment coverage.
@@ -68,10 +69,14 @@ and then exercising an inverse adjustment without any duplicate balance movement
   Rationale: Credits that could not be removed never left the account. Restoring them would create value rather than
   undoing the earlier adjustment.
   Date/Author: 2026-08-28, Codex plan audit.
-- Decision (open): what happens when the balance is smaller than the reversal.
-  Options: clamp the debit to the available balance and record the shortfall, or drop the `balance >= 0` check constraint and let the balance go negative.
-  Recommendation: clamp and record. Negative balances complicate every read path and every guard in the verification flow, and the shortfall record preserves the information a later collections or suspension decision would need.
-  This decision must be settled before implementation begins; it changes the schema, the acceptance criteria, and the behavior of `CreditGuard` for an affected organization.
+- Decision: When an approved debit-causing adjustment exceeds the available credit balance, debit only the available
+  credits, leave the balance at zero, and persist the unapplied amount as a shortfall. Never make a credit balance
+  negative.
+  Rationale: Spendable credits and an adjustment shortfall are different domain concepts. Keeping them separate
+  preserves the existing invariant that balances cannot be negative, records the full financial effect for later
+  collections or suspension policy, and lets an inverse adjustment clear the recorded shortfall before restoring
+  only credits that were actually debited.
+  Date/Author: 2026-08-29, project owner.
 
 ## Outcomes & Retrospective
 
@@ -101,7 +106,8 @@ unverified adjustment input.
 
 ## Plan of Work
 
-Settle the open policy decision first and record it in the Decision Log with its rationale and date.
+Apply the settled clamp-and-record policy throughout the credit operation, adjustment state, tests, and runtime
+validation.
 
 Extend `PaymentEvent` with explicit debit and restore adjustment variants. Each carries `providerEventId`,
 `providerReference`, provider adjustment ID, amount in minor units, and currency. In the Paddle adapter, map only
@@ -130,7 +136,7 @@ limitation and retain signed Paddle fixture coverage plus the real-PostgreSQL pr
 
 New internal payment-event variants for debit and restore adjustments. New payments-owned
 `CreditPurchaseAdjustment` persistence and a purpose-specific adjustment store port. The credit module gains a narrow
-idempotent operation that reports the amount applied under the settled insufficient-balance policy. No endpoint or
+idempotent operation that reports the amount applied under the clamp-and-record policy. No endpoint or
 configuration changes. Development schema changes use TypeORM synchronization against disposable data; no migration
 or backfill is added. Depends on plans 04, 05, 07, and 08.
 
@@ -146,7 +152,8 @@ or backfill is added. Depends on plans 04, 05, 07, and 08.
 - A `chargeback_reverse` or `credit_reverse` clears the attributable shortfall first, restores no more than credits
   actually debited, and is idempotent on replay.
 - A later `reversed` update for the original adjustment cannot restore the same movement a second time.
-- A reversal larger than the available balance behaves exactly as the settled policy states and is recorded.
+- An approved debit-causing adjustment larger than the available balance debits only the available credits, leaves
+  the balance at zero, and records the exact unapplied amount as a shortfall.
 - An organization with an outstanding shortfall still receives a clear `402` rather than a `500` on its next
   verification request.
 - A reversal for an unknown `providerReference` returns `200` and changes nothing.
@@ -191,4 +198,4 @@ provider credentials. Official Paddle references:
 
 ## Plan readiness
 
-Ready after the insufficient-balance clawback policy decision recorded in the Decision Log.
+Ready to implement.
