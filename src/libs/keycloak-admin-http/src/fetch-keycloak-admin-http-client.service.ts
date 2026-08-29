@@ -1,14 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common'
-import {
-    KEYCLOAK_ADMIN_HTTP_CONFIGURATION,
-    KeycloakAdminHttpConfiguration,
-} from './keycloak-admin-http-configuration'
+import { KeycloakAdminHttp } from './keycloak-admin-http'
+import { KEYCLOAK_ADMIN_HTTP_CONFIGURATION, KeycloakAdminHttpConfiguration } from './keycloak-admin-http-configuration'
 
 const TOKEN_EXPIRY_SAFETY_MARGIN_MS = 5_000
 const DEFAULT_TOKEN_TTL_SECONDS = 60
 
 @Injectable()
-export class KeycloakAdminHttpClient {
+export class FetchKeycloakAdminHttpClient implements KeycloakAdminHttp {
     private accessToken: string | undefined
     private accessTokenExpiresAt = 0
 
@@ -16,14 +14,15 @@ export class KeycloakAdminHttpClient {
         @Inject(KEYCLOAK_ADMIN_HTTP_CONFIGURATION) private readonly configuration: KeycloakAdminHttpConfiguration,
     ) {}
 
-    async request<T = void>(
+    async requestRealm<T = void>(
         method: string,
         path: string,
         body?: unknown,
-        acceptedStatuses: number[] = [200, 201, 204],
+        acceptedStatuses: readonly number[] = [200, 201, 204],
     ): Promise<T> {
         const token = await this.ensureToken()
-        const response = await fetch(`${this.configuration.baseUrl}${path}`, {
+        const url = `${this.configuration.baseUrl}/admin/realms/${this.configuration.realm}${path}`
+        const response = await fetch(url, {
             method,
             headers: {
                 authorization: `Bearer ${token}`,
@@ -36,28 +35,14 @@ export class KeycloakAdminHttpClient {
             throw new Error(`${method} ${path} failed with HTTP ${response.status}: ${await response.text()}`)
         }
 
-        if (response.status === 204 || response.headers.get('content-length') === '0') {
+        // An explicitly accepted 404 (an idempotent delete race) returns undefined without parsing a body,
+        // the same as a 204 or an empty body -- Keycloak may still return text content on a 404.
+        if (response.status === 204 || response.status === 404 || response.headers.get('content-length') === '0') {
             return undefined as T
         }
 
         const text = await response.text()
         return (text.length === 0 ? undefined : JSON.parse(text)) as T
-    }
-
-    async requestOrUndefined<T>(path: string): Promise<T | undefined> {
-        const token = await this.ensureToken()
-        const response = await fetch(`${this.configuration.baseUrl}${path}`, {
-            headers: { authorization: `Bearer ${token}` },
-        })
-
-        if (response.status === 404) {
-            return undefined
-        }
-        if (!response.ok) {
-            throw new Error(`GET ${path} failed with HTTP ${response.status}: ${await response.text()}`)
-        }
-
-        return (await response.json()) as T
     }
 
     private async ensureToken(): Promise<string> {
