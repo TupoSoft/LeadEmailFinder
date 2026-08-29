@@ -15,11 +15,11 @@ restating it.
 
 ## Progress
 
-- [ ] (2026-08-29) Clarify the enforceable module-layer contract and its narrow root exceptions.
-- [ ] (2026-08-29) Publish root and module-scoped agent instructions for applying and validating the contract.
-- [ ] (2026-08-29) Implement and test the architecture scanner, diagnostics, baseline comparison, and shrink-only updater.
-- [ ] (2026-08-29) Capture the current violation baseline and wire the check into local and GitHub validation.
-- [ ] (2026-08-29) Run focused and repository validation, then record the final rule counts and enforcement evidence.
+- [x] (2026-08-29) Clarify the enforceable module-layer contract and its narrow root exceptions.
+- [x] (2026-08-29) Publish root and module-scoped agent instructions for applying and validating the contract.
+- [x] (2026-08-29) Implement and test the architecture scanner, diagnostics, baseline comparison, and shrink-only updater.
+- [x] (2026-08-29) Capture the current violation baseline and wire the check into local and GitHub validation.
+- [x] (2026-08-29) Run focused and repository validation, then record the final rule counts and enforcement evidence.
 
 ## Plan dependencies
 
@@ -45,6 +45,19 @@ restating it.
 - Live GitHub API checks found that `TupoSoft/LeadEmailFinder` is private and that both the master branch-protection
   endpoint and repository rule set endpoint return HTTP 403 with “Upgrade to GitHub Pro or make this repository
   public.” A failing workflow is useful evidence but is not currently a merge restriction that cannot be bypassed.
+- A missing baseline at the immediate base revision is not sufficient evidence of first adoption. A previously
+  adopted baseline can be deleted and then recreated with more debt unless the checker searches the base ancestry
+  for the last version that contained the file.
+- Raw Markdown link matching can mistake links in comments and code for dependency declarations and can miss valid
+  reference-style links. The scanner needs offset-preserving visibility masking and one link extractor for both the
+  module catalog and module dependency sections.
+- Direct export declarations are not the only way a barrel can leak another module. TypeScript also permits exported
+  import-equals declarations, exported values initialized by `require()` or `import()`, and imported bindings that
+  are exported later through a local declaration.
+- Pull request #447 merged between branch creation and the first pull-request workflow run. The shared Keycloak admin
+  transport in that pull request resolved four source-placement violations, so the initial run correctly rejected
+  those baseline entries as stale. Rebasing onto commit `429b815e9b23879d9aba9ceeb2096048a636c982` and running the
+  shrink-only updater reduced the baseline from 225 to 221 entries.
 
 ## Decision Log
 
@@ -89,10 +102,37 @@ restating it.
   Keeping the rule matrix in `src/libs/modules/README.md` and making both instruction files point to it avoids a
   second architecture contract that can drift.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: When the configured base commit does not contain the baseline, search its ancestry for the latest added
+  or modified version and compare against that version. Allow bootstrap only when the path has never existed in that
+  history. Operational Git or historical-baseline parsing errors stop the check.
+  Rationale: deleting the file must not reopen the one-time bootstrap allowance or turn an infrastructure failure
+  into permission to grow architecture debt.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Parse only visible inline or reference-style Markdown links for module catalogs and dependencies, and
+  track import bindings exported directly or later through local declarations in barrels.
+  Rationale: comments, code examples, alternate aliases, and equivalent TypeScript export syntax must not bypass the
+  same public-boundary and documented-dependency rules.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Percent-escape key delimiters and validate every baseline entry against the known rule-key grammar.
+  Rationale: arbitrary strings and delimiter collisions would weaken exact-set comparison and grouped diagnostics.
+  Date/Author: 2026-08-29, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and locally validated. The root/scoped agent workflow and canonical module guide are published; the
+scanner, CLI, package scripts, pre-commit hook, CI step, and deterministic baseline are present. The focused fixture
+suite passes 73 tests, including every layer edge, import, and Jest form, alternate aliases, barrel export forms,
+Markdown visibility, exact-set comparison, shrink-only updates, historical baseline growth, and first-adoption
+bootstrap behavior. The real repository passes the default gate with nine modules and 221 violations recorded in the
+baseline.
+
+The full Jest suite, lint, type check, production build, Harper check, formatting checks, and whitespace check pass.
+No application runtime file, dependency, lockfile, endpoint, DTO, authorization rule, persistence behavior, queue,
+configuration contract, or provider integration changed. The scanner deliberately performs structural and bounded
+import-binding analysis rather than arbitrary value-flow analysis. This keeps the gate deterministic and focused on
+the contract it documents without introducing a new compiler or lint dependency. Pull-request delivery was requested
+on 2026-08-30. This plan records final local evidence; the pull request is the source of truth for live GitHub check
+and review state.
 
 ## Context and Orientation
 
@@ -106,14 +146,14 @@ The wildcard mappings are compatibility infrastructure for current debt and are 
 import is supported. The executable API host at `src/lead-email-finder-api` is outside a business module and consumes
 module barrels as the application composition root.
 
-The existing `Validate` workflow in `.github/workflows/validate.yml` checks out full history and runs lint,
-typecheck, Jest, build, and image build. `.husky/pre-commit` currently runs affected Jest tests. The new checker will
-be a dedicated command in both places rather than being hidden inside ESLint.
+The `Validate` workflow in `.github/workflows/validate.yml` checks out full history and runs the dedicated module
+architecture command before lint, typecheck, Jest, build, and image build. `.husky/pre-commit` runs the same command
+before affected Jest tests rather than hiding architecture enforcement inside ESLint.
 
-The root `AGENTS.md` currently supplies general SOLID, adapter, controller, testing, and ExecPlan guidance, but it
-does not require an agent to read the business-module contract, identify an owning layer and public boundary, or run
-an architecture command. There is no `src/libs/modules/AGENTS.md`. This plan adds those workflow instructions
-alongside the README and command so all three describe the same enforceable policy.
+The root `AGENTS.md` supplies general SOLID, adapter, controller, testing, and ExecPlan guidance and now directs
+agents working with business modules to the canonical contract. The scoped `src/libs/modules/AGENTS.md` requires
+agents to identify the owning layer, public boundary, and dependency direction, then run the architecture command.
+The root instructions, scoped instructions, README, and command therefore describe the same enforceable policy.
 
 A “production TypeScript file” in this plan is a `.ts` file that is not below `__tests__` and does not end in
 `.spec.ts` or `.test.ts`. The scanner still examines test imports for cross-module boundary violations.
@@ -348,6 +388,31 @@ concise note that the GitHub protection and rule set APIs returned HTTP 403 for 
 does not mistake a green workflow for a merge policy that cannot be bypassed. Do not record tokens, absolute
 developer-specific paths in the baseline, or unrelated repository state.
 
+Current implementation evidence:
+
+- Baseline total: 221 (`source-placement`: 125, `api-placement`: 29, `technical-dependency`: 33,
+  `layer-dependency`: 11, `cross-module-public-api`: 22, `module-cycle`: 1).
+- Focused fixtures: 73 of 73 passing.
+- `architecture:check`: passes for nine modules with 221 recorded violations; with commit
+  `429b815e9b23879d9aba9ceeb2096048a636c982` as `ARCHITECTURE_BASE_SHA`, the one-time pre-baseline bootstrap path also
+  passes.
+- Baseline SHA-256 before and after a repeated updater run:
+  `b72673b48673c230e03c4eec0eb0b81a0efae637b7d22e7f1d1f9e8149840272`.
+- `corepack pnpm lint`: passed with zero errors and two preexisting return-type warnings in unchanged specs.
+- `corepack pnpm typecheck`: passed.
+- `corepack pnpm test:docs-lint`: 13 tests passed under Node 24.19.0, matching the workflow's Node 24 runtime. The
+  host's default Node 22 runtime does not recognize the command's `--test-isolation=none` flag.
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci`: 131 suites and 922 tests passed; nine suites and 27 tests
+  remained skipped, and one test remains marked for future work.
+- `corepack pnpm build`: passed; Nest compiled 445 files with zero type-checker issues.
+- `corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md`: all five required files passed Harper.
+- The planned documentation Prettier command, a two-space workflow Prettier check, and `git diff --check` passed.
+- `package.json` adds only the two command interfaces, `pnpm-lock.yaml` is unchanged, and no application TypeScript
+  file changed.
+- Live GitHub workflow status is intentionally not frozen in this plan. Local validation exercised the same command
+  with commit `429b815e9b23879d9aba9ceeb2096048a636c982` as `ARCHITECTURE_BASE_SHA`; the pull request is the source of truth
+  after push.
+
 ## Plan readiness
 
-Ready to implement.
+Implemented and locally validated; ready for pull-request review.
