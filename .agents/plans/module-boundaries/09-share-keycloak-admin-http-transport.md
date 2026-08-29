@@ -16,7 +16,7 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
 - [x] (2026-08-29) Add the shared Keycloak Admin HTTP port, implementation, configuration, and Nest module.
 - [x] (2026-08-29) Rewire both feature adapters to the shared port and remove their duplicated transport files.
 - [x] (2026-08-29) Consolidate focused tests and update module documentation without changing public feature barrels.
-- [x] (2026-08-29) Complete static, focused, and full-suite validation; live-Keycloak and Bruno regression remain unverified in this environment (see Outcomes & Retrospective).
+- [x] (2026-08-29) Complete static, focused, full-suite, live-Keycloak, and Bruno regression validation.
 
 ## Plan dependencies
 
@@ -42,10 +42,22 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
   before the `key` one. The wildcard entries never collided, because the `key` wildcard pattern requires a literal
   `key/` substring, which `keycloak-admin-http` never contains.
 - A `lef-*` disposable Compose stack was already running in this environment (five days old, unrelated to this
-  plan's own work). Its `api` container reported unhealthy, and no `TEST_ORG_*`/`TEST_SVC_*`/`TEST_POSTGRES_URL`
-  fixtures were configured. Per this plan's own Idempotence and Recovery guidance not to tear down a Compose
-  project owned by another checkout, it was left untouched rather than rebuilt or restarted to chase
-  live-Keycloak/Bruno coverage.
+  plan's own work), with its `api` container reporting unhealthy. Initially left untouched per this plan's own
+  Idempotence and Recovery guidance not to tear down a Compose project owned by another checkout. The user then
+  explicitly asked for it to be torn down and for live verification to run, which `pnpm dev:reset
+  --confirm-project=LEF` did safely: it is this exact checkout's own documented reset workflow
+  (`.agents/plans/auth/10-development-reset-workflow.md`), not an unrelated project.
+- The live-Keycloak specs' `TEST_ORG_*`/`TEST_SVC_*` fixtures map directly onto the output `dev:reset` itself produces:
+  `.dev/keycloak/org-admin-client.json` supplies the issuer/client-id/secret, and the Keycloak master bootstrap
+  admin defaults to `admin`/`admin-development-only` (`docker/infra.yaml`, `KC_BOOTSTRAP_ADMIN_USERNAME`/
+  `KC_BOOTSTRAP_ADMIN_PASSWORD`). Each spec asserts its own Postgres URL's database name ends `_test`; neither
+  creates that database itself, so `lef_org_onboarding_test`/`lef_svc_client_test` were created by hand once
+  against the rebuilt `lef-postgres-1` before running them.
+- The pre-request script in `bruno/service-client-management` reads `{{process.env.OIDC_ISSUER_URL}}` directly.
+  That is empty, not a shell-expansion failure, whenever the three `OIDC_ISSUER_URL`/`KEYCLOAK_SERVICE_CLIENT_ID`/
+  `KEYCLOAK_SERVICE_CLIENT_SECRET` exports do not survive into the same shell invocation as the `npx
+  @usebruno/cli run` call. Worth remembering: each Bash tool call in this environment starts a fresh shell with
+  no inherited exports from a previous one.
 
 ## Decision Log
 
@@ -93,8 +105,8 @@ consumers, and the unchanged organization-onboarding and service-client life-cyc
 
 ## Outcomes & Retrospective
 
-Implemented and validated to the extent this environment's already-running (and already-unhealthy, preexisting)
-disposable Compose stack allowed.
+Implemented and fully validated, including live-Keycloak and Bruno coverage against a freshly rebuilt disposable
+stack.
 
 - Added `src/libs/keycloak-admin-http/src/` (`keycloak-admin-http.ts`, `keycloak-admin-http-configuration.ts`,
   `fetch-keycloak-admin-http-client.service.ts`, `keycloak-admin-http.module.ts`, `index.ts`), exposed as
@@ -128,18 +140,25 @@ disposable Compose stack allowed.
 - The ExecPlan repository-fixture test and `git diff --check` both ran clean.
 - `corepack pnpm docs:lint --` on every changed Markdown file passed.
 
-**Not verified live in this environment:** the live-Keycloak feature suites
-(`keycloak-organization-admin.live-keycloak.integration.spec.ts`,
-`service-client-management.live-keycloak.integration.spec.ts`) and the `bruno/organization-onboarding` and
-`bruno/service-client-management` collections. A `lef-*` disposable Compose stack was already running here, but it
-predates this plan's own work, its `api` container was already reporting unhealthy, and no `TEST_ORG_*`/
-`TEST_SVC_*`/`TEST_POSTGRES_URL` fixtures were configured. Rebuilding or restarting it to chase this plan's live
-coverage risked tearing down a Compose project this plan's own Idempotence and Recovery section says not to touch
-merely to validate itself. No endpoint, DTO, status code, or Keycloak call shape changed. The focused fetch-client
-suite exercises the exact request/response handling those live and Bruno runs would exercise against a real
-Keycloak. The risk this leaves unverified is therefore narrow: real network/authentication behavior against a live
-Keycloak realm, not application logic. A future run with a dedicated disposable stack for this checkout should
-complete this plan's full Validation section before it is trusted beyond development.
+**Verified live**, at the user's explicit request, by tearing down the preexisting `lef-*` disposable stack
+(which had predated this plan's own work and had an unhealthy `api` container) and running `pnpm dev:reset
+--confirm-project=LEF`. That rebuilt the `api` image from this branch's code, provisioned Keycloak again, reseeded
+the development fixtures, and passed its own authenticated smoke test.
+
+- Created two dedicated, disposable `_test`-suffixed Postgres databases on the rebuilt stack
+  (`lef_org_onboarding_test`, `lef_svc_client_test`), matching the naming rule both live-Keycloak specs assert on
+  their own `TEST_ORG_POSTGRES_URL`/`TEST_SVC_POSTGRES_URL`.
+- With `TEST_ORG_*` pointed at the rebuilt Keycloak (issuer, the `lef-org-admin-service` client from
+  `.dev/keycloak/org-admin-client.json`, its dedicated database, and the master-realm bootstrap admin credentials
+  from `docker/infra.yaml`) and `TEST_SVC_*` configured the same way against its own database,
+  `keycloak-organization-admin.live-keycloak.integration.spec.ts` and
+  `service-client-management.live-keycloak.integration.spec.ts` both ran and passed (5/5 tests). This drives the
+  real `KeycloakOrganizationAdminClient` and `KeycloakServiceClientAdminClient` adapters through the real shared
+  `KeycloakAdminHttpModule` against a live Keycloak realm, not a mock.
+- With `OIDC_ISSUER_URL`/`KEYCLOAK_SERVICE_CLIENT_ID`/`KEYCLOAK_SERVICE_CLIENT_SECRET` from
+  `.dev/keycloak/service-client.json` (written by `pnpm keycloak:bootstrap-credential`, which `dev:reset` already
+  ran), `bruno/organization-onboarding` passed 8/8 requests and `bruno/service-client-management` passed 4/4
+  against the live containerized API.
 
 ## Context and Orientation
 
@@ -342,5 +361,4 @@ secrets.
 
 ## Plan readiness
 
-Implemented and validated in this environment; see Outcomes & Retrospective for what the preexisting disposable
-stack could not verify live. Pull request not yet opened.
+Implemented and fully validated, including live-Keycloak and Bruno coverage. Pull request not yet opened.
