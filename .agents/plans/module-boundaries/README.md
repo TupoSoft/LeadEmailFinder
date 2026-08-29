@@ -1,6 +1,6 @@
-# Module boundary consistency roadmap
+# Module Boundary Consistency Road Map
 
-This roadmap makes `src/` follow one ownership model without changing HTTP behavior. Each plan follows
+This road map makes `src/` follow one ownership model without changing HTTP behavior. Each plan follows
 `.agents/PLANS.md`, represents exactly one pull request, and must preserve the existing routes, authorization,
 serialization, persistence semantics, queue names, and provider behavior.
 
@@ -12,6 +12,7 @@ serialization, persistence semantics, queue names, and provider behavior.
 6. [Relocate organization onboarding into the standard module hierarchy](06-relocate-organization-onboarding-module.md)
 7. [Relocate service-client management into the standard module hierarchy](07-relocate-service-client-management-module.md)
 8. [Relocate email verification into the standard module hierarchy](08-relocate-email-verification-module.md)
+9. [Share the Keycloak Admin HTTP transport across feature modules](09-share-keycloak-admin-http-transport.md)
 
 Shared decisions:
 
