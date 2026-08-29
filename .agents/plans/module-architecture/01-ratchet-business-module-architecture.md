@@ -9,11 +9,14 @@ boundary violation. After this change, `corepack pnpm architecture:check` scans 
 `src/libs/modules/README.md`, accepts the repository's existing debt only through an itemized baseline, rejects both
 new violations and stale baseline entries, and runs in the existing validation workflow and pre-commit hook. A
 developer can observe the gate by running the command on the current tree, then exercising its fixture tests for new,
-resolved, and baseline-growth cases.
+resolved, and baseline-growth cases. Coding agents receive the same workflow through a concise root `AGENTS.md`
+bridge and scoped `src/libs/modules/AGENTS.md` instructions that point to the executable contract instead of
+restating it.
 
 ## Progress
 
 - [ ] (2026-08-29) Clarify the enforceable module-layer contract and its narrow root exceptions.
+- [ ] (2026-08-29) Publish root and module-scoped agent instructions for applying and validating the contract.
 - [ ] (2026-08-29) Implement and test the architecture scanner, diagnostics, baseline comparison, and shrink-only updater.
 - [ ] (2026-08-29) Capture the current violation baseline and wire the check into local and GitHub validation.
 - [ ] (2026-08-29) Run focused and repository validation, then record the final rule counts and enforcement evidence.
@@ -79,6 +82,13 @@ resolved, and baseline-growth cases.
   Rationale: a legitimate policy change must update the human contract, scanner, tests, and implementation without
   silently widening existing debt.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: Add a short business-module trigger to the root `AGENTS.md` and put the detailed workflow in
+  `src/libs/modules/AGENTS.md`; the root trigger explicitly requires agents working on or importing a business module
+  to read the scoped file.
+  Rationale: agents commonly start at the repository root, so scoped instructions cannot be the only discovery path.
+  Keeping the rule matrix in `src/libs/modules/README.md` and making both instruction files point to it avoids a
+  second architecture contract that can drift.
+  Date/Author: 2026-08-29, Codex planning.
 
 ## Outcomes & Retrospective
 
@@ -100,6 +110,11 @@ The existing `Validate` workflow in `.github/workflows/validate.yml` checks out 
 typecheck, Jest, build, and image build. `.husky/pre-commit` currently runs affected Jest tests. The new checker will
 be a dedicated command in both places rather than being hidden inside ESLint.
 
+The root `AGENTS.md` currently supplies general SOLID, adapter, controller, testing, and ExecPlan guidance, but it
+does not require an agent to read the business-module contract, identify an owning layer and public boundary, or run
+an architecture command. There is no `src/libs/modules/AGENTS.md`. This plan adds those workflow instructions
+alongside the README and command so all three describe the same enforceable policy.
+
 A “production TypeScript file” in this plan is a `.ts` file that is not below `__tests__` and does not end in
 `.spec.ts` or `.test.ts`. The scanner still examines test imports for cross-module boundary violations.
 
@@ -107,6 +122,10 @@ A “production TypeScript file” in this plan is a `.ts` file that is not belo
 
 Revise `src/libs/modules/README.md` to say that unused layers may be absent, define the root barrel/composition
 exceptions, make the layer dependency matrix explicit, and document the architecture command and ratchet semantics.
+Add a concise trigger to the root `AGENTS.md` and create `src/libs/modules/AGENTS.md` so coding agents read that
+canonical guide, identify the owner, layer, public contract, and dependency direction before editing, and run the
+same architecture gate before completion. The scoped instructions must explain how to shrink resolved debt without
+allowing baseline growth, but must not duplicate the guide's package-prefix list or dependency matrix.
 Add the scanner, its focused Jest specification, its CLI, and the initial JSON baseline under
 `scripts/architecture/`. Add `architecture:check` and `architecture:baseline` package scripts. Run the check from
 `.husky/pre-commit` and from an explicit step in the existing `validate` job.
@@ -126,12 +145,26 @@ Document the dependency matrix, controller/DTO placement, framework-free applica
 cross-module rule, test treatment, and the fact that baseline entries are temporary debt rather than supported
 exceptions.
 
+Then update the root `AGENTS.md` with a business-module trigger that applies whenever a task edits a module or imports
+one from elsewhere. It requires reading `src/libs/modules/AGENTS.md`, the canonical modules guide, and the affected
+module README before coding. Create `src/libs/modules/AGENTS.md` with the concrete agent workflow. Require agents to
+name the owning module, target layer, public surface, and dependency direction and to keep application and domain
+framework-independent. They must put technical integrations behind injected ports and adapters, use only bare public
+barrels across modules, preserve contracts outside the plan, and run `architecture:check`, focused tests, and
+typecheck before finishing. When a remediation produces only stale baseline entries, the instructions may direct the
+agent to the shrink-only `architecture:baseline` command. They must forbid new or broadened baseline entries and
+require a new or updated ExecPlan when a requested design cannot fit the contract. Keep detailed rule definitions in
+the modules guide rather than copying them into either instruction file. These commands are interfaces delivered by
+this plan and are validated only after their package scripts and implementations exist.
+
 Then implement `scripts/architecture/module-architecture.ts`. Discover immediate module directories and validate
-kebab-case names, `README.md`, `src`, `src/index.ts`, the root catalog, and the standard README sections. Parse
-TypeScript with the compiler API, load compiler options from `tsconfig.json`, and resolve relative and aliased module
-specifiers. Scan static imports, type-only imports, export declarations, import-equals declarations, literal
-`import()` and `require()` calls, and literal Jest mock/require calls. Normalize all stored paths to `/` and stop with
-an error on any parse or resolution failure relevant to a boundary decision.
+kebab-case names, `README.md`, `src`, `src/index.ts`, the root catalog, and the standard README sections. Treat the
+catalog-level `README.md` and `AGENTS.md` as documentation rather than module entries, and cover the new scoped file in
+a discovery fixture so its presence cannot change the module inventory. Parse TypeScript with the compiler API, load
+compiler options from `tsconfig.json`, and resolve relative and aliased module specifiers. Scan static imports,
+type-only imports, export declarations, import-equals declarations, literal `import()` and `require()` calls, and
+literal Jest mock/require calls. Normalize all stored paths to `/` and stop with an error on any parse or resolution
+failure relevant to a boundary decision.
 
 Apply these source rules:
 
@@ -205,12 +238,21 @@ needed; it never contains absolute paths or line numbers.
 
 No runtime interface, environment variable, package dependency, TypeScript alias, Jest mapping, endpoint, database
 contract, or Nest injection token changes. `ARCHITECTURE_BASE_SHA` is a CI-only checker input; it is not application
-configuration.
+configuration. The developer-facing instruction surfaces are the root `AGENTS.md`, which provides the repository-wide
+trigger, and `src/libs/modules/AGENTS.md`, which defines the scoped workflow while treating
+`src/libs/modules/README.md` and `architecture:check` as authoritative.
 
 ## Acceptance Criteria
 
 - The modules guide and scanner agree on optional layers, root exceptions, the dependency matrix, API placement,
   technical dependencies, public barrels, test treatment, and ratchet behavior.
+- The root `AGENTS.md` requires agents editing or importing business modules to read
+  `src/libs/modules/AGENTS.md`, `src/libs/modules/README.md`, and the affected module README before coding.
+- `src/libs/modules/AGENTS.md` requires agents to identify ownership, layer, public surface, and dependency direction;
+  run the architecture gate and focused validation; shrink only stale debt; and stop rather than accept new debt.
+  Neither instruction file duplicates the canonical dependency matrix or technical-package list.
+- The scanner ignores the catalog-level `src/libs/modules/AGENTS.md` as documentation and still discovers exactly the
+  business-module directories.
 - A compliant fixture containing only the layers it needs produces no violation; empty placeholder directories are
   unnecessary.
 - Every structural, placement, direction, technical-package, public-boundary, documentation-edge, barrel-escape, and
@@ -227,7 +269,8 @@ configuration.
   reducing coverage.
 - The pre-commit hook and the existing `validate` job invoke the same check command. A failed workflow is reported,
   without claiming GitHub blocks merge or direct push under the repository's current private-plan limitation.
-- `package.json` gains no dependency, `pnpm-lock.yaml` is unchanged, and application/runtime files are unchanged.
+- `package.json` gains no dependency, `pnpm-lock.yaml` is unchanged, and application TypeScript/runtime files are
+  unchanged.
 - Existing lint, typecheck, Jest, build, documentation lint, formatting, and whitespace checks pass.
 
 ## Validation
@@ -241,12 +284,14 @@ update behavior:
 
     corepack pnpm architecture:baseline
     corepack pnpm architecture:check
+    baseline_sha_before="$(sha256sum scripts/architecture/module-architecture-baseline.json)"
     corepack pnpm architecture:baseline
+    test "$baseline_sha_before" = "$(sha256sum scripts/architecture/module-architecture-baseline.json)"
     git diff --check
 
-The second baseline command must make no changes to files. The focused fixtures must explicitly prove new-debt,
-stale-entry, base-growth, duplicate-import, malformed-baseline, parse-failure, and missing-base bootstrap scenarios;
-do not create probe violations in real module files.
+The hash comparison proves that the second baseline command makes no byte-level change. The focused fixtures must
+explicitly prove new-debt, stale-entry, base-growth, duplicate-import, malformed-baseline, parse-failure, and
+missing-base bootstrap scenarios; do not create probe violations in real module files.
 
 Run repository validation:
 
@@ -258,13 +303,22 @@ Run repository validation:
 
 Validate all materially edited English Markdown with Harper and check its formatting:
 
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md src/libs/modules/README.md
-    corepack pnpm exec prettier --check .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md src/libs/modules/README.md
+    corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md
+    corepack pnpm exec prettier --check AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md
+
+Inspect the instruction bridge and scoped workflow directly:
+
+    test -f src/libs/modules/AGENTS.md
+    rg -n -F "src/libs/modules/AGENTS.md" AGENTS.md
+    rg -n -F "src/libs/modules/README.md" AGENTS.md src/libs/modules/AGENTS.md
+    rg -n -F "architecture:check" src/libs/modules/AGENTS.md
+    rg -n -F "architecture:baseline" src/libs/modules/AGENTS.md
 
 Inspect `git diff --name-only` and `git diff -- package.json pnpm-lock.yaml` to confirm there is no dependency or
-lockfile change and no application source change. Inspect the workflow diff to confirm the base SHA expression and
-full-history checkout remain present. The eventual pull request's live workflow proves GitHub execution; under the
-verified private-repository limitation, branch-protection enforcement remains unavailable rather than unverified.
+lockfile change and no application TypeScript/runtime source change. Inspect the workflow diff to confirm the base SHA
+expression and full-history checkout remain present. The eventual pull request's live workflow proves GitHub
+execution; under the verified private-repository limitation, branch-protection enforcement remains unavailable
+rather than unverified.
 
 No container, database, or Bruno execution is required. Bruno is not applicable because this plan changes internal
 architecture tooling and documentation without changing HTTP behavior.
@@ -289,10 +343,10 @@ comparison.
 ## Artifacts and Notes
 
 Record the final baseline count grouped by rule, the stable checker output, focused-test count, full validation
-results, exact Harper command/result, and the live workflow result. Keep one concise note that the GitHub protection
-and rule set APIs returned HTTP 403 for this private repository so later work does not mistake a green workflow for a
-merge policy that cannot be bypassed. Do not record tokens, absolute developer-specific paths in the baseline, or
-unrelated repository state.
+results, the final root/scoped agent workflow, exact Harper command/result, and the live workflow result. Keep one
+concise note that the GitHub protection and rule set APIs returned HTTP 403 for this private repository so later work
+does not mistake a green workflow for a merge policy that cannot be bypassed. Do not record tokens, absolute
+developer-specific paths in the baseline, or unrelated repository state.
 
 ## Plan readiness
 

@@ -1,13 +1,13 @@
 # Business Module Architecture Road Map
 
-This road map turns `src/libs/modules/README.md` into an enforceable architecture contract, removes the current
-violations in bounded pull requests, and finishes with a strict zero-baseline gate. Each plan follows
-`.agents/PLANS.md` and represents exactly one pull request.
+This road map turns `src/libs/modules/README.md` into agent guidance backed by an executable architecture contract,
+removes the current violations in bounded pull requests, and finishes with a strict zero-violation gate. Each plan
+follows `.agents/PLANS.md` and represents exactly one pull request.
 
 ## Order and Dependencies
 
-1. [Ratchet business-module architecture](01-ratchet-business-module-architecture.md) — depends on
-   `module-boundaries/08` and `module-readmes/01`.
+1. [Ratchet business-module architecture](01-ratchet-business-module-architecture.md) — publishes the root/scoped
+   agent workflow and ratcheted checker; depends on `module-boundaries/08` and `module-readmes/01`.
 2. [Introduce identity persistence ports](02-introduce-identity-persistence-ports.md) — depends on
    `module-architecture/01`.
 3. [Make auth and BFF session acyclic and layered](03-make-auth-and-bff-session-acyclic-and-layered.md) — depends
@@ -28,8 +28,10 @@ violations in bounded pull requests, and finishes with a strict zero-baseline ga
     depends on `module-architecture/05` and `module-architecture/08`.
 11. [Layer email-verification delivery workflows](11-layer-email-verification-delivery-workflows.md) — depends on
     `module-architecture/03`, `module-architecture/04`, and `module-architecture/10`.
-12. [Retire the module-architecture baseline](12-retire-module-architecture-baseline.md) — depends on
-    `module-architecture/05`, `module-architecture/08`, `module-architecture/09`, and `module-architecture/11`.
+12. [Retire the module-architecture baseline](12-retire-module-architecture-baseline.md) — removes transitional
+    baseline-maintenance wording from agent guidance and deletes the debt baseline while retaining the strict
+    workflow; depends on `module-architecture/05`, `module-architecture/08`, `module-architecture/09`, and
+    `module-architecture/11`.
 
 ## Shared Constraints
 
@@ -40,10 +42,13 @@ violations in bounded pull requests, and finishes with a strict zero-baseline ga
   not contracts.
 - Plan 01 records every existing violation by stable identity. Later plans may only remove baseline entries; they
   must not exchange one violation for another or expand the baseline.
+- Plan 01 also publishes the coding-agent workflow through a root `AGENTS.md` trigger and
+  `src/libs/modules/AGENTS.md`. Both files point to the canonical module guide and executable gate. Plan 12 removes
+  their transitional baseline-maintenance language when the checker becomes a strict zero-violation command.
 - Refactors preserve routes, DTO validation, authorization, persistence behavior, queue contracts, provider
   compensation, and runtime configuration unless a plan explicitly states otherwise.
 - No plan introduces a TypeORM migration while the project has no production environment. Incompatible development
   schema changes use disposable synchronized data with documented reset and reseed steps.
 - The repository is currently private on a GitHub plan that returns HTTP 403 responses for branch-protection and
-  rule set APIs. The validation workflow and pre-commit hook can detect violations, but GitHub cannot be claimed to block a
-  red merge or direct push until repository capabilities change.
+  rule set APIs. After Plan 01 lands, the validation workflow and pre-commit hook can detect violations, but GitHub
+  cannot be claimed to block a red merge or direct push until repository capabilities change.

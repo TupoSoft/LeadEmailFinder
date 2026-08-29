@@ -9,14 +9,16 @@ cleanup is complete, the repository no longer carries a violation baseline or a 
 `corepack pnpm architecture:check` scans the current tree and fails on any violation. A developer can observe the
 result through an absent `scripts/architecture/module-architecture-baseline.json` and strict checker fixtures that
 reject each forbidden edge. A clean repository-wide run also proves unchanged end-to-end application behavior across
-the major HTTP, queue, SMTP, storage, identity, proxy, and payment workflows.
+the major HTTP, queue, SMTP, storage, identity, proxy, and payment workflows. Active root and module-scoped
+`AGENTS.md` guidance contains no baseline-maintenance path, and the scoped workflow requires every coding agent to
+finish with a clean strict check.
 
 ## Progress
 
 - [ ] (2026-08-29) Reconcile the final checker report and prove every prerequisite removed its assigned violation keys.
 - [ ] (2026-08-29) Remove the baseline artifact, shrink-only updater, bootstrap path, and base-revision debt logic.
 - [ ] (2026-08-29) Make `architecture:check` require zero violations and strengthen strict regression fixtures.
-- [ ] (2026-08-29) Update architecture documentation and CI to describe the permanent zero-violation invariant.
+- [ ] (2026-08-29) Update agent instructions, architecture documentation, and CI for the permanent zero-violation invariant.
 - [ ] (2026-08-29) Complete focused, full, runtime, Bruno, documentation, and recovery validation.
 
 ## Plan dependencies
@@ -55,6 +57,12 @@ None yet.
   position introduced by plan 01; change only the accepted count and remove transitional machinery.
   Rationale: Developers should not learn a second enforcement tool when the ratchet reaches zero.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: Preserve the root `AGENTS.md` bridge unless it contains stale ratchet wording, and update
+  `src/libs/modules/AGENTS.md` to remove the shrink-only baseline workflow while preserving its pointer to the
+  canonical module contract.
+  Rationale: current coding-agent instructions must describe the command that exists after this pull request; leaving
+  a removed updater in active guidance would create an unsafe and impossible completion path.
+  Date/Author: 2026-08-29, Codex planning.
 - Decision: Make no application, schema, queue, provider, or configuration change and add no migration or rollout
   mechanism.
   Rationale: This plan closes enforcement after the behavior-preserving module refactors; it must not hide new feature
@@ -86,12 +94,18 @@ hook remain enforcement signals, but the verified GitHub plan currently provides
 that can make the workflow an unavoidable merge boundary. This plan removes only the temporary debt-accounting path
 and proves the complete repository still meets both architecture and runtime contracts.
 
+Plan 01 also adds a root `AGENTS.md` trigger and `src/libs/modules/AGENTS.md` workflow. During the ratchet phase, the
+scoped instructions allow the shrink-only baseline command only for stale entries produced by removing known debt and
+forbid baseline growth. Once this plan removes the updater, the root bridge must remain valid and the scoped file must
+require only the strict read-only check; neither file may contain active baseline-maintenance direction.
+
 ## Scope and Non-Goals
 
 Verify zero current violations and simplify the architecture checker to reject any nonempty scan result. Delete the
 baseline JSON, shrink/bootstrap updater, package command, base-SHA input, and their obsolete tests. Add strict clean
-and violating fixtures; update CI, module architecture documentation, the road map, plan outcomes, and developer
-guidance; and run the final repository-wide validation matrix.
+and violating fixtures; update CI and the module-scoped `AGENTS.md` instructions; audit the root `AGENTS.md` bridge;
+update module architecture documentation, the road map, plan outcomes, and developer guidance; and run the final
+repository-wide validation matrix.
 
 Do not weaken, rename, or exclude an architecture rule to reach zero. Do not add another baseline, allow list,
 grandfathered path, warning mode, inline suppression, or changed-files-only scan. Do not refactor application code in
@@ -116,7 +130,11 @@ Delete `scripts/architecture/module-architecture-baseline.json`. Remove `archite
 and remove any updater CLI file that has no strict-check responsibility. Remove `ARCHITECTURE_BASE_SHA` setup from
 `.github/workflows/validate.yml`; keep the architecture check in the required validation job and keep complete-tree
 behavior. Search scripts, workflows, plans, module documentation, and tests for stale baseline/bootstrap/shrink
-instructions.
+instructions. Audit the root `AGENTS.md` bridge and update it only if it contains transitional wording. Update
+`src/libs/modules/AGENTS.md` in the same pass: retain the requirement to read the canonical modules guide and affected
+module README, identify ownership and dependency direction, and run focused validation, but remove every instruction
+to invoke or maintain a baseline. Require `architecture:check` to pass with zero violations and direct an agent that
+cannot satisfy the contract to update or create an ExecPlan rather than add an exception.
 Historical completed ExecPlans retain truthful recorded evidence, but current developer guidance must describe the
 zero-violation command.
 
@@ -126,11 +144,12 @@ framework/infrastructure import from domain or application, invalid public barre
 Each violating fixture must fail without a baseline and identify the stable source/target. Add a repository fixture
 that scans the actual checkout and expects an empty list.
 
-Update `src/libs/modules/README.md` and `.agents/plans/module-architecture/README.md` so contributors run only
+Update the active guidance in `AGENTS.md`, `src/libs/modules/AGENTS.md`, `src/libs/modules/README.md`, and
+`.agents/plans/module-architecture/README.md` so agents and contributors run only
 `corepack pnpm architecture:check` and understand that any violation fails the local gate and Validate workflow. Do
-not claim that GitHub blocks merge or direct push unless repository capabilities are verified again and configured. Then
-run the final static, full, PostgreSQL, Compose, Bruno, and documentation matrix. No runtime code should differ in
-this plan; any behavior failure is evidence of incomplete prerequisite validation, not permission to suppress the
+not claim that GitHub blocks merge or direct push unless repository capabilities are verified again and configured.
+Then run the final static, full, PostgreSQL, Compose, Bruno, and documentation matrix. No runtime code should differ
+in this plan; any behavior failure is evidence of incomplete prerequisite validation, not permission to suppress the
 test.
 
 ## Interfaces and Dependencies
@@ -146,7 +165,8 @@ continues to implement the exact module contract and rule categories established
 
 No application TypeScript API, HTTP API, queue, database, storage, provider, environment variable, or external
 dependency changes. The plan depends on the last cleanup for each transitive branch of the road map and unlocks the
-permanent required architecture gate with no legacy allowance.
+permanent required architecture gate with no legacy allowance. The root and module-scoped `AGENTS.md` files remain
+developer instruction surfaces, but their only architecture command is the read-only strict check.
 
 ## Acceptance Criteria
 
@@ -162,28 +182,35 @@ permanent required architecture gate with no legacy allowance.
 - No ignored module path, inline architecture suppression, allow list, grandfathered key, or warning-only rule exists.
 - `src/libs/modules/README.md` and the road map describe zero-violation enforcement and no longer instruct developers
   to update a baseline.
+- The root `AGENTS.md` still delegates business-module work to the scoped workflow, and
+  `src/libs/modules/AGENTS.md` requires the strict `architecture:check`. Neither file contains a baseline command or
+  maintenance workflow, and both continue to point to the canonical guide rather than duplicating its rule matrix.
 - All module public barrels remain narrow, all cross-module imports use bare public aliases, domain/application code
   is framework-independent, and infrastructure/API dependencies point inward.
 - Focused architecture tests, full static/test/build validation, real-PostgreSQL integration tests, Compose health,
   and the representative Bruno matrix pass.
-- No application source, database schema, queue protocol, provider behavior, configuration, or migration changes in
-  this pull request.
+- No application TypeScript/runtime source, database schema, queue protocol, provider behavior, configuration, or
+  migration changes in this pull request.
 
 ## Validation
 
 Before deleting transitional files, require and record the zero state:
 
     corepack pnpm architecture:check
+    baseline_sha_before="$(sha256sum scripts/architecture/module-architecture-baseline.json)"
     corepack pnpm architecture:baseline
-    git diff --exit-code -- scripts/architecture/module-architecture-baseline.json
+    test "$baseline_sha_before" = "$(sha256sum scripts/architecture/module-architecture-baseline.json)"
 
-Inspect the JSON and require `violations` to be `[]`. The no-diff baseline command proves there is no stale debt left;
-it is then removed by this plan. After the change, run:
+Inspect the JSON and require `violations` to be `[]`. The byte-identical baseline command proves there is no stale
+debt left regardless of index state; the baseline is then removed by this plan. After the change, run:
 
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/architecture/module-architecture.spec.ts --runInBand
     corepack pnpm architecture:check
     test ! -e scripts/architecture/module-architecture-baseline.json
-    ! rg -n "architecture:baseline|ARCHITECTURE_BASE_SHA|module-architecture-baseline" package.json scripts/architecture .github/workflows/validate.yml src/libs/modules/README.md .agents/plans/module-architecture/README.md
+    test -f src/libs/modules/AGENTS.md
+    rg -n -F "src/libs/modules/AGENTS.md" AGENTS.md
+    ! rg -n "architecture:baseline|ARCHITECTURE_BASE_SHA|module-architecture-baseline" AGENTS.md package.json scripts/architecture .github/workflows/validate.yml src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md
+    ! rg -n "baseline|bootstrap|shrink" AGENTS.md src/libs/modules/AGENTS.md
 
 The focused test must include the actual-repository zero fixture and one rejecting fixture per rule category. Run
 the final static and PostgreSQL matrix:
@@ -211,7 +238,8 @@ bounded batch completion, durable result download, and a healthy API after all c
 
 Finish documentation and repository checks:
 
-    corepack pnpm docs:lint -- src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md
+    corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md
+    corepack pnpm exec prettier --check AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md
     git diff --check
 
 Bruno: no new requests are expected in this enforcement-only pull request, but the complete representative matrix is
@@ -231,9 +259,9 @@ another checkout's containers and all unrelated user changes. There is no migrat
 ## Artifacts and Notes
 
 Record the pre-removal zero baseline and current-scan counts, deleted transitional files/commands, strict fixture
-matrix, final architecture output, full/static/PostgreSQL totals, each Bruno collection total, Compose health, and
-documentation result. Do not record tokens, Keycloak or Paddle secrets, raw webhook bodies, customer CSV data,
-database credentials, or other sensitive runtime values.
+matrix, final architecture output, updated root/scoped agent workflow, full/static/PostgreSQL totals, each Bruno
+collection total, Compose health, and documentation result. Do not record tokens, Keycloak or Paddle secrets, raw
+webhook bodies, customer CSV data, database credentials, or other sensitive runtime values.
 
 ## Plan readiness
 
