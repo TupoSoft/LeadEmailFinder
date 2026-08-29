@@ -1,0 +1,25 @@
+info:
+    name: 14-replay-debit-adjustment
+    type: http
+    seq: 14
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/payments/webhook'
+    headers:
+        - name: Content-Type
+          value: application/json
+        - name: Paddle-Signature
+          value: '{{debitAdjustmentSignature}}'
+    body:
+        type: text
+        data: '{{debitAdjustmentBody}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('acknowledges a replayed debit adjustment', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body).to.deep.equal({ received: true });
+              });

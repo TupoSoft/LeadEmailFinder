@@ -37,6 +37,9 @@ export class CreditPurchase {
     @Column({ type: 'enum', enum: CreditPurchaseStatus, default: CreditPurchaseStatus.PENDING })
     status: CreditPurchaseStatus
 
+    @Column({ type: 'timestamptz', nullable: true })
+    creditsGrantedAt?: Date | null
+
     @CreateDateColumn()
     createdAt: Date
 

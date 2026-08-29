@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
 import { PaymentEvent } from './payment-provider'
 import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore, PurchaseReferenceConflictError } from './payment-purchase.store'
 
@@ -10,10 +11,16 @@ export class PaymentEventHandler {
     constructor(
         @Inject(PAYMENT_PURCHASE_STORE) private readonly purchases: PaymentPurchaseStore,
         private readonly credits: CreditsService,
+        private readonly adjustmentHandler: PaymentAdjustmentHandler,
     ) {}
 
     async handle(event: PaymentEvent): Promise<void> {
         if (event.kind === 'ignored') return
+
+        if (event.kind === 'purchase_adjustment_debit' || event.kind === 'purchase_adjustment_restore') {
+            if (!(await this.adjustmentHandler.handle(event))) this.logUnknown(event)
+            return
+        }
 
         const correlation = { providerReference: event.providerReference, purchaseId: event.purchaseId }
 
@@ -23,6 +30,7 @@ export class PaymentEventHandler {
                 if (!purchase) return this.logUnknown(event)
 
                 await this.credits.credit(purchase.organizationId, purchase.credits, purchase.id)
+                await this.purchases.recordCreditsGranted(purchase.id)
                 return
             }
 

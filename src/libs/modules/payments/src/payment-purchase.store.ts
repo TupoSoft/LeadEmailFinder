@@ -23,5 +23,6 @@ export class PurchaseReferenceConflictError extends Error {
 
 export interface PaymentPurchaseStore {
     recordPaid(correlation: PurchaseCorrelation): Promise<PaidPurchase | null>
+    recordCreditsGranted(purchaseId: string): Promise<void>
     recordFailed(correlation: PurchaseCorrelation): Promise<boolean>
 }

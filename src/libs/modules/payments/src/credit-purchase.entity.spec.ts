@@ -14,8 +14,12 @@ describe('CreditPurchase', () => {
                 index.columns.includes('organizationId')
             )
         })
+        const creditsGrantedAt = metadata.columns.find(
+            column => column.target === CreditPurchase && column.propertyName === 'creditsGrantedAt',
+        )
 
         expect(providerReference?.options).toMatchObject({ type: 'varchar', nullable: true, unique: true })
         expect(organizationIndex).toBeDefined()
+        expect(creditsGrantedAt?.options).toMatchObject({ type: 'timestamptz', nullable: true })
     })
 })

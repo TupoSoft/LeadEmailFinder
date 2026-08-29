@@ -64,10 +64,54 @@ export class PaddlePaymentProvider implements PaymentProvider {
                     providerReference: event.data.id,
                     purchaseId: extractPurchaseId(event.data.customData),
                 }
+            case EventName.AdjustmentCreated:
+            case EventName.AdjustmentUpdated:
+                return mapAdjustmentEvent(event.eventId, event.data)
             default:
                 return { kind: 'ignored', providerEventId: event.eventId }
         }
     }
+}
+
+interface PaddleAdjustmentData {
+    id: string
+    action: string
+    status: string
+    transactionId: string
+    currencyCode: string
+    totals: { subtotal: string }
+}
+
+function mapAdjustmentEvent(providerEventId: string, adjustment: PaddleAdjustmentData): PaymentEvent {
+    if (adjustment.status !== 'approved') return { kind: 'ignored', providerEventId }
+
+    const debitActions = new Set(['refund', 'credit', 'chargeback'])
+    const restoreActions = new Set(['chargeback_reverse', 'credit_reverse'])
+    if (!debitActions.has(adjustment.action) && !restoreActions.has(adjustment.action)) {
+        return { kind: 'ignored', providerEventId }
+    }
+
+    const amountMinor = parseAdjustmentAmount(adjustment.totals.subtotal)
+    if (!/^[A-Z]{3}$/.test(adjustment.currencyCode)) {
+        throw new Error('Invalid Paddle adjustment currency')
+    }
+
+    return {
+        kind: debitActions.has(adjustment.action) ? 'purchase_adjustment_debit' : 'purchase_adjustment_restore',
+        providerEventId,
+        providerReference: adjustment.transactionId,
+        providerAdjustmentId: adjustment.id,
+        amountMinor,
+        currency: adjustment.currencyCode,
+    }
+}
+
+function parseAdjustmentAmount(value: string): number {
+    if (!/^\d+$/.test(value)) throw new Error('Invalid Paddle adjustment amount')
+
+    const amount = Number(value)
+    if (!Number.isSafeInteger(amount)) throw new Error('Invalid Paddle adjustment amount')
+    return amount
 }
 
 // The signed event has already been verified by this point; customData is otherwise untyped provider input,

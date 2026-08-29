@@ -14,6 +14,42 @@ function createSdkProvider(): PaddlePaymentProvider {
 }
 
 function serializeEvent(event: PaymentEvent): Buffer {
+    if (event.kind === 'purchase_adjustment_debit' || event.kind === 'purchase_adjustment_restore') {
+        return Buffer.from(
+            JSON.stringify({
+                event_id: event.providerEventId,
+                event_type: 'adjustment.created',
+                occurred_at: new Date().toISOString(),
+                notification_id: `notification-${event.providerEventId}`,
+                data: {
+                    id: event.providerAdjustmentId,
+                    action: event.kind === 'purchase_adjustment_debit' ? 'refund' : 'credit_reverse',
+                    type: 'partial',
+                    transaction_id: event.providerReference,
+                    subscription_id: null,
+                    customer_id: 'customer-id',
+                    reason: 'contract test',
+                    credit_applied_to_balance: false,
+                    currency_code: event.currency,
+                    status: 'approved',
+                    items: [],
+                    totals: {
+                        subtotal: String(event.amountMinor),
+                        tax: '0',
+                        total: String(event.amountMinor),
+                        fee: '0',
+                        earnings: String(event.amountMinor),
+                        currency_code: event.currency,
+                        retained_fee: '0',
+                    },
+                    payout_totals: null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                },
+            }),
+        )
+    }
+
     const eventType =
         event.kind === 'purchase_paid'
             ? 'transaction.completed'
@@ -110,7 +146,67 @@ describe('PaddlePaymentProvider', () => {
         ).rejects.toBeInstanceOf(PaddleCheckoutUrlMissingError)
     })
 
-    it('ignores adjustment events reserved for refund handling', async () => {
+    const adjustmentActions = [
+        'refund',
+        'credit',
+        'chargeback',
+        'chargeback_reverse',
+        'credit_reverse',
+        'chargeback_warning',
+        'chargeback_warning_reverse',
+    ] as const
+    const adjustmentStatuses = ['pending_approval', 'approved', 'rejected', 'reversed'] as const
+    const adjustmentEventTypes = ['adjustment.created', 'adjustment.updated'] as const
+
+    it.each(
+        adjustmentEventTypes.flatMap(eventType =>
+            adjustmentActions.flatMap(action =>
+                adjustmentStatuses.map(status => ({ eventType, action, status })),
+            ),
+        ),
+    )('maps $eventType $action/$status to the accounting contract', async ({ eventType, action, status }) => {
+        const provider = new PaddlePaymentProvider(
+            {
+                transactions: { create: jest.fn() },
+                webhooks: {
+                    unmarshal: jest.fn().mockResolvedValue({
+                        eventId: 'event-adjustment',
+                        eventType,
+                        data: {
+                            id: 'adjustment-id',
+                            action,
+                            status,
+                            transactionId: 'transaction-id',
+                            currencyCode: 'USD',
+                            totals: { subtotal: '250', total: '300' },
+                        },
+                    }),
+                },
+            } as unknown as PaddleClient,
+            webhookSecret,
+        )
+
+        const debit = status === 'approved' && ['refund', 'credit', 'chargeback'].includes(action)
+        const restore = status === 'approved' && ['chargeback_reverse', 'credit_reverse'].includes(action)
+        const expected: PaymentEvent =
+            debit || restore
+                ? {
+                      kind: debit ? 'purchase_adjustment_debit' : 'purchase_adjustment_restore',
+                      providerEventId: 'event-adjustment',
+                      providerReference: 'transaction-id',
+                      providerAdjustmentId: 'adjustment-id',
+                      amountMinor: 250,
+                      currency: 'USD',
+                  }
+                : { kind: 'ignored', providerEventId: 'event-adjustment' }
+
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual(expected)
+    })
+
+    it.each([
+        [{ subtotal: 'not-money' }, 'USD', 'Invalid Paddle adjustment amount'],
+        [{ subtotal: '250' }, 'usd', 'Invalid Paddle adjustment currency'],
+    ])('rejects malformed approved adjustment accounting fields', async (totals, currencyCode, message) => {
         const provider = new PaddlePaymentProvider(
             {
                 transactions: { create: jest.fn() },
@@ -118,16 +214,20 @@ describe('PaddlePaymentProvider', () => {
                     unmarshal: jest.fn().mockResolvedValue({
                         eventId: 'event-adjustment',
                         eventType: 'adjustment.created',
-                        data: { id: 'adjustment-id' },
+                        data: {
+                            id: 'adjustment-id',
+                            action: 'refund',
+                            status: 'approved',
+                            transactionId: 'transaction-id',
+                            currencyCode,
+                            totals,
+                        },
                     }),
                 },
             } as unknown as PaddleClient,
             webhookSecret,
         )
 
-        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).resolves.toEqual({
-            kind: 'ignored',
-            providerEventId: 'event-adjustment',
-        })
+        await expect(provider.parseEvent(Buffer.from('{}'), 'signature')).rejects.toThrow(message)
     })
 })

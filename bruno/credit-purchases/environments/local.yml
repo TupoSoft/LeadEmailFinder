@@ -2,8 +2,6 @@ name: local
 variables:
     - name: baseUrl
       value: http://localhost:53000
-    - name: ownerAccessToken
-      value: '{{process.env.OWNER_ACCESS_TOKEN}}'
     - name: oidcIssuerUrl
       value: '{{process.env.OIDC_ISSUER_URL}}'
     - name: serviceClientId

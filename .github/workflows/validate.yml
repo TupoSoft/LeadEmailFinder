@@ -70,6 +70,11 @@ jobs:
           TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
 
+      - name: Test payment adjustments against a real database
+        env:
+          TEST_PAYMENT_WEBHOOK_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
+        run: corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand
+
       - name: Build application
         run: corepack pnpm build
 

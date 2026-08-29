@@ -55,6 +55,23 @@ export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
         })
     }
 
+    recordCreditsGranted(purchaseId: string): Promise<void> {
+        return this.dataSource.transaction(async manager => {
+            const purchase = await manager.findOne(CreditPurchase, {
+                where: { id: purchaseId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            if (!purchase) throw new Error(`Unknown paid purchase: ${purchaseId}`)
+            if (purchase.status !== CreditPurchaseStatus.PAID) {
+                throw new Error(`Cannot complete the credit grant for unpaid purchase: ${purchaseId}`)
+            }
+            if (purchase.creditsGrantedAt) return
+
+            purchase.creditsGrantedAt = new Date()
+            await manager.save(CreditPurchase, purchase)
+        })
+    }
+
     // Resolves by provider reference first; a purchase ID is only a fallback for a completion event
     // that arrives before checkout creation persists the reference, and never overrides an established one.
     private async resolvePurchase(

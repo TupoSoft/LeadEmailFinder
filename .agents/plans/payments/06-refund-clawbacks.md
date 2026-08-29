@@ -4,20 +4,27 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
-Stop refunds and chargebacks from becoming free credits without double-debiting when Paddle later reverses an
-adjustment. After this change, an approved debit-causing adjustment removes no more than the credits attributable to
-that purchase, an inverse adjustment restores only the credits previously removed, and every applied amount or
-shortfall is durably recoverable. A developer can observe it by refunding a sandbox transaction, replaying the event,
-and then exercising an inverse adjustment without any duplicate balance movement.
+Stop refunds and chargebacks from becoming free credits without double-moving the balance when Paddle later reverses
+an adjustment. After this change, an approved debit-causing adjustment removes no more than the credits attributable
+to that purchase, an inverse adjustment restores only the credits previously removed, and every applied amount or
+shortfall is durably recoverable. A developer can observe it through the repeatable stub-provider Bruno workflow, the
+real-PostgreSQL recovery suite, and a Paddle sandbox refund when sandbox credentials are available.
 
 ## Progress
 
 - [x] (2026-08-29) Settle the insufficient-balance policy: clamp the debit to the available balance, record the
   shortfall, and never make the credit balance negative.
-- [ ] (2026-08-28) Normalize Paddle debit, restore, and ignored adjustment actions into explicit provider-event variants.
-- [ ] (2026-08-28) Add a durable adjustment state machine that serializes purchase accounting and converges after partial failure.
-- [ ] (2026-08-28) Add full, partial, inverse, insufficient-balance, replay, and concurrent-adjustment coverage.
-- [ ] (2026-08-28) Run typecheck, lint, Jest, Bruno, and sandbox refund and inverse-adjustment passes.
+- [x] (2026-08-29) Normalize Paddle debit, restore, and ignored adjustment actions into explicit provider-event
+  variants, using the signed adjustment subtotal as the comparable pretax amount.
+- [x] (2026-08-29) Add a durable adjustment state machine that serializes purchase accounting and converges after
+  partial failure.
+- [x] (2026-08-29) Add full, partial, inverse, insufficient-balance, replay, concurrency, ordering, and injected-failure
+  coverage, including 20 passing scenarios against a freshly synchronized PostgreSQL schema.
+- [x] (2026-08-29) Complete the full typecheck, lint, Jest, build, Harper, diff, and plan-sync validation pass.
+- [x] (2026-08-29) Run the 19-request Bruno workflow against a freshly built local stub-provider stack; all 19
+  requests and tests passed with Bruno CLI 4.0.0.
+- [ ] (2026-08-29) Run a Paddle sandbox purchase, approved refund, replay, and provider-generated inverse adjustment
+  when sandbox credentials and an inverse-producing scenario are available.
 
 ## Plan dependencies
 
@@ -38,16 +45,37 @@ and then exercising an inverse adjustment without any duplicate balance movement
 - Plan `payments/08` changed paid and failed event correlation to `PurchaseCorrelation` and added the
   purchase-ID/reference conflict contract. This plan must extend the current contract rather than restoring the
   provider-reference-only lookup from plan 04.
+- Paddle adjustment `totals.total` includes tax, while the stored catalog price is the pack's pretax base amount.
+  `totals.subtotal` is therefore the comparable amount for proportional credit accounting.
+- Paddle does not attach an original-adjustment ID to an inverse adjustment. It instead marks the original adjustment
+  `reversed` while delivering a separate `chargeback_reverse` or `credit_reverse` entity. The separate approved inverse
+  entity is the sole restore authority; the original `reversed` update must remain ignored.
+- Marking a purchase paid and granting its credits are separate transactions. Without another durable marker, an
+  adjustment can observe `paid` before the credit grant exists and incorrectly clamp to zero. `creditsGrantedAt` closes
+  this race by keeping the adjustment retryable until the original ledger grant commits.
+- Rounding each partial event independently loses many sub-credit adjustments. Calculating the target from cumulative
+  net minor units applies the rounding once, preserves customer-favorable flooring, and converges for inverse-before-
+  debit and debit-to-restore-to-debit orderings.
+- Jest skips environment-gated integration suites during the ordinary full suite. The validation workflow needed a
+  dedicated serial `TEST_PAYMENT_WEBHOOK_POSTGRES_URL` step so the adjustment lock and recovery contract is a CI gate.
+- Bruno CLI 4 runs collection scripts in a sandbox without global `fetch` or `URL`. The collection-level client-
+  credentials bootstrap must use `bru.sendRequest`, and the stub checkout reference is extracted with a regular
+  expression so the same collection works in the desktop app and current CLI.
 
 ## Decision Log
 
-- Decision: Reversal is a debit through `CreditsService.debit`, not a status change on the purchase.
-  Rationale: `debit` already locks the account row and uses the idempotency ledger, and the balance must move by the same mechanism spending uses. The purchase status records what happened to the sale; the ledger records what happened to the balance.
+- Decision: A debit-causing adjustment uses the adjustment-only `CreditsService.debitUpTo` operation, not a purchase
+  status change or the strict spending debit.
+  Rationale: The operation locks the account, records even a zero result under a unique ledger reference, and reports
+  the amount applied so payments can persist exact shortfall. `CreditsService.debit` remains strict, preserving the
+  existing insufficient-credit exception and HTTP `402` behavior for verification work.
   Date/Author: 2026-08-17, project planning.
 - Decision: The debit reference is derived from the provider adjustment id, not the purchase id.
-  Rationale: One purchase can be refunded in several partial adjustments, so keying on the purchase id would silently drop every reversal after the first. The adjustment id makes each reversal distinct and each redelivery idempotent.
+  Rationale: One purchase can be refunded in several partial adjustments, so keying on the purchase id would silently
+  drop every debit-causing adjustment after the first. The adjustment id makes each adjustment distinct and each
+  redelivery idempotent.
   Date/Author: 2026-08-17, project planning.
-- Decision: Only approved reversals move the balance.
+- Decision: Only approved debit-causing or inverse adjustments move the balance.
   Rationale: Paddle creates most refunds in live accounts as `pending_approval` and can later reject them. Clawing back on creation would remove credits for refunds that never happen, so the handler acts on the approved state and ignores pending and rejected ones.
   Date/Author: 2026-08-17, project planning.
 - Decision: Approved `refund`, `credit`, and `chargeback` actions request a debit; `chargeback_warning` and the related reverse action
@@ -77,17 +105,51 @@ and then exercising an inverse adjustment without any duplicate balance movement
   collections or suspension policy, and lets an inverse adjustment clear the recorded shortfall before restoring
   only credits that were actually debited.
   Date/Author: 2026-08-29, project owner.
+- Decision: Calculate each new movement as the difference between cumulative proportional credit targets, using the
+  net debit-minus-restore subtotal capped to the purchase amount.
+  Rationale: One cumulative floor is customer-favorable without allowing repeated tiny adjustments to evade clawback,
+  and it permits a legitimate later debit after a completed debit and inverse cycle.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Treat approved inverse-action entities as the only restore events and ignore an original adjustment whose
+  status later becomes `reversed`.
+  Rationale: Paddle emits both records for one financial reversal. Applying both would restore the same credits twice,
+  while the inverse entity has its own provider adjustment ID for durable idempotency.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Record both `originalShortfallCredits` and mutable `shortfallCredits` on a debit adjustment.
+  Rationale: Inverse claims reserve and clear outstanding shortfall before restoring applied debits, while the original
+  field retains the audit record of what could not be collected.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Namespace credit-ledger references as `payment-adjustment:<providerAdjustmentId>:<direction>` and retry an
+  opposite-direction event while a claim is incomplete.
+  Rationale: The namespace prevents collision with purchase grants, and delaying the opposite direction avoids
+  calculating a restore from an applied debit whose completion record is not yet durable.
+  Date/Author: 2026-08-29, Codex implementation.
+- Decision: Persist `creditsGrantedAt` only after the original credit ledger grant succeeds.
+  Rationale: Paid status alone is not proof that the balance contains the purchased credits. The marker fences
+  adjustment claims from that transaction gap without coupling the payments repository to credit tables.
+  Date/Author: 2026-08-29, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The provider, application, persistence, and credit-ledger changes are implemented. Focused unit tests and 20 payment
+adjustment plus eight credit-ledger scenarios pass against real PostgreSQL, including forced lock overlap, both inverse
+orderings, exact shortfall recovery, grant fencing, and failures before and after ledger application. The full
+repository validation and 19-request stub-provider Bruno workflow pass. No material SOLID violation was found: the
+provider adapter normalizes Paddle, the application handler orchestrates, the pure accounting function owns the
+calculation, the store owns locking and adjustment persistence, and credits owns ledger mutation.
+
+The Paddle sandbox purchase/refund pass was not run because this worktree had no Paddle secret files. A seller also
+cannot manufacture Paddle's provider-generated chargeback or credit inverse actions, so a live inverse proof requires
+an external scenario that produces one. The fixture now documents the approved-refund, replay, and optional inverse
+procedure without representing that manual path as green. No migration was added; disposable development schemas use
+TypeORM synchronization as required.
 
 ## Context and Orientation
 
-Plan 04 grants credits on `purchase_paid` and originally mapped everything else to `ignored`. The adapter from plan 05 still
-maps adjustment events to `ignored`, leaving them for this plan. Plan 07 provides the reusable Paddle sandbox checkout,
-managed webhook destination, secret mounts, and recorded purchase flow that this plan extends. Plan 08 made event
-correlation safe when completion arrives before checkout creation stores the provider reference.
+Plan 04 introduced credit grants on `purchase_paid`, and plan 05 introduced the signed Paddle adapter. Plan 07 provides
+the reusable sandbox checkout, managed webhook destination, secret mounts, and recorded purchase flow. Plan 08 made
+event correlation safe when completion arrives before checkout creation stores the provider reference. This plan
+extends all four contracts with normalized adjustment events and a payments-owned adjustment state machine.
 
 Paddle delivers refunds, credits, and chargebacks as `adjustment.created` with an `action` of `refund`, `credit`, `chargeback`, or one of the reversal variants, and a `status` of `pending_approval`, `approved`, `rejected`, or `reversed`. An adjustment references its transaction, and amounts may be partial. `adjustment.updated` carries later status changes, so an approval that follows a `pending_approval` creation arrives on that event.
 
@@ -122,8 +184,13 @@ or returns the provider-adjustment record. Store requested credits, applied debi
 small processing state. Debit calculations round in the customer's favor and cap cumulative debit at granted credits;
 restore calculations first reduce shortfall and then cap re-crediting at credits previously debited.
 
+Fence claims with a payments-owned grant-completion timestamp set only after the original credit-ledger operation
+succeeds. Calculate the proportional target from cumulative net adjustment subtotals rather than rounding each event
+independently. Preserve the original shortfall for audit while reducing a separate outstanding shortfall as inverse
+claims reserve it.
+
 Make the credit-side operation idempotently return the amount applied for its adjustment reference, including on
-replay. `PaymentEventHandler` claims the adjustment, applies the credit operation, then records completion. A failure
+replay. `PaymentAdjustmentHandler` claims the adjustment, applies the credit operation, then records completion. A failure
 after claim or credit application remains retryable: replay returns the same claim, the credit ledger returns the same
 applied amount, and completion converges without recalculation. Keep purchase persistence and credit policy behind
 their existing module boundaries rather than letting a repository write another module's tables directly.
@@ -142,13 +209,14 @@ or backfill is added. Depends on plans 04, 05, 07, and 08.
 
 ## Acceptance Criteria
 
-- An approved full reversal removes exactly the credits that purchase granted.
-- An approved partial reversal removes the proportional share, rounded in the customer's favor.
-- Two partial reversals never remove more credits than the purchase granted.
-- Replaying a reversal event leaves the balance unchanged and returns `200`.
+- An approved full debit-causing adjustment removes exactly the credits that purchase granted when the available
+  balance is sufficient; otherwise it applies the settled clamp-and-shortfall policy.
+- An approved partial debit-causing adjustment removes the proportional share, rounded in the customer's favor.
+- Two partial debit-causing adjustments never remove more credits than the purchase granted.
+- Replaying a debit-causing adjustment event leaves the balance unchanged and returns `200`.
 - A `pending_approval` or `rejected` adjustment changes nothing.
 - An approved chargeback debits credits on the same path as a refund.
-- A chargeback warning and warning reversal change no balance or shortfall state.
+- `chargeback_warning` and `chargeback_warning_reverse` actions change no balance or shortfall state.
 - A `chargeback_reverse` or `credit_reverse` clears the attributable shortfall first, restores no more than credits
   actually debited, and is idempotent on replay.
 - A later `reversed` update for the original adjustment cannot restore the same movement a second time.
@@ -156,10 +224,16 @@ or backfill is added. Depends on plans 04, 05, 07, and 08.
   the balance at zero, and records the exact unapplied amount as a shortfall.
 - An organization with an outstanding shortfall still receives a clear `402` rather than a `500` on its next
   verification request.
-- A reversal for an unknown `providerReference` returns `200` and changes nothing.
+- A debit-causing adjustment for an unknown `providerReference` returns `200` and changes nothing.
 - Two distinct partial adjustments delivered concurrently cannot cumulatively debit more than the purchase granted.
 - A failure after adjustment claim, credit-ledger application, or adjustment completion converges on replay without a
   duplicate balance movement or lost shortfall.
+- An inverse event delivered before its debit event converges without creating or removing credits.
+- A debit, completed inverse, and later legitimate debit can each apply in sequence without stale cumulative caps.
+- A zero applied debit remains zero on replay after the account is replenished.
+- Reusing a provider adjustment ID with different financial details is rejected without another ledger movement.
+- An adjustment delivered after paid status but before the original credit grant completes remains retryable. It does
+  not debit before the grant-completion fence is set.
 
 ## Validation
 
@@ -178,6 +252,31 @@ Run `corepack pnpm typecheck`, `corepack pnpm lint`, the focused payment and cre
 plan 07 sandbox purchase, approved refund, replay, and inverse-adjustment scenario available in Paddle sandbox. Record
 any provider limitation without claiming that a path that did not run is green.
 
+Completed evidence on 2026-08-29:
+
+- `corepack pnpm typecheck` passed.
+- `corepack pnpm lint` passed with no errors. It reported only the two existing explicit-return-type warnings in
+  `load-secrets.spec.ts` and `parse-connection-string-options.factory.spec.ts`.
+- The focused payment and credit unit command passed 15 suites and 173 tests; the environment-gated integration suite
+  was skipped in that command and run explicitly below.
+- `TEST_PAYMENT_WEBHOOK_POSTGRES_URL=postgresql://postgres:postgres@localhost:55435/lef_payment_test corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand`
+  passed all 20 tests.
+- `TEST_CREDITS_POSTGRES_URL=postgresql://postgres:postgres@localhost:55435/lef_payment_test corepack pnpm test -- credits.service.integration.spec.ts --runInBand`
+  passed all eight tests.
+- `corepack pnpm test:ci` passed 135 suites and 957 tests; nine environment-gated suites were skipped, with 48 skipped
+  tests and one existing test marked as to-do.
+- `corepack pnpm build` passed with zero type-checking issues and compiled 454 files.
+- `corepack pnpm docs:lint -- .agents/plans/payments/06-refund-clawbacks.md src/libs/modules/payments/README.md src/libs/modules/credits/README.md docker/paddle-dev/README.md bruno/credit-purchases/README.md`
+  passed all five files.
+- `corepack pnpm dlx @usebruno/cli run --env local` passed 19 of 19 requests and tests against the rebuilt local
+  stub-provider stack. The exact stack, generated credentials, and disposable volumes were removed afterward.
+- `git diff --check` passed.
+- `PLANS_DRY_RUN=true corepack pnpm plans:sync` passed for all 56 ExecPlans and reported only the expected issue 355
+  body update.
+
+Not run: the Paddle sandbox purchase, approved refund, replay, and optional provider-generated inverse scenario. No
+Paddle credential files were available, and no inverse-producing provider event was under local control.
+
 ## Idempotence and Recovery
 
 The unique provider adjustment record plus credit-ledger reference makes redelivery and partial-process failure
@@ -189,9 +288,25 @@ rollback exists.
 
 ## Artifacts and Notes
 
-Record a redacted action/status mapping table, concurrent PostgreSQL results, injected-failure recovery results, and
-sandbox adjustment ID suffixes. Never commit raw webhook payloads, customer data, full transaction identifiers, or
-provider credentials. Official Paddle references:
+The implemented action/status mapping is:
+
+| Status     | `refund`, `credit`, `chargeback` | `chargeback_reverse`, `credit_reverse` | Warning actions |
+| ---------- | -------------------------------- | -------------------------------------- | --------------- |
+| `approved` | Debit                            | Restore                                | Ignore          |
+| Other      | Ignore                           | Ignore                                 | Ignore          |
+
+An original debit adjustment updated to `reversed` is in the `Other` row and remains ignored. Its separate approved
+inverse entity performs restoration. The adapter uses unsigned `totals.subtotal`; currency must be an uppercase
+three-letter code.
+
+The real-PostgreSQL evidence includes concurrent partials, identical debit and restore replays, and paid-grant fencing.
+It also covers inverse-before-debit, debit-to-restore-to-debit, zero clamping, and exact 70-credit shortfall recovery.
+Injected failures cover the boundaries before ledger application, after debit or restore application, and after
+adjustment completion.
+Sandbox adjustment ID suffixes remain pending because no Paddle secret files were present in this worktree.
+
+Never commit raw webhook payloads, customer data, full transaction identifiers, or provider credentials. Official
+Paddle references:
 
 - <https://developer.paddle.com/webhooks/adjustments/adjustment-updated/>
 - <https://developer.paddle.com/build/transactions/create-transaction-adjustments/>

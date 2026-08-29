@@ -95,8 +95,9 @@ Create a Platform notification destination when no safely reusable destination r
 https://replace-with-the-quick-tunnel.trycloudflare.com/v1/payments/webhook
 ```
 
-Subscribe only to `transaction.completed`, `transaction.canceled`, and `transaction.past_due`. Copy the exact
-destination ID and its secret into local files without putting the secret in shell history:
+Subscribe only to `transaction.completed`, `transaction.canceled`, `transaction.past_due`, `adjustment.created`, and
+`adjustment.updated`. Copy the exact destination ID and its secret into local files without putting the secret in
+shell history:
 
 ```shell
 read -r -p 'Paddle notification destination ID: ' LEF_PADDLE_SETTING_ID
@@ -245,7 +246,66 @@ purchase is not idempotent; abandon any unpaid duplicate and create a fresh purc
 rejects a transaction with `transaction_checkout_url_domain_is_not_approved`, confirm that `PADDLE_CHECKOUT_URL`
 uses the current tunnel domain and that the same fully qualified domain is approved in the sandbox dashboard.
 
-## 8. Deactivate the Destination and Restore the Stub Stack
+## 8. Refund and Prove the Credit Clawback
+
+Extract the Paddle transaction ID from the checkout URL without printing the API key, then create a full sandbox
+refund. Paddle may create it as `pending_approval`; sandbox refunds are approved automatically on Paddle's periodic
+approval cycle. A pending or rejected adjustment must leave the balance unchanged.
+
+```shell
+export LEF_TRANSACTION_ID="$(
+  node -e "process.stdout.write(new URL(process.env.LEF_CHECKOUT_URL).searchParams.get('_ptxn') || '')"
+)"
+test -n "$LEF_TRANSACTION_ID"
+
+LEF_REFUND_RESPONSE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $(cat .dev/paddle/api-key.txt)" \
+    -H 'Content-Type: application/json' \
+    --data "$(
+      jq -nc --arg transactionId "$LEF_TRANSACTION_ID" \
+        '{action:"refund",type:"full",transaction_id:$transactionId,reason:"LeadEmailFinder clawback verification"}'
+    )" \
+    https://sandbox-api.paddle.com/adjustments
+)"
+export LEF_REFUND_ADJUSTMENT_ID="$(jq -er .data.id <<<"$LEF_REFUND_RESPONSE")"
+case "$(jq -r .data.status <<<"$LEF_REFUND_RESPONSE")" in
+  pending_approval | approved) ;;
+  *) exit 1 ;;
+esac
+```
+
+Wait for the approved `adjustment.created` or `adjustment.updated` delivery to return HTTP 200. The handler uses the
+adjustment subtotal, which is the comparable pretax purchase amount, to calculate the proportional credit target.
+Verify that the full refund removed exactly the 100 credits granted by this purchase, then replay the approved
+delivery and prove that the balance does not move again:
+
+```shell
+export LEF_REFUNDED_BALANCE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
+    "http://localhost:53000/credits/$LEF_ORGANIZATION_ID" | jq -er .balance
+)"
+test "$LEF_REFUNDED_BALANCE" -eq "$((LEF_PAID_BALANCE - 100))"
+
+# Replay the approved adjustment delivery from Paddle's notification log before running this assertion.
+LEF_REFUND_REPLAY_BALANCE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
+    "http://localhost:53000/credits/$LEF_ORGANIZATION_ID" | jq -er .balance
+)"
+test "$LEF_REFUND_REPLAY_BALANCE" -eq "$LEF_REFUNDED_BALANCE"
+```
+
+Seller API calls cannot manufacture Paddle's provider-generated chargeback or credit inverse actions. If this sandbox
+transaction later produces an approved `chargeback_reverse` or `credit_reverse`, verify that its delivery restores no
+more than the credits actually removed, clears any attributable shortfall first, and remains unchanged on replay. A
+`status: reversed` update for the original adjustment is informational for credit accounting; the separate approved
+inverse adjustment is the only restore event. When the sandbox cannot produce an inverse action, record that path as
+unverified rather than treating the original `reversed` update as a substitute. Signed Paddle fixture tests and the
+real-PostgreSQL integration suite provide the automated inverse proof.
+
+## 9. Deactivate the Destination and Restore the Stub Stack
 
 Before stopping the public tunnel, open the Platform destination whose ID is stored in
 `.dev/paddle/notification-setting-id.txt`, deactivate it, and reload the destination list. Confirm that the exact
@@ -258,6 +318,8 @@ Only after that verification, stop the overlay, clear sensitive shell variables,
 docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml down
 unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
 unset LEF_PURCHASE_ID LEF_CHECKOUT_URL LEF_PURCHASE_RESPONSE LEF_PAID_PURCHASE LEF_REPLAYED_PURCHASE
+unset LEF_TRANSACTION_ID LEF_REFUND_RESPONSE LEF_REFUND_ADJUSTMENT_ID LEF_REFUNDED_BALANCE
+unset LEF_REFUND_REPLAY_BALANCE
 unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL
 rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt \
   .dev/paddle/notification-setting-id.txt

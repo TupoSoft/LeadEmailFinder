@@ -14,6 +14,14 @@ export interface CheckoutResult {
     redirectUrl: string
 }
 
+export interface PaymentAdjustmentEvent {
+    providerEventId: string
+    providerReference: string
+    providerAdjustmentId: string
+    amountMinor: number
+    currency: string
+}
+
 export type PaymentEvent =
     | {
           kind: 'purchase_paid' | 'purchase_failed'
@@ -21,6 +29,8 @@ export type PaymentEvent =
           providerReference: string
           purchaseId?: string
       }
+    | (PaymentAdjustmentEvent & { kind: 'purchase_adjustment_debit' })
+    | (PaymentAdjustmentEvent & { kind: 'purchase_adjustment_restore' })
     | {
           kind: 'ignored'
           providerEventId: string

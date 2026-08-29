@@ -8,18 +8,28 @@ request:
         - type: before-request
           code: |-
               if (!bru.getVar('serviceClientToken')) {
-                const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
+                const form = [
+                  ['grant_type', 'client_credentials'],
+                  ['client_id', bru.getEnvVar('serviceClientId')],
+                  ['client_secret', bru.getEnvVar('serviceClientSecret')],
+                ].map(function(entry) {
+                  return `${encodeURIComponent(entry[0])}=${encodeURIComponent(entry[1])}`;
+                }).join('&');
+                const response = await bru.sendRequest({
                   method: 'POST',
+                  url: `${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`,
                   headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                  body: new URLSearchParams({
-                    grant_type: 'client_credentials',
-                    client_id: bru.getEnvVar('serviceClientId'),
-                    client_secret: bru.getEnvVar('serviceClientSecret'),
-                  }),
+                  data: form,
                 });
-                const payload = await response.json();
-                if (!response.ok || !payload.access_token) {
+                const payload = response.data;
+                if (response.status !== 200 || !payload || !payload.access_token) {
                   throw new Error(`Client Credentials token request failed with HTTP ${response.status}`);
                 }
                 bru.setVar('serviceClientToken', payload.access_token);
+              }
+              if (
+                req.getName() !== '01-unauthorized-purchase' &&
+                !req.getUrl().includes('/v1/payments/webhook')
+              ) {
+                req.setHeader('Authorization', `Bearer ${bru.getVar('serviceClientToken')}`);
               }

@@ -1,8 +1,8 @@
 # Credits
 
-Owns the business rules for organization credit balances: administrative grant/set operations, per-request
-debiting via a guard, and the application-level debit/grant logic every verification and billing path calls
-into.
+Owns the business rules for organization credit balances: administrative grant and set operations, strict
+per-request debiting through a guard, and the narrow idempotent debit and grant operations used by verification and
+billing workflows.
 
 ## Responsibility
 
@@ -12,13 +12,16 @@ into.
   rejecting with `402` when the balance is insufficient.
 - `CreditsService.debit()`/grant application logic used directly by other modules (for example, batch
   verification debits per validated CSV row, and payments grants a purchased pack's credits).
+- `CreditsService.debitUpTo()` and `creditOnce()` for payment adjustments. These methods return the amount recorded for
+  a ledger reference on both the first application and replay; a clamped zero debit is persisted so later top-ups are
+  never charged by an old adjustment.
 
 ## Non-Responsibilities
 
 - No ledger persistence — the credit account and debit/grant rows are owned by
   [`identity`](../identity/README.md); this module only reads and writes through them.
-- No payment processing or credit-pack pricing (owned by [`payments`](../payments/README.md)); credits only
-  applies the grant payments hands it.
+- No payment processing, adjustment accounting, shortfall policy, or credit-pack pricing (owned by
+  [`payments`](../payments/README.md)); credits applies the ledger operation that payments has already authorized.
 - No opinion on what a request should cost — callers (guards, processors) decide the debit amount.
 
 ## Public API
@@ -47,6 +50,10 @@ below but are not part of the intentional public API other modules should import
 `CreditGuard` is applied by other modules' controllers (for example synchronous and async email verification) —
 it is not itself mounted on any route here.
 
+Strict spending still uses `CreditsService.debit()`: insufficient balance raises `InsufficientCreditsException`, and
+`CreditGuard` exposes that as HTTP `402`. Only the payment-adjustment path uses `debitUpTo()` to clamp at the available
+balance and report the applied amount for durable shortfall accounting.
+
 ## Persistence
 
 None owned directly. Credits reads and writes the `OrganizationCreditAccount` (`organization_credit_accounts`),
@@ -58,8 +65,10 @@ None. This module reads no environment variables.
 
 ## Validation
 
-Focused tests live in `src/`: `credits.controller.spec.ts`, `credits.guard.spec.ts`, `credits.service.spec.ts`,
-and `credits.service.integration.spec.ts` (schema-level, gated on `TEST_CREDITS_POSTGRES_URL`).
+Focused tests live in `src/`: `credits.controller.spec.ts`, `credits.guard.spec.ts`, `credits.service.spec.ts`, and
+`credits.service.integration.spec.ts` (schema-level, gated on `TEST_CREDITS_POSTGRES_URL`). The service tests cover
+clamped debit results, zero-result replay after replenishment, one-time restoration, and concurrent ledger
+idempotency against real PostgreSQL.
 
 No Bruno collection is dedicated to credits — its balance and debit behavior is exercised indirectly instead.
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the resulting balance back

@@ -1,21 +1,23 @@
 # Payments
 
-Sells credit packs through a checkout flow and ingests the resulting payment-provider webhooks, granting the
-purchased credits idempotently once a payment is confirmed.
+Sells credit packs through a checkout flow and ingests the resulting payment-provider webhooks. It grants purchased
+credits idempotently when payment is confirmed, claws back credits for approved refunds and chargebacks, and restores
+only credits previously removed when Paddle sends an approved inverse adjustment.
 
 ## Responsibility
 
 - Creating a credit-pack purchase and returning the provider's checkout URL, and listing an organization's past
   purchases.
-- Verifying and processing signed payment-provider webhooks (`purchase_paid`, and provider-specific failure/
-  cancellation events).
-- Idempotent credit granting on a confirmed payment, and provider abstraction over a stub adapter (for
-  deterministic local/dev/test use) and a real Paddle adapter.
+- Verifying and processing signed payment-provider webhooks for purchases, failures, and payment adjustments.
+- Idempotent credit granting on a confirmed payment and durable, replay-safe debit or restore orchestration for
+  approved adjustments.
+- Provider abstraction over a stub adapter for deterministic local development and testing, and a real Paddle
+  adapter.
 
 ## Non-Responsibilities
 
-- No credit ledger persistence or debit logic (owned by [`credits`](../credits/README.md)); payments only calls
-  `CreditsService` to grant on a paid event.
+- No credit ledger persistence or account mutation logic (owned by [`credits`](../credits/README.md)); payments calls
+  purpose-specific credit operations after calculating and persisting the permitted adjustment movement.
 - No card/bank detail handling — that is delegated entirely to the configured provider.
 
 ## Public API
@@ -26,7 +28,8 @@ Paddle) are internal.
 
 ## Dependencies
 
-- [`credits`](../credits/README.md) — `CreditsService`, to grant credits on a paid event.
+- [`credits`](../credits/README.md) — `CreditsService`, to grant credits on paid events, debit approved adjustments,
+  and restore an adjustment's applied debit once.
 - [`identity`](../identity/README.md) — the `AuthPrincipal` type.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`,
   `RequirePermissions`, `Public`.
@@ -49,7 +52,17 @@ Paddle) are internal.
 
 ## Persistence
 
-Owns one entity: `CreditPurchase` → `credit_purchases`, indexed on `organizationId`.
+Owns two entities:
+
+- `CreditPurchase` → `credit_purchases`, indexed on `organizationId`. Its internal `creditsGrantedAt` marker fences
+  adjustment handling from the gap between recording a paid purchase and committing its credit grant.
+- `CreditPurchaseAdjustment` → `credit_purchase_adjustments`, keyed by the provider adjustment ID and indexed on the
+  purchase ID. It stores the requested movement, applied debit or restore, original and outstanding shortfall, and
+  processing state.
+
+Adjustment claims lock the purchase row before cumulative proportional accounting. This serializes distinct partial
+events, rounds debit targets in the customer's favor, caps debits at the purchase grant, and makes replay and
+partial-process recovery converge through namespaced ledger references.
 
 ## Configuration
 
@@ -67,12 +80,14 @@ The reusable Paddle sandbox checkout, tunnel, and notification-replay workflow i
 
 ## Validation
 
-Focused tests live in `src/`: `credit-pack-catalog.spec.ts`, `credit-purchase.controller.spec.ts`,
-`credit-purchase.entity.spec.ts`, `credit-purchase.service.spec.ts`, `payment-event.handler.spec.ts` (and its
-`.integration.spec.ts` counterpart), `payment-webhook.controller.spec.ts`, `payments.module.spec.ts`, and the
-provider adapter specs under `infrastructure/` (`stub-payment-provider.spec.ts`,
-`paddle/paddle-payment-provider.spec.ts`, `typeorm-payment-purchase.store.spec.ts`).
+Focused tests live in `src/`: the purchase controller, service, entity, event-handler, webhook-controller, and module
+specs; `credit-purchase-adjustment.entity.spec.ts`; `payment-adjustment-accounting.spec.ts`;
+`payment-adjustment.handler.spec.ts`; and the provider and TypeORM adapter specs under `infrastructure/`. The Paddle
+adapter matrix covers every supported action, status, and adjustment webhook type. The gated
+`payment-event.handler.integration.spec.ts` exercises locking, replay, shortfall, inverse ordering, and injected
+recovery boundaries against real PostgreSQL.
 
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) exercises the checkout flow, purchase
-listing, and signed webhook crediting end to end against the local stub provider — including a
-tampered-signature rejection — and documents a manual (not automated) Paddle sandbox verification procedure.
+listing, signed webhook crediting, debit adjustment, replay, inverse restoration, and inverse replay end to end
+against the local stub provider, including a tampered-signature rejection. It also links to the manual Paddle
+sandbox purchase and refund procedure.

@@ -23,6 +23,22 @@ export function paymentProviderContract(name: string, options: PaymentProviderCo
                 providerReference: 'provider-purchase',
                 purchaseId: '20000000-0000-4000-8000-000000000001',
             },
+            {
+                kind: 'purchase_adjustment_debit',
+                providerEventId: 'event-adjustment-debit',
+                providerReference: 'provider-purchase',
+                providerAdjustmentId: 'adjustment-debit',
+                amountMinor: 250,
+                currency: 'USD',
+            },
+            {
+                kind: 'purchase_adjustment_restore',
+                providerEventId: 'event-adjustment-restore',
+                providerReference: 'provider-purchase',
+                providerAdjustmentId: 'adjustment-restore',
+                amountMinor: 250,
+                currency: 'USD',
+            },
         ])('parses a valid $kind event', async expected => {
             const rawBody = options.serializeEvent(expected)
 

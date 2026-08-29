@@ -141,4 +141,38 @@ describe('TypeOrmPaymentPurchaseStore', () => {
         await expect(store.recordFailed({ providerReference: purchase.providerReference! })).resolves.toBe(true)
         expect(manager.save).not.toHaveBeenCalled()
     })
+
+    it('marks the paid purchase credit grant complete under a write lock', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PAID)
+        manager.findOne.mockResolvedValue(purchase)
+
+        await store.recordCreditsGranted(purchase.id)
+
+        expect(manager.findOne).toHaveBeenCalledWith(CreditPurchase, {
+            where: { id: purchase.id },
+            lock: { mode: 'pessimistic_write' },
+        })
+        expect(manager.save).toHaveBeenCalledWith(
+            CreditPurchase,
+            expect.objectContaining({ creditsGrantedAt: expect.any(Date) }),
+        )
+    })
+
+    it('does not rewrite an already completed purchase credit grant', async () => {
+        const purchase = Object.assign(purchaseWith(CreditPurchaseStatus.PAID), { creditsGrantedAt: new Date() })
+        manager.findOne.mockResolvedValue(purchase)
+
+        await store.recordCreditsGranted(purchase.id)
+
+        expect(manager.save).not.toHaveBeenCalled()
+    })
+
+    it('rejects a credit-grant completion marker on an unpaid purchase', async () => {
+        const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
+        manager.findOne.mockResolvedValue(purchase)
+
+        await expect(store.recordCreditsGranted(purchase.id)).rejects.toThrow('unpaid purchase')
+
+        expect(manager.save).not.toHaveBeenCalled()
+    })
 })

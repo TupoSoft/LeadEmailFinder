@@ -15,11 +15,14 @@ import {
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentProvider, PAYMENT_PROVIDER } from './payment-provider'
+import { CreditPurchaseAdjustment } from './credit-purchase-adjustment.entity'
 import { CreditPurchase } from './credit-purchase.entity'
 import { PaymentsModule } from './payments.module'
 import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
 import { PaymentEventHandler } from './payment-event.handler'
 import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
+import { TypeOrmPaymentAdjustmentStore } from './infrastructure/typeorm-payment-adjustment.store'
+import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
 import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-provider'
 
 const baseConfig = new Map<string, string>([
@@ -43,6 +46,8 @@ async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string
         .overrideProvider(ConfigService)
         .useValue({ getOrThrow: (key: string) => config.get(key) })
         .overrideProvider(getRepositoryToken(CreditPurchase))
+        .useValue({})
+        .overrideProvider(getRepositoryToken(CreditPurchaseAdjustment))
         .useValue({})
         .overrideProvider(getRepositoryToken(Organization))
         .useValue({})
@@ -68,6 +73,10 @@ async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string
         .useValue({})
         .overrideProvider(TypeOrmPaymentPurchaseStore)
         .useValue({})
+        .overrideProvider(TypeOrmPaymentAdjustmentStore)
+        .useValue({})
+        .overrideProvider(PaymentAdjustmentHandler)
+        .useValue({})
         .compile()
 }
 
@@ -80,6 +89,13 @@ describe('PaymentsModule', () => {
         expect(
             imports.some(module =>
                 module.providers?.some(provider => provider.provide === getRepositoryToken(CreditPurchase)),
+            ),
+        ).toBe(true)
+        expect(
+            imports.some(module =>
+                module.providers?.some(
+                    provider => provider.provide === getRepositoryToken(CreditPurchaseAdjustment),
+                ),
             ),
         ).toBe(true)
     })
