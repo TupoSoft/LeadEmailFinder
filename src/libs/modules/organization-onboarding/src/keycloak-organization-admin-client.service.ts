@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { KeycloakAdminHttpClient } from './keycloak-admin-http-client.service'
-import { KEYCLOAK_ADMIN_HTTP_CONFIGURATION, KeycloakAdminHttpConfiguration } from './keycloak-admin-http-configuration'
+import { KEYCLOAK_ADMIN_HTTP, KeycloakAdminHttp } from '@tuposoft/lead-email-finder/keycloak-admin-http'
 import { EnsureKeycloakUserInput, KeycloakOrganizationAdmin, KeycloakUserRef } from './keycloak-organization-admin'
 
 interface KeycloakUserRepresentation {
@@ -15,23 +14,18 @@ interface KeycloakRoleRepresentation {
 
 @Injectable()
 export class KeycloakOrganizationAdminClient implements KeycloakOrganizationAdmin {
-    constructor(
-        private readonly http: KeycloakAdminHttpClient,
-        @Inject(KEYCLOAK_ADMIN_HTTP_CONFIGURATION) private readonly configuration: KeycloakAdminHttpConfiguration,
-    ) {}
+    constructor(@Inject(KEYCLOAK_ADMIN_HTTP) private readonly http: KeycloakAdminHttp) {}
 
     async ensureUser({ email, password }: EnsureKeycloakUserInput): Promise<KeycloakUserRef> {
-        const realm = this.configuration.realm
-
         let [user] = await this.findByEmail(email)
 
         if (user) {
             return { subject: user.id, created: false }
         }
 
-        await this.http.request(
+        await this.http.requestRealm(
             'POST',
-            `/admin/realms/${realm}/users`,
+            '/users',
             {
                 username: email,
                 email,
@@ -53,24 +47,15 @@ export class KeycloakOrganizationAdminClient implements KeycloakOrganizationAdmi
     }
 
     async assignRealmRole(subject: string, role: 'owner' | 'admin'): Promise<void> {
-        const realm = this.configuration.realm
-        const roleRepresentation = await this.http.request<KeycloakRoleRepresentation>(
-            'GET',
-            `/admin/realms/${realm}/roles/${role}`,
-        )
+        const roleRepresentation = await this.http.requestRealm<KeycloakRoleRepresentation>('GET', `/roles/${role}`)
 
-        await this.http.request(
-            'POST',
-            `/admin/realms/${realm}/users/${subject}/role-mappings/realm`,
-            [roleRepresentation],
-            [204],
-        )
+        await this.http.requestRealm('POST', `/users/${subject}/role-mappings/realm`, [roleRepresentation], [204])
     }
 
     private findByEmail(email: string): Promise<KeycloakUserRepresentation[]> {
-        return this.http.request<KeycloakUserRepresentation[]>(
+        return this.http.requestRealm<KeycloakUserRepresentation[]>(
             'GET',
-            `/admin/realms/${this.configuration.realm}/users?email=${encodeURIComponent(email)}&exact=true`,
+            `/users?email=${encodeURIComponent(email)}&exact=true`,
         )
     }
 }
