@@ -26,7 +26,7 @@ finish with a clean strict check.
 - `module-architecture/05`
 - `module-architecture/08`
 - `module-architecture/09`
-- `module-architecture/11`
+- `module-architecture/16`
 
 ## Surprises & Discoveries
 
@@ -83,9 +83,10 @@ violations and that file: a current-only key is new debt and a baseline-only key
 `architecture:baseline` command may only shrink the set after bootstrap. CI passes `ARCHITECTURE_BASE_SHA` so a pull
 request cannot introduce a key that was absent from its base revision.
 
-Plans 02 through 11 remove the legacy edges in bounded pull requests. Plan 05 completes proxy contracts; plan 08
-seals identity persistence after the auth/BFF, credits, onboarding, and service-client consumers use ports; plan 09
-layers the final payment behavior; and plan 11 completes email-verification delivery after plan 10 extracts its core.
+Plans 02 through 16 remove the legacy edges in bounded pull requests. Plan 05 completes proxy contracts. Plan 08
+seals identity persistence after the auth/BFF, credits, onboarding, and service-client consumers use ports. Plan 09
+layers the final payment behavior. Plan 16 completes email-verification delivery after plans 10, 13, and 14 separate
+its core and network adapters and plans 11 and 15 layer sync and async delivery.
 Because those dependencies transitively include every earlier cleanup, this plan begins only when the baseline is
 expected to contain zero entries and the ordinary checker already passes.
 

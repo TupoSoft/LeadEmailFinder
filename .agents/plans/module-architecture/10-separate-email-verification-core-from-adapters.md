@@ -1,83 +1,85 @@
-# Separate the Email-Verification Core from Adapters
+# Separate the Email-Verification Core from Persistence
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
-Make email, domain, and mailbox-verification rules runnable without Nest, TypeORM, DNS, HTTP, SMTP, proxy, catch-all,
-or mapping frameworks. The module retains its current verification results, cached email/domain data, SMTP behavior,
-and internal administration endpoints, but core use cases depend only on explicit ports whose implementations live
-under infrastructure. A developer can observe the separation through pure unit tests, contract tests against fake
-and real adapters, the unchanged email administration API, and the same deterministic SMTP fixture result. The
-sync, deprecated-sync, async, and batch delivery workflows remain in their existing mixed folders for plan 11 to
-layer separately.
+Make the email-verification rules and central orchestration runnable without Nest, TypeORM, DNS, HTTP, SMTP,
+proxy, catch-all, BullMQ, S3, or transport DTOs. This pull request also moves the four existing persistence models
+behind TypeORM store adapters and layers the existing admin-only email-cache vertical slice. Network behavior stays
+in its current locations behind compatibility implementations of the new ports; plans 13 and 14 relocate those
+adapters. A developer can observe the result through pure application/domain tests, real-PostgreSQL store contract
+tests, unchanged organization-scoped `/emails` behavior, and unchanged verification responses through the
+compatibility wiring.
 
 ## Progress
 
-- [ ] (2026-08-29) Define pure email, domain, verification, and mailbox-probe models, policies, ports, and use cases.
-- [ ] (2026-08-29) Move email/domain/verification TypeORM state behind private persistence adapters without schema changes.
-- [ ] (2026-08-29) Move DNS, HTTP synonym discovery, SMTP, proxy, and catch-all implementations behind infrastructure ports.
-- [ ] (2026-08-29) Move the existing email administration HTTP boundary into API and recompose the core module.
-- [ ] (2026-08-29) Shrink the baseline and complete pure, adapter, PostgreSQL, HTTP, SMTP, and full validation.
+- [ ] (2026-08-30) Complete the binding size projection and, if required, replace this plan with the prescribed split.
+- [ ] (2026-08-30) Characterize verification, persistence, organization ownership, and email-administration behavior.
+- [ ] (2026-08-30) Define the pure domain/application core and narrow persistence and network ports.
+- [ ] (2026-08-30) Implement TypeORM stores and layer the email-administration API/application slice.
+- [ ] (2026-08-30) Bind legacy network components as compatibility adapters and shrink only this plan's baseline keys.
+- [ ] (2026-08-30) Complete focused, PostgreSQL, HTTP, runtime, architecture, and full validation.
 
 ## Plan dependencies
 
-- `module-architecture/05`
 - `module-architecture/08`
+- `privacy-compliance/03`
+- `privacy-compliance/04`
 
 ## Surprises & Discoveries
 
-- The current folder named `domain/` is a feature slice for cached Internet domains, not the module's architectural
-  domain layer. It contains a TypeORM entity, Nest module/service, `Automapper` profile/DTO, `HttpService`-based HTML
-  crawler, and pure parsing helpers together.
-- `email/` similarly combines a TypeORM entity, repository-backed service, `Automapper` profile, Nest controller,
-  validation DTOs, and exceptions. The admin-only `/emails` API is excluded from Swagger but is externally
-  observable and protected by `platform:admin`.
-- `EmailVerificationService` is the central verification use case, yet it injects a TypeORM verification repository
-  and common-library email/domain service interfaces directly. `EmailVerifier` then combines DNS, SMTP, catch-all,
-  and provider implementations.
-- The top-level public barrel already exports only `EmailVerificationModule`. Internal barrels expose entities and
-  services, but no other module should depend on them after plan 03 removes deep-import support.
+- The current `src/domain/` directory is a cached-Internet-domain feature slice containing TypeORM, Nest,
+  Automapper, HTTP retrieval, DTO, and pure parsing concerns; it is not an architectural domain layer.
+- `EmailVerificationService` is stored in the synchronous delivery folder even though sync, deprecated-sync, async,
+  and batch callers all use it.
+- The historical repository size classifier counted non-Markdown additions plus deletions, ignored
+  `pnpm-lock.yaml`, and classified 1,000 or more modifications as `size/xl`. This road map retains that bound as a
+  planning gate even when a checkout does not run the former labeler workflow.
 
 ## Decision Log
 
-- Decision: Use the architectural `src/domain/` for plain email address, cached domain, verification-result, and
-  mailbox-probe models, value objects, policies, and errors. Rename the current cached-domain feature concepts where
-  necessary so “domain” does not ambiguously mean both an Internet domain and an architecture layer.
-  Rationale: A clear vocabulary prevents framework code from returning to the domain layer under a misleading folder
-  name.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Put verification orchestration and email/domain administration use cases under `src/application/` and
-  make them depend on narrow `EmailStore`, `DomainStore`, `VerificationStore`, mailbox probe, MX resolver, and domain
-  synonym ports. Keep DI tokens and Nest binding in the composition module, not in the pure contracts.
-  Rationale: Application services coordinate business work; storage and network mechanisms remain replaceable
-  adapters.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Put TypeORM entities/mappers/stores under `src/infrastructure/persistence/typeorm/`; DNS resolution,
-  remote-page retrieval/synonym discovery, SMTP clients, proxy-backed SMTP verification, and catch-all providers
-  under purpose-named infrastructure directories.
-  Rationale: These components depend on databases, networks, providers, or frameworks and therefore point inward
-  through ports.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Keep deterministic HTML parsing pure only if it can accept text and URLs without importing Nest or an
-  HTTP client; the remote fetch/retry/logging behavior remains an HTTP adapter.
-  Rationale: Parsing supplied data is a deterministic transformation, while obtaining it is an external side effect.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Move the existing `/emails` controller and DTOs to `src/api/http/email-administration/`, preserving its
-  platform-admin protection, excluded-from-Swagger status, routes, validation, serialization, and error mapping. Do
-  not add a new public domain-administration endpoint.
-  Rationale: The current email cache API needs a clear delivery home; the internal domain query/policy service does
-  not justify inventing a new HTTP contract during an architecture refactor.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Leave sync, deprecated-sync, async, and batch controllers, DTOs, BullMQ services/processors, upload/result
-  storage, and their legacy folder names to plan 11. Rewire them only enough to consume the new core use case.
-  Rationale: Separating the verification engine and persistence/network adapters is independently reviewable; moving
-  four delivery workflows in the same pull request would obscure behavior regressions.
-  Date/Author: 2026-08-29, Codex planning.
-- Decision: Preserve all four current tables and use TypeORM synchronization against disposable development data;
-  add no migration, backfill, cache conversion, or production rollout step.
-  Rationale: The plan changes code ownership and mapping, not stored meaning.
-  Date/Author: 2026-08-29, Codex planning.
+- Decision: Put plain email, cached-domain, verification-result, and mailbox-probe records, policies, value objects,
+  and errors under `src/domain/`; put central verification and email/domain administration use cases and ports under
+  `src/application/`.
+  Rationale: Business rules and orchestration must be independently testable and must point outward only through
+  purpose-specific interfaces.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Put `Email`, `Domain`, `EmailVerification`, and `SmtpVerification` entities, mappers, and store adapters
+  under `src/infrastructure/persistence/typeorm/`, preserving the post-privacy-plan-04 organization-owned schema.
+  Rationale: Persistence is one cohesive adapter family and can be separated without moving any network protocol.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Move `/emails` controllers, DTOs, validation, serialization, and HTTP error mapping to
+  `src/api/http/email-administration/`; move its orchestration to application and keep TypeORM private.
+  Rationale: The existing admin cache is a bounded vertical slice over the same stores and is independently
+  verifiable without discovery, SMTP, queue, or storage relocation.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Define narrow `MxResolver`, `DomainSynonymDiscovery`, `AccountDiscovery`, and `MailboxProbe` ports, but
+  leave their existing concrete code in place as compatibility implementations. Do not move or redesign DNS, HTTP,
+  provider, SMTP, or proxy behavior here.
+  Rationale: Ports let the core point inward while plans 13 and 14 keep the two network-adapter changes reviewable.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Preserve the PII-safe logging contract from privacy plan 03 and every organization identifier, composite
+  key, lookup, and isolation rule from privacy plan 04.
+  Rationale: Architecture relocation cannot recreate address-bearing logs or cross-organization caches.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Before editing production code, create a per-path projection table for every non-Markdown file in scope.
+  Record expected additions and deletions. Count a new file at its expected full length and a rewritten file at its
+  expected changed lines. Count a move as delete plus add unless a rename-only scratch diff proves Git's rename-aware
+  `numstat` is smaller. Sum additions plus deletions exactly as the repository classifier did; Markdown and
+  `pnpm-lock.yaml` are excluded. A projected total of 1,000 or more is `size/xl`.
+  Rationale: One ExecPlan must remain one reviewable PR and must not rely on optimistic rename detection.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: If the projection is `size/xl`, stop before production edits. Repurpose this plan to contain only the
+  pure core and TypeORM stores. Create the next unused module-architecture ExecPlan for the email-administration
+  API/integration and final core/persistence compatibility composition. Make plan 13 depend on that new plan, and
+  update the road map and plan 12. Do not weaken the threshold, omit tests from the projection, or defer the split
+  until review.
+  Rationale: This is the predetermined decomposition seam and leaves both PRs operational and independently tested.
+  Date/Author: 2026-08-30, Codex planning.
+- Decision: Add no migration or backfill. Use TypeORM synchronization only against disposable development data.
+  Rationale: The repository has no production environment and the schema meaning is established by privacy plan 04.
+  Date/Author: 2026-08-30, Codex planning.
 
 ## Outcomes & Retrospective
 
@@ -85,173 +87,150 @@ Not started.
 
 ## Context and Orientation
 
-`src/libs/modules/email-verification/src/domain/` currently owns cached domain state and policy;
-`email/` owns cached email CRUD; `sync-email-verification/` owns the verification entity and central
-`EmailVerificationService`; and `email-verifier/` owns MX/catch-all/SMTP decisions. `email-verifier/smtp/` combines
-the SMTP client factory, proxy allocation, protocol client, verifier, TypeORM `SmtpVerification` entity, and Nest
-module. The technical `src/libs/dns` and `src/libs/catch-all` libraries provide concrete network implementations.
+The module is under `src/libs/modules/email-verification/`. `sync-email-verification/email-verification.service.ts`
+currently normalizes an address, consults the shared `Domain` policy, reads or creates `Email`, invokes
+`email-verifier/`, stores `EmailVerification`, and links the email to the latest result. The same service is called by
+all delivery modes. `email/`, the current `domain/`, `sync-email-verification/`, and `email-verifier/smtp/` each mix
+entities or repositories with framework and business code.
 
-The central flow lowercases an address, checks whether its domain permits verification, and creates or updates the
-cached email. It then performs the mailbox probe. Finally, it saves or updates the verification result and links the
-email to that result.
-That ordering, cache behavior, result fields, and error behavior are invariants. Existing synchronous, asynchronous,
-and batch callers share the service. The `/emails` controller creates, lists, reads, and patches cached records.
-Duplicate `POST` requests return `409`; a missing single-record `GET` returns `404`; and `PATCH` creates the cached
-record when it does not already exist.
+Privacy plan 04 changes `emails`, `email_verifications`, and `smtp_verifications` to organization-owned records while
+keeping `domains` a shared technical-policy table. Every store operation in this plan must use the resulting
+organization-aware keys and must preserve foreign-record concealment. Privacy plan 03 establishes an allowlisted log
+contract that excludes raw or encoded addresses, SMTP transcripts, provider payloads, and message-bearing external
+errors. Plan `module-architecture/08` supplies the sealed identity principal boundary used by retained controllers.
 
-Plan `module-architecture/05` moves proxy contracts and tokens to the proxy module's public domain/application API;
-SMTP must use only that bare public alias. Plan `module-architecture/08` seals identity infrastructure while
-retaining the pure principal contract used at HTTP boundaries. The checker and shrink-only baseline from plan 01
-enforce the move; plan 11 consumes the completed core to layer delivery workflows.
+The existing `/emails` routes are platform-admin-only, excluded from Swagger, and scoped to the caller's
+organization. Within one organization, duplicate `POST /emails` returns `409`; missing or foreign reads return
+`404`; and `PATCH /emails/:email` creates a missing record only for the caller. Network code and all sync, deprecated,
+async, and batch delivery folders remain compatibility callers after this PR.
 
 ## Scope and Non-Goals
 
-Create the email-verification domain and application core, and extract persistence and network ports. Relocate and
-map the existing email, domain, verification, and SMTP entities behind TypeORM adapters. Relocate DNS, HTTP, SMTP,
-proxy, and catch-all implementations; move the email administration controller/DTOs; recompose module wiring; add
-focused port contracts and HTTP integration coverage; and update documentation.
+Create the pure core, application ports, TypeORM persistence adapters, and the email-administration API/application
+slice. Move tests with their owners, bind the old DNS/HTTP/provider/SMTP/proxy implementations to the new ports
+without relocating them, narrow internal barrels, update the module README, and remove only baseline keys resolved
+by these changes.
 
-Do not layer the sync, deprecated-sync, async, or batch delivery folders beyond the minimal imports needed to call
-the core; plan 11 owns them. Do not change verification heuristics, catch-all provider ordering, proxy lease rules,
-SMTP commands/timeouts, DNS caching, domain synonym semantics, email-cache behavior, routes, permissions, DTOs,
-queues, S3 keys, credit charging, configuration keys, table schemas, or public barrel. Do not add migrations,
-backfills, new endpoints, production rollout, or production recovery work.
+Do not move network implementations; plans 13 and 14 own them. Do not layer sync, deprecated-sync, async, or batch
+delivery; plans 11, 15, and 16 own them. Do not change verification heuristics, domain synonym behavior, provider
+selection, SMTP protocol order, queue contracts, S3 keys, credit charging, routes, permissions, DTO schemas, public
+exports, configuration, or post-privacy table schemas. Do not add endpoints, migrations, backfills, production
+rollout, or recovery mechanisms.
 
 ## Plan of Work
 
-Begin with characterization tests for the verification sequence, domain prohibition, cached-email upsert, prior
-verification reuse, result persistence, MX/catch-all/SMTP outcomes, and adapter failures. Define pure domain records
-that carry the fields currently exposed by `DomainResponseDto`, `EmailResponseDto`, and
-`EmailVerificationResponseDto` without decorators or ORM identity. Define application ports around the operations
-actually used; avoid generic repositories or a single manager interface.
+First inventory all affected production and test paths and complete the size projection. If it reaches `size/xl`,
+perform the mandatory plan split and stop this implementation. Otherwise, capture characterization tests for
+normalization, domain prohibition, email upsert, prior-result behavior, adapter outcomes, persistence failures, and
+two-organization isolation.
 
-Move the central verification orchestration into application and inject the domain policy/store, email store,
-verification store, and mailbox-probe ports. Move email and domain administration/query use cases alongside it.
-Application/domain code must not import `@nestjs/*`, `@nestjs/typeorm`, `typeorm`, `@automapper/*`,
-`class-transformer`, `class-validator`, `@tuposoft/lead-email-finder/dns`,
-`@tuposoft/lead-email-finder/catch-all`, the proxy implementation, Node DNS calls, HTTP clients, SMTP clients, BullMQ,
-or S3.
+Create framework-free records and policies under `src/domain/`. Create application commands, results, and
+purpose-specific stores and network ports under `src/application/`; avoid generic repositories and manager
+services. Move the central verification sequence from `sync-email-verification/` into application. Domain and
+application files must not import Nest, TypeORM, Automapper, class validation/serialization, DNS/HTTP/SMTP clients,
+catch-all providers, proxy implementations, BullMQ, Redis, multer, S3, or transport DTOs.
 
-Under `infrastructure/persistence/typeorm/`, keep the existing `emails`, `domains`, `email_verifications`, and
-`smtp_verifications` entity schemas and implement the new store ports with explicit mappers. Preserve null/default
-semantics, enum encodings, timestamps, indexes, last-verification linking, batch IDs, and update-versus-insert
-behavior. Add adapter contract tests and a real-PostgreSQL round trip that proves mapping and schema compatibility.
+Move all four TypeORM schemas to `src/infrastructure/persistence/typeorm/` and add explicit domain/entity mappers.
+Implement organization-aware `EmailStore`, `VerificationStore`, and `SmtpVerificationStore` plus the shared
+technical `DomainStore`. Preserve table/column names, composite identities, indexes, enum/null/default behavior,
+timestamps, batch linkage, latest-verification linkage, and insert-versus-update semantics. Add contract tests that
+run against in-memory fakes and each real adapter, plus a real-PostgreSQL round trip.
 
-Under infrastructure network directories, wrap the DNS service, HTTP page retrieval, HTML synonym extraction,
-catch-all provider set, proxy contract, SMTP factory/client, and SMTP verifier behind the new ports. Preserve optional
-`CATCH_ALL_HTTP_PROXY_URL`, default `SMTP_PORT`, provider activation, lease release on success/failure/timeout, and
-bounded SMTP connection behavior. Compose these adapters in internal Nest modules without exporting them from the
-top-level barrel.
+Move `/emails` transport code to `src/api/http/email-administration/` and its operations to application. Keep guards,
+Swagger exclusion, validation, mapping, and status codes unchanged. Add a Nest/TypeORM integration test for
+unauthenticated, unauthorized, platform-admin, duplicate, invalid, missing, foreign, and cross-organization cases.
 
-Move the existing email administration HTTP controller, DTOs, serialization, and validation under `api/http/` and
-map application errors to the same HTTP responses. Extend its controller tests and add a focused
-`email-administration-http.integration.spec.ts` using the real Nest module and TypeORM adapter wiring. Override only
-the authentication boundary with unauthenticated, unauthorized, and platform-admin principals. Against disposable
-PostgreSQL, prove unique-record creation, list/read/update success, duplicate `POST` returning `409`, missing `GET`
-returning `404`, missing `PATCH` creating a record, and validation behavior. Do not add a domain endpoint or a new
-Bruno collection for this internal refactor.
-
-Rewire the four delivery workflows to the core application token without relocating them. Narrow internal barrels,
-keep the top-level `index.ts` module-only, update the email-verification README, and run the shrink-only baseline
-update after all core violations are gone. Baseline keys for delivery folders intentionally remain until plan 11.
+Adapt the existing DNS, synonym, provider, and SMTP classes at their legacy paths to the new network ports. This is
+temporary inward-pointing compatibility wiring, not permission to export or deep-import those implementations.
+Recompose only what is needed for the core and email administration to run. Keep the four delivery folders in place
+and rewire them to the new core token. Update `src/libs/modules/email-verification/README.md`; run the shrink-only
+baseline command and reject any new or renamed violation key.
 
 ## Interfaces and Dependencies
 
-The public module barrel remains exactly `EmailVerificationModule`. Existing HTTP, queue, result, and configuration
-interfaces remain unchanged. New interfaces are internal, purpose-specific application ports for email records,
-cached domains/policy, verification results, mailbox probing, MX resolution, and domain synonym lookup. Port values
-are domain records, not TypeORM entities or framework DTOs.
+The top-level barrel continues to export only `EmailVerificationModule`. New internal contracts include
+organization-aware `EmailStore`, `VerificationStore`, and `SmtpVerificationStore`; shared-policy `DomainStore`; and
+the `MxResolver`, `DomainSynonymDiscovery`, `AccountDiscovery`, and `MailboxProbe` network ports. Values crossing
+these interfaces are domain records and application commands, never TypeORM entities, Nest providers, HTTP DTOs, or
+provider responses.
 
-The infrastructure layer depends on TypeORM, Node/Nest DNS and HTTP facilities, the technical catch-all providers,
-SMTP implementation, and the public proxy contracts delivered by plan 05. The application/domain layers depend on
-none of them. Plan 08 seals the identity boundary used by the retained async and batch delivery workflows. Plan 11
-depends on the new core use case and completes delivery layering.
+No HTTP, queue, storage, configuration, or public TypeScript contract changes. The plan depends on the identity
+boundary from module-architecture plan 08, PII-safe logging from privacy plan 03, and organization-owned persistence
+from privacy plan 04. Plans 13 and 14 replace the compatibility network implementations; plans 11, 15, and 16 layer
+delivery.
 
 ## Acceptance Criteria
 
-- Email-verification domain and application files contain no Nest, TypeORM, `Automapper`, DTO validation/serialization,
-  BullMQ, S3, DNS-client, HTTP-client, SMTP-client, catch-all-provider, or proxy-adapter import.
-- Pure unit tests execute domain policy and central verification orchestration with in-memory port fakes and no Nest
-  testing module, database, network, queue, or environment configuration.
-- TypeORM entities and mappers are private to `infrastructure/persistence/typeorm`; table names, columns, indexes,
-  enum/null/default behavior, timestamps, and record linking are unchanged.
-- DNS, HTTP synonym lookup, catch-all, proxy leasing, SMTP client creation, protocol execution, timeouts, and lease
-  release implement explicit ports and satisfy focused adapter contracts.
-- The same input and adapter outcomes produce the same email-verification response, domain rejection, email-cache
-  state, stored verification row, SMTP reason/source fields, and error behavior.
-- `POST /emails`, `GET /emails`, `GET /emails/:email`, and `PATCH /emails/:email` retain platform-admin protection,
-  validation, response schemas, and Swagger exclusion behavior. Duplicate `POST` remains `409`, missing `GET`
-  remains `404`, and `PATCH` continues to upsert a missing record.
-- No new domain-administration endpoint exists, and the top-level public barrel still exports only
-  `EmailVerificationModule`.
-- Sync, deprecated-sync, async, and batch behavior remains operational but their remaining layer violations stay
-  explicitly assigned to plan 11 rather than being renamed in the baseline.
-- Focused email-administration controller and HTTP integration tests cover success plus material auth, duplicate,
-  validation, and missing-record rejection paths through the recomposed Nest wiring.
-- The SMTP development collection still proves deterministic DNS, proxy, SMTP, catch-all, and deprecated-route credit
-  behavior.
-- The shrink-only baseline update removes only the core/adapter violations fixed here, adds no key, and
-  `corepack pnpm architecture:check` passes.
-- Focused, PostgreSQL, full, build, documentation, Bruno, runtime, and diff checks pass without a migration.
+- The recorded projection is below 1,000 non-documentation additions plus deletions, or this plan has been replaced
+  by the mandated two-plan split before any production edit.
+- Domain/application code imports no framework, ORM, Automapper, validation/serialization, network client, provider,
+  proxy implementation, queue, Redis, multer, S3, or transport DTO.
+- Pure tests run central verification and email/domain policy with fakes only.
+- All four TypeORM schemas are private infrastructure details and preserve the post-privacy-plan-04 schema and
+  organization boundaries with no migration.
+- Two organizations can process the same address without sharing email, verification, or SMTP state; the shared
+  domain policy remains non-tenant data.
+- Compatibility network adapters produce the same outcomes and errors without adding a raw address, SMTP transcript,
+  provider payload, or external message to logs.
+- `/emails` retains its routes, platform-admin policy, Swagger exclusion, validation, serialization, organization
+  isolation, `409`, `404`, and upsert behavior through the recomposed module.
+- Sync, deprecated-sync, async, and batch behavior remains unchanged in legacy delivery folders.
+- The public barrel remains module-only; the baseline loses only resolved core, persistence, and email-admin keys.
+- Focused, PostgreSQL, HTTP integration, architecture, full-suite, build, documentation, runtime, and diff checks pass.
 
 ## Validation
 
-Run pure and adapter-focused suites after moving tests beside their owners:
+Before production edits, record the projection table and sum its additions and deletions. After implementation,
+compare the actual classifier-compatible count:
+
+    git fetch origin master
+    git diff --numstat -M origin/master...HEAD | awk '$3 !~ /\.md$/ && $3 != "pnpm-lock.yaml" { additions += $1; deletions += $2 } END { print additions + deletions }'
+
+The projection must be less than 1,000. If the actual result reaches 1,000, do not open the PR as delivered; execute
+the same prescribed split and revalidate each branch.
+
+Run focused and persistence coverage:
 
     corepack pnpm architecture:check
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/domain src/libs/modules/email-verification/src/application src/libs/modules/email-verification/src/infrastructure src/libs/modules/email-verification/src/api/http/email-administration --runInBand
-    TEST_POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/lef_identity_test TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- email-verification-persistence.integration.spec.ts --runInBand
-    TEST_EMAIL_ADMIN_POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/lef_email_admin_test TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- email-administration-http.integration.spec.ts --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/domain src/libs/modules/email-verification/src/application src/libs/modules/email-verification/src/infrastructure/persistence src/libs/modules/email-verification/src/api/http/email-administration --runInBand
+    TEST_POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/lef_email_verification_test TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- email-verification-persistence.integration.spec.ts email-administration-http.integration.spec.ts --runInBand
     corepack pnpm architecture:baseline
     corepack pnpm architecture:check
 
-The implementation must add the named persistence integration spec if no equivalent real-PostgreSQL test exists.
-Inspect the baseline diff and keep plan-11 delivery entries stable; do not accept path-renamed equivalents.
-
-Before using the shared Docker project, inspect the `lef-api-1` Compose working-directory label and stop if another
-checkout owns it. For an owned disposable stack, run `pnpm dev:reset -- --confirm-project=LEF`, then start the SMTP
-overlay:
-
-    docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
-    curl --fail --silent http://localhost:53000/health | jq -e '.status == "ok"'
-
-The dedicated email-administration command above must run rather than skip and must use its disposable database.
-Then run the exact container-network command in `bruno/smtp-dev/README.md`, including `--network lef_default`, the
-container-internal Keycloak issuer, `--sandbox developer`, and `baseUrl=http://api:3000`. The SMTP collection must
-pass every request, including proxy drain/restore and the deprecated route's `402` and one-credit cases.
-
-Finish with:
+Inspect the baseline diff and reject added or path-renamed debt. Then run:
 
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/module-architecture/10-separate-email-verification-core-from-adapters.md
+    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/10-separate-email-verification-core-from-adapters.md
     git diff --check
 
-Bruno requests are not added or updated because this is an internal refactor with no HTTP contract change. Rerun
-the existing SMTP collection because the SMTP/proxy adapter wiring moves.
+Before runtime checks, inspect the `lef-api-1` Compose labels and stop if another checkout owns the project. Against an
+owned disposable stack, run the existing SMTP development collection from its README to prove the compatibility
+wiring still reaches the unchanged network adapters and responses.
+
+Bruno: add no requests because this is a behavior-preserving internal refactor; rerun `bruno/smtp-dev` as a wiring
+regression.
 
 ## Idempotence and Recovery
 
-Create ports and characterization tests before moving adapters, then rewire one side effect at a time. A second move
-or baseline update must be a no-op. If interrupted, use `git status`, the architecture report, and focused tests to
-locate incomplete adapters; recover by completing or reverting the narrow move while preserving unrelated user
-changes, not by introducing deep imports or baseline entries.
+Create ports and characterization tests before moving owners, then move one model/use case at a time. Repeated file
+moves, adapter registration, and shrink-only baseline updates must be no-ops. If interrupted, use `git status`, the
+architecture report, and focused tests to finish or revert only the current narrow move; never recover with a deep
+import or new baseline key.
 
-The email/domain/verification tables remain schema-compatible. If disposable data must be reset, confirm Compose
-ownership and use `pnpm dev:reset -- --confirm-project=LEF`; no migration rollback exists. SMTP fixture recovery uses
-the documented proxy restore and DNS-cache reset services. A failed email-administration integration run uses a new
-run-unique email after reset rather than mutating or deleting unrelated records.
+Post-privacy schemas are unchanged. Use only disposable synchronized data and, after confirming Compose ownership,
+`pnpm dev:reset -- --confirm-project=LEF`. There is no migration rollback. Preserve unrelated user changes and
+another checkout's containers.
 
 ## Artifacts and Notes
 
-Record the final layer/import map, port list, TypeORM mapping proof, removed and deliberately retained baseline keys,
-pure/adapter/PostgreSQL test totals, administration HTTP results, SMTP Bruno totals, health result, and full
-validation. Do not
-record access tokens, service-client secrets, SMTP credentials, raw email addresses beyond local fixture values, or
-customer data.
+Record the per-path size projection and actual count, final layer map, port list, TypeORM mapping proof, email-admin
+HTTP results, removed and deliberately retained baseline keys, test totals, sanitized runtime result, and full
+validation. Do not record raw addresses beyond local fixtures, tokens, service-client secrets, SMTP credentials,
+provider payloads, or customer data.
 
 ## Plan readiness
 
-Ready to implement.
+Ready after the binding size projection confirms fewer than 1,000 non-documentation additions plus deletions; otherwise replace this plan with the mandated split ExecPlans.
