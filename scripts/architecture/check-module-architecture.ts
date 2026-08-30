@@ -12,6 +12,21 @@ import {
 
 export const BASELINE_RELATIVE_PATH = 'scripts/architecture/module-architecture-baseline.json'
 
+const ADOPTION_RECONCILIATION_EXACT_PATHS = new Set([
+    BASELINE_RELATIVE_PATH,
+    'scripts/architecture/check-module-architecture.ts',
+    'scripts/architecture/module-architecture.spec.ts',
+])
+const ADOPTION_RECONCILIATION_PLAN_PREFIX = '.agents/plans/module-architecture-reconciliation/'
+const SCANNER_RELEVANT_UNTRACKED_PATHS = [
+    'src',
+    'scripts',
+    'jest.config.ts',
+    ':(top,glob)tsconfig*.json',
+    'package.json',
+    'pnpm-lock.yaml',
+] as const
+
 interface TextWriter {
     write(text: string): unknown
 }
@@ -29,6 +44,11 @@ interface GitResult {
     status: number | null
     stderr: string
     stdout: string
+}
+
+interface BaseComparison {
+    readonly matches: boolean
+    readonly reconciliationEligible: boolean
 }
 
 function formatError(error: unknown): string {
@@ -65,6 +85,14 @@ function showBaseline(rootDir: string, revision: string): readonly string[] {
     return parseBaseline(contents, `${revision}:${BASELINE_RELATIVE_PATH}`).violations
 }
 
+function baselineExistsAtRevision(rootDir: string, revision: string): boolean {
+    const treeContents = requireGitSuccess(
+        runGit(rootDir, ['ls-tree', '--name-only', revision, '--', BASELINE_RELATIVE_PATH]),
+        `Failed to inspect architecture baseline at revision ${revision}`,
+    )
+    return treeContents.trim().split(/\r?\n/).includes(BASELINE_RELATIVE_PATH)
+}
+
 /**
  * Reads the baseline at a usable pull-request base. `undefined` means that no
  * cross-revision comparison can be made; `null` is the one-time bootstrap case
@@ -86,11 +114,7 @@ export function readBaseBaseline(
         return undefined
     }
 
-    const treeContents = requireGitSuccess(
-        runGit(rootDir, ['ls-tree', '--name-only', baseSha, '--', BASELINE_RELATIVE_PATH]),
-        `Failed to inspect architecture baseline at base commit ${baseSha}`,
-    )
-    if (treeContents.trim().split(/\r?\n/).includes(BASELINE_RELATIVE_PATH)) {
+    if (baselineExistsAtRevision(rootDir, baseSha)) {
         return showBaseline(rootDir, baseSha)
     }
 
@@ -159,25 +183,116 @@ function printBaseGrowth(stderr: TextWriter, keys: readonly string[]): void {
     }
 }
 
+function parseNullDelimitedPaths(output: string): readonly string[] {
+    return output.split('\0').filter(path => path !== '')
+}
+
+function isAdoptionReconciliationPath(path: string): boolean {
+    return ADOPTION_RECONCILIATION_EXACT_PATHS.has(path) || path.startsWith(ADOPTION_RECONCILIATION_PLAN_PREFIX)
+}
+
+function collectChangedPaths(rootDir: string, baseSha: string): ReadonlySet<string> {
+    const tracked = requireGitSuccess(
+        runGit(rootDir, ['diff', '--name-only', '--no-renames', '-z', baseSha, '--']),
+        `Failed to compare architecture reconciliation paths with base commit ${baseSha}`,
+    )
+    const untracked = requireGitSuccess(
+        runGit(rootDir, ['ls-files', '--others', '--exclude-standard', '-z', '--', '.']),
+        `Failed to inspect untracked files during architecture adoption reconciliation at ${baseSha}`,
+    )
+    const ignoredScannerInputs = requireGitSuccess(
+        runGit(rootDir, ['ls-files', '--others', '-z', '--', ...SCANNER_RELEVANT_UNTRACKED_PATHS]),
+        `Failed to inspect ignored scanner inputs during architecture adoption reconciliation at ${baseSha}`,
+    )
+
+    return new Set([
+        ...parseNullDelimitedPaths(tracked),
+        ...parseNullDelimitedPaths(untracked),
+        ...parseNullDelimitedPaths(ignoredScannerInputs),
+    ])
+}
+
+function adoptionReconciliationEligible(
+    rootDir: string,
+    baseSha: string,
+    addedViolations: readonly ArchitectureViolation[],
+): boolean {
+    if (!baselineExistsAtRevision(rootDir, baseSha)) {
+        return false
+    }
+
+    const ancestorCheck = runGit(rootDir, ['merge-base', '--is-ancestor', baseSha, 'HEAD'])
+    if (ancestorCheck.error === undefined && ancestorCheck.status === 1) {
+        return false
+    }
+    requireGitSuccess(ancestorCheck, `Failed to verify architecture base commit ${baseSha} against HEAD`)
+
+    const ancestry = requireGitSuccess(
+        runGit(rootDir, ['rev-list', '--parents', '-n', '1', baseSha]),
+        `Failed to inspect parents of architecture base commit ${baseSha}`,
+    )
+        .trim()
+        .split(/\s+/)
+    if (ancestry.length < 2) {
+        throw new Error(`Architecture base commit ${baseSha} has no first parent; reconciliation is unsafe.`)
+    }
+    if (ancestry.length !== 2) {
+        return false
+    }
+    const firstParent = ancestry[1]
+    const priorBaselineRevision = requireGitSuccess(
+        runGit(rootDir, ['log', '-n', '1', '--format=%H', firstParent, '--', BASELINE_RELATIVE_PATH]),
+        `Failed to inspect architecture baseline ancestry before base commit ${baseSha}`,
+    ).trim()
+    if (priorBaselineRevision !== '') {
+        return false
+    }
+
+    const changedPaths = collectChangedPaths(rootDir, baseSha)
+    if ([...changedPaths].some(path => !isAdoptionReconciliationPath(path))) {
+        return false
+    }
+
+    return addedViolations.every(violation => violation.source !== undefined && !changedPaths.has(violation.source))
+}
+
 function compareWithBase(
     rootDir: string,
     environment: NodeJS.ProcessEnv,
     stderr: TextWriter,
     currentBaselineKeys: readonly string[],
-): boolean {
+    currentViolations: readonly ArchitectureViolation[],
+): BaseComparison {
     const baseBaseline = readBaseBaseline(rootDir, environment, stderr)
     if (baseBaseline === undefined) {
-        return true
+        return { matches: true, reconciliationEligible: false }
     }
     if (baseBaseline === null) {
         stderr.write('Base revision predates the architecture baseline; allowing bootstrap.\n')
-        return true
+        return { matches: true, reconciliationEligible: false }
     }
 
     const baseKeys = new Set(baseBaseline)
     const addedKeys = currentBaselineKeys.filter(key => !baseKeys.has(key))
-    printBaseGrowth(stderr, addedKeys)
-    return addedKeys.length === 0
+    if (addedKeys.length === 0) {
+        return { matches: true, reconciliationEligible: false }
+    }
+
+    const currentKeys = new Set(currentBaselineKeys)
+    const hasRemovedBaseKeys = baseBaseline.some(key => !currentKeys.has(key))
+    const violationsByKey = new Map(currentViolations.map(violation => [violation.key, violation]))
+    const addedViolations = addedKeys
+        .map(key => violationsByKey.get(key))
+        .filter((violation): violation is ArchitectureViolation => violation !== undefined)
+    const baseSha = environment.ARCHITECTURE_BASE_SHA!.trim()
+    const reconciliationEligible =
+        !hasRemovedBaseKeys &&
+        addedViolations.length === addedKeys.length &&
+        adoptionReconciliationEligible(rootDir, baseSha, addedViolations)
+    if (!reconciliationEligible) {
+        printBaseGrowth(stderr, addedKeys)
+    }
+    return { matches: false, reconciliationEligible }
 }
 
 function writeBaselineAtomically(path: string, keys: readonly string[]): void {
@@ -207,8 +322,8 @@ function checkArchitecture(
     printNewViolations(stderr, comparison.currentOnly)
     printStaleEntries(stderr, comparison.baselineOnly)
 
-    const baseMatches = compareWithBase(rootDir, environment, stderr, baseline.violations)
-    if (!comparison.matches || !baseMatches) {
+    const baseComparison = compareWithBase(rootDir, environment, stderr, baseline.violations, scan.violations)
+    if (!comparison.matches || (!baseComparison.matches && !baseComparison.reconciliationEligible)) {
         return 1
     }
 
@@ -228,11 +343,16 @@ function updateBaseline(
     const scan = scanModuleArchitecture({ rootDir })
     const currentKeys = scan.violations.map(violation => violation.key).sort()
 
-    if (!compareWithBase(rootDir, environment, stderr, currentKeys)) {
+    const baseComparison = compareWithBase(rootDir, environment, stderr, currentKeys, scan.violations)
+    if (!baseComparison.matches && !baseComparison.reconciliationEligible) {
         return 1
     }
 
     if (!existsSync(baselinePath)) {
+        if (baseComparison.reconciliationEligible) {
+            stderr.write('Adoption reconciliation requires the current architecture baseline file to exist.\n')
+            return 1
+        }
         writeBaselineAtomically(baselinePath, currentKeys)
         stdout.write(`Created architecture baseline with ${currentKeys.length} violations.\n`)
         return 0
@@ -241,7 +361,16 @@ function updateBaseline(
     const baseline = parseBaseline(readFileSync(baselinePath, 'utf8'), BASELINE_RELATIVE_PATH)
     const comparison = compareViolationSets(scan.violations, baseline.violations)
     if (comparison.currentOnly.length > 0) {
+        if (baseComparison.reconciliationEligible && comparison.baselineOnly.length === 0) {
+            writeBaselineAtomically(baselinePath, currentKeys)
+            stdout.write(
+                `Reconciled architecture baseline adoption from ${baseline.violations.length} to ${currentKeys.length} violations.\n`,
+            )
+            return 0
+        }
+
         printNewViolations(stderr, comparison.currentOnly)
+        printStaleEntries(stderr, comparison.baselineOnly)
         stderr.write('Refusing to grow the architecture baseline. Fix the new violations instead.\n')
         return 1
     }
