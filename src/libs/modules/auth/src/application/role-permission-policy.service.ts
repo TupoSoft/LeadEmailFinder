@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common'
 import { AuthPermission, AuthPrincipal, AuthRole } from '@tuposoft/lead-email-finder/modules/identity'
 
 const MEMBER_PERMISSIONS: readonly AuthPermission[] = ['verification:run', 'verification:read']
@@ -13,7 +12,6 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthRole, readonly AuthPermission
     platform_admin: PLATFORM_ADMIN_PERMISSIONS,
 }
 
-@Injectable()
 export class RolePermissionPolicy {
     effectivePermissionsFor(principal: AuthPrincipal): readonly AuthPermission[] {
         if (principal.credentialKind === 'service_client') {

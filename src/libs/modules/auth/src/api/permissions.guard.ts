@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core'
 import { Request } from 'express'
 import { AuthPermission } from '@tuposoft/lead-email-finder/modules/identity'
-import { RolePermissionPolicy } from '../../application/role-permission-policy.service'
+import { RolePermissionPolicy } from '../application/role-permission-policy.service'
 import { getAuthPrincipal } from './request-principal'
 import { REQUIRED_PERMISSIONS_METADATA_KEY } from './require-permissions.decorator'
 

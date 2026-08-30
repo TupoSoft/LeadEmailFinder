@@ -1,10 +1,10 @@
-import { randomBytes, randomUUID } from 'node:crypto'
-import { Controller, Get, Global, INestApplication, Module, UseGuards } from '@nestjs/common'
+import { randomUUID } from 'node:crypto'
+import { Controller, Get, INestApplication, UseGuards } from '@nestjs/common'
+import { APP_GUARD } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
-import { Redis } from 'ioredis'
 import request from 'supertest'
 import {
     AuditLogEntry,
@@ -17,11 +17,17 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth/auth.module'
-import { CurrentPrincipal } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/current-principal.decorator'
-import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/permissions.guard'
-import { RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/require-permissions.decorator'
-import { RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth/application/role-permission-policy.service'
+import {
+    AuthenticationService,
+    AuthGuard,
+    AuthModule,
+    CredentialExtractor,
+    CurrentPrincipal,
+    OidcCredentialAuthenticator,
+    PermissionsGuard,
+    RequirePermissions,
+    RolePermissionPolicy,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import { ServiceClientCreationService } from './service-client-creation.service'
 import { ServiceClientDeletionService } from './service-client-deletion.service'
 import { ServiceClientDisablementService } from './service-client-disablement.service'
@@ -134,16 +140,6 @@ function decodeSubject(token: string): string {
     return (JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub: string }).sub
 }
 
-// AuthModule imports BffSessionModule, whose providers need a Redis client and BFF session configuration
-// even though this test never exercises browser-session behavior. lazyConnect avoids an unused, unwanted TCP
-// connection attempt for a Redis instance nothing here actually calls.
-@Global()
-@Module({
-    providers: [{ provide: Redis, useFactory: () => new Redis({ lazyConnect: true }) }],
-    exports: [Redis],
-})
-class TestRedisModule {}
-
 @Controller('service-client-live-test')
 class ServiceClientLiveTestController {
     @UseGuards(PermissionsGuard)
@@ -205,16 +201,9 @@ describeWithKeycloakAndPostgres('service client lifecycle against a live Keycloa
         process.env['OIDC_AUDIENCE'] = 'lead-email-finder-api'
         process.env['KEYCLOAK_ORG_ADMIN_CLIENT_ID'] = orgAdminClientId
         process.env['KEYCLOAK_ORG_ADMIN_CLIENT_SECRET'] = orgAdminClientSecret
-        // AuthModule -> BffSessionModule needs these to construct its configuration provider, even though
-        // this test never drives a browser session. Values are unused placeholders, not exercised here.
-        process.env['APP_BASE_URL'] = 'http://localhost:53000'
-        process.env['BFF_CLIENT_ID'] = 'lef-web-bff'
-        process.env['BFF_CLIENT_SECRET'] = 'unused-in-this-test'
-        process.env['SESSION_ENCRYPTION_KEY'] = randomBytes(32).toString('base64url')
 
         moduleRef = await Test.createTestingModule({
             imports: [
-                TestRedisModule,
                 ConfigModule.forRoot({ ignoreEnvFile: true }),
                 TypeOrmModule.forRoot({
                     type: 'postgres',
@@ -226,7 +215,18 @@ describeWithKeycloakAndPostgres('service client lifecycle against a live Keycloa
                 ServiceClientManagementModule,
             ],
             controllers: [ServiceClientLiveTestController],
-            providers: [RolePermissionPolicy, PermissionsGuard],
+            providers: [
+                RolePermissionPolicy,
+                PermissionsGuard,
+                {
+                    provide: AuthenticationService,
+                    useFactory: (extractor: CredentialExtractor, oidc: OidcCredentialAuthenticator) =>
+                        new AuthenticationService(extractor, [oidc]),
+                    inject: [CredentialExtractor, OidcCredentialAuthenticator],
+                },
+                AuthGuard,
+                { provide: APP_GUARD, useExisting: AuthGuard },
+            ],
         }).compile()
 
         app = moduleRef.createNestApplication()

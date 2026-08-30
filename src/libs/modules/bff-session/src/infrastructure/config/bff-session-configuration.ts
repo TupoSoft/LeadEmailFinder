@@ -1,19 +1,8 @@
 import { ConfigService } from '@nestjs/config'
-
-export const BFF_SESSION_CONFIGURATION = Symbol('BFF_SESSION_CONFIGURATION')
+import { BffSessionConfiguration } from '../../application/bff-session-configuration'
 
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
 const DEFAULT_SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000
-
-export interface BffSessionConfiguration {
-    readonly appBaseUrl: string
-    readonly issuer: string
-    readonly clientId: string
-    readonly clientSecret: string
-    readonly sessionIdleTimeoutMs: number
-    readonly sessionAbsoluteTimeoutMs: number
-    readonly isSecureCookie: boolean
-}
 
 export function createBffSessionConfiguration(configService: ConfigService): BffSessionConfiguration {
     const appBaseUrl = configService.getOrThrow<string>('APP_BASE_URL')

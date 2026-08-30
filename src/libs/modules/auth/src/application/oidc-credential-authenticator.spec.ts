@@ -1,4 +1,4 @@
-import { ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { ServiceCredentialRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { OidcCredentialAuthenticator } from './oidc-credential-authenticator'
 import { OidcTokenVerifier } from './oidc-token-verifier'
 import { ServiceCredentialResolver } from './service-credential-resolver.service'
@@ -35,7 +35,7 @@ describe('OidcCredentialAuthenticator', () => {
                 id: 'credential-id',
                 organizationId: 'organization-id',
                 permissions: ['verification:run'],
-            } as ServiceCredential
+            } as unknown as ServiceCredentialRecord
             serviceCredentialResolver.resolveActive.mockResolvedValue(serviceCredential)
 
             const principal = await authenticator.authenticate({ scheme: 'bearer', token: 'a.b.c' })
@@ -58,7 +58,7 @@ describe('OidcCredentialAuthenticator', () => {
                 id: 'credential-id',
                 organizationId: 'true-organization-id',
                 permissions: [],
-            } as unknown as ServiceCredential
+            } as unknown as ServiceCredentialRecord
             serviceCredentialResolver.resolveActive.mockResolvedValue(serviceCredential)
 
             const principal = await authenticator.authenticate({ scheme: 'bearer', token: 'a.b.c' })

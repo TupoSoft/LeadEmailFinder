@@ -5,11 +5,11 @@ import request from 'supertest'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService } from './application/authentication.service'
 import { RolePermissionPolicy } from './application/role-permission-policy.service'
-import { AuthGuard } from './infrastructure/http/auth.guard'
-import { CurrentPrincipal } from './infrastructure/http/current-principal.decorator'
-import { PermissionsGuard } from './infrastructure/http/permissions.guard'
-import { Public } from './infrastructure/http/public.decorator'
-import { RequirePermissions } from './infrastructure/http/require-permissions.decorator'
+import { AuthGuard } from './api/auth.guard'
+import { CurrentPrincipal } from './api/current-principal.decorator'
+import { PermissionsGuard } from './api/permissions.guard'
+import { Public } from './api/public.decorator'
+import { RequirePermissions } from './api/require-permissions.decorator'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
     authenticate: jest.fn(),

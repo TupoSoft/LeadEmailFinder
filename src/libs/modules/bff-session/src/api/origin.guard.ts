@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable } from '@nestjs/common'
 import { Request } from 'express'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../application/bff-session-configuration'
 import { firstHeaderValue } from './parse-cookie-header'
 
 @Injectable()

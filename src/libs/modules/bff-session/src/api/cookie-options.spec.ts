@@ -1,4 +1,4 @@
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../application/bff-session-configuration'
 import { buildCsrfCookieOptions, buildLoginStateCookieOptions, buildSessionCookieOptions } from './cookie-options'
 
 function configWith(isSecureCookie: boolean): BffSessionConfiguration {

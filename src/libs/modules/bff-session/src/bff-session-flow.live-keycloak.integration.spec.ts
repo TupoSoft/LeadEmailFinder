@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { load } from 'cheerio'
 import { ClassSerializerInterceptor, Global, INestApplication, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { Reflector } from '@nestjs/core'
+import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
@@ -15,8 +15,15 @@ import {
     OrganizationCreditAccount,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
-import { BFF_CSRF_COOKIE_NAME } from './infrastructure/http/bff-cookie-names'
+import {
+    AuthenticationService,
+    AuthGuard,
+    AuthModule,
+    CredentialExtractor,
+    OidcCredentialAuthenticator,
+} from '@tuposoft/lead-email-finder/modules/auth'
+import { BffSessionCredentialAuthenticator, BffSessionModule, BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session'
+import { BFF_CSRF_COOKIE_NAME } from './api/bff-cookie-names'
 
 // Deliberately its own env vars, not TEST_OIDC_*/TEST_POSTGRES_URL: this test drives a real Keycloak
 // browser login (distinct from the M2M client-credentials tests) and does its own dropSchema+synchronize
@@ -38,9 +45,9 @@ const describeWithKeycloakRedisAndPostgres =
 const appBaseUrl = 'http://localhost:53000'
 const identityEntities = [Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
 
-// AuthModule -> BffSessionModule injects Redis without importing RedisModule itself, relying on it being
-// registered globally elsewhere in the real app (via DnsModule). This test's module graph has no such
-// registration, so a global module supplies one directly.
+// BffSessionModule injects Redis without importing RedisModule itself, relying on it being registered
+// globally elsewhere in the real app (via DnsModule). This test's module graph has no such registration,
+// so a global module supplies one directly.
 @Global()
 @Module({
     providers: [{ provide: Redis, useFactory: () => new Redis(redisUrl!) }],
@@ -244,6 +251,21 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
                     entities: identityEntities,
                 }),
                 AuthModule,
+                BffSessionModule,
+            ],
+            providers: [
+                {
+                    provide: AuthenticationService,
+                    useFactory: (
+                        extractor: CredentialExtractor,
+                        oidc: OidcCredentialAuthenticator,
+                        bffSession: BffSessionCredentialAuthenticator,
+                    ) => new AuthenticationService(extractor, [oidc, bffSession]),
+                    inject: [CredentialExtractor, OidcCredentialAuthenticator, BffSessionCredentialAuthenticator],
+                },
+                AuthGuard,
+                { provide: APP_GUARD, useExisting: AuthGuard },
+                { provide: APP_GUARD, useExisting: BrowserSessionMutationGuard },
             ],
         }).compile()
 

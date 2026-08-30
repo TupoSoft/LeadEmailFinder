@@ -1,15 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { Redis } from 'ioredis'
 import { generateSessionId } from '../../application/pkce'
+import { SessionStore } from '../../application/session-store'
 import { SessionRecord } from '../../domain/session-record'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../../application/bff-session-configuration'
 import { SessionEncryptor } from '../crypto/session-encryptor'
 import { withRedisTimeout } from './redis-timeout'
 
 const KEY_PREFIX = 'bff-session'
 
 @Injectable()
-export class RedisSessionStore {
+export class RedisSessionStore implements SessionStore {
     constructor(
         @Inject(Redis) private readonly redis: Redis,
         private readonly encryptor: SessionEncryptor,

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { Redis } from 'ioredis'
+import { PendingLoginStateStore } from '../../application/pending-login-state-store'
 import { PendingLoginState } from '../../domain/pending-login-state'
 import { withRedisTimeout } from './redis-timeout'
 
@@ -7,7 +8,7 @@ const KEY_PREFIX = 'bff-login-state'
 const PENDING_LOGIN_TTL_SECONDS = 600
 
 @Injectable()
-export class RedisPendingLoginStateStore {
+export class RedisPendingLoginStateStore implements PendingLoginStateStore {
     constructor(@Inject(Redis) private readonly redis: Redis) {}
 
     async create(state: string, pendingLoginState: PendingLoginState): Promise<void> {

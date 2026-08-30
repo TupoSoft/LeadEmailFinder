@@ -11,9 +11,13 @@ who is acting and what they are allowed to do.
 - External human identities (one row per Keycloak subject) and service credentials (one row per M2M client).
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
-- Resolving a human identity's active membership (`HumanIdentityResolver`), for session/principal construction.
-- A framework-free `ExternalIdentityResolver`, proven standalone ahead of the consumers that will migrate to it
-  (`module-architecture/03`, `/06`); it is not yet wired into any request path.
+- Resolving a human identity's active membership (`HumanIdentityResolver`), for session/principal construction —
+  still used by `invitation-acceptance.service.ts` in `organization-onboarding`, which needs to enlist identity
+  creation in its own ambient transaction; not used by `auth`/`bff-session` since `module-architecture/03`.
+- A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, and `ActiveServiceCredentialReader`,
+  used by `bff-session` (identity resolution on OIDC return, active-membership checks) and `auth` (active
+  service-credential checks) since `module-architecture/03`; `organization-onboarding` and
+  `service-client-management` migrate to these ports in later plans.
 
 ## Non-Responsibilities
 
@@ -40,14 +44,13 @@ barrel. It splits into two parts:
 `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
 
 **Temporary compatibility surface (deprecated)** — `HumanIdentityResolver`, `TypeOrmModule` reexported for direct
-repository injection, and
-every entity class listed under Persistence below. Each is still justified by a consumer not yet migrated: `auth`
-injects `ServiceCredential` directly; `bff-session` injects `OrganizationMembership` directly; `credits` operates
-on `OrganizationCreditAccount`/`CreditDebit`/`CreditGrant` directly; `organization-onboarding` and
-`service-client-management` run raw TypeORM transactions over several identity entities, including the
-`invitation-acceptance.service.ts` file in `organization-onboarding`, which passes its own `EntityManager` into
-`HumanIdentityResolver`. `module-architecture/08` removes this whole surface once plans `03`, `04`, `06`, and `07`
-have migrated all of it.
+repository injection, and every entity class listed under Persistence below. Each is still justified by a
+consumer not yet migrated: `credits` operates on `OrganizationCreditAccount`/`CreditDebit`/`CreditGrant`
+directly; `organization-onboarding` and `service-client-management` run raw TypeORM transactions over several
+identity entities, including the `invitation-acceptance.service.ts` file in `organization-onboarding`, which
+passes its own `EntityManager` into `HumanIdentityResolver`. `auth` and `bff-session` no longer use this surface
+as of `module-architecture/03`. `module-architecture/08` removes what remains of it once plans `04`, `06`, and
+`07` have migrated the rest.
 
 ## Dependencies
 

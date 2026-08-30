@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common'
 import { ExtractedCredential } from './credential-authenticator'
 
 export const BFF_SESSION_COOKIE_NAME = 'lef_session'
@@ -25,7 +24,6 @@ function parseCookieHeader(header: string | undefined): Record<string, string> {
     )
 }
 
-@Injectable()
 export class CredentialExtractor {
     extract(headers: Record<string, string | string[] | undefined>): ExtractedCredential | undefined {
         const authorization = this.firstValue(headers['authorization'])

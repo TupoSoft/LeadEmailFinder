@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common'
 import { Request } from 'express'
-import { getAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/request-principal'
+import { getAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { CsrfGuard } from './csrf.guard'
 import { OriginGuard } from './origin.guard'
 

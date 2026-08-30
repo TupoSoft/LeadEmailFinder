@@ -1,6 +1,6 @@
 import { Redis } from 'ioredis'
 import { SessionRecord } from '../../domain/session-record'
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../../application/bff-session-configuration'
 import { SessionEncryptor } from '../crypto/session-encryptor'
 import { RedisSessionStore } from './redis-session-store'
 import { RedisUnavailableError } from './redis-timeout'

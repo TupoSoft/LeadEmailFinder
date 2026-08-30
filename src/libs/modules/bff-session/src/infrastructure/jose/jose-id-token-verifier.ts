@@ -1,7 +1,7 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { createRemoteJWKSet, JWTPayload, jwtVerify } from 'jose'
 import { IdTokenVerifier, VerifiedIdToken } from '../../application/id-token-verifier'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../../application/bff-session-configuration'
 
 type RemoteJwkSet = ReturnType<typeof createRemoteJWKSet>
 

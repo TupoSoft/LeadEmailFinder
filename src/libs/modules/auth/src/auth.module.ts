@@ -1,40 +1,35 @@
 import { Module } from '@nestjs/common'
-import { APP_GUARD } from '@nestjs/core'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
-import { BffSessionModule } from '@tuposoft/lead-email-finder/modules/bff-session/bff-session.module'
-import { BffSessionCredentialAuthenticator } from '@tuposoft/lead-email-finder/modules/bff-session/application/bff-session-credential-authenticator'
-import { BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session/infrastructure/http/browser-session-mutation.guard'
-import { AuthenticationService } from './application/authentication.service'
-import { CREDENTIAL_AUTHENTICATORS } from './application/credential-authenticator'
+import {
+    ACTIVE_SERVICE_CREDENTIAL_READER,
+    ActiveServiceCredentialReader,
+    IdentityModule,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { CredentialExtractor } from './application/credential-extractor'
 import { OidcCredentialAuthenticator } from './application/oidc-credential-authenticator'
-import { OIDC_TOKEN_VERIFIER } from './application/oidc-token-verifier'
+import { OIDC_TOKEN_VERIFIER, OidcTokenVerifier } from './application/oidc-token-verifier'
 import { ServiceCredentialResolver } from './application/service-credential-resolver.service'
-import { AuthGuard } from './infrastructure/http/auth.guard'
 import { JoseOidcTokenVerifier } from './infrastructure/jose/jose-oidc-token-verifier'
 import { createOidcConfiguration, OIDC_CONFIGURATION } from './infrastructure/jose/oidc-configuration'
 
 @Module({
-    imports: [ConfigModule, IdentityModule, BffSessionModule],
+    imports: [ConfigModule, IdentityModule],
     providers: [
-        CredentialExtractor,
-        AuthenticationService,
-        ServiceCredentialResolver,
-        OidcCredentialAuthenticator,
+        { provide: CredentialExtractor, useFactory: () => new CredentialExtractor() },
+        {
+            provide: ServiceCredentialResolver,
+            useFactory: (reader: ActiveServiceCredentialReader) => new ServiceCredentialResolver(reader),
+            inject: [ACTIVE_SERVICE_CREDENTIAL_READER],
+        },
         { provide: OIDC_CONFIGURATION, useFactory: createOidcConfiguration, inject: [ConfigService] },
         { provide: OIDC_TOKEN_VERIFIER, useClass: JoseOidcTokenVerifier },
         {
-            provide: CREDENTIAL_AUTHENTICATORS,
-            useFactory: (oidc: OidcCredentialAuthenticator, bffSession: BffSessionCredentialAuthenticator) => [
-                oidc,
-                bffSession,
-            ],
-            inject: [OidcCredentialAuthenticator, BffSessionCredentialAuthenticator],
+            provide: OidcCredentialAuthenticator,
+            useFactory: (tokenVerifier: OidcTokenVerifier, serviceCredentialResolver: ServiceCredentialResolver) =>
+                new OidcCredentialAuthenticator(tokenVerifier, serviceCredentialResolver),
+            inject: [OIDC_TOKEN_VERIFIER, ServiceCredentialResolver],
         },
-        { provide: APP_GUARD, useClass: AuthGuard },
-        { provide: APP_GUARD, useExisting: BrowserSessionMutationGuard },
     ],
-    exports: [AuthenticationService],
+    exports: [CredentialExtractor, OidcCredentialAuthenticator],
 })
 export class AuthModule {}

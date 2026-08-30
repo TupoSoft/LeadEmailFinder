@@ -15,10 +15,10 @@ session, and logging out behavior, plus global CSRF/Origin protection with the s
 
 ## Progress
 
-- [ ] (2026-08-29) Reorganize auth and BFF session into their responsibility-based layers and inward dependencies.
-- [ ] (2026-08-29) Move authenticator assembly and global-guard registration into the API-host composition module.
-- [ ] (2026-08-29) Replace all 22 cross-module deep imports with intentional public-barrel imports.
-- [ ] (2026-08-29) Remove business-module wildcard aliases and validate unit, integration, live-fixture, and Bruno behavior.
+- [x] (2026-08-30) Reorganize auth and BFF session into their responsibility-based layers and inward dependencies.
+- [x] (2026-08-30) Move authenticator assembly and global-guard registration into the API-host composition module.
+- [x] (2026-08-30) Replace all 22 cross-module deep imports with intentional public-barrel imports.
+- [x] (2026-08-30) Remove business-module wildcard aliases and validate unit, integration, live-fixture, and Bruno behavior.
 
 ## Plan dependencies
 
@@ -26,7 +26,39 @@ session, and logging out behavior, plus global CSRF/Origin protection with the s
 
 ## Surprises & Discoveries
 
-None yet.
+- The architecture checker's `api-placement` rule only flags `.controller.ts`/`.dto.ts` files outside the `api`
+  layer; it does not require guards or decorators to move there (the layer-dependency set for `infrastructure`
+  already permits depending on `application`). Guards and decorators were still moved to `api/` for both modules
+  to match this plan's own design intent (a clean, documented layer story), not because the checker demanded it.
+- `PermissionsGuard` and `RolePermissionPolicy` were never actually resolved through the DI container `AuthModule`
+  itself provides, by any existing consumer: `organization-onboarding` and `service-client-management` each
+  already redeclare fresh instances of both in their own `providers` array, importing only the classes from the
+  barrel `auth` exposes. This meant `AuthModule` did not need to keep providing or exporting either — it only
+  needs to provide the ingredients a composition root uses to build `AuthenticationService`
+  (`CredentialExtractor`, `OidcCredentialAuthenticator`).
+- `AuthGuard` could not be provided by `AuthModule` at all once `AuthenticationService` moved to the composition
+  root: Nest eagerly instantiates every provider in a module at bootstrap, and `AuthenticationService` is not
+  visible inside the container `AuthModule` itself provides. `AuthGuard` is instead provided directly by
+  `AuthenticationCompositionModule` (and, in tests, by whichever ad hoc module assembles `AuthenticationService`
+  itself) — the class definition lives in `auth/api/`, but nothing forces it to be instantiated by `auth.module.ts`.
+  The same reasoning applies to the three live-Keycloak integration tests that previously imported the real
+  `AuthModule` for its old self-registering global-guard behavior, stubbing a Redis client just to satisfy
+  the indirect import in `BffSessionModule`. Each now assembles its own minimal `AuthenticationService`/`APP_GUARD`
+  composition locally. The `oidc-permission-check` spec and the `service-client-management` live-Keycloak spec
+  each only exercise the bearer path, so neither needs the Redis stub or the BFF-only environment variables it
+  never actually exercised.
+- A single shared `CredentialRejectedError`, defined in the `credential-authenticator.ts` file already owned by
+  auth (a file `bff-session` already legitimately imports), lets `AuthGuard` translate *any* authenticator's
+  per-request rejection into a 401 without importing anything from `bff-session`. This resolves what would
+  otherwise be an auth-to-`bff-session` dependency purely to catch the error types `bff-session` itself throws.
+- The "sign-in requires exactly one active membership" check owned by `bff-session` is not a per-request credential
+  rejection; it never runs through `AuthGuard`. It is instead a distinct login-time failure, so it kept its own
+  local `SingleActiveMembershipRequiredError`, translated to 403 by the controller's `callback()` method directly.
+- Rebuilding the local dev stack (`pnpm dev:reset --confirm-project=LEF`) and running the three live-Keycloak
+  integration specs plus both affected Bruno collections against it (see Outcomes) caught nothing this plan's
+  static validation had missed. It was still the only way to prove that the rewritten
+  `AuthenticationCompositionModule` wiring, the three new typed-error translations, and the removed Redis stubs
+  all produce byte-identical HTTP behavior end to end.
 
 ## Decision Log
 
@@ -58,10 +90,114 @@ None yet.
   Rationale: Exact aliases are the supported public barrels. Removing wildcard resolution makes future deep imports
   fail in both TypeScript and Jest instead of relying only on lint convention.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: Introduce a single `CredentialRejectedError` in the `credential-authenticator.ts` file owned by auth
+  (not a family of per-cause error classes) for every per-request "this credential does not authenticate"
+  failure across both modules, translated to a 401 only inside `AuthGuard`.
+  Rationale: `AuthGuard` must distinguish an expected authentication failure (401) from a genuine bug or
+  infrastructure fault (which should still surface as a 500, exactly as it did before this refactor). A single
+  shared marker type lets every authenticator in the chain — including the one owned by `bff-session`, which
+  already legitimately depends on the barrel auth exposes — signal that distinction without `AuthGuard` needing
+  to import or enumerate each authenticator's own error types.
+  Date/Author: 2026-08-30, implementation.
+- Decision: The login-time failures owned by `bff-session` (`LoginStateInvalidError`, `AuthorizationCodeExchangeFailedError`,
+  `SingleActiveMembershipRequiredError`) are translated to HTTP exceptions inside `BffSessionController.callback()`
+  directly, not via a shared error-translation guard/interceptor.
+  Rationale: These failures happen during `handleCallback()`, a plain controller method call outside the
+  `AuthGuard`/`AuthenticationService` chain entirely (the callback request itself is `@Public()`). A local
+  try/catch at the one call site that can throw them is simpler than introducing a new cross-cutting
+  translation mechanism for three call sites total.
+  Date/Author: 2026-08-30, implementation.
+- Decision: Introduce `SessionStore`/`PENDING_LOGIN_STATE_STORE` application ports (mirroring identity's
+  `module-architecture/02` port pattern) bound to the existing `RedisSessionStore`/`RedisPendingLoginStateStore`
+  adapters via `useExisting`, rather than only removing the `@nestjs/common` decorators from the application
+  services that consumed them directly.
+  Rationale: The acceptance criteria require no application file to import its own infrastructure layer; the
+  application services already only used the narrow `get`/`save`/`create`/`delete` and `create`/`consume`
+  surfaces respectively, so extracting a port was a direct mechanical fit, not a speculative abstraction.
+  Date/Author: 2026-08-30, implementation.
+- Decision: Split `BffSessionConfiguration` (the token and interface) into `application/bff-session-configuration.ts`,
+  leaving only the `ConfigService`-reading factory in `infrastructure/config/bff-session-configuration.ts`.
+  Rationale: The configuration contract is read by files in `application` (`BffSessionFlowService`) and `api`
+  (`BffSessionController`, `OriginGuard`, `cookie-options.ts`); the layer-dependency rule does not let either
+  reach into `infrastructure`, so the contract had to move to a layer both can legally depend on.
+  Date/Author: 2026-08-30, implementation.
+- Decision: Add `auth.module.spec.ts`, `bff-session.module.spec.ts`, and
+  `authentication-composition.module.spec.ts` (all `Reflect.getMetadata(MODULE_METADATA...)`-based, matching
+  the established pattern in `identity.module.spec.ts`), plus a new `api/bff-session.controller.spec.ts` for the
+  callback error-translation logic.
+  Rationale: None of the rewired `@Module()` provider/factory wiring, nor the new controller-level error
+  translation, had any existing fast unit-level coverage. The only test that previously exercised the real
+  `AuthModule`/`BffSessionModule` DI graphs end to end was the skip-gated live-Keycloak suite.
+  Date/Author: 2026-08-30, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including a live rebuild of the local development stack.
+
+Every acceptance criterion was met:
+
+- The production source graph between `auth` and `bff-session` is one-directional (`bff-session -> auth` only);
+  confirmed both by the architecture check (the `module-cycle|src/libs/modules|auth,bff-session` baseline entry
+  is now stale/removed) and by `auth.module.ts` having zero imports from `bff-session`.
+- All 22 preexisting cross-module deep-import declarations are gone; `rg -n
+  "@tuposoft/lead-email-finder/modules/[^'\"]+/" src scripts` returns nothing outside
+  `module-architecture-baseline.json`/`module-architecture.spec.ts`.
+- `tsconfig.json` and `jest.config.ts` no longer have `@tuposoft/lead-email-finder/modules/auth/*` or
+  `.../bff-session/*` wildcard mappings; both still keep their exact bare-barrel entries. No other module's
+  wildcard mapping was touched (out of scope for this plan).
+- `auth` and `bff-session` application/domain files import no `@nestjs/`, `typeorm`, or other forbidden technical
+  package; guards, decorators, the controller, and DTOs now live under `api/`, which is not subject to that
+  restriction. `corepack pnpm architecture:baseline` shrank the baseline from 229 to 187 violations with zero new
+  ones — every removed entry belonged to this plan's scope, and nothing outside it changed.
+- The host's `AuthenticationCompositionModule` registers `{ provide: APP_GUARD, useExisting: AuthGuard }` before
+  `{ provide: APP_GUARD, useExisting: BrowserSessionMutationGuard }` — asserted directly by
+  `authentication-composition.module.spec.ts` and proven behaviorally by the existing "rejects POST
+  `/v1/auth/logout` with 401 when unauthenticated" case in `bff-session-guard-wiring.integration.spec.ts` (a
+  mutation route; 401, not 403, only if auth genuinely runs first).
+
+Validation performed:
+
+- `TMPDIR=/tmp corepack pnpm test -- src/libs/modules/auth/src src/libs/modules/bff-session/src
+  src/lead-email-finder-api/src --runInBand` — 35 suites, 221 tests, all passing.
+- `TMPDIR=/tmp corepack pnpm test -- src/libs/modules/organization-onboarding/src
+  src/libs/modules/service-client-management/src --runInBand` — 17 suites, 121 tests, all passing (these two
+  consumer modules' own deep-import specs were repaired but their own module/provider wiring was untouched).
+- `corepack pnpm architecture:baseline` then `architecture:check` — shrank 229 → 187 violations, check passes.
+- `tsc --noEmit` (via a scratch tsconfig redirecting `outDir`/`tsBuildInfoFile` off the root-owned `dist/`) —
+  clean.
+- `TMPDIR=/tmp corepack pnpm test:ci` — 144 suites, 1099 tests passing, 49 skipped (live-fixture-gated), and a
+  single to-do test that predates this plan and is unrelated to it.
+- `corepack pnpm lint` — 0 errors, 2 preexisting warnings in unrelated files.
+- `nest build` (via a scratch `nest-cli.json`/`tsconfig.build.json` pair redirecting `outDir` off the root-owned
+  `dist/`) — 0 type-check issues, 477 files compiled.
+- `git diff --check` — clean.
+- Live verification: ran `pnpm dev:reset --confirm-project=LEF` to rebuild and reprovision the local `lef-*`
+  Compose stack with these changes (the reset's own authenticated M2M smoke test passed against the rebuilt
+  `lef-api-1`). Then, against that live stack:
+  - `bruno/m2m-oidc-authentication` and `bruno/bff-sessions` — both collections, all requests, and all assertions
+    passing (`/health` stays public, missing/malformed bearer credentials rejected with 401, PKCE login redirect
+    correct, missing login-state on `callback` rejected with 401 — proving the new `LoginStateInvalidError` ->
+    401 translation for real).
+  - `bff-session-flow.live-keycloak.integration.spec.ts` (real Keycloak user, real login/callback/session,
+    disabled-membership invalidation, genuine CSRF/Origin round trip, replayed-code rejection, MFA-blocked
+    login) — 4/4 passing.
+  - `oidc-permission-check.live-keycloak.integration.spec.ts` (real M2M token against `PermissionsGuard`,
+    disabled/missing service-credential rejection) — 4/4 passing.
+  - `service-client-management.live-keycloak.integration.spec.ts` (create -> token -> use -> rotate -> disable ->
+    delete against a real Keycloak client) — 1/1 passing.
+  - `jose-oidc-token-verifier.live-keycloak.integration.spec.ts` — 4/4 passing.
+  - The three disposable Postgres databases created for this run (`bff_flow_test`, `oidc_perm_test`,
+    `svc_mgmt_test`) were dropped afterward; no state was left behind beyond the normal dev-reset seed data.
+
+No material architectural trade-off surfaced beyond what the Decision Log above already records. `credits`,
+`organization-onboarding`, and `service-client-management` still consume identity's deprecated compatibility
+surface directly. `organization-onboarding` and `service-client-management` also still have test-only deep
+imports into their *own* modules' internals, unrelated to `auth`/`bff-session`. Both are explicitly out of scope for
+this plan, left to `module-architecture/04`, `/06`, `/07`, and `/08`.
+
+Bruno: no new endpoint, request body, status code, or auth behavior was introduced, so no Bruno *file* changed.
+The two collections whose behavior this plan could plausibly have regressed (`m2m-oidc-authentication`,
+`bff-sessions`) were still run live against the rebuilt stack, and both pass in full.
 
 ## Context and Orientation
 
@@ -215,4 +351,5 @@ encryption keys.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including live verification against a rebuilt local development stack.
+Pull request not yet opened.
