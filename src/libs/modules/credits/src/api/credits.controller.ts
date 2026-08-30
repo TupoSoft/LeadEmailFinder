@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, SerializeOptions, UseGuards } from '@nestjs/common'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { CreditsService } from './credits.service'
+import { CreditsService } from '../application/credits.service'
 import { AddCreditsDto, CreditResponseDto, CreditsAccountParamsDto, SetBalanceDto } from './credits.dto'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { randomUUID } from 'node:crypto'

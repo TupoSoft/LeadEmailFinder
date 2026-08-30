@@ -1,7 +1,9 @@
 import { ConfigService } from '@nestjs/config'
+import { Global, Module } from '@nestjs/common'
 import { MODULE_METADATA } from '@nestjs/common/constants'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
+import { DataSource } from 'typeorm'
 import {
     AuditLogEntry,
     CreditDebit,
@@ -40,9 +42,20 @@ const baseConfig = new Map<string, string>([
     ['PAYMENTS_CHECKOUT_URL', 'http://localhost:3000/payment-return'],
 ])
 
+// Identity's TypeOrmCreditLedgerStore (unexported, private to identity) injects a bare DataSource for its
+// pessimistic-locking transactions. Nest eagerly instantiates every provider in every imported module
+// regardless of overrides elsewhere, so this graph needs a DataSource somewhere even though nothing here
+// exercises real credit-ledger behavior. A @Global() stub reaches it without identity exporting the adapter.
+@Global()
+@Module({
+    providers: [{ provide: DataSource, useValue: {} }],
+    exports: [DataSource],
+})
+class TestDataSourceModule {}
+
 async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string>): Promise<TestingModule> {
     const config = new Map([...baseConfig, ...configOverrides])
-    return Test.createTestingModule({ imports: [PaymentsModule] })
+    return Test.createTestingModule({ imports: [PaymentsModule, TestDataSourceModule] })
         .overrideProvider(ConfigService)
         .useValue({ getOrThrow: (key: string) => config.get(key) })
         .overrideProvider(getRepositoryToken(CreditPurchase))

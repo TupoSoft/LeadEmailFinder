@@ -18,8 +18,9 @@ billing workflows.
 
 ## Non-Responsibilities
 
-- No ledger persistence — the credit account and debit/grant rows are owned by
-  [`identity`](../identity/README.md); this module only reads and writes through them.
+- No ledger persistence, locking, or transaction mechanics — the credit account and debit/grant rows, and the
+  atomic operations against them, are owned by [`identity`](../identity/README.md) behind its `CreditLedgerStore`
+  port; this module only decides which operation to call and how to interpret the outcome.
 - No payment processing, adjustment accounting, shortfall policy, or credit-pack pricing (owned by
   [`payments`](../payments/README.md)); credits applies the ledger operation that payments has already authorized.
 - No opinion on what a request should cost — callers (guards, processors) decide the debit amount.
@@ -30,10 +31,13 @@ billing workflows.
 `InsufficientCreditsException`. The controller and its DTOs are internal — they back the admin HTTP surface
 below but are not part of the intentional public API other modules should import.
 
+`CreditsService` is a framework-free `application/` class built from an explicit factory in `credits.module.ts`;
+it has no `infrastructure/` layer of its own since its one adapter (`TypeOrmCreditLedgerStore`) lives in identity.
+
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `OrganizationCreditAccount`, `CreditDebit`, and `CreditGrant`, injected
-  through the `TypeOrmModule` that `IdentityModule` exports.
+- [`identity`](../identity/README.md) — the `CreditLedgerStore` port and its `CREDIT_LEDGER_STORE` token,
+  through the public barrel `IdentityModule` exposes.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `RequirePermissions`, and
   `getAuthPrincipal`.
 
@@ -57,7 +61,8 @@ balance and report the applied amount for durable shortfall accounting.
 ## Persistence
 
 None owned directly. Credits reads and writes the `OrganizationCreditAccount` (`organization_credit_accounts`),
-`CreditDebit` (`credit_debits`), and `CreditGrant` (`credit_grants`) tables owned by `identity`.
+`CreditDebit` (`credit_debits`), and `CreditGrant` (`credit_grants`) tables owned by `identity`, exclusively
+through `CreditLedgerStore` — never through a direct repository or `DataSource` injection.
 
 ## Configuration
 
@@ -65,10 +70,12 @@ None. This module reads no environment variables.
 
 ## Validation
 
-Focused tests live in `src/`: `credits.controller.spec.ts`, `credits.guard.spec.ts`, `credits.service.spec.ts`, and
-`credits.service.integration.spec.ts` (schema-level, gated on `TEST_CREDITS_POSTGRES_URL`). The service tests cover
-clamped debit results, zero-result replay after replenishment, one-time restoration, and concurrent ledger
-idempotency against real PostgreSQL.
+Focused tests live in `src/`: `api/credits.controller.spec.ts`, `api/credits.guard.spec.ts`,
+`application/credits.service.spec.ts` (mocks `CreditLedgerStore` directly), `credits.module.spec.ts`
+(provider/export wiring), and `application/credits.service.integration.spec.ts` (schema-level, gated on
+`TEST_CREDITS_POSTGRES_URL`, exercised through the real `IdentityModule` and its `TypeOrmCreditLedgerStore`
+adapter). The integration tests cover clamped debit results, zero-result replay after replenishment, one-time
+restoration, and concurrent ledger idempotency against real PostgreSQL.
 
 No Bruno collection is dedicated to credits — its balance and debit behavior is exercised indirectly instead.
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the resulting balance back

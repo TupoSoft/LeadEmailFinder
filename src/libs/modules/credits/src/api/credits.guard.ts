@@ -2,8 +2,8 @@ import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } 
 import { Request } from 'express'
 import { randomUUID } from 'node:crypto'
 import { getAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsService } from './credits.service'
-import { InsufficientCreditsException } from './credits.error'
+import { CreditsService } from '../application/credits.service'
+import { InsufficientCreditsException } from '../domain/credits.error'
 
 @Injectable()
 export class CreditGuard implements CanActivate {

@@ -4,6 +4,7 @@ import { ExternalIdentityResolver } from './application/external-identity-resolv
 import { HumanIdentityResolver } from './application/human-identity-resolver.service'
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
+import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
 import { EXTERNAL_IDENTITY_STORE, ExternalIdentityStore } from './application/ports/external-identity-store'
 import { AuditLogEntry } from './infrastructure/persistence/audit-log-entry.entity'
 import { CreditDebit } from './infrastructure/persistence/credit-debit.entity'
@@ -16,6 +17,7 @@ import { Organization } from './infrastructure/persistence/organization.entity'
 import { ServiceCredential } from './infrastructure/persistence/service-credential.entity'
 import { TypeOrmActiveMembershipReader } from './infrastructure/persistence/typeorm-active-membership-reader'
 import { TypeOrmActiveServiceCredentialReader } from './infrastructure/persistence/typeorm-active-service-credential-reader'
+import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-credit-ledger-store'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 
 @Module({
@@ -37,9 +39,11 @@ import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeo
         TypeOrmExternalIdentityStore,
         TypeOrmActiveMembershipReader,
         TypeOrmActiveServiceCredentialReader,
+        TypeOrmCreditLedgerStore,
         { provide: EXTERNAL_IDENTITY_STORE, useExisting: TypeOrmExternalIdentityStore },
         { provide: ACTIVE_MEMBERSHIP_READER, useExisting: TypeOrmActiveMembershipReader },
         { provide: ACTIVE_SERVICE_CREDENTIAL_READER, useExisting: TypeOrmActiveServiceCredentialReader },
+        { provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore },
         {
             provide: ExternalIdentityResolver,
             inject: [EXTERNAL_IDENTITY_STORE],
@@ -52,6 +56,7 @@ import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeo
         EXTERNAL_IDENTITY_STORE,
         ACTIVE_MEMBERSHIP_READER,
         ACTIVE_SERVICE_CREDENTIAL_READER,
+        CREDIT_LEDGER_STORE,
         ExternalIdentityResolver,
     ],
 })

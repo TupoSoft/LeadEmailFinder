@@ -1,8 +1,6 @@
 {
     "schemaVersion": 1,
     "violations": [
-        "api-placement|src/libs/modules/credits/src/credits.controller.ts|credits.controller.ts",
-        "api-placement|src/libs/modules/credits/src/credits.dto.ts|credits.dto.ts",
         "api-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification.controller.ts|async-email-verification/async-email-verification.controller.ts",
         "api-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification.dto.ts|async-email-verification/async-email-verification.dto.ts",
         "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-csv-row.dto.ts|batch-email-verification/batch-email-verification-csv-row.dto.ts",
@@ -37,11 +35,6 @@
         "layer-dependency|src/libs/modules/payments/src/infrastructure/typeorm-payment-adjustment.store.ts|../payment-adjustment.store",
         "layer-dependency|src/libs/modules/payments/src/infrastructure/typeorm-payment-purchase.store.ts|../credit-purchase.entity",
         "layer-dependency|src/libs/modules/payments/src/infrastructure/typeorm-payment-purchase.store.ts|../payment-purchase.store",
-        "source-placement|src/libs/modules/credits/src/credits.controller.ts|credits.controller.ts",
-        "source-placement|src/libs/modules/credits/src/credits.dto.ts|credits.dto.ts",
-        "source-placement|src/libs/modules/credits/src/credits.error.ts|credits.error.ts",
-        "source-placement|src/libs/modules/credits/src/credits.guard.ts|credits.guard.ts",
-        "source-placement|src/libs/modules/credits/src/credits.service.ts|credits.service.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-job-data.interface.ts|async-email-verification/async-email-verification-job-data.interface.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-service-impl.service.ts|async-email-verification/async-email-verification-service-impl.service.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-service.interface.ts|async-email-verification/async-email-verification-service.interface.ts",

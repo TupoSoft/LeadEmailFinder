@@ -2,8 +2,8 @@ import { ExecutionContext, HttpException, HttpStatus } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditGuard } from './credits.guard'
-import { CreditsService } from './credits.service'
-import { InsufficientCreditsException } from './credits.error'
+import { CreditsService } from '../application/credits.service'
+import { InsufficientCreditsException } from '../domain/credits.error'
 
 describe('CreditGuard', () => {
     let guard: CreditGuard
