@@ -1,39 +1,32 @@
 import { Injectable } from '@nestjs/common'
 import { DataSource } from 'typeorm'
 import {
-    AuditLogEntry,
-    AuthPrincipal,
-    Organization,
-    OrganizationInvitation,
-} from '@tuposoft/lead-email-finder/modules/identity'
-import { generateInvitationToken, INVITATION_TTL_MS } from './invitation-token'
-
-export interface OrganizationCreationResult {
-    readonly organization: Organization
-    readonly invitation: OrganizationInvitation
-    readonly rawToken: string
-}
+    CreateOrganizationWithOwnerInvitationCommand,
+    OrganizationRegistrationResult,
+    OrganizationRegistrationStore,
+} from '../../application/ports/organization-registration-store'
+import { OrganizationInvitationRecord } from '../../domain/organization-invitation-record'
+import { OrganizationRecord } from '../../domain/organization-record'
+import { AuditLogEntry } from './audit-log-entry.entity'
+import { Organization } from './organization.entity'
+import { OrganizationInvitation } from './organization-invitation.entity'
 
 @Injectable()
-export class OrganizationCreationService {
+export class TypeOrmOrganizationRegistrationStore implements OrganizationRegistrationStore {
     constructor(private readonly dataSource: DataSource) {}
 
-    async createWithFirstOwner(
-        actor: AuthPrincipal,
-        name: string,
-        ownerEmail: string,
-    ): Promise<OrganizationCreationResult> {
-        const { rawToken, tokenHash } = generateInvitationToken()
-        const expiresAt = new Date(Date.now() + INVITATION_TTL_MS)
-        const email = ownerEmail.toLowerCase()
+    async createWithOwnerInvitation(
+        command: CreateOrganizationWithOwnerInvitationCommand,
+    ): Promise<OrganizationRegistrationResult> {
+        const { name, ownerEmail, tokenHash, expiresAt, actor } = command
 
-        const { organization, invitation } = await this.dataSource.transaction(async manager => {
+        return this.dataSource.transaction(async manager => {
             const organization = await manager.save(Organization, manager.create(Organization, { name }))
             const invitation = await manager.save(
                 OrganizationInvitation,
                 manager.create(OrganizationInvitation, {
                     organizationId: organization.id,
-                    email,
+                    email: ownerEmail,
                     role: 'owner',
                     tokenHash,
                     expiresAt,
@@ -66,12 +59,25 @@ export class OrganizationCreationService {
                 targetType: 'invitation',
                 targetId: invitation.id,
                 outcome: 'success',
-                metadata: { role: 'owner', email },
+                metadata: { role: 'owner', email: ownerEmail },
             })
 
-            return { organization, invitation }
+            return { organization: toOrganizationRecord(organization), invitation: toInvitationRecord(invitation) }
         })
+    }
+}
 
-        return { organization, invitation, rawToken }
+function toOrganizationRecord(organization: Organization): OrganizationRecord {
+    return { id: organization.id, name: organization.name }
+}
+
+function toInvitationRecord(invitation: OrganizationInvitation): OrganizationInvitationRecord {
+    return {
+        id: invitation.id,
+        organizationId: invitation.organizationId,
+        email: invitation.email,
+        role: invitation.role,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
     }
 }

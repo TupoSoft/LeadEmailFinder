@@ -15,10 +15,10 @@ live-Keycloak adapter tests, and the existing onboarding Bruno collection.
 
 ## Progress
 
-- [ ] (2026-08-29) Move onboarding controllers/DTOs, use cases, domain rules, and Keycloak/configuration adapters into layers.
-- [ ] (2026-08-29) Replace repositories, `DataSource`, and `EntityManager` with small identity persistence ports.
-- [ ] (2026-08-29) Preserve invitation idempotency, organization locking, final-owner safety, audit, and compensation tests.
-- [ ] (2026-08-29) Run focused, database, live-Keycloak-optional, repository-wide, and Bruno validation.
+- [x] (2026-08-31) Move onboarding controllers/DTOs, use cases, domain rules, and Keycloak/configuration adapters into layers.
+- [x] (2026-08-31) Replace repositories, `DataSource`, and `EntityManager` with small identity persistence ports.
+- [x] (2026-08-31) Preserve invitation idempotency, organization locking, final-owner safety, audit, and compensation tests.
+- [x] (2026-08-31) Run focused, database, live-Keycloak-optional, repository-wide, and Bruno validation.
 
 ## Plan dependencies
 
@@ -28,9 +28,39 @@ live-Keycloak adapter tests, and the existing onboarding Bruno collection.
 
 ## Surprises & Discoveries
 
-- `module-boundaries/09` will remove the duplicated feature-local Keycloak HTTP transport and configuration before
-  this plan starts. Onboarding must retain only its feature-specific `KeycloakOrganizationAdmin` adapter and consume
-  the shared `KeycloakAdminHttp` port rather than recreating the deleted transport.
+- `module-boundaries/09` had already removed the duplicated feature-local Keycloak HTTP transport and
+  configuration before this plan started; `KeycloakOrganizationAdminClient` already consumed the shared
+  `KeycloakAdminHttp` port. Nothing to do there — confirmed by reading the adapter before starting.
+- `MembershipRoleChangeService`/`MembershipRemovalService` turned out to need the exact same session pattern as
+  invitation acceptance: each calls Keycloak (`assignRealmRole`) while the organization row is locked, between
+  the load and the save. This was not explicit in the Decision Log's wording. It fell out of reading
+  `membership-role-change.service.ts` line by line. So `MembershipMutationStore` grew the same `begin()`/session
+  shape as `InvitationAcceptanceStore`, rather than a single-call outcome contract. The already-disabled no-op
+  case in `MembershipRemovalService` calls `session.abort()` directly (a no-op transaction that never reaches the
+  final-owner check), matching the original early return before any write. Both session ports use a manually
+  managed `QueryRunner` (`connect()`/`startTransaction()`), not the `dataSource.transaction()` sugar, since the
+  transaction must stay open across the external Keycloak call.
+- Once these six services depend on ports instead of raw TypeORM, their unit tests stop asserting exact
+  `Repository`/`EntityManager` call shapes; they mock the port instead. That freed the new adapters to choose
+  their own query shape. For example, `TypeOrmMembershipMutationStore` always joins `externalIdentity`, even for
+  `disable()`, which never needs it, without touching any test.
+- No existing unit test asserted exact Forbidden/Conflict/Not-Found error message text — only
+  `.rejects.toThrow(SomeNestException)`, with no message argument. So the new domain error classes
+  (`domain/organization-onboarding.errors.ts`) were free to choose their own messages. The original wording was
+  kept anyway since it was free and preserves existing UX.
+- `HumanIdentityResolver` in `identity` had exactly one consumer, `invitation-acceptance.service.ts`. This plan
+  moved that consumer onto the inline resolve-or-create-and-lock logic owned by `InvitationAcceptanceStore`. That
+  logic is reimplemented against the session's `QueryRunner.manager`, not delegated to the already-provided but
+  transaction-unaware `ExternalIdentityResolver`/`ExternalIdentityStore`. That store commits via the default
+  non-transactional repo and would break the all-or-nothing rollback on a Keycloak failure. With its only
+  consumer gone, `HumanIdentityResolver` and its spec were deleted as dead code; `ExternalIdentityResolver`
+  remains provided-but-unconsumed, unrelated to this plan.
+- `membership-mutation-concurrency.integration.spec.ts` was rewired to import the real `IdentityModule`, not
+  `OrganizationOnboardingModule`, and factory-bind `MembershipRemovalService`/`MembershipRoleChangeService`
+  directly via `MEMBERSHIP_MUTATION_STORE` — mirroring the integration-spec precedent owned by `credits`. That is
+  narrower than importing the whole onboarding module. Importing the whole module would have required faking
+  Keycloak-admin-HTTP configuration environment variables purely to satisfy Nest's eager instantiation of an
+  unrelated provider, while this approach still exercises the real identity port/adapter wiring end to end.
 
 ## Decision Log
 
@@ -66,7 +96,36 @@ live-Keycloak adapter tests, and the existing onboarding Bruno collection.
 
 ## Outcomes & Retrospective
 
-Not started.
+`organization-onboarding` now has `api/`, `application/`, `domain/`, `infrastructure/` layers plus root
+composition; `identity` gained five new ports (`OrganizationRegistrationStore`, `InvitationStore`,
+`InvitationAcceptanceStore`, `MembershipDirectory`, `MembershipMutationStore`) and their TypeORM adapters, and
+lost `HumanIdentityResolver` (dead code once its one consumer migrated). All six application services are
+framework-free classes wired through explicit factories in `organization-onboarding.module.ts`; the controller's
+`handleErrors()` maps seven typed domain errors to the unchanged `Forbidden`/`NotFound`/`Conflict`/`Gone` HTTP
+behavior.
+
+Focused/unit totals: identity 87 tests (13 suites, 1 skipped without `TEST_POSTGRES_URL`), organization-onboarding
+77 tests (12 suites, 2 skipped without `TEST_POSTGRES_URL`/live-Keycloak fixtures). Full `test:ci`: 1216 tests,
+1166 passed, 49 skipped (preexisting gates), 1 marked pending — no regressions outside this plan's own files.
+`architecture:baseline` shrank from 166 to 149 violations, confirmed via diff to be a pure removal with no added
+lines. `architecture:check` passes. `typecheck`, `lint`, and `build` (via scratch `nest-cli`/`tsconfig.build`
+configurations, deleted after use) all pass clean.
+
+A `lef-*` dev stack was running (owned by this checkout, confirmed via the `lef-api-1` working-directory label),
+which let all live validation run for real. `membership-mutation-concurrency.integration.spec.ts` against a disposable
+`membership_mutation_test` database: 2/2 passed, proving the `MembershipMutationStore` session actually
+serializes concurrent final-owner mutations against real Postgres locks. The live-Keycloak spec
+(`keycloak-organization-admin.live-keycloak.integration.spec.ts`) against a disposable
+`org_onboarding_live_test` database and the real Keycloak realm: 4/4 passed after updating its one assertion from
+`ConflictException` to `ConflictingMembershipError` (it calls `InvitationAcceptanceService` directly, bypassing
+the controller's HTTP mapping, so it must assert the domain error the service now throws). `bruno/organization-onboarding`
+against the same stack (real `lef-development-service` M2M token): 8/8 requests, 8/8 tests passed, including the
+`409` existing-owner-conflict path. Both disposable databases were dropped after use; no containers or shared
+fixtures were touched.
+
+No material SOLID trade-offs. Each of the five new ports is single-purpose, one persistence concern each. The
+two session-shaped ports isolate transaction-suspension complexity in the infrastructure layer owned by
+`identity`, rather than leaking `QueryRunner` into onboarding. No generic "manager" interface was introduced.
 
 ## Context and Orientation
 
@@ -220,4 +279,4 @@ or Keycloak client secrets.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including real-Postgres concurrency, live-Keycloak, and Bruno evidence.

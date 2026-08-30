@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { KEYCLOAK_ADMIN_HTTP, KeycloakAdminHttp } from '@tuposoft/lead-email-finder/keycloak-admin-http'
-import { EnsureKeycloakUserInput, KeycloakOrganizationAdmin, KeycloakUserRef } from './keycloak-organization-admin'
+import { EnsureKeycloakUserInput, KeycloakOrganizationAdmin, KeycloakUserRef } from '../application/ports/keycloak-organization-admin'
 
 interface KeycloakUserRepresentation {
     id: string

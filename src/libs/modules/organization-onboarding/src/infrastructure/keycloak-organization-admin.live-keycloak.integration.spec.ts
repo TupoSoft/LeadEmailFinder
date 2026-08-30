@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { ConflictException } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { ConfigModule } from '@nestjs/config'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
@@ -15,10 +14,11 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { InvitationAcceptanceService } from './invitation-acceptance.service'
-import { InvitationIssuanceService } from './invitation-issuance.service'
-import { KEYCLOAK_ORGANIZATION_ADMIN, KeycloakOrganizationAdmin } from './keycloak-organization-admin'
-import { OrganizationOnboardingModule } from './organization-onboarding.module'
+import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
+import { InvitationIssuanceService } from '../application/invitation-issuance.service'
+import { KEYCLOAK_ORGANIZATION_ADMIN, KeycloakOrganizationAdmin } from '../application/ports/keycloak-organization-admin'
+import { ConflictingMembershipError } from '../domain/organization-onboarding.errors'
+import { OrganizationOnboardingModule } from '../organization-onboarding.module'
 
 // Deliberately its own env vars and its own dedicated Postgres DB, not TEST_BFF_*/TEST_OIDC_*: Jest runs spec
 // files in parallel workers, so sharing a database with another dropSchema:true test in the same full-suite
@@ -243,7 +243,9 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
                 'owner',
             )
 
-            await expect(invitationAcceptance.accept(rawToken, replacementPassword)).rejects.toThrow(ConflictException)
+            await expect(invitationAcceptance.accept(rawToken, replacementPassword)).rejects.toThrow(
+                ConflictingMembershipError,
+            )
 
             const unchangedInvitation = await invitationRepo.findOneByOrFail({ id: invitation.id })
             expect(unchangedInvitation.status).toBe('pending')
