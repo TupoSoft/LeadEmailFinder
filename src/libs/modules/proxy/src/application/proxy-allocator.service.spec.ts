@@ -1,67 +1,20 @@
-import { Test } from '@nestjs/testing'
+import { IAllocationObserver } from '../domain/allocation-observer.interface'
+import { IProxy } from '../domain/proxy.interface'
+import { IProxyLeaseService } from '../domain/proxy-lease.interface'
 import { ProxyAllocatorService } from './proxy-allocator.service'
-import {
-    ALLOCATION_OBSERVER_TOKEN,
-    IAllocationObserver,
-    IProxy,
-    IProxyLeaseService,
-    PROXY_LEASE_SERVICE_TOKEN,
-} from '@tuposoft/lead-email-finder/common'
-import {
-    PROXY_CANDIDATE_REPOSITORY_TOKEN,
-    ProxyCandidate,
-    ProxyCandidateRepository,
-} from './proxy-candidate.repository'
+import { ProxyCandidate, ProxyCandidateRepository } from './ports/proxy-candidate-repository'
 
 describe('ProxyAllocatorService', () => {
     let service: ProxyAllocatorService
-    let candidateRepository: { findEligible: jest.Mock; findActiveById: jest.Mock }
-    let proxyLeaseService: { acquire: jest.Mock; release: jest.Mock }
-    let observer: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
+    let candidateRepository: jest.Mocked<ProxyCandidateRepository>
+    let proxyLeaseService: jest.Mocked<IProxyLeaseService>
+    let observer: jest.Mocked<IAllocationObserver>
 
-    beforeEach(async () => {
-        const moduleRef = await Test.createTestingModule({
-            providers: [
-                ProxyAllocatorService,
-                {
-                    provide: PROXY_CANDIDATE_REPOSITORY_TOKEN,
-                    useValue: {
-                        findEligible: jest.fn(),
-                        findActiveById: jest.fn(),
-                    },
-                },
-                {
-                    provide: PROXY_LEASE_SERVICE_TOKEN,
-                    useValue: {
-                        acquire: jest.fn(),
-                        release: jest.fn(),
-                    },
-                },
-                {
-                    provide: ALLOCATION_OBSERVER_TOKEN,
-                    useValue: {
-                        onAllocation: jest.fn(),
-                        onConnectionOutcome: jest.fn(),
-                        onLeaseRelease: jest.fn(),
-                    },
-                },
-            ],
-        }).compile()
-
-        service = moduleRef.get(ProxyAllocatorService)
-        candidateRepository = moduleRef.get<ProxyCandidateRepository>(PROXY_CANDIDATE_REPOSITORY_TOKEN) as {
-            findEligible: jest.Mock
-            findActiveById: jest.Mock
-        }
-        proxyLeaseService = moduleRef.get<IProxyLeaseService>(PROXY_LEASE_SERVICE_TOKEN) as {
-            acquire: jest.Mock
-            release: jest.Mock
-        }
-        observer = moduleRef.get<IAllocationObserver>(ALLOCATION_OBSERVER_TOKEN) as {
-            onAllocation: jest.Mock
-            onConnectionOutcome: jest.Mock
-            onLeaseRelease: jest.Mock
-        }
+    beforeEach(() => {
+        candidateRepository = { findEligible: jest.fn(), findActiveById: jest.fn() }
+        proxyLeaseService = { acquire: jest.fn(), release: jest.fn() }
+        observer = { onAllocation: jest.fn(), onConnectionOutcome: jest.fn(), onLeaseRelease: jest.fn() }
+        service = new ProxyAllocatorService(candidateRepository, proxyLeaseService, observer)
     })
 
     it('leases an active, non-blacklisted proxy for an MX host', async () => {

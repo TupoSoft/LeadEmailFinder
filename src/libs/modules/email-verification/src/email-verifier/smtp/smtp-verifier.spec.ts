@@ -1,6 +1,6 @@
 import { SmtpVerifier } from './smtp-verifier'
 import { SmtpVerificationReason } from './smtp.enums'
-import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/common'
+import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
 
 interface SmtpVerifierInternals {

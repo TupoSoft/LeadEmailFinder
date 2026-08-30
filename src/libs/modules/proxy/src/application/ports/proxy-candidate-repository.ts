@@ -1,4 +1,4 @@
-import { IProxy } from '@tuposoft/lead-email-finder/common'
+import { IProxy } from '../../domain/proxy.interface'
 
 export const PROXY_CANDIDATE_REPOSITORY_TOKEN = Symbol('ProxyCandidateRepository')
 

@@ -1,25 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common'
-import {
-    ALLOCATION_OBSERVER_TOKEN,
-    IAllocationObserver,
-    IProxyAllocator,
-    IProxyLeaseService,
-    LeasedProxy,
-    PROXY_LEASE_SERVICE_TOKEN,
-} from '@tuposoft/lead-email-finder/common'
-import {
-    PROXY_CANDIDATE_REPOSITORY_TOKEN,
-    ProxyCandidate,
-    ProxyCandidateRepository,
-} from './proxy-candidate.repository'
+import { IAllocationObserver } from '../domain/allocation-observer.interface'
+import { IProxyAllocator, LeasedProxy } from '../domain/proxy-allocator.interface'
+import { IProxyLeaseService } from '../domain/proxy-lease.interface'
+import { ProxyCandidate, ProxyCandidateRepository } from './ports/proxy-candidate-repository'
 
-
-@Injectable()
 export class ProxyAllocatorService implements IProxyAllocator {
     constructor(
-        @Inject(PROXY_CANDIDATE_REPOSITORY_TOKEN) private readonly candidateRepository: ProxyCandidateRepository,
-        @Inject(PROXY_LEASE_SERVICE_TOKEN) private readonly proxyLeaseService: IProxyLeaseService,
-        @Inject(ALLOCATION_OBSERVER_TOKEN) private readonly observer: IAllocationObserver,
+        private readonly candidateRepository: ProxyCandidateRepository,
+        private readonly proxyLeaseService: IProxyLeaseService,
+        private readonly observer: IAllocationObserver,
     ) {}
 
     async acquire(mxHost: string, proxyId?: string, excludedProxyIds: string[] = []): Promise<LeasedProxy | undefined> {

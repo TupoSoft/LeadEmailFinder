@@ -1,15 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { Redis } from 'ioredis'
-import { randomUUID } from 'node:crypto'
-import {
-    IProxyLeaseService,
-    ProxyLease,
-    ProxyLeaseRequest,
-} from '@tuposoft/lead-email-finder/common'
+import { AcquireLeaseCommand, ProxyLeaseStore } from '../../application/ports/proxy-lease-store'
 
-const DEFAULT_MX_REQUESTS_PER_MINUTE = 10
-const DEFAULT_LEASE_TTL_MS = 60_000
 const RATE_WINDOW_MS = 60_000
 
 const ACQUIRE_LEASE_SCRIPT = `
@@ -59,24 +51,17 @@ const RELEASE_LEASE_SCRIPT = `
 `
 
 @Injectable()
-export class ProxyLeaseService implements IProxyLeaseService {
-    private readonly mxRequestsPerMinute: number
-    private readonly leaseTtlMs: number
+export class RedisProxyLeaseStore implements ProxyLeaseStore {
+    constructor(@Inject(Redis) private readonly redis: Redis) {}
 
-    constructor(
-        @Inject(Redis)
-        private readonly redis: Redis,
-        configService: ConfigService,
-    ) {
-        this.mxRequestsPerMinute = configService.get<number>('PROXY_MX_REQUESTS_PER_MINUTE') ?? DEFAULT_MX_REQUESTS_PER_MINUTE
-        this.leaseTtlMs = configService.get<number>('PROXY_LEASE_TTL_MS') ?? DEFAULT_LEASE_TTL_MS
-    }
-
-    async acquire(request: ProxyLeaseRequest): Promise<ProxyLease | undefined> {
-        const now = Date.now()
-        const leaseId = randomUUID()
-        const rateWindowTtl = RATE_WINDOW_MS - (now % RATE_WINDOW_MS)
-        const [activeLeasesKey, proxyRateKey, mxRateKey, leaseKey] = this.keys(request.proxyId, request.mxHost, leaseId, now)
+    async tryAcquire(command: AcquireLeaseCommand): Promise<boolean> {
+        const rateWindowTtl = RATE_WINDOW_MS - (command.now % RATE_WINDOW_MS)
+        const [activeLeasesKey, proxyRateKey, mxRateKey, leaseKey] = this.keys(
+            command.proxyId,
+            command.mxHost,
+            command.leaseId,
+            command.now,
+        )
         const acquired = await this.redis.eval(
             ACQUIRE_LEASE_SCRIPT,
             4,
@@ -84,31 +69,22 @@ export class ProxyLeaseService implements IProxyLeaseService {
             proxyRateKey,
             mxRateKey,
             leaseKey,
-            String(now),
-            String(this.leaseTtlMs),
-            String(request.maxConcurrent),
-            String(request.requestsPerMinute),
-            String(this.mxRequestsPerMinute),
+            String(command.now),
+            String(command.leaseTtlMs),
+            String(command.maxConcurrent),
+            String(command.proxyRequestsPerMinute),
+            String(command.mxRequestsPerMinute),
             String(rateWindowTtl),
-            leaseId,
-            request.proxyId,
+            command.leaseId,
+            command.proxyId,
         )
 
-        if (Number(acquired) !== 1) {
-            return undefined
-        }
-
-        return {
-            id: leaseId,
-            proxyId: request.proxyId,
-            mxHost: request.mxHost,
-            expiresAt: new Date(now + this.leaseTtlMs),
-        }
+        return Number(acquired) === 1
     }
 
-    async release(lease: ProxyLease): Promise<boolean> {
-        const [activeLeasesKey, , , leaseKey] = this.keys(lease.proxyId, lease.mxHost, lease.id, Date.now())
-        const released = await this.redis.eval(RELEASE_LEASE_SCRIPT, 2, activeLeasesKey, leaseKey, lease.id)
+    async release(proxyId: string, mxHost: string, leaseId: string): Promise<boolean> {
+        const [activeLeasesKey, , , leaseKey] = this.keys(proxyId, mxHost, leaseId, Date.now())
+        const released = await this.redis.eval(RELEASE_LEASE_SCRIPT, 2, activeLeasesKey, leaseKey, leaseId)
 
         return Number(released) === 1
     }

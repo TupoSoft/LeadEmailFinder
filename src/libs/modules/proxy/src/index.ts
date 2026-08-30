@@ -1,1 +1,7 @@
 export * from './proxy.module'
+export * from './domain/allocation-observer.interface'
+export * from './domain/proxy-allocator.interface'
+export * from './domain/proxy.interface'
+export * from './domain/proxy-service.interface'
+export type { ProxyLease, ProxyLeaseRequest } from './domain/proxy-lease.interface'
+export { ALLOCATION_OBSERVER_TOKEN, PROXY_ALLOCATOR_TOKEN, PROXY_SERVICE_TOKEN } from './domain/proxy.tokens'
