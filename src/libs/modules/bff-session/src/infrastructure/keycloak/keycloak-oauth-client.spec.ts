@@ -1,4 +1,4 @@
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../../application/bff-session-configuration'
 import { KeycloakOAuthClient, OAuthTokenExchangeFailedError } from './keycloak-oauth-client'
 
 const configuration: BffSessionConfiguration = {

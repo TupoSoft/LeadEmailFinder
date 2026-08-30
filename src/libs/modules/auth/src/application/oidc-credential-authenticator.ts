@@ -1,14 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CredentialAuthenticator, ExtractedCredential } from './credential-authenticator'
 import { isJwtShapedToken } from './credential-extractor'
-import { OIDC_TOKEN_VERIFIER, OidcTokenVerifier } from './oidc-token-verifier'
+import { OidcTokenVerifier } from './oidc-token-verifier'
 import { ServiceCredentialResolver } from './service-credential-resolver.service'
 
-@Injectable()
 export class OidcCredentialAuthenticator implements CredentialAuthenticator {
     constructor(
-        @Inject(OIDC_TOKEN_VERIFIER) private readonly tokenVerifier: OidcTokenVerifier,
+        private readonly tokenVerifier: OidcTokenVerifier,
         private readonly serviceCredentialResolver: ServiceCredentialResolver,
     ) {}
 

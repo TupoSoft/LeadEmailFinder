@@ -1,6 +1,7 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { AuthenticationService } from '../../application/authentication.service'
+import { AuthenticationService } from '../application/authentication.service'
+import { CredentialRejectedError } from '../application/credential-authenticator'
 import { AuthGuard } from './auth.guard'
 import { getAuthPrincipal } from './request-principal'
 
@@ -32,11 +33,19 @@ describe('AuthGuard', () => {
         expect(authenticationService.authenticate).not.toHaveBeenCalled()
     })
 
-    it('rejects a non-public route when authentication fails', async () => {
+    it('rejects a non-public route with 401 when authentication rejects the credential', async () => {
         reflector.getAllAndOverride.mockReturnValue(false)
-        authenticationService.authenticate.mockRejectedValue(new UnauthorizedException('missing credential'))
+        authenticationService.authenticate.mockRejectedValue(new CredentialRejectedError('missing credential'))
 
         await expect(guard.canActivate(contextFor({ headers: {} }))).rejects.toThrow(UnauthorizedException)
+    })
+
+    it('propagates an unrecognized error from authenticate unchanged', async () => {
+        reflector.getAllAndOverride.mockReturnValue(false)
+        const unexpected = new Error('redis is down')
+        authenticationService.authenticate.mockRejectedValue(unexpected)
+
+        await expect(guard.canActivate(contextFor({ headers: {} }))).rejects.toBe(unexpected)
     })
 
     it('attaches the resolved principal to the request and allows the route', async () => {

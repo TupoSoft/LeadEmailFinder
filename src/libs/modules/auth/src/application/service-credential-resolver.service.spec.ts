@@ -1,46 +1,44 @@
-import { UnauthorizedException } from '@nestjs/common'
-import { getRepositoryToken } from '@nestjs/typeorm'
-import { Test, TestingModule } from '@nestjs/testing'
-import { Repository } from 'typeorm'
-import { ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { ActiveServiceCredentialReader, ServiceCredentialRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import { CredentialRejectedError } from './credential-authenticator'
 import { ServiceCredentialResolver } from './service-credential-resolver.service'
 
 describe('ServiceCredentialResolver', () => {
+    let readerMock: jest.Mocked<ActiveServiceCredentialReader>
     let resolver: ServiceCredentialResolver
-    let repoMock: jest.Mocked<Pick<Repository<ServiceCredential>, 'findOne'>>
 
-    beforeEach(async () => {
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                ServiceCredentialResolver,
-                { provide: getRepositoryToken(ServiceCredential), useValue: { findOne: jest.fn() } },
-            ],
-        }).compile()
-
-        resolver = module.get(ServiceCredentialResolver)
-        repoMock = module.get(getRepositoryToken(ServiceCredential))
+    beforeEach(() => {
+        readerMock = { findByIssuerAndSubject: jest.fn() }
+        resolver = new ServiceCredentialResolver(readerMock)
     })
 
+    const credential: ServiceCredentialRecord = {
+        id: 'cred-1',
+        organizationId: 'org-1',
+        issuer: 'iss',
+        subject: 'sub',
+        keycloakClientId: 'client-1',
+        permissions: ['verification:run'],
+        status: 'active',
+    }
+
     it('returns the credential when found and active', async () => {
-        const credential = { issuer: 'iss', subject: 'sub', status: 'active' } as ServiceCredential
-        repoMock.findOne.mockResolvedValue(credential)
+        readerMock.findByIssuerAndSubject.mockResolvedValueOnce(credential)
 
         const result = await resolver.resolveActive('iss', 'sub')
 
         expect(result).toBe(credential)
-        expect(repoMock.findOne).toHaveBeenCalledWith({ where: { issuer: 'iss', subject: 'sub' } })
+        expect(readerMock.findByIssuerAndSubject).toHaveBeenCalledWith('iss', 'sub')
     })
 
-    it('throws when no credential matches the issuer and subject', async () => {
-        repoMock.findOne.mockResolvedValue(null)
+    it('throws CredentialRejectedError when no credential matches the issuer and subject', async () => {
+        readerMock.findByIssuerAndSubject.mockResolvedValueOnce(undefined)
 
-        await expect(resolver.resolveActive('iss', 'sub')).rejects.toThrow(UnauthorizedException)
+        await expect(resolver.resolveActive('iss', 'sub')).rejects.toThrow(CredentialRejectedError)
     })
 
-    it('throws when the matching credential is disabled', async () => {
-        const credential = { issuer: 'iss', subject: 'sub', status: 'disabled' } as ServiceCredential
-        repoMock.findOne.mockResolvedValue(credential)
+    it('throws CredentialRejectedError when the matching credential is disabled', async () => {
+        readerMock.findByIssuerAndSubject.mockResolvedValueOnce({ ...credential, status: 'disabled' })
 
-        await expect(resolver.resolveActive('iss', 'sub')).rejects.toThrow(UnauthorizedException)
+        await expect(resolver.resolveActive('iss', 'sub')).rejects.toThrow(CredentialRejectedError)
     })
 })

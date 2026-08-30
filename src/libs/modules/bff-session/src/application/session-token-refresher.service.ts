@@ -1,6 +1,5 @@
-import { Inject, Injectable, Optional } from '@nestjs/common'
 import { SessionRecord } from '../domain/session-record'
-import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './oauth-provider-client'
+import { OAuthProviderClient } from './oauth-provider-client'
 
 export class SessionRefreshFailedError extends Error {
     constructor() {
@@ -9,13 +8,12 @@ export class SessionRefreshFailedError extends Error {
     }
 }
 
-@Injectable()
 export class SessionTokenRefresher {
     public static readonly DEFAULT_REFRESH_SKEW_MS = 60_000
 
     constructor(
-        @Inject(OAUTH_PROVIDER_CLIENT) private readonly oauthProviderClient: OAuthProviderClient,
-        @Optional() private readonly refreshSkewMs = SessionTokenRefresher.DEFAULT_REFRESH_SKEW_MS,
+        private readonly oauthProviderClient: OAuthProviderClient,
+        private readonly refreshSkewMs: number = SessionTokenRefresher.DEFAULT_REFRESH_SKEW_MS,
     ) {}
 
     async refreshIfNeeded(record: SessionRecord): Promise<SessionRecord> {

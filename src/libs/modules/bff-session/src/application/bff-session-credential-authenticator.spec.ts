@@ -1,9 +1,9 @@
-import { UnauthorizedException } from '@nestjs/common'
-import { OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { OrganizationMembershipRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import { CredentialRejectedError } from '@tuposoft/lead-email-finder/modules/auth'
 import { SessionRecord } from '../domain/session-record'
-import { RedisSessionStore } from '../infrastructure/redis/redis-session-store'
 import { BffSessionCredentialAuthenticator } from './bff-session-credential-authenticator'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
+import { SessionStore } from './session-store'
 import { SessionRefreshFailedError, SessionTokenRefresher } from './session-token-refresher.service'
 
 function sampleRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
@@ -24,17 +24,17 @@ function sampleRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe('BffSessionCredentialAuthenticator', () => {
-    let sessionStore: jest.Mocked<Pick<RedisSessionStore, 'get' | 'save' | 'delete'>>
+    let sessionStore: jest.Mocked<SessionStore>
     let sessionTokenRefresher: jest.Mocked<Pick<SessionTokenRefresher, 'refreshIfNeeded'>>
     let humanMembershipResolver: jest.Mocked<Pick<HumanMembershipResolver, 'resolveActive'>>
     let authenticator: BffSessionCredentialAuthenticator
 
     beforeEach(() => {
-        sessionStore = { get: jest.fn(), save: jest.fn(), delete: jest.fn() }
+        sessionStore = { create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn() }
         sessionTokenRefresher = { refreshIfNeeded: jest.fn() }
         humanMembershipResolver = { resolveActive: jest.fn() }
         authenticator = new BffSessionCredentialAuthenticator(
-            sessionStore as unknown as RedisSessionStore,
+            sessionStore,
             sessionTokenRefresher as unknown as SessionTokenRefresher,
             humanMembershipResolver as unknown as HumanMembershipResolver,
         )
@@ -48,26 +48,25 @@ describe('BffSessionCredentialAuthenticator', () => {
         it('does not support a bearer credential', () => {
             expect(authenticator.supports({ scheme: 'bearer', token: 'a.b.c' })).toBe(false)
         })
-
     })
 
     describe('authenticate', () => {
-        it('throws when no session record is found', async () => {
+        it('throws CredentialRejectedError when no session record is found', async () => {
             sessionStore.get.mockResolvedValue(undefined)
 
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                UnauthorizedException,
-            )
+            await expect(
+                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
+            ).rejects.toThrow(CredentialRejectedError)
         })
 
-        it('deletes the session and rejects when the refresh token is dead', async () => {
+        it('deletes the session and rejects with CredentialRejectedError when the refresh token is dead', async () => {
             const record = sampleRecord()
             sessionStore.get.mockResolvedValue(record)
             sessionTokenRefresher.refreshIfNeeded.mockRejectedValue(new SessionRefreshFailedError())
 
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                UnauthorizedException,
-            )
+            await expect(
+                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
+            ).rejects.toThrow(CredentialRejectedError)
             expect(sessionStore.delete).toHaveBeenCalledWith('session-id')
         })
 
@@ -75,11 +74,11 @@ describe('BffSessionCredentialAuthenticator', () => {
             const record = sampleRecord()
             sessionStore.get.mockResolvedValue(record)
             sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(record)
-            humanMembershipResolver.resolveActive.mockRejectedValue(new UnauthorizedException('disabled'))
+            humanMembershipResolver.resolveActive.mockRejectedValue(new CredentialRejectedError('disabled'))
 
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                UnauthorizedException,
-            )
+            await expect(
+                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
+            ).rejects.toThrow(CredentialRejectedError)
         })
 
         it('builds an AuthPrincipal from the refreshed record and resolved membership, and persists the refreshed record', async () => {
@@ -87,7 +86,7 @@ describe('BffSessionCredentialAuthenticator', () => {
             const refreshedRecord = { ...record, accessToken: 'new-access-token' }
             sessionStore.get.mockResolvedValue(record)
             sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(refreshedRecord)
-            humanMembershipResolver.resolveActive.mockResolvedValue({ role: 'admin' } as OrganizationMembership)
+            humanMembershipResolver.resolveActive.mockResolvedValue({ role: 'admin' } as OrganizationMembershipRecord)
 
             const principal = await authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })
 
@@ -110,7 +109,7 @@ describe('BffSessionCredentialAuthenticator', () => {
             humanMembershipResolver.resolveActive.mockResolvedValue({
                 organizationId: 'true-organization-id',
                 role: 'owner',
-            } as OrganizationMembership)
+            } as OrganizationMembershipRecord)
 
             const principal = await authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })
 

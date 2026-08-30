@@ -14,10 +14,10 @@ import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { EnvironmentVariablesDto, normalizePaymentCheckoutUrlConfiguration } from './environment-variables.dto'
 import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
-import { AuthModule } from '@tuposoft/lead-email-finder/modules/auth'
 import { PaymentsModule } from '@tuposoft/lead-email-finder/modules/payments'
 import { OrganizationOnboardingModule } from '@tuposoft/lead-email-finder/modules/organization-onboarding'
 import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modules/service-client-management'
+import { AuthenticationCompositionModule } from './authentication/authentication-composition.module'
 
 @Module({
     imports: [
@@ -47,7 +47,7 @@ import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modul
         }),
         EmailVerificationModule,
         IdentityModule,
-        AuthModule,
+        AuthenticationCompositionModule,
         OrganizationOnboardingModule,
         ServiceClientManagementModule,
         PaymentsModule,

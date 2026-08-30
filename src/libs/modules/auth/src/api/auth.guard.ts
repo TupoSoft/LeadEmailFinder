@@ -1,7 +1,8 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Request } from 'express'
-import { AuthenticationService } from '../../application/authentication.service'
+import { AuthenticationService } from '../application/authentication.service'
+import { CredentialRejectedError } from '../application/credential-authenticator'
 import { setAuthPrincipal } from './request-principal'
 
 @Injectable()
@@ -22,7 +23,17 @@ export class AuthGuard implements CanActivate {
         }
 
         const request = context.switchToHttp().getRequest<Request>()
-        const principal = await this.authenticationService.authenticate(request.headers)
+
+        let principal
+        try {
+            principal = await this.authenticationService.authenticate(request.headers)
+        } catch (error) {
+            if (error instanceof CredentialRejectedError) {
+                throw new UnauthorizedException(error.message)
+            }
+            throw error
+        }
+
         setAuthPrincipal(request, principal)
 
         return true

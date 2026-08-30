@@ -1,12 +1,15 @@
-import { UnauthorizedException } from '@nestjs/common'
-import { ExternalIdentity, HumanIdentityResolver, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
-import { BffSessionConfiguration } from '../infrastructure/config/bff-session-configuration'
-import { RedisPendingLoginStateStore } from '../infrastructure/redis/redis-pending-login-state-store'
-import { RedisSessionStore } from '../infrastructure/redis/redis-session-store'
-import { BffSessionFlowService } from './bff-session-flow.service'
+import { ExternalIdentityRecord, ExternalIdentityResolver, OrganizationMembershipRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import { BffSessionConfiguration } from './bff-session-configuration'
+import {
+    AuthorizationCodeExchangeFailedError,
+    BffSessionFlowService,
+    LoginStateInvalidError,
+} from './bff-session-flow.service'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
 import { IdTokenVerifier } from './id-token-verifier'
 import { OAuthProviderClient } from './oauth-provider-client'
+import { PendingLoginStateStore } from './pending-login-state-store'
+import { SessionStore } from './session-store'
 
 const configuration: BffSessionConfiguration = {
     appBaseUrl: 'http://localhost:53000',
@@ -21,9 +24,9 @@ const configuration: BffSessionConfiguration = {
 describe('BffSessionFlowService', () => {
     let oauthProviderClient: jest.Mocked<OAuthProviderClient>
     let idTokenVerifier: jest.Mocked<IdTokenVerifier>
-    let pendingLoginStateStore: jest.Mocked<Pick<RedisPendingLoginStateStore, 'create' | 'consume'>>
-    let sessionStore: jest.Mocked<Pick<RedisSessionStore, 'create' | 'get' | 'delete'>>
-    let humanIdentityResolver: jest.Mocked<Pick<HumanIdentityResolver, 'resolveOrCreate'>>
+    let pendingLoginStateStore: jest.Mocked<PendingLoginStateStore>
+    let sessionStore: jest.Mocked<SessionStore>
+    let externalIdentityResolver: jest.Mocked<Pick<ExternalIdentityResolver, 'resolveOrCreate'>>
     let humanMembershipResolver: jest.Mocked<Pick<HumanMembershipResolver, 'resolveActiveForLogin'>>
     let service: BffSessionFlowService
 
@@ -36,17 +39,17 @@ describe('BffSessionFlowService', () => {
         }
         idTokenVerifier = { verify: jest.fn() }
         pendingLoginStateStore = { create: jest.fn(), consume: jest.fn() }
-        sessionStore = { create: jest.fn(), get: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) }
-        humanIdentityResolver = { resolveOrCreate: jest.fn() }
+        sessionStore = { create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) }
+        externalIdentityResolver = { resolveOrCreate: jest.fn() }
         humanMembershipResolver = { resolveActiveForLogin: jest.fn() }
 
         service = new BffSessionFlowService(
             oauthProviderClient,
             idTokenVerifier,
             configuration,
-            pendingLoginStateStore as unknown as RedisPendingLoginStateStore,
-            sessionStore as unknown as RedisSessionStore,
-            humanIdentityResolver as unknown as HumanIdentityResolver,
+            pendingLoginStateStore,
+            sessionStore,
+            externalIdentityResolver as unknown as ExternalIdentityResolver,
             humanMembershipResolver as unknown as HumanMembershipResolver,
         )
     })
@@ -85,20 +88,20 @@ describe('BffSessionFlowService', () => {
         it('rejects when the login-state cookie is missing', async () => {
             await expect(
                 service.handleCallback(validCallbackInput({ cookieState: undefined })),
-            ).rejects.toThrow(UnauthorizedException)
+            ).rejects.toThrow(LoginStateInvalidError)
             expect(pendingLoginStateStore.consume).not.toHaveBeenCalled()
         })
 
         it('rejects when the login-state cookie does not match the state query parameter', async () => {
             await expect(
                 service.handleCallback(validCallbackInput({ cookieState: 'a-different-state' })),
-            ).rejects.toThrow(UnauthorizedException)
+            ).rejects.toThrow(LoginStateInvalidError)
         })
 
         it('rejects a replayed or unknown state (pending state already consumed)', async () => {
             pendingLoginStateStore.consume.mockResolvedValue(undefined)
 
-            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(UnauthorizedException)
+            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(LoginStateInvalidError)
         })
 
         it('rejects when the authorization code exchange fails (e.g. wrong PKCE verifier)', async () => {
@@ -110,7 +113,7 @@ describe('BffSessionFlowService', () => {
             })
             oauthProviderClient.exchangeAuthorizationCode.mockRejectedValue(new Error('invalid_grant'))
 
-            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(UnauthorizedException)
+            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(AuthorizationCodeExchangeFailedError)
         })
 
         it('creates a session and deletes the prior one when rotating', async () => {
@@ -128,10 +131,10 @@ describe('BffSessionFlowService', () => {
                 refreshTokenExpiresInSeconds: 1800,
             })
             idTokenVerifier.verify.mockResolvedValue({ issuer: 'https://issuer', subject: 'human-1', email: null })
-            humanIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentity)
+            externalIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentityRecord)
             humanMembershipResolver.resolveActiveForLogin.mockResolvedValue({
                 organizationId: 'org-1',
-            } as OrganizationMembership)
+            } as OrganizationMembershipRecord)
             sessionStore.create.mockResolvedValue('new-session-id')
 
             const result = await service.handleCallback(validCallbackInput({ existingSessionId: 'old-session-id' }))
@@ -159,10 +162,10 @@ describe('BffSessionFlowService', () => {
                 refreshTokenExpiresInSeconds: 1800,
             })
             idTokenVerifier.verify.mockResolvedValue({ issuer: 'https://issuer', subject: 'human-1', email: null })
-            humanIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentity)
+            externalIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentityRecord)
             humanMembershipResolver.resolveActiveForLogin.mockResolvedValue({
                 organizationId: 'org-1',
-            } as OrganizationMembership)
+            } as OrganizationMembershipRecord)
             sessionStore.create.mockResolvedValue('new-session-id')
 
             await service.handleCallback(validCallbackInput())

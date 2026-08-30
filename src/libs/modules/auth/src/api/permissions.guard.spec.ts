@@ -1,7 +1,7 @@
 import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { RolePermissionPolicy } from '../../application/role-permission-policy.service'
+import { RolePermissionPolicy } from '../application/role-permission-policy.service'
 import { PermissionsGuard } from './permissions.guard'
 import { setAuthPrincipal } from './request-principal'
 

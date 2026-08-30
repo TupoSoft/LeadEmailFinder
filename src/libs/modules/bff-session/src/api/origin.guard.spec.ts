@@ -1,5 +1,5 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common'
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../application/bff-session-configuration'
 import { OriginGuard } from './origin.guard'
 
 const configuration: BffSessionConfiguration = {

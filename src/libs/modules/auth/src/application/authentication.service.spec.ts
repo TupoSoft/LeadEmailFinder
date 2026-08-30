@@ -1,7 +1,6 @@
-import { UnauthorizedException } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService } from './authentication.service'
-import { CredentialAuthenticator, ExtractedCredential } from './credential-authenticator'
+import { CredentialAuthenticator, CredentialRejectedError, ExtractedCredential } from './credential-authenticator'
 import { CredentialExtractor } from './credential-extractor'
 
 describe('AuthenticationService', () => {
@@ -20,7 +19,7 @@ describe('AuthenticationService', () => {
     it('throws when no credential can be extracted from the headers', async () => {
         credentialExtractor.extract.mockReturnValue(undefined)
 
-        await expect(service.authenticate({})).rejects.toThrow(UnauthorizedException)
+        await expect(service.authenticate({})).rejects.toThrow(CredentialRejectedError)
     })
 
     it('throws when no authenticator supports the extracted credential', async () => {
@@ -29,7 +28,7 @@ describe('AuthenticationService', () => {
         firstAuthenticator.supports.mockReturnValue(false)
         secondAuthenticator.supports.mockReturnValue(false)
 
-        await expect(service.authenticate({})).rejects.toThrow(UnauthorizedException)
+        await expect(service.authenticate({})).rejects.toThrow(CredentialRejectedError)
         expect(firstAuthenticator.authenticate).not.toHaveBeenCalled()
         expect(secondAuthenticator.authenticate).not.toHaveBeenCalled()
     })
@@ -53,8 +52,8 @@ describe('AuthenticationService', () => {
         const credential: ExtractedCredential = { scheme: 'bearer', token: 'token' }
         credentialExtractor.extract.mockReturnValue(credential)
         firstAuthenticator.supports.mockReturnValue(true)
-        firstAuthenticator.authenticate.mockRejectedValue(new UnauthorizedException('invalid'))
+        firstAuthenticator.authenticate.mockRejectedValue(new CredentialRejectedError('invalid'))
 
-        await expect(service.authenticate({})).rejects.toThrow(UnauthorizedException)
+        await expect(service.authenticate({})).rejects.toThrow(CredentialRejectedError)
     })
 })

@@ -1,5 +1,5 @@
 import { CookieOptions } from 'express'
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../application/bff-session-configuration'
 
 const PENDING_LOGIN_STATE_MAX_AGE_MS = 600_000
 

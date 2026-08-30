@@ -1,59 +1,60 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common'
-import { Repository } from 'typeorm'
-import { OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
-import { HumanMembershipResolver } from './human-membership-resolver.service'
+import { ActiveMembershipReader, OrganizationMembershipRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import { CredentialRejectedError } from '@tuposoft/lead-email-finder/modules/auth'
+import { HumanMembershipResolver, SingleActiveMembershipRequiredError } from './human-membership-resolver.service'
 
 describe('HumanMembershipResolver', () => {
-    let membershipRepo: jest.Mocked<Pick<Repository<OrganizationMembership>, 'findOne' | 'find'>>
+    let readerMock: jest.Mocked<ActiveMembershipReader>
     let resolver: HumanMembershipResolver
 
     beforeEach(() => {
-        membershipRepo = { findOne: jest.fn(), find: jest.fn() }
-        resolver = new HumanMembershipResolver(membershipRepo as unknown as Repository<OrganizationMembership>)
+        readerMock = { findByOrganizationAndExternalIdentity: jest.fn(), findActiveForExternalIdentity: jest.fn() }
+        resolver = new HumanMembershipResolver(readerMock)
     })
 
     describe('resolveActive', () => {
         it('returns the membership when active', async () => {
-            const membership = { status: 'active', role: 'member' } as OrganizationMembership
-            membershipRepo.findOne.mockResolvedValue(membership)
+            const membership = { status: 'active', role: 'member' } as OrganizationMembershipRecord
+            readerMock.findByOrganizationAndExternalIdentity.mockResolvedValue(membership)
 
             await expect(resolver.resolveActive('org-1', 'identity-1')).resolves.toBe(membership)
         })
 
-        it('throws when no membership exists', async () => {
-            membershipRepo.findOne.mockResolvedValue(null)
+        it('throws CredentialRejectedError when no membership exists', async () => {
+            readerMock.findByOrganizationAndExternalIdentity.mockResolvedValue(undefined)
 
-            await expect(resolver.resolveActive('org-1', 'identity-1')).rejects.toThrow(UnauthorizedException)
+            await expect(resolver.resolveActive('org-1', 'identity-1')).rejects.toThrow(CredentialRejectedError)
         })
 
-        it('throws when the membership is disabled', async () => {
-            membershipRepo.findOne.mockResolvedValue({ status: 'disabled' } as OrganizationMembership)
+        it('throws CredentialRejectedError when the membership is disabled', async () => {
+            readerMock.findByOrganizationAndExternalIdentity.mockResolvedValue({
+                status: 'disabled',
+            } as OrganizationMembershipRecord)
 
-            await expect(resolver.resolveActive('org-1', 'identity-1')).rejects.toThrow(UnauthorizedException)
+            await expect(resolver.resolveActive('org-1', 'identity-1')).rejects.toThrow(CredentialRejectedError)
         })
     })
 
     describe('resolveActiveForLogin', () => {
         it('returns the single active membership', async () => {
-            const membership = { organizationId: 'org-1', role: 'member' } as OrganizationMembership
-            membershipRepo.find.mockResolvedValue([membership])
+            const membership = { organizationId: 'org-1', role: 'member' } as OrganizationMembershipRecord
+            readerMock.findActiveForExternalIdentity.mockResolvedValue([membership])
 
             await expect(resolver.resolveActiveForLogin('identity-1')).resolves.toBe(membership)
         })
 
         it('rejects when there are zero active memberships', async () => {
-            membershipRepo.find.mockResolvedValue([])
+            readerMock.findActiveForExternalIdentity.mockResolvedValue([])
 
-            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(ForbiddenException)
+            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(SingleActiveMembershipRequiredError)
         })
 
         it('rejects when there is more than one active membership', async () => {
-            membershipRepo.find.mockResolvedValue([
-                { organizationId: 'org-1' } as OrganizationMembership,
-                { organizationId: 'org-2' } as OrganizationMembership,
+            readerMock.findActiveForExternalIdentity.mockResolvedValue([
+                { organizationId: 'org-1' } as OrganizationMembershipRecord,
+                { organizationId: 'org-2' } as OrganizationMembershipRecord,
             ])
 
-            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(ForbiddenException)
+            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(SingleActiveMembershipRequiredError)
         })
     })
 })

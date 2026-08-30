@@ -1,13 +1,12 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common'
-import { HumanIdentityResolver } from '@tuposoft/lead-email-finder/modules/identity'
+import { ExternalIdentityResolver } from '@tuposoft/lead-email-finder/modules/identity'
 import { SessionRecord } from '../domain/session-record'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../infrastructure/config/bff-session-configuration'
-import { RedisPendingLoginStateStore } from '../infrastructure/redis/redis-pending-login-state-store'
-import { RedisSessionStore } from '../infrastructure/redis/redis-session-store'
+import { BffSessionConfiguration } from './bff-session-configuration'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
-import { ID_TOKEN_VERIFIER, IdTokenVerifier } from './id-token-verifier'
-import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './oauth-provider-client'
+import { IdTokenVerifier } from './id-token-verifier'
+import { OAuthProviderClient } from './oauth-provider-client'
+import { PendingLoginStateStore } from './pending-login-state-store'
 import { computeCodeChallengeS256, generateCodeVerifier, generateCsrfToken, generateNonce, generateState } from './pkce'
+import { SessionStore } from './session-store'
 
 export interface LoginStart {
     readonly authorizationUrl: string
@@ -26,15 +25,28 @@ export interface CallbackResult {
     readonly csrfToken: string
 }
 
-@Injectable()
+export class LoginStateInvalidError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'LoginStateInvalidError'
+    }
+}
+
+export class AuthorizationCodeExchangeFailedError extends Error {
+    constructor() {
+        super('Authorization code exchange failed')
+        this.name = 'AuthorizationCodeExchangeFailedError'
+    }
+}
+
 export class BffSessionFlowService {
     constructor(
-        @Inject(OAUTH_PROVIDER_CLIENT) private readonly oauthProviderClient: OAuthProviderClient,
-        @Inject(ID_TOKEN_VERIFIER) private readonly idTokenVerifier: IdTokenVerifier,
-        @Inject(BFF_SESSION_CONFIGURATION) private readonly configuration: BffSessionConfiguration,
-        private readonly pendingLoginStateStore: RedisPendingLoginStateStore,
-        private readonly sessionStore: RedisSessionStore,
-        private readonly humanIdentityResolver: HumanIdentityResolver,
+        private readonly oauthProviderClient: OAuthProviderClient,
+        private readonly idTokenVerifier: IdTokenVerifier,
+        private readonly configuration: BffSessionConfiguration,
+        private readonly pendingLoginStateStore: PendingLoginStateStore,
+        private readonly sessionStore: SessionStore,
+        private readonly externalIdentityResolver: ExternalIdentityResolver,
         private readonly humanMembershipResolver: HumanMembershipResolver,
     ) {}
 
@@ -59,13 +71,13 @@ export class BffSessionFlowService {
 
     async handleCallback(input: CallbackInput): Promise<CallbackResult> {
         if (!input.cookieState || input.cookieState !== input.state) {
-            throw new UnauthorizedException('Login state is missing or does not match the callback request')
+            throw new LoginStateInvalidError('Login state is missing or does not match the callback request')
         }
 
         const pending = await this.pendingLoginStateStore.consume(input.state)
 
         if (!pending) {
-            throw new UnauthorizedException('Login state is invalid, expired, or was already used')
+            throw new LoginStateInvalidError('Login state is invalid, expired, or was already used')
         }
 
         let tokenResponse
@@ -76,11 +88,11 @@ export class BffSessionFlowService {
                 codeVerifier: pending.codeVerifier,
             })
         } catch {
-            throw new UnauthorizedException('Authorization code exchange failed')
+            throw new AuthorizationCodeExchangeFailedError()
         }
 
         const verifiedIdToken = await this.idTokenVerifier.verify(tokenResponse.idToken, pending.nonce)
-        const externalIdentity = await this.humanIdentityResolver.resolveOrCreate(
+        const externalIdentity = await this.externalIdentityResolver.resolveOrCreate(
             verifiedIdToken.issuer,
             verifiedIdToken.subject,
             verifiedIdToken.email,

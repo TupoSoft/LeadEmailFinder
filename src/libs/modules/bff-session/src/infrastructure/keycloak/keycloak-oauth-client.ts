@@ -5,7 +5,7 @@ import {
     OAuthTokenResponse,
     RefreshedTokens,
 } from '../../application/oauth-provider-client'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../../application/bff-session-configuration'
 
 export class OAuthTokenExchangeFailedError extends Error {
     constructor(reason: string) {

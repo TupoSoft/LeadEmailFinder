@@ -1,17 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import {
-    CredentialAuthenticator,
-    ExtractedCredential,
-} from '@tuposoft/lead-email-finder/modules/auth/application/credential-authenticator'
-import { RedisSessionStore } from '../infrastructure/redis/redis-session-store'
+import { CredentialAuthenticator, CredentialRejectedError, ExtractedCredential } from '@tuposoft/lead-email-finder/modules/auth'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
+import { SessionStore } from './session-store'
 import { SessionRefreshFailedError, SessionTokenRefresher } from './session-token-refresher.service'
 
-@Injectable()
 export class BffSessionCredentialAuthenticator implements CredentialAuthenticator {
     constructor(
-        private readonly sessionStore: RedisSessionStore,
+        private readonly sessionStore: SessionStore,
         private readonly sessionTokenRefresher: SessionTokenRefresher,
         private readonly humanMembershipResolver: HumanMembershipResolver,
     ) {}
@@ -25,7 +20,7 @@ export class BffSessionCredentialAuthenticator implements CredentialAuthenticato
         const record = await this.sessionStore.get(sessionId)
 
         if (!record) {
-            throw new UnauthorizedException('Session is missing, expired, or invalid')
+            throw new CredentialRejectedError('Session is missing, expired, or invalid')
         }
 
         let refreshedRecord
@@ -34,7 +29,7 @@ export class BffSessionCredentialAuthenticator implements CredentialAuthenticato
         } catch (error) {
             if (error instanceof SessionRefreshFailedError) {
                 await this.sessionStore.delete(sessionId)
-                throw new UnauthorizedException('Session could not be refreshed; sign in again')
+                throw new CredentialRejectedError('Session could not be refreshed; sign in again')
             }
             throw error
         }

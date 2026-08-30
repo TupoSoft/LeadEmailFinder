@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common'
 import { jwtVerify } from 'jose'
-import { BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BffSessionConfiguration } from '../../application/bff-session-configuration'
 import { JoseIdTokenVerifier } from './jose-id-token-verifier'
 
 jest.mock('jose', () => ({

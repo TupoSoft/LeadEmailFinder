@@ -1,11 +1,10 @@
-import { Controller, Get, HttpStatus, Inject, Post, Query, Req, Res, SerializeOptions } from '@nestjs/common'
+import { ForbiddenException, Controller, Get, HttpStatus, Inject, Post, Query, Req, Res, SerializeOptions, UnauthorizedException } from '@nestjs/common'
 import { Request, Response } from 'express'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { Public } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/public.decorator'
-import { CurrentPrincipal } from '@tuposoft/lead-email-finder/modules/auth/infrastructure/http/current-principal.decorator'
-import { BFF_SESSION_COOKIE_NAME } from '@tuposoft/lead-email-finder/modules/auth/application/credential-extractor'
-import { BffSessionFlowService } from '../../application/bff-session-flow.service'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../config/bff-session-configuration'
+import { BFF_SESSION_COOKIE_NAME, CurrentPrincipal, Public } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthorizationCodeExchangeFailedError, BffSessionFlowService, LoginStateInvalidError } from '../application/bff-session-flow.service'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../application/bff-session-configuration'
+import { SingleActiveMembershipRequiredError } from '../application/human-membership-resolver.service'
 import { BFF_CSRF_COOKIE_NAME, BFF_LOGIN_STATE_COOKIE_NAME } from './bff-cookie-names'
 import { AuthCallbackQueryDto, SessionResponseDto } from './bff-session.dto'
 import { buildCsrfCookieOptions, buildLoginStateCookieOptions, buildSessionCookieOptions } from './cookie-options'
@@ -32,12 +31,24 @@ export class BffSessionController {
     async callback(@Query() query: AuthCallbackQueryDto, @Req() req: Request, @Res() res: Response): Promise<void> {
         const cookies = parseCookieHeader(firstHeaderValue(req.headers['cookie']))
 
-        const { sessionId, csrfToken } = await this.bffSessionFlow.handleCallback({
-            code: query.code,
-            state: query.state,
-            cookieState: cookies[BFF_LOGIN_STATE_COOKIE_NAME],
-            existingSessionId: cookies[BFF_SESSION_COOKIE_NAME],
-        })
+        let sessionId: string
+        let csrfToken: string
+        try {
+            ;({ sessionId, csrfToken } = await this.bffSessionFlow.handleCallback({
+                code: query.code,
+                state: query.state,
+                cookieState: cookies[BFF_LOGIN_STATE_COOKIE_NAME],
+                existingSessionId: cookies[BFF_SESSION_COOKIE_NAME],
+            }))
+        } catch (error) {
+            if (error instanceof LoginStateInvalidError || error instanceof AuthorizationCodeExchangeFailedError) {
+                throw new UnauthorizedException(error.message)
+            }
+            if (error instanceof SingleActiveMembershipRequiredError) {
+                throw new ForbiddenException(error.message)
+            }
+            throw error
+        }
 
         res.clearCookie(BFF_LOGIN_STATE_COOKIE_NAME, buildLoginStateCookieOptions(this.configuration))
         res.cookie(BFF_SESSION_COOKIE_NAME, sessionId, buildSessionCookieOptions(this.configuration))
