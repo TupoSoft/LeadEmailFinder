@@ -51,6 +51,11 @@ jobs:
           HARPER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: corepack pnpm docs:lint:changed
 
+      - name: Check module architecture
+        env:
+          ARCHITECTURE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm architecture:check
+
       - name: Lint
         run: corepack pnpm lint
 

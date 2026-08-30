@@ -11,6 +11,11 @@
 - Add or update focused tests for every changed behavior, including contract tests for alternate implementations where appropriate.
 - Before finishing, review the diff for SOLID violations and report any material architectural trade-offs.
 
+## Business Module Workflow
+
+- Before editing a business module under `src/libs/modules/` or importing one from elsewhere, read `src/libs/modules/AGENTS.md`, the canonical `src/libs/modules/README.md`, and the affected module's `README.md`.
+- Follow the scoped workflow and validate the result with the module architecture gate before finishing.
+
 # Bruno Test Policy
 
 - For every implementation change, determine whether it changes externally observable HTTP API behavior.
