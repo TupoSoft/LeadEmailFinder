@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -211,6 +211,33 @@ function initializeGit(fixture: FixtureRepository): void {
     git(fixture, ['init', '--quiet'])
     git(fixture, ['add', '.'])
     git(fixture, ['commit', '--quiet', '-m', 'fixture base'])
+}
+
+function commitFixture(fixture: FixtureRepository, message: string): string {
+    git(fixture, ['add', '.'])
+    git(fixture, ['commit', '--quiet', '-m', message])
+    return git(fixture, ['rev-parse', 'HEAD'])
+}
+
+function createAdoptionFixture(baselineKeys: readonly string[] = []): {
+    baseSha: string
+    fixture: FixtureRepository
+} {
+    const fixture = new FixtureRepository().addModule('orders', {
+        files: {
+            'helper.ts': 'export const helper = true\n',
+        },
+    })
+    fixture.addRootFile('scripts/architecture/module-architecture.ts', 'export const fixtureScannerVersion = 1\n')
+    fixture.addRootFile('.gitignore', 'src/ignored-architecture-input.ts\n')
+    const tsconfigPath = join(fixture.rootDir, 'tsconfig.json')
+    const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8')) as { include: string[] }
+    tsconfig.include.push('scripts/**/*.ts')
+    fixture.addRootFile('tsconfig.json', `${JSON.stringify(tsconfig, null, 4)}\n`)
+    initializeGit(fixture)
+    write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline(baselineKeys))
+    const baseSha = commitFixture(fixture, 'adopt architecture baseline')
+    return { baseSha, fixture }
 }
 
 function runCli(
@@ -985,15 +1012,272 @@ describe('architecture CLI ratchet', () => {
         expect(result.stderr).toContain('allowing bootstrap')
     })
 
+    it('reconciles violations already present at the first baseline commit', () => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const environment = { ARCHITECTURE_BASE_SHA: baseSha }
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        fixture.addRootFile('scripts/architecture/check-module-architecture.ts', 'export const fixtureCliVersion = 2\n')
+        fixture.addRootFile(
+            'scripts/architecture/module-architecture.spec.ts',
+            'export const fixtureSpecificationVersion = 2\n',
+        )
+        fixture.addRootFile(
+            '.agents/plans/module-architecture-reconciliation/README.md',
+            '# Fixture reconciliation plan\n',
+        )
+        git(fixture, [
+            'add',
+            'scripts/architecture/check-module-architecture.ts',
+            'scripts/architecture/module-architecture.spec.ts',
+        ])
+
+        const beforeUpdate = runCli(fixture, [], environment)
+        const reconciliation = runCli(fixture, ['--write-baseline'], environment)
+        const reconciledContents = readFileSync(baselinePath, 'utf8')
+        const repeated = runCli(fixture, ['--write-baseline'], environment)
+
+        expect(beforeUpdate.code).toBe(1)
+        expect(beforeUpdate.stderr).toContain('[NEW]')
+        expect(reconciliation.code).toBe(0)
+        expect(reconciliation.stdout).toContain('Reconciled architecture baseline adoption')
+        expect(parseBaseline(reconciledContents).violations).toEqual(scan(fixture).map(violation => violation.key))
+        expect(repeated.code).toBe(0)
+        expect(repeated.stdout).toContain('already current')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(reconciledContents)
+        expect(runCli(fixture).code).toBe(0)
+        expect(runCli(fixture, [], environment).code).toBe(0)
+    })
+
+    it('rejects reconciliation for a violation sourced from an allowed changed TypeScript file', () => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+        fixture.addRootFile(
+            'scripts/architecture/module-architecture.spec.ts',
+            "import '@tuposoft/lead-email-finder/modules/orders/helper'\n",
+        )
+        git(fixture, ['add', 'scripts/architecture/module-architecture.spec.ts'])
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('requires the current baseline file to exist for adoption reconciliation', () => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        unlinkSync(baselinePath)
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('requires the current architecture baseline file to exist')
+        expect(existsSync(baselinePath)).toBe(false)
+    })
+
+    it('rejects adoption reconciliation when the base parent already contains a baseline', () => {
+        const { fixture } = createAdoptionFixture()
+        fixture.addRootFile('reconciliation-note.txt', 'later change\n')
+        const laterBaseSha = commitFixture(fixture, 'later baseline commit')
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: laterBaseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('rejects adoption reconciliation when a baseline existed earlier in the parent ancestry', () => {
+        const fixture = new FixtureRepository().addModule('orders', {
+            files: {
+                'helper.ts': 'export const helper = true\n',
+            },
+        })
+        fixture.addRootFile('scripts/architecture/module-architecture.ts', 'export const fixtureScannerVersion = 1\n')
+        write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline([]))
+        initializeGit(fixture)
+        unlinkSync(join(fixture.rootDir, BASELINE_RELATIVE_PATH))
+        commitFixture(fixture, 'delete architecture baseline')
+        write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline([]))
+        const recreatedBaseSha = commitFixture(fixture, 'recreate architecture baseline')
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: recreatedBaseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('rejects adoption reconciliation when a merge parent already contains a baseline', () => {
+        const fixture = new FixtureRepository().addModule('orders', {
+            files: {
+                'helper.ts': 'export const helper = true\n',
+            },
+        })
+        fixture.addRootFile('scripts/architecture/module-architecture.ts', 'export const fixtureScannerVersion = 1\n')
+        initializeGit(fixture)
+        const initialSha = git(fixture, ['rev-parse', 'HEAD'])
+        git(fixture, ['checkout', '--quiet', '-b', 'baseline-side'])
+        write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline([]))
+        const baselineSideSha = commitFixture(fixture, 'adopt baseline on merge side')
+        git(fixture, ['checkout', '--quiet', '-b', 'first-parent', initialSha])
+        fixture.addRootFile('first-parent-note.txt', 'first parent\n')
+        commitFixture(fixture, 'advance first parent')
+        git(fixture, ['merge', '--quiet', '--no-ff', '-m', 'merge baseline side', baselineSideSha])
+        const mergeBaseSha = git(fixture, ['rev-parse', 'HEAD'])
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: mergeBaseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('rejects adoption reconciliation when the configured base is not an ancestor of HEAD', () => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const firstParentSha = git(fixture, ['rev-parse', `${baseSha}^1`])
+        git(fixture, ['checkout', '--quiet', '-b', 'sibling-adoption', firstParentSha])
+        write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline([]))
+        commitFixture(fixture, 'adopt baseline on sibling')
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('rejects adoption reconciliation that would replace stale base entries with additions', () => {
+        const staleKey = 'source-placement|src/libs/modules/orders/src/stale.ts|stale.ts'
+        const { baseSha, fixture } = createAdoptionFixture([staleKey])
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it.each([
+        [
+            'module source',
+            (fixture: FixtureRepository) =>
+                fixture.writeModuleFile(
+                    'orders',
+                    'helper.ts',
+                    'export const helper = true\nexport const changed = true\n',
+                ),
+        ],
+        [
+            'TypeScript configuration',
+            (fixture: FixtureRepository) => {
+                const tsconfigPath = join(fixture.rootDir, 'tsconfig.json')
+                fixture.addRootFile('tsconfig.json', `${readFileSync(tsconfigPath, 'utf8')}\n`)
+            },
+        ],
+        [
+            'core scanner',
+            (fixture: FixtureRepository) =>
+                fixture.addRootFile(
+                    'scripts/architecture/module-architecture.ts',
+                    'export const fixtureScannerVersion = 2\n',
+                ),
+        ],
+        [
+            'TypeScript source outside the module directory',
+            (fixture: FixtureRepository) =>
+                fixture.addRootFile('src/outside-architecture-input.ts', 'export const outsideInput = true\n'),
+        ],
+        [
+            'new ignored TypeScript source',
+            (fixture: FixtureRepository) =>
+                fixture.addRootFile('src/ignored-architecture-input.ts', 'export const ignoredInput = true\n'),
+        ],
+    ])('rejects adoption reconciliation after a %s change', (_description, changeInput) => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+        changeInput(fixture)
+        git(fixture, ['add', '.'])
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('rejects adoption reconciliation with an ordinary untracked file outside the allowed paths', () => {
+        const { baseSha, fixture } = createAdoptionFixture()
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+        fixture.addRootFile('untracked-note.txt', 'unrelated work\n')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('[BASELINE GROWTH]')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
+    })
+
+    it('fails closed when a baseline-bearing base commit has no first parent', () => {
+        const fixture = new FixtureRepository().addModule('orders', {
+            files: {
+                'helper.ts': 'export const helper = true\n',
+            },
+        })
+        fixture.addRootFile('scripts/architecture/module-architecture.ts', 'export const fixtureScannerVersion = 1\n')
+        write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline([]))
+        initializeGit(fixture)
+        const baseSha = git(fixture, ['rev-parse', 'HEAD'])
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: baseSha,
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('first parent')
+    })
+
     it('rejects deletion and recreation that grows the baseline relative to the base commit', () => {
         const fixture = new FixtureRepository().addModule('orders', {
             files: {
                 'helper.ts': 'export const helper = true\n',
             },
         })
-        expect(runCli(fixture, ['--write-baseline']).code).toBe(0)
         initializeGit(fixture)
-        const baseSha = git(fixture, ['rev-parse', 'HEAD'])
+        expect(runCli(fixture, ['--write-baseline']).code).toBe(0)
+        const baseSha = commitFixture(fixture, 'adopt architecture baseline')
         fixture.writeModuleFile('orders', 'another.ts', 'export const another = true\n')
         const currentKeys = scan(fixture).map(violation => violation.key)
         write(join(fixture.rootDir, BASELINE_RELATIVE_PATH), serializeBaseline(currentKeys))
@@ -1039,6 +1323,23 @@ describe('architecture CLI ratchet', () => {
         expect(result.code).toBe(0)
         expect(result.stderr).toContain('base commit')
         expect(result.stderr).toContain('unavailable')
+    })
+
+    it('does not allow an unavailable base to grow the baseline updater', () => {
+        const fixture = new FixtureRepository().addModule('orders')
+        expect(runCli(fixture, ['--write-baseline']).code).toBe(0)
+        const baselinePath = join(fixture.rootDir, BASELINE_RELATIVE_PATH)
+        const before = readFileSync(baselinePath, 'utf8')
+        fixture.writeModuleFile('orders', 'helper.ts', 'export const helper = true\n')
+
+        const result = runCli(fixture, ['--write-baseline'], {
+            ARCHITECTURE_BASE_SHA: '1234567890123456789012345678901234567890',
+        })
+
+        expect(result.code).toBe(1)
+        expect(result.stderr).toContain('unavailable')
+        expect(result.stderr).toContain('Refusing to grow')
+        expect(readFileSync(baselinePath, 'utf8')).toBe(before)
     })
 
     it('rejects a malformed current baseline and unknown CLI arguments', () => {
