@@ -1,4 +1,5 @@
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
 import { PaymentEventHandler } from './payment-event.handler'
 import { PaidPurchase, PaymentPurchaseStore, PurchaseReferenceConflictError } from './payment-purchase.store'
 
@@ -6,6 +7,8 @@ const paidEvent = {
     kind: 'purchase_paid' as const,
     providerEventId: 'event-paid-1',
     providerReference: 'provider-purchase-1',
+    providerTotalMinor: 500,
+    currency: 'USD',
 }
 
 const purchase: PaidPurchase = {
@@ -17,12 +20,18 @@ const purchase: PaidPurchase = {
 describe('PaymentEventHandler', () => {
     let purchases: jest.Mocked<PaymentPurchaseStore>
     let credits: jest.Mocked<Pick<CreditsService, 'credit'>>
+    let adjustmentHandler: jest.Mocked<Pick<PaymentAdjustmentHandler, 'handle'>>
     let handler: PaymentEventHandler
 
     beforeEach(() => {
-        purchases = { recordPaid: jest.fn(), recordFailed: jest.fn() }
+        purchases = { recordPaid: jest.fn(), recordCreditsGranted: jest.fn(), recordFailed: jest.fn() }
         credits = { credit: jest.fn() }
-        handler = new PaymentEventHandler(purchases, credits as unknown as CreditsService)
+        adjustmentHandler = { handle: jest.fn() }
+        handler = new PaymentEventHandler(
+            purchases,
+            credits as unknown as CreditsService,
+            adjustmentHandler as unknown as PaymentAdjustmentHandler,
+        )
     })
 
     it('grants stored purchase credits using the purchase id', async () => {
@@ -33,8 +42,11 @@ describe('PaymentEventHandler', () => {
         expect(purchases.recordPaid).toHaveBeenCalledWith({
             providerReference: paidEvent.providerReference,
             purchaseId: undefined,
+            providerTotalMinor: paidEvent.providerTotalMinor,
+            currency: paidEvent.currency,
         })
         expect(credits.credit).toHaveBeenCalledWith(purchase.organizationId, purchase.credits, purchase.id)
+        expect(purchases.recordCreditsGranted).toHaveBeenCalledWith(purchase.id)
     })
 
     it('forwards the event purchase id as a correlation fallback', async () => {
@@ -45,6 +57,8 @@ describe('PaymentEventHandler', () => {
         expect(purchases.recordPaid).toHaveBeenCalledWith({
             providerReference: paidEvent.providerReference,
             purchaseId: purchase.id,
+            providerTotalMinor: paidEvent.providerTotalMinor,
+            currency: paidEvent.currency,
         })
     })
 
@@ -56,6 +70,28 @@ describe('PaymentEventHandler', () => {
 
         expect(credits.credit).toHaveBeenCalledTimes(2)
         expect(credits.credit).toHaveBeenNthCalledWith(2, purchase.organizationId, purchase.credits, purchase.id)
+    })
+
+    it('does not mark the purchase grant complete when credit application fails', async () => {
+        const failure = new Error('credit grant failed')
+        purchases.recordPaid.mockResolvedValue(purchase)
+        credits.credit.mockRejectedValue(failure)
+
+        await expect(handler.handle(paidEvent)).rejects.toBe(failure)
+
+        expect(purchases.recordCreditsGranted).not.toHaveBeenCalled()
+    })
+
+    it('surfaces a grant-marker failure so replay can finish the durable handoff', async () => {
+        const failure = new Error('grant marker failed')
+        purchases.recordPaid.mockResolvedValue(purchase)
+        purchases.recordCreditsGranted.mockRejectedValueOnce(failure)
+
+        await expect(handler.handle(paidEvent)).rejects.toBe(failure)
+        await expect(handler.handle(paidEvent)).resolves.toBeUndefined()
+
+        expect(credits.credit).toHaveBeenCalledTimes(2)
+        expect(purchases.recordCreditsGranted).toHaveBeenCalledTimes(2)
     })
 
     it('acknowledges an unknown provider reference without changing credits', async () => {
@@ -87,6 +123,26 @@ describe('PaymentEventHandler', () => {
 
         expect(purchases.recordPaid).not.toHaveBeenCalled()
         expect(purchases.recordFailed).not.toHaveBeenCalled()
+        expect(adjustmentHandler.handle).not.toHaveBeenCalled()
+    })
+
+    it('delegates adjustment events to the adjustment handler', async () => {
+        const event = {
+            kind: 'purchase_adjustment_debit' as const,
+            providerEventId: 'event-adjustment-1',
+            providerReference: paidEvent.providerReference,
+            providerAdjustmentId: 'adjustment-1',
+            amountMinor: 250,
+            isFull: false,
+            currency: 'USD',
+        }
+        adjustmentHandler.handle.mockResolvedValue(true)
+
+        await handler.handle(event)
+
+        expect(adjustmentHandler.handle).toHaveBeenCalledWith(event)
+        expect(purchases.recordPaid).not.toHaveBeenCalled()
+        expect(credits.credit).not.toHaveBeenCalled()
     })
 
     it('lets a purchase-reference conflict surface for provider retry without granting credits', async () => {

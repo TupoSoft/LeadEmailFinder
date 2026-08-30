@@ -15,6 +15,7 @@
 **/.vscode
 **/.next
 **/.cache
+**/.dev
 **/*.*proj.user
 **/*.dbmdl
 **/*.jfm

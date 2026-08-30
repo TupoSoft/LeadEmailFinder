@@ -1,0 +1,20 @@
+info:
+    name: 15-read-debit-replay-balance
+    type: http
+    seq: 15
+
+http:
+    method: GET
+    url: '{{baseUrl}}/credits/{{organizationId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('leaves the balance unchanged after debit replay', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.balance).to.equal(Number(bru.getVar('debitedBalance')));
+              });

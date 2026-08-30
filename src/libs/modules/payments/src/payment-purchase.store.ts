@@ -11,6 +11,11 @@ export interface PurchaseCorrelation {
     purchaseId?: string
 }
 
+export interface PaidPurchaseCorrelation extends PurchaseCorrelation {
+    providerTotalMinor: number
+    currency: string
+}
+
 export class PurchaseReferenceConflictError extends Error {
     constructor(
         public readonly purchaseId: string,
@@ -21,7 +26,30 @@ export class PurchaseReferenceConflictError extends Error {
     }
 }
 
+export class PurchaseCurrencyMismatchError extends Error {
+    constructor(
+        public readonly purchaseId: string,
+        public readonly expectedCurrency: string,
+        public readonly receivedCurrency: string,
+    ) {
+        super(`Paid purchase ${purchaseId} uses a different currency from its catalog entry`)
+        this.name = PurchaseCurrencyMismatchError.name
+    }
+}
+
+export class PurchaseProviderTotalConflictError extends Error {
+    constructor(
+        public readonly purchaseId: string,
+        public readonly expectedProviderTotalMinor: number,
+        public readonly receivedProviderTotalMinor: number,
+    ) {
+        super(`Paid purchase ${purchaseId} was replayed with a different provider total`)
+        this.name = PurchaseProviderTotalConflictError.name
+    }
+}
+
 export interface PaymentPurchaseStore {
-    recordPaid(correlation: PurchaseCorrelation): Promise<PaidPurchase | null>
+    recordPaid(correlation: PaidPurchaseCorrelation): Promise<PaidPurchase | null>
+    recordCreditsGranted(purchaseId: string): Promise<void>
     recordFailed(correlation: PurchaseCorrelation): Promise<boolean>
 }

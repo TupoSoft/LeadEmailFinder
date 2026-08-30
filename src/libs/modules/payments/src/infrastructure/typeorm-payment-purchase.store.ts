@@ -3,8 +3,11 @@ import { DataSource, EntityManager } from 'typeorm'
 import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
 import {
     PaidPurchase,
+    PaidPurchaseCorrelation,
     PaymentPurchaseStore,
+    PurchaseCurrencyMismatchError,
     PurchaseCorrelation,
+    PurchaseProviderTotalConflictError,
     PurchaseReferenceConflictError,
 } from '../payment-purchase.store'
 
@@ -17,16 +20,34 @@ interface ResolvedPurchase {
 export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
     constructor(private readonly dataSource: DataSource) {}
 
-    recordPaid(correlation: PurchaseCorrelation): Promise<PaidPurchase | null> {
+    recordPaid(correlation: PaidPurchaseCorrelation): Promise<PaidPurchase | null> {
+        this.assertPositiveInteger(correlation.providerTotalMinor, 'providerTotalMinor')
+
         return this.dataSource.transaction(async manager => {
             const resolved = await this.resolvePurchase(manager, correlation)
             if (!resolved) return null
 
             const { purchase } = resolved
+            if (purchase.currency !== correlation.currency) {
+                throw new PurchaseCurrencyMismatchError(purchase.id, purchase.currency, correlation.currency)
+            }
+            if (
+                purchase.providerTotalMinor != null &&
+                purchase.providerTotalMinor !== correlation.providerTotalMinor
+            ) {
+                throw new PurchaseProviderTotalConflictError(
+                    purchase.id,
+                    purchase.providerTotalMinor,
+                    correlation.providerTotalMinor,
+                )
+            }
+
             const statusChanged = purchase.status !== CreditPurchaseStatus.PAID
             if (statusChanged) purchase.status = CreditPurchaseStatus.PAID
+            const providerTotalChanged = purchase.providerTotalMinor == null
+            if (providerTotalChanged) purchase.providerTotalMinor = correlation.providerTotalMinor
 
-            if (resolved.bound || statusChanged) {
+            if (resolved.bound || statusChanged || providerTotalChanged) {
                 await manager.save(CreditPurchase, purchase)
             }
 
@@ -52,6 +73,23 @@ export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
             }
 
             return true
+        })
+    }
+
+    recordCreditsGranted(purchaseId: string): Promise<void> {
+        return this.dataSource.transaction(async manager => {
+            const purchase = await manager.findOne(CreditPurchase, {
+                where: { id: purchaseId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            if (!purchase) throw new Error(`Unknown paid purchase: ${purchaseId}`)
+            if (purchase.status !== CreditPurchaseStatus.PAID) {
+                throw new Error(`Cannot complete the credit grant for unpaid purchase: ${purchaseId}`)
+            }
+            if (purchase.creditsGrantedAt) return
+
+            purchase.creditsGrantedAt = new Date()
+            await manager.save(CreditPurchase, purchase)
         })
     }
 
@@ -83,5 +121,11 @@ export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
 
         byId.providerReference = providerReference
         return { purchase: byId, bound: true }
+    }
+
+    private assertPositiveInteger(value: number, field: string): void {
+        if (!Number.isSafeInteger(value) || value <= 0) {
+            throw new Error(`Paid purchase ${field} must be a positive safe integer`)
+        }
     }
 }

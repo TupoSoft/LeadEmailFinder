@@ -145,6 +145,93 @@ describe('CreditsService', () => {
         })
     })
 
+    describe('debitUpTo', () => {
+        it('clamps to the available balance and returns the amount persisted in the ledger', async () => {
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 3 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce(null)
+
+            await expect(service.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(3)
+
+            expect(managerMock.save).toHaveBeenCalledWith(
+                OrganizationCreditAccount,
+                expect.objectContaining({ balance: 0 }),
+            )
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditDebit, {
+                organizationId: 'org-1',
+                reference: 'adjustment-1',
+                amount: 3,
+            })
+        })
+
+        it('records and replays a zero applied debit without charging a later balance', async () => {
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 0 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce(null)
+
+            await expect(service.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(0)
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditDebit, {
+                organizationId: 'org-1',
+                reference: 'adjustment-1',
+                amount: 0,
+            })
+
+            jest.clearAllMocks()
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 20 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce({ amount: 0 } as CreditDebit)
+
+            await expect(service.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(0)
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
+        })
+
+        it('returns the originally applied amount for a nonzero replay', async () => {
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 50 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce({ amount: 7 } as CreditDebit)
+
+            await expect(service.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(7)
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('creditOnce', () => {
+        it('credits the account and reports the applied operation amount', async () => {
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 3 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce(null)
+            managerMock.save.mockImplementation((_entity, account) =>
+                Promise.resolve(account as OrganizationCreditAccount),
+            )
+
+            await expect(service.creditOnce('org-1', 7, 'restore-1')).resolves.toBe(7)
+
+            expect(managerMock.save).toHaveBeenCalledWith(
+                OrganizationCreditAccount,
+                expect.objectContaining({ balance: 10 }),
+            )
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditGrant, {
+                organizationId: 'org-1',
+                reference: 'restore-1',
+                amount: 7,
+            })
+        })
+
+        it('returns the original grant amount without crediting a replay again', async () => {
+            managerMock.findOne
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 10 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce({ amount: 7 } as CreditGrant)
+
+            await expect(service.creditOnce('org-1', 7, 'restore-1')).resolves.toBe(7)
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
+        })
+    })
+
     describe('setBalance', () => {
         it('sets the balance of an existing account', async () => {
             accountRepoMock.findOneBy.mockResolvedValue({

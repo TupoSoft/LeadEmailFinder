@@ -34,10 +34,12 @@ export PADDLE_STARTER_PRICE_ID=pri_replace_with_the_sandbox_price_id
 
 ## 2. Create Local Secret Files
 
-Create a sandbox API key and client-side token under **Paddle > Developer tools > Authentication**. Enter them
-through hidden prompts so they do not enter shell history. The webhook secret is added after the notification
-destination is created or safely reused in the next section. Its destination ID is recorded beside the secret so
-cleanup can target the exact external resource owned by this fixture.
+Create a sandbox API key and client-side token under **Paddle > Developer tools > Authentication**. The API key needs
+read access to transactions and read/write access to adjustments, notifications, notification settings, and client
+tokens so the verification and exact cleanup calls can run. Enter both secrets through hidden prompts so they do not
+enter shell history. The webhook secret is added after the notification destination is created or safely reused in
+the next section. Resource IDs are recorded beside their secrets so cleanup can target only the external resources
+owned by this fixture.
 
 ```shell
 mkdir -p .dev/paddle
@@ -53,18 +55,54 @@ printf '\n'
 chmod 600 .dev/paddle/api-key.txt .dev/paddle/client-token.txt
 ```
 
+Resolve the selected token's `ctkn_...` identifier through the API without printing any token value. The query must
+find exactly one active match:
+
+```shell
+(
+  set -euo pipefail
+  LEF_PADDLE_CLIENT_TOKEN_ID="$(
+    LEF_PADDLE_TOKEN_PAGE='https://sandbox-api.paddle.com/client-tokens?per_page=200'
+    while test -n "$LEF_PADDLE_TOKEN_PAGE"; do
+      LEF_PADDLE_TOKEN_RESPONSE="$(
+        curl --fail --silent --show-error \
+          -H "Authorization: Bearer $(cat .dev/paddle/api-key.txt)" \
+          "$LEF_PADDLE_TOKEN_PAGE"
+      )"
+      jq -r --rawfile token .dev/paddle/client-token.txt \
+        '.data[] | select(.token == $token and .status == "active") | .id' \
+        <<<"$LEF_PADDLE_TOKEN_RESPONSE"
+      LEF_PADDLE_TOKEN_PAGE="$(
+        jq -r 'if .meta.pagination.has_more then .meta.pagination.next else empty end' \
+          <<<"$LEF_PADDLE_TOKEN_RESPONSE"
+      )"
+    done |
+      jq -Rse 'split("\n") | map(select(length > 0)) |
+        if length == 1 then .[0] else error("expected one active client token") end'
+  )"
+  printf '%s' "$LEF_PADDLE_CLIENT_TOKEN_ID" > .dev/paddle/client-token-id.txt
+  chmod 600 .dev/paddle/client-token-id.txt
+)
+```
+
 Only use sandbox values: API keys start with `pdl_sdbx_apikey_`, and client-side tokens start with `test_`.
-`.dev/paddle/` is gitignored. Never put these values, an access token, an account-specific price identifier, a
-customer payload, or a raw webhook body in a tracked file.
+`.dev/paddle/` is excluded from both Git and Docker build contexts. Never put these values, an access token, an
+account-specific price identifier, a customer payload, or a raw webhook body in a tracked file.
 
 ## 3. Start the Tunnel and Configure Paddle
 
 Start the tunnel and its checkout dependency before the rest of the stack:
 
 ```shell
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d paddle-webhook-tunnel
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml logs -f paddle-webhook-tunnel
+export LEF_PADDLE_COMPOSE_PROJECT="lef-paddle-dev-$(printf '%s' "$PWD" | sha256sum | cut -c1-8)"
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+  up -d paddle-webhook-tunnel
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+  logs -f paddle-webhook-tunnel
 ```
+
+The path-derived project name keeps this fixture's containers, networks, volumes, and locally built images separate
+from the ordinary `LEF` Compose project and other worktrees. Keep the same variable for every command below.
 
 Copy the temporary `https://...trycloudflare.com` URL from the logs, then stop following them with `Ctrl+C`.
 Keep it in the same shell that will start the full overlay:
@@ -95,8 +133,9 @@ Create a Platform notification destination when no safely reusable destination r
 https://replace-with-the-quick-tunnel.trycloudflare.com/v1/payments/webhook
 ```
 
-Subscribe only to `transaction.completed`, `transaction.canceled`, and `transaction.past_due`. Copy the exact
-destination ID and its secret into local files without putting the secret in shell history:
+Subscribe only to `transaction.completed`, `transaction.canceled`, `transaction.past_due`, `adjustment.created`, and
+`adjustment.updated`. Copy the exact destination ID and its secret into local files without putting the secret in
+shell history:
 
 ```shell
 read -r -p 'Paddle notification destination ID: ' LEF_PADDLE_SETTING_ID
@@ -115,12 +154,13 @@ secret belongs to that destination and must not be replaced with an API key or a
 
 ## 4. Start and Inspect the Fixture
 
-Start the full overlay after all three files exist and both `PADDLE_STARTER_PRICE_ID` and
-`PADDLE_CHECKOUT_URL` are exported:
+Start the full overlay after the three runtime secret files (`api-key.txt`, `client-token.txt`, and
+`webhook-secret.txt`) and two resource-ID files (`client-token-id.txt` and `notification-setting-id.txt`) exist, and
+after both `PADDLE_STARTER_PRICE_ID` and `PADDLE_CHECKOUT_URL` are exported:
 
 ```shell
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d --build
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d --build
 curl --fail --silent --show-error http://localhost:57000/health
 curl --fail --silent --show-error "$PADDLE_PUBLIC_URL/health"
 curl --fail --silent --show-error http://localhost:53000/health | jq -e '.status == "ok"'
@@ -130,7 +170,8 @@ The checkout container reads its client-side token from `/run/secrets`, renders 
 token. Verify the runtime page without printing it:
 
 ```shell
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml exec -T paddle-checkout sh -ec \
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+  exec -T paddle-checkout sh -ec \
   "grep -q \"Paddle.Environment.set('sandbox')\" /usr/share/nginx/html/checkout.html && \
    ! grep -q '\${PADDLE_CLIENT_TOKEN}' /usr/share/nginx/html/checkout.html && \
    ! grep -Eq 'pdl_sdbx_apikey_|pdl_ntfset_' /usr/share/nginx/html/checkout.html"
@@ -138,11 +179,19 @@ docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml exec -T 
 
 ## 5. Bootstrap Authentication
 
-The API uses the container-internal Keycloak issuer in this overlay. Provision and seed the development M2M
-credential from inside the API container so its token has the matching issuer claim:
+The API uses the container-internal Keycloak issuer in this overlay. Refuse to overwrite a preexisting local
+Keycloak fixture, then mark the directory as owned by this run. Provision and seed the development M2M credential
+from inside the API container so its token has the matching issuer claim:
 
 ```shell
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml exec -T api sh -ec '
+test ! -e .dev/keycloak || {
+  printf '%s\n' '.dev/keycloak already exists; use a clean worktree or preserve that fixture explicitly.' >&2
+  exit 1
+}
+mkdir -p .dev/keycloak
+touch .dev/keycloak/.paddle-fixture-owned
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+  exec -T api sh -ec '
   export KEYCLOAK_URL=http://keycloak:8080
   export POSTGRES_URL="$(cat /run/secrets/postgres_url)"
   pnpm keycloak:provision
@@ -154,7 +203,8 @@ Mint a short-lived token without printing the client secret or access token:
 
 ```shell
 export LEF_ACCESS_TOKEN="$(
-  docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml exec -T api sh -ec '
+  docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+    exec -T api sh -ec '
     client_id="$(jq -r .clientId .dev/keycloak/service-client.json)"
     client_secret="$(jq -r .clientSecret .dev/keycloak/service-client.json)"
     curl --fail --silent --show-error \
@@ -245,24 +295,144 @@ purchase is not idempotent; abandon any unpaid duplicate and create a fresh purc
 rejects a transaction with `transaction_checkout_url_domain_is_not_approved`, confirm that `PADDLE_CHECKOUT_URL`
 uses the current tunnel domain and that the same fully qualified domain is approved in the sandbox dashboard.
 
-## 8. Deactivate the Destination and Restore the Stub Stack
+## 8. Refund and Prove the Credit Clawback
 
-Before stopping the public tunnel, open the Platform destination whose ID is stored in
-`.dev/paddle/notification-setting-id.txt`, deactivate it, and reload the destination list. Confirm that the exact
-destination is inactive and that no other active `LeadEmailFinder paddle-dev` destination exists. Deactivation
-preserves its delivery logs while preventing retries and avoiding consumption of Paddle's active-destination limit.
+Extract the Paddle transaction ID from the checkout URL without printing the API key, then create a full sandbox
+refund. Paddle may create it as `pending_approval`; sandbox refunds are approved automatically on Paddle's periodic
+approval cycle. A pending or rejected adjustment must leave the balance unchanged.
+
+```shell
+export LEF_TRANSACTION_ID="$(
+  node -e "process.stdout.write(new URL(process.env.LEF_CHECKOUT_URL).searchParams.get('_ptxn') || '')"
+)"
+test -n "$LEF_TRANSACTION_ID"
+
+LEF_REFUND_RESPONSE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $(cat .dev/paddle/api-key.txt)" \
+    -H 'Content-Type: application/json' \
+    --data "$(
+      jq -nc --arg transactionId "$LEF_TRANSACTION_ID" \
+        '{action:"refund",type:"full",transaction_id:$transactionId,reason:"LeadEmailFinder clawback verification"}'
+    )" \
+    https://sandbox-api.paddle.com/adjustments
+)"
+export LEF_REFUND_ADJUSTMENT_ID="$(jq -er .data.id <<<"$LEF_REFUND_RESPONSE")"
+case "$(jq -r .data.status <<<"$LEF_REFUND_RESPONSE")" in
+  pending_approval | approved) ;;
+  *) exit 1 ;;
+esac
+```
+
+Wait for the approved `adjustment.created` or `adjustment.updated` delivery to return HTTP 200. The paid event stores
+the transaction `grandTotal` from the signature-verified event, and the adjustment handler compares it with the
+adjustment `total` from the signature-verified event, both after tax. A full adjustment also carries explicit full
+scope, so a full remainder targets the entire purchase grant.
+Verify that the full refund removed exactly the 100 credits granted by this purchase, then replay the approved delivery
+and prove that the balance does not move again:
+
+```shell
+export LEF_REFUNDED_BALANCE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
+    "http://localhost:53000/credits/$LEF_ORGANIZATION_ID" | jq -er .balance
+)"
+test "$LEF_REFUNDED_BALANCE" -eq "$((LEF_PAID_BALANCE - 100))"
+
+# Replay the approved adjustment delivery from Paddle's notification log before running this assertion.
+LEF_REFUND_REPLAY_BALANCE="$(
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
+    "http://localhost:53000/credits/$LEF_ORGANIZATION_ID" | jq -er .balance
+)"
+test "$LEF_REFUND_REPLAY_BALANCE" -eq "$LEF_REFUNDED_BALANCE"
+```
+
+Seller API calls cannot manufacture Paddle's provider-generated chargeback or credit inverse actions. If this sandbox
+transaction later produces an approved `chargeback_reverse` or `credit_reverse`, verify that its delivery restores no
+more than the credits actually removed, clears any attributable shortfall first, and remains unchanged on replay. A
+`status: reversed` update for the original adjustment is informational for credit accounting; the separate approved
+inverse adjustment is the only restore event. When the sandbox cannot produce an inverse action, record that path as
+unverified rather than treating the original `reversed` update as a substitute. Signed Paddle fixture tests and the
+real-PostgreSQL integration suite provide the automated inverse proof.
+
+## 9. Deactivate the Destination and Restore the Stub Stack
+
+Before stopping the public tunnel, deactivate the Platform destination whose ID is stored in
+`.dev/paddle/notification-setting-id.txt` and verify that exact destination is inactive. Confirm that no other active
+`LeadEmailFinder paddle-dev` destination exists. Deactivation preserves its delivery logs while preventing retries and
+avoiding consumption of Paddle's active-destination limit.
+
+Revoke the fixture client token only after the final checkout is complete, then verify the exact recorded ID reports
+`revoked`:
+
+```shell
+(
+  set -euo pipefail
+  LEF_PADDLE_API_KEY="$(cat .dev/paddle/api-key.txt)"
+  LEF_PADDLE_SETTING_ID="$(cat .dev/paddle/notification-setting-id.txt)"
+  curl --fail --silent --show-error \
+    -X PATCH \
+    -H "Authorization: Bearer $LEF_PADDLE_API_KEY" \
+    -H 'Content-Type: application/json' \
+    --data '{"active":false}' \
+    "https://sandbox-api.paddle.com/notification-settings/$LEF_PADDLE_SETTING_ID" |
+    jq -e --arg id "$LEF_PADDLE_SETTING_ID" '.data.id == $id and .data.active == false'
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_PADDLE_API_KEY" \
+    "https://sandbox-api.paddle.com/notification-settings/$LEF_PADDLE_SETTING_ID" |
+    jq -e --arg id "$LEF_PADDLE_SETTING_ID" '.data.id == $id and .data.active == false'
+  LEF_PADDLE_SETTINGS_PAGE='https://sandbox-api.paddle.com/notification-settings?per_page=200'
+  while test -n "$LEF_PADDLE_SETTINGS_PAGE"; do
+    LEF_PADDLE_SETTINGS_RESPONSE="$(
+      curl --fail --silent --show-error \
+        -H "Authorization: Bearer $LEF_PADDLE_API_KEY" \
+        "$LEF_PADDLE_SETTINGS_PAGE"
+    )"
+    jq -r '.data[] | select(.description == "LeadEmailFinder paddle-dev" and .active == true) | .id' \
+      <<<"$LEF_PADDLE_SETTINGS_RESPONSE"
+    LEF_PADDLE_SETTINGS_PAGE="$(
+      jq -r 'if .meta.pagination.has_more then .meta.pagination.next else empty end' \
+        <<<"$LEF_PADDLE_SETTINGS_RESPONSE"
+    )"
+  done | jq -Rse 'split("\n") | map(select(length > 0)) | length == 0'
+
+  LEF_PADDLE_CLIENT_TOKEN_ID="$(cat .dev/paddle/client-token-id.txt)"
+  curl --fail --silent --show-error \
+    -X PATCH \
+    -H "Authorization: Bearer $LEF_PADDLE_API_KEY" \
+    -H 'Content-Type: application/json' \
+    --data '{"status":"revoked"}' \
+    "https://sandbox-api.paddle.com/client-tokens/$LEF_PADDLE_CLIENT_TOKEN_ID" |
+    jq -e --arg id "$LEF_PADDLE_CLIENT_TOKEN_ID" '.data.id == $id and .data.status == "revoked"'
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $LEF_PADDLE_API_KEY" \
+    "https://sandbox-api.paddle.com/client-tokens/$LEF_PADDLE_CLIENT_TOKEN_ID" |
+    jq -e --arg id "$LEF_PADDLE_CLIENT_TOKEN_ID" \
+      '.data.id == $id and .data.status == "revoked" and .data.revoked_at != null'
+)
+```
 
 Only after that verification, stop the overlay, clear sensitive shell variables, and discard its local files:
 
 ```shell
-docker compose -f docker/compose.yaml -f docker/compose.paddle-dev.yaml down
+docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
+  down --volumes --remove-orphans --rmi local
 unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
 unset LEF_PURCHASE_ID LEF_CHECKOUT_URL LEF_PURCHASE_RESPONSE LEF_PAID_PURCHASE LEF_REPLAYED_PURCHASE
+unset LEF_TRANSACTION_ID LEF_REFUND_RESPONSE LEF_REFUND_ADJUSTMENT_ID LEF_REFUNDED_BALANCE
+unset LEF_REFUND_REPLAY_BALANCE
 unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL
 rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt \
-  .dev/paddle/notification-setting-id.txt
-docker compose -f docker/compose.yaml up -d --build
+  .dev/paddle/client-token-id.txt .dev/paddle/notification-setting-id.txt
+if test -f .dev/keycloak/.paddle-fixture-owned; then
+  rm -rf .dev/keycloak
+fi
+unset LEF_PADDLE_COMPOSE_PROJECT
 ```
+
+If you stopped a separately owned stub-provider stack before this run, restore it with its own explicit Compose
+project name. Do not target the shared `LEF` project as part of this fixture's cleanup.
 
 If deactivation fails, keep the tunnel running while diagnosing delivery, retain both the notification-setting ID
 and webhook secret, and do not run the removal block or claim cleanup complete. Retry deactivation against that

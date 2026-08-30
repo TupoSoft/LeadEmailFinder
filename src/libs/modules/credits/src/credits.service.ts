@@ -37,6 +37,27 @@ export class CreditsService {
         })
     }
 
+    async debitUpTo(organizationId: string, amount: number, reference: string): Promise<number> {
+        this.assertNonNegativeInteger(amount)
+
+        return this.dataSource.transaction(async manager => {
+            const account = await manager.findOne(OrganizationCreditAccount, {
+                where: { organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            const existing = await manager.findOne(CreditDebit, { where: { organizationId, reference } })
+            if (existing) return existing.amount
+
+            const applied = Math.min(account?.balance ?? 0, amount)
+            if (account && applied > 0) {
+                account.balance -= applied
+                await manager.save(OrganizationCreditAccount, account)
+            }
+            await manager.insert(CreditDebit, { organizationId, reference, amount: applied })
+            return applied
+        })
+    }
+
     async credit(organizationId: string, amount: number, reference: string): Promise<number> {
         return this.dataSource.transaction(async manager => {
             const account =
@@ -56,6 +77,25 @@ export class CreditsService {
         })
     }
 
+    async creditOnce(organizationId: string, amount: number, reference: string): Promise<number> {
+        this.assertNonNegativeInteger(amount)
+
+        return this.dataSource.transaction(async manager => {
+            const account =
+                (await manager.findOne(OrganizationCreditAccount, {
+                    where: { organizationId },
+                    lock: { mode: 'pessimistic_write' },
+                })) ?? Object.assign(new OrganizationCreditAccount(), { organizationId, balance: 0 })
+            const existing = await manager.findOne(CreditGrant, { where: { organizationId, reference } })
+            if (existing) return existing.amount
+
+            account.balance += amount
+            await manager.save(OrganizationCreditAccount, account)
+            await manager.insert(CreditGrant, { organizationId, reference, amount })
+            return amount
+        })
+    }
+
     async getBalance(organizationId: string): Promise<number> {
         const account = await this.organizationCreditAccountRepo.findOneBy({ organizationId })
         return account?.balance ?? 0
@@ -69,5 +109,11 @@ export class CreditsService {
 
         const saved = await this.organizationCreditAccountRepo.save(account)
         return saved.balance
+    }
+
+    private assertNonNegativeInteger(amount: number): void {
+        if (!Number.isSafeInteger(amount) || amount < 0) {
+            throw new Error('Credit amount must be a non-negative safe integer')
+        }
     }
 }

@@ -14,13 +14,32 @@ export interface CheckoutResult {
     redirectUrl: string
 }
 
+export interface PaymentAdjustmentEvent {
+    providerEventId: string
+    providerReference: string
+    providerAdjustmentId: string
+    amountMinor: number
+    isFull: boolean
+    currency: string
+}
+
 export type PaymentEvent =
     | {
-          kind: 'purchase_paid' | 'purchase_failed'
+          kind: 'purchase_paid'
+          providerEventId: string
+          providerReference: string
+          purchaseId?: string
+          providerTotalMinor: number
+          currency: string
+      }
+    | {
+          kind: 'purchase_failed'
           providerEventId: string
           providerReference: string
           purchaseId?: string
       }
+    | (PaymentAdjustmentEvent & { kind: 'purchase_adjustment_debit' })
+    | (PaymentAdjustmentEvent & { kind: 'purchase_adjustment_restore' })
     | {
           kind: 'ignored'
           providerEventId: string

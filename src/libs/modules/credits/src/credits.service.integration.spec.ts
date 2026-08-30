@@ -117,4 +117,46 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
         const grantRows = await schemaDataSource.getRepository(CreditGrant).findBy({ organizationId })
         expect(grantRows).toHaveLength(2)
     })
+
+    it('clamps and replays the same adjustment debit result concurrently', async () => {
+        await service.setBalance(organizationId, 3)
+
+        await expect(
+            Promise.all([
+                service.debitUpTo(organizationId, 10, 'adjustment-debit'),
+                service.debitUpTo(organizationId, 10, 'adjustment-debit'),
+            ]),
+        ).resolves.toEqual([3, 3])
+        await expect(service.getBalance(organizationId)).resolves.toBe(0)
+        await expect(
+            schemaDataSource.getRepository(CreditDebit).findBy({ organizationId, reference: 'adjustment-debit' }),
+        ).resolves.toEqual([expect.objectContaining({ amount: 3 })])
+    })
+
+    it('persists a zero clamp so replay after replenishment does not debit later credits', async () => {
+        await service.setBalance(organizationId, 0)
+
+        await expect(service.debitUpTo(organizationId, 10, 'zero-adjustment')).resolves.toBe(0)
+        await service.setBalance(organizationId, 10)
+        await expect(service.debitUpTo(organizationId, 10, 'zero-adjustment')).resolves.toBe(0)
+
+        await expect(service.getBalance(organizationId)).resolves.toBe(10)
+        await expect(
+            schemaDataSource.getRepository(CreditDebit).findBy({ organizationId, reference: 'zero-adjustment' }),
+        ).resolves.toEqual([expect.objectContaining({ amount: 0 })])
+    })
+
+    it('applies one restoration when the same reference is credited concurrently', async () => {
+        await expect(
+            Promise.all([
+                service.creditOnce(organizationId, 5, 'adjustment-restore'),
+                service.creditOnce(organizationId, 5, 'adjustment-restore'),
+            ]),
+        ).resolves.toEqual([5, 5])
+
+        await expect(service.getBalance(organizationId)).resolves.toBe(15)
+        await expect(
+            schemaDataSource.getRepository(CreditGrant).findBy({ organizationId, reference: 'adjustment-restore' }),
+        ).resolves.toEqual([expect.objectContaining({ amount: 5 })])
+    })
 })

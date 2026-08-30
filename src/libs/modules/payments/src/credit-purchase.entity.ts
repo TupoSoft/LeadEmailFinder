@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
+import { Check, Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
 
 export enum CreditPurchaseStatus {
     PENDING = 'pending',
@@ -9,6 +9,7 @@ export enum CreditPurchaseStatus {
 
 @Entity('credit_purchases')
 @Index(['organizationId'])
+@Check('CHK_credit_purchases_provider_total_positive', '"providerTotalMinor" IS NULL OR "providerTotalMinor" > 0')
 export class CreditPurchase {
     @PrimaryGeneratedColumn('uuid')
     id: string
@@ -34,8 +35,14 @@ export class CreditPurchase {
     @Column({ type: 'varchar', nullable: true, unique: true })
     providerReference?: string | null
 
+    @Column({ type: 'int', nullable: true })
+    providerTotalMinor?: number | null
+
     @Column({ type: 'enum', enum: CreditPurchaseStatus, default: CreditPurchaseStatus.PENDING })
     status: CreditPurchaseStatus
+
+    @Column({ type: 'timestamptz', nullable: true })
+    creditsGrantedAt?: Date | null
 
     @CreateDateColumn()
     createdAt: Date
