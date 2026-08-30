@@ -11,29 +11,32 @@ leased allocation for outbound SMTP connections that must originate from a rotat
 - Rate-limited, lease-based allocation (`ProxyAllocatorService`/`ProxyLeaseService`) so no single proxy exceeds
   its configured requests-per-minute budget while a connection is in flight.
 - Structured allocation/lease/connection-outcome observability (`StructuredLoggingAllocationObserver`).
+- Owning the `IProxy`/registry/allocator/lease contracts and their DI tokens that
+  [`email-verification`](../email-verification/README.md) consumes — these are proxy business contracts, not
+  generic shared utilities.
 
 ## Non-Responsibilities
 
 - No SMTP verification itself — [`email-verification`](../email-verification/README.md) is the only consumer of
-  proxy allocation, through the shared contracts described below.
+  proxy allocation, through this module's public barrel.
 - No organization or credit concepts — proxies are a global resource, not scoped to any organization.
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports only `ProxyModule`. `ProxyController`, the two internal services
-(`ProxyService` for CRUD/admin, `ProxyRegistryService` for the lookup contract other modules consume), the
-`Proxy` entity, and its DTOs are all internal.
+[`src/index.ts`](src/index.ts) exports `ProxyModule`; the consumer-facing contracts `IProxy`, `IProxyService`,
+`IProxyAllocator`, `LeasedProxy`, `ProxyLease`/`ProxyLeaseRequest`, the allocation/connection/lease-release event
+types, `IAllocationObserver`; and only the DI tokens a consumer currently injects:
+`PROXY_SERVICE_TOKEN`, `PROXY_ALLOCATOR_TOKEN`, `ALLOCATION_OBSERVER_TOKEN`.
 
-The actual integration surface other modules use — `IProxy`, `IProxyService`, `IProxyAllocator`,
-`IProxyLeaseService`, `LeasedProxy`, `ProxyLease`, and the `PROXY_SERVICE_TOKEN`/`PROXY_ALLOCATOR_TOKEN` DI
-tokens — lives in the shared `@tuposoft/lead-email-finder/common` package, not in this module's own barrel.
-Depend on those contracts, not on any deep import into the implementation of `proxy` itself.
+`ProxyController`, the two internal application services (`ProxyService` for CRUD/admin, `ProxyRegistryService`
+for the lookup contract other modules consume), the `Proxy` entity, its DTOs, the lease-service interface
+(`IProxyLeaseService`) and its token (`PROXY_LEASE_SERVICE_TOKEN`); the persistence, Redis, and observability
+adapters are internal too. `ProxyModule` resolves `PROXY_LEASE_SERVICE_TOKEN` for its own internal wiring — the
+dependency `ProxyAllocatorService` has on `ProxyLeaseService` — but does not export it.
 
 ## Dependencies
 
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `RequirePermissions`.
-- `@tuposoft/lead-email-finder/common` — the shared proxy contracts and DI tokens this module implements and
-  exports bindings for.
 - Redis, injected directly (via the technical `libs/redis` package registered at the composition root) for
   lease bookkeeping — an infrastructure dependency, not a business-module one.
 
@@ -42,7 +45,7 @@ Depend on those contracts, not on any deep import into the implementation of `pr
 `ProxyController` at `v1/proxies`, restricted to the `platform:admin` permission:
 
 | Method   | Path                        | Notes                                     |
-| -------- | --------------------------- | ----------------------------------------- |
+| -------- | --------------------------- | ------------------------------------------ |
 | `POST`   | `v1/proxies`                | Create                                    |
 | `GET`    | `v1/proxies`                | List                                      |
 | `GET`    | `v1/proxies/healthy`        | Same eligibility query the allocator uses |
@@ -53,7 +56,10 @@ Depend on those contracts, not on any deep import into the implementation of `pr
 
 ## Persistence
 
-Owns one entity: `Proxy` → `proxy_registry`.
+Owns one entity: `Proxy` → `proxy_registry`, behind the private `ProxyRepository` and `ProxyCandidateRepository`
+application ports (`TypeOrmProxyRepository`/`TypeOrmProxyCandidateRepository` are their only adapters). Lease
+bookkeeping lives in Redis behind the private `ProxyLeaseStore` port (`RedisProxyLeaseStore` is its only
+adapter) — see Configuration below for the values that govern it.
 
 ## Configuration
 
@@ -62,10 +68,13 @@ Owns one entity: `Proxy` → `proxy_registry`.
 
 ## Validation
 
-Focused tests live in `src/`: `proxy.controller.spec.ts`, `proxy.service.spec.ts`,
-`proxy-registry.service.spec.ts`, `proxy-allocator.service.spec.ts`, `proxy-lease.service.spec.ts`,
-`structured-logging-allocation-observer.spec.ts`, `typeorm-proxy-candidate.repository.spec.ts`, and
-`proxy.module.spec.ts`.
+Focused tests live in `src/`, organized by layer: `api/proxy.controller.spec.ts`,
+`api/proxy-response.mapper.spec.ts`, `application/proxy.service.spec.ts`,
+`application/proxy-registry.service.spec.ts`, `application/proxy-allocator.service.spec.ts`,
+`application/proxy-lease.service.spec.ts`, `infrastructure/persistence/typeorm-proxy-repository.spec.ts`,
+`infrastructure/persistence/typeorm-proxy-candidate.repository.spec.ts`,
+`infrastructure/redis/redis-proxy-lease-store.spec.ts`,
+`infrastructure/observability/structured-logging-allocation-observer.spec.ts`, and `proxy.module.spec.ts`.
 
 [`bruno/proxy-registry`](../../../../bruno/proxy-registry/README.md) exercises the secured CRUD life cycle above
 end to end and removes the proxy it creates. In addition,

@@ -1,4 +1,3 @@
-import { AutoMap } from '@automapper/classes'
 import { Exclude, Expose, Type } from 'class-transformer'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
@@ -12,28 +11,17 @@ import {
     Min,
     ValidateNested,
 } from 'class-validator'
+import { ProxyLifecycle } from '../domain/proxy-lifecycle'
+import { ProxyProtocol } from '../domain/proxy-protocol'
 
-export enum ProxyProtocol {
-    HTTP = 1,
-    HTTPS = 2,
-    SOCKS5 = 3,
-    SOCKS4 = 4,
-}
-
-export enum ProxyLifecycle {
-    ACTIVE = 'active',
-    DRAINING = 'draining',
-    DISABLED = 'disabled',
-}
+export { ProxyLifecycle, ProxyProtocol }
 
 @Expose()
 export class ProxyAuthDto {
-    @AutoMap()
     @IsString()
     @IsNotEmpty()
     user: string
 
-    @AutoMap()
     @IsString()
     @IsNotEmpty()
     pass: string
@@ -41,42 +29,31 @@ export class ProxyAuthDto {
 
 @Expose()
 export class ProxyDto {
-    @AutoMap()
     id: string
 
-    @AutoMap()
     @ApiProperty({ enum: ProxyProtocol })
     protocol: ProxyProtocol
 
-    @AutoMap()
     host: string
 
-    @AutoMap()
     port: number
 
     @Exclude()
     auth?: never
 
-    @AutoMap()
     @ApiProperty({ enum: ProxyLifecycle })
     state: ProxyLifecycle
 
-    @AutoMap()
     weight: number
 
-    @AutoMap()
     maxConcurrent: number
 
-    @AutoMap()
     requestsPerMinute: number
 
-    @AutoMap()
     description?: string
 
-    @AutoMap()
     createdAt: Date
 
-    @AutoMap()
     updatedAt: Date
 }
 

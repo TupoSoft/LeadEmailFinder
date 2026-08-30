@@ -1,20 +1,18 @@
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
+import { IDnsService, ISmtpVerificationResponse, ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
 import {
     ALLOCATION_OBSERVER_TOKEN,
     ConnectionOutcomeEvent,
     IAllocationObserver,
-    IDnsService,
     IProxy,
     IProxyAllocator,
     IProxyService,
-    ISmtpVerificationResponse,
-    ISmtpVerifier,
     LeasedProxy,
     PROXY_ALLOCATOR_TOKEN,
     PROXY_SERVICE_TOKEN,
-} from '@tuposoft/lead-email-finder/common'
+} from '@tuposoft/lead-email-finder/modules/proxy'
 import { SmtpVerification } from './smtp-verification.entity'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'

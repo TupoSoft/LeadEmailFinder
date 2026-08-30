@@ -1,4 +1,4 @@
-import type { IProxy } from '@tuposoft/lead-email-finder/common'
+import type { IProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { connect } from '@tuposoft/lead-email-finder/socket'
 
 export interface ListenerEgressCheckTarget {

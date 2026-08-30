@@ -15,10 +15,10 @@ and real SMTP allocation through the existing Bruno workflows.
 
 ## Progress
 
-- [ ] (2026-08-29) Move proxy HTTP, application, domain, persistence, Redis, and observability code into layers.
-- [ ] (2026-08-29) Move proxy-owned contracts/tokens out of `libs/common` and publish them through the proxy barrel.
-- [ ] (2026-08-29) Update SMTP verification to consume the public proxy API without a deep import.
-- [ ] (2026-08-29) Run focused, static, full-suite, and both proxy/SMTP runtime regressions.
+- [x] (2026-08-30) Move proxy HTTP, application, domain, persistence, Redis, and observability code into layers.
+- [x] (2026-08-30) Move proxy-owned contracts/tokens out of `libs/common` and publish them through the proxy barrel.
+- [x] (2026-08-30) Update SMTP verification to consume the public proxy API without a deep import.
+- [x] (2026-08-30) Run focused, static, full-suite, and both proxy/SMTP runtime regressions.
 
 ## Plan dependencies
 
@@ -26,7 +26,32 @@ and real SMTP allocation through the existing Bruno workflows.
 
 ## Surprises & Discoveries
 
-None yet.
+- `ProxyService` (admin CRUD) and `ProxyRegistryService` (SMTP-facing registry) both queried the same `Proxy`
+  entity directly, with overlapping operations (`findOneBy({id})`, blacklist-append-and-save). A single
+  `ProxyRepository` application port, with one `TypeOrmProxyRepository` adapter, covers both consumers'
+  operations (`create`/`find`/`list`/`update`/`delete`/`addBlacklist` plus the two distinct eligibility queries) without
+  duplicating persistence-layer query logic across two near-identical adapters.
+- The "is this id UUID-shaped" check (the `isUUID` function from `class-validator`) existed purely to avoid a Postgres UUID-cast
+  runtime error, not as a business rule. It moved into `TypeOrmProxyRepository` itself, which, as infrastructure,
+  may freely import `class-validator`; `findById`/`update`/`delete`/`addBlacklist` each return `undefined` for a
+  malformed id before ever querying. `ProxyService` now treats "not found" and "malformed id" identically,
+  exactly as before, with no UUID check of its own. The one exception is the `listProxies` page-token check,
+  which stays in the framework-free application layer, since rejecting a malformed cursor is pagination policy,
+  not a persistence-shape detail. It reimplements the same accepted pattern the real `isUUID()` uses (versions
+  1–8, variant 8/9/a/b, plus the nil UUID), verified empirically against that real function rather than assumed.
+- Proxy's `ProxyProfile` (an `@automapper/classes` mapping between the TypeORM entity and the response DTO) could
+  not survive the move: this plan's own design puts a domain record between persistence and the API DTO, and
+  `@AutoMap()` is itself a forbidden technical import in `domain`. The entity-to-DTO mapping was a flat 1:1 field
+  copy with no real transformation logic, so it was replaced with two plain functions
+  (`toProxyRecord`/`toProxyDto`) instead of trying to preserve automapper across the new layer boundary.
+  `AutomapperModule.forRoot()` itself stays registered globally for the other modules that still use it.
+  `ProxyLeaseService` no longer executes Redis commands directly (moved to `RedisProxyLeaseStore`, a private
+  application port); it now only computes the lease id and expiry and delegates the atomic acquire/release Lua
+  scripts to that store, matching the Decision Log's original design.
+- Live verification (see Outcomes) caught nothing static validation had missed. The `smtp-dev` collection still
+  exercised one path none of the other checks did: a real SMTP verification allocating and releasing a lease
+  through `RedisProxyLeaseStore`, alongside a real proxy drain/restore/healthy-exclusion cycle. Together they
+  proved the Redis-lease-store split didn't change the atomic acquire/release behavior.
 
 ## Decision Log
 
@@ -51,7 +76,55 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including live verification against a rebuilt local development stack (both the
+base stack and the `smtp-dev` fixture overlay).
+
+Every acceptance criterion was met:
+
+- Proxy source now follows `api`/`application`/`domain`/`infrastructure`, with only `proxy.module.ts` and
+  `index.ts` at the module root.
+- Proxy application/domain files import no `@nestjs/` package, TypeORM, Redis, `class-validator`,
+  `@automapper/`, or another forbidden technical package (the one `class-validator` `isUUID` usage lives in the
+  infrastructure adapter; see Surprises & Discoveries).
+- `src/libs/common/src/interfaces/proxy` no longer exists; every proxy/SMTP import resolves through the exact
+  `@tuposoft/lead-email-finder/modules/proxy` alias — confirmed by `rg -n
+  "IProxy|PROXY_(SERVICE|ALLOCATOR|LEASE_SERVICE)_TOKEN|ALLOCATION_OBSERVER_TOKEN" src scripts` returning zero
+  hits outside the `proxy` module itself and the two consumers now importing it correctly.
+- The public barrel exports every current SMTP-facing contract (`IProxy`, `IProxyService`, `IProxyAllocator`,
+  `LeasedProxy`, `ProxyLease`/`ProxyLeaseRequest`, the allocation/connection/lease-release events,
+  `IAllocationObserver`) and only the three tokens a consumer currently injects — no controller, DTO, entity,
+  repository, Redis adapter, or the lease-service token/interface.
+- `ProxyModule` resolves the same three public tokens exactly once (`proxy.module.spec.ts`) and keeps
+  `PROXY_LEASE_SERVICE_TOKEN` private, matching the original module's exports exactly.
+- `corepack pnpm architecture:baseline` shrank the baseline from 187 to 173 violations with zero new ones —
+  every removed entry belonged to this plan's scope.
+
+Validation performed:
+
+- `TMPDIR=/tmp corepack pnpm test -- src/libs/modules/proxy/src
+  src/libs/modules/email-verification/src/email-verifier/smtp --runInBand` — 15 suites, 92 tests, all passing.
+- `corepack pnpm architecture:baseline` then `architecture:check` — shrank 187 → 173 violations, check passes.
+- `tsc --noEmit` (via a scratch tsconfig redirecting `outDir`/`tsBuildInfoFile` off the root-owned `dist/`) —
+  clean.
+- `TMPDIR=/tmp corepack pnpm test:ci` — 147 suites, 1130 tests passing, 49 skipped, plus a to-do test that
+  predates this plan and is unrelated to it.
+- `corepack pnpm lint` — 0 errors, 2 preexisting warnings in unrelated files.
+- `nest build` (via a scratch `nest-cli.json`/`tsconfig.build.json` pair redirecting `outDir` off the root-owned
+  `dist/`) — 0 type-check issues, 488 files compiled.
+- `git diff --check` — clean.
+- Live verification: ran `pnpm dev:reset --confirm-project=LEF` to rebuild the local `lef-*` Compose stack with
+  these changes (the reset's own authenticated M2M smoke test passed against the rebuilt `lef-api-1`). Then:
+  - `bruno/proxy-registry` (`--sandbox developer`, against the base stack) — the full secured CRUD life cycle
+    (unauthorized rejection, create, list, get, update, blacklist report, delete), 8/8 requests passing.
+  - Switched to the `smtp-dev` fixture overlay (`docker/compose.smtp-dev.yaml`) and ran `bruno/smtp-dev` from a
+    throwaway container on the `lef_default` network, per its documented recipe. It drove a real SMTP
+    verification through the registered SOCKS5 proxy, drained and restored that proxy, confirmed
+    healthy-selection excludes a draining proxy, and exercised the deprecated legacy-verify route's credit
+    debiting — 11/11 requests passing. This is the one path that exercises the new
+    `RedisProxyLeaseStore`/`ProxyLeaseService` split end to end.
+  - Restored the base Compose stack afterward; `GET /health` returns `200`.
+
+No material architectural trade-off surfaced beyond what the Decision Log above already records.
 
 ## Context and Orientation
 
@@ -193,4 +266,5 @@ test totals, and separate base-stack/SMTP-stack Bruno evidence. Do not record pr
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including live verification against a rebuilt local development stack (base
+and `smtp-dev` overlay). Pull request not yet opened.

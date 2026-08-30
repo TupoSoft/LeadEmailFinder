@@ -20,8 +20,8 @@ compatibility route kept billing- and permission-equivalent to its replacement.
 
 - No credit policy — it calls [`credits`](../credits/README.md) to debit, but does not decide the cost of a
   request.
-- No proxy allocation policy — it leases proxies through the shared contracts
-  [`proxy`](../proxy/README.md) implements, but does not own proxy state itself.
+- No proxy allocation policy — it leases proxies through the contracts
+  [`proxy`](../proxy/README.md) owns and exposes, but does not own proxy state itself.
 - No organization/membership concepts beyond the `organizationId` every verification and batch job is scoped to.
 
 ## Public API
@@ -37,9 +37,9 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 
 - [`credits`](../credits/README.md) — `CreditGuard` on every billed route, and `CreditsService.debit()` called
   directly by the batch processor (one credit per validated CSV row).
-- `@tuposoft/lead-email-finder/common` — the shared `IProxyService`/`IProxyAllocator` contracts and DI tokens,
-  which [`proxy`](../proxy/README.md) implements; SMTP verification acquires and releases leases through these
-  contracts, not through any deep import into the implementation of `proxy` itself.
+- [`proxy`](../proxy/README.md) — the `IProxyService`/`IProxyAllocator` contracts and DI tokens, through its
+  public barrel; SMTP verification acquires and releases leases through these contracts, not through any deep
+  import into the implementation of `proxy` itself.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `RequirePermissions`,
   `CurrentPrincipal`.
 - [`identity`](../identity/README.md) — the `AuthPrincipal` type.

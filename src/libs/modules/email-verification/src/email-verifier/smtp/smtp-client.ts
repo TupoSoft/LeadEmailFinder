@@ -12,7 +12,7 @@ import { connect, ConnectionTimeoutError, readUntil, write } from '@tuposoft/lea
 import { parseSmtpResponse, promiseWithTimeout } from './smtp.util'
 import { Logger } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
-import { IProxy } from '@tuposoft/lead-email-finder/common'
+import { IProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
 import { SmtpClientTimeoutException } from './smtp-client-timeout.exception'
 import { SmtpException } from './smtp.exception'

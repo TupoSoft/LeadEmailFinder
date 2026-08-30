@@ -1,5 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
-import { AllocationEvent, ConnectionOutcomeEvent, IAllocationObserver, LeaseReleaseEvent } from '@tuposoft/lead-email-finder/common'
+import {
+    AllocationEvent,
+    ConnectionOutcomeEvent,
+    IAllocationObserver,
+    LeaseReleaseEvent,
+} from '../../domain/allocation-observer.interface'
 
 @Injectable()
 export class StructuredLoggingAllocationObserver implements IAllocationObserver {

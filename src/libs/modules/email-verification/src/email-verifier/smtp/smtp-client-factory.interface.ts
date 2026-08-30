@@ -1,4 +1,4 @@
-import { IProxy } from '@tuposoft/lead-email-finder/common'
+import { IProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
 
 export interface SmtpClientFactoryOptions {

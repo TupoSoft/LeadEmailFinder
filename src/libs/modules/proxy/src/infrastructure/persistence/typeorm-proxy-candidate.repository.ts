@@ -1,17 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { IProxy } from '@tuposoft/lead-email-finder/common'
 import { Repository } from 'typeorm'
-import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
+import { ProxyCandidate, ProxyCandidateRepository } from '../../application/ports/proxy-candidate-repository'
+import { ProxyLifecycle } from '../../domain/proxy-lifecycle'
+import { toIProxy } from '../../domain/to-iproxy.mapper'
+import { toProxyRecord } from './proxy-entity.mapper'
 import { Proxy } from './proxy.entity'
-import { ProxyCandidate, ProxyCandidateRepository } from './proxy-candidate.repository'
-
-const PROTOCOL_TO_TYPE: Record<ProxyProtocol, IProxy['type']> = {
-    [ProxyProtocol.HTTP]: 'http',
-    [ProxyProtocol.HTTPS]: 'https',
-    [ProxyProtocol.SOCKS4]: 'socks4',
-    [ProxyProtocol.SOCKS5]: 'socks5',
-}
 
 @Injectable()
 export class TypeOrmProxyCandidateRepository implements ProxyCandidateRepository {
@@ -43,15 +37,7 @@ export class TypeOrmProxyCandidateRepository implements ProxyCandidateRepository
 
 function mapCandidate(proxy: Proxy): ProxyCandidate {
     return {
-        proxy: {
-            id: proxy.id,
-            type: PROTOCOL_TO_TYPE[proxy.protocol],
-            host: proxy.host,
-            port: proxy.port,
-            user: proxy.auth?.user,
-            password: proxy.auth?.pass,
-            blacklists: proxy.blacklists,
-        },
+        proxy: toIProxy(toProxyRecord(proxy)),
         weight: proxy.weight,
         maxConcurrent: proxy.maxConcurrent,
         requestsPerMinute: proxy.requestsPerMinute,

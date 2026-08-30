@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
-import { ProxyLifecycle, ProxyProtocol } from './proxy.dto'
+import { ProxyLifecycle } from '../../domain/proxy-lifecycle'
+import { ProxyProtocol } from '../../domain/proxy-protocol'
 import { Proxy } from './proxy.entity'
 import { TypeOrmProxyCandidateRepository } from './typeorm-proxy-candidate.repository'
 

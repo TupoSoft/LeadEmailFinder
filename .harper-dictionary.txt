@@ -1,5 +1,6 @@
 AMD64
 auth
+automapper
 baselined
 BFF
 Bruno
