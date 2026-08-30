@@ -12,6 +12,8 @@ who is acting and what they are allowed to do.
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
 - Resolving a human identity's active membership (`HumanIdentityResolver`), for session/principal construction.
+- A framework-free `ExternalIdentityResolver`, proven standalone ahead of the consumers that will migrate to it
+  (`module-architecture/03`, `/06`); it is not yet wired into any request path.
 
 ## Non-Responsibilities
 
@@ -26,11 +28,26 @@ who is acting and what they are allowed to do.
 
 ## Public API
 
-Everything under `src/` is exported from [`src/index.ts`](src/index.ts): `IdentityModule`,
-`HumanIdentityResolver`, the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`, `AuthRole`,
-`AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`), and every
-entity class listed under Persistence below. Unlike most modules in this directory, the public surface of
-`identity` is its whole `src/` tree — there is no internal implementation hidden behind the barrel.
+Everything under `src/` is exported from [`src/index.ts`](src/index.ts). Unlike most modules in this directory,
+the public surface of `identity` is its whole `src/` tree — there is no internal implementation hidden behind the
+barrel. It splits into two parts:
+
+**Supported application ports** — the contract new and migrating consumers should depend on: `IdentityModule`,
+`ExternalIdentityResolver`, the three ports and their injection tokens (`ExternalIdentityStore`/
+`EXTERNAL_IDENTITY_STORE`, `ActiveMembershipReader`/`ACTIVE_MEMBERSHIP_READER`, `ActiveServiceCredentialReader`/
+`ACTIVE_SERVICE_CREDENTIAL_READER`), their record types (`ExternalIdentityRecord`, `OrganizationMembershipRecord`,
+`ServiceCredentialRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`, `AuthRole`,
+`AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
+
+**Temporary compatibility surface (deprecated)** — `HumanIdentityResolver`, `TypeOrmModule` reexported for direct
+repository injection, and
+every entity class listed under Persistence below. Each is still justified by a consumer not yet migrated: `auth`
+injects `ServiceCredential` directly; `bff-session` injects `OrganizationMembership` directly; `credits` operates
+on `OrganizationCreditAccount`/`CreditDebit`/`CreditGrant` directly; `organization-onboarding` and
+`service-client-management` run raw TypeORM transactions over several identity entities, including the
+`invitation-acceptance.service.ts` file in `organization-onboarding`, which passes its own `EntityManager` into
+`HumanIdentityResolver`. `module-architecture/08` removes this whole surface once plans `03`, `04`, `06`, and `07`
+have migrated all of it.
 
 ## Dependencies
 
@@ -59,7 +76,8 @@ Identity owns each of the following TypeORM entities, registered via `TypeOrmMod
 | `AuditLogEntry`             | `audit_log_entries`            |
 
 Every entity carries an `organizationId` foreign key back to `Organization`, cascading on delete except
-`OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead.
+`OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same nine tables are also
+reachable read-only through the three supported ports above, for the narrower set of fields each record exposes.
 
 ## Configuration
 
@@ -68,7 +86,11 @@ None. This module reads no environment variables.
 ## Validation
 
 Focused tests live in `src/`: `application/human-identity-resolver.service.spec.ts`,
-`domain/auth-principal.spec.ts`, `infrastructure/persistence/identity-entities.spec.ts`, and
+`application/external-identity-resolver.service.spec.ts`, `domain/auth-principal.spec.ts`,
+`identity.module.spec.ts` (provider/export wiring), `infrastructure/persistence/identity-entities.spec.ts`,
+`infrastructure/persistence/typeorm-external-identity-store.spec.ts`,
+`infrastructure/persistence/typeorm-active-membership-reader.spec.ts`,
+`infrastructure/persistence/typeorm-active-service-credential-reader.spec.ts`, and
 `infrastructure/persistence/identity-schema.integration.spec.ts` (schema-level, gated on `TEST_POSTGRES_URL`).
 
 No Bruno collection targets identity directly — its persistence is exercised indirectly through every other

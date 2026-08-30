@@ -18,10 +18,10 @@ host still starts with the existing identity schema.
 
 ## Progress
 
-- [ ] (2026-08-29) Define public identity data shapes, purpose-specific ports, and stable injection tokens.
-- [ ] (2026-08-29) Implement TypeORM adapters and a port-backed `ExternalIdentityResolver` without migrating consumers.
-- [ ] (2026-08-29) Preserve and document transitional compatibility for consumers awaiting plans 03, 04, 06, and 07.
-- [ ] (2026-08-29) Run focused, schema, repository-wide, documentation, and runtime-wiring validation.
+- [x] (2026-08-30) Define public identity data shapes, purpose-specific ports, and stable injection tokens.
+- [x] (2026-08-30) Implement TypeORM adapters and a port-backed `ExternalIdentityResolver` without migrating consumers.
+- [x] (2026-08-30) Preserve and document transitional compatibility for consumers awaiting plans 03, 04, 06, and 07.
+- [x] (2026-08-30) Run focused, schema, repository-wide, documentation, and runtime-wiring validation.
 
 ## Plan dependencies
 
@@ -29,7 +29,19 @@ host still starts with the existing identity schema.
 
 ## Surprises & Discoveries
 
-None yet.
+- The two reader ports (`ActiveMembershipReader`, `ActiveServiceCredentialReader`) cannot reproduce their eventual
+  callers' throwing behavior (`UnauthorizedException`/`ForbiddenException` in `ServiceCredentialResolver`/
+  `HumanMembershipResolver`): both exceptions come from `@nestjs/common`, which the architecture ratchet forbids
+  in `application`/`domain` layer files. This settles what would otherwise be a judgment call: the ports must stay
+  pure lookups (no status filtering, no throwing) and leave "not found" or "not active" to the future caller.
+- The live `architecture:baseline` count is 229, not the 221 recorded in the Artifacts section of
+  `module-architecture/01` — a follow-up commit (`2b6f248`, PR #451) reconciled 8 violations a concurrently merged
+  payments fix introduced. This plan's changes did not move that count at all: `architecture:baseline` reports the
+  baseline as already current at 229 violations, both before and after, confirming zero new or resolved
+  violations.
+- `identity` already nests `infrastructure/` into a `persistence/` subdirectory, so adding an `application/ports/`
+  subdirectory follows an established precedent rather than introducing a new one; the architecture scanner
+  classifies layer by top-level `application`/`domain`/`infrastructure`/`api` directory, not by exact depth.
 
 ## Decision Log
 
@@ -63,10 +75,54 @@ None yet.
   silently change atomicity. Plan 03 migrates BFF to the new resolver; plan 06 moves invitation acceptance to the
   onboarding persistence operations introduced with that migration; plan 08 then removes the legacy resolver.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: `ExternalIdentityStore.create` throws a new `ExternalIdentityConflictError` (defined alongside the
+  port) on a Postgres `23505` unique-violation, instead of the port returning a sentinel value or the resolver
+  knowing about Postgres error codes.
+  Rationale: mirrors the established pattern in `payments/src/payment-purchase.store.ts`
+  (`PurchaseReferenceConflictError`, etc.) for translating a storage-specific failure into a framework-free signal
+  the application layer can catch by type.
+  Date/Author: 2026-08-30, implementation.
+- Decision: `ExternalIdentityStore.updateEmail` takes the whole prior `ExternalIdentityRecord`, not just an id.
+  Rationale: preserves the exact single find-then-save query shape the legacy resolver already uses, avoiding an
+  extra read the record-by-id alternative would require.
+  Date/Author: 2026-08-30, implementation.
+- Decision: Add `identity.module.spec.ts` (not named in this plan's original file list), asserting the new
+  `useExisting`/factory bindings and that every existing export is retained, following the `Reflect.getMetadata`
+  pattern in `proxy.module.spec.ts` exactly.
+  Rationale: gives two of this plan's own acceptance criteria ("adapters wired via `useExisting`", "existing
+  consumers continue compiling") direct executable proof cheaper than a full Nest bootstrap test.
+  Date/Author: 2026-08-30, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated.
+
+- Added `domain/{external-identity,organization-membership,service-credential}-record.ts` (plain interfaces, no
+  imports beyond sibling domain files), `application/ports/{external-identity-store,active-membership-reader,
+  active-service-credential-reader}.ts` (interfaces + tokens; the store's file also holds
+  `ExternalIdentityConflictError`), `application/external-identity-resolver.service.ts` (framework-free, no
+  `@Injectable()`), and one `infrastructure/persistence/typeorm-*.ts` adapter per port, each `@Injectable()` and
+  `@InjectRepository`-based exactly like the legacy resolver.
+- `IdentityModule` and `index.ts` received only additive changes: three new `useExisting` bindings, one factory-provided
+  `ExternalIdentityResolver`, and matching new exports; `TypeOrmModule.forFeature([...9 entities])`,
+  `HumanIdentityResolver`, and every existing export are untouched.
+- `human-identity-resolver.service.ts` was not touched at all (confirmed via `git diff` showing zero changes to
+  that file), so its four architecture-baseline entries remain exactly as they were.
+- Test coverage: 5 new focused suites (`external-identity-resolver.service.spec.ts`, three `typeorm-*.spec.ts`,
+  `identity.module.spec.ts`), bringing `src/libs/modules/identity/src` to 53 passing tests across 8 suites (one
+  suite, the Postgres-gated schema integration test, correctly skips without `TEST_POSTGRES_URL`).
+- Ran the real-Postgres schema regression against a dedicated `lef_identity_schema_test` database on this
+  workstation's disposable `lef-postgres-1` dev container: passed, proving all nine tables are unchanged.
+- `corepack pnpm architecture:check`: passed, 229 baselined violations, unchanged from before this plan.
+  `corepack pnpm architecture:baseline`: reported "already current (229 violations)" both before and after this
+  plan's changes — genuinely zero new or resolved violations, confirming the Surprises & Discoveries entry above.
+- `corepack pnpm typecheck` (0 issues, local scratch-tsconfig workaround for this workstation's root-owned
+  `dist/`, same as prior plans), `corepack pnpm lint` (0 errors, the same 2 preexisting unrelated warnings),
+  `corepack pnpm test:ci` (1085/1135 passing, rest preexisting live-gated skips and one preexisting pending case),
+  `corepack pnpm build` (469
+  files, 0 issues), and `git diff --check` all ran clean. `corepack pnpm docs:lint --` on both changed Markdown
+  files passed.
+- Bruno: not applicable — no route, DTO, or public wiring changed; nothing to add or update.
 
 ## Context and Orientation
 
@@ -211,4 +267,4 @@ and any environment-gated runtime checks here during implementation. Never recor
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated. Pull request not yet opened.
