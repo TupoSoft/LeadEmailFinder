@@ -16,10 +16,10 @@ workflows over the unchanged HTTP API.
 
 ## Progress
 
-- [ ] (2026-08-29) Move credits HTTP, application, and domain concerns into their standard layers.
-- [ ] (2026-08-29) Introduce an identity-owned credit-ledger port and TypeORM adapter.
-- [ ] (2026-08-29) Preserve strict debit/grant, adjustment clamp-and-record, replay, and administrative balance behavior.
-- [ ] (2026-08-29) Run static, database, full-suite, and affected Bruno regressions.
+- [x] (2026-08-30) Move credits HTTP, application, and domain concerns into their standard layers.
+- [x] (2026-08-30) Introduce an identity-owned credit-ledger port and TypeORM adapter.
+- [x] (2026-08-30) Preserve strict debit/grant, adjustment clamp-and-record, replay, and administrative balance behavior.
+- [x] (2026-08-30) Run static, database, full-suite, and affected Bruno regressions.
 
 ## Plan dependencies
 
@@ -33,6 +33,26 @@ workflows over the unchanged HTTP API.
   the shortfall, return the originally applied amount on replay, and let an inverse clear shortfall before restoring
   only credits actually removed. The port extracted here must preserve that completed contract, not model only the
   older all-or-nothing debit path.
+- Two consumer test files construct `IdentityModule`/`CreditsService` inside their own `TestingModule` without a
+  real `TypeOrmModule.forRoot`. `payments.module.spec.ts` wholesale-overrides `CreditsService` itself, so it
+  never previously needed to satisfy its constructor dependencies. `payment-event.handler.integration.spec.ts`
+  listed the *old* bare `CreditsService` class as a provider — something a framework-free class with no
+  decorator metadata can no longer auto-construct. Nest eagerly instantiates every provider in every imported
+  module regardless of what the test itself exercises. Adding `TypeOrmCreditLedgerStore` to `IdentityModule` — a
+  provider neither test previously needed to think about — surfaced the absence of a `DataSource` in one case and
+  the absence of a factory in the other. Fixed with a `@Global()` stub `DataSource` module in `payments.module.spec.ts`
+  (mirroring the `TestRedisModule` pattern this repository's live-Keycloak specs already use), since
+  `TypeOrmCreditLedgerStore` is intentionally not exported for direct override, and by rewiring
+  `payment-event.handler.integration.spec.ts` to import the real `IdentityModule` and factory-bind
+  `CreditsService` from `CREDIT_LEDGER_STORE`, exactly like `CreditsModule` itself does.
+- The `TypeOrmModule.forFeature` call owned by `IdentityModule` registers repositories for all nine identity
+  entities.
+  Any test that imports the real `IdentityModule`, rather than re-registering a handful of entities itself, must
+  give its root `DataSource`/`TypeOrmModule.forRoot` all nine entities too, or repository resolution fails with a
+  "no metadata found" error. Both real-Postgres integration specs rewired in this plan
+  (`credits.service.integration.spec.ts` and `payment-event.handler.integration.spec.ts`) needed their `entities`
+  array expanded from three or four credit/purchase tables to the full nine-entity identity set plus their own
+  tables.
 
 ## Decision Log
 
@@ -56,10 +76,79 @@ workflows over the unchanged HTTP API.
   Rationale: Credits' TypeORM adapter remains in identity, so an empty `infrastructure/` placeholder would add no
   information and cannot be tracked meaningfully by Git.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: The three throw sites in `debit()` (`account-missing`; a reference already recorded, checked before
+  the balance comparison, reported as `replayed`; and `insufficient-balance`) moved into
+  `TypeOrmCreditLedgerStore` verbatim, in their exact original order, only changing each `throw` into a `return`
+  of the matching outcome string. `debitUpTo`/`credit`/`creditOnce`/`getBalance`/`setBalance` moved unchanged —
+  none of them throw a credits-domain error, so none needed an outcome type.
+  Rationale: The identical ordering matters for correctness: a replayed reference must succeed even when the
+  current balance is now below what a fresh debit would require, exactly as before this move.
+  Date/Author: 2026-08-30, implementation.
+- Decision: The `assertNonNegativeInteger` guard for `debitUpTo`/`creditOnce` stays in `CreditsService`
+  (application), not the identity adapter.
+  Rationale: This check has no persistence dependency and is pure input validation, thrown as a plain `Error`
+  before the store is ever called. Moving it to infrastructure would add nothing, and would let a malformed amount reach
+  the adapter instead of failing fast in the same layer that already owns the module's other validation.
+  Date/Author: 2026-08-30, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and fully validated, including live verification against a rebuilt local development stack.
+
+Every acceptance criterion was met:
+
+- Credits source is organized under `api/`, `application/`, and `domain/`, with only `credits.module.ts` and
+  `index.ts` at its root — no `infrastructure/` directory, since its one adapter lives in identity.
+- No credits application/domain file imports `@nestjs/`, TypeORM, or an identity persistence entity/deep path;
+  `CreditsService` depends only on identity's public `CreditLedgerStore` port.
+- Ordinary `debit()` still locks and applies once per `(organizationId, reference)`, rejects missing/insufficient
+  accounts, and never writes a debit without the matching balance change. Unit tests against a mocked
+  `CreditLedgerStore` prove this, as does the real-Postgres integration suite's concurrent-debit and
+  duplicate-reference coverage, run through the exact production wiring (`IdentityModule` plus factory-bound
+  `CreditsService`).
+- `debitUpTo()` still clamps to the available balance without going negative, returns the applied amount on
+  first application and replay, and payments' own real-Postgres suite (`payment-event.handler.integration.spec.ts`,
+  21/21 passing) confirms it still persists the exact shortfall and restores only credits actually removed.
+- `credit()`/`creditOnce()` still apply once per reference with their distinct replay semantics (current balance
+  vs. originally granted amount).
+- Existing public credits imports in payments and verification compile unchanged — neither module needed a
+  source change, only two of their test files needed new module-wiring accommodations for identity's new
+  eagerly-instantiated adapter (see Surprises & Discoveries).
+- `corepack pnpm architecture:baseline` shrank the baseline from 173 to 166 violations with zero new ones.
+
+Validation performed:
+
+- `TMPDIR=/tmp corepack pnpm test -- src/libs/modules/credits/src src/libs/modules/identity/src --runInBand` —
+  13 suites, 91 tests, all passing.
+- `corepack pnpm architecture:baseline` then `architecture:check` — shrank 173 → 166 violations, check passes.
+- `tsc --noEmit` (scratch tsconfig off the root-owned `dist/`) — clean.
+- `TMPDIR=/tmp corepack pnpm test -- src/libs/modules/payments/src src/libs/modules/email-verification/src
+  --runInBand` — 36 suites, 284 tests, all passing (after fixing the two consumer test files described in
+  Surprises & Discoveries).
+- `TMPDIR=/tmp corepack pnpm test:ci` — 149 suites, 1145 tests passing, 49 skipped, plus a to-do test that
+  predates this plan and is unrelated to it.
+- `corepack pnpm lint` — 0 errors, 2 preexisting warnings in unrelated files.
+- `nest build` (scratch configuration off the root-owned `dist/`) — 0 type-check issues, 492 files compiled.
+- `git diff --check` — clean.
+- Real-Postgres integration suites, each against a disposable `_test` database:
+  `credits.service.integration.spec.ts` — 8/8 passing, through the real `IdentityModule`/
+  `TypeOrmCreditLedgerStore` wiring. `payment-event.handler.integration.spec.ts` — 21/21 passing, proving the
+  full payments-06 clamp-and-record/shortfall/restore/replay contract holds unchanged through the new port.
+- Live verification: ran `pnpm dev:reset --confirm-project=LEF` to rebuild the local `lef-*` Compose stack with
+  these changes (the reset's own smoke test read a real balance through the new wiring). Then, against the live
+  stack:
+  - `bruno/credit-purchases` (`--sandbox developer`) — the full grant/replay, debit-adjustment/replay, and
+    inverse-restore/replay lifecycle plus rejection cases, 22/22 requests passing.
+  - `bruno/batch-verification` (customer M2M credentials fetched live from Keycloak per its documented recipe) —
+    proves the strict per-row `debit()` path (the same method `CreditGuard` uses) end to end, 3/3 requests
+    passing.
+  - `GET /health` returns `200` afterward.
+
+No material architectural trade-off surfaced beyond what the Decision Log above already records.
+
+Bruno: no new endpoint, request body, status code, or credits behavior was introduced, so no Bruno file changed,
+but `bruno/credit-purchases` and `bruno/batch-verification` were both run live against the rebuilt stack and
+both pass in full.
 
 ## Context and Orientation
 
@@ -202,4 +291,5 @@ Do not record organization credentials, access tokens, or payment secrets.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including live verification against a rebuilt local development stack.
+Pull request not yet opened.

@@ -1,45 +1,46 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
-import { CreditDebit, CreditGrant, OrganizationCreditAccount } from '@tuposoft/lead-email-finder/modules/identity'
-import { InsufficientCreditsException } from './credits.error'
+import { CreditDebitOutcome, CreditLedgerStore } from '../../application/ports/credit-ledger-store'
+import { CreditDebit } from './credit-debit.entity'
+import { CreditGrant } from './credit-grant.entity'
+import { OrganizationCreditAccount } from './organization-credit-account.entity'
 
 @Injectable()
-export class CreditsService {
+export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
     constructor(
-        @InjectRepository(OrganizationCreditAccount)
-        private readonly organizationCreditAccountRepo: Repository<OrganizationCreditAccount>,
         private readonly dataSource: DataSource,
+        @InjectRepository(OrganizationCreditAccount)
+        private readonly accountRepo: Repository<OrganizationCreditAccount>,
     ) {}
 
-    async debit(organizationId: string, amount: number, reference: string): Promise<void> {
-        await this.dataSource.transaction(async manager => {
+    async debit(organizationId: string, amount: number, reference: string): Promise<CreditDebitOutcome> {
+        return this.dataSource.transaction(async manager => {
             const account = await manager.findOne(OrganizationCreditAccount, {
                 where: { organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
 
             if (!account) {
-                throw new InsufficientCreditsException(organizationId)
+                return 'account-missing'
             }
 
             if (await manager.existsBy(CreditDebit, { organizationId, reference })) {
-                return
+                return 'replayed'
             }
 
             if (account.balance < amount) {
-                throw new InsufficientCreditsException(organizationId)
+                return 'insufficient-balance'
             }
 
             account.balance -= amount
             await manager.save(OrganizationCreditAccount, account)
             await manager.insert(CreditDebit, { organizationId, reference, amount })
+            return 'applied'
         })
     }
 
     async debitUpTo(organizationId: string, amount: number, reference: string): Promise<number> {
-        this.assertNonNegativeInteger(amount)
-
         return this.dataSource.transaction(async manager => {
             const account = await manager.findOne(OrganizationCreditAccount, {
                 where: { organizationId },
@@ -78,8 +79,6 @@ export class CreditsService {
     }
 
     async creditOnce(organizationId: string, amount: number, reference: string): Promise<number> {
-        this.assertNonNegativeInteger(amount)
-
         return this.dataSource.transaction(async manager => {
             const account =
                 (await manager.findOne(OrganizationCreditAccount, {
@@ -97,23 +96,15 @@ export class CreditsService {
     }
 
     async getBalance(organizationId: string): Promise<number> {
-        const account = await this.organizationCreditAccountRepo.findOneBy({ organizationId })
+        const account = await this.accountRepo.findOneBy({ organizationId })
         return account?.balance ?? 0
     }
 
     async setBalance(organizationId: string, amount: number): Promise<number> {
-        const account =
-            (await this.organizationCreditAccountRepo.findOneBy({ organizationId })) ??
-            this.organizationCreditAccountRepo.create({ organizationId })
+        const account = (await this.accountRepo.findOneBy({ organizationId })) ?? this.accountRepo.create({ organizationId })
         account.balance = amount
 
-        const saved = await this.organizationCreditAccountRepo.save(account)
+        const saved = await this.accountRepo.save(account)
         return saved.balance
-    }
-
-    private assertNonNegativeInteger(amount: number): void {
-        if (!Number.isSafeInteger(amount) || amount < 0) {
-            throw new Error('Credit amount must be a non-negative safe integer')
-        }
     }
 }

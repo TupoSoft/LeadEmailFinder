@@ -4,10 +4,12 @@ import { ExternalIdentityResolver } from './application/external-identity-resolv
 import { HumanIdentityResolver } from './application/human-identity-resolver.service'
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
+import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
 import { EXTERNAL_IDENTITY_STORE } from './application/ports/external-identity-store'
 import { IdentityModule } from './identity.module'
 import { TypeOrmActiveMembershipReader } from './infrastructure/persistence/typeorm-active-membership-reader'
 import { TypeOrmActiveServiceCredentialReader } from './infrastructure/persistence/typeorm-active-service-credential-reader'
+import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-credit-ledger-store'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 
 describe('IdentityModule', () => {
@@ -26,6 +28,7 @@ describe('IdentityModule', () => {
                     provide: ACTIVE_SERVICE_CREDENTIAL_READER,
                     useExisting: TypeOrmActiveServiceCredentialReader,
                 }),
+                expect.objectContaining({ provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore }),
                 expect.objectContaining({ provide: ExternalIdentityResolver }),
             ]),
         )
@@ -42,6 +45,7 @@ describe('IdentityModule', () => {
                 EXTERNAL_IDENTITY_STORE,
                 ACTIVE_MEMBERSHIP_READER,
                 ACTIVE_SERVICE_CREDENTIAL_READER,
+                CREDIT_LEDGER_STORE,
                 ExternalIdentityResolver,
             ]),
         )

@@ -3,10 +3,18 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 import {
+    AuditLogEntry,
+    CREDIT_LEDGER_STORE,
     CreditDebit,
     CreditGrant,
+    CreditLedgerStore,
+    ExternalIdentity,
+    IdentityModule,
     Organization,
     OrganizationCreditAccount,
+    OrganizationInvitation,
+    OrganizationMembership,
+    ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import {
@@ -29,11 +37,19 @@ import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-pu
 // This suite owns its database because other integration specs also synchronize and drop their schemas.
 const postgresUrl = process.env['TEST_PAYMENT_WEBHOOK_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
+// The full identity entity set, not just the three credit tables: IdentityModule's own TypeOrmModule.forFeature
+// call registers repositories for all nine, so the root DataSource must already know all nine or repository
+// resolution fails with a "no metadata found" error.
 const entities = [
     Organization,
+    ExternalIdentity,
+    OrganizationMembership,
+    ServiceCredential,
     OrganizationCreditAccount,
     CreditDebit,
     CreditGrant,
+    OrganizationInvitation,
+    AuditLogEntry,
     CreditPurchase,
     CreditPurchaseAdjustment,
 ]
@@ -78,10 +94,15 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
         moduleRef = await Test.createTestingModule({
             imports: [
                 TypeOrmModule.forRoot({ type: 'postgres', url: postgresUrl, synchronize: false, entities }),
-                TypeOrmModule.forFeature(entities),
+                TypeOrmModule.forFeature([CreditPurchase, CreditPurchaseAdjustment]),
+                IdentityModule,
             ],
             providers: [
-                CreditsService,
+                {
+                    provide: CreditsService,
+                    useFactory: (store: CreditLedgerStore) => new CreditsService(store),
+                    inject: [CREDIT_LEDGER_STORE],
+                },
                 PaymentEventHandler,
                 PaymentAdjustmentHandler,
                 TypeOrmPaymentPurchaseStore,

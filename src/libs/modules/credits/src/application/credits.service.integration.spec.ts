@@ -3,10 +3,18 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 import { randomUUID } from 'node:crypto'
 import {
+    AuditLogEntry,
+    CREDIT_LEDGER_STORE,
     CreditDebit,
     CreditGrant,
+    CreditLedgerStore,
+    ExternalIdentity,
+    IdentityModule,
     Organization,
     OrganizationCreditAccount,
+    OrganizationInvitation,
+    OrganizationMembership,
+    ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
 
@@ -16,7 +24,20 @@ import { CreditsService } from './credits.service'
 const postgresUrl = process.env['TEST_CREDITS_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 
-const entities = [Organization, OrganizationCreditAccount, CreditDebit, CreditGrant]
+// The full identity entity set, not just the three credit tables: IdentityModule's own TypeOrmModule.forFeature
+// call registers repositories for all nine, so the root DataSource must already know all nine or repository
+// resolution fails with a "no metadata found" error.
+const entities = [
+    Organization,
+    ExternalIdentity,
+    OrganizationMembership,
+    ServiceCredential,
+    OrganizationCreditAccount,
+    CreditDebit,
+    CreditGrant,
+    OrganizationInvitation,
+    AuditLogEntry,
+]
 
 describeWithPostgres('CreditsService against a real, freshly-synced Postgres schema', () => {
     let schemaDataSource: DataSource
@@ -42,9 +63,15 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
         moduleRef = await Test.createTestingModule({
             imports: [
                 TypeOrmModule.forRoot({ type: 'postgres', url: postgresUrl, synchronize: false, entities }),
-                TypeOrmModule.forFeature(entities),
+                IdentityModule,
             ],
-            providers: [CreditsService],
+            providers: [
+                {
+                    provide: CreditsService,
+                    useFactory: (store: CreditLedgerStore) => new CreditsService(store),
+                    inject: [CREDIT_LEDGER_STORE],
+                },
+            ],
         }).compile()
 
         service = moduleRef.get(CreditsService)
