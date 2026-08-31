@@ -1,19 +1,44 @@
-import { ConflictException } from '@nestjs/common'
+import { Test, TestingModule } from '@nestjs/testing'
+import { TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource, QueryRunner } from 'typeorm'
 import {
     AuditLogEntry,
     AuthPrincipal,
+    CreditDebit,
+    CreditGrant,
     ExternalIdentity,
+    IdentityModule,
+    MEMBERSHIP_MUTATION_STORE,
+    MembershipMutationStore,
     Organization,
+    OrganizationCreditAccount,
+    OrganizationInvitation,
     OrganizationMembership,
+    ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { KeycloakOrganizationAdmin } from './keycloak-organization-admin'
+import { FinalOwnerConflictError } from '../domain/organization-onboarding.errors'
 import { MembershipRemovalService } from './membership-removal.service'
 import { MembershipRoleChangeService } from './membership-role-change.service'
+import { KeycloakOrganizationAdmin } from './ports/keycloak-organization-admin'
 
 const postgresUrl = process.env['TEST_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 const schema = `membership_mutation_${process.pid}`
+
+// The full identity entity set, not just the four this test touches: IdentityModule's own
+// TypeOrmModule.forFeature call registers repositories for all nine, so the root DataSource must already
+// know all nine or repository resolution fails with a "no metadata found" error.
+const entities = [
+    Organization,
+    ExternalIdentity,
+    OrganizationMembership,
+    ServiceCredential,
+    OrganizationCreditAccount,
+    CreditDebit,
+    CreditGrant,
+    OrganizationInvitation,
+    AuditLogEntry,
+]
 
 interface OrganizationFixture {
     readonly organization: Organization
@@ -22,7 +47,8 @@ interface OrganizationFixture {
 }
 
 describeWithPostgres('concurrent final-owner membership mutations', () => {
-    let dataSource: DataSource
+    let schemaDataSource: DataSource
+    let moduleRef: TestingModule
     let removalService: MembershipRemovalService
     let roleChangeService: MembershipRoleChangeService
 
@@ -32,37 +58,55 @@ describeWithPostgres('concurrent final-owner membership mutations', () => {
             throw new Error('TEST_POSTGRES_URL must select a database whose name ends with _test')
         }
 
-        dataSource = new DataSource({
+        schemaDataSource = new DataSource({
             type: 'postgres',
             url: postgresUrl,
             schema,
             synchronize: false,
-            entities: [Organization, ExternalIdentity, OrganizationMembership, AuditLogEntry],
+            entities,
         })
-        await dataSource.initialize()
-        await dataSource.query(`CREATE SCHEMA "${schema}"`)
-        await dataSource.synchronize()
+        await schemaDataSource.initialize()
+        await schemaDataSource.query(`CREATE SCHEMA "${schema}"`)
+        await schemaDataSource.synchronize()
 
-        const keycloakAdmin: KeycloakOrganizationAdmin = {
-            ensureUser: jest.fn(),
-            assignRealmRole: jest.fn(),
-        }
-        removalService = new MembershipRemovalService(dataSource)
-        roleChangeService = new MembershipRoleChangeService(dataSource, keycloakAdmin)
+        const keycloakAdmin: KeycloakOrganizationAdmin = { ensureUser: jest.fn(), assignRealmRole: jest.fn() }
+
+        moduleRef = await Test.createTestingModule({
+            imports: [
+                TypeOrmModule.forRoot({ type: 'postgres', url: postgresUrl, schema, synchronize: false, entities }),
+                IdentityModule,
+            ],
+            providers: [
+                {
+                    provide: MembershipRemovalService,
+                    inject: [MEMBERSHIP_MUTATION_STORE],
+                    useFactory: (store: MembershipMutationStore) => new MembershipRemovalService(store),
+                },
+                {
+                    provide: MembershipRoleChangeService,
+                    inject: [MEMBERSHIP_MUTATION_STORE],
+                    useFactory: (store: MembershipMutationStore) => new MembershipRoleChangeService(store, keycloakAdmin),
+                },
+            ],
+        }).compile()
+
+        removalService = moduleRef.get(MembershipRemovalService)
+        roleChangeService = moduleRef.get(MembershipRoleChangeService)
     })
 
     afterAll(async () => {
-        if (!dataSource?.isInitialized) return
+        await moduleRef?.close()
+        if (!schemaDataSource?.isInitialized) return
 
-        await dataSource.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`)
-        await dataSource.destroy()
+        await schemaDataSource.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`)
+        await schemaDataSource.destroy()
     })
 
     it('serializes concurrent removals targeting different owners', async () => {
-        const fixture = await createOrganizationWithTwoOwners(dataSource, 'removal')
+        const fixture = await createOrganizationWithTwoOwners(schemaDataSource, 'removal')
 
         await expectExactlyOneConflict(
-            dataSource,
+            schemaDataSource,
             fixture,
             ([first, second]) => [
                 removalService.remove(fixture.actor, fixture.organization.id, first.id),
@@ -73,10 +117,10 @@ describeWithPostgres('concurrent final-owner membership mutations', () => {
     })
 
     it('serializes concurrent demotions targeting different owners', async () => {
-        const fixture = await createOrganizationWithTwoOwners(dataSource, 'demotion')
+        const fixture = await createOrganizationWithTwoOwners(schemaDataSource, 'demotion')
 
         await expectExactlyOneConflict(
-            dataSource,
+            schemaDataSource,
             fixture,
             ([first, second]) => [
                 roleChangeService.changeRole(fixture.actor, fixture.organization.id, first.id, 'member'),
@@ -158,7 +202,7 @@ async function expectExactlyOneConflict(
     const rejected = results.filter(result => result.status === 'rejected')
     expect(fulfilled).toHaveLength(1)
     expect(rejected).toHaveLength(1)
-    expect(rejected[0].reason).toBeInstanceOf(ConflictException)
+    expect(rejected[0].reason).toBeInstanceOf(FinalOwnerConflictError)
 
     await expect(
         dataSource.manager.count(OrganizationMembership, {

@@ -27,12 +27,32 @@ change must stay consistent.
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports only `OrganizationOnboardingModule`. Every service, the Keycloak admin
-client, and every DTO are internal.
+port/adapter, and every DTO are internal.
+
+## Architecture
+
+Layered per `module-architecture/06`. `api/` holds the controller, DTOs, and HTTP integration test — the only
+layer that may import Nest/`class-validator`/Swagger. `application/` holds the six use-case services and the
+private `KeycloakOrganizationAdmin` port; both are framework-free, constructed through explicit factories in
+`organization-onboarding.module.ts`. `domain/` holds invitation token generation/hashing/TTL, and the typed
+errors `NotInOrganizationError`/`InsufficientPermissionError`/`MembershipNotFoundError`/`InvitationNotFoundError`/
+`InvitationExpiredError`/`ConflictingMembershipError`/`FinalOwnerConflictError`. `infrastructure/` holds the
+`KeycloakOrganizationAdminClient` adapter. The controller's private `handleErrors()` maps each domain error to
+the unchanged `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException` HTTP behavior.
+
+Every use case that must call Keycloak while a lock is held — `InvitationAcceptanceService`,
+`MembershipRoleChangeService`, `MembershipRemovalService` — does so through one of identity's two session-shaped
+ports, `InvitationAcceptanceStore` or `MembershipMutationStore`. A `begin()` call returns either a terminal
+outcome or a session that stays open across the Keycloak call. The service completes or aborts that session in a
+`try`/`finally`, so a Keycloak failure always rolls back the lock and any partial state — exactly reproducing the
+single-transaction correctness this module had before the split.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `Organization`, `OrganizationMembership`, `OrganizationInvitation`,
-  `AuditLogEntry`, and the `AuthPrincipal`/`AuthRole` types.
+- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthRole`, and the five persistence ports
+  `OrganizationRegistrationStore`, `InvitationStore`, `InvitationAcceptanceStore`, `MembershipDirectory`,
+  `MembershipMutationStore` (plus their record types and tokens). This module no longer imports any identity
+  TypeORM entity or `DataSource`/`EntityManager`.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `Public`,
   `RequirePermissions`.
 - `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
@@ -56,8 +76,9 @@ client, and every DTO are internal.
 
 ## Persistence
 
-None owned. This module operates entirely on the `Organization`, `OrganizationMembership`,
-`OrganizationInvitation`, and `AuditLogEntry` tables owned by `identity`.
+None owned. This module operates entirely through the five persistence ports owned by `identity`, which read and
+write the `Organization`, `OrganizationMembership`, `OrganizationInvitation`, `ExternalIdentity`, and
+`AuditLogEntry` tables `identity` owns.
 
 ## Configuration
 
@@ -68,13 +89,16 @@ None owned. This module operates entirely on the `Organization`, `OrganizationMe
 
 ## Validation
 
-Focused tests live in `src/`: `organization-creation.service.spec.ts`, `invitation-issuance.service.spec.ts`,
-`invitation-acceptance.service.spec.ts`, `membership-listing.service.spec.ts`,
-`membership-role-change.service.spec.ts`, `membership-removal.service.spec.ts`,
-`membership-mutation-concurrency.integration.spec.ts` (real-Postgres concurrent-mutation coverage for the
-final-owner invariant, gated on `TEST_POSTGRES_URL`), `organizations.controller.spec.ts`,
-`organization-onboarding-http.integration.spec.ts`, and the live-Keycloak-gated
-`keycloak-organization-admin.live-keycloak.integration.spec.ts`.
+Focused tests live in `src/`: `application/organization-creation.service.spec.ts`,
+`application/invitation-issuance.service.spec.ts`, `application/invitation-acceptance.service.spec.ts`,
+`application/membership-listing.service.spec.ts`, `application/membership-role-change.service.spec.ts`,
+`application/membership-removal.service.spec.ts`,
+`application/membership-mutation-concurrency.integration.spec.ts` (real-Postgres concurrent-mutation coverage for
+the final-owner invariant, gated on `TEST_POSTGRES_URL`, built from the real `IdentityModule` port wiring),
+`api/organizations.controller.spec.ts` (including its `handleErrors()` error-mapping cases),
+`api/organization-onboarding-http.integration.spec.ts`, `organization-onboarding.module.spec.ts` (factory-provider
+wiring), and the live-Keycloak-gated
+`infrastructure/keycloak-organization-admin.live-keycloak.integration.spec.ts`.
 
 [`bruno/organization-onboarding`](../../../../bruno/organization-onboarding/README.md) proves organization
 creation with a pending owner invitation, no-session invitation acceptance, idempotent duplicate acceptance,

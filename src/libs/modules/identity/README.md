@@ -11,16 +11,21 @@ who is acting and what they are allowed to do.
 - External human identities (one row per Keycloak subject) and service credentials (one row per M2M client).
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
-- Resolving a human identity's active membership (`HumanIdentityResolver`), for session/principal construction —
-  still used by `invitation-acceptance.service.ts` in `organization-onboarding`, which needs to enlist identity
-  creation in its own ambient transaction; not used by `auth`/`bff-session` since `module-architecture/03`.
 - A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, and `ActiveServiceCredentialReader`,
   used by `bff-session` (identity resolution on OIDC return, active-membership checks) and `auth` (active
-  service-credential checks) since `module-architecture/03`; `organization-onboarding` and
-  `service-client-management` migrate to these ports in later plans.
+  service-credential checks) since `module-architecture/03`; `service-client-management` migrates to these
+  ports in a later plan.
 - Atomic credit-ledger persistence (`CreditLedgerStore`) — locking, idempotent debit/grant, and balance
   mutation — used by `credits` since `module-architecture/04`. Identity owns the transaction and locking
   mechanics; `credits` owns the business rules (strict-vs-clamped debit, replay semantics, exception mapping).
+- Organization/invitation registration, invitation lookup and failure-audit append, locked invitation-acceptance
+  sessions, membership listing, and locked membership-mutation sessions (`OrganizationRegistrationStore`,
+  `InvitationStore`, `InvitationAcceptanceStore`, `MembershipDirectory`, `MembershipMutationStore`) — used by
+  `organization-onboarding` since `module-architecture/06`. The two session-shaped ports
+  (`InvitationAcceptanceStore`, `MembershipMutationStore`) hold one open, locked transaction across a caller's
+  Keycloak call. Each exposes only `complete()`/`abort()`, or `changeRole()`/`disable()`/`abort()`. The external
+  call happens inside the same lock window a single transaction gave the pre-migration code, and this module
+  never learns anything about Keycloak.
 
 ## Non-Responsibilities
 
@@ -41,20 +46,22 @@ the public surface of `identity` is its whole `src/` tree — there is no intern
 barrel. It splits into two parts:
 
 **Supported application ports** — the contract new and migrating consumers should depend on: `IdentityModule`,
-`ExternalIdentityResolver`, the four ports and their injection tokens (`ExternalIdentityStore`/
+`ExternalIdentityResolver`, the nine ports and their injection tokens (`ExternalIdentityStore`/
 `EXTERNAL_IDENTITY_STORE`, `ActiveMembershipReader`/`ACTIVE_MEMBERSHIP_READER`, `ActiveServiceCredentialReader`/
-`ACTIVE_SERVICE_CREDENTIAL_READER`, `CreditLedgerStore`/`CREDIT_LEDGER_STORE`), their record types
-(`ExternalIdentityRecord`, `OrganizationMembershipRecord`, `ServiceCredentialRecord`), and the domain enums/types
-(`AuthPrincipal`, `AuthCredentialKind`, `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`,
-`MembershipStatus`, `ServiceCredentialStatus`).
+`ACTIVE_SERVICE_CREDENTIAL_READER`, `CreditLedgerStore`/`CREDIT_LEDGER_STORE`,
+`OrganizationRegistrationStore`/`ORGANIZATION_REGISTRATION_STORE`, `InvitationStore`/`INVITATION_STORE`,
+`InvitationAcceptanceStore`/`INVITATION_ACCEPTANCE_STORE`, `MembershipDirectory`/`MEMBERSHIP_DIRECTORY`,
+`MembershipMutationStore`/`MEMBERSHIP_MUTATION_STORE`), their record types (`ExternalIdentityRecord`,
+`OrganizationMembershipRecord`, `ServiceCredentialRecord`, `OrganizationRecord`, `OrganizationInvitationRecord`,
+`OrganizationMembershipDetailRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
+`AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
 
-**Temporary compatibility surface (deprecated)** — `HumanIdentityResolver`, `TypeOrmModule` reexported for direct
-repository injection, and every entity class listed under Persistence below. Each is still justified by a
-consumer not yet migrated: `organization-onboarding` and `service-client-management` run raw TypeORM transactions
-over several identity entities, including the `invitation-acceptance.service.ts` file in
-`organization-onboarding`, which passes its own `EntityManager` into `HumanIdentityResolver`. `auth`/`bff-session`
-(as of `module-architecture/03`) and `credits` (as of `module-architecture/04`) no longer use this surface.
-`module-architecture/08` removes what remains of it once plans `06` and `07` have migrated the rest.
+**Temporary compatibility surface (deprecated)** — `TypeOrmModule` reexported for direct repository injection,
+and every entity class listed under Persistence below. Still justified by one consumer not yet migrated:
+`service-client-management` runs raw TypeORM transactions over `ServiceCredential`/`AuditLogEntry`.
+`auth`/`bff-session` (as of `module-architecture/03`), `credits` (as of `module-architecture/04`), and
+`organization-onboarding` (as of `module-architecture/06`) no longer use this surface. `module-architecture/08`
+removes what remains of it once plan `07` migrates the rest.
 
 ## Dependencies
 
@@ -84,9 +91,11 @@ Identity owns each of the following TypeORM entities, registered via `TypeOrmMod
 
 Every entity carries an `organizationId` foreign key back to `Organization`, cascading on delete except
 `OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same nine tables are also
-reachable through the four supported ports above, for the narrower set of fields each record exposes;
-`CreditLedgerStore` is the one port that writes (`OrganizationCreditAccount`, `CreditDebit`, `CreditGrant`), the
-other three are read-only.
+reachable through the nine supported ports above, for the narrower set of fields each record exposes.
+`ActiveMembershipReader` and `MembershipDirectory` are read-only; every other port writes at least one table —
+`OrganizationRegistrationStore` and `InvitationStore.issueWithAudit` each wrap a single `dataSource.transaction()`
+since neither calls anything external, while `InvitationAcceptanceStore` and `MembershipMutationStore` hold a
+manually managed `QueryRunner` transaction open across the caller's Keycloak call (see Responsibility above).
 
 ## Configuration
 
@@ -94,16 +103,23 @@ None. This module reads no environment variables.
 
 ## Validation
 
-Focused tests live in `src/`: `application/human-identity-resolver.service.spec.ts`,
-`application/external-identity-resolver.service.spec.ts`, `domain/auth-principal.spec.ts`,
-`identity.module.spec.ts` (provider/export wiring), `infrastructure/persistence/identity-entities.spec.ts`,
+Focused tests live in `src/`: `application/external-identity-resolver.service.spec.ts`,
+`domain/auth-principal.spec.ts`, `identity.module.spec.ts` (provider/export wiring),
+`infrastructure/persistence/identity-entities.spec.ts`,
 `infrastructure/persistence/typeorm-external-identity-store.spec.ts`,
 `infrastructure/persistence/typeorm-active-membership-reader.spec.ts`,
 `infrastructure/persistence/typeorm-active-service-credential-reader.spec.ts`,
-`infrastructure/persistence/typeorm-credit-ledger-store.spec.ts`, and
+`infrastructure/persistence/typeorm-credit-ledger-store.spec.ts`,
+`infrastructure/persistence/typeorm-organization-registration-store.spec.ts`,
+`infrastructure/persistence/typeorm-invitation-store.spec.ts`,
+`infrastructure/persistence/typeorm-invitation-acceptance-store.spec.ts`,
+`infrastructure/persistence/typeorm-membership-directory.spec.ts`,
+`infrastructure/persistence/typeorm-membership-mutation-store.spec.ts`, and
 `infrastructure/persistence/identity-schema.integration.spec.ts` (schema-level, gated on `TEST_POSTGRES_URL`). The
-real-Postgres behavioral coverage for `CreditLedgerStore` (locking, concurrent debit/grant, replay) lives in
-`credits`' own `application/credits.service.integration.spec.ts`, exercised through the real adapter.
+real-Postgres behavioral coverage for `CreditLedgerStore` (locking, concurrent debit/grant, replay) lives in the
+`application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapter;
+the same is true for `MembershipMutationStore` final-owner locking, exercised through the
+`application/membership-mutation-concurrency.integration.spec.ts` file owned by `organization-onboarding`.
 
 No Bruno collection targets identity directly — its persistence is exercised indirectly through every other
 module's collection (see the [root README](../../../../README.md) for the full list).

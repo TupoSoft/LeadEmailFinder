@@ -1,12 +1,22 @@
+import { ConflictException, ForbiddenException, GoneException, NotFoundException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import { AuthPrincipal, Organization, OrganizationInvitation, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
-import { InvitationAcceptanceService } from './invitation-acceptance.service'
-import { InvitationIssuanceService } from './invitation-issuance.service'
-import { MembershipListingService } from './membership-listing.service'
-import { MembershipRemovalService } from './membership-removal.service'
-import { MembershipRoleChangeService } from './membership-role-change.service'
-import { OrganizationCreationService } from './organization-creation.service'
+import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
+import { InvitationIssuanceService } from '../application/invitation-issuance.service'
+import { MembershipListingService } from '../application/membership-listing.service'
+import { MembershipRemovalService } from '../application/membership-removal.service'
+import { MembershipRoleChangeService } from '../application/membership-role-change.service'
+import { OrganizationCreationService } from '../application/organization-creation.service'
+import {
+    ConflictingMembershipError,
+    FinalOwnerConflictError,
+    InsufficientPermissionError,
+    InvitationExpiredError,
+    InvitationNotFoundError,
+    MembershipNotFoundError,
+    NotInOrganizationError,
+} from '../domain/organization-onboarding.errors'
 import { OrganizationsController } from './organizations.controller'
 
 const principal: AuthPrincipal = {
@@ -56,13 +66,15 @@ describe('OrganizationsController', () => {
 
     it('creates an organization and returns the organization id and invitation', async () => {
         organizationCreation.createWithFirstOwner.mockResolvedValue({
-            organization: { id: 'org-1' } as Organization,
+            organization: { id: 'org-1', name: 'Acme' },
             invitation: {
                 id: 'invitation-1',
+                organizationId: 'org-1',
                 email: 'owner@example.test',
                 role: 'owner',
+                status: 'pending',
                 expiresAt: new Date('2026-01-01T00:00:00Z'),
-            } as OrganizationInvitation,
+            },
             rawToken: 'raw-token',
         })
 
@@ -85,10 +97,12 @@ describe('OrganizationsController', () => {
         invitationIssuance.issue.mockResolvedValue({
             invitation: {
                 id: 'invitation-2',
+                organizationId: 'org-1',
                 email: 'new@example.test',
                 role: 'member',
+                status: 'pending',
                 expiresAt: new Date('2026-01-02T00:00:00Z'),
-            } as OrganizationInvitation,
+            },
             rawToken: 'another-raw-token',
         })
 
@@ -115,10 +129,13 @@ describe('OrganizationsController', () => {
         membershipListing.listActive.mockResolvedValue([
             {
                 id: 'membership-1',
+                organizationId: 'org-1',
+                externalIdentityId: 'ext-1',
+                externalIdentitySubject: 'kc-subject-1',
                 role: 'member',
                 status: 'active',
-                externalIdentity: { email: 'member@example.test' },
-            } as OrganizationMembership,
+                email: 'member@example.test',
+            },
         ])
 
         const result = await controller.listMembers({ organizationId: 'org-1' }, principal)
@@ -132,10 +149,13 @@ describe('OrganizationsController', () => {
     it('changes a member role mapped to the response shape', async () => {
         membershipRoleChange.changeRole.mockResolvedValue({
             id: 'membership-1',
+            organizationId: 'org-1',
+            externalIdentityId: 'ext-1',
+            externalIdentitySubject: 'kc-subject-1',
             role: 'admin',
             status: 'active',
-            externalIdentity: { email: 'member@example.test' },
-        } as OrganizationMembership)
+            email: 'member@example.test',
+        })
 
         const result = await controller.changeRole(
             { organizationId: 'org-1', membershipId: 'membership-1' },
@@ -151,5 +171,63 @@ describe('OrganizationsController', () => {
         await controller.removeMember({ organizationId: 'org-1', membershipId: 'membership-1' }, principal)
 
         expect(membershipRemoval.remove).toHaveBeenCalledWith(principal, 'org-1', 'membership-1')
+    })
+
+    describe('error mapping', () => {
+        it('translates NotInOrganizationError into a 403', async () => {
+            membershipListing.listActive.mockRejectedValue(new NotInOrganizationError())
+
+            await expect(controller.listMembers({ organizationId: 'org-1' }, principal)).rejects.toThrow(
+                ForbiddenException,
+            )
+        })
+
+        it('translates InsufficientPermissionError into a 403', async () => {
+            membershipListing.listActive.mockRejectedValue(new InsufficientPermissionError('nope'))
+
+            await expect(controller.listMembers({ organizationId: 'org-1' }, principal)).rejects.toThrow(
+                ForbiddenException,
+            )
+        })
+
+        it('translates MembershipNotFoundError into a 404', async () => {
+            membershipRoleChange.changeRole.mockRejectedValue(new MembershipNotFoundError())
+
+            await expect(
+                controller.changeRole({ organizationId: 'org-1', membershipId: 'm-1' }, { role: 'admin' }, principal),
+            ).rejects.toThrow(NotFoundException)
+        })
+
+        it('translates InvitationNotFoundError into a 404', async () => {
+            invitationAcceptance.accept.mockRejectedValue(new InvitationNotFoundError())
+
+            await expect(
+                controller.acceptInvitation({ token: 't' }, { password: 'password12345' }),
+            ).rejects.toThrow(NotFoundException)
+        })
+
+        it('translates ConflictingMembershipError into a 409', async () => {
+            invitationAcceptance.accept.mockRejectedValue(new ConflictingMembershipError())
+
+            await expect(
+                controller.acceptInvitation({ token: 't' }, { password: 'password12345' }),
+            ).rejects.toThrow(ConflictException)
+        })
+
+        it('translates FinalOwnerConflictError into a 409', async () => {
+            membershipRemoval.remove.mockRejectedValue(new FinalOwnerConflictError('nope'))
+
+            await expect(
+                controller.removeMember({ organizationId: 'org-1', membershipId: 'm-1' }, principal),
+            ).rejects.toThrow(ConflictException)
+        })
+
+        it('translates InvitationExpiredError into a 410', async () => {
+            invitationAcceptance.accept.mockRejectedValue(new InvitationExpiredError())
+
+            await expect(
+                controller.acceptInvitation({ token: 't' }, { password: 'password12345' }),
+            ).rejects.toThrow(GoneException)
+        })
     })
 })

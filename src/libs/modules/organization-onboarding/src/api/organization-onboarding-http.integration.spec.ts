@@ -2,14 +2,14 @@ import { ClassSerializerInterceptor, INestApplication, Module, UnauthorizedExcep
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
-import { AuthPrincipal, OrganizationMembership } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthPrincipal, OrganizationMembershipDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService, AuthGuard, PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { InvitationAcceptanceService } from './invitation-acceptance.service'
-import { InvitationIssuanceService } from './invitation-issuance.service'
-import { MembershipListingService } from './membership-listing.service'
-import { MembershipRemovalService } from './membership-removal.service'
-import { MembershipRoleChangeService } from './membership-role-change.service'
-import { OrganizationCreationService } from './organization-creation.service'
+import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
+import { InvitationIssuanceService } from '../application/invitation-issuance.service'
+import { MembershipListingService } from '../application/membership-listing.service'
+import { MembershipRemovalService } from '../application/membership-removal.service'
+import { MembershipRoleChangeService } from '../application/membership-role-change.service'
+import { OrganizationCreationService } from '../application/organization-creation.service'
 import { OrganizationsController } from './organizations.controller'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
@@ -215,10 +215,13 @@ describe('organization onboarding HTTP boundary', () => {
             membershipListingMock.listActive.mockResolvedValue([
                 {
                     id: 'membership-1',
+                    organizationId,
+                    externalIdentityId: 'ext-1',
+                    externalIdentitySubject: 'kc-subject-1',
                     role: 'member',
                     status: 'active',
-                    externalIdentity: { email: 'member@example.test' },
-                } as OrganizationMembership,
+                    email: 'member@example.test',
+                } satisfies OrganizationMembershipDetailRecord,
             ])
 
             const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}/members`).expect(200)
@@ -234,10 +237,13 @@ describe('organization onboarding HTTP boundary', () => {
             authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
             membershipRoleChangeMock.changeRole.mockResolvedValue({
                 id: membershipId,
+                organizationId,
+                externalIdentityId: 'ext-1',
+                externalIdentitySubject: 'kc-subject-1',
                 role: 'admin',
                 status: 'active',
-                externalIdentity: { email: 'member@example.test' },
-            } as OrganizationMembership)
+                email: 'member@example.test',
+            } satisfies OrganizationMembershipDetailRecord)
 
             const response = await request(app.getHttpServer())
                 .patch(`/v1/organizations/${organizationId}/members/${membershipId}`)
