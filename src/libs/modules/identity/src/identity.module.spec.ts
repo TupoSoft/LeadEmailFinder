@@ -1,5 +1,4 @@
 import { MODULE_METADATA } from '@nestjs/common/constants'
-import { TypeOrmModule } from '@nestjs/typeorm'
 import { ExternalIdentityResolver } from './application/external-identity-resolver.service'
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
@@ -75,12 +74,11 @@ describe('IdentityModule', () => {
         )
     })
 
-    it('keeps every compatibility export while exposing all application tokens', () => {
+    it('exposes every application token but never TypeOrmModule, sealing repository access at the DI level', () => {
         const exports = Reflect.getMetadata(MODULE_METADATA.EXPORTS, IdentityModule) as unknown[]
 
         expect(exports).toEqual(
             expect.arrayContaining([
-                TypeOrmModule,
                 EXTERNAL_IDENTITY_STORE,
                 ACTIVE_MEMBERSHIP_READER,
                 ACTIVE_SERVICE_CREDENTIAL_READER,
@@ -95,5 +93,6 @@ describe('IdentityModule', () => {
                 ExternalIdentityResolver,
             ]),
         )
+        expect(exports.some(exported => (exported as { name?: string }).name === 'TypeOrmModule')).toBe(false)
     })
 })

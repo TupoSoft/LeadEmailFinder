@@ -13,11 +13,11 @@ workflows against PostgreSQL and Keycloak without a route, schema, or response c
 
 ## Progress
 
-- [ ] (2026-08-29) Inventory every remaining identity entity, repository, and `TypeOrmModule` consumer after the prerequisite plans land.
-- [ ] (2026-08-29) Remove the legacy TypeORM-coupled resolver after every caller uses the framework-free replacement and purpose-specific ports.
-- [ ] (2026-08-29) Remove entity compatibility exports and the transitive `TypeOrmModule` export from the identity public surface.
-- [ ] (2026-08-29) Rewire and test all identity-backed consumers without changing persistence or HTTP behavior.
-- [ ] (2026-08-29) Shrink the architecture baseline and complete focused, PostgreSQL, runtime, Bruno, and full validation.
+- [x] (2026-08-31) Inventory every remaining identity entity, repository, and `TypeOrmModule` consumer after the prerequisite plans land.
+- [x] (2026-08-31) Remove the legacy TypeORM-coupled resolver after every caller uses the framework-free replacement and purpose-specific ports — already done in `module-architecture/06`, confirmed here.
+- [x] (2026-08-31) Remove the transitive `TypeOrmModule` export from `IdentityModule` at the Nest DI level (entity-class exports kept narrowly for test fixtures — see Decision Log).
+- [x] (2026-08-31) Rewire and test all identity-backed consumers without changing persistence or HTTP behavior — no consumer rewiring was needed; none relied on the removed export.
+- [x] (2026-08-31) Shrink the architecture baseline and complete focused, PostgreSQL, runtime, Bruno, and full validation.
 
 ## Plan dependencies
 
@@ -31,10 +31,34 @@ workflows against PostgreSQL and Keycloak without a route, schema, or response c
 - The current `src/libs/modules/identity/src/index.ts` exports all nine TypeORM entities, and `IdentityModule` exports
   its complete `TypeOrmModule.forFeature(...)` registration. Consumer module tests therefore override identity
   repository tokens even when the consumer needs only one narrow operation.
-- Plan 02 adds a framework-free `ExternalIdentityResolver` over `EXTERNAL_IDENTITY_STORE` but deliberately retains
-  the legacy TypeORM-coupled `HumanIdentityResolver` because invitation acceptance currently passes it an
-  `EntityManager`. Plan 03 migrates BFF callers, and plan 06 moves the transactional onboarding use into
-  `InvitationStore.accept`, making the legacy resolver removable here.
+- `HumanIdentityResolver` was already deleted in `module-architecture/06`. That plan moved
+  `invitation-acceptance.service.ts` onto the inline resolve-or-create-and-lock logic owned by
+  `InvitationAcceptanceStore` and removed the legacy resolver and its spec at that point, so it was not deferred
+  to this plan as originally expected. Nothing to do here beyond confirming zero references remain.
+- A precise, per-file audit (parsing each production `.ts` file's `@tuposoft/lead-email-finder/modules/identity`
+  import specifier list, not a rough grep) found **zero** production consumers importing an identity entity class
+  by name anywhere in `auth`, `bff-session`, `credits`, `organization-onboarding`, `service-client-management`, or
+  `payments`. Plans 03, 04, 06, and 07 had already fully migrated every production consumer onto the
+  purpose-specific ports before this plan started. The only remaining coupling is in test files.
+- Exactly eight `.spec.ts`/`.integration.spec.ts` files (one each in `auth` and `bff-session`, two each in
+  `organization-onboarding` and `payments`, one in `credits`, one in `service-client-management`) still import
+  identity entity classes by name. Each one constructs its own disposable Postgres schema
+  (`dropSchema: true, synchronize: true, entities: [...]`) against a dedicated database, an established pattern
+  already documented inline in each file — a distinct environment-variable name per feature, specifically to
+  avoid Jest parallel-worker collisions on `dropSchema`. Two of them (`credits.service.integration.spec.ts`,
+  `payment-event.handler.integration.spec.ts`) additionally do extensive raw fixture creation and assertion —
+  dozens of `schemaDataSource.getRepository(...).save/findBy(...)` call sites across `Organization`,
+  `OrganizationCreditAccount`, `CreditDebit`, and `CreditGrant`.
+- Reading `scripts/architecture/module-architecture.ts` directly confirmed the `cross-module-public-api` rule
+  (unlike the `technical-dependency` and layer-dependency rules) is not gated on `source.production` — it fires
+  for `.spec.ts` files exactly as for production files. A deep import into identity's infrastructure path from any
+  of the eight test files above, in any module, would be flagged as a violation regardless of test-vs-production.
+  This ruled out a "deep import from tests only" resolution without a change to the checker itself.
+- The identity baseline has zero entries in `scripts/architecture/module-architecture-baseline.json` today. The
+  checker's rules operate on import edges, not on what a Nest module's `exports` array contains. So removing
+  `TypeOrmModule` from `IdentityModule.exports` is a manual DI-hygiene change the checker cannot itself verify or
+  shrink a baseline for — confirmed instead via a full consumer test-suite run, an architecture-check rerun, and
+  the repository-wide entity-import audit above.
 - The current identity README describes the whole `src/` tree as public. That compatibility promise must be replaced
   with the ports defined by plan 02 and consumed by plans 03, 04, 06, and 07.
 
@@ -74,10 +98,53 @@ workflows against PostgreSQL and Keycloak without a route, schema, or response c
   Rationale: Wrapping the legacy resolver would preserve its `EntityManager` transaction escape hatch. The additive
   replacement and onboarding persistence operation already cover its legitimate responsibilities.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: Narrow the "seal" to the DI level. `IdentityModule` no longer exports `TypeOrmModule` or any
+  repository token at the Nest level, and zero production code imports an identity entity class. The plain
+  TypeScript `index.ts` barrel, though, keeps reexporting the nine entity classes. That is specifically so the
+  eight named real-Postgres/live-Keycloak integration tests outside identity (in `auth`, `bff-session`, `credits`,
+  `organization-onboarding` ×2, `payments` ×2, `service-client-management`) can keep constructing their own
+  disposable schema and fixture rows exactly as before.
+  Rationale: Those eight tests need the complete identity entity set for `dropSchema`/`synchronize`, and two of
+  them need extensive raw fixture creation/assertion across several identity tables. The architecture checker's
+  `cross-module-public-api` rule fires on deep cross-module imports in test files exactly as in production files
+  (confirmed by reading `scripts/architecture/module-architecture.ts`), so there is no deep-import escape hatch.
+  Building a full port-based replacement (schema bootstrap plus arbitrary fixture creation/assertion across
+  `Organization`/`OrganizationCreditAccount`/`CreditDebit`/`CreditGrant`/etc.) would mean identity growing a
+  second, broad "testing query" surface — directly against this plan's own narrow-ports rationale ("without
+  granting consumers general table access"). Presented to the user as a genuine three-way fork (narrow the seal;
+  build a testing-query surface; add a sanctioned test-only checker alias); the user chose to narrow the seal.
+  Date/Author: 2026-08-31, Claude Sonnet 5 (implementation-time, confirmed with the user).
 
 ## Outcomes & Retrospective
 
-Not started.
+Two files changed in `identity` (`identity.module.ts`, `identity.module.spec.ts`) plus two README files and this
+ExecPlan. The actual code diff was small because plans 03/04/06/07 had already migrated every production
+consumer before this plan started. `identity.module.ts` no longer exports `TypeOrmModule`, sealing repository
+access at the Nest DI level, while the plain TypeScript entity-class exports stay for eight named test files per
+the "narrow seal" decision above.
+
+Full validation: identity's own suite (99 tests, 1 skipped without `TEST_POSTGRES_URL`); the combined suite across
+`identity`, `auth`, `bff-session`, `credits`, `organization-onboarding`, `service-client-management`, and
+`payments` (615 passed, 49 skipped, zero failures, proving no consumer relied on the removed export).
+
+`architecture:check`/`baseline` stayed at 138 violations, unchanged, since zero identity-tagged entries existed
+before or after — the checker cannot verify this specific change, so it had to be proven by the test run instead.
+`typecheck`, `lint`, `test:ci` (1191 passed, 49 skipped, 1 marked pending), and `build` all pass clean.
+
+Real-Postgres evidence against a `lef-*` dev stack that was running (owned by this checkout): `identity-schema`,
+`credits.service`, `membership-mutation-concurrency`, and `payment-event.handler` integration specs — all
+passed against disposable databases. Live-Keycloak evidence: `oidc-permission-check`, `bff-session-flow`,
+`keycloak-organization-admin`, and `service-client-management` live specs — 13 tests, all passed against the
+real Keycloak realm. Bruno: `m2m-oidc-authentication` (3/3), `bff-sessions` (4 requests/5 tests),
+`organization-onboarding` (8/8), `service-client-management` (4/4), `credit-purchases` (22/22) — all passed
+against the running stack. Every disposable database was dropped after use; no containers or shared fixtures
+were touched.
+
+No material SOLID trade-offs. The one functional change — removing the `TypeOrmModule` export from
+`IdentityModule` — is a pure narrowing of an existing Nest module's public surface, not a new abstraction. The
+"narrow seal" decision
+keeps the entity-class exports as a small, explicitly-labeled test-only exception rather than inventing a second,
+broader testing-query port surface that would have undermined the plan's own narrow-ports rationale.
 
 ## Context and Orientation
 
@@ -144,10 +211,13 @@ source edges are clean; the update must delete identity-related violation keys a
 
 The public `@tuposoft/lead-email-finder/modules/identity` barrel continues to expose `IdentityModule`, the pure
 principal/role/permission/status/audit vocabulary, `ExternalIdentityResolver`, and the purpose-specific port
-contracts and tokens established by plans 02, 04, 06, and 07. It no longer exposes `HumanIdentityResolver`, `Organization`, `ExternalIdentity`,
-`OrganizationMembership`, `ServiceCredential`, `OrganizationCreditAccount`, `CreditDebit`, `CreditGrant`,
-`OrganizationInvitation`, or `AuditLogEntry` as persistence classes. `IdentityModule` no longer exports
-`TypeOrmModule`.
+contracts and tokens established by plans 02, 04, 06, and 07. It no longer exposes `HumanIdentityResolver`
+(removed in plan 06). Per the "narrow seal" Decision Log entry, it keeps exporting `Organization`,
+`ExternalIdentity`, `OrganizationMembership`, `ServiceCredential`, `OrganizationCreditAccount`, `CreditDebit`,
+`CreditGrant`, `OrganizationInvitation`, and `AuditLogEntry` as plain TypeScript classes for test-fixture
+bootstrapping only. No production code may import them. `IdentityModule` no longer exports `TypeOrmModule` or
+any repository token at the Nest DI level either, so no consumer can obtain an identity repository through the
+module system regardless of what the TypeScript barrel exports.
 
 No endpoint, DTO, queue, configuration key, database schema, or external library changes. This plan consumes the
 contracts established by its four prerequisites and unlocks payments layering in `module-architecture/09` and the
@@ -155,9 +225,11 @@ email-verification core extraction in `module-architecture/10`.
 
 ## Acceptance Criteria
 
-- `IdentityModule` exports no `TypeOrmModule`, repository token, entity class, `DataSource`, or `EntityManager`.
-- The identity public barrel exports no class decorated with `@Entity`, and no production consumer imports an
-  identity infrastructure path or an identity entity compatibility symbol.
+- `IdentityModule` exports no `TypeOrmModule`, repository token, `DataSource`, or `EntityManager`.
+- **Amended by the "narrow seal" Decision Log entry above**: the identity public barrel keeps exporting its nine
+  `@Entity`-decorated classes, narrowly for the eight named test files' disposable-schema/fixture bootstrapping.
+  No production consumer imports an identity infrastructure path or entity compatibility symbol — confirmed by a
+  repository-wide, per-file import-specifier audit, not merely a grep.
 - Identity application and domain files import no Nest, TypeORM, or `@nestjs/typeorm` package and use no framework
   decorator.
 - Auth, BFF sessions, credits, organization onboarding, service-client management, payments, and the API host compile
@@ -237,4 +309,6 @@ Keycloak identifiers and no access tokens, client secrets, database URLs with cr
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including real-Postgres, live-Keycloak, and Bruno evidence. Per the "narrow
+seal" Decision Log entry, the identity entity-class TypeScript exports remain for eight named test files. The
+Nest-level `TypeOrmModule`/repository-token export from `IdentityModule` is fully removed.
