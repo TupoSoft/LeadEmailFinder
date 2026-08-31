@@ -136,5 +136,9 @@ describe('deprecated GET /verify HTTP boundary', () => {
         expect(creditsServiceMock.debit).toHaveBeenCalledTimes(1)
         expect(creditsServiceMock.debit).toHaveBeenCalledWith('org-1', 1, expect.any(String))
         expect(emailVerificationServiceMock.verify).toHaveBeenCalledTimes(1)
+        expect(emailVerificationServiceMock.verify).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            email: 'test@example.com',
+        })
     })
 })

@@ -1,9 +1,13 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm'
+import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm'
 import { EmailPatternEnum } from '@tuposoft/lead-email-finder/common'
 import { AutoMap } from '@automapper/classes'
 
 @Entity('emails')
+@Index(['organizationId', 'updatedAt'])
 export class Email {
+    @PrimaryColumn('uuid')
+    organizationId: string
+
     @PrimaryColumn('text')
     @AutoMap()
     id: string

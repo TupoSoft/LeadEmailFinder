@@ -3,10 +3,10 @@ import {
     EmailVerificationSource,
     ICatchAllVerifier,
     ISmtpVerifier,
+    VerifyOptions,
 } from '@tuposoft/lead-email-finder/common'
 import { EmailVerifier } from './email-verifier.service'
 import { Test } from '@nestjs/testing'
-import { EmailVerificationRequestDto } from '../sync-email-verification/email-verification-request.dto'
 import { getSecondLevelDomain } from '@tuposoft/lead-email-finder/dns'
 
 jest.mock('@tuposoft/lead-email-finder/dns', () => ({
@@ -15,8 +15,11 @@ jest.mock('@tuposoft/lead-email-finder/dns', () => ({
 
 const email = 'danilo@microsoft.com'
 const [, domain] = email.split('@')
+const organizationId = '1d33b587-bc90-49f7-9693-92d72cc5c271'
 const SMTP_VERIFIER_TOKEN = 'SmtpVerifierToken'
 const CATCH_ALL_VERIFIERS_TOKEN = 'CatchAllVerifiersToken'
+
+const verificationOptions = (): VerifyOptions => ({ organizationId, email })
 
 describe('EmailVerifier', () => {
     let emailVerifier: EmailVerifier
@@ -60,7 +63,7 @@ describe('EmailVerifier', () => {
     })
 
     it('should return proper result when email domain is a catch-all', async () => {
-        const requestDto: EmailVerificationRequestDto = { email }
+        const request = verificationOptions()
 
         smtpVerifierMock.verify.mockResolvedValueOnce({
             email,
@@ -69,18 +72,19 @@ describe('EmailVerifier', () => {
             reason: EmailVerificationReason.AcceptedEmail,
         })
 
-        const result = await emailVerifier.verify(requestDto)
+        const result = await emailVerifier.verify(request)
 
         expect(smtpVerifierMock.verify).toHaveBeenCalledWith(
+            organizationId,
             `tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak@${domain}`,
         )
         expect(result.catchAll).toBe(true)
-        expect(result.email).toBe(requestDto.email)
+        expect(result.email).toBe(request.email)
         expect(result.domain).toBe(domain)
     })
 
     it('should verify email itself when domain is not a catch-all', async () => {
-        const requestDto: EmailVerificationRequestDto = { email }
+        const request = verificationOptions()
         jest.spyOn(smtpVerifierMock, 'verify')
             .mockResolvedValueOnce({
                 email,
@@ -95,16 +99,21 @@ describe('EmailVerifier', () => {
                 reason: EmailVerificationReason.AcceptedEmail,
             })
 
-        const result = await emailVerifier.verify(requestDto)
+        const result = await emailVerifier.verify(request)
 
-        expect(smtpVerifierMock.verify).toHaveBeenCalledWith(email)
+        expect(smtpVerifierMock.verify).toHaveBeenNthCalledWith(
+            1,
+            organizationId,
+            `tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak@${domain}`,
+        )
+        expect(smtpVerifierMock.verify).toHaveBeenNthCalledWith(2, organizationId, email)
         expect(result.exists).toBe(true)
         expect(result.sources).toContain(EmailVerificationSource.MX)
         expect(result.reason).toBe(EmailVerificationReason.AcceptedEmail)
     })
 
     it('should verify via HTTP if necessary', async () => {
-        const requestDto: EmailVerificationRequestDto = { email }
+        const request = verificationOptions()
 
         jest.spyOn(smtpVerifierMock, 'verify').mockResolvedValueOnce({
             email,
@@ -118,7 +127,7 @@ describe('EmailVerifier', () => {
         microsoft1.verify.mockResolvedValue(true)
         microsoft2.verify.mockResolvedValue(false)
 
-        const result = await emailVerifier.verify(requestDto)
+        const result = await emailVerifier.verify(request)
 
         expect(result.sources).toContain(microsoft1.sourceName)
         expect(result.exists).toBe(true)
@@ -126,7 +135,7 @@ describe('EmailVerifier', () => {
     })
 
     it('should return unknown reason when verification fails', async () => {
-        const requestDto: EmailVerificationRequestDto = { email }
+        const request = verificationOptions()
 
         jest.spyOn(smtpVerifierMock, 'verify').mockResolvedValue({
             email,
@@ -134,14 +143,14 @@ describe('EmailVerifier', () => {
             reason: EmailVerificationReason.Unknown,
         })
 
-        const result = await emailVerifier.verify(requestDto)
+        const result = await emailVerifier.verify(request)
 
         expect(result.exists).toBe(null)
         expect(result.reason).toBe(EmailVerificationReason.Unknown)
     })
 
     it('should extract correct MX domain from target exchange', async () => {
-        const requestDto: EmailVerificationRequestDto = { email }
+        const request = verificationOptions()
 
         jest.spyOn(smtpVerifierMock, 'verify').mockResolvedValueOnce({
             email,
@@ -152,7 +161,7 @@ describe('EmailVerifier', () => {
 
         getSecondLevelDomainMock.mockReturnValueOnce('domain.com')
 
-        const result = await emailVerifier.verify(requestDto)
+        const result = await emailVerifier.verify(request)
 
         expect(result.mxDomain).toBe('domain.com')
     })

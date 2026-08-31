@@ -3,11 +3,15 @@ import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } fr
 import { AutoMap } from '@automapper/classes'
 
 @Entity('email_verifications')
-@Index(['email', 'batchId'])
+@Index(['organizationId', 'email', 'createdAt'])
+@Index(['organizationId', 'batchId'])
 export class EmailVerification {
     @PrimaryGeneratedColumn('uuid')
     @AutoMap()
     id: string
+
+    @Column('uuid')
+    organizationId: string
 
     @Column()
     @AutoMap()

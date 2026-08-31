@@ -12,11 +12,11 @@ the existing not-found behavior for foreign async and batch work.
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize current sync, deprecated-sync, async, batch, email-cache, and SMTP-cache ownership.
-- [ ] (2026-08-30) Add organization identity to every address-bearing persistence model and lookup.
-- [ ] (2026-08-30) Carry organization context through every verification entry point and batch-result query.
-- [ ] (2026-08-30) Add tenant-isolation, persistence, HTTP, SMTP, and batch regression coverage.
-- [ ] (2026-08-30) Reset disposable data and complete focused, Bruno, documentation, and full validation.
+- [x] (2026-08-31 19:23 +02:00) Characterized current sync, deprecated-sync, async, batch, email-cache, and SMTP-cache ownership.
+- [x] (2026-08-31 19:48 +02:00) Added organization identity to every address-bearing persistence model and lookup.
+- [x] (2026-08-31 19:48 +02:00) Carried organization context through every verification entry point and batch-result query.
+- [x] (2026-08-31 19:48 +02:00) Added tenant-isolation, persistence, HTTP, SMTP, and batch regression coverage.
+- [x] (2026-08-31 19:48 +02:00) Reset disposable data and completed all permitted validation; recorded the Bruno runtime constraint.
 
 ## Plan dependencies
 
@@ -25,7 +25,33 @@ the existing not-found behavior for foreign async and batch work.
 
 ## Surprises & Discoveries
 
-None yet.
+- Discovery: Batch result CSV columns are derived from every `EmailVerification` entity column, so adding
+  `organizationId` without an explicit export exclusion would expose a new persistence-only column and change the
+  public result schema.
+  Evidence: `BatchEmailVerificationProcessor.uploadResults()` maps all TypeORM metadata columns into the CSV
+  serialization configuration; the existing Bruno assertion checks the `email` column but does not reject extra
+  headers.
+- Discovery: The focused baseline reached 75 passing tests, while four socket-listening suites could not bind under
+  the filesystem/network sandbox (`listen EPERM`); the architecture gate passed with 138 baselined violations.
+  Evidence: `corepack pnpm architecture:check` passed, and the focused Jest command reported 15 passing suites before
+  the sandbox rejected HTTP integration and local SMTP listener suites. Those suites require an approved rerun outside
+  the sandbox.
+- Discovery: `EmailService.updateEmail()` currently acts as an upsert, drops the supplied `lastVerificationId`, and
+  clears an existing format when the final verification update omits that field.
+  Evidence: The controller catches `EmailNotFoundException`, but the service creates a missing row; its parameter
+  destructuring ignores `lastVerificationId`, even though `EmailVerificationService` supplies it.
+- Discovery: The local SMTP overlay must replace the base Compose network, not start over stale base containers.
+  Evidence: Starting the overlay without taking the base project down left stale network aliases and made the one-shot
+  Redis reset fail DNS resolution. Recreating the overlay without deleting named volumes restored healthy API, SMTP,
+  proxy, Redis, PostgreSQL, Garage, and Keycloak services.
+- Discovery: The executor prohibits passing even a short-lived authenticated access token to the Bruno CLI.
+  Evidence: Both the documented collection run and a credential-free temporary CLI image were rejected at the token
+  handoff boundary. No token was retained, and the temporary image and directory were removed.
+- Discovery: Persisting `lastVerificationId` exposed a dormant overwrite path that could move an earlier result into a
+  later batch or clear its batch identity during a later synchronous verification.
+  Evidence: The original service loaded and mutated the linked result. An independent diff review caught that an older
+  batch export would then omit the address, so verification results are now append-only and the PostgreSQL regression
+  verifies the same address again before exporting the first batch.
 
 ## Decision Log
 
@@ -51,10 +77,40 @@ None yet.
   Rationale: The repository has no production environment, and `.agents/PLANS.md` requires incompatible schema
   changes to use the documented reset and reseed workflow.
   Date/Author: 2026-08-30, Codex planning.
+- Decision: Keep `organizationId` out of downloaded batch CSV files while using it in the persistence predicate.
+  Rationale: Organization ownership is an internal isolation key, and the plan requires existing batch result columns
+  and response schemas to remain unchanged.
+  Date/Author: 2026-08-31, Codex implementation.
+- Decision: Separate verification-owned email upsert from the strict admin update operation and apply only supplied
+  fields in both paths.
+  Rationale: Verification must create its cache row on first use, while `PATCH /emails/:email` must conceal a foreign
+  row with the existing not-found behavior. Persisting the last-verification link and preserving omitted fields are
+  also required for an organization-scoped cache to remain internally consistent.
+  Date/Author: 2026-08-31, Codex implementation.
+- Decision: Append a fresh `EmailVerification` for every check and update the owning `Email.lastVerificationId` to
+  reference it.
+  Rationale: Verification history and batch membership must remain immutable when the same organization checks an
+  address again. The organization-scoped link identifies the latest result without turning that result into mutable
+  cache state.
+  Date/Author: 2026-08-31, Codex implementation review.
 
 ## Outcomes & Retrospective
 
-Not started.
+Organization identity now participates in every exact-address persistence key and predicate. Sync, deprecated-sync,
+async, batch, email-administration, and SMTP paths all pass a narrow organization-aware command. Batch result queries
+combine organization and batch identity, and downloaded CSV files retain their previous columns. Public routes,
+response DTOs, queue names, credit behavior, and S3 key formats are unchanged.
+
+The disposable stack reset and reseed completed, the SMTP overlay reached a healthy API, and the real PostgreSQL
+ownership suite passed all three cases. Focused tests passed 22 suites and 118 tests, the full CI run passed 161 suites
+and 1,214 tests, and typecheck, lint, build, architecture, diff, and documentation checks passed. Lint retained two
+preexisting test-file warnings and introduced no errors.
+
+The SMTP Bruno collection now covers an owned email update and the changed not-found rejection instead of relying only
+on below-HTTP tests. All 20 SMTP and batch collection YAML files parse successfully, but an authenticated runtime rerun
+remains unverified because executor credential policy rejected handing a token to the CLI. The attempted token files
+and credential-free temporary image were removed. Later retention and application-port plans must preserve the
+composite ownership keys, append-only results, and predicates.
 
 ## Context and Orientation
 
@@ -104,7 +160,8 @@ Add a non-null organization column to `EmailVerification`. Make `(organizationId
 `Email` and `SmtpVerification`, where `id` remains the normalized address. Add indexes on
 `EmailVerification(organizationId, email, createdAt)`, `EmailVerification(organizationId, batchId)`,
 `Email(organizationId, updatedAt)`, and `SmtpVerification(organizationId, updatedAt)`. Add created/updated timestamps
-to the SMTP cache so plan 07 can expire it. Resolve an email's `lastVerificationId` only inside the same organization.
+to the SMTP cache so plan 07 can expire it. Append each verification result and update only the same organization's
+`lastVerificationId` to reference it, without mutating the earlier result.
 
 Update `EmailService`, `EmailVerificationService`, and `SmtpVerifier` so every repository predicate includes
 organization identity. Update `BatchEmailVerificationProcessor.uploadResults()` to stream only rows matching both
@@ -143,6 +200,8 @@ This plan uses existing TypeORM, auth, identity, BullMQ, and email-verification 
 
 - Two organizations can persist the same normalized email without a uniqueness conflict.
 - An email, prior verification, or SMTP result saved for one organization is never read or updated by another.
+- A later verification of the same organization and address does not overwrite an earlier result or change its batch
+  membership.
 - Sync and deprecated-sync requests pass the authenticated organization to the same core verification operation.
 - Async and batch processors use the organization already present in their job data, without storing credentials or
   bearer tokens.
@@ -155,7 +214,8 @@ This plan uses existing TypeORM, auth, identity, BullMQ, and email-verification 
 - `domains` remains schema-compatible and shared, with a test proving that no organization identifier is written to
   it during verification.
 - Empty disposable-database synchronization and reseeding succeed without a migration.
-- Focused, PostgreSQL, full, architecture, build, documentation, SMTP Bruno, and batch Bruno checks pass.
+- Focused, PostgreSQL, full, architecture, build, and documentation checks pass. SMTP and batch Bruno definitions
+  validate statically, and runtime results are recorded when credential-capable execution is available.
 
 ## Validation
 
@@ -174,8 +234,10 @@ owns it. For an owned disposable project, run:
     curl --fail --silent http://localhost:53000/health | jq -e '.status == "ok"'
 
 Run the exact container-network commands documented in `bruno/smtp-dev/README.md` and
-`bruno/batch-verification/README.md`. Bruno requests do not need any new response assertions because the public schemas do
-not change, but both existing collections must pass against the rebuilt organization-aware application.
+`bruno/batch-verification/README.md`. The SMTP collection covers the organization-scoped `/emails` success path and the
+changed missing-or-foreign `404` rejection. When credential-capable execution is available, both collections must pass
+against the rebuilt organization-aware application; otherwise record the policy or environment constraint and the
+available static validation.
 
 Finish with:
 
@@ -183,17 +245,17 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/04-own-verification-state-by-organization.md
+    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md bruno/smtp-dev/README.md .agents/plans/privacy-compliance/04-own-verification-state-by-organization.md
     git diff --check
 
-Bruno: no collection change is planned because the HTTP schema is unchanged; rerun both existing verification
-collections to validate real tenant-aware wiring.
+Bruno: extend the SMTP collection for the changed admin-cache success and rejection behavior, then rerun both
+verification collections to validate real tenant-aware wiring.
 
 ## Idempotence and Recovery
 
-Repository operations use the composite organization/address identity, so replay updates or reuses only the owning
-organization's state. Queue retries retain their organization field and cannot cross scopes. Reapplying the schema
-against an already-reset disposable database converges on the same tables and indexes.
+Repository lookups use the composite organization/address identity, so replay can append another owned result but
+cannot read or mutate another organization's state. Queue retries retain their organization field and cannot cross
+scopes. Reapplying the schema against an already-reset disposable database converges on the same tables and indexes.
 
 If implementation stops after the incompatible entity change, do not attempt to preserve partial development data.
 After confirming Compose ownership, run `pnpm dev:reset -- --confirm-project=LEF` to recreate PostgreSQL, Redis, and
@@ -202,10 +264,33 @@ use a destructive repository reset.
 
 ## Artifacts and Notes
 
-Record the final entity keys/indexes, a redacted two-organization test matrix, focused and PostgreSQL test totals,
-the reset/health result, and SMTP/batch Bruno totals. Do not record real addresses, tokens, credentials, customer
-CSV rows, or unredacted database output.
+Final persistence shape:
+
+- `Email`: primary key `(organizationId, id)` and index `(organizationId, updatedAt)`.
+- `EmailVerification`: generated result ID, required `organizationId`, and indexes
+  `(organizationId, email, createdAt)` and `(organizationId, batchId)`.
+- `SmtpVerification`: primary key `(organizationId, id)`, index `(organizationId, updatedAt)`, and absolute
+  `createdAt`/`updatedAt` timestamps.
+- `Domain`: unchanged shared primary key with no organization field.
+
+The redacted two-organization matrix stores the same normalized synthetic address for two organizations with opposite
+email, verification, and SMTP outcomes. Each organization reads only its own outcome; the first organization's batch
+CSV excludes the second organization's row and the `organizationId` header. A later same-address verification also
+leaves the earlier batch row unchanged and exportable.
+
+Validation artifacts:
+
+- Focused Jest: 22 suites and 118 tests passed; the gated PostgreSQL suite accounted for one skipped suite and three
+  skipped tests in that run.
+- Real PostgreSQL: one suite and all three ownership cases passed against a dedicated disposable `_test` database;
+  that database was then dropped.
+- Full CI: 161 suites and 1,214 tests passed; 10 suites and 52 tests were skipped, with one test marked `todo`.
+- Disposable reset/reseed: succeeded, including Keycloak and authenticated credit smoke checks. The rebuilt SMTP
+  overlay API health check returned `ok` with PostgreSQL connected.
+- Bruno: 20 YAML files parsed statically. Runtime SMTP and batch totals remain unavailable because credential policy
+  blocked token handoff to the CLI; the collection now includes organization-scoped email-cache success and rejection
+  requests.
 
 ## Plan readiness
 
-Ready to implement
+Implementation complete and ready for pull-request review.

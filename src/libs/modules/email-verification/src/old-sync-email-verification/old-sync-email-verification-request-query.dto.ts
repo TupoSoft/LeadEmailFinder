@@ -1,7 +1,6 @@
-import { VerifyOptions } from '@tuposoft/lead-email-finder/common'
 import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 
-export class OldSyncEmailVerificationRequestQueryDto implements VerifyOptions {
+export class OldSyncEmailVerificationRequestQueryDto {
     @IsVerifiableEmail()
     email: string
 }

@@ -1,0 +1,27 @@
+info:
+  name: 13-reject-missing-email-update
+  type: http
+  seq: 13
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/emails/missing@lef.test"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "exists": true
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('conceals an email outside the authenticated organization as not found', function() {
+          expect(res.status).to.equal(404);
+        });
