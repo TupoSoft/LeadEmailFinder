@@ -6,6 +6,7 @@ This road map makes the ExecPlans under `.agents/plans/` visible on the `TupoSof
 2. [Distinguish actionable ExecPlans from dependency backlog](02-actionable-project-backlog.md)
 3. [Preserve assigned work in progress](03-preserve-assigned-work-in-progress.md)
 4. [Enforce truthful ExecPlan metadata](04-enforce-truthful-execplan-metadata.md)
+5. [Prepare reusable ExecPlan Sync adoption](05-adopt-reusable-execplan-sync-action.md)
 
 Shared decisions:
 
@@ -18,9 +19,18 @@ Shared decisions:
   progress can still advance it to `Done`.
 - Malformed required headings fail before GitHub interaction; completed legacy plans may omit only the dependency
   section allowed by `.agents/PLANS.md`.
+- The public Action must be pinned to a reviewed 40-character release commit SHA. Migration keeps the existing issue
+  markers, labels, Project 9 status mapping, and generated body identity so adoption does not recreate or rewrite the
+  backlog unnecessarily.
+- Only one writer may run during migration. Disable the repository-local writer before the first external Action
+  write, and retain a rollback path until the external Action completes an unchanged second run.
 
 ## Setup
 
 The workflow needs a `PROJECT_SYNC_TOKEN` repository secret. The default `GITHUB_TOKEN` cannot write organization-level `Projects V2`, so this must be a classic personal access token with the `project` scope, a fine-grained token with organization project write, or a GitHub App token.
 
 Run it by hand with `pnpm plans:sync`, using the local `gh` login. `PLANS_DRY_RUN=true pnpm plans:sync` reports what would change without writing anything. `PLANS_PROJECT_OWNER`, `PLANS_PROJECT_NUMBER`, `PLANS_BRANCH`, and `PLANS_DIR` override the defaults, which target `TupoSoft` project 9 on `master`.
+
+Plan 05 replaces this repository-local implementation only after TupoSoft publishes a reviewed prerelease SHA and
+selects a credential-hosting model that is enforceable for this private repository. Until that migration completes,
+the setup above remains the active writer and must not run concurrently with the external Action.
