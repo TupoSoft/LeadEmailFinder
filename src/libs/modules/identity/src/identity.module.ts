@@ -77,7 +77,6 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         },
     ],
     exports: [
-        TypeOrmModule,
         EXTERNAL_IDENTITY_STORE,
         ACTIVE_MEMBERSHIP_READER,
         ACTIVE_SERVICE_CREDENTIAL_READER,
