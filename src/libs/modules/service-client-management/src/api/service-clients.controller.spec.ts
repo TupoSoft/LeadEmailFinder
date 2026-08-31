@@ -1,11 +1,18 @@
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import { AuthPrincipal, ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthPrincipal, ServiceCredentialDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
-import { ServiceClientCreationService } from './service-client-creation.service'
-import { ServiceClientDeletionService } from './service-client-deletion.service'
-import { ServiceClientDisablementService } from './service-client-disablement.service'
-import { ServiceClientListingService } from './service-client-listing.service'
-import { ServiceClientRotationService } from './service-client-rotation.service'
+import { ServiceClientCreationService } from '../application/service-client-creation.service'
+import { ServiceClientDeletionService } from '../application/service-client-deletion.service'
+import { ServiceClientDisablementService } from '../application/service-client-disablement.service'
+import { ServiceClientListingService } from '../application/service-client-listing.service'
+import { ServiceClientRotationService } from '../application/service-client-rotation.service'
+import {
+    DisabledServiceClientRotationError,
+    ServiceClientAccessDeniedError,
+    ServiceClientNotFoundError,
+    ServiceClientPermissionCeilingExceededError,
+} from '../domain/service-client-management.errors'
 import { ServiceClientsController } from './service-clients.controller'
 
 const principal: AuthPrincipal = {
@@ -18,7 +25,7 @@ const principal: AuthPrincipal = {
     credentialId: 'identity-1',
 }
 
-function credentialFixture(overrides: Partial<ServiceCredential> = {}): ServiceCredential {
+function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {}): ServiceCredentialDetailRecord {
     return {
         id: 'sc-1',
         organizationId: 'org-1',
@@ -31,7 +38,7 @@ function credentialFixture(overrides: Partial<ServiceCredential> = {}): ServiceC
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-01T00:00:00Z'),
         ...overrides,
-    } as ServiceCredential
+    }
 }
 
 describe('ServiceClientsController', () => {
@@ -118,5 +125,46 @@ describe('ServiceClientsController', () => {
         await controller.remove({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal)
 
         expect(deletion.delete).toHaveBeenCalledWith(principal, 'org-1', 'sc-1')
+    })
+
+    it('maps application access denial to ForbiddenException', async () => {
+        creation.create.mockRejectedValue(new ServiceClientAccessDeniedError('Only an owner or admin may create service clients'))
+
+        await expect(
+            controller.create({ organizationId: 'org-1' }, { permissions: ['verification:run'] }, principal),
+        ).rejects.toThrow(ForbiddenException)
+    })
+
+    it('maps permission-ceiling validation to BadRequestException', async () => {
+        creation.create.mockRejectedValue(new ServiceClientPermissionCeilingExceededError(['billing:manage']))
+
+        await expect(
+            controller.create({ organizationId: 'org-1' }, { permissions: ['billing:manage'] }, principal),
+        ).rejects.toThrow(BadRequestException)
+    })
+
+    it('maps concealed missing clients to NotFoundException', async () => {
+        rotation.rotate.mockRejectedValue(new ServiceClientNotFoundError())
+
+        await expect(
+            controller.rotate({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal),
+        ).rejects.toThrow(NotFoundException)
+    })
+
+    it('maps disabled rotation to ConflictException', async () => {
+        rotation.rotate.mockRejectedValue(new DisabledServiceClientRotationError())
+
+        await expect(
+            controller.rotate({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal),
+        ).rejects.toThrow(ConflictException)
+    })
+
+    it('preserves unknown provider and persistence errors', async () => {
+        const error = new Error('provider unavailable')
+        deletion.delete.mockRejectedValue(error)
+
+        await expect(controller.remove({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal)).rejects.toBe(
+            error,
+        )
     })
 })

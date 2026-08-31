@@ -28,11 +28,11 @@ import {
     RequirePermissions,
     RolePermissionPolicy,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { ServiceClientCreationService } from './service-client-creation.service'
-import { ServiceClientDeletionService } from './service-client-deletion.service'
-import { ServiceClientDisablementService } from './service-client-disablement.service'
-import { ServiceClientRotationService } from './service-client-rotation.service'
-import { ServiceClientManagementModule } from './service-client-management.module'
+import { ServiceClientCreationService } from '../../application/service-client-creation.service'
+import { ServiceClientDeletionService } from '../../application/service-client-deletion.service'
+import { ServiceClientDisablementService } from '../../application/service-client-disablement.service'
+import { ServiceClientRotationService } from '../../application/service-client-rotation.service'
+import { ServiceClientManagementModule } from '../../service-client-management.module'
 
 // Deliberately its own env vars and its own dedicated Postgres DB, not TEST_ORG_*/TEST_OIDC_*: Jest runs spec
 // files in parallel workers, so sharing a database with another dropSchema:true test in the same full-suite

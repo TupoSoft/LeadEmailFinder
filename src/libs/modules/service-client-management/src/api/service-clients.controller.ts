@@ -1,23 +1,33 @@
 import {
+    BadRequestException,
     Body,
+    ConflictException,
     Controller,
     Delete,
+    ForbiddenException,
     Get,
     HttpCode,
     HttpStatus,
+    NotFoundException,
     Param,
     Post,
     SerializeOptions,
     UseGuards,
 } from '@nestjs/common'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { AuthPrincipal, ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthPrincipal, ServiceCredentialDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { ServiceClientCreationService } from './service-client-creation.service'
-import { ServiceClientDeletionService } from './service-client-deletion.service'
-import { ServiceClientDisablementService } from './service-client-disablement.service'
-import { ServiceClientListingService } from './service-client-listing.service'
-import { ServiceClientRotationService } from './service-client-rotation.service'
+import { ServiceClientCreationService } from '../application/service-client-creation.service'
+import { ServiceClientDeletionService } from '../application/service-client-deletion.service'
+import { ServiceClientDisablementService } from '../application/service-client-disablement.service'
+import { ServiceClientListingService } from '../application/service-client-listing.service'
+import { ServiceClientRotationService } from '../application/service-client-rotation.service'
+import {
+    DisabledServiceClientRotationError,
+    ServiceClientAccessDeniedError,
+    ServiceClientNotFoundError,
+    ServiceClientPermissionCeilingExceededError,
+} from '../domain/service-client-management.errors'
 import {
     CreateServiceClientDto,
     ServiceClientMemberParamsDto,
@@ -26,12 +36,12 @@ import {
     ServiceClientSecretResponseDto,
 } from './service-clients.dto'
 
-function toResponse(credential: ServiceCredential): ServiceClientResponseDto {
+function toResponse(credential: ServiceCredentialDetailRecord): ServiceClientResponseDto {
     return {
         id: credential.id,
         clientId: credential.keycloakClientId,
         description: credential.description,
-        permissions: credential.permissions,
+        permissions: [...credential.permissions],
         status: credential.status,
         createdAt: credential.createdAt,
         updatedAt: credential.updatedAt,
@@ -58,14 +68,16 @@ export class ServiceClientsController {
         @Body() { description, permissions }: CreateServiceClientDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<ServiceClientSecretResponseDto> {
-        const { credential, secret } = await this.serviceClientCreation.create(
-            principal,
-            organizationId,
-            description ?? null,
-            permissions,
-        )
+        return this.handleErrors(async () => {
+            const { credential, secret } = await this.serviceClientCreation.create(
+                principal,
+                organizationId,
+                description ?? null,
+                permissions,
+            )
 
-        return { ...toResponse(credential), clientSecret: secret }
+            return { ...toResponse(credential), clientSecret: secret }
+        })
     }
 
     @Get()
@@ -75,9 +87,11 @@ export class ServiceClientsController {
         @Param() { organizationId }: ServiceClientParamsDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<ServiceClientResponseDto[]> {
-        const credentials = await this.serviceClientListing.list(principal, organizationId)
+        return this.handleErrors(async () => {
+            const credentials = await this.serviceClientListing.list(principal, organizationId)
 
-        return credentials.map(toResponse)
+            return credentials.map(toResponse)
+        })
     }
 
     @Post(':serviceClientId/rotate')
@@ -88,13 +102,15 @@ export class ServiceClientsController {
         @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<ServiceClientSecretResponseDto> {
-        const { credential, secret } = await this.serviceClientRotation.rotate(
-            principal,
-            organizationId,
-            serviceClientId,
-        )
+        return this.handleErrors(async () => {
+            const { credential, secret } = await this.serviceClientRotation.rotate(
+                principal,
+                organizationId,
+                serviceClientId,
+            )
 
-        return { ...toResponse(credential), clientSecret: secret }
+            return { ...toResponse(credential), clientSecret: secret }
+        })
     }
 
     @Post(':serviceClientId/disable')
@@ -104,7 +120,7 @@ export class ServiceClientsController {
         @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<void> {
-        await this.serviceClientDisablement.disable(principal, organizationId, serviceClientId)
+        return this.handleErrors(() => this.serviceClientDisablement.disable(principal, organizationId, serviceClientId))
     }
 
     @Delete(':serviceClientId')
@@ -114,6 +130,26 @@ export class ServiceClientsController {
         @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<void> {
-        await this.serviceClientDeletion.delete(principal, organizationId, serviceClientId)
+        return this.handleErrors(() => this.serviceClientDeletion.delete(principal, organizationId, serviceClientId))
+    }
+
+    private async handleErrors<T>(operation: () => Promise<T>): Promise<T> {
+        try {
+            return await operation()
+        } catch (error) {
+            if (error instanceof ServiceClientAccessDeniedError) {
+                throw new ForbiddenException(error.message)
+            }
+            if (error instanceof ServiceClientPermissionCeilingExceededError) {
+                throw new BadRequestException(error.message)
+            }
+            if (error instanceof ServiceClientNotFoundError) {
+                throw new NotFoundException(error.message)
+            }
+            if (error instanceof DisabledServiceClientRotationError) {
+                throw new ConflictException(error.message)
+            }
+            throw error
+        }
     }
 }

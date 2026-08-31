@@ -2,13 +2,13 @@ import { ClassSerializerInterceptor, INestApplication, Module, UnauthorizedExcep
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
-import { AuthPrincipal, ServiceCredential } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthPrincipal, ServiceCredentialDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService, AuthGuard, PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { ServiceClientCreationService } from './service-client-creation.service'
-import { ServiceClientDeletionService } from './service-client-deletion.service'
-import { ServiceClientDisablementService } from './service-client-disablement.service'
-import { ServiceClientListingService } from './service-client-listing.service'
-import { ServiceClientRotationService } from './service-client-rotation.service'
+import { ServiceClientCreationService } from '../application/service-client-creation.service'
+import { ServiceClientDeletionService } from '../application/service-client-deletion.service'
+import { ServiceClientDisablementService } from '../application/service-client-disablement.service'
+import { ServiceClientListingService } from '../application/service-client-listing.service'
+import { ServiceClientRotationService } from '../application/service-client-rotation.service'
 import { ServiceClientsController } from './service-clients.controller'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
@@ -36,7 +36,9 @@ function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal
     }
 }
 
-function credentialFixture(overrides: Partial<ServiceCredential> = {}): ServiceCredential {
+function credentialFixture(
+    overrides: Partial<ServiceCredentialDetailRecord> = {},
+): ServiceCredentialDetailRecord {
     return {
         id: serviceClientId,
         organizationId,
@@ -49,7 +51,7 @@ function credentialFixture(overrides: Partial<ServiceCredential> = {}): ServiceC
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         ...overrides,
-    } as ServiceCredential
+    }
 }
 
 @Module({
