@@ -20,13 +20,38 @@ import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } from '@tuposoft/lead-email-finder/common'
 import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
 import { deriveResultsKey } from './derive-results-key'
+
+type S3UploadSecurityParameters =
+    | {
+          CacheControl: 'no-store'
+          ServerSideEncryption: 'aws:kms'
+          SSEKMSKeyId: string
+      }
+    | {
+          CacheControl: 'no-store'
+      }
+
+function mapCustomerObjectWriteSecurity(security: CustomerObjectWriteSecurity): S3UploadSecurityParameters {
+    if (security.mode === 'production-kms') {
+        return {
+            CacheControl: security.cacheControl,
+            ServerSideEncryption: security.serverSideEncryption,
+            SSEKMSKeyId: security.kmsKeyId,
+        }
+    }
+
+    return { CacheControl: security.cacheControl }
+}
 
 @Processor(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
 export class BatchEmailVerificationProcessor extends WorkerHost {
     constructor(
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
+        @Inject(CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN)
+        private readonly customerObjectWriteSecurity: CustomerObjectWriteSecurity,
         @InjectQueue('async-email-verification')
         private readonly asyncEmailVerificationQueue: Queue<AsyncEmailVerificationJobData>,
         @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
@@ -94,6 +119,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
                 Key,
                 Body,
                 ContentType: 'text/csv',
+                ...mapCustomerObjectWriteSecurity(this.customerObjectWriteSecurity),
             },
         })
 

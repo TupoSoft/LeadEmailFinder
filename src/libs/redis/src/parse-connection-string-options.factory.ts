@@ -1,27 +1,45 @@
-import { RedisOptions, type SentinelAddress } from 'ioredis'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { ok } from 'node:assert'
+import type { RedisOptions, SentinelAddress } from 'ioredis'
+import type { ConnectionOptions } from 'node:tls'
 import {
     REDIS_DEFAULT_DB_INDEX,
     REDIS_DEFAULT_PORT,
     REDIS_SENTINEL_DEFAULT_PORT,
     REDIS_SENTINEL_URL_REGEX,
 } from './redis.constants'
-import { Injectable } from '@nestjs/common'
 import { RedisSentinelUrlParts } from './redis-sentinel-url-parts.interface'
+
+type RedisUrlErrorReason =
+    | 'insecure-transport'
+    | 'invalid-database-index'
+    | 'invalid-sentinel-host'
+    | 'invalid-sentinel-port'
+    | 'invalid-sentinel-url'
+    | 'invalid-url'
+    | 'missing-sentinel-master-name'
+    | 'unsupported-scheme'
+
+function redisUrlError(reason: RedisUrlErrorReason): Error {
+    return new Error(`REDIS_URL: ${reason}`)
+}
 
 @Injectable()
 export class ParseConnectionStringOptionsFactory {
     private readonly redisUrl: string
+    private readonly isProduction: boolean
+    private readonly redisTlsCa?: string
 
     constructor(configService: ConfigService) {
         const redisUrl = configService.get<string>('REDIS_URL')
 
         if (redisUrl === undefined) {
-            throw new Error('REDIS_URL is not defined')
+            throw new Error('REDIS_URL: missing')
         }
 
         this.redisUrl = redisUrl
+        this.isProduction = configService.get<string>('NODE_ENV') === 'production'
+        this.redisTlsCa = configService.get<string>('REDIS_TLS_CA')
     }
 
     create(): RedisOptions {
@@ -34,36 +52,54 @@ export class ParseConnectionStringOptionsFactory {
     }
 
     private parseRedisUrl(): RedisOptions {
-        if (this.redisUrl.startsWith('redis://')) {
-            return this.parseRedisStandaloneUrl()
-        } else if (this.redisUrl.startsWith('redis-sentinel://')) {
+        if (this.redisUrl.startsWith('redis-sentinel://')) {
             return this.parseRedisSentinelUrl()
-        } else {
-            throw new Error(`Invalid redis URI`)
         }
+
+        if (this.redisUrl.startsWith('rediss://')) {
+            return this.parseRedisStandaloneUrl(true)
+        }
+
+        if (this.redisUrl.startsWith('redis://')) {
+            if (this.isProduction) {
+                throw redisUrlError('insecure-transport')
+            }
+
+            return this.parseRedisStandaloneUrl(false)
+        }
+
+        throw redisUrlError('unsupported-scheme')
     }
 
     private parseRedisSentinelUrl(): RedisOptions {
         const match = REDIS_SENTINEL_URL_REGEX.exec(this.redisUrl)
-        ok(match !== null, `Invalid Redis Sentinel URL: ${this.redisUrl}`)
+        if (match?.groups === undefined) {
+            throw redisUrlError('invalid-sentinel-url')
+        }
 
         const { groups } = match
-        ok(groups !== undefined, 'Invalid RegExp')
-
         const { username, password, hosts, database, query } = groups as RedisSentinelUrlParts
-        ok(hosts !== undefined, 'There are no hosts in the URL')
+        if (hosts === undefined) {
+            throw redisUrlError('invalid-sentinel-host')
+        }
 
-        const db = database !== undefined ? parseInt(database) : undefined
+        const db = database !== undefined ? Number(database) : undefined
+        if (db !== undefined && (!Number.isInteger(db) || db < 0)) {
+            throw redisUrlError('invalid-database-index')
+        }
 
         const sentinels: SentinelAddress[] = hosts.split(',').map(value => {
             const [hostname, sentinelPort = String(REDIS_SENTINEL_DEFAULT_PORT)] = value.split(':') as Array<
                 string | undefined
             >
-            ok(hostname !== undefined, 'Hostname cannot be undefined')
-            ok(hostname !== '', 'Hostname cannot be empty')
+            if (hostname === undefined || hostname === '') {
+                throw redisUrlError('invalid-sentinel-host')
+            }
 
             const port = parseInt(sentinelPort)
-            ok(!isNaN(port), `Invalid port: ${sentinelPort}, not a number`)
+            if (isNaN(port)) {
+                throw redisUrlError('invalid-sentinel-port')
+            }
 
             return {
                 host: hostname,
@@ -73,9 +109,11 @@ export class ParseConnectionStringOptionsFactory {
 
         const searchParams = new URLSearchParams(query)
         const name = searchParams.get('name')
-        ok(name !== null, 'The master group name is missing')
+        if (name === null) {
+            throw redisUrlError('missing-sentinel-master-name')
+        }
 
-        return {
+        const options: RedisOptions = {
             name,
             sentinels,
             username,
@@ -83,12 +121,33 @@ export class ParseConnectionStringOptionsFactory {
             sentinelPassword: password,
             db,
         }
+
+        if (!this.isProduction) {
+            return options
+        }
+
+        const tls = this.createVerifiedTlsOptions()
+
+        return {
+            ...options,
+            enableTLSForSentinelMode: true,
+            tls,
+            sentinelTLS: tls,
+        }
     }
 
-    private parseRedisStandaloneUrl(): RedisOptions {
-        const { hostname, port, username, password, pathname } = new URL(this.redisUrl)
+    private parseRedisStandaloneUrl(useTls: boolean): RedisOptions {
+        let parsedUrl: URL
 
-        const options = {
+        try {
+            parsedUrl = new URL(this.redisUrl)
+        } catch {
+            throw redisUrlError('invalid-url')
+        }
+
+        const { hostname, port, username, password, pathname } = parsedUrl
+
+        const options: RedisOptions = {
             host: hostname,
             port: port !== '' ? parseInt(port, 10) : REDIS_DEFAULT_PORT,
             db: pathname !== '' ? parseInt(pathname.replace('/', ''), 10) : REDIS_DEFAULT_DB_INDEX,
@@ -96,8 +155,21 @@ export class ParseConnectionStringOptionsFactory {
             password: password !== '' ? password : undefined,
         }
 
-        ok(!isNaN(options.db), `Invalid Redis database index in path: ${pathname}`)
+        if (options.db === undefined || isNaN(options.db)) {
+            throw redisUrlError('invalid-database-index')
+        }
+
+        if (useTls) {
+            options.tls = this.createVerifiedTlsOptions()
+        }
 
         return options
+    }
+
+    private createVerifiedTlsOptions(): ConnectionOptions {
+        return {
+            rejectUnauthorized: true,
+            ...(this.redisTlsCa === undefined ? {} : { ca: this.redisTlsCa }),
+        }
     }
 }

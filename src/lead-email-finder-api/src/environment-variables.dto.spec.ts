@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer'
 import { validateSync } from 'class-validator'
 import {
     EnvironmentVariablesDto,
+    normalizeEnvironmentConfiguration,
     normalizePaymentCheckoutUrlConfiguration,
 } from './environment-variables.dto'
 
@@ -23,6 +24,95 @@ describe('EnvironmentVariablesDto', (): void => {
 
         expect(environment.S3_FORCE_PATH_STYLE).toBe(expected)
         expect(environment.TYPEORM_SYNCHRONIZE).toBe(expected)
+    })
+
+    it.each([
+        ['POSTGRES_TLS_CA', '-----BEGIN CERTIFICATE-----\npostgres-ca\n-----END CERTIFICATE-----'],
+        ['REDIS_TLS_CA', '-----BEGIN CERTIFICATE-----\nredis-ca\n-----END CERTIFICATE-----'],
+        ['S3_SERVER_SIDE_ENCRYPTION', 'aws:kms'],
+        ['S3_KMS_KEY_ID', 'alias/customer-objects'],
+    ] as const)('accepts the optional production security setting %s', (property, value): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { [property]: value })
+
+        const errors = validateSync(environment, { skipMissingProperties: true })
+
+        expect(errors.find(error => error.property === property)).toBeUndefined()
+        expect(environment[property]).toBe(value)
+    })
+
+    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_SERVER_SIDE_ENCRYPTION', 'S3_KMS_KEY_ID'] as const)(
+        'rejects a non-string %s setting',
+        (property): void => {
+            const environment = plainToInstance(EnvironmentVariablesDto, { [property]: { unexpected: true } })
+
+            expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+                property,
+            )
+        },
+    )
+
+    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
+        'accepts %s from a validated secret-file path',
+        property => {
+            const environment = plainToInstance(EnvironmentVariablesDto, {
+                [`${property}_FILE`]: `/run/secrets/${property.toLowerCase()}`,
+            })
+
+            expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+        },
+    )
+
+    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
+        'rejects %s from outside the secret-file directory',
+        property => {
+            const fileProperty = `${property}_FILE`
+            const environment = plainToInstance(EnvironmentVariablesDto, {
+                [fileProperty]: `/tmp/${property.toLowerCase()}`,
+            })
+
+            expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+                fileProperty,
+            )
+        },
+    )
+
+    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
+        'rejects duplicate inline and file sources for %s without exposing either value',
+        property => {
+            const secretValue = 'sensitive-inline-value'
+            const secretFile = `/run/secrets/${property.toLowerCase()}`
+
+            expect(() =>
+                normalizeEnvironmentConfiguration({
+                    [property]: secretValue,
+                    [`${property}_FILE`]: secretFile,
+                }),
+            ).toThrow(`${property}: multiple-sources`)
+
+            try {
+                normalizeEnvironmentConfiguration({
+                    [property]: secretValue,
+                    [`${property}_FILE`]: secretFile,
+                })
+            } catch (error) {
+                expect(String(error)).not.toContain(secretValue)
+                expect(String(error)).not.toContain(secretFile)
+            }
+        },
+    )
+
+    it('keeps production-only security settings optional for local development', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {})
+        const productionSecurityProperties = [
+            'POSTGRES_TLS_CA',
+            'REDIS_TLS_CA',
+            'S3_SERVER_SIDE_ENCRYPTION',
+            'S3_KMS_KEY_ID',
+        ]
+
+        const errors = validateSync(environment).map(error => error.property)
+
+        expect(errors).not.toEqual(expect.arrayContaining(productionSecurityProperties))
     })
 
     it('transforms proxy capacity values from environment variables', (): void => {

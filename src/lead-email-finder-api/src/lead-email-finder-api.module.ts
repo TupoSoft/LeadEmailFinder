@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule, ConfigService } from '@nestjs/config'
+import { ConfigModule } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { AutomapperModule } from '@automapper/nestjs'
 import { classes } from '@automapper/classes'
@@ -11,29 +11,26 @@ import { HealthModule } from './health'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
 import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
-import { EnvironmentVariablesDto, normalizePaymentCheckoutUrlConfiguration } from './environment-variables.dto'
+import { EnvironmentVariablesDto, normalizeEnvironmentConfiguration } from './environment-variables.dto'
 import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
 import { PaymentsModule } from '@tuposoft/lead-email-finder/modules/payments'
 import { OrganizationOnboardingModule } from '@tuposoft/lead-email-finder/modules/organization-onboarding'
 import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modules/service-client-management'
 import { AuthenticationCompositionModule } from './authentication/authentication-composition.module'
+import { PostgresModuleOptionsFactoryImpl } from './postgres-module-options-factory-impl'
+import { CustomerObjectWriteSecurityModule } from './customer-object-write-security.module'
 
 @Module({
     imports: [
         ConfigModule.forRoot({
             load: [loadSecrets],
-            validate: config => validate(EnvironmentVariablesDto, normalizePaymentCheckoutUrlConfiguration(config)),
+            validate: config => validate(EnvironmentVariablesDto, normalizeEnvironmentConfiguration(config)),
         }),
+        CustomerObjectWriteSecurityModule,
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
-            useFactory: (configService: ConfigService) => ({
-                type: 'postgres',
-                url: configService.get('POSTGRES_URL'),
-                autoLoadEntities: true,
-                synchronize: configService.get('TYPEORM_SYNCHRONIZE'),
-            }),
-            inject: [ConfigService],
+            useClass: PostgresModuleOptionsFactoryImpl,
         }),
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
