@@ -36,10 +36,8 @@ export class AsyncEmailVerificationProcessor extends WorkerHost {
     async process(
         job: Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>,
     ): Promise<IEmailVerificationResponseDto> {
-        // job.data carries organizationId/credentialId beyond VerifyOptions; verify() only reads the
-        // VerifyOptions fields it declares, so passing the wider object through is safe and avoids an
-        // unused-variable destructure.
-        const response = await this.emailVerificationService.verify(job.data)
+        const { organizationId, email, format, batchId } = job.data
+        const response = await this.emailVerificationService.verify({ organizationId, email, format, batchId })
 
         if (response.reason === EmailVerificationReason.TemporarilyBlocked) {
             throw new GreylistedException(response.email)

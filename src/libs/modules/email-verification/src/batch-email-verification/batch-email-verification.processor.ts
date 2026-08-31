@@ -74,10 +74,12 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         const queryAlias = 'ev'
         const columns = this.dataSource
             .getMetadata(EmailVerification)
-            .columns.map(c => ({ key: `${queryAlias}_${c.propertyName}`, header: c.propertyName }))
+            .columns.filter(({ propertyName }) => propertyName !== 'organizationId')
+            .map(({ propertyName }) => ({ key: `${queryAlias}_${propertyName}`, header: propertyName }))
         const cursor = await this.emailVerificationRepo
             .createQueryBuilder(queryAlias)
-            .where(`${queryAlias}.batchId = :batchId`, { batchId: job.id })
+            .where(`${queryAlias}.organizationId = :organizationId`, { organizationId })
+            .andWhere(`${queryAlias}.batchId = :batchId`, { batchId: job.id })
             .stream()
         const stringifier = stringify({
             columns,

@@ -3,11 +3,13 @@ import { IUpdateEmailRequestDto } from './update-email-request-dto.interface'
 import { IEmailResponseDto } from './email-response-dto.interface'
 
 export interface IEmailService {
-    createEmail(options: ICreateEmailRequestDto): Promise<IEmailResponseDto>
+    createEmail(organizationId: string, options: ICreateEmailRequestDto): Promise<IEmailResponseDto>
 
-    getEmails(): Promise<IEmailResponseDto[]>
+    getEmails(organizationId: string): Promise<IEmailResponseDto[]>
 
-    getEmail(email: string): Promise<IEmailResponseDto>
+    getEmail(organizationId: string, email: string): Promise<IEmailResponseDto>
 
-    updateEmail(email: string, options: IUpdateEmailRequestDto): Promise<IEmailResponseDto>
+    updateEmail(organizationId: string, email: string, options: IUpdateEmailRequestDto): Promise<IEmailResponseDto>
+
+    upsertEmail(organizationId: string, email: string, options: IUpdateEmailRequestDto): Promise<IEmailResponseDto>
 }

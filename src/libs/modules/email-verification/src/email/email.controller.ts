@@ -19,7 +19,8 @@ import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
 import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { ApiExcludeController } from '@nestjs/swagger'
-import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 @UseGuards(PermissionsGuard)
 @RequirePermissions('platform:admin')
@@ -30,9 +31,12 @@ export class EmailController {
 
     @Post()
     @HttpCode(201)
-    async createEmail(@Body() { email, exists, format }: CreateEmailRequestDto): Promise<EmailResponseDto> {
+    async createEmail(
+        @Body() { email, exists, format }: CreateEmailRequestDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<EmailResponseDto> {
         try {
-            return await this.emailService.createEmail({ email, exists, format })
+            return await this.emailService.createEmail(principal.organizationId, { email, exists, format })
         } catch (error) {
             if (error instanceof EmailAlreadyExistsException) {
                 throw new ConflictException(error.message)
@@ -43,14 +47,17 @@ export class EmailController {
     }
 
     @Get()
-    async getEmails(): Promise<EmailResponseDto[]> {
-        return await this.emailService.getEmails()
+    async getEmails(@CurrentPrincipal() principal: AuthPrincipal): Promise<EmailResponseDto[]> {
+        return await this.emailService.getEmails(principal.organizationId)
     }
 
     @Get(':email')
-    async getEmail(@Param('email') email: string): Promise<EmailResponseDto> {
+    async getEmail(
+        @Param('email') email: string,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<EmailResponseDto> {
         try {
-            return await this.emailService.getEmail(email)
+            return await this.emailService.getEmail(principal.organizationId, email)
         } catch (error) {
             if (error instanceof EmailNotFoundException) {
                 throw new NotFoundException(error.message)
@@ -64,9 +71,10 @@ export class EmailController {
     async updateEmail(
         @Param('email') email: string,
         @Body() { format, exists }: UpdateEmailRequestDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<EmailResponseDto> {
         try {
-            return await this.emailService.updateEmail(email, { format, exists })
+            return await this.emailService.updateEmail(principal.organizationId, email, { format, exists })
         } catch (error) {
             if (error instanceof EmailNotFoundException) {
                 throw new NotFoundException(error.message)

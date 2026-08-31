@@ -9,13 +9,26 @@ import { UpdateEmailRequestDto } from './update-email-request.dto'
 import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
-import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
+import { PermissionsGuard, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
+import { NextFunction, Request, Response } from 'express'
 
 const mockEmailService: jest.Mocked<IEmailService> = {
     createEmail: jest.fn(),
     getEmails: jest.fn(),
     getEmail: jest.fn(),
     updateEmail: jest.fn(),
+    upsertEmail: jest.fn(),
+}
+
+const principal: AuthPrincipal = {
+    credentialKind: 'service_client',
+    issuer: 'https://issuer.example.test',
+    subject: 'platform-admin-client',
+    organizationId: 'organization-1',
+    membershipRole: 'platform_admin',
+    permissions: ['platform:admin'],
+    credentialId: 'credential-1',
 }
 
 const username = 'danilo'
@@ -62,6 +75,10 @@ describe('EmailController', () => {
             .compile()
 
         app = moduleRef.createNestApplication()
+        app.use((req: Request, _res: Response, next: NextFunction) => {
+            setAuthPrincipal(req, principal)
+            next()
+        })
         await app.init()
     })
 
@@ -80,6 +97,8 @@ describe('EmailController', () => {
                 .send(createEmailRequestDto)
                 .expect(HttpStatus.CREATED)
                 .expect(JSON.stringify(emailResponseDto))
+
+            expect(mockEmailService.createEmail).toHaveBeenCalledWith(principal.organizationId, createEmailRequestDto)
         })
 
         it('should return 409 if email already exists', async () => {
@@ -92,6 +111,8 @@ describe('EmailController', () => {
                 .send(createEmailRequestDto)
                 .expect(HttpStatus.CONFLICT)
                 .expect(JSON.stringify(conflictException.getResponse()))
+
+            expect(mockEmailService.createEmail).toHaveBeenCalledWith(principal.organizationId, createEmailRequestDto)
         })
     })
 
@@ -100,6 +121,7 @@ describe('EmailController', () => {
             const data: EmailResponseDto[] = [emailResponseDto]
             mockEmailService.getEmails.mockResolvedValue(data)
             await request(app.getHttpServer()).get('/emails').expect(HttpStatus.OK).expect(JSON.stringify(data))
+            expect(mockEmailService.getEmails).toHaveBeenCalledWith(principal.organizationId)
         })
     })
 
@@ -110,6 +132,8 @@ describe('EmailController', () => {
                 .get(`/emails/${email}`)
                 .expect(HttpStatus.OK)
                 .expect(JSON.stringify(emailResponseDto))
+
+            expect(mockEmailService.getEmail).toHaveBeenCalledWith(principal.organizationId, email)
         })
 
         it('should return 404 if email not found', async () => {
@@ -121,6 +145,8 @@ describe('EmailController', () => {
                 .get(`/emails/${email}`)
                 .expect(HttpStatus.NOT_FOUND)
                 .expect(JSON.stringify(notFoundException.getResponse()))
+
+            expect(mockEmailService.getEmail).toHaveBeenCalledWith(principal.organizationId, email)
         })
     })
 
@@ -136,6 +162,12 @@ describe('EmailController', () => {
                 .send(updateEmailRequestDto)
                 .expect(HttpStatus.OK)
                 .expect(JSON.stringify(response))
+
+            expect(mockEmailService.updateEmail).toHaveBeenCalledWith(
+                principal.organizationId,
+                email,
+                { format: undefined, exists: updateEmailRequestDto.exists },
+            )
         })
 
         it('should return 404 if email not found during update', async () => {
@@ -148,6 +180,12 @@ describe('EmailController', () => {
                 .send(updateEmailRequestDto)
                 .expect(HttpStatus.NOT_FOUND)
                 .expect(JSON.stringify(notFoundException.getResponse()))
+
+            expect(mockEmailService.updateEmail).toHaveBeenCalledWith(
+                principal.organizationId,
+                email,
+                { format: undefined, exists: updateEmailRequestDto.exists },
+            )
         })
     })
 })

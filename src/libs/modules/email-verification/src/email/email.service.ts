@@ -21,27 +21,32 @@ export class EmailService implements IEmailService {
         @InjectMapper() private readonly mapper: Mapper,
     ) {}
 
-    async createEmail({ email, exists, format }: ICreateEmailRequestDto): Promise<IEmailResponseDto> {
+    async createEmail(
+        organizationId: string,
+        { email, exists, format }: ICreateEmailRequestDto,
+    ): Promise<IEmailResponseDto> {
+        email = EmailService.normalizeEmail(email)
         const [username, domain] = email.split('@')
 
-        if (await this.emailRepo.existsBy({ id: email })) {
+        if (await this.emailRepo.existsBy({ organizationId, id: email })) {
             throw new EmailAlreadyExistsException({ email })
         }
 
         const emailEntity = await this.emailRepo.save(
-            this.emailRepo.create({ id: email, exists, format, domain, username }),
+            this.emailRepo.create({ organizationId, id: email, exists, format, domain, username }),
         )
 
         return this.mapper.map(emailEntity, Email, EmailResponseDto)
     }
 
-    async getEmails(): Promise<IEmailResponseDto[]> {
-        const emails = await this.emailRepo.find()
+    async getEmails(organizationId: string): Promise<IEmailResponseDto[]> {
+        const emails = await this.emailRepo.find({ where: { organizationId } })
         return this.mapper.mapArray(emails, Email, EmailResponseDto)
     }
 
-    async getEmail(email: string): Promise<IEmailResponseDto> {
-        const emailEntity = await this.emailRepo.findOneBy({ id: email })
+    async getEmail(organizationId: string, email: string): Promise<IEmailResponseDto> {
+        email = EmailService.normalizeEmail(email)
+        const emailEntity = await this.emailRepo.findOneBy({ organizationId, id: email })
 
         if (emailEntity == null) {
             throw new EmailNotFoundException({ email })
@@ -50,20 +55,65 @@ export class EmailService implements IEmailService {
         return this.mapper.map(emailEntity, Email, EmailResponseDto)
     }
 
-    async updateEmail(email: string, { format, exists }: IUpdateEmailRequestDto): Promise<IEmailResponseDto> {
-        const [username, domain] = email.split('@')
-
-        let emailEntity = await this.emailRepo.findOneBy({ id: email })
+    async updateEmail(
+        organizationId: string,
+        email: string,
+        options: IUpdateEmailRequestDto,
+    ): Promise<IEmailResponseDto> {
+        email = EmailService.normalizeEmail(email)
+        const emailEntity = await this.emailRepo.findOneBy({ organizationId, id: email })
 
         if (emailEntity == null) {
-            emailEntity = this.emailRepo.create({ id: email, username, domain, format, exists: exists ?? null })
-        } else {
-            emailEntity.format = format
-            emailEntity.exists = exists ?? null
+            throw new EmailNotFoundException({ email })
         }
 
+        EmailService.applyUpdates(emailEntity, options)
         const saved = await this.emailRepo.save(emailEntity)
 
         return this.mapper.map(saved, Email, EmailResponseDto)
+    }
+
+    async upsertEmail(
+        organizationId: string,
+        email: string,
+        options: IUpdateEmailRequestDto,
+    ): Promise<IEmailResponseDto> {
+        email = EmailService.normalizeEmail(email)
+        const [username, domain] = email.split('@')
+
+        let emailEntity = await this.emailRepo.findOneBy({ organizationId, id: email })
+
+        if (emailEntity == null) {
+            emailEntity = this.emailRepo.create({
+                organizationId,
+                id: email,
+                username,
+                domain,
+                exists: null,
+            })
+        }
+
+        EmailService.applyUpdates(emailEntity, options)
+        const saved = await this.emailRepo.save(emailEntity)
+
+        return this.mapper.map(saved, Email, EmailResponseDto)
+    }
+
+    private static normalizeEmail(email: string): string {
+        return email.toLowerCase()
+    }
+
+    private static applyUpdates(email: Email, { format, exists, lastVerificationId }: IUpdateEmailRequestDto): void {
+        if (format !== undefined) {
+            email.format = format
+        }
+
+        if (exists !== undefined) {
+            email.exists = exists
+        }
+
+        if (lastVerificationId !== undefined) {
+            email.lastVerificationId = lastVerificationId
+        }
     }
 }
