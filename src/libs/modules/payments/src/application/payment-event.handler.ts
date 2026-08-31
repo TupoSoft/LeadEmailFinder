@@ -1,17 +1,15 @@
-import { Inject, Injectable, Logger } from '@nestjs/common'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { PaymentEvent } from '../domain/payment-event'
 import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
-import { PaymentEvent } from './payment-provider'
-import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore, PurchaseReferenceConflictError } from './payment-purchase.store'
+import { PaymentEventLogger } from './ports/payment-event-logger'
+import { PaymentPurchaseStore, PurchaseReferenceConflictError } from './ports/payment-purchase-store'
 
-@Injectable()
 export class PaymentEventHandler {
-    private readonly logger = new Logger(PaymentEventHandler.name)
-
     constructor(
-        @Inject(PAYMENT_PURCHASE_STORE) private readonly purchases: PaymentPurchaseStore,
+        private readonly purchases: PaymentPurchaseStore,
         private readonly credits: CreditsService,
         private readonly adjustmentHandler: PaymentAdjustmentHandler,
+        private readonly log: PaymentEventLogger,
     ) {}
 
     async handle(event: PaymentEvent): Promise<void> {
@@ -46,22 +44,13 @@ export class PaymentEventHandler {
     }
 
     private logUnknown(event: Exclude<PaymentEvent, { kind: 'ignored' }>): void {
-        this.logger.warn({
-            message: 'Ignoring payment event for an unknown purchase',
-            providerEventId: event.providerEventId,
-            providerReference: event.providerReference,
-        })
+        this.log.warnUnknownEvent(event.providerEventId, event.providerReference)
     }
 
     private logConflict(
         event: Exclude<PaymentEvent, { kind: 'ignored' }>,
         error: PurchaseReferenceConflictError,
     ): void {
-        this.logger.error({
-            message: 'Rejecting a payment event whose purchase is already bound to a different provider reference',
-            providerEventId: event.providerEventId,
-            providerReference: event.providerReference,
-            purchaseId: error.purchaseId,
-        })
+        this.log.errorConflict(event.providerEventId, event.providerReference, error.purchaseId)
     }
 }

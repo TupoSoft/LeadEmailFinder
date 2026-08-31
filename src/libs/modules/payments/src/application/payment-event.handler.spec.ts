@@ -1,7 +1,8 @@
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
 import { PaymentEventHandler } from './payment-event.handler'
-import { PaidPurchase, PaymentPurchaseStore, PurchaseReferenceConflictError } from './payment-purchase.store'
+import { PaymentEventLogger } from './ports/payment-event-logger'
+import { PaidPurchase, PaymentPurchaseStore, PurchaseReferenceConflictError } from './ports/payment-purchase-store'
 
 const paidEvent = {
     kind: 'purchase_paid' as const,
@@ -21,16 +22,27 @@ describe('PaymentEventHandler', () => {
     let purchases: jest.Mocked<PaymentPurchaseStore>
     let credits: jest.Mocked<Pick<CreditsService, 'credit'>>
     let adjustmentHandler: jest.Mocked<Pick<PaymentAdjustmentHandler, 'handle'>>
+    let log: jest.Mocked<PaymentEventLogger>
     let handler: PaymentEventHandler
 
     beforeEach(() => {
-        purchases = { recordPaid: jest.fn(), recordCreditsGranted: jest.fn(), recordFailed: jest.fn() }
+        purchases = {
+            create: jest.fn(),
+            bindProviderReference: jest.fn(),
+            markFailed: jest.fn(),
+            listForOrganization: jest.fn(),
+            recordPaid: jest.fn(),
+            recordCreditsGranted: jest.fn(),
+            recordFailed: jest.fn(),
+        }
         credits = { credit: jest.fn() }
         adjustmentHandler = { handle: jest.fn() }
+        log = { warnUnknownEvent: jest.fn(), errorConflict: jest.fn() }
         handler = new PaymentEventHandler(
             purchases,
             credits as unknown as CreditsService,
             adjustmentHandler as unknown as PaymentAdjustmentHandler,
+            log,
         )
     })
 
@@ -94,12 +106,13 @@ describe('PaymentEventHandler', () => {
         expect(purchases.recordCreditsGranted).toHaveBeenCalledTimes(2)
     })
 
-    it('acknowledges an unknown provider reference without changing credits', async () => {
+    it('acknowledges an unknown provider reference without changing credits, and logs it', async () => {
         purchases.recordPaid.mockResolvedValue(null)
 
         await handler.handle(paidEvent)
 
         expect(credits.credit).not.toHaveBeenCalled()
+        expect(log.warnUnknownEvent).toHaveBeenCalledWith(paidEvent.providerEventId, paidEvent.providerReference)
     })
 
     it('records a failed purchase without changing credits', async () => {
@@ -118,12 +131,25 @@ describe('PaymentEventHandler', () => {
         expect(credits.credit).not.toHaveBeenCalled()
     })
 
+    it('logs an unknown failed-purchase event', async () => {
+        purchases.recordFailed.mockResolvedValue(false)
+
+        await handler.handle({
+            kind: 'purchase_failed',
+            providerEventId: 'event-failed-1',
+            providerReference: paidEvent.providerReference,
+        })
+
+        expect(log.warnUnknownEvent).toHaveBeenCalledWith('event-failed-1', paidEvent.providerReference)
+    })
+
     it('does nothing for an ignored provider event', async () => {
         await handler.handle({ kind: 'ignored', providerEventId: 'event-ignored-1' })
 
         expect(purchases.recordPaid).not.toHaveBeenCalled()
         expect(purchases.recordFailed).not.toHaveBeenCalled()
         expect(adjustmentHandler.handle).not.toHaveBeenCalled()
+        expect(log.warnUnknownEvent).not.toHaveBeenCalled()
     })
 
     it('delegates adjustment events to the adjustment handler', async () => {
@@ -145,12 +171,34 @@ describe('PaymentEventHandler', () => {
         expect(credits.credit).not.toHaveBeenCalled()
     })
 
-    it('lets a purchase-reference conflict surface for provider retry without granting credits', async () => {
+    it('logs an unknown adjustment event', async () => {
+        const event = {
+            kind: 'purchase_adjustment_debit' as const,
+            providerEventId: 'event-adjustment-1',
+            providerReference: paidEvent.providerReference,
+            providerAdjustmentId: 'adjustment-1',
+            amountMinor: 250,
+            isFull: false,
+            currency: 'USD',
+        }
+        adjustmentHandler.handle.mockResolvedValue(false)
+
+        await handler.handle(event)
+
+        expect(log.warnUnknownEvent).toHaveBeenCalledWith('event-adjustment-1', paidEvent.providerReference)
+    })
+
+    it('lets a purchase-reference conflict surface for provider retry without granting credits, and logs it', async () => {
         const conflict = new PurchaseReferenceConflictError(purchase.id, 'established-reference')
         purchases.recordPaid.mockRejectedValue(conflict)
 
         await expect(handler.handle({ ...paidEvent, purchaseId: purchase.id })).rejects.toBe(conflict)
 
         expect(credits.credit).not.toHaveBeenCalled()
+        expect(log.errorConflict).toHaveBeenCalledWith(
+            paidEvent.providerEventId,
+            paidEvent.providerReference,
+            purchase.id,
+        )
     })
 })

@@ -16,16 +16,21 @@ import {
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
-import { PaymentProvider, PAYMENT_PROVIDER } from './payment-provider'
-import { CreditPurchaseAdjustment } from './credit-purchase-adjustment.entity'
-import { CreditPurchase } from './credit-purchase.entity'
-import { PaymentsModule } from './payments.module'
-import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
-import { PaymentEventHandler } from './payment-event.handler'
-import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
-import { TypeOrmPaymentAdjustmentStore } from './infrastructure/typeorm-payment-adjustment.store'
-import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
+import { CreditPackCatalog } from './application/credit-pack-catalog'
+import { CreditPurchaseService } from './application/credit-purchase.service'
+import { PaymentAdjustmentHandler } from './application/payment-adjustment.handler'
+import { PaymentEventHandler } from './application/payment-event.handler'
+import { PAYMENT_ADJUSTMENT_STORE } from './application/ports/payment-adjustment-store'
+import { PAYMENT_EVENT_LOGGER } from './application/ports/payment-event-logger'
+import { PAYMENT_PROVIDER, PaymentProvider } from './application/ports/payment-provider'
+import { PAYMENT_PURCHASE_STORE } from './application/ports/payment-purchase-store'
 import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-provider'
+import { TypeOrmPaymentAdjustmentStore } from './infrastructure/persistence/typeorm-payment-adjustment.store'
+import { TypeOrmPaymentPurchaseStore } from './infrastructure/persistence/typeorm-payment-purchase.store'
+import { CreditPurchaseAdjustment } from './infrastructure/persistence/typeorm/credit-purchase-adjustment.entity'
+import { CreditPurchase } from './infrastructure/persistence/typeorm/credit-purchase.entity'
+import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
+import { PaymentsModule } from './payments.module'
 
 const baseConfig = new Map<string, string>([
     [
@@ -42,10 +47,14 @@ const baseConfig = new Map<string, string>([
     ['PAYMENTS_CHECKOUT_URL', 'http://localhost:3000/payment-return'],
 ])
 
-// Identity's TypeOrmCreditLedgerStore (unexported, private to identity) injects a bare DataSource for its
-// pessimistic-locking transactions. Nest eagerly instantiates every provider in every imported module
-// regardless of overrides elsewhere, so this graph needs a DataSource somewhere even though nothing here
-// exercises real credit-ledger behavior. A @Global() stub reaches it without identity exporting the adapter.
+// CreditsModule (still imported for CreditsService) pulls in identity's TypeOrmCreditLedgerStore, which injects
+// a bare DataSource for its pessimistic-locking transactions. Nest eagerly instantiates every provider in every
+// imported module regardless of overrides elsewhere or export visibility, so this graph needs a DataSource
+// somewhere even though nothing here exercises real credit-ledger behavior. A @Global() stub reaches it without
+// identity exporting the adapter. module-architecture/08 stopped IdentityModule from exporting TypeOrmModule, but
+// its internal TypeOrmModule.forFeature(9 entities) registration still instantiates eagerly regardless of export
+// status — confirmed empirically: removing these nine overrides breaks this suite with the stub DataSource
+// missing entityMetadatas, so they stay.
 @Global()
 @Module({
     providers: [{ provide: DataSource, useValue: {} }],
@@ -111,6 +120,32 @@ describe('PaymentsModule', () => {
                 ),
             ),
         ).toBe(true)
+    })
+
+    it('provides every use case via an explicit factory injecting its identity/payment ports', () => {
+        const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, PaymentsModule) as Array<{
+            provide?: unknown
+            inject?: unknown[]
+        }>
+
+        expect(providers).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ provide: CreditPackCatalog, inject: [ConfigService] }),
+                expect.objectContaining({
+                    provide: CreditPurchaseService,
+                    inject: [PAYMENT_PURCHASE_STORE, CreditPackCatalog, PAYMENT_PROVIDER, ConfigService],
+                }),
+                expect.objectContaining({
+                    provide: PaymentAdjustmentHandler,
+                    inject: [PAYMENT_ADJUSTMENT_STORE, CreditsService],
+                }),
+                expect.objectContaining({
+                    provide: PaymentEventHandler,
+                    inject: [PAYMENT_PURCHASE_STORE, CreditsService, PaymentAdjustmentHandler, PAYMENT_EVENT_LOGGER],
+                }),
+                expect.objectContaining({ provide: PAYMENT_PROVIDER, inject: [ConfigService] }),
+            ]),
+        )
     })
 
     it('resolves the stub through the payment provider port', async () => {

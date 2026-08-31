@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common'
 import { DataSource, EntityManager } from 'typeorm'
-import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
+import { PurchaseRecord } from '../../domain/purchase-record'
+import { PurchaseStatus } from '../../domain/purchase-status'
 import {
+    CreatePurchaseInput,
     PaidPurchase,
     PaidPurchaseCorrelation,
     PaymentPurchaseStore,
@@ -9,7 +11,8 @@ import {
     PurchaseCorrelation,
     PurchaseProviderTotalConflictError,
     PurchaseReferenceConflictError,
-} from '../payment-purchase.store'
+} from '../../application/ports/payment-purchase-store'
+import { CreditPurchase, CreditPurchaseStatus } from './typeorm/credit-purchase.entity'
 
 interface ResolvedPurchase {
     purchase: CreditPurchase
@@ -19,6 +22,43 @@ interface ResolvedPurchase {
 @Injectable()
 export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
     constructor(private readonly dataSource: DataSource) {}
+
+    async create(input: CreatePurchaseInput): Promise<PurchaseRecord> {
+        const purchase = await this.dataSource.manager.save(
+            CreditPurchase,
+            this.dataSource.manager.create(CreditPurchase, {
+                organizationId: input.organizationId,
+                packId: input.packId,
+                credits: input.credits,
+                amountMinor: input.amountMinor,
+                currency: input.currency,
+                provider: input.provider,
+                status: CreditPurchaseStatus.PENDING,
+            }),
+        )
+        return toRecord(purchase)
+    }
+
+    async bindProviderReference(purchaseId: string, providerReference: string): Promise<PurchaseRecord> {
+        const purchase = await this.dataSource.manager.findOneByOrFail(CreditPurchase, { id: purchaseId })
+        purchase.providerReference = providerReference
+        const saved = await this.dataSource.manager.save(CreditPurchase, purchase)
+        return toRecord(saved)
+    }
+
+    async markFailed(purchaseId: string): Promise<void> {
+        const purchase = await this.dataSource.manager.findOneByOrFail(CreditPurchase, { id: purchaseId })
+        purchase.status = CreditPurchaseStatus.FAILED
+        await this.dataSource.manager.save(CreditPurchase, purchase)
+    }
+
+    async listForOrganization(organizationId: string): Promise<PurchaseRecord[]> {
+        const purchases = await this.dataSource.manager.find(CreditPurchase, {
+            where: { organizationId },
+            order: { createdAt: 'DESC' },
+        })
+        return purchases.map(toRecord)
+    }
 
     recordPaid(correlation: PaidPurchaseCorrelation): Promise<PaidPurchase | null> {
         this.assertPositiveInteger(correlation.providerTotalMinor, 'providerTotalMinor')
@@ -127,5 +167,23 @@ export class TypeOrmPaymentPurchaseStore implements PaymentPurchaseStore {
         if (!Number.isSafeInteger(value) || value <= 0) {
             throw new Error(`Paid purchase ${field} must be a positive safe integer`)
         }
+    }
+}
+
+function toRecord(purchase: CreditPurchase): PurchaseRecord {
+    return {
+        id: purchase.id,
+        organizationId: purchase.organizationId,
+        packId: purchase.packId,
+        credits: purchase.credits,
+        amountMinor: purchase.amountMinor,
+        currency: purchase.currency,
+        provider: purchase.provider,
+        providerReference: purchase.providerReference ?? null,
+        providerTotalMinor: purchase.providerTotalMinor ?? null,
+        status: purchase.status as PurchaseStatus,
+        creditsGrantedAt: purchase.creditsGrantedAt ?? null,
+        createdAt: purchase.createdAt,
+        updatedAt: purchase.updatedAt,
     }
 }

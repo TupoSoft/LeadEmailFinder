@@ -13,11 +13,11 @@ tests, the stub Bruno collection, and the Paddle sandbox workflow with unchanged
 
 ## Progress
 
-- [ ] (2026-08-29) Reconcile the final payment and adjustment contracts delivered by `payments/06` with the target layers.
-- [ ] (2026-08-29) Move payment models, policies, ports, and use cases into domain and application without framework dependencies.
-- [ ] (2026-08-29) Move controllers, DTOs, configuration, TypeORM stores, and stub/Paddle providers into API and infrastructure.
-- [ ] (2026-08-29) Recompose `PaymentsModule` and preserve checkout, webhook, grant, credit-reversal, and recovery behavior.
-- [ ] (2026-08-29) Shrink the architecture baseline and complete focused, PostgreSQL, Paddle, Bruno, and full validation.
+- [x] (2026-08-31) Reconcile the final payment and adjustment contracts delivered by `payments/06` with the target layers.
+- [x] (2026-08-31) Move payment models, policies, ports, and use cases into domain and application without framework dependencies.
+- [x] (2026-08-31) Move controllers, DTOs, configuration, TypeORM stores, and stub/Paddle providers into API and infrastructure.
+- [x] (2026-08-31) Recompose `PaymentsModule` and preserve checkout, webhook, grant, credit-reversal, and recovery behavior.
+- [x] (2026-08-31) Shrink the architecture baseline and complete focused, PostgreSQL, Bruno, and full validation (Paddle sandbox not run — no account in this session, see Outcomes).
 
 ## Plan dependencies
 
@@ -34,10 +34,39 @@ tests, the stub Bruno collection, and the Paddle sandbox workflow with unchanged
 - `CreditPurchaseResponseDto` imports `CreditPurchaseStatus` from the TypeORM entity, so the HTTP schema currently
   treats a persistence enum as a transport contract.
 - `PaymentsModule` imports `IdentityModule`, and its module test overrides every exported identity repository even
-  though payments owns only `CreditPurchase`. Plan 08 removes that compatibility surface before this refactor.
-- Plan `payments/06` delivers adjustment entities, store ports, and credit-operation outcomes based on the
-  insufficient-balance policy settled by that plan. This plan must layer those contracts rather than replace or
-  reinterpret them.
+  though payments owns only `CreditPurchase`. Plan `payments/06` delivers adjustment entities, store ports, and
+  credit-operation outcomes based on the insufficient-balance policy settled by that plan; this plan layers those
+  contracts rather than replacing or reinterpreting them.
+- Reading the actual code (not the plan's own rough description) found payments already much closer to its target
+  shape than `organization-onboarding` or `credits` were when their plans started. The purchase, adjustment, and
+  provider ports were already plain interfaces with zero framework imports. `payment-adjustment-accounting.ts`
+  (the proportional-debit/shortfall math) was already a pure function. `PaddlePaymentProvider` was already
+  framework-free, and the two TypeORM stores already used `dataSource.transaction()` sugar behind clean adapter
+  classes. No provider call happens mid-transaction here — Paddle/stub calls always run fully before or after a
+  `dataSource.transaction()`, never inside one — so none of the session-pattern complexity from plan 06 applied.
+  This plan was materially more mechanical.
+- `CreditPurchaseService` used `@InjectRepository(CreditPurchase)` directly rather than the existing purchase
+  store port, which only had the event-handling-side methods. Extended that one port with
+  `create`/`bindProviderReference`/`markFailed`/`listForOrganization` rather than inventing a second store for
+  the same resource.
+- `PaymentEventHandler` used the `Logger` class from `@nestjs/common` directly for two operational log lines (unknown event,
+  reference conflict). No test asserted on their content, but dropping them would still be a real behavior
+  regression. `@nestjs/` is a forbidden technical-dependency prefix for application/domain, confirmed in the
+  checker's own `TECHNICAL_PACKAGE_PREFIXES` list. Added one small `PaymentEventLogger` port instead, bound to a
+  thin infrastructure adapter wrapping the real `Logger` — and added the log-assertion test coverage the
+  original spec never had.
+- Confirmed empirically, not assumed: `payments.module.ts` importing both `CreditsModule` and `IdentityModule`
+  directly was dead weight — nothing in payments injects an identity port, and `CreditsModule` already imports
+  `IdentityModule` internally and exports `CreditsService`. Removed the direct `IdentityModule` import.
+- **Contrary to my own initial hypothesis**: I expected the nine `getRepositoryToken(<identity entity>)`
+  overrides in `payments.module.spec.ts` to be dead code once `IdentityModule` stopped exporting `TypeOrmModule`
+  in `module-architecture/08`. Removing them broke the suite (`Cannot read properties of undefined, reading
+  'find'`, inside the TypeORM package's own repository-provider factory). The real mechanism: Nest eagerly
+  instantiates every provider in every imported module regardless of export visibility, and `CreditsModule`
+  still imports `IdentityModule`, whose own internal (now not exported) `TypeOrmModule.forFeature([9 entities])`
+  registration still eagerly instantiates those nine repository-token factories against the test's stub
+  `DataSource`. The overrides are still required and were restored, with the reasoning recorded inline in the
+  spec.
 
 ## Decision Log
 
@@ -75,7 +104,36 @@ tests, the stub Bruno collection, and the Paddle sandbox workflow with unchanged
 
 ## Outcomes & Retrospective
 
-Not started.
+`payments` now has `api/http/`, `application/` (with `application/ports/`), `domain/`, and
+`infrastructure/persistence/typeorm/` layers plus root composition. All application services
+(`CreditPurchaseService`, `CreditPackCatalog`, `PaymentEventHandler`, `PaymentAdjustmentHandler`) are framework-free
+classes wired through explicit factories in `payments.module.ts`; `PaymentPurchaseStore` gained four checkout-side
+methods; a new `PaymentEventLogger` port replaced a direct `Logger` dependency; `CreditPurchaseResponseDto` now
+types its status field from a domain `PurchaseStatus` union instead of the TypeORM entity's enum.
+
+Full validation: the combined payments+credits suite (206 passed, 29 skipped, zero failures);
+`architecture:check`/`baseline` (baseline shrank 138→110, pure removal confirmed via diff — 28 stale entries for
+the moved files, zero new violations); `typecheck`, `lint`, `test:ci` (1198 passed, 49 skipped, 1 marked pending),
+and `build` all pass clean.
+
+Real-Postgres evidence against a `lef-*` dev stack that was running (owned by this checkout):
+`payment-event.handler.integration.spec.ts` — all 21 scenarios passed (concurrent grants, replay, shortfall,
+inverse ordering, injected-failure recovery), and `credits.service.integration.spec.ts` — all 8 scenarios passed.
+Bruno: `bruno/credit-purchases` — 22/22 requests, 22/22 tests passed against the live rebuilt stack, including the
+tampered-signature rejection and both adjustment/replay/inverse paths. The dev container hot-reloads from the
+mounted checkout, so this genuinely exercised the new layered code end to end, not the pre-refactor image.
+
+**Paddle sandbox**: not run. This session has no Paddle sandbox account/credentials, so the opt-in live checkout
+plus refund plus replay workflow this plan's Validation section calls for did not execute. The Paddle contract
+test (`paddle-payment-provider.spec.ts` via the shared `payment-provider.contract.ts`) and the stub-based Bruno
+collection above are the executed evidence for the provider contract and HTTP boundary. The Outcomes section of
+`payments/06` already records a real Paddle sandbox run against the pre-refactor code, and this plan changed no Paddle
+request/response mapping logic — only its file location and constructor wiring.
+
+No material SOLID trade-offs. The new `PaymentEventLogger`/checkout-side `PaymentPurchaseStore` methods are each
+single-purpose; no generic manager or catch-all logging interface was introduced. This plan's code diff was
+smaller than its own text anticipated, since the ports/pure-function seams payments already had going in did most
+of the architectural work already.
 
 ## Context and Orientation
 
@@ -244,4 +302,6 @@ card data.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including real-Postgres and Bruno evidence against a live rebuilt dev stack.
+Paddle sandbox not run (no account in this session); the Paddle contract test and stub-based Bruno collection
+stand as executed evidence for the provider contract and HTTP boundary.

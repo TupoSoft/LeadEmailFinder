@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer'
 import { IsNotEmpty, IsString } from 'class-validator'
-import { CreditPurchaseStatus } from './credit-purchase.entity'
+import { PurchaseStatus } from '../../domain/purchase-status'
 
 export class CreateCreditPurchaseDto {
     @IsString()
@@ -13,7 +13,7 @@ export class CreateCreditPurchaseResponseDto {
     id: string
 
     @Expose()
-    status: CreditPurchaseStatus
+    status: PurchaseStatus
 
     @Expose()
     redirectUrl: string
@@ -42,7 +42,7 @@ export class CreditPurchaseResponseDto {
     providerReference?: string | null
 
     @Expose()
-    status: CreditPurchaseStatus
+    status: PurchaseStatus
 
     @Expose()
     createdAt: Date

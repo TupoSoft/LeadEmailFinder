@@ -1,9 +1,7 @@
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { PaymentAdjustmentDirection } from '../domain/payment-adjustment-direction'
 import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
-import {
-    PaymentAdjustmentDirection,
-    PaymentAdjustmentStore,
-} from './payment-adjustment.store'
+import { PaymentAdjustmentStore } from './ports/payment-adjustment-store'
 
 const debitEvent = {
     kind: 'purchase_adjustment_debit' as const,

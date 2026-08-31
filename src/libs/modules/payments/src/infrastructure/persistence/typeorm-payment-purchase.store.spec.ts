@@ -1,11 +1,11 @@
 import { DataSource, EntityManager } from 'typeorm'
-import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
 import {
     PaidPurchaseCorrelation,
     PurchaseCurrencyMismatchError,
     PurchaseProviderTotalConflictError,
     PurchaseReferenceConflictError,
-} from '../payment-purchase.store'
+} from '../../application/ports/payment-purchase-store'
+import { CreditPurchase, CreditPurchaseStatus } from './typeorm/credit-purchase.entity'
 import { TypeOrmPaymentPurchaseStore } from './typeorm-payment-purchase.store'
 
 function purchaseWith(status: CreditPurchaseStatus, providerReference: string | null = 'provider-purchase-1'): CreditPurchase {
@@ -30,15 +30,112 @@ function paidInput(overrides: Partial<PaidPurchaseCorrelation> = {}): PaidPurcha
 }
 
 describe('TypeOrmPaymentPurchaseStore', () => {
-    let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save'>>
+    let manager: jest.Mocked<Pick<EntityManager, 'findOne' | 'save' | 'create' | 'find' | 'findOneByOrFail'>>
     let store: TypeOrmPaymentPurchaseStore
 
     beforeEach(() => {
-        manager = { findOne: jest.fn(), save: jest.fn() }
+        manager = {
+            findOne: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+            find: jest.fn(),
+            findOneByOrFail: jest.fn(),
+        }
+        manager.create.mockImplementation((_entity, data) => data as never)
         const transaction = jest.fn(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
             callback(manager as unknown as EntityManager),
         )
-        store = new TypeOrmPaymentPurchaseStore({ transaction } as unknown as DataSource)
+        store = new TypeOrmPaymentPurchaseStore({
+            transaction,
+            manager: manager as unknown as EntityManager,
+        } as unknown as DataSource)
+    })
+
+    describe('create', () => {
+        it('creates a pending purchase and maps it to a record', async () => {
+            manager.save.mockResolvedValue({
+                id: 'purchase-1',
+                organizationId: 'org-1',
+                packId: 'starter',
+                credits: 100,
+                amountMinor: 500,
+                currency: 'USD',
+                provider: 'stub',
+                providerReference: null,
+                providerTotalMinor: null,
+                status: CreditPurchaseStatus.PENDING,
+                creditsGrantedAt: null,
+                createdAt: new Date('2026-01-01T00:00:00Z'),
+                updatedAt: new Date('2026-01-01T00:00:00Z'),
+            } as CreditPurchase)
+
+            const result = await store.create({
+                organizationId: 'org-1',
+                packId: 'starter',
+                credits: 100,
+                amountMinor: 500,
+                currency: 'USD',
+                provider: 'stub',
+            })
+
+            expect(manager.create).toHaveBeenCalledWith(CreditPurchase, {
+                organizationId: 'org-1',
+                packId: 'starter',
+                credits: 100,
+                amountMinor: 500,
+                currency: 'USD',
+                provider: 'stub',
+                status: CreditPurchaseStatus.PENDING,
+            })
+            expect(result).toEqual(
+                expect.objectContaining({ id: 'purchase-1', status: 'pending', providerReference: null }),
+            )
+        })
+    })
+
+    describe('bindProviderReference', () => {
+        it('saves the provider reference on the purchase', async () => {
+            const purchase = purchaseWith(CreditPurchaseStatus.PENDING, null)
+            manager.findOneByOrFail.mockResolvedValue(purchase)
+            manager.save.mockImplementation((_entity, data) => Promise.resolve(data as CreditPurchase))
+
+            const result = await store.bindProviderReference(purchase.id, 'stub_purchase-1')
+
+            expect(manager.save).toHaveBeenCalledWith(
+                CreditPurchase,
+                expect.objectContaining({ providerReference: 'stub_purchase-1' }),
+            )
+            expect(result.providerReference).toBe('stub_purchase-1')
+        })
+    })
+
+    describe('markFailed', () => {
+        it('marks the purchase failed', async () => {
+            const purchase = purchaseWith(CreditPurchaseStatus.PENDING)
+            manager.findOneByOrFail.mockResolvedValue(purchase)
+
+            await store.markFailed(purchase.id)
+
+            expect(manager.save).toHaveBeenCalledWith(
+                CreditPurchase,
+                expect.objectContaining({ status: CreditPurchaseStatus.FAILED }),
+            )
+        })
+    })
+
+    describe('listForOrganization', () => {
+        it('lists purchases newest first, mapped to records', async () => {
+            const purchase = purchaseWith(CreditPurchaseStatus.PAID)
+            manager.find.mockResolvedValue([purchase])
+
+            const result = await store.listForOrganization(purchase.organizationId)
+
+            expect(manager.find).toHaveBeenCalledWith(CreditPurchase, {
+                where: { organizationId: purchase.organizationId },
+                order: { createdAt: 'DESC' },
+            })
+            expect(result).toEqual([expect.objectContaining({ id: purchase.id })])
+        })
     })
 
     it('locks and marks a purchase paid', async () => {

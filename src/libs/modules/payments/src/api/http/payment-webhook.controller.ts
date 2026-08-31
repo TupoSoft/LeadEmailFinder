@@ -13,8 +13,9 @@ import {
 import { Public } from '@tuposoft/lead-email-finder/modules/auth'
 import { Expose } from 'class-transformer'
 import type { Request } from 'express'
-import { PaymentEventHandler } from './payment-event.handler'
-import { InvalidPaymentSignatureError, PAYMENT_PROVIDER, PaymentProvider } from './payment-provider'
+import { PaymentEventHandler } from '../../application/payment-event.handler'
+import { PAYMENT_PROVIDER, PaymentProvider } from '../../application/ports/payment-provider'
+import { InvalidPaymentSignatureError } from '../../domain/payment-event'
 
 class PaymentWebhookAcknowledgementDto {
     @Expose()

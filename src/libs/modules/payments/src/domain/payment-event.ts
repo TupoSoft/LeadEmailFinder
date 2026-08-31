@@ -1,6 +1,4 @@
-import type { CreditPack } from './credit-pack-catalog'
-
-export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER')
+import type { CreditPack } from './credit-pack'
 
 export interface CheckoutInput {
     purchaseId: string
@@ -44,11 +42,6 @@ export type PaymentEvent =
           kind: 'ignored'
           providerEventId: string
       }
-
-export interface PaymentProvider {
-    createCheckout(input: CheckoutInput): Promise<CheckoutResult>
-    parseEvent(rawBody: Buffer, signature: string): Promise<PaymentEvent>
-}
 
 export class InvalidPaymentSignatureError extends Error {
     constructor() {

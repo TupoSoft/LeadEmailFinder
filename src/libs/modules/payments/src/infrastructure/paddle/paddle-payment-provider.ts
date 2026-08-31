@@ -1,11 +1,6 @@
 import { EventName } from '@paddle/paddle-node-sdk'
-import {
-    CheckoutInput,
-    CheckoutResult,
-    InvalidPaymentSignatureError,
-    PaymentEvent,
-    PaymentProvider,
-} from '../../payment-provider'
+import { CheckoutInput, CheckoutResult, InvalidPaymentSignatureError, PaymentEvent } from '../../domain/payment-event'
+import { PaymentProvider } from '../../application/ports/payment-provider'
 import { PaddleClient } from './paddle-client'
 
 export class PaddleCheckoutUrlMissingError extends Error {

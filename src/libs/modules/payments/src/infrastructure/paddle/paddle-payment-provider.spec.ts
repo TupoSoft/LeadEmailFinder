@@ -1,8 +1,8 @@
 import { createHmac } from 'node:crypto'
 import { Environment, Paddle } from '@paddle/paddle-node-sdk'
-import { CreditPack } from '../../credit-pack-catalog'
-import { PaymentEvent } from '../../payment-provider'
-import { paymentProviderContract } from '../../payment-provider.contract'
+import { CreditPack } from '../../domain/credit-pack'
+import { PaymentEvent } from '../../domain/payment-event'
+import { paymentProviderContract } from '../payment-provider.contract'
 import { PaddleClient } from './paddle-client'
 import { PaddleCheckoutUrlMissingError, PaddlePaymentProvider } from './paddle-payment-provider'
 

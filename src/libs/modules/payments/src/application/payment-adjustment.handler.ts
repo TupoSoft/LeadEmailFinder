@@ -1,21 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
-import {
-    PAYMENT_ADJUSTMENT_STORE,
-    PaymentAdjustmentDirection,
-    PaymentAdjustmentStore,
-} from './payment-adjustment.store'
-import { PaymentEvent } from './payment-provider'
+import { PaymentAdjustmentDirection } from '../domain/payment-adjustment-direction'
+import { PaymentEvent } from '../domain/payment-event'
+import { PaymentAdjustmentStore } from './ports/payment-adjustment-store'
 
-type AdjustmentEvent = Extract<
-    PaymentEvent,
-    { kind: 'purchase_adjustment_debit' | 'purchase_adjustment_restore' }
->
+type AdjustmentEvent = Extract<PaymentEvent, { kind: 'purchase_adjustment_debit' | 'purchase_adjustment_restore' }>
 
-@Injectable()
 export class PaymentAdjustmentHandler {
     constructor(
-        @Inject(PAYMENT_ADJUSTMENT_STORE) private readonly adjustments: PaymentAdjustmentStore,
+        private readonly adjustments: PaymentAdjustmentStore,
         private readonly credits: CreditsService,
     ) {}
 
@@ -38,16 +30,8 @@ export class PaymentAdjustmentHandler {
 
         const appliedCredits =
             claim.direction === PaymentAdjustmentDirection.DEBIT
-                ? await this.credits.debitUpTo(
-                      claim.organizationId,
-                      claim.operationCredits,
-                      claim.ledgerReference,
-                  )
-                : await this.credits.creditOnce(
-                      claim.organizationId,
-                      claim.operationCredits,
-                      claim.ledgerReference,
-                  )
+                ? await this.credits.debitUpTo(claim.organizationId, claim.operationCredits, claim.ledgerReference)
+                : await this.credits.creditOnce(claim.organizationId, claim.operationCredits, claim.ledgerReference)
         await this.adjustments.complete(claim.providerAdjustmentId, appliedCredits)
         return true
     }

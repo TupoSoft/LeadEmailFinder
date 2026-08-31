@@ -10,13 +10,13 @@ import {
 } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditPackNotFoundError } from './credit-pack-catalog'
+import { CreditPurchaseService, PaymentCheckoutError } from '../../application/credit-purchase.service'
+import { CreditPackNotFoundError } from '../../domain/credit-pack'
 import {
     CreateCreditPurchaseDto,
     CreateCreditPurchaseResponseDto,
     CreditPurchaseResponseDto,
 } from './credit-purchase.dto'
-import { CreditPurchaseService, PaymentCheckoutError } from './credit-purchase.service'
 
 @UseGuards(PermissionsGuard)
 @Controller('v1/credit-purchases')

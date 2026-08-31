@@ -23,8 +23,26 @@ only credits previously removed when Paddle sends an approved inverse adjustment
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports `PaymentsProviderName`, `PaddleEnvironmentName`, the `PaymentConfiguration`
-interface, and `PaymentsModule`. The controllers, services, entity, provider ports, and adapters (stub and
+interface, and `PaymentsModule`. The controllers, services, entities, provider ports, and adapters (stub and
 Paddle) are internal.
+
+## Architecture
+
+Layered per `module-architecture/09`. `api/http/` holds the controllers and DTOs — the only layer that may import
+Nest/`class-validator`/`class-transformer`/Express. `application/` holds `CreditPurchaseService`,
+`CreditPackCatalog`, `PaymentEventHandler`, `PaymentAdjustmentHandler`, and their ports under
+`application/ports/`; all are framework-free, constructed through explicit factories in `payments.module.ts`.
+`domain/` holds purchase/adjustment status and direction vocabulary, the `PaymentEvent` union, the pure
+proportional-debit/shortfall calculation in `payment-adjustment-accounting.ts`, and `payment-configuration.ts`.
+`infrastructure/` holds the TypeORM entities under `persistence/typeorm/`, their store adapters, the stub and
+Paddle providers, and a small `PaymentEventLogger` adapter wrapping the real `Logger` so `PaymentEventHandler`
+never imports `@nestjs/common`.
+
+`CreditPurchaseService` and the two event handlers depend only on `PaymentPurchaseStore`, `PaymentAdjustmentStore`,
+`PaymentProvider`, and `PaymentEventLogger` — never a TypeORM repository or `ConfigService` directly. Unlike the
+session-shaped identity ports used by `organization-onboarding`, no provider call here ever happens
+mid-transaction: Paddle/stub calls (`createCheckout`, `parseEvent`) always run fully before or after a
+`dataSource.transaction()`, so the stores use the plain `dataSource.transaction()` sugar throughout.
 
 ## Dependencies
 
@@ -52,15 +70,17 @@ Paddle) are internal.
 
 ## Persistence
 
-Owns two entities:
+Owns two entities under `infrastructure/persistence/typeorm/`:
 
 - `CreditPurchase` → `credit_purchases`, indexed on `organizationId`. Its nullable internal `providerTotalMinor` is
   filled by a verified paid event with the settled gross amount used as the adjustment denominator, while
   `creditsGrantedAt` fences adjustment handling from the gap between recording a paid purchase and committing its
-  credit grant.
+  credit grant. Reachable through `PaymentPurchaseStore`, whose `PurchaseRecord` results use a plain domain
+  `PurchaseStatus` string union rather than the entity's TypeORM-decorated status enum.
 - `CreditPurchaseAdjustment` → `credit_purchase_adjustments`, keyed by the provider adjustment ID and indexed on the
   purchase ID. It stores the provider's gross amount, whether the provider marked the adjustment full, requested
-  movement, applied debit or restore, original and outstanding shortfall, and processing state.
+  movement, applied debit or restore, original and outstanding shortfall, and processing state. Reachable through
+  `PaymentAdjustmentStore`.
 
 Adjustment claims lock the purchase row before cumulative proportional gross accounting. This serializes distinct
 partial events, rounds debit targets in the customer's favor, normalizes a full adjustment to the provider total,
@@ -83,12 +103,16 @@ The reusable Paddle sandbox checkout, tunnel, and notification-replay workflow i
 
 ## Validation
 
-Focused tests live in `src/`: the purchase controller, service, entity, event-handler, webhook-controller, and module
-specs; `credit-purchase-adjustment.entity.spec.ts`; `payment-adjustment-accounting.spec.ts`;
-`payment-adjustment.handler.spec.ts`; and the provider and TypeORM adapter specs under `infrastructure/`. The Paddle
-adapter matrix covers every supported action, status, and adjustment webhook type. The gated
-`payment-event.handler.integration.spec.ts` exercises locking, replay, shortfall, inverse ordering, and injected
-recovery boundaries against real PostgreSQL.
+Focused tests live in `src/`: `api/http/credit-purchase.controller.spec.ts`,
+`api/http/payment-webhook.controller.spec.ts`, `application/credit-purchase.service.spec.ts`,
+`application/credit-pack-catalog.spec.ts`, `application/payment-event.handler.spec.ts`,
+`application/payment-adjustment.handler.spec.ts`, `domain/payment-adjustment-accounting.spec.ts`,
+`infrastructure/persistence/typeorm/credit-purchase.entity.spec.ts` and
+`credit-purchase-adjustment.entity.spec.ts`, the provider specs under `infrastructure/` (the Paddle adapter matrix
+covers every supported action, status, and adjustment webhook type), the TypeORM store specs under
+`infrastructure/persistence/`, and `payments.module.spec.ts` (factory-provider wiring). The gated
+`application/payment-event.handler.integration.spec.ts` exercises locking, replay, shortfall, inverse ordering,
+and injected recovery boundaries against real PostgreSQL.
 
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) exercises the checkout flow, purchase
 listing, signed webhook crediting, debit adjustment, replay, inverse restoration, and inverse replay end to end
