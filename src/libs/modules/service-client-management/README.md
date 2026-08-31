@@ -14,7 +14,7 @@ kept consistent through compensation on partial failure.
 ## Non-Responsibilities
 
 - No `ServiceCredential` persistence of its own (owned by [`identity`](../identity/README.md)); this module only
-  operates on that entity.
+  requests purpose-specific reads and atomic credential/audit writes through identity's public ports.
 - No request-time M2M authentication (owned by [`auth`](../auth/README.md)); this module only manages the
   credentials auth later authenticates.
 
@@ -23,10 +23,24 @@ kept consistent through compensation on partial failure.
 [`src/index.ts`](src/index.ts) exports only `ServiceClientManagementModule`. Every service, the Keycloak admin
 client, and every DTO are internal.
 
+## Architecture
+
+Layered per `module-architecture/07`. `api/` holds the controller, DTOs, HTTP integration test, and mapping from
+typed service-client errors to the unchanged Nest HTTP exceptions. `application/` holds the five life-cycle use
+cases and the private `KeycloakServiceClientAdmin` port. `domain/` holds the framework-free service-client error
+vocabulary. `infrastructure/config/` adapts Nest configuration to the plain application contract, while
+`infrastructure/keycloak/` holds the `KeycloakServiceClientAdminClient` adapter together with live-Keycloak coverage.
+
+Application and domain import neither Nest nor TypeORM. `service-client-management.module.ts` constructs each use
+case through an explicit factory, injecting identity's directory/writer ports, the private Keycloak port, the
+framework-free role-permission policy, and the issuer as plain configuration. The controller alone translates
+application/domain failures to HTTP behavior.
+
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `ServiceCredential`, `AuditLogEntry`, and the `AuthPrincipal`/
-  `AuthPermission` types.
+- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthPermission`, `ServiceCredentialDetailRecord`, and the
+  `ServiceCredentialDirectory`/`ServiceCredentialWriter` persistence ports with their injection tokens. This module
+  imports no identity TypeORM entity, repository, or `DataSource`.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`,
   `RequirePermissions`.
 - `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
@@ -53,8 +67,12 @@ can never call these endpoints, regardless of its permissions.
 
 ## Persistence
 
-None owned. This module operates entirely on the `ServiceCredential` and `AuditLogEntry` tables owned by
-`identity`.
+None owned. This module operates entirely through `ServiceCredentialDirectory` and `ServiceCredentialWriter`,
+whose TypeORM adapters are owned by `identity`. The directory performs organization-scoped lookups and oldest-first
+listing, including disabled credentials. The writer keeps each create, rotate, disable, or delete mutation atomic
+with its corresponding audit entry in the `ServiceCredential` and `AuditLogEntry` tables. Its conditional,
+organization-scoped mutation outcomes prevent a stale pre-provider snapshot from re-enabling or recreating a
+credential that was concurrently disabled or deleted.
 
 ## Configuration
 
@@ -65,13 +83,18 @@ None owned. This module operates entirely on the `ServiceCredential` and `AuditL
 
 ## Validation
 
-Focused tests live in `src/`: `service-client-creation.service.spec.ts`,
-`service-client-listing.service.spec.ts`, `service-client-rotation.service.spec.ts`,
-`service-client-disablement.service.spec.ts`, `service-client-deletion.service.spec.ts`,
-`service-clients.controller.spec.ts`, `service-client-management-http.integration.spec.ts`, and the
-live-Keycloak-gated `service-client-management.live-keycloak.integration.spec.ts`.
+Focused tests live in `src/`: `application/service-client-creation.service.spec.ts`,
+`application/service-client-listing.service.spec.ts`, `application/service-client-rotation.service.spec.ts`,
+`application/service-client-disablement.service.spec.ts`, `application/service-client-deletion.service.spec.ts`,
+`api/service-clients.controller.spec.ts`, `api/service-client-management-http.integration.spec.ts`,
+`service-client-management.module.spec.ts` (factory-provider wiring),
+`infrastructure/config/service-client-management-configuration.spec.ts`,
+`infrastructure/keycloak/keycloak-service-client-admin-client.service.spec.ts`, and the live-Keycloak-gated
+`infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts`. Identity's adapter behavior
+is covered by `infrastructure/persistence/typeorm-service-credential-directory.spec.ts` and
+`infrastructure/persistence/typeorm-service-credential-writer.spec.ts` in the identity module.
 
 [`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) proves only
 rejection paths — missing credential, a cross-organization actor, and unsupported/duplicate permissions —
 because Bruno cannot mint a `human_session`. The full create/list/rotate/disable/delete life cycle is instead
-covered by `service-client-management.live-keycloak.integration.spec.ts` above.
+covered by `infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts` above.

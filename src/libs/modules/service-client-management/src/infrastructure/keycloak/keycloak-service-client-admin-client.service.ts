@@ -4,7 +4,7 @@ import {
     CreateServiceClientInput,
     KeycloakServiceClientAdmin,
     ProvisionedServiceClient,
-} from './keycloak-service-client-admin'
+} from '../../application/ports/keycloak-service-client-admin'
 
 // Matches scripts/keycloak/provisioning.ts's AUDIENCE_SCOPE: the client scope is provisioned once,
 // realm-wide, by that script. This adapter only looks it up by name and never recreates it.
