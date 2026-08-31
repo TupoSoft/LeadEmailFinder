@@ -1,200 +1,219 @@
-import { Test } from '@nestjs/testing'
-import { EmailService } from './email.service'
-import { Email } from './email.entity'
-import { getRepositoryToken } from '@nestjs/typeorm'
 import { Mapper } from '@automapper/core'
-import { getMapperToken } from '@automapper/nestjs'
-import { EmailPatternEnum, ICreateEmailRequestDto, IUpdateEmailRequestDto } from '@tuposoft/lead-email-finder/common'
-import { when } from 'jest-when'
+import { EmailPatternEnum } from '@tuposoft/lead-email-finder/common'
 import { Repository } from 'typeorm'
-import { EmailResponseDto } from './email-response.dto'
 import { EmailAlreadyExistsException } from './email-already-exists.exception'
 import { EmailNotFoundException } from './email-not-found.exception'
+import { EmailResponseDto } from './email-response.dto'
+import { Email } from './email.entity'
+import { EmailService } from './email.service'
 
-const now = Date.now()
-const date = new Date(now)
-jest.useFakeTimers({ now })
+const organizationId = '10000000-0000-4000-8000-000000000001'
+const otherOrganizationId = '10000000-0000-4000-8000-000000000002'
+const email = 'user@test.com'
+const date = new Date('2026-08-31T00:00:00.000Z')
 
-const mockedEmailRepo: jest.Mocked<
-    Pick<Repository<Email>, 'find' | 'existsBy' | 'save' | 'create' | 'findOneBy'>
-> = {
-    find: jest.fn(),
-    existsBy: jest.fn(),
-    save: jest.fn(),
-    create: jest.fn(),
-    findOneBy: jest.fn(),
+function emailEntity(overrides: Partial<Email> = {}): Email {
+    return {
+        organizationId,
+        id: email,
+        username: 'user',
+        domain: 'test.com',
+        exists: true,
+        format: EmailPatternEnum.FDotLast,
+        createdAt: date,
+        updatedAt: date,
+        ...overrides,
+    }
 }
 
-const mockedMapper: jest.Mocked<Pick<Mapper, 'map' | 'mapArray'>> = {
-    map: jest.fn(),
-    mapArray: jest.fn(),
+function emailResponse(overrides: Partial<EmailResponseDto> = {}): EmailResponseDto {
+    return {
+        email,
+        username: 'user',
+        domain: 'test.com',
+        exists: true,
+        format: EmailPatternEnum.FDotLast,
+        createdAt: date,
+        updatedAt: date,
+        ...overrides,
+    }
 }
 
-const username = 'user'
-const domain = 'test.com'
-const email = `${username}@${domain}`
-
-const emailEntity: Email = {
-    id: email,
-    exists: true,
-    format: EmailPatternEnum.FDotLast,
-    domain,
-    username,
-    createdAt: date,
-    updatedAt: date,
-    lastVerificationId: undefined,
-    lastVerifiedAt: undefined,
-}
-
-const emailResponseDto: EmailResponseDto = {
-    email,
-    exists: true,
-    format: EmailPatternEnum.FDotLast,
-    domain,
-    username,
-    createdAt: date,
-    updatedAt: date,
-}
-
-describe('EmailService tests', () => {
+describe('EmailService', () => {
+    let emailRepo: jest.Mocked<Pick<Repository<Email>, 'find' | 'existsBy' | 'save' | 'create' | 'findOneBy'>>
+    let mapper: jest.Mocked<Pick<Mapper, 'map' | 'mapArray'>>
     let service: EmailService
-    let emailRepo: jest.Mocked<Repository<Email>>
-    let mapper: jest.Mocked<Mapper>
 
-    beforeAll(async () => {
-        const moduleRef = await Test.createTestingModule({
-            providers: [
-                {
-                    provide: getRepositoryToken(Email),
-                    useValue: mockedEmailRepo,
-                },
-                { provide: getMapperToken(), useValue: mockedMapper },
-                EmailService,
-            ],
-        }).compile()
-
-        service = moduleRef.get(EmailService)
-        emailRepo = moduleRef.get(getRepositoryToken(Email))
-        mapper = moduleRef.get(getMapperToken())
+    beforeEach(() => {
+        emailRepo = {
+            find: jest.fn(),
+            existsBy: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+            findOneBy: jest.fn(),
+        }
+        mapper = { map: jest.fn(), mapArray: jest.fn() }
+        service = new EmailService(emailRepo as unknown as Repository<Email>, mapper as unknown as Mapper)
     })
 
-    afterEach(() => jest.resetAllMocks())
+    it('creates a normalized address only within the requested organization', async () => {
+        const entity = emailEntity()
+        const response = emailResponse()
+        emailRepo.existsBy.mockResolvedValue(false)
+        emailRepo.create.mockReturnValue(entity)
+        emailRepo.save.mockResolvedValue(entity)
+        mapper.map.mockReturnValue(response as never)
 
-    describe('createEmail', () => {
-        it('should create and return a mapped EmailResponseDto', async () => {
-            const createEmailOptions: ICreateEmailRequestDto = {
-                email,
+        await expect(
+            service.createEmail(organizationId, {
+                email: 'User@Test.com',
                 exists: true,
                 format: EmailPatternEnum.FDotLast,
-            }
+            }),
+        ).resolves.toBe(response)
 
-            emailRepo.existsBy.mockResolvedValue(false)
-            emailRepo.create.mockReturnValue(emailEntity)
-            emailRepo.save.mockResolvedValue(emailEntity)
-
-            when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
-                .calledWith(emailEntity, Email, EmailResponseDto)
-                .mockReturnValue(emailResponseDto)
-
-            const result = await service.createEmail(createEmailOptions)
-
-            expect(emailRepo.existsBy).toHaveBeenCalledWith({ id: email })
-            expect(emailRepo.save).toHaveBeenCalled()
-            expect(mapper.map).toHaveBeenCalledWith(emailEntity, Email, EmailResponseDto)
-            expect(result).toEqual(emailResponseDto)
+        expect(emailRepo.existsBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(emailRepo.create).toHaveBeenCalledWith({
+            organizationId,
+            id: email,
+            username: 'user',
+            domain: 'test.com',
+            exists: true,
+            format: EmailPatternEnum.FDotLast,
         })
+    })
 
-        it('should throw EmailAlreadyExistsException if exists', async () => {
-            const createEmailOptions: ICreateEmailRequestDto = {
-                email,
-                exists: true,
+    it('checks duplicates with the composite organization and address identity', async () => {
+        emailRepo.existsBy.mockResolvedValue(true)
+
+        await expect(service.createEmail(otherOrganizationId, { email, exists: true })).rejects.toThrow(
+            EmailAlreadyExistsException,
+        )
+
+        expect(emailRepo.existsBy).toHaveBeenCalledWith({ organizationId: otherOrganizationId, id: email })
+        expect(emailRepo.save).not.toHaveBeenCalled()
+    })
+
+    it('lists only the requested organization', async () => {
+        const entity = emailEntity()
+        const response = emailResponse()
+        emailRepo.find.mockResolvedValue([entity])
+        mapper.mapArray.mockReturnValue([response] as never)
+
+        await expect(service.getEmails(organizationId)).resolves.toEqual([response])
+
+        expect(emailRepo.find).toHaveBeenCalledWith({ where: { organizationId } })
+    })
+
+    it('gets a normalized address only within the requested organization', async () => {
+        const entity = emailEntity()
+        const response = emailResponse()
+        emailRepo.findOneBy.mockResolvedValue(entity)
+        mapper.map.mockReturnValue(response as never)
+
+        await expect(service.getEmail(organizationId, 'User@Test.com')).resolves.toBe(response)
+
+        expect(emailRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+    })
+
+    it('conceals a missing or foreign address as not found', async () => {
+        emailRepo.findOneBy.mockResolvedValue(null)
+
+        await expect(service.getEmail(organizationId, email)).rejects.toThrow(EmailNotFoundException)
+
+        expect(emailRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(mapper.map).not.toHaveBeenCalled()
+    })
+
+    it('strictly updates an owned address while preserving omitted fields', async () => {
+        const entity = emailEntity()
+        const saved = emailEntity({
+            exists: false,
+            lastVerificationId: '20000000-0000-4000-8000-000000000001',
+        })
+        const response = emailResponse({
+            exists: false,
+            lastVerificationId: saved.lastVerificationId,
+        })
+        emailRepo.findOneBy.mockResolvedValue(entity)
+        emailRepo.save.mockResolvedValue(saved)
+        mapper.map.mockReturnValue(response as never)
+
+        await expect(
+            service.updateEmail(organizationId, email, {
+                exists: false,
+                lastVerificationId: saved.lastVerificationId,
+            }),
+        ).resolves.toBe(response)
+
+        expect(emailRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(entity).toEqual(
+            expect.objectContaining({
                 format: EmailPatternEnum.FDotLast,
-            }
-
-            emailRepo.existsBy.mockResolvedValue(true)
-
-            await expect(service.createEmail(createEmailOptions)).rejects.toThrow(EmailAlreadyExistsException)
-            expect(emailRepo.existsBy).toHaveBeenCalledWith({ id: email })
-            expect(emailRepo.save).not.toHaveBeenCalled()
-        })
+                exists: false,
+                lastVerificationId: saved.lastVerificationId,
+            }),
+        )
     })
 
-    describe('getEmails', () => {
-        it('should return mapped list of emails', async () => {
-            emailRepo.find.mockResolvedValue([emailEntity])
+    it('does not upsert through the strict administrative update path', async () => {
+        emailRepo.findOneBy.mockResolvedValue(null)
 
-            when<EmailResponseDto[], [Email[], typeof Email, typeof EmailResponseDto]>(mapper.mapArray)
-                .calledWith([emailEntity], Email, EmailResponseDto)
-                .mockReturnValue([emailResponseDto])
+        await expect(service.updateEmail(organizationId, email, { exists: false })).rejects.toThrow(
+            EmailNotFoundException,
+        )
 
-            const result = await service.getEmails()
-
-            expect(emailRepo.find).toHaveBeenCalled()
-            expect(mapper.mapArray).toHaveBeenCalledWith([emailEntity], Email, EmailResponseDto)
-            expect(result).toEqual([emailResponseDto])
-        })
+        expect(emailRepo.create).not.toHaveBeenCalled()
+        expect(emailRepo.save).not.toHaveBeenCalled()
     })
 
-    describe('getEmail', () => {
-        it('should return mapped email when found', async () => {
-            emailRepo.findOneBy.mockResolvedValue(emailEntity)
+    it('creates an organization-owned address through the verification-only upsert path', async () => {
+        const verificationId = '20000000-0000-4000-8000-000000000001'
+        const entity = emailEntity({ exists: false, lastVerificationId: verificationId })
+        const response = emailResponse({ exists: false, lastVerificationId: verificationId })
+        emailRepo.findOneBy.mockResolvedValue(null)
+        emailRepo.create.mockReturnValue(entity)
+        emailRepo.save.mockResolvedValue(entity)
+        mapper.map.mockReturnValue(response as never)
 
-            when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
-                .calledWith(emailEntity, Email, EmailResponseDto)
-                .mockReturnValue(emailResponseDto)
+        await expect(
+            service.upsertEmail(organizationId, 'User@Test.com', {
+                format: EmailPatternEnum.FDotLast,
+                exists: false,
+                lastVerificationId: verificationId,
+            }),
+        ).resolves.toBe(response)
 
-            const result = await service.getEmail(email)
-
-            expect(emailRepo.findOneBy).toHaveBeenCalledWith({ id: email })
-            expect(mapper.map).toHaveBeenCalledWith(emailEntity, Email, EmailResponseDto)
-            expect(result).toEqual(emailResponseDto)
+        expect(emailRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(emailRepo.create).toHaveBeenCalledWith({
+            organizationId,
+            id: email,
+            username: 'user',
+            domain: 'test.com',
+            exists: null,
         })
-
-        it('should throw EmailNotFoundException when not found', async () => {
-            emailRepo.findOneBy.mockResolvedValue(null)
-            await expect(service.getEmail('missing@test.com')).rejects.toThrow(EmailNotFoundException)
-        })
+        expect(entity.lastVerificationId).toBe(verificationId)
     })
 
-    describe('updateEmail', () => {
-        it('should update and return mapped email when found', async () => {
-            const options: IUpdateEmailRequestDto = { format: EmailPatternEnum.First, exists: false }
-            const updatedEntity = Object.assign({}, emailEntity, options)
-            const updatedEmailResponseDto = Object.assign({}, emailResponseDto, options)
+    it('updates an owned verification cache without clearing its format', async () => {
+        const verificationId = '20000000-0000-4000-8000-000000000001'
+        const entity = emailEntity({ exists: true })
+        const saved = emailEntity({ exists: null, lastVerificationId: verificationId })
+        const response = emailResponse({ exists: null, lastVerificationId: verificationId })
+        emailRepo.findOneBy.mockResolvedValue(entity)
+        emailRepo.save.mockResolvedValue(saved)
+        mapper.map.mockReturnValue(response as never)
 
-            emailRepo.findOneBy.mockResolvedValue({ ...emailEntity })
-            emailRepo.save.mockResolvedValue(updatedEntity)
+        await expect(
+            service.upsertEmail(organizationId, email, { exists: null, lastVerificationId: verificationId }),
+        ).resolves.toBe(response)
 
-            when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
-                .calledWith(updatedEntity, Email, EmailResponseDto)
-                .mockReturnValue(updatedEmailResponseDto)
-
-            const result = await service.updateEmail(email, options)
-
-            expect(emailRepo.findOneBy).toHaveBeenCalledWith({ id: email })
-            expect(emailRepo.save).toHaveBeenCalled()
-            expect(mapper.map).toHaveBeenCalledWith(updatedEntity, Email, EmailResponseDto)
-            expect(result).toEqual(updatedEmailResponseDto)
-        })
-
-        it('should create and save when email not found', async () => {
-            const options: IUpdateEmailRequestDto = { format: EmailPatternEnum.First, exists: false }
-            const newEntity = { id: email, username, domain, format: options.format, exists: options.exists }
-
-            emailRepo.findOneBy.mockResolvedValue(null)
-            emailRepo.create.mockReturnValue(newEntity as Email)
-            emailRepo.save.mockResolvedValue(newEntity as Email)
-
-            when<EmailResponseDto, [Email, typeof Email, typeof EmailResponseDto]>(mapper.map)
-                .calledWith(newEntity as Email, Email, EmailResponseDto)
-                .mockReturnValue(emailResponseDto)
-
-            const result = await service.updateEmail(email, options)
-
-            expect(emailRepo.findOneBy).toHaveBeenCalledWith({ id: email })
-            expect(emailRepo.create).toHaveBeenCalled()
-            expect(emailRepo.save).toHaveBeenCalled()
-            expect(result).toEqual(emailResponseDto)
-        })
+        expect(entity).toEqual(
+            expect.objectContaining({
+                format: EmailPatternEnum.FDotLast,
+                exists: null,
+                lastVerificationId: verificationId,
+            }),
+        )
     })
 })

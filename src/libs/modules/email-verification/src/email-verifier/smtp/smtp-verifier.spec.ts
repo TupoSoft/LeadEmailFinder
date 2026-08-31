@@ -10,7 +10,11 @@ interface SmtpVerifierInternals {
     tryVerify: jest.Mock
 }
 
-describe('SmtpVerifier lease-aware allocation', () => {
+const organizationId = '1d33b587-bc90-49f7-9693-92d72cc5c271'
+const otherOrganizationId = '3dc5deaf-c1f0-4b48-a0dc-caa8504f3a78'
+const email = 'person@example.com'
+
+describe('SmtpVerifier', () => {
     let verifier: SmtpVerifier
     let internals: SmtpVerifierInternals
     let proxyAllocator: { acquire: jest.Mock; release: jest.Mock }
@@ -118,11 +122,12 @@ describe('SmtpVerifier lease-aware allocation', () => {
         smtpVerificationRepo.findOneBy.mockResolvedValue(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
 
-        await expect(verifier.verify('person@example.com')).resolves.toEqual({
-            email: 'person@example.com',
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+            email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
         })
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
     })
 
     it('returns an unknown result when lease allocation is unavailable', async () => {
@@ -130,10 +135,73 @@ describe('SmtpVerifier lease-aware allocation', () => {
         smtpVerificationRepo.findOneBy.mockResolvedValue(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
 
-        await expect(verifier.verify('person@example.com')).resolves.toEqual({
-            email: 'person@example.com',
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+            email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
+        })
+    })
+
+    it('returns a conclusive result only from the requesting organization cache', async () => {
+        smtpVerificationRepo.findOneBy.mockImplementation(({ organizationId: requestedOrganizationId }) => {
+            if (requestedOrganizationId !== organizationId) return null
+
+            return {
+                organizationId,
+                id: email,
+                exists: true,
+                reason: SmtpVerificationReason.AcceptedEmail,
+                targetExchange: 'mx.example.com',
+            }
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+            email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+        })
+        await expect(verifier.verify(otherOrganizationId, email)).resolves.toEqual({
+            email,
+            exists: false,
+            reason: SmtpVerificationReason.NoMxRecords,
+        })
+
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(1, { organizationId, id: email })
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(2, {
+            organizationId: otherOrganizationId,
+            id: email,
+        })
+        expect(internals.getExchanges).toHaveBeenCalledTimes(1)
+    })
+
+    it('reuses temporarily blocked connection hints only from the requesting organization cache', async () => {
+        smtpVerificationRepo.findOneBy.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: null,
+            reason: SmtpVerificationReason.TemporarilyBlocked,
+            targetExchange: 'mx.example.com',
+            proxyId: 'proxy-id',
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
+        internals.getSmtpClient = jest.fn().mockResolvedValue({ attemptedConnection: false })
+
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.Unknown,
+        })
+
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(internals.getExchanges).toHaveBeenCalledWith({
+            domain: 'example.com',
+            targetExchange: 'mx.example.com',
+        })
+        expect(internals.getSmtpClient).toHaveBeenCalledWith({
+            exchanges: ['mx.example.com'],
+            proxyId: 'proxy-id',
         })
     })
 
@@ -141,12 +209,12 @@ describe('SmtpVerifier lease-aware allocation', () => {
         const allocation = createAllocation('proxy-id')
         const client = {} as any
         const result = {
-            email: 'person@example.com',
+            email,
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
         }
         smtpVerificationRepo.findOneBy.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
-        smtpVerificationRepo.create.mockReturnValue({ id: 'person@example.com' })
+        smtpVerificationRepo.create.mockReturnValue({ organizationId, id: email })
         smtpVerificationRepo.save.mockResolvedValue(undefined)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
         internals.getSmtpClient = jest.fn().mockResolvedValue({
@@ -156,7 +224,18 @@ describe('SmtpVerifier lease-aware allocation', () => {
         internals.tryVerify = jest.fn().mockResolvedValue(result)
         proxyAllocator.release.mockResolvedValue(true)
 
-        await expect(verifier.verify('person@example.com')).resolves.toEqual(result)
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(1, { organizationId, id: email })
+        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(2, { organizationId, id: email })
+        expect(smtpVerificationRepo.create).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(smtpVerificationRepo.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId,
+                id: email,
+                exists: true,
+                reason: SmtpVerificationReason.AcceptedEmail,
+            }),
+        )
         expect(proxyAllocator.release).toHaveBeenCalledWith(allocation)
     })
 })

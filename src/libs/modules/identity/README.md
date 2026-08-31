@@ -61,11 +61,22 @@ barrel. It splits into two parts:
 `OrganizationMembershipDetailRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
 `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
 
-**Temporary compatibility surface (deprecated)** — `TypeOrmModule` reexported for direct repository injection,
-and every entity class listed under Persistence below. No production business module needs this surface after
-`service-client-management` moved to ports in `module-architecture/07`; some integration fixtures still construct
-the persistence entities directly. `module-architecture/08` removes the compatibility exports together after the
-complete consumer audit, rather than narrowing the surface piecemeal in prerequisite plans.
+**Test-fixture-only surface** — every entity class listed under Persistence below, exported from the TypeScript
+barrel for exactly one purpose. It lets another module's own real-Postgres or live-Keycloak integration test build
+its own disposable database (`dropSchema`/`synchronize`) and create/assert fixture rows across identity's tables,
+without this module owning that test. `module-architecture/08` sealed everything else. `IdentityModule` no longer
+exports `TypeOrmModule` or any repository token at the Nest DI level. A repository-wide audit confirmed zero
+production, non-test files import an identity entity by name, so no production code path can obtain an identity
+repository through this module. The eight legitimate consumers of this surface, all `.spec.ts` files that
+construct their own disposable schema, are: `oidc-permission-check.live-keycloak.integration.spec.ts` (`auth`),
+`bff-session-flow.live-keycloak.integration.spec.ts` (`bff-session`), `credits.service.integration.spec.ts`
+(`credits`), `membership-mutation-concurrency.integration.spec.ts` and
+`keycloak-organization-admin.live-keycloak.integration.spec.ts` (`organization-onboarding`),
+`payments.module.spec.ts` and `payment-event.handler.integration.spec.ts` (`payments`), and
+`service-client-management.live-keycloak.integration.spec.ts` (`service-client-management`). Building a
+port-based replacement for this — schema bootstrap plus arbitrary fixture creation/assertion across several
+tables — would mean identity growing a second, broad "testing query" surface, directly against the narrow-ports
+rationale above. So this plan kept the entity-class exports rather than inventing one.
 
 ## Dependencies
 
@@ -79,7 +90,7 @@ None. Identity has no controllers; it is consumed in-process by every other modu
 ## Persistence
 
 Identity owns each of the following TypeORM entities, registered via `TypeOrmModule.forFeature(...)` in
-`identity.module.ts` and temporarily exported through the deprecated compatibility surface described above:
+`identity.module.ts` and exported through the test-fixture-only surface described above:
 
 | Entity                      | Table                          |
 | --------------------------- | ------------------------------ |

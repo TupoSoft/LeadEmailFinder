@@ -39,7 +39,7 @@ export class EmailVerifier implements IEmailVerifier {
         return getSecondLevelDomain(targetExchange ?? '')
     }
 
-    async verify({ email, format }: VerifyOptions): Promise<IEmailVerificationResultDto> {
+    async verify({ organizationId, email, format }: VerifyOptions): Promise<IEmailVerificationResultDto> {
         const [localPart, domain] = email.split('@')
 
         const emailVerification: IEmailVerificationResultDto = {
@@ -54,7 +54,10 @@ export class EmailVerifier implements IEmailVerifier {
         }
 
         const wrongEmail = `${EmailVerifier.CATCH_ALL_EMAIL_USERNAME}@${domain}`
-        const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(wrongEmail)
+        const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(
+            organizationId,
+            wrongEmail,
+        )
         const reason = fromStringToEnum(EmailVerificationReason, reasonString)
         ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
 
@@ -64,7 +67,10 @@ export class EmailVerifier implements IEmailVerifier {
         emailVerification.catchAll = exists
 
         if (exists === false) {
-            const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(email)
+            const { exists, targetExchange, reason: reasonString } = await this.smtpVerifier.verify(
+                organizationId,
+                email,
+            )
             const reason = fromStringToEnum(EmailVerificationReason, reasonString)
             ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
 

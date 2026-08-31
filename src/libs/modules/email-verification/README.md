@@ -22,9 +22,9 @@ compatibility route kept billing- and permission-equivalent to its replacement.
   request.
 - No proxy allocation policy — it leases proxies through the contracts
   [`proxy`](../proxy/README.md) owns and exposes, but does not own proxy state itself.
-- No organization/membership policy — async and batch jobs carry the authenticated `organizationId` and
-  `credentialId`, while the current synchronous flow and PostgreSQL address caches have no organization ownership.
-  Privacy plan `privacy-compliance/04` owns that missing boundary.
+- No organization/membership policy — authenticated HTTP adapters and existing jobs supply `organizationId`, while
+  this module uses that value only to isolate verification state. Identity and membership policy remain owned by
+  [`identity`](../identity/README.md) and [`auth`](../auth/README.md).
 - No production transport or object-encryption policy — the API composition root validates that policy and supplies
   one shared common token to this module's S3 infrastructure adapters.
 
@@ -35,12 +35,14 @@ The canonical
 defines this module's customer-data processor/service-provider posture, its separation from LeadEmailFinder controller
 data, permitted purposes, recipients, fixed engineering retention defaults, rights routing, and follow-up owners.
 
-Those defaults are documentary policy, not current runtime behavior. At this revision, the `emails`,
-`email_verifications`, and `smtp_verifications` records are not organization-owned; BullMQ jobs have no terminal-age
-cleanup; batch inputs and results have no deletion path; and SMTP cache rows have no lifecycle timestamp. Plans
-`privacy-compliance/04` and `privacy-compliance/07` own organization scoping and enforcement. Verification is only a
-deliverability signal: it does not establish consent, lawful basis, marketing eligibility, or permission to contact,
-and this module does not send commercial messages or own final suppression duties.
+The `emails`, `email_verifications`, and `smtp_verifications` records are organization-owned. Exact-address cache
+lookups use the organization together with the normalized address, each check appends a result and updates only the
+owning organization's latest-result link, and batch result queries require both organization and batch identity. The
+`domains` table remains shared operator-managed technical policy and stores no organization or address association.
+BullMQ jobs still have no terminal-age cleanup, and batch inputs and results have no deletion path;
+`privacy-compliance/07` owns those retention controls. Verification is only a deliverability signal: it does not
+establish consent, lawful basis, marketing eligibility, or permission to contact, and this module does not send
+commercial messages or own final suppression duties.
 
 ## Public API
 
@@ -84,12 +86,12 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 
 ## Persistence
 
-| Entity              | Table                 |
-| ------------------- | --------------------- |
-| `EmailVerification` | `email_verifications` |
-| `Domain`            | `domains`             |
-| `Email`             | `emails`              |
-| `SmtpVerification`  | `smtp_verifications`  |
+| Entity              | Table                 | Ownership and identity                                      |
+| ------------------- | --------------------- | ----------------------------------------------------------- |
+| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                       |
+| `Domain`            | `domains`             | Shared technical policy; domain name                        |
+| `Email`             | `emails`              | Organization plus normalized address                        |
+| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps  |
 
 ## S3 / Storage
 
@@ -128,10 +130,14 @@ Focused tests are grouped by subarea under `src/`:
   `email/email.controller.spec.ts`, `email/email.service.spec.ts`
 - **SMTP engine**: `email-verifier/email-verifier.spec.ts`, `email-verifier/smtp/smtp-client.factory.spec.ts`,
   `email-verifier/smtp/smtp-client.spec.ts`, `email-verifier/smtp/smtp-verifier.spec.ts`
+- **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
+  `verification-organization-ownership.integration.spec.ts`
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a local,
 Docker-network-only SMTP fixture, proving application plumbing rather than real-world deliverability. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated
 `GET /verify` route costs the same one credit as `POST /verify`, including the `402` rejection at zero balance.
+Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the
+authenticated organization's cache.
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) uploads a fixture CSV, polls to
 completion, and downloads the results, asserting the returned CSV's `email` column matches what was uploaded.

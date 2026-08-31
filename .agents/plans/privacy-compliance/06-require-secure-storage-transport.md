@@ -37,6 +37,10 @@ A developer can observe insecure production settings being rejected, both batch 
 - Optional values supported through `@WithFileVars()` need an explicit `@IsFileVar` condition when the canonical
   variable is not otherwise required. The security variables therefore validate their `/run/secrets/` paths
   explicitly and reject simultaneous direct and `_FILE` sources before loading either value.
+- Privacy plan 04 landed while this pull request was under review and changed the same batch processor, specification,
+  and module README. The conflict resolution preserved its organization-scoped query and CSV behavior alongside this
+  plan's injected object-write security contract. Its direct processor integration fixture also needed the new
+  development security argument.
 
 ## Decision Log
 
@@ -99,10 +103,10 @@ One framework-free common contract now supplies a frozen security value to the A
 writers inject the token, always write `no-store`, and add the exact SSE-KMS request fields in production. A reusable
 contract suite covers both adapters and is available to plan 13.
 
-The focused suite passed 8 suites and 117 tests; the full suite passed 162 suites and 1,257 tests, with the repository's
-9 suites and 49 tests intentionally skipped. Typecheck, compilation, the production Docker build, and the module
-architecture gate passed. Lint passed with zero errors and one preexisting warning in
-`src/libs/config/src/load-secrets.spec.ts`.
+After merging the latest `master`, the focused suite passed 8 suites and 119 tests; the full suite passed 165 suites
+and 1,280 tests, with the repository's 10 suites and 52 tests intentionally skipped. Typecheck, compilation, the
+production Docker build, and the module architecture gate passed. Lint passed with zero errors and one preexisting
+warning in `src/libs/config/src/load-secrets.spec.ts`.
 
 No HTTP contract changed, so Bruno coverage is not applicable. The active Lead Email Finder Compose stack belonged to
 the unrelated main checkout and was deliberately neither recreated nor used to claim worktree runtime coverage. No
@@ -266,16 +270,17 @@ The sanitized configuration matrix is:
 
 Validation artifacts:
 
-- Focused Jest: 8 suites and 117 tests passed.
-- Full `test:ci`: 162 suites and 1,257 tests passed; 9 suites and 49 tests were intentionally skipped.
+- Focused Jest after merging `master`: 8 suites and 119 tests passed.
+- Full `test:ci` after merging `master`: 165 suites and 1,280 tests passed; 10 suites and 52 tests were intentionally
+  skipped.
 - `typecheck`: passed.
 - `lint`: passed with zero errors and one preexisting explicit-return-type warning in
   `src/libs/config/src/load-secrets.spec.ts:14`.
-- `build`: passed with zero TypeScript issues and 532 SWC-compiled files.
+- Post-merge `build`: passed with zero TypeScript issues and 536 SWC-compiled files.
 - `architecture:check`: passed for 9 modules with the existing 138 baselined violations.
-- Production `docker build -f Dockerfile -t lef-issue-467-validation .`: passed with zero TypeScript issues and 532
-  SWC-compiled files. Image inspection confirmed the Jest-only contract was absent; the exact temporary image was
-  removed afterward.
+- Pre-merge production `docker build -f Dockerfile -t lef-issue-467-validation .`: passed with zero TypeScript issues
+  and 532 SWC-compiled files. Image inspection confirmed the Jest-only contract was absent; the exact temporary image
+  was removed afterward. The later merge had no packaging conflict, and its Nest production build passed separately.
 - `docs:lint` for the four changed Markdown files: passed.
 - `git diff --check`: passed.
 - Bruno: not applicable — no externally observable HTTP API behavior changed. Exact startup and storage-request

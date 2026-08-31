@@ -5,7 +5,8 @@ accepts every recipient, so this checks application, DNS, proxy, and SMTP wiring
 deliverability. The collection then drains the fixture proxy, confirms that proxy selection excludes it, and
 restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
 that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
-a successful request.
+a successful request. The final requests update the authenticated organization's stored email and prove that an
+address outside that organization's cache is concealed as `404 Not Found` rather than created implicitly.
 
 The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
 internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another
