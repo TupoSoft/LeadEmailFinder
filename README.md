@@ -8,6 +8,7 @@ Lead Email Finder is an API for finding email addresses.
 
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
+- [Privacy and Data Lifecycle](#privacy-and-data-lifecycle)
 - [Development](#development)
     - [Environment Variables](#environment-variables)
     - [Running the Application](#running-the-application)
@@ -36,6 +37,15 @@ Clone this repository:
   git clone https://github.com/TupoSoft/LeadEmailFinder.git
   cd LeadEmailFinder
 ```
+
+## Privacy and Data Lifecycle
+
+The [email-verification processing and lifecycle contract](docs/privacy/email-verification-processing-contract.md) is
+the repository-owned engineering source of truth for customer-verification data flows, processor/controller
+boundaries, recipients, fixed lifecycle defaults, rights routing, and follow-up control owners. Its retention defaults
+are not yet enforced by the current runtime, and its pending Legal, DPO, Commercial, Security/vendor, Operations,
+controller-data, incident, and California reviews are not compliance approvals, customer assent, or a published
+privacy notice.
 
 ## Development
 
@@ -141,14 +151,13 @@ before stopping the tunnel or deleting its local ID and signature secret.
 
 The development Compose stack starts the following supporting services:
 
-| Service | Host address | Purpose |
-| --- | --- | --- |
-| API | http://localhost:53000 | Lead Email Finder API and Swagger documentation |
-| PostgreSQL | `localhost:55432` | Application database |
-| Redis | `localhost:56379` | Queue and cache storage |
-| Bull Board | http://localhost:54000 | Queue dashboard |
-| MinIO API | http://localhost:59000 | S3-compatible object storage |
-| MinIO Console | http://localhost:59001 | Object storage console |
+| Service    | Host address           | Purpose                                         |
+| ---------- | ---------------------- | ----------------------------------------------- |
+| API        | http://localhost:53000 | Lead Email Finder API and Swagger documentation |
+| PostgreSQL | `localhost:55432`      | Application database                            |
+| Redis      | `localhost:56379`      | Queue and cache storage                         |
+| Bull Board | http://localhost:54000 | Queue dashboard                                 |
+| Garage/S3  | http://localhost:59000 | S3-compatible object storage                    |
 
 The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
 the ordinary development stack.
@@ -179,11 +188,11 @@ Any other value is rejected outright, never falls back to a prompt.
 
 Each run seeds:
 
-| Fixture | Identity | Notes |
-| --- | --- | --- |
-| Platform M2M credential | `lef-development-service` (Client Credentials) | `platform:admin`; see `scripts/keycloak/bootstrap-credential.ts` |
-| Platform operator (human) | `platform-operator@lef.test` | `platform_admin`; password is the fixed dev-only constant in `scripts/keycloak/platform-operator.ts` |
-| Customer organization | "Acme Development Customer" | Owner `owner@acme.lef.test`, 1000 starting credits |
-| Customer M2M credential | `lef-svc-dev-fixture` (Client Credentials) | Scoped to `verification:run`/`verification:read` only |
+| Fixture                   | Identity                                       | Notes                                                                                                |
+| ------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Platform M2M credential   | `lef-development-service` (Client Credentials) | `platform:admin`; see `scripts/keycloak/bootstrap-credential.ts`                                     |
+| Platform operator (human) | `platform-operator@lef.test`                   | `platform_admin`; password is the fixed dev-only constant in `scripts/keycloak/platform-operator.ts` |
+| Customer organization     | "Acme Development Customer"                    | Owner `owner@acme.lef.test`, 1000 starting credits                                                   |
+| Customer M2M credential   | `lef-svc-dev-fixture` (Client Credentials)     | Scoped to `verification:run`/`verification:read` only                                                |
 
 Generated secrets (Keycloak client secrets, id summaries) are written only to the gitignored `.dev/keycloak/*.json` files, never printed in full.
