@@ -22,7 +22,23 @@ compatibility route kept billing- and permission-equivalent to its replacement.
   request.
 - No proxy allocation policy — it leases proxies through the contracts
   [`proxy`](../proxy/README.md) owns and exposes, but does not own proxy state itself.
-- No organization/membership concepts beyond the `organizationId` every verification and batch job is scoped to.
+- No organization/membership policy — async and batch jobs carry the authenticated `organizationId` and
+  `credentialId`, while the current synchronous flow and PostgreSQL address caches have no organization ownership.
+  Privacy plan `privacy-compliance/04` owns that missing boundary.
+
+## Privacy and Data Lifecycle
+
+The canonical
+[email-verification processing and lifecycle contract](../../../../docs/privacy/email-verification-processing-contract.md)
+defines this module's customer-data processor/service-provider posture, its separation from LeadEmailFinder controller
+data, permitted purposes, recipients, fixed engineering retention defaults, rights routing, and follow-up owners.
+
+Those defaults are documentary policy, not current runtime behavior. At this revision, the `emails`,
+`email_verifications`, and `smtp_verifications` records are not organization-owned; BullMQ jobs have no terminal-age
+cleanup; batch inputs and results have no deletion path; and SMTP cache rows have no lifecycle timestamp. Plans
+`privacy-compliance/04` and `privacy-compliance/07` own organization scoping and enforcement. Verification is only a
+deliverability signal: it does not establish consent, lawful basis, marketing eligibility, or permission to contact,
+and this module does not send commercial messages or own final suppression duties.
 
 ## Public API
 

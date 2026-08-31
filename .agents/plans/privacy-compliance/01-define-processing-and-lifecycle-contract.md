@@ -19,10 +19,14 @@ does not execute a customer agreement, publish a privacy notice, approve a trans
 
 ## Progress
 
-- [ ] (2026-08-30) Inventory every customer address, verification inference, job, artifact, log, recipient, and transfer flow in the current repository.
-- [ ] (2026-08-30) Write the processing contract with fixed roles, purposes, retention defaults, rights routing, ownership, approval status, and follow-up mapping.
-- [ ] (2026-08-30) Link and summarize the contract from the repository and email-verification README files without claiming legal approval or contract assent.
-- [ ] (2026-08-30) Run plan, architecture, prose, formatting, and whitespace validation and record sanitized evidence.
+- [x] (2026-08-31 12:30 +02:00) Inventoried every repository-visible customer address, verification inference, job,
+      artifact, log, recipient, and transfer flow, including absent ownership and lifecycle controls.
+- [x] (2026-08-31 12:30 +02:00) Wrote the processing contract with fixed roles, purposes, retention defaults, rights
+      routing, owners, approval state, source anchors, and one follow-up row for each plan from 02 through 33.
+- [x] (2026-08-31 12:30 +02:00) Linked and summarized the contract from the root and email-verification README files
+      while stating that runtime enforcement and Legal/DPO/contract/vendor approvals remain pending.
+- [x] (2026-08-31 12:54 +02:00) Ran plan, architecture, type, prose, formatting, whitespace, and dry-run sync
+      validation and recorded sanitized evidence.
 
 ## Plan dependencies
 
@@ -31,7 +35,40 @@ does not execute a customer agreement, publish a privacy notice, approve a trans
 
 ## Surprises & Discoveries
 
-None yet.
+- Discovery: `emails`, `email_verifications`, and `smtp_verifications` have no organization ID, while only async and
+  batch jobs carry authenticated organization/credential ownership. The synchronous service and batch result query do
+  not add organization ownership to the persisted rows. A conclusive global SMTP-cache row is reusable across
+  organizations, including the fixed synthetic address shared by checks of one domain, and the attempted
+  `lastVerificationId` write is dropped.
+  Evidence: the four email-verification entities, `EmailVerificationService.verify()`, and
+  `BatchEmailVerificationProcessor.uploadResults()` at source snapshot `756f9eb`, plus `SmtpVerifier.verify()` and
+  `EmailService.updateEmail()`.
+- Discovery: current application lifecycles do not enforce the fixed defaults. BullMQ queues have no terminal removal
+  options, batch code never deletes source/result objects, and `smtp_verifications` has no lifecycle timestamp.
+  Evidence: queue registrations, batch S3 adapters, and `SmtpVerification` at source snapshot `756f9eb`.
+- Discovery: the separate DNS Redis cache is not a 24-hour SMTP-cache control. `parseTimeString('1d')` returns
+  `86,400,000` milliseconds, but `DnsService` passes the value to Redis `EX` as seconds, producing an approximately
+  1,000-day TTL.
+  Evidence: `src/libs/common/src/utils/time.ts` and `src/libs/dns/src/dns.service.ts`.
+- Discovery: four HTTP account-discovery adapters are selected when only `CATCH_ALL_HTTP_PROXY_URL` is present.
+  LinkedIn request code with static session material is registered in `CatchAllModule` but is not selected in
+  `EmailVerifierModule`, so it is dormant source, not a verified live recipient. Both active Microsoft adapters mutate
+  process-wide static request bodies, allowing overlapping calls to overwrite or exchange target addresses before
+  transport.
+  Evidence: `src/libs/catch-all/src/` and `email-verifier.module.ts`.
+- Discovery: the HTTP serializer excludes `createdAt` from both synchronous and completed asynchronous verification
+  responses. Implicit conversion does instantiate the nested asynchronous result DTO, so the completed poll returns the
+  other exposed result fields rather than an empty object.
+  Evidence: both response DTOs, the global `ClassSerializerInterceptor`, and a local `class-transformer` serialization
+  check.
+- Discovery: development Redis and Bull Board publish host ports without repository-configured authentication, and
+  Redis has no TLS. The root README also named the current Garage/S3 service as MinIO and advertised a nonexistent
+  console port.
+  Evidence: `docker/infra.yaml`, the root README service table, and the Garage configuration.
+- Discovery: logging can contain the deprecated GET query URL, complete SMTP commands/responses, raw addresses in
+  provider errors, and BullMQ failure text. A legacy `swarm.yml` names a sink compatible with `Graylog`, but the repository
+  does not establish that descriptor as a current environment or managed-provider inventory.
+  Evidence: `src/main.ts`, SMTP/provider logging sites, `LeadEmailFinderApiModule`, and `swarm.yml`.
 
 ## Decision Log
 
@@ -62,10 +99,42 @@ None yet.
   Rationale: The inventory and technical contract are independently implementable; approval remains a release gate
   before public claims and does not make repository documentation a signed contract or live notice.
   Date/Author: 2026-08-30, project planning.
+- Decision: Show normative lifecycle maxima beside current unenforced behavior rather than describing the defaults as
+  live retention.
+  Rationale: This documentation-only pull request must expose the gaps that plans 04, 07, and 11 later close and must
+  not convert policy prose into false runtime evidence.
+  Date/Author: 2026-08-31, Codex.
+- Decision: Inventory the DNS cache separately from the SMTP probe cache and record its exact unit mismatch without
+  expanding this pull request into a runtime fix.
+  Rationale: The source discrepancy is material lifecycle evidence, but issue 462 explicitly prohibits application
+  and configuration changes. The 24-hour normative row applies to `smtp_verifications`, not `DNS_CACHE:*`.
+  Date/Author: 2026-08-31, Codex.
+- Decision: Classify the legacy descriptor compatible with `Graylog` and dormant LinkedIn adapter as
+  repository-visible but unverified, not as approved or active recipients.
+  Rationale: Source presence proves neither live deployment nor provider approval; the contract must preserve that
+  distinction for plans 02, 10, and 11.
+  Date/Author: 2026-08-31, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Completed on 2026-08-31. The repository now has one source-backed email-verification processing contract with 21
+stable inventory rows, exact normative lifecycle maxima, and an approval-state matrix. It also includes recipient and
+rights routing and a reviewed implementation row for every privacy plan from 02 through 33. The root and module README
+files link to it and state that retention enforcement, agreements, notices, provider/transfer approvals, managed-store
+evidence, controller-data decisions, incident operations, and California applicability remain pending.
+
+The audit exposed organization-independent PostgreSQL and SMTP cache state and cross-organization reuse of conclusive
+SMTP results. It also identified the absence of terminal and object cleanup, a DNS TTL unit mismatch of about 1,000
+days, shared mutable Microsoft request bodies, plaintext or unauthenticated development surfaces, and address-bearing
+logs and provider calls. Later plans must not obscure these current behaviors. This documentation-only change did not
+fix or activate any of those paths. It assigned the DNS lifecycle discrepancy to a required plan-07 scope
+reconciliation and preserved every other control under its owning follow-up plan.
+
+An independent review compared all direct plan dependencies and corrected overbroad owner, gate, and evidence claims
+for plans 04, 09, 13, 14, 17, 23, 24, 25, 32, and 33. A final source review corrected cache-hit flow, HTTP response
+serialization, concurrent provider-request isolation, and development operator-surface details. All required checks
+passed. The final dry run would mark issue 462 `Done` and propose the deterministic downstream readiness updates caused
+by completing this dependency; it performed no project writes.
 
 ## Context and Orientation
 
@@ -258,10 +327,25 @@ Preserve unrelated work and do not reset shared containers or disposable data fo
 
 ## Artifacts and Notes
 
-Record inventory row counts, reviewed paths, changed documentation, parser/dependency/architecture results, exact
-Harper command/result, formatting/whitespace results, dry-run summary, follow-up mapping, and pending/approved roles.
-Never record real addresses, CSV rows, queue payloads, object keys, tokens, credentials, customer/vendor contracts,
-provider responses, or private legal advice.
+- Changed documentation: `docs/privacy/email-verification-processing-contract.md`, the root README,
+  `src/libs/modules/email-verification/README.md`, and this ExecPlan. No application source, configuration, dependency,
+  lockfile, schema, migration, provider, endpoint, queue, S3, or Bruno artifact changed.
+- Inventory evidence: 21 stable rows checked against email-verification HTTP, TypeORM, BullMQ, Redis, S3, DNS, SMTP,
+  proxy, account-discovery, logging, billing/authentication references, development infrastructure, and plans 02 through
+  33 at source snapshot `756f9eb4779e0b07c330ce98cc733318afc79a16`.
+- Plan validation: the two focused suites passed, with 2 suites and 46 tests; the module architecture gate passed for 9
+  modules with 149 baselined violations; `corepack pnpm typecheck` passed.
+- Harper validation:
+  `corepack pnpm docs:lint -- docs/privacy/email-verification-processing-contract.md README.md src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/01-define-processing-and-lifecycle-contract.md`
+  passed all 5 files.
+- Formatting and whitespace: the exact five-file `corepack pnpm exec prettier --check` command and `git diff --check`
+  passed.
+- Read-only synchronization: `PLANS_DRY_RUN=true corepack pnpm plans:sync` reported 107 ExecPlans, 0 created, and 5
+  proposed updates. It would mark `privacy-compliance/01` (issue 462) `Done`, advance plans 02, 04, and 06 to `Todo`,
+  and refresh plan 03 while leaving it `Backlog`; no project write occurred.
+- Rendering contract: `privacy-compliance/01` retains exactly two dependencies, all four progress items, and `Ready to
+implement`. Legal, DPO, Commercial, Vendor Management, Operations, Security, controller-data, incident, and
+  California decisions remain pending; this plan records no private evidence or customer data.
 
 ## Plan readiness
 
