@@ -6,8 +6,9 @@ import { ApiOperation } from '@nestjs/swagger'
 import { InjectMapper } from '@automapper/nestjs'
 import { Mapper } from '@automapper/core'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
-import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 @UseGuards(PermissionsGuard)
 @RequirePermissions('verification:run')
@@ -23,8 +24,12 @@ export class OldSyncEmailVerificationController {
     @ApiOperation({ deprecated: true })
     async verifyEmail(
         @Query() emailVerificationRequestDto: OldSyncEmailVerificationRequestQueryDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<OldSyncEmailVerificationResponseDto> {
-        const result = await this.emailVerificationService.verify(emailVerificationRequestDto)
+        const result = await this.emailVerificationService.verify({
+            organizationId: principal.organizationId,
+            email: emailVerificationRequestDto.email,
+        })
         return this.mapper.map(result, EmailVerificationResponseDto, OldSyncEmailVerificationResponseDto)
     }
 }

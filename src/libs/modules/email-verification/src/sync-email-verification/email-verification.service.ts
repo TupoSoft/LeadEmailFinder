@@ -22,35 +22,30 @@ export class EmailVerificationService implements IEmailVerificationService {
         @Inject(DOMAIN_SERVICE_TOKEN) private readonly domainService: IDomainService,
     ) {}
 
-    async verify({ email, format, batchId }: VerifyOptions): Promise<IEmailVerificationResponseDto> {
+    async verify({ organizationId, email, format, batchId }: VerifyOptions): Promise<IEmailVerificationResponseDto> {
         email = email.toLowerCase()
 
         const [, domainName] = email.split('@')
 
         await this.validateDomain(domainName)
 
-        const emailRecord = await this.emailService.updateEmail(email, {
+        await this.emailService.upsertEmail(organizationId, email, {
             format,
             exists: null,
         })
 
-        const emailVerificationResult = await this.emailVerifier.verify({ email, format })
+        const emailVerificationResult = await this.emailVerifier.verify({ organizationId, email, format })
 
-        let emailVerificationRecord =
-            emailRecord.lastVerificationId != null
-                ? await this.emailVerificationRepo.findOneBy({ id: emailRecord.lastVerificationId })
-                : null
-
-        emailVerificationRecord ??= this.emailVerificationRepo.create()
-        Object.assign(emailVerificationRecord, { ...emailVerificationResult, batchId })
+        let emailVerificationRecord = this.emailVerificationRepo.create({ organizationId })
+        Object.assign(emailVerificationRecord, { ...emailVerificationResult, batchId, organizationId })
         emailVerificationRecord = await this.emailVerificationRepo.save(emailVerificationRecord)
 
-        await this.emailService.updateEmail(email, {
+        await this.emailService.upsertEmail(organizationId, email, {
             exists: emailVerificationResult.exists,
             lastVerificationId: emailVerificationRecord.id,
         })
 
-        return emailVerificationRecord
+        return EmailVerificationService.withoutOrganization(emailVerificationRecord)
     }
 
     private async validateDomain(domainName: string): Promise<void> {
@@ -59,5 +54,12 @@ export class EmailVerificationService implements IEmailVerificationService {
         if (!isAllowed) {
             throw new DomainVerificationForbiddenException(domainName)
         }
+    }
+
+    private static withoutOrganization({
+        organizationId: _organizationId,
+        ...response
+    }: EmailVerification): IEmailVerificationResponseDto {
+        return response
     }
 }

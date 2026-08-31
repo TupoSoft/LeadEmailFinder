@@ -138,13 +138,14 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result?.exists != null
     }
 
-    verify = async (email: string): Promise<ISmtpVerificationResponse> => {
+    verify = async (organizationId: string, email: string): Promise<ISmtpVerificationResponse> => {
         const [, domain] = email.split('@')
+        const cacheKey = { organizationId, id: email }
 
         const getExchangesParams: GetExchangesParams = { domain }
         const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
 
-        const cachedResult = await this.smtpVerificationRepo.findOneBy({ id: email })
+        const cachedResult = await this.smtpVerificationRepo.findOneBy(cacheKey)
         if (SmtpVerifier.hasEmailVerificationOutcome(cachedResult)) {
             const { id: cachedEmail, exists, targetExchange, reason } = cachedResult
 
@@ -188,8 +189,8 @@ export class SmtpVerifier implements ISmtpVerifier {
             await this.releaseAllocation(leasedClient.allocation)
         }
 
-        let smtpRecord = await this.smtpVerificationRepo.findOneBy({ id: email })
-        smtpRecord ??= this.smtpVerificationRepo.create({ id: email })
+        let smtpRecord = await this.smtpVerificationRepo.findOneBy(cacheKey)
+        smtpRecord ??= this.smtpVerificationRepo.create(cacheKey)
         Object.assign(smtpRecord, result)
         await this.smtpVerificationRepo.save(smtpRecord)
 

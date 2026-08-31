@@ -3,7 +3,7 @@ import { getQueueToken } from '@nestjs/bullmq'
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { getS3ConnectionToken } from 'nestjs-s3'
 import { DataSource } from 'typeorm'
-import { Job } from 'bullmq'
+import { Job, WaitingChildrenError } from 'bullmq'
 import { Readable } from 'node:stream'
 import { Upload } from '@aws-sdk/lib-storage'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
@@ -55,7 +55,9 @@ function erroringCursor(error: Error): Readable {
 }
 
 describe('BatchEmailVerificationProcessor', () => {
-    let queryBuilder: { where: jest.Mock; stream: jest.Mock }
+    let queryBuilder: { where: jest.Mock; andWhere: jest.Mock; stream: jest.Mock }
+    let asyncEmailVerificationQueue: { add: jest.Mock }
+    let s3: { getObject: jest.Mock }
     let job: Job<BatchEmailVerificationJobData, string> & { updateData: jest.Mock }
 
     beforeEach(() => {
@@ -63,11 +65,15 @@ describe('BatchEmailVerificationProcessor', () => {
 
         queryBuilder = {
             where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
             stream: jest.fn(),
         }
+        asyncEmailVerificationQueue = { add: jest.fn() }
+        s3 = { getObject: jest.fn() }
 
         job = {
             id: 'job-1',
+            queueQualifiedName: 'bull:batch-email-verification',
             data: {
                 step: BatchEmailVerificationJobStep.UploadResults,
                 bucket: 'bucket',
@@ -91,8 +97,8 @@ describe('BatchEmailVerificationProcessor', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 BatchEmailVerificationProcessor,
-                { provide: getS3ConnectionToken('default'), useValue: {} },
-                { provide: getQueueToken('async-email-verification'), useValue: { add: jest.fn() } },
+                { provide: getS3ConnectionToken('default'), useValue: s3 },
+                { provide: getQueueToken('async-email-verification'), useValue: asyncEmailVerificationQueue },
                 {
                     provide: getRepositoryToken(EmailVerification),
                     useValue: { createQueryBuilder: jest.fn().mockReturnValue(queryBuilder) },
@@ -123,6 +129,18 @@ describe('BatchEmailVerificationProcessor', () => {
         })
     })
 
+    it('scopes the result cursor by both organization and batch id', async () => {
+        mockUploadDrivenByBody()
+        const processor = await buildProcessor(Readable.from([], { objectMode: true }))
+
+        await processor.process(job, 'token')
+
+        expect(queryBuilder.where).toHaveBeenCalledWith('ev.organizationId = :organizationId', {
+            organizationId: 'org-1',
+        })
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith('ev.batchId = :batchId', { batchId: 'job-1' })
+    })
+
     it('rejects and never advances to Finish when the S3 upload rejects', async () => {
         mockUploadRejectingDirectly(new Error('upload failed'))
         const processor = await buildProcessor(Readable.from([], { objectMode: true }))
@@ -139,7 +157,7 @@ describe('BatchEmailVerificationProcessor', () => {
         expect(job.updateData).not.toHaveBeenCalled()
     })
 
-    it('maps the query builder\'s alias-prefixed raw row keys to the correct CSV header names', async () => {
+    it('maps alias-prefixed raw row keys without exporting the organization id', async () => {
         // `.stream()` returns raw rows keyed by TypeORM's generated hydration alias ("ev_<property>"), not
         // bare entity property names. Regression coverage for a real bug this fix uncovered: every downloaded
         // batch CSV had a correct header but every data row was blank, because the stringifier was reading
@@ -149,16 +167,71 @@ describe('BatchEmailVerificationProcessor', () => {
 
         const cursor = Readable.from(
             [
-                { ev_id: 'id-1', ev_email: 'person@lef.test' },
-                { ev_id: 'id-2', ev_email: 'other@lef.test' },
+                { ev_id: 'id-1', ev_organizationId: 'org-1', ev_email: 'person@lef.test' },
+                { ev_id: 'id-2', ev_organizationId: 'org-1', ev_email: 'other@lef.test' },
             ],
             { objectMode: true },
         )
-        const processor = await buildProcessor(cursor, [{ propertyName: 'id' }, { propertyName: 'email' }])
+        const processor = await buildProcessor(cursor, [
+            { propertyName: 'id' },
+            { propertyName: 'organizationId' },
+            { propertyName: 'email' },
+        ])
 
         await processor.process(job, 'token')
 
         const csv = Buffer.concat(chunks).toString('utf8')
         expect(csv).toBe('id,email\nid-1,person@lef.test\nid-2,other@lef.test\n')
+    })
+
+    it('propagates the parent organization and batch id to every async child job', async () => {
+        const csv = Readable.toWeb(Readable.from(['email\nperson@lef.test\nother@lef.test\n']))
+        s3.getObject.mockResolvedValue({ Body: { transformToWebStream: () => csv } })
+        job.data = {
+            step: BatchEmailVerificationJobStep.Process,
+            bucket: 'bucket',
+            key: 'organizations/org-1/uploads/file.csv',
+            organizationId: 'org-1',
+            credentialId: 'cred-1',
+        }
+        job.moveToWaitingChildren = jest.fn().mockResolvedValue(true)
+        const processor = await buildProcessor(Readable.from([], { objectMode: true }))
+
+        await expect(processor.process(job, 'token')).rejects.toBeInstanceOf(WaitingChildrenError)
+        expect(asyncEmailVerificationQueue.add).toHaveBeenCalledTimes(2)
+        expect(asyncEmailVerificationQueue.add).toHaveBeenNthCalledWith(
+            1,
+            'async-email-verification',
+            {
+                email: 'person@lef.test',
+                batchId: 'job-1',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
+            {
+                jobId: expect.any(String),
+                parent: {
+                    id: 'job-1',
+                    queue: 'bull:batch-email-verification',
+                },
+            },
+        )
+        expect(asyncEmailVerificationQueue.add).toHaveBeenNthCalledWith(
+            2,
+            'async-email-verification',
+            {
+                email: 'other@lef.test',
+                batchId: 'job-1',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
+            {
+                jobId: expect.any(String),
+                parent: {
+                    id: 'job-1',
+                    queue: 'bull:batch-email-verification',
+                },
+            },
+        )
     })
 })
