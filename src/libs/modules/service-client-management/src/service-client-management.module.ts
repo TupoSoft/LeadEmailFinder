@@ -1,29 +1,88 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { KeycloakAdminHttpModule } from '@tuposoft/lead-email-finder/keycloak-admin-http'
-import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    IdentityModule,
+    SERVICE_CREDENTIAL_DIRECTORY,
+    SERVICE_CREDENTIAL_WRITER,
+    ServiceCredentialDirectory,
+    ServiceCredentialWriter,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { KEYCLOAK_SERVICE_CLIENT_ADMIN } from './keycloak-service-client-admin'
-import { KeycloakServiceClientAdminClient } from './keycloak-service-client-admin-client.service'
-import { ServiceClientCreationService } from './service-client-creation.service'
-import { ServiceClientDeletionService } from './service-client-deletion.service'
-import { ServiceClientDisablementService } from './service-client-disablement.service'
-import { ServiceClientListingService } from './service-client-listing.service'
-import { ServiceClientRotationService } from './service-client-rotation.service'
-import { ServiceClientsController } from './service-clients.controller'
+import { ServiceClientsController } from './api/service-clients.controller'
+import { KEYCLOAK_SERVICE_CLIENT_ADMIN, KeycloakServiceClientAdmin } from './application/ports/keycloak-service-client-admin'
+import { ServiceClientCreationService } from './application/service-client-creation.service'
+import { ServiceClientDeletionService } from './application/service-client-deletion.service'
+import { ServiceClientDisablementService } from './application/service-client-disablement.service'
+import {
+    SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
+    ServiceClientManagementConfiguration,
+} from './application/service-client-management-configuration'
+import { ServiceClientListingService } from './application/service-client-listing.service'
+import { ServiceClientRotationService } from './application/service-client-rotation.service'
+import { createServiceClientManagementConfiguration } from './infrastructure/config/service-client-management-configuration'
+import { KeycloakServiceClientAdminClient } from './infrastructure/keycloak/keycloak-service-client-admin-client.service'
 
 @Module({
     imports: [ConfigModule, IdentityModule, KeycloakAdminHttpModule],
     controllers: [ServiceClientsController],
     providers: [
-        ServiceClientCreationService,
-        ServiceClientListingService,
-        ServiceClientRotationService,
-        ServiceClientDisablementService,
-        ServiceClientDeletionService,
         RolePermissionPolicy,
         PermissionsGuard,
-        { provide: KEYCLOAK_SERVICE_CLIENT_ADMIN, useClass: KeycloakServiceClientAdminClient },
+        {
+            provide: SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
+            useFactory: createServiceClientManagementConfiguration,
+            inject: [ConfigService],
+        },
+        KeycloakServiceClientAdminClient,
+        {
+            provide: KEYCLOAK_SERVICE_CLIENT_ADMIN,
+            useExisting: KeycloakServiceClientAdminClient,
+        },
+        {
+            provide: ServiceClientCreationService,
+            inject: [
+                SERVICE_CREDENTIAL_WRITER,
+                KEYCLOAK_SERVICE_CLIENT_ADMIN,
+                SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
+                RolePermissionPolicy,
+            ],
+            useFactory: (
+                writer: ServiceCredentialWriter,
+                keycloakAdmin: KeycloakServiceClientAdmin,
+                configuration: ServiceClientManagementConfiguration,
+                rolePermissionPolicy: RolePermissionPolicy,
+            ) => new ServiceClientCreationService(writer, keycloakAdmin, configuration, rolePermissionPolicy),
+        },
+        {
+            provide: ServiceClientListingService,
+            inject: [SERVICE_CREDENTIAL_DIRECTORY],
+            useFactory: (directory: ServiceCredentialDirectory) => new ServiceClientListingService(directory),
+        },
+        {
+            provide: ServiceClientRotationService,
+            inject: [SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER, KEYCLOAK_SERVICE_CLIENT_ADMIN],
+            useFactory: (
+                directory: ServiceCredentialDirectory,
+                writer: ServiceCredentialWriter,
+                keycloakAdmin: KeycloakServiceClientAdmin,
+            ) => new ServiceClientRotationService(directory, writer, keycloakAdmin),
+        },
+        {
+            provide: ServiceClientDisablementService,
+            inject: [SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER],
+            useFactory: (directory: ServiceCredentialDirectory, writer: ServiceCredentialWriter) =>
+                new ServiceClientDisablementService(directory, writer),
+        },
+        {
+            provide: ServiceClientDeletionService,
+            inject: [SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER, KEYCLOAK_SERVICE_CLIENT_ADMIN],
+            useFactory: (
+                directory: ServiceCredentialDirectory,
+                writer: ServiceCredentialWriter,
+                keycloakAdmin: KeycloakServiceClientAdmin,
+            ) => new ServiceClientDeletionService(directory, writer, keycloakAdmin),
+        },
     ],
 })
 export class ServiceClientManagementModule {}

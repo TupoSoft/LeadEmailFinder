@@ -14,10 +14,10 @@ integration suite, the optional full Keycloak life-cycle suite, and the existing
 
 ## Progress
 
-- [ ] (2026-08-29) Move service-client HTTP, application, domain, Keycloak, configuration, and provider code into layers.
-- [ ] (2026-08-29) Replace repositories and `DataSource` with identity's credential directory and writer contracts.
-- [ ] (2026-08-29) Preserve provisioning, compensation, rotation, disablement, deletion, audit, and concealment behavior.
-- [ ] (2026-08-29) Run focused, live-Keycloak-optional, repository-wide, documentation, and Bruno validation.
+- [x] (2026-08-31) Move service-client HTTP, application, domain, Keycloak, configuration, and provider code into layers.
+- [x] (2026-08-31) Replace repositories and `DataSource` with identity's credential directory and writer contracts.
+- [x] (2026-08-31) Preserve provisioning, compensation, rotation, disablement, deletion, audit, and concealment behavior.
+- [x] (2026-08-31) Run focused, live-Keycloak, repository-wide, documentation, and Bruno validation.
 
 ## Plan dependencies
 
@@ -30,6 +30,13 @@ integration suite, the optional full Keycloak life-cycle suite, and the existing
 - `module-boundaries/09` will replace this feature's duplicated Keycloak HTTP transport and configuration with the
   shared `KeycloakAdminHttp` technical-library port before this plan starts. The layering work must retain that shared
   dependency and move only the feature-specific service-client adapter.
+- The existing `ServiceCredentialRecord` deliberately contains only the fields authentication needs. Extending it
+  would couple auth fixtures to management-only response fields, so identity now publishes a separate
+  `ServiceCredentialDetailRecord`, following its existing summary/detail record convention.
+- A first writer draft preserved rotation with a full `save` of the credential snapshot read before the Keycloak
+  call. Independent review showed that this could overwrite a concurrent disable, recreate a concurrently deleted
+  row, and fail to advance `updatedAt` when TypeORM detected no changed column. Scoped conditional mutations and
+  explicit not-found/disabled outcomes preserve provider ordering without carrying those stale-snapshot hazards.
 
 ## Decision Log
 
@@ -52,14 +59,34 @@ integration suite, the optional full Keycloak life-cycle suite, and the existing
   compensation for creation failure.
   Rationale: Reordering provider and local state is a product/recovery change, not a layering change.
   Date/Author: 2026-08-29, Codex planning.
+- Decision: Keep `ServiceCredentialRecord` minimal and use `ServiceCredentialDetailRecord` for the management
+  directory, writer, application results, and API serialization.
+  Rationale: Authentication does not need description or timestamp fields, while service-client management must
+  return them without importing the TypeORM entity. Identity already uses separate summary/detail records for this
+  distinction.
+  Date/Author: 2026-08-31, Codex implementation.
+- Decision: Implement rotation, disablement, and deletion with organization-scoped conditional mutations and return
+  operation-specific outcomes when a concurrent local change wins.
+  Rationale: Local disablement must remain authoritative, repeated disablement must not duplicate audits, and a
+  stale pre-provider record must never re-enable or recreate a credential. Application services map those outcomes
+  to the existing conflict, concealment, or idempotent-success HTTP behavior without reordering provider calls.
+  Date/Author: 2026-08-31, Codex implementation and review.
 
 ## Outcomes & Retrospective
 
-Not started.
+The feature now has explicit API, application, domain, and infrastructure layers. Identity owns the new
+purpose-specific directory/writer adapters, application services use plain injected contracts, Nest exception
+translation stays at the API boundary, and the public service-client barrel remains module-only. Conditional writer
+operations also prevent stale rotation/disable/delete snapshots from reversing a concurrent local authority change.
+
+All planned validation passed, including the real Keycloak/PostgreSQL life cycle and the four-request Bruno
+rejection workflow. The disposable stack and dedicated test database created for validation were removed afterward.
+The only non-blocking coverage gap is that conditional concurrency is verified through exact adapter outcome tests,
+not through a dedicated competing-transaction PostgreSQL harness.
 
 ## Context and Orientation
 
-The module's production files currently sit flat under
+Before implementation, the module's production files sat flat under
 `src/libs/modules/service-client-management/src`. `ServiceClientsController` and its DTO expose create, list,
 rotate, disable, and delete routes. Five services enforce organization membership, human-session-only access,
 owner/admin roles, and permission ceilings. All five services inject TypeORM repositories and/or `DataSource`;
@@ -182,18 +209,38 @@ create/list/use/rotate/disable/delete success life cycle when available. Report 
 
 ## Idempotence and Recovery
 
-There is no data migration. Disable and provider deletion retain their current retry behavior; creation compensation
-continues using a request-unique client ID. During implementation, migrate one use case at a time but never leave
-both port and direct-TypeORM writes enabled. If a disposable live test stops after provisioning a client, run that
-documented test steps to clean up or delete only the unique fixture client it created; do not alter shared realm clients or
-identity rows. Provider binding and file moves are repeatable once each token has one implementation.
+There is no data migration. Conditional active-to-disabled mutation makes repeated and concurrent disablement
+idempotent without duplicate audits; scoped rotation/delete outcomes prevent stale callers from overwriting a newer
+local state. Provider deletion retains its retry behavior, and creation compensation continues using a request-unique
+client ID. During implementation, migrate one use case at a time but never leave both port and direct-TypeORM writes
+enabled. If a disposable live test stops after provisioning a client, run its documented cleanup or delete only the
+unique fixture client it created; do not alter shared realm clients or identity rows. Provider binding and file moves
+are repeatable once each token has one implementation.
 
 ## Artifacts and Notes
 
-Record the final layer map, persistence operation/outcome names, compensation-order evidence, focused/full test
-totals, live-Keycloak availability, and Bruno request/test totals. Never record returned client secrets, bearer
-tokens, admin credentials, or real organization IDs.
+- Layer map: `api/` owns controllers, DTOs, exception mapping, and HTTP integration; `application/` owns the five use
+  cases plus the Keycloak/configuration ports; `domain/` owns typed errors; `infrastructure/config/` binds the issuer;
+  and `infrastructure/keycloak/` owns the provider adapter and live suite.
+- Identity contracts: `ServiceCredentialDirectory.listForOrganization`/`findByIdForOrganization` and
+  `ServiceCredentialWriter.createWithAudit`/`rotateWithAudit`/`disableWithAudit`/`deleteWithAudit`.
+- Initial evidence before the refactor: 55 focused tests passed, one live-Keycloak test was skip-gated, and the
+  architecture gate passed with 149 baselined violations.
+- Final focused evidence: 67 tests and 10 suites passed; the one live suite was skip-gated in the ordinary focused
+  command, then passed separately against real Keycloak and PostgreSQL for create, token use, rotation, disablement,
+  and deletion. The four Bruno requests and four tests passed with the expected 401/403/400/400 responses.
+- Repository evidence: type checking passed, and lint completed with zero errors and two preexisting warnings
+  outside this change. The full run passed 1,191 tests and 158 suites, with 49 tests skipped and one to-do.
+- Build and prose evidence: the build compiled 522 files with zero TypeScript issues, Harper passed all four changed
+  Markdown files, and `git diff --check` passed.
+- Architecture evidence: the shrink-only updater removed exactly 11 service-client entries, reducing the baseline
+  from 149 to 138, and `architecture:check` reports no new or stale violation.
+- Runtime recovery: validation began with no `lef` container, network, or volume. The reset workflow, Keycloak smoke,
+  authenticated API smoke, Bruno collection, and live suite passed; the dedicated `_test` database and all
+  turn-created disposable stack resources were then removed.
+- No returned client secret, bearer token, administrator credential, or real organization identifier is recorded.
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and fully validated, including live Keycloak/PostgreSQL and Bruno evidence; ready for pull-request
+review.
