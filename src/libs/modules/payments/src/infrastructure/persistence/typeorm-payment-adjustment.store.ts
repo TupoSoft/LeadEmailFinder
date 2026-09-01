@@ -1,26 +1,26 @@
 import { Injectable } from '@nestjs/common'
 import { DataSource } from 'typeorm'
-import {
-    CreditPurchaseAdjustment,
-    CreditPurchaseAdjustmentDirection,
-    CreditPurchaseAdjustmentState,
-} from '../credit-purchase-adjustment.entity'
-import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
+import { PaymentAdjustmentDirection } from '../../domain/payment-adjustment-direction'
 import {
     calculatePaymentAdjustmentClaim,
     PaymentAdjustmentAccountingRecord,
-} from '../payment-adjustment-accounting'
+} from '../../domain/payment-adjustment-accounting'
 import {
     ClaimedPaymentAdjustment,
     PaymentAdjustmentBasisMissingError,
     PaymentAdjustmentClaimInput,
     PaymentAdjustmentCurrencyMismatchError,
-    PaymentAdjustmentDirection,
     PaymentAdjustmentDirectionInProgressError,
     PaymentAdjustmentPurchaseNotReadyError,
     PaymentAdjustmentReplayConflictError,
     PaymentAdjustmentStore,
-} from '../payment-adjustment.store'
+} from '../../application/ports/payment-adjustment-store'
+import {
+    CreditPurchaseAdjustment,
+    CreditPurchaseAdjustmentDirection,
+    CreditPurchaseAdjustmentState,
+} from './typeorm/credit-purchase-adjustment.entity'
+import { CreditPurchase, CreditPurchaseStatus } from './typeorm/credit-purchase.entity'
 
 @Injectable()
 export class TypeOrmPaymentAdjustmentStore implements PaymentAdjustmentStore {

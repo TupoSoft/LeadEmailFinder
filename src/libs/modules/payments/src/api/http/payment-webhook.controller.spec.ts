@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common'
 import type { RawBodyRequest } from '@nestjs/common'
 import type { Request } from 'express'
-import { PaymentEventHandler } from './payment-event.handler'
-import { InvalidPaymentSignatureError, PaymentProvider } from './payment-provider'
+import { PaymentEventHandler } from '../../application/payment-event.handler'
+import { PaymentProvider } from '../../application/ports/payment-provider'
+import { InvalidPaymentSignatureError } from '../../domain/payment-event'
 import { PaymentWebhookController } from './payment-webhook.controller'
 
 describe('PaymentWebhookController', () => {

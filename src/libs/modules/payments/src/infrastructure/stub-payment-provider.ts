@@ -1,22 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import type { PaymentConfiguration } from '../payment-configuration'
-import {
-    CheckoutInput,
-    CheckoutResult,
-    InvalidPaymentSignatureError,
-    PaymentEvent,
-    PaymentProvider,
-} from '../payment-provider'
+import { CheckoutInput, CheckoutResult, InvalidPaymentSignatureError, PaymentEvent } from '../domain/payment-event'
+import { PaymentProvider } from '../application/ports/payment-provider'
 
-@Injectable()
 export class StubPaymentProvider implements PaymentProvider {
-    private readonly webhookSecret: string
-
-    constructor(configService: ConfigService<PaymentConfiguration, true>) {
-        this.webhookSecret = configService.getOrThrow('PAYMENTS_STUB_WEBHOOK_SECRET')
-    }
+    constructor(private readonly webhookSecret: string) {}
 
     createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
         const providerReference = `stub_${input.purchaseId}`

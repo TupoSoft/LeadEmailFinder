@@ -1,4 +1,15 @@
+import { PurchaseRecord } from '../../domain/purchase-record'
+
 export const PAYMENT_PURCHASE_STORE = Symbol('PAYMENT_PURCHASE_STORE')
+
+export interface CreatePurchaseInput {
+    organizationId: string
+    packId: string
+    credits: number
+    amountMinor: number
+    currency: string
+    provider: string
+}
 
 export interface PaidPurchase {
     id: string
@@ -49,6 +60,10 @@ export class PurchaseProviderTotalConflictError extends Error {
 }
 
 export interface PaymentPurchaseStore {
+    create(input: CreatePurchaseInput): Promise<PurchaseRecord>
+    bindProviderReference(purchaseId: string, providerReference: string): Promise<PurchaseRecord>
+    markFailed(purchaseId: string): Promise<void>
+    listForOrganization(organizationId: string): Promise<PurchaseRecord[]>
     recordPaid(correlation: PaidPurchaseCorrelation): Promise<PaidPurchase | null>
     recordCreditsGranted(purchaseId: string): Promise<void>
     recordFailed(correlation: PurchaseCorrelation): Promise<boolean>

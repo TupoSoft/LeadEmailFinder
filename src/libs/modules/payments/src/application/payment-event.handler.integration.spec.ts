@@ -17,22 +17,23 @@ import {
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
-import {
-    CreditPurchaseAdjustment,
-    CreditPurchaseAdjustmentState,
-} from './credit-purchase-adjustment.entity'
-import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
+import { PaymentEvent } from '../domain/payment-event'
 import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
+import { PaymentEventHandler } from './payment-event.handler'
 import {
     PAYMENT_ADJUSTMENT_STORE,
     PaymentAdjustmentDirectionInProgressError,
     PaymentAdjustmentStore,
-} from './payment-adjustment.store'
-import { PaymentEventHandler } from './payment-event.handler'
-import { PaymentEvent } from './payment-provider'
-import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore } from './payment-purchase.store'
-import { TypeOrmPaymentAdjustmentStore } from './infrastructure/typeorm-payment-adjustment.store'
-import { TypeOrmPaymentPurchaseStore } from './infrastructure/typeorm-payment-purchase.store'
+} from './ports/payment-adjustment-store'
+import { PAYMENT_EVENT_LOGGER, PaymentEventLogger } from './ports/payment-event-logger'
+import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore } from './ports/payment-purchase-store'
+import { TypeOrmPaymentAdjustmentStore } from '../infrastructure/persistence/typeorm-payment-adjustment.store'
+import { TypeOrmPaymentPurchaseStore } from '../infrastructure/persistence/typeorm-payment-purchase.store'
+import {
+    CreditPurchaseAdjustment,
+    CreditPurchaseAdjustmentState,
+} from '../infrastructure/persistence/typeorm/credit-purchase-adjustment.entity'
+import { CreditPurchase, CreditPurchaseStatus } from '../infrastructure/persistence/typeorm/credit-purchase.entity'
 
 // This suite owns its database because other integration specs also synchronize and drop their schemas.
 const postgresUrl = process.env['TEST_PAYMENT_WEBHOOK_POSTGRES_URL']
@@ -103,12 +104,30 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
                     useFactory: (store: CreditLedgerStore) => new CreditsService(store),
                     inject: [CREDIT_LEDGER_STORE],
                 },
-                PaymentEventHandler,
-                PaymentAdjustmentHandler,
                 TypeOrmPaymentPurchaseStore,
                 TypeOrmPaymentAdjustmentStore,
                 { provide: PAYMENT_PURCHASE_STORE, useExisting: TypeOrmPaymentPurchaseStore },
                 { provide: PAYMENT_ADJUSTMENT_STORE, useExisting: TypeOrmPaymentAdjustmentStore },
+                {
+                    provide: PAYMENT_EVENT_LOGGER,
+                    useValue: { warnUnknownEvent: () => undefined, errorConflict: () => undefined },
+                },
+                {
+                    provide: PaymentAdjustmentHandler,
+                    useFactory: (adjustments: PaymentAdjustmentStore, credits: CreditsService) =>
+                        new PaymentAdjustmentHandler(adjustments, credits),
+                    inject: [PAYMENT_ADJUSTMENT_STORE, CreditsService],
+                },
+                {
+                    provide: PaymentEventHandler,
+                    useFactory: (
+                        purchases: PaymentPurchaseStore,
+                        credits: CreditsService,
+                        adjustmentHandler: PaymentAdjustmentHandler,
+                        log: PaymentEventLogger,
+                    ) => new PaymentEventHandler(purchases, credits, adjustmentHandler, log),
+                    inject: [PAYMENT_PURCHASE_STORE, CreditsService, PaymentAdjustmentHandler, PAYMENT_EVENT_LOGGER],
+                },
             ],
         }).compile()
 

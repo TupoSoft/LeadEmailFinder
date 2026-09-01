@@ -1,6 +1,5 @@
-import { ConfigService } from '@nestjs/config'
-import { CreditPackCatalog, CreditPackNotFoundError } from './credit-pack-catalog'
-import { PaymentConfiguration } from './payment-configuration'
+import { CreditPackCatalog } from './credit-pack-catalog'
+import { CreditPackNotFoundError } from '../domain/credit-pack'
 
 describe('CreditPackCatalog', () => {
     const configuredPacks = JSON.stringify({
@@ -13,7 +12,7 @@ describe('CreditPackCatalog', () => {
     })
 
     it('returns an immutable server-configured pack', () => {
-        const catalog = createCatalog(configuredPacks)
+        const catalog = new CreditPackCatalog(configuredPacks)
 
         const pack = catalog.get('starter')
 
@@ -28,7 +27,7 @@ describe('CreditPackCatalog', () => {
     })
 
     it('rejects an unknown pack id', () => {
-        const catalog = createCatalog(configuredPacks)
+        const catalog = new CreditPackCatalog(configuredPacks)
 
         expect(() => catalog.get('missing')).toThrow(new CreditPackNotFoundError('missing'))
     })
@@ -49,14 +48,6 @@ describe('CreditPackCatalog', () => {
             }),
         ],
     ])('rejects %s', (_scenario, value) => {
-        expect(() => createCatalog(value)).toThrow()
+        expect(() => new CreditPackCatalog(value)).toThrow()
     })
 })
-
-function createCatalog(value: string): CreditPackCatalog {
-    const configService = {
-        getOrThrow: jest.fn().mockReturnValue(value),
-    } as unknown as ConfigService<PaymentConfiguration, true>
-
-    return new CreditPackCatalog(configService)
-}

@@ -2,10 +2,10 @@ import { BadGatewayException, BadRequestException, ExecutionContext, ForbiddenEx
 import { Reflector } from '@nestjs/core'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditPackNotFoundError } from './credit-pack-catalog'
+import { CreditPurchaseService, PaymentCheckoutError } from '../../application/credit-purchase.service'
+import { CreditPackNotFoundError } from '../../domain/credit-pack'
+import { PurchaseRecord } from '../../domain/purchase-record'
 import { CreditPurchaseController } from './credit-purchase.controller'
-import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
-import { CreditPurchaseService, PaymentCheckoutError } from './credit-purchase.service'
 
 function principalWith(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal {
     return {
@@ -31,14 +31,14 @@ describe('CreditPurchaseController', () => {
 
     it('returns the purchase id, pending status, and checkout redirect', async () => {
         purchases.start.mockResolvedValue({
-            purchase: { id: 'purchase-1', status: CreditPurchaseStatus.PENDING } as CreditPurchase,
+            purchase: { id: 'purchase-1', status: 'pending' } as PurchaseRecord,
             redirectUrl: 'http://localhost:3000/payment-return?purchaseId=purchase-1',
         })
         const principal = principalWith()
 
         await expect(controller.create({ packId: 'starter' }, principal)).resolves.toEqual({
             id: 'purchase-1',
-            status: CreditPurchaseStatus.PENDING,
+            status: 'pending',
             redirectUrl: 'http://localhost:3000/payment-return?purchaseId=purchase-1',
         })
         expect(purchases.start).toHaveBeenCalledWith(principal, 'starter')
@@ -68,7 +68,7 @@ describe('CreditPurchaseController', () => {
     })
 
     it('lists purchases using only the principal organization', async () => {
-        const organizationPurchases = [{ id: 'purchase-1' }] as CreditPurchase[]
+        const organizationPurchases = [{ id: 'purchase-1' }] as PurchaseRecord[]
         purchases.listForOrganization.mockResolvedValue(organizationPurchases)
         const principal = principalWith()
 

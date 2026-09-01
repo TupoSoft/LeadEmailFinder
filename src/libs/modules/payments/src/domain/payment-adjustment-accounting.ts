@@ -1,4 +1,4 @@
-import { PaymentAdjustmentDirection } from './payment-adjustment.store'
+import { PaymentAdjustmentDirection } from './payment-adjustment-direction'
 
 export interface PaymentAdjustmentPurchaseTerms {
     basisMinor: number

@@ -1,4 +1,5 @@
-import { PaymentEvent, PaymentProvider } from './payment-provider'
+import { PaymentEvent } from '../domain/payment-event'
+import { PaymentProvider } from '../application/ports/payment-provider'
 
 interface PaymentProviderContractOptions {
     createProvider(): PaymentProvider

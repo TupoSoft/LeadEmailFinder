@@ -1,18 +1,18 @@
 import { DataSource, EntityManager } from 'typeorm'
+import { PaymentAdjustmentDirection } from '../../domain/payment-adjustment-direction'
+import {
+    PaymentAdjustmentBasisMissingError,
+    PaymentAdjustmentCurrencyMismatchError,
+    PaymentAdjustmentDirectionInProgressError,
+    PaymentAdjustmentPurchaseNotReadyError,
+    PaymentAdjustmentReplayConflictError,
+} from '../../application/ports/payment-adjustment-store'
 import {
     CreditPurchaseAdjustment,
     CreditPurchaseAdjustmentDirection,
     CreditPurchaseAdjustmentState,
-} from '../credit-purchase-adjustment.entity'
-import { CreditPurchase, CreditPurchaseStatus } from '../credit-purchase.entity'
-import {
-    PaymentAdjustmentBasisMissingError,
-    PaymentAdjustmentCurrencyMismatchError,
-    PaymentAdjustmentDirection,
-    PaymentAdjustmentDirectionInProgressError,
-    PaymentAdjustmentPurchaseNotReadyError,
-    PaymentAdjustmentReplayConflictError,
-} from '../payment-adjustment.store'
+} from './typeorm/credit-purchase-adjustment.entity'
+import { CreditPurchase, CreditPurchaseStatus } from './typeorm/credit-purchase.entity'
 import { TypeOrmPaymentAdjustmentStore } from './typeorm-payment-adjustment.store'
 
 const purchase = {

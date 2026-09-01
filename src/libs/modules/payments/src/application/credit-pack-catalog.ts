@@ -1,28 +1,10 @@
-import { Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import type { PaymentConfiguration } from './payment-configuration'
+import { CreditPack, CreditPackNotFoundError } from '../domain/credit-pack'
 
-export interface CreditPack {
-    id: string
-    credits: number
-    amountMinor: number
-    currency: string
-    providerPriceId: string
-}
-
-export class CreditPackNotFoundError extends Error {
-    constructor(packId: string) {
-        super(`Unknown credit pack: ${packId}`)
-        this.name = CreditPackNotFoundError.name
-    }
-}
-
-@Injectable()
 export class CreditPackCatalog {
     private readonly packs: Readonly<Record<string, CreditPack>>
 
-    constructor(configService: ConfigService<PaymentConfiguration, true>) {
-        this.packs = parseCreditPacks(configService.getOrThrow('PAYMENTS_CREDIT_PACKS'))
+    constructor(rawCreditPacks: string) {
+        this.packs = parseCreditPacks(rawCreditPacks)
     }
 
     get(packId: string): CreditPack {

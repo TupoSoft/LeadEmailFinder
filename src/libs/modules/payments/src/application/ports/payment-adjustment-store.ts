@@ -1,9 +1,6 @@
-export const PAYMENT_ADJUSTMENT_STORE = Symbol('PAYMENT_ADJUSTMENT_STORE')
+import { PaymentAdjustmentDirection } from '../../domain/payment-adjustment-direction'
 
-export enum PaymentAdjustmentDirection {
-    DEBIT = 'debit',
-    RESTORE = 'restore',
-}
+export const PAYMENT_ADJUSTMENT_STORE = Symbol('PAYMENT_ADJUSTMENT_STORE')
 
 export interface PaymentAdjustmentClaimInput {
     providerEventId: string

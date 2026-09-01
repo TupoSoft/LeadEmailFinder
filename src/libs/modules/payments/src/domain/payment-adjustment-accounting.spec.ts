@@ -2,7 +2,7 @@ import {
     calculatePaymentAdjustmentClaim,
     PaymentAdjustmentAccountingRecord,
 } from './payment-adjustment-accounting'
-import { PaymentAdjustmentDirection } from './payment-adjustment.store'
+import { PaymentAdjustmentDirection } from './payment-adjustment-direction'
 
 const purchase = { basisMinor: 500, credits: 100 }
 

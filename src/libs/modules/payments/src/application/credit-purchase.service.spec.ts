@@ -1,11 +1,10 @@
-import { ConfigService } from '@nestjs/config'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { Repository } from 'typeorm'
-import { CreditPack, CreditPackCatalog, CreditPackNotFoundError } from './credit-pack-catalog'
-import { CreditPurchase, CreditPurchaseStatus } from './credit-purchase.entity'
+import { CreditPack, CreditPackNotFoundError } from '../domain/credit-pack'
+import { PurchaseRecord } from '../domain/purchase-record'
+import { CreditPackCatalog } from './credit-pack-catalog'
 import { CreditPurchaseService, PaymentCheckoutError } from './credit-purchase.service'
-import { PaymentConfiguration } from './payment-configuration'
-import { PaymentProvider } from './payment-provider'
+import { PaymentProvider } from './ports/payment-provider'
+import { PaymentPurchaseStore } from './ports/payment-purchase-store'
 
 const principal: AuthPrincipal = {
     credentialKind: 'human_session',
@@ -25,44 +24,59 @@ const pack: CreditPack = {
     providerPriceId: 'price_starter',
 }
 
+function purchaseFixture(overrides: Partial<PurchaseRecord> = {}): PurchaseRecord {
+    return {
+        id: '20000000-0000-4000-8000-000000000001',
+        organizationId: principal.organizationId,
+        packId: 'starter',
+        credits: 100,
+        amountMinor: 500,
+        currency: 'USD',
+        provider: 'stub',
+        providerReference: null,
+        providerTotalMinor: null,
+        status: 'pending',
+        creditsGrantedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+    }
+}
+
 describe('CreditPurchaseService', () => {
-    let purchaseRepo: jest.Mocked<Pick<Repository<CreditPurchase>, 'create' | 'save' | 'find'>>
+    let store: jest.Mocked<PaymentPurchaseStore>
     let catalog: jest.Mocked<Pick<CreditPackCatalog, 'get'>>
     let paymentProvider: jest.Mocked<Pick<PaymentProvider, 'createCheckout' | 'parseEvent'>>
     let service: CreditPurchaseService
 
     beforeEach(() => {
-        purchaseRepo = {
+        store = {
             create: jest.fn(),
-            save: jest.fn(),
-            find: jest.fn(),
+            bindProviderReference: jest.fn(),
+            markFailed: jest.fn(),
+            listForOrganization: jest.fn(),
+            recordPaid: jest.fn(),
+            recordCreditsGranted: jest.fn(),
+            recordFailed: jest.fn(),
         }
         catalog = { get: jest.fn() }
         paymentProvider = { createCheckout: jest.fn(), parseEvent: jest.fn() }
-        const configService = {
-            getOrThrow: jest.fn((key: string) => {
-                if (key === 'PAYMENTS_PROVIDER') return 'stub'
-                if (key === 'PAYMENTS_CHECKOUT_URL') return 'http://localhost:3000/payment-return'
-                throw new Error(`Unexpected configuration key: ${key}`)
-            }),
-        } as unknown as ConfigService<PaymentConfiguration, true>
 
         service = new CreditPurchaseService(
-            purchaseRepo as unknown as Repository<CreditPurchase>,
+            store,
             catalog as unknown as CreditPackCatalog,
             paymentProvider,
-            configService,
+            'stub' as never,
+            'http://localhost:3000/payment-return',
         )
     })
 
     it('persists catalog values before creating checkout and then stores the provider reference', async () => {
-        const purchase = {
-            id: '20000000-0000-4000-8000-000000000001',
-            status: CreditPurchaseStatus.PENDING,
-        } as CreditPurchase
+        const purchase = purchaseFixture()
+        const bound = purchaseFixture({ providerReference: 'stub_purchase-1' })
         catalog.get.mockReturnValue(pack)
-        purchaseRepo.create.mockReturnValue(purchase)
-        purchaseRepo.save.mockResolvedValue(purchase)
+        store.create.mockResolvedValue(purchase)
+        store.bindProviderReference.mockResolvedValue(bound)
         paymentProvider.createCheckout.mockResolvedValue({
             providerReference: 'stub_purchase-1',
             redirectUrl: 'http://localhost:3000/payment-return?purchaseId=purchase-1',
@@ -71,14 +85,13 @@ describe('CreditPurchaseService', () => {
         const result = await service.start(principal, 'starter')
 
         expect(catalog.get).toHaveBeenCalledWith('starter')
-        expect(purchaseRepo.create).toHaveBeenCalledWith({
+        expect(store.create).toHaveBeenCalledWith({
             organizationId: principal.organizationId,
             packId: 'starter',
             credits: 100,
             amountMinor: 500,
             currency: 'USD',
             provider: 'stub',
-            status: CreditPurchaseStatus.PENDING,
         })
         expect(paymentProvider.createCheckout).toHaveBeenCalledWith({
             purchaseId: purchase.id,
@@ -86,11 +99,9 @@ describe('CreditPurchaseService', () => {
             pack,
             returnUrl: 'http://localhost:3000/payment-return',
         })
-        expect(purchaseRepo.save).toHaveBeenLastCalledWith(
-            expect.objectContaining({ providerReference: 'stub_purchase-1' }),
-        )
+        expect(store.bindProviderReference).toHaveBeenCalledWith(purchase.id, 'stub_purchase-1')
         expect(result).toEqual({
-            purchase,
+            purchase: bound,
             redirectUrl: 'http://localhost:3000/payment-return?purchaseId=purchase-1',
         })
     })
@@ -101,36 +112,26 @@ describe('CreditPurchaseService', () => {
         })
 
         await expect(service.start(principal, 'missing')).rejects.toThrow(CreditPackNotFoundError)
-        expect(purchaseRepo.create).not.toHaveBeenCalled()
-        expect(purchaseRepo.save).not.toHaveBeenCalled()
+        expect(store.create).not.toHaveBeenCalled()
         expect(paymentProvider.createCheckout).not.toHaveBeenCalled()
     })
 
     it('marks the purchase failed when checkout creation fails', async () => {
-        const purchase = {
-            id: '20000000-0000-4000-8000-000000000002',
-            status: CreditPurchaseStatus.PENDING,
-        } as CreditPurchase
+        const purchase = purchaseFixture({ id: '20000000-0000-4000-8000-000000000002' })
         catalog.get.mockReturnValue(pack)
-        purchaseRepo.create.mockReturnValue(purchase)
-        purchaseRepo.save.mockResolvedValue(purchase)
+        store.create.mockResolvedValue(purchase)
         paymentProvider.createCheckout.mockRejectedValue(new Error('provider unavailable'))
 
         await expect(service.start(principal, 'starter')).rejects.toThrow(PaymentCheckoutError)
-        expect(purchaseRepo.save).toHaveBeenCalledTimes(2)
-        expect(purchaseRepo.save).toHaveBeenLastCalledWith(
-            expect.objectContaining({ status: CreditPurchaseStatus.FAILED }),
-        )
+        expect(store.markFailed).toHaveBeenCalledWith(purchase.id)
+        expect(store.bindProviderReference).not.toHaveBeenCalled()
     })
 
-    it('lists only the requested organization newest first', async () => {
-        const purchases = [{ id: 'purchase-2' }, { id: 'purchase-1' }] as CreditPurchase[]
-        purchaseRepo.find.mockResolvedValue(purchases)
+    it('lists only the requested organization', async () => {
+        const purchases = [purchaseFixture({ id: 'purchase-2' }), purchaseFixture({ id: 'purchase-1' })]
+        store.listForOrganization.mockResolvedValue(purchases)
 
         await expect(service.listForOrganization(principal.organizationId)).resolves.toBe(purchases)
-        expect(purchaseRepo.find).toHaveBeenCalledWith({
-            where: { organizationId: principal.organizationId },
-            order: { createdAt: 'DESC' },
-        })
+        expect(store.listForOrganization).toHaveBeenCalledWith(principal.organizationId)
     })
 })

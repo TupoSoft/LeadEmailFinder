@@ -1,2 +1,2 @@
-export * from './payment-configuration'
+export * from './domain/payment-configuration'
 export * from './payments.module'
