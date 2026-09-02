@@ -9,15 +9,46 @@ import {
     OfficeApps,
 } from '@tuposoft/lead-email-finder/catch-all'
 import { EmailVerifier } from './email-verifier.service'
-import { CATCH_ALL_VERIFIERS_TOKEN, SMTP_VERIFIER_TOKEN } from './email-verifier.constants'
+import {
+    ACCOUNT_DISCOVERY_CLOCK_TOKEN,
+    CATCH_ALL_VERIFIERS_TOKEN,
+    SMTP_VERIFIER_TOKEN,
+} from './email-verifier.constants'
 import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
 import { CatchAllProxyConfiguration } from '../email-verification-configuration'
+import { loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
+import {
+    AccountDiscoveryApprovalView,
+    Clock,
+} from '../application/account-discovery/approved-account-discovery-verifier'
+import { composeAccountDiscoveryVerifiers } from '../infrastructure/account-discovery/account-discovery-composition'
 
-export function catchAllVerifiersForProxy(
-    proxyUrl: string | undefined,
-    catchAllVerifiers: ICatchAllVerifier[],
-): ICatchAllVerifier[] {
-    return proxyUrl ? catchAllVerifiers : []
+const SYSTEM_CLOCK: Clock = Object.freeze({ now: () => new Date() })
+
+type AccountDiscoveryManifestLoader = () => Promise<{ approvals: readonly AccountDiscoveryApprovalView[] }>
+
+export async function configuredAccountDiscoveryVerifiers(
+    configService: ConfigService<CatchAllProxyConfiguration, true>,
+    clock: Clock,
+    microsoftGetCredentialType: MicrosoftGetCredentialType,
+    microsoftLogin: MicrosoftLogin,
+    mimecastLogin: MimecastLogin,
+    officeApps: OfficeApps,
+    loadManifest: AccountDiscoveryManifestLoader = loadAccountDiscoveryApprovals,
+): Promise<ICatchAllVerifier[]> {
+    const manifest = await loadManifest()
+
+    return composeAccountDiscoveryVerifiers(
+        {
+            CATCH_ALL_HTTP_PROXY_URL: configService.get('CATCH_ALL_HTTP_PROXY_URL'),
+            CATCH_ALL_PROVIDER: configService.get('CATCH_ALL_PROVIDER'),
+            CATCH_ALL_PROVIDER_APPROVAL_ID: configService.get('CATCH_ALL_PROVIDER_APPROVAL_ID'),
+            CATCH_ALL_PROVIDER_REGION: configService.get('CATCH_ALL_PROVIDER_REGION'),
+        },
+        manifest.approvals,
+        { microsoftGetCredentialType, microsoftLogin, mimecastLogin, officeApps },
+        clock,
+    )
 }
 
 @Module({
@@ -29,12 +60,20 @@ export function catchAllVerifiersForProxy(
             useExisting: SmtpVerifier,
         },
         {
+            provide: ACCOUNT_DISCOVERY_CLOCK_TOKEN,
+            useValue: SYSTEM_CLOCK,
+        },
+        {
             provide: CATCH_ALL_VERIFIERS_TOKEN,
-            useFactory: (
-                configService: ConfigService<CatchAllProxyConfiguration, true>,
-                ...catchAllVerifiers: ICatchAllVerifier[]
-            ) => catchAllVerifiersForProxy(configService.get('CATCH_ALL_HTTP_PROXY_URL'), catchAllVerifiers),
-            inject: [ConfigService, MicrosoftGetCredentialType, MicrosoftLogin, MimecastLogin, OfficeApps],
+            useFactory: configuredAccountDiscoveryVerifiers,
+            inject: [
+                ConfigService,
+                ACCOUNT_DISCOVERY_CLOCK_TOKEN,
+                MicrosoftGetCredentialType,
+                MicrosoftLogin,
+                MimecastLogin,
+                OfficeApps,
+            ],
         },
     ],
     exports: [EmailVerifier],

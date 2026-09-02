@@ -1,8 +1,8 @@
 import { Expose } from 'class-transformer'
 import {
     EmailPatternEnum,
+    EmailVerificationReadSource,
     EmailVerificationReason,
-    EmailVerificationSource,
     IEmailVerificationResponseDto,
 } from '@tuposoft/lead-email-finder/common'
 import { IsEmail, IsFQDN } from 'class-validator'
@@ -41,7 +41,7 @@ export class EmailVerificationResponseDto implements IEmailVerificationResponseD
 
     @Expose()
     @AutoMap(() => [String])
-    sources: EmailVerificationSource[]
+    sources: EmailVerificationReadSource[]
 
     @Expose()
     @AutoMap()

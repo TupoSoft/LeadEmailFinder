@@ -44,9 +44,7 @@ describe('organization-owned verification entities', () => {
         [Email, ['organizationId', 'updatedAt']],
         [SmtpVerification, ['organizationId', 'updatedAt']],
     ])('indexes %p by %p', (entity, expectedColumns) => {
-        const indexes = metadata.indices
-            .filter(index => index.target === entity)
-            .map(index => index.columns)
+        const indexes = metadata.indices.filter(index => index.target === entity).map(index => index.columns)
 
         expect(indexes).toContainEqual(expectedColumns)
     })
@@ -79,5 +77,19 @@ describe('organization-owned verification entities', () => {
 
         await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
         expect(dataSource.entityMetadatas).toHaveLength(4)
+    })
+
+    it('hydrates a historical LinkedIn source only at the persisted-row boundary', async () => {
+        const dataSource = new MetadataDataSource({
+            type: 'postgres',
+            entities: [EmailVerification],
+        })
+        await dataSource.buildEntityMetadata()
+        const sourcesColumn = dataSource
+            .getMetadata(EmailVerification)
+            .columns.find(column => column.propertyName === 'sources')
+
+        expect(sourcesColumn).toBeDefined()
+        expect(dataSource.driver.prepareHydratedValue('linkedin,mx', sourcesColumn!)).toEqual(['linkedin', 'mx'])
     })
 })

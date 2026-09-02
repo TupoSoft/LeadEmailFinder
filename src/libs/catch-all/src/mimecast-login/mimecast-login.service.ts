@@ -7,9 +7,14 @@ import { isNativeError } from 'node:util/types'
 import { MimecastData } from './mimecast-data.interface'
 import { MimecastResponse } from './mimecast-response.interface'
 
+export type MimecastRegion = 'us' | 'uk'
+
 @Injectable()
-export class MimecastLogin implements ICatchAllVerifier {
-    private static readonly URL = 'https://login-{countryCode}.mimecast.com/u/proxy/api/login/discover-authentication'
+export class MimecastLogin {
+    private static readonly URLS: Readonly<Record<MimecastRegion, string>> = Object.freeze({
+        us: 'https://login-us.mimecast.com/u/proxy/api/login/discover-authentication',
+        uk: 'https://login-uk.mimecast.com/u/proxy/api/login/discover-authentication',
+    })
 
     private static readonly HEADERS = {
         'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="100", "Google Chrome";v="100"',
@@ -27,7 +32,7 @@ export class MimecastLogin implements ICatchAllVerifier {
 
     private static readonly EXPECTED_AUTH_TYPES = ['Basic-Ad', 'Basic-Cloud']
 
-    sourceName = 'mimecast' as const
+    readonly sourceName = 'mimecast' as const
 
     constructor(
         @Optional()
@@ -35,10 +40,28 @@ export class MimecastLogin implements ICatchAllVerifier {
         private readonly httpService: HttpService,
     ) {}
 
-    verify: (email: string) => Promise<boolean> = async email => {
-        const { URL: url, HEADERS: headers, EXPECTED_AUTH_TYPES: expectedAuthTypes } = MimecastLogin
+    forRegion(region: MimecastRegion): ICatchAllVerifier {
+        const url = MimecastLogin.urlForRegion(region)
 
-        const countryCodes = ['us', 'uk']
+        return Object.freeze({
+            sourceName: this.sourceName,
+            verify: (email: string) => this.verifyAtUrl(email, url),
+        })
+    }
+
+    private static urlForRegion(region: MimecastRegion): string {
+        switch (region) {
+            case 'us':
+                return MimecastLogin.URLS.us
+            case 'uk':
+                return MimecastLogin.URLS.uk
+            default:
+                throw new Error(`Unsupported Mimecast region: ${String(region)}`)
+        }
+    }
+
+    private async verifyAtUrl(email: string, url: string): Promise<boolean> {
+        const { HEADERS: headers, EXPECTED_AUTH_TYPES: expectedAuthTypes } = MimecastLogin
 
         const body: MimecastData = {
             data: [
@@ -52,14 +75,12 @@ export class MimecastLogin implements ICatchAllVerifier {
             headers,
         }
 
-        const promises = countryCodes.map(async countryCode => {
+        try {
             const {
                 data: {
                     data: [{ authenticate: authTypes }],
                 },
-            } = await firstValueFrom(
-                this.httpService.post<MimecastResponse>(url.replace('{countryCode}', countryCode), body, config),
-            )
+            } = await firstValueFrom(this.httpService.post<MimecastResponse>(url, body, config))
 
             for (const authType of authTypes) {
                 if (expectedAuthTypes.includes(authType)) {
@@ -68,10 +89,6 @@ export class MimecastLogin implements ICatchAllVerifier {
             }
 
             throw new Error('Mimecast login failed')
-        })
-
-        try {
-            return await Promise.any(promises)
         } catch (error) {
             if (isNativeError(error)) {
                 this.logger.debug(`Mimecast catch all verification ended in error for email ${email}: ${error.message}`)

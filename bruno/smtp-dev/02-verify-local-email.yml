@@ -5,12 +5,12 @@ info:
 
 http:
   method: POST
-  url: "{{baseUrl}}/verify"
+  url: '{{baseUrl}}/verify'
   headers:
     - name: Content-Type
       value: application/json
     - name: Authorization
-      value: "Bearer {{serviceClientToken}}"
+      value: 'Bearer {{serviceClientToken}}'
   body:
     type: json
     data: |-
@@ -28,4 +28,5 @@ runtime:
           expect(res.body.catchAll).to.equal(true);
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
+          expect(res.body.sources).to.deep.equal([]);
         });

@@ -17,15 +17,20 @@ account-discovery request. This safety pull request can merge with an empty mani
 
 ## Progress
 
-- [ ] (2026-08-30) Remove the LinkedIn adapter, registration, exports, tests, and committed session material.
-- [ ] (2026-08-30) Add the repository-owned redacted LinkedIn-session scanner and route validity, revocation, and
-      reachable-history decisions to Security.
-- [ ] (2026-08-30) Add the empty account-discovery approval manifest, strict schema, CI command, and runtime loader.
-- [ ] (2026-08-30) Require one matching approval ID, provider, purpose, region, and validity interval at startup and
+- [x] (2026-09-03 00:02 +02:00) Removed the LinkedIn adapter, registration, exports, tests, and committed working-tree
+      session material without opening or displaying the deleted files.
+- [x] (2026-09-03 00:03 +02:00) Added the repository-owned redacted LinkedIn-session scanner, confirmed Security was
+      notified out of band, and left validity, revocation, and reachable-history remediation decisions with Security.
+- [x] (2026-09-02 19:55 +02:00) Added the empty account-discovery approval manifest, shared strict schema, CLI command,
+      and fixed-path runtime loader.
+- [x] (2026-09-02 19:55 +02:00) Required one matching approval ID, provider, purpose, region, and validity interval at startup and
       immediately before every provider disclosure.
-- [ ] (2026-08-30) Select zero or one provider, choose one Mimecast region, and make mutable provider bodies
+- [x] (2026-09-02 19:55 +02:00) Selected zero or one provider, chose one Mimecast region, and made mutable provider bodies
       concurrency-safe.
-- [ ] (2026-08-30) Add focused, packaging, HTTP-regression, architecture, full-suite, and documentation validation.
+- [x] (2026-09-03 00:11 +02:00) Added and ran focused, packaging, HTTP-regression, PostgreSQL integration,
+      architecture, full-suite, and documentation validation. Bruno runtime execution remains unverified because the
+      required development stack and generated credentials are unavailable; its changed assertion received static
+      validation.
 
 ## Plan dependencies
 
@@ -33,9 +38,24 @@ account-discovery request. This safety pull request can merge with an empty mani
 
 ## Surprises & Discoveries
 
-- `src/libs/catch-all/src/linkedin-login/linkedin-login.service.ts` contains hard-coded LinkedIn session-cookie,
+- `src/libs/catch-all/src/linkedin-login/linkedin-login.service.ts` contained hard-coded LinkedIn session-cookie,
   CSRF, and request-header material. Deleting the current file does not determine validity, revoke the remote session,
   or remove reachable Git history.
+- The Nest build compiles from the `src` source root, so a runtime loader implemented only under `scripts/privacy`
+  would be absent from the production build. The shared parser and fixed-path loader therefore live in
+  `src/libs/config/src/account-discovery-approvals.ts`; the required script path is a thin CLI that exports the same
+  API.
+- `email_verifications.sources` is a TypeORM `simple-array`, and an older synchronized-development row can hydrate the
+  historical `linkedin` literal without an active provider enum member. The focused entity test preserves only that
+  read-side compatibility boundary.
+- The repository defines no Security recipient, private incident system, or case-reference format. The repository
+  owner confirmed that Security was notified out of band on 2026-09-03; no private case reference was exposed to or
+  fabricated by this implementation. The adapter files were then deleted without being opened or displayed.
+- The working-tree scan is clean. The reachable-history scan reports 11 redacted findings for one rule ID. Security
+  retains the validity, remote-revocation, and coordinated history-remediation decisions; this pull request does not
+  suppress the findings or rewrite history.
+- The production manifest initially inherited runtime-user ownership. The final image keeps it root-owned and not
+  writable by the `node` runtime user, so a compromised process cannot rewrite its approval evidence before restart.
 
 ## Decision Log
 
@@ -82,22 +102,48 @@ account-discovery request. This safety pull request can merge with an empty mani
 - Decision: Build each provider request body from immutable templates inside `verify()`.
   Rationale: Overlapping requests must not overwrite or exchange target addresses through shared mutable objects.
   Date/Author: 2026-08-30, privacy road map review.
+- Decision: Put the canonical approval schema and loader in the compiled configuration library and keep
+  `scripts/privacy/account-discovery-approvals.ts` as the CLI entry point.
+  Rationale: CLI and runtime still use exactly one parser, while the production build includes the runtime loader.
+  Date/Author: 2026-09-02, Codex.
+- Decision: Remove `linkedin` from active provider and result enums but retain it as a read-only persisted-result type.
+  Rationale: TypeORM must hydrate older synchronized-development rows without allowing any active adapter to emit or
+  select that source.
+  Date/Author: 2026-09-02, Codex.
+- Decision: After repository-owner confirmation that Security was notified, delete the adapter without opening or
+  displaying it and run only the redacted scanner. Record counts and rule IDs, but no matched bytes or private case
+  details.
+  Rationale: The repository has no documented recipient or case system, while immediate working-tree containment can
+  proceed without making remote validity, revocation, or history-remediation decisions.
+  Date/Author: 2026-09-03, Codex.
+- Decision: Package the fixed approval manifest as root-owned and non-writable by the runtime `node` user.
+  Rationale: A process whose outbound disclosures are gated by repository approval evidence must not be able to
+  rewrite that evidence in its container layer.
+  Date/Author: 2026-09-03, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+The repository now defaults to zero account-discovery providers, and an environment selection cannot activate one
+without an exact current approval from the fixed empty manifest. The LinkedIn adapter and working-tree session material
+are gone; only the historical persistence literal remains read-only. Provider bodies are request-local, and Mimecast
+selects one approved region.
+
+Working-tree containment is complete, but the redacted reachable-history result is intentionally nonzero. Security
+was notified out of band and owns validity, revocation, and coordinated history-remediation decisions. No private case
+reference was available to this implementation. Bruno coverage was updated and statically checked, but runtime
+execution awaits the SMTP development stack and generated credentials.
 
 ## Context and Orientation
 
-`src/libs/modules/email-verification/src/email-verifier/email-verifier.module.ts` currently activates multiple
-account-discovery adapters from proxy presence, and `email-verifier.service.ts` can call all injected verifiers.
-`src/libs/catch-all/src/catch-all.module.ts` registers Microsoft, Mimecast, Office Apps, and LinkedIn implementations.
-The LinkedIn implementation contains the exposed material. Microsoft adapters mutate static bodies, and Mimecast tries
-two regional endpoints.
+Before this change, `src/libs/modules/email-verification/src/email-verifier/email-verifier.module.ts` activated
+multiple account-discovery adapters from proxy presence, and `email-verifier.service.ts` could call all injected
+verifiers. `src/libs/catch-all/src/catch-all.module.ts` registered Microsoft, Mimecast, Office Apps, and LinkedIn
+implementations. The LinkedIn implementation contained the exposed material, Microsoft adapters mutated static bodies,
+and Mimecast tried two regional endpoints.
 
 Top-level configuration is validated by
 `src/lead-email-finder-api/src/environment-variables.dto.ts` and composed in
-`src/lead-email-finder-api/src/lead-email-finder-api.module.ts`. The repository currently has no approval manifest or
+`src/lead-email-finder-api/src/lead-email-finder-api.module.ts`. This change adds the fixed empty approval manifest and
 runtime evidence gate. Plan 10 later obtains the actual contract, vendor, transfer, security, customer-notice or
 authorization, and expiry evidence and is the only plan allowed to populate the manifest.
 
@@ -119,7 +165,9 @@ Plan 10 owns approval records and governance. Plan 03 owns PII-safe provider log
 
 ## Plan of Work
 
-Notify Security through the approved private channel before handling the LinkedIn file. Delete
+Notify Security through the approved private channel before handling the LinkedIn file. The repository names no such
+recipient or system, so the repository owner confirmed out-of-band notification before implementation continued; no
+case reference was invented or committed. Delete
 `src/libs/catch-all/src/linkedin-login/` and remove its module/barrel references. Trace the historical `linkedin` source
 through persistence and response decoding. Keep it only if a compatibility test proves an old synchronized-development
 row remains readable; remove it from every active provider union and selector in all cases.
@@ -216,8 +264,9 @@ Plan 10 later versions and populates the manifest; it is deliberately not a depe
 - Mimecast sends to one approved regional endpoint; overlapping provider calls do not share or swap bodies.
 - The production image contains the fixed manifest at the runtime path; no environment can redirect that path.
 - Default development and SMTP workflows invoke no account-discovery adapter.
-- Focused tests, manifest/scanner checks, packaging test, architecture, typecheck, lint, full suite, build, Bruno,
-  documentation, formatting, and whitespace validation pass.
+- Focused tests, manifest/scanner checks, packaging test, architecture, typecheck, lint, full suite, build,
+  documentation, formatting, and whitespace validation pass. Bruno runtime execution passes when its dependencies are
+  available; otherwise its static coverage and the exact unavailable dependency are recorded.
 
 ## Validation
 
@@ -239,8 +288,9 @@ Then run:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md
-    corepack pnpm exec prettier --check config/privacy/account-discovery-approvals.yaml src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md
+    corepack pnpm docs:lint -- README.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md
+    corepack pnpm exec prettier --check .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md config/privacy/account-discovery-approvals.yaml README.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md
+    corepack pnpm exec prettier --check --tab-width 2 .github/workflows/validate.yml bruno/smtp-dev/02-verify-local-email.yml bruno/smtp-dev/opencollection.yml
     git diff --check
 
 Run `bruno/smtp-dev` in the required container network and assert the synthetic local result has no external
@@ -259,9 +309,23 @@ history ad hoc, or restoring LinkedIn code.
 
 ## Artifacts and Notes
 
-Record manifest revision, sanitized approval fixture IDs, scanner version/scope/count/rule IDs, private Security case
-reference, test totals, image-path evidence, and Bruno totals. Never record matched values, cookie/header excerpts,
-addresses, credentials, provider payloads, customer identities, or private legal/vendor evidence.
+- Manifest: `initial-empty`, zero approvals; shared CLI and runtime parser passed.
+- Scanner: working tree, zero findings; reachable history, 11 redacted findings under
+  `linkedin-jsessionid-cookie`. No matched value or excerpt was emitted. Security notification was confirmed by the
+  repository owner; no private case reference was supplied to this implementation.
+- Tests: eight focused suites and 125 tests passed. The full suite passed 169 suites and 1,375 tests, with 10 suites
+  and 52 tests skipped; three PostgreSQL integration suites added 30 passing tests. Documentation-linter tests passed
+  13 of 13.
+- Gates: architecture passed with 9 modules and 110 baselined violations; typecheck and build passed; ESLint passed
+  with one preexisting warning in `src/libs/config/src/load-secrets.spec.ts`.
+- Image: `lead-email-finder:issue-463` contains `/app/config/privacy/account-discovery-approvals.yaml` as root-owned,
+  non-group/world-writable, and not writable by the runtime `node` user; it parses as the fixed empty manifest.
+- Bruno: the SMTP collection assertion was updated and statically validated. Runtime execution is unverified because
+  no Compose services or generated Keycloak credentials are present, and creating them requires the confirmation-gated
+  destructive development reset.
+
+Never record matched values, cookie/header excerpts, addresses, credentials, provider payloads, customer identities,
+or private legal/vendor evidence.
 
 ## Plan readiness
 

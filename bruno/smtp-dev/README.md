@@ -2,8 +2,9 @@
 
 This collection verifies `person@lef.test` through the opt-in, Docker-network-only SMTP fixture. The fixture
 accepts every recipient, so this checks application, DNS, proxy, and SMTP wiring rather than real-world
-deliverability. The collection then drains the fixture proxy, confirms that proxy selection excludes it, and
-restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
+deliverability. The verification assertion also proves that the default empty approval manifest produces no external
+account-discovery source. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
+and restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
 that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
 a successful request. The final requests update the authenticated organization's stored email and prove that an
 address outside that organization's cache is concealed as `404 Not Found` rather than created implicitly.

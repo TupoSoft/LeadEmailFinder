@@ -1,5 +1,27 @@
-import { IsBoolean, IsEnum, IsInt, IsJSON, IsOptional, IsString, IsUrl, Max, Min, ValidateIf } from 'class-validator'
-import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
+import {
+    IsBoolean,
+    IsEnum,
+    IsInt,
+    IsJSON,
+    IsNotEmpty,
+    IsOptional,
+    IsString,
+    IsUrl,
+    Max,
+    Min,
+    Validate,
+    ValidateIf,
+    ValidationArguments,
+    ValidatorConstraint,
+    ValidatorConstraintInterface,
+} from 'class-validator'
+import {
+    ACCOUNT_DISCOVERY_PROVIDERS,
+    type AccountDiscoveryProvider,
+    Environment,
+    IsFileVar,
+    WithFileVars,
+} from '@tuposoft/lead-email-finder/config'
 import { PaddleEnvironmentName, PaymentsProviderName } from '@tuposoft/lead-email-finder/modules/payments'
 import { Transform, Type } from 'class-transformer'
 
@@ -7,10 +29,64 @@ function transformBoolean(value: unknown): boolean {
     return value === true || value === 'true'
 }
 
-const OPTIONAL_SECURITY_FILE_VARIABLES = ['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const
+const OPTIONAL_FILE_VARIABLES = [
+    'POSTGRES_TLS_CA',
+    'REDIS_TLS_CA',
+    'S3_KMS_KEY_ID',
+    'CATCH_ALL_HTTP_PROXY_URL',
+] as const
+
+interface AccountDiscoveryProviderEnvironment {
+    CATCH_ALL_HTTP_PROXY_URL?: unknown
+    CATCH_ALL_HTTP_PROXY_URL_FILE?: unknown
+    CATCH_ALL_PROVIDER?: unknown
+    CATCH_ALL_PROVIDER_APPROVAL_ID?: unknown
+    CATCH_ALL_PROVIDER_REGION?: unknown
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.length > 0
+}
+
+function isConfiguredDirectlyOrByFile(
+    environment: AccountDiscoveryProviderEnvironment,
+    property: 'CATCH_ALL_HTTP_PROXY_URL',
+): boolean {
+    return isNonEmptyString(environment[property]) || isNonEmptyString(environment[`${property}_FILE`])
+}
+
+@ValidatorConstraint({ name: 'accountDiscoveryProviderConfiguration', async: false })
+class AccountDiscoveryProviderConfigurationConstraint implements ValidatorConstraintInterface {
+    validate(_value: unknown, { object }: ValidationArguments): boolean {
+        const environment = object as AccountDiscoveryProviderEnvironment
+        const { CATCH_ALL_PROVIDER: provider } = environment
+
+        if (provider === undefined) {
+            return (
+                environment.CATCH_ALL_PROVIDER_APPROVAL_ID === undefined &&
+                environment.CATCH_ALL_PROVIDER_REGION === undefined
+            )
+        }
+
+        return (
+            typeof provider === 'string' &&
+            ACCOUNT_DISCOVERY_PROVIDERS.includes(provider as AccountDiscoveryProvider) &&
+            isConfiguredDirectlyOrByFile(environment, 'CATCH_ALL_HTTP_PROXY_URL') &&
+            isNonEmptyString(environment.CATCH_ALL_PROVIDER_APPROVAL_ID) &&
+            isNonEmptyString(environment.CATCH_ALL_PROVIDER_REGION) &&
+            (provider !== 'mimecast' ||
+                environment.CATCH_ALL_PROVIDER_REGION === 'us' ||
+                environment.CATCH_ALL_PROVIDER_REGION === 'uk')
+        )
+    }
+
+    defaultMessage(): string {
+        return 'account discovery provider configuration is incomplete or unsupported'
+    }
+}
 
 function isOptionalFileVariableConfigured(
-    property: (typeof OPTIONAL_SECURITY_FILE_VARIABLES)[number],
+    property: (typeof OPTIONAL_FILE_VARIABLES)[number],
 ): (environment: Record<string, unknown>) => boolean {
     return (environment: Record<string, unknown>): boolean =>
         environment[property] !== undefined || environment[`${property}_FILE`] !== undefined
@@ -34,7 +110,7 @@ export function normalizePaymentCheckoutUrlConfiguration(config: Record<string, 
 export function normalizeEnvironmentConfiguration(config: Record<string, unknown>): Record<string, unknown> {
     const normalizedConfig = normalizePaymentCheckoutUrlConfiguration(config)
 
-    for (const property of OPTIONAL_SECURITY_FILE_VARIABLES) {
+    for (const property of OPTIONAL_FILE_VARIABLES) {
         if (normalizedConfig[property] !== undefined && normalizedConfig[`${property}_FILE`] !== undefined) {
             throw new Error(`${property}: multiple-sources`)
         }
@@ -66,9 +142,33 @@ export class EnvironmentVariablesDto {
     @IsString()
     REDIS_TLS_CA?: string
 
+    @IsFileVar(
+        environment =>
+            environment['CATCH_ALL_PROVIDER'] !== undefined ||
+            environment['CATCH_ALL_HTTP_PROXY_URL'] !== undefined ||
+            environment['CATCH_ALL_HTTP_PROXY_URL_FILE'] !== undefined,
+    )
     @IsOptional()
     @IsString()
     CATCH_ALL_HTTP_PROXY_URL?: string
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    @Validate(AccountDiscoveryProviderConfigurationConstraint)
+    CATCH_ALL_PROVIDER?: AccountDiscoveryProvider
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    @Validate(AccountDiscoveryProviderConfigurationConstraint)
+    CATCH_ALL_PROVIDER_APPROVAL_ID?: string
+
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    @Validate(AccountDiscoveryProviderConfigurationConstraint)
+    CATCH_ALL_PROVIDER_REGION?: string
 
     @IsFileVar()
     @IsString()
