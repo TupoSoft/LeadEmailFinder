@@ -66,6 +66,33 @@ commit real production credentials.
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
+#### Production Transport and Customer-Object Storage
+
+`NODE_ENV=production` enables fail-closed transport and object-write checks at startup:
+
+- PostgreSQL uses peer-verified TLS, and `POSTGRES_URL` must not contain connection-string parameters that replace the
+  application's TLS policy. `POSTGRES_TLS_CA` or `POSTGRES_TLS_CA_FILE` can supply an optional trusted CA; otherwise,
+  PostgreSQL uses the `Node.js` runtime's configured default trust roots.
+- A standalone `REDIS_URL` must use `rediss://`. Sentinel connections keep the existing `redis-sentinel://` syntax,
+  but discovery and selected-master traffic both use peer-verified TLS. `REDIS_TLS_CA` or `REDIS_TLS_CA_FILE` can
+  supply an optional trusted CA; otherwise, Redis uses the `Node.js` runtime's configured default trust roots.
+- `S3_URL` must use HTTPS, `S3_SERVER_SIDE_ENCRYPTION` must be `aws:kms`, and `S3_KMS_KEY_ID` (or
+  `S3_KMS_KEY_ID_FILE`) must be nonempty. S3 HTTPS uses the `Node.js` runtime's configured default trust roots, which
+  can be extended with `NODE_EXTRA_CA_CERTS`. Production supplies explicit peer-verifying Node HTTP-handler options,
+  so `NODE_TLS_REJECT_UNAUTHORIZED=0` cannot weaken S3 certificate verification.
+
+Configure each optional secret through either its direct variable or its `_FILE` counterpart, never both. Duplicate
+sources fail startup with a value-redacted `<KEY>: multiple-sources` error.
+
+Every email-verification batch input and result write sends `Cache-Control: no-store`. Production writes additionally
+state the configured SSE-KMS algorithm and key on the request instead of relying only on bucket defaults. Configuration
+failures identify only the rejected key and a stable reason; they do not echo URLs, credentials, CA
+contents, or KMS identifiers.
+
+The checked-in Compose stack is explicitly a disposable development environment. Its plaintext PostgreSQL and Redis
+connections and HTTP Garage endpoint remain supported only while `NODE_ENV=development`; do not use that stack as a
+production configuration template.
+
 #### Draining a Proxy
 
 To take a proxy out of rotation without dropping in-flight verifications, `PATCH /v1/proxies/:id` with `{"state": "draining"}`. New allocations for that proxy stop immediately (it's excluded by the eligibility query, not by a background job), while any lease already held keeps running to completion and releases normally. Wait at least `PROXY_LEASE_TTL_MS` (60 seconds by default) after draining, then check the application logs for that proxy's ID: once only `Proxy lease release outcome` entries appear for it, with no further `Proxy allocation acquired` entries, it's safe to `PATCH` its state to `"disabled"` or `DELETE` it.

@@ -7,6 +7,11 @@ import { setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Request } from 'express'
 import multerS3 from 'multer-s3'
+import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } from '@tuposoft/lead-email-finder/common'
+import {
+    CustomerObjectWriteSecurityMapping,
+    customerObjectWriteSecurityContract,
+} from '@tuposoft/lead-email-finder/common/testing'
 
 jest.mock('multer-s3')
 
@@ -18,18 +23,34 @@ type MulterS3KeyCallback = (
 
 interface MulterS3Options {
     key: MulterS3KeyCallback
+    cacheControl?: string
+    serverSideEncryption?: string
+    sseKmsKeyId?: string
+}
+
+const developmentObjectWriteSecurity: CustomerObjectWriteSecurity = {
+    mode: 'development-local',
+    cacheControl: 'no-store',
+}
+
+function readSecurityMapping(options: MulterS3Options): CustomerObjectWriteSecurityMapping {
+    if ('serverSideEncryption' in options || 'sseKmsKeyId' in options) {
+        return {
+            cacheControl: options.cacheControl as 'no-store',
+            serverSideEncryption: options.serverSideEncryption as 'aws:kms',
+            kmsKeyId: options.sseKmsKeyId as string,
+        }
+    }
+
+    return { cacheControl: options.cacheControl as 'no-store' }
 }
 
 describe('MulterOptionsFactoryImpl', () => {
     let factory: MulterOptionsFactoryImpl
     let keyCallback: MulterS3KeyCallback
+    let multerS3Options: MulterS3Options
 
-    beforeEach(async () => {
-        ;(multerS3 as unknown as jest.Mock).mockImplementation((options: MulterS3Options) => {
-            keyCallback = options.key
-            return 'storage-engine'
-        })
-
+    async function buildFactory(objectWriteSecurity: CustomerObjectWriteSecurity): Promise<MulterOptionsFactoryImpl> {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 MulterOptionsFactoryImpl,
@@ -38,14 +59,37 @@ describe('MulterOptionsFactoryImpl', () => {
                     useValue: {},
                 },
                 {
+                    provide: CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN,
+                    useValue: objectWriteSecurity,
+                },
+                {
                     provide: ConfigService,
                     useValue: { get: jest.fn().mockReturnValue('bucket') },
                 },
             ],
         }).compile()
 
-        factory = module.get(MulterOptionsFactoryImpl)
+        return module.get(MulterOptionsFactoryImpl)
+    }
+
+    beforeEach(async () => {
+        ;(multerS3 as unknown as jest.Mock).mockImplementation((options: MulterS3Options) => {
+            multerS3Options = options
+            keyCallback = options.key
+            return 'storage-engine'
+        })
+
+        factory = await buildFactory(developmentObjectWriteSecurity)
         void factory.createMulterOptions()
+    })
+
+    customerObjectWriteSecurityContract('batch input multer-S3 adapter', {
+        writeWithSecurity: async security => {
+            const securedFactory = await buildFactory(security)
+            void securedFactory.createMulterOptions()
+
+            return readSecurityMapping(multerS3Options)
+        },
     })
 
     it('generates an organization-namespaced key when a principal is present', () => {

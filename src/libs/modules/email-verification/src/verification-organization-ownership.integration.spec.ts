@@ -287,6 +287,10 @@ describeWithPostgres('verification organization ownership', () => {
 
         const processor = new BatchEmailVerificationProcessor(
             {} as never,
+            {
+                mode: 'development-local',
+                cacheControl: 'no-store',
+            },
             { add: jest.fn() } as never,
             verificationRepository,
             dataSource,

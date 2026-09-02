@@ -1,18 +1,22 @@
 import { IsBoolean, IsEnum, IsInt, IsJSON, IsOptional, IsString, IsUrl, Max, Min, ValidateIf } from 'class-validator'
 import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
-import {
-    PaddleEnvironmentName,
-    PaymentsProviderName,
-} from '@tuposoft/lead-email-finder/modules/payments'
+import { PaddleEnvironmentName, PaymentsProviderName } from '@tuposoft/lead-email-finder/modules/payments'
 import { Transform, Type } from 'class-transformer'
 
 function transformBoolean(value: unknown): boolean {
     return value === true || value === 'true'
 }
 
-export function normalizePaymentCheckoutUrlConfiguration(
-    config: Record<string, unknown>,
-): Record<string, unknown> {
+const OPTIONAL_SECURITY_FILE_VARIABLES = ['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const
+
+function isOptionalFileVariableConfigured(
+    property: (typeof OPTIONAL_SECURITY_FILE_VARIABLES)[number],
+): (environment: Record<string, unknown>) => boolean {
+    return (environment: Record<string, unknown>): boolean =>
+        environment[property] !== undefined || environment[`${property}_FILE`] !== undefined
+}
+
+export function normalizePaymentCheckoutUrlConfiguration(config: Record<string, unknown>): Record<string, unknown> {
     const checkoutUrl = config['PAYMENTS_CHECKOUT_URL']
     const legacyCheckoutUrl = config['PAYMENTS_CHECKOUT_RETURN_URL']
 
@@ -27,6 +31,18 @@ export function normalizePaymentCheckoutUrlConfiguration(
     return config
 }
 
+export function normalizeEnvironmentConfiguration(config: Record<string, unknown>): Record<string, unknown> {
+    const normalizedConfig = normalizePaymentCheckoutUrlConfiguration(config)
+
+    for (const property of OPTIONAL_SECURITY_FILE_VARIABLES) {
+        if (normalizedConfig[property] !== undefined && normalizedConfig[`${property}_FILE`] !== undefined) {
+            throw new Error(`${property}: multiple-sources`)
+        }
+    }
+
+    return normalizedConfig
+}
+
 @WithFileVars()
 export class EnvironmentVariablesDto {
     @IsEnum(Environment)
@@ -39,6 +55,16 @@ export class EnvironmentVariablesDto {
     @IsFileVar()
     @IsString()
     POSTGRES_URL: string
+
+    @IsFileVar(isOptionalFileVariableConfigured('POSTGRES_TLS_CA'))
+    @IsOptional()
+    @IsString()
+    POSTGRES_TLS_CA?: string
+
+    @IsFileVar(isOptionalFileVariableConfigured('REDIS_TLS_CA'))
+    @IsOptional()
+    @IsString()
+    REDIS_TLS_CA?: string
 
     @IsOptional()
     @IsString()
@@ -66,6 +92,15 @@ export class EnvironmentVariablesDto {
 
     @IsString()
     S3_BUCKET: string
+
+    @IsOptional()
+    @IsString()
+    S3_SERVER_SIDE_ENCRYPTION?: string
+
+    @IsFileVar(isOptionalFileVariableConfigured('S3_KMS_KEY_ID'))
+    @IsOptional()
+    @IsString()
+    S3_KMS_KEY_ID?: string
 
     @IsBoolean()
     @Type(() => String)

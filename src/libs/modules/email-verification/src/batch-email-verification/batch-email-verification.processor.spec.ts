@@ -11,6 +11,11 @@ import { BatchEmailVerificationProcessor } from './batch-email-verification.proc
 import { BatchEmailVerificationJobData } from './batch-email-verification-job-data.interface'
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
 import { EmailVerification } from '../sync-email-verification'
+import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } from '@tuposoft/lead-email-finder/common'
+import {
+    CustomerObjectWriteSecurityMapping,
+    customerObjectWriteSecurityContract,
+} from '@tuposoft/lead-email-finder/common/testing'
 
 jest.mock('@aws-sdk/lib-storage')
 
@@ -18,10 +23,34 @@ interface UploadParams {
     Bucket: string
     Key: string
     Body: NodeJS.WritableStream
+    CacheControl?: string
+    ServerSideEncryption?: string
+    SSEKMSKeyId?: string
 }
 
-function mockUploadDrivenByBody(onBody?: (body: NodeJS.WritableStream) => void): void {
+const developmentObjectWriteSecurity: CustomerObjectWriteSecurity = {
+    mode: 'development-local',
+    cacheControl: 'no-store',
+}
+
+function readSecurityMapping(params: UploadParams): CustomerObjectWriteSecurityMapping {
+    if ('ServerSideEncryption' in params || 'SSEKMSKeyId' in params) {
+        return {
+            cacheControl: params.CacheControl as 'no-store',
+            serverSideEncryption: params.ServerSideEncryption as 'aws:kms',
+            kmsKeyId: params.SSEKMSKeyId as string,
+        }
+    }
+
+    return { cacheControl: params.CacheControl as 'no-store' }
+}
+
+function mockUploadDrivenByBody(
+    onBody?: (body: NodeJS.WritableStream) => void,
+    onUpload?: (params: UploadParams) => void,
+): void {
     ;(Upload as unknown as jest.Mock).mockImplementation(({ params }: { params: UploadParams }) => {
+        onUpload?.(params)
         onBody?.(params.Body)
 
         return {
@@ -91,6 +120,7 @@ describe('BatchEmailVerificationProcessor', () => {
     async function buildProcessor(
         cursor: Readable,
         metadataColumns: { propertyName: string }[] = [{ propertyName: 'email' }],
+        objectWriteSecurity: CustomerObjectWriteSecurity = developmentObjectWriteSecurity,
     ): Promise<BatchEmailVerificationProcessor> {
         queryBuilder.stream.mockResolvedValue(cursor)
 
@@ -98,6 +128,7 @@ describe('BatchEmailVerificationProcessor', () => {
             providers: [
                 BatchEmailVerificationProcessor,
                 { provide: getS3ConnectionToken('default'), useValue: s3 },
+                { provide: CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, useValue: objectWriteSecurity },
                 { provide: getQueueToken('async-email-verification'), useValue: asyncEmailVerificationQueue },
                 {
                     provide: getRepositoryToken(EmailVerification),
@@ -113,6 +144,21 @@ describe('BatchEmailVerificationProcessor', () => {
 
         return module.get(BatchEmailVerificationProcessor)
     }
+
+    customerObjectWriteSecurityContract('batch result AWS upload adapter', {
+        writeWithSecurity: async security => {
+            let uploadParams: UploadParams | undefined
+            mockUploadDrivenByBody(undefined, params => {
+                uploadParams = params
+            })
+            const processor = await buildProcessor(Readable.from([], { objectMode: true }), undefined, security)
+
+            await processor.process(job, 'token')
+
+            expect(uploadParams).toBeDefined()
+            return readSecurityMapping(uploadParams as UploadParams)
+        },
+    })
 
     it('advances to Finish with the exact uploaded bucket/key after a successful upload', async () => {
         mockUploadDrivenByBody()

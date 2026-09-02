@@ -25,6 +25,8 @@ compatibility route kept billing- and permission-equivalent to its replacement.
 - No organization/membership policy — authenticated HTTP adapters and existing jobs supply `organizationId`, while
   this module uses that value only to isolate verification state. Identity and membership policy remain owned by
   [`identity`](../identity/README.md) and [`auth`](../auth/README.md).
+- No production transport or object-encryption policy — the API composition root validates that policy and supplies
+  one shared common token to this module's S3 infrastructure adapters.
 
 ## Privacy and Data Lifecycle
 
@@ -97,7 +99,10 @@ Batch uploads are stored at `organizations/<organizationId>/uploads/<uuid>` (buc
 multer-S3 storage engine). Completed results are written back beside the upload with `/uploads/` replaced by
 `/results/` (`derive-results-key.ts`), and the job's stored `s3://bucket/key` result location is parsed back
 into a bucket/key pair by `parse-s3-result-location.ts` when a result is downloaded. The S3 client's own
-credentials and region are configured once at the API composition root, not inside this module.
+credentials, region, transport policy, and shared `CustomerObjectWriteSecurity` value are configured once at the API
+composition root, not inside this module. Both writers inject that value and always map `no-store`; production maps
+the exact SSE-KMS algorithm and key fields as well. Neither writer reads `NODE_ENV` or accepts a local security
+override.
 
 ## Configuration
 
@@ -119,7 +124,8 @@ Focused tests are grouped by subarea under `src/`:
   `batch-email-verification/batch-email-verification.service.spec.ts`,
   `batch-email-verification/derive-results-key.spec.ts`,
   `batch-email-verification/parse-s3-result-location.spec.ts`,
-  `batch-email-verification/multer-options-factory-impl.service.spec.ts`
+  `batch-email-verification/multer-options-factory-impl.service.spec.ts`; the two writer specifications reuse the
+  common customer-object security contract for production and development mappings
 - **Domain/Email persistence**: `domain/domain.service.spec.ts`, `domain/domain-synonym-finder.spec.ts`,
   `email/email.controller.spec.ts`, `email/email.service.spec.ts`
 - **SMTP engine**: `email-verifier/email-verifier.spec.ts`, `email-verifier/smtp/smtp-client.factory.spec.ts`,

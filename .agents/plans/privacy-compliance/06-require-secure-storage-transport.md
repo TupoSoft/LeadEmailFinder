@@ -14,12 +14,14 @@ A developer can observe insecure production settings being rejected, both batch 
 
 ## Progress
 
-- [ ] (2026-08-30) Extract strict PostgreSQL, Redis, and S3 configuration into focused factories.
-- [ ] (2026-08-30) Reject insecure production transport without exposing connection strings, trust material, or keys.
-- [ ] (2026-08-30) Add the common `CustomerObjectWriteSecurity` value/token and bind it in the API composition root.
-- [ ] (2026-08-30) Inject the shared token into both email batch-object writers and verify exact AWS parameters.
-- [ ] (2026-08-30) Prove production rejection, local-development compatibility, packaging, runtime wiring, and full
-      validation.
+- [x] (2026-08-31 19:45 +02:00) Extracted strict PostgreSQL, Redis, and S3 configuration into focused factories.
+- [x] (2026-08-31 19:45 +02:00) Rejected insecure production transport with stable, value-redacted configuration errors.
+- [x] (2026-08-31 19:45 +02:00) Added the common `CustomerObjectWriteSecurity` value/token and bound one frozen
+      value in the API composition root.
+- [x] (2026-08-31 19:45 +02:00) Injected the shared token into both email batch-object writers and covered their
+      exact production and development AWS mappings with one reusable contract.
+- [x] (2026-08-31 20:00 +02:00) Proved production rejection, local-development compatibility, packaging, root wiring,
+      and full repository validation.
 
 ## Plan dependencies
 
@@ -27,7 +29,18 @@ A developer can observe insecure production settings being rejected, both batch 
 
 ## Surprises & Discoveries
 
-None yet.
+- The common library had no README even though this plan's validation and documentation scope named one. This change
+  creates `src/libs/common/README.md` to document the new contract and its testing-only adapter suite.
+- Ioredis keeps one `redis-sentinel://` configuration syntax. Authenticated production transport is expressed through
+  `enableTLSForSentinelMode`, peer-verified `tls` options for the selected master, and matching `sentinelTLS` options
+  for discovery rather than through a second URL scheme.
+- Optional values supported through `@WithFileVars()` need an explicit `@IsFileVar` condition when the canonical
+  variable is not otherwise required. The security variables therefore validate their `/run/secrets/` paths
+  explicitly and reject simultaneous direct and `_FILE` sources before loading either value.
+- Privacy plan 04 landed while this pull request was under review and changed the same batch processor, specification,
+  and module README. The conflict resolution preserved its organization-scoped query and CSV behavior alongside this
+  plan's injected object-write security contract. Its direct processor integration fixture also needed the new
+  development security argument.
 
 ## Decision Log
 
@@ -64,23 +77,62 @@ None yet.
 - Decision: Configuration failures identify only the offending key and stable reason code.
   Rationale: Fail-closed startup must not echo a URL, host, username, password, CA, KMS identifier, or credential.
   Date/Author: 2026-08-30, privacy road map review.
+- Decision: Format new configuration failures as `<KEY>: <stable-kebab-reason>` and retain the existing Sentinel URL
+  syntax while setting all required ioredis TLS controls explicitly.
+  Rationale: One redacted format is testable across factories, and preserving the Sentinel syntax avoids an unrelated
+  configuration migration without weakening discovery or selected-master transport.
+  Date/Author: 2026-08-31, implementation.
+- Decision: Treat the direct and `_FILE` forms of each optional security secret as mutually exclusive configuration
+  sources.
+  Rationale: Rejecting ambiguity keeps application initialization deterministic and prevents an inline value from
+  silently shadowing a mounted secret.
+  Date/Author: 2026-08-31, implementation.
+- Decision: Supply the AWS SDK's Node HTTP-handler constructor options with `httpsAgent.rejectUnauthorized=true` in
+  production.
+  Rationale: An HTTPS scheme is not authenticated transport if a process-wide Node setting disables certificate
+  verification. Explicit agent options override that setting while retaining the configured default trust roots.
+  Date/Author: 2026-08-31, final security audit.
 
 ## Outcomes & Retrospective
 
-Not started.
+Completed. The application now refuses to start in production unless PostgreSQL, Redis, and S3 meet the authenticated
+transport requirements, and S3 also has an explicit SSE-KMS algorithm and key. Development keeps the existing
+disposable PostgreSQL, Redis, and Garage behavior.
+
+One framework-free common contract now supplies a frozen security value to the API composition root. Both email batch
+writers inject the token, always write `no-store`, and add the exact SSE-KMS request fields in production. A reusable
+contract suite covers both adapters and is available to plan 13.
+
+After merging the latest `master`, the focused suite passed 8 suites and 119 tests; the full suite passed 165 suites
+and 1,280 tests, with the repository's 10 suites and 52 tests intentionally skipped. Typecheck, compilation, the
+production Docker build, and the module architecture gate passed. Lint passed with zero errors and one preexisting
+warning in `src/libs/config/src/load-secrets.spec.ts`.
+
+No HTTP contract changed, so Bruno coverage is not applicable. The active Lead Email Finder Compose stack belonged to
+the unrelated main checkout and was deliberately neither recreated nor used to claim worktree runtime coverage. No
+migration was added.
+
+The final SOLID review found no new material violation. The input mapping remains in the small multer-S3 adapter. The
+result mapping remains in the preexisting `BatchEmailVerificationProcessor`, which already coordinates queue state,
+database streaming, CSV generation, and S3 upload; extracting a dedicated result writer is preexisting architectural
+debt outside this transport-policy pull request. The new mapping is a pure local function covered by the reusable
+contract, which limits further responsibility growth and prevents policy drift. The S3 factory and common value factory
+both validate the KMS pair deliberately: the former protects client initialization, and the latter protects the
+injected write-policy boundary.
 
 ## Context and Orientation
 
-`src/lead-email-finder-api/src/lead-email-finder-api.module.ts` currently constructs TypeORM options inline.
-`src/libs/redis/src/parse-connection-string-options.factory.ts` accepts plaintext standalone and Sentinel connections.
-`src/lead-email-finder-api/src/s3-module-options-factory-impl.ts` accepts the configured endpoint without a
-production transport check.
+At plan start, `src/lead-email-finder-api/src/lead-email-finder-api.module.ts` constructed TypeORM options inline,
+`src/libs/redis/src/parse-connection-string-options.factory.ts` accepted plaintext standalone and Sentinel
+connections, and `src/lead-email-finder-api/src/s3-module-options-factory-impl.ts` accepted the configured endpoint
+without a production transport check. The implementation now delegates these decisions to focused factories.
 
 Email batch input writes use
 `src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.ts`, and
-`BatchEmailVerificationProcessor` creates result uploads. Neither write requests server-side encryption. The common
-library already exposes framework-free interfaces and symbol tokens, including proxy tokens, and is an allowed
-cross-module dependency. The API project is the outer Nest composition root.
+`BatchEmailVerificationProcessor` creates result uploads. At plan start neither requested server-side encryption;
+both now inject the common write-security token. The common library exposes framework-free interfaces and symbol
+tokens, including proxy tokens, and is an allowed cross-module dependency. The API project remains the outer Nest
+composition root.
 
 The local Compose stack deliberately uses plaintext services on its private development network. That is a development
 exception, not proof of production security.
@@ -105,8 +157,8 @@ connection-string parameters that could override the explicit SSL object. Preser
 Extend `EnvironmentVariablesDto` and focused tests for `POSTGRES_TLS_CA`, `REDIS_TLS_CA`,
 `S3_SERVER_SIDE_ENCRYPTION`, and `S3_KMS_KEY_ID`. Make the Redis parser require `rediss://` in production standalone
 mode and explicit peer-verified TLS for Sentinel discovery and master traffic. Make the S3 options factory reject
-non-HTTPS production endpoints and require the KMS pair. Use the platform trust store or `NODE_EXTRA_CA_CERTS`; never
-set an agent that disables verification.
+non-HTTPS production endpoints and require the KMS pair. Use the `Node.js` runtime's configured default trust roots or
+`NODE_EXTRA_CA_CERTS`; never set an agent that disables verification.
 
 Add these common files and exports:
 
@@ -176,7 +228,7 @@ implementation uses existing TypeORM, ioredis, AWS SDK, Nest configuration, and 
 
 Run focused configuration, common-contract, and adapter tests:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/lead-email-finder-api/src/environment-variables.dto.spec.ts src/lead-email-finder-api/src/postgres-module-options-factory-impl.spec.ts src/lead-email-finder-api/src/s3-module-options-factory-impl.spec.ts src/lead-email-finder-api/src/customer-object-write-security.factory.spec.ts src/libs/redis/src/parse-connection-string-options.factory.spec.ts src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/lead-email-finder-api/src/environment-variables.dto.spec.ts src/lead-email-finder-api/src/postgres-module-options-factory-impl.spec.ts src/lead-email-finder-api/src/s3-module-options-factory-impl.spec.ts src/lead-email-finder-api/src/customer-object-write-security.factory.spec.ts src/lead-email-finder-api/src/customer-object-write-security.module.spec.ts src/libs/redis/src/parse-connection-string-options.factory.spec.ts src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts --runInBand
     corepack pnpm architecture:check
 
 Cover every insecure production combination, CA pass-through, redacted errors, immutable returned values, explicit fake
@@ -203,10 +255,40 @@ verification, using a non-KMS production mode, adding a business-module-local re
 
 ## Artifacts and Notes
 
-Record the sanitized configuration matrix, common-token contract-test result, adapter request-field assertions,
-development health, Bruno totals, and full check results. Never record connection strings, CA contents, KMS IDs,
-credentials, customer addresses, or object contents.
+The sanitized configuration matrix is:
+
+- Production PostgreSQL supplies `ssl.rejectUnauthorized=true`, optionally supplies the configured CA contents, and
+  rejects URL parameters that could replace the explicit TLS policy.
+- Production standalone Redis requires `rediss://`; Sentinel supplies peer-verified `tls` and `sentinelTLS`
+  settings. Both optionally consume trusted CA contents.
+- Production S3 requires HTTPS, `aws:kms`, and a nonempty KMS key. Development preserves the existing plaintext local
+  endpoints. Production also supplies explicit peer-verifying Node HTTP-handler options.
+- Both customer-object writers always map `no-store`; production also maps `aws:kms` and the configured key through
+  provider-specific request fields. Security fields are applied last so local options cannot override them.
+- The reusable Jest contract is reachable only through the common testing deep barrel and is excluded from production
+  compilation.
+
+Validation artifacts:
+
+- Focused Jest after merging `master`: 8 suites and 119 tests passed.
+- Full `test:ci` after merging `master`: 165 suites and 1,280 tests passed; 10 suites and 52 tests were intentionally
+  skipped.
+- `typecheck`: passed.
+- `lint`: passed with zero errors and one preexisting explicit-return-type warning in
+  `src/libs/config/src/load-secrets.spec.ts:14`.
+- Post-merge `build`: passed with zero TypeScript issues and 536 SWC-compiled files.
+- `architecture:check`: passed for 9 modules with the existing 138 baselined violations.
+- Pre-merge production `docker build -f Dockerfile -t lef-issue-467-validation .`: passed with zero TypeScript issues
+  and 532 SWC-compiled files. Image inspection confirmed the Jest-only contract was absent; the exact temporary image
+  was removed afterward. The later merge had no packaging conflict, and its Nest production build passed separately.
+- `docs:lint` for the four changed Markdown files: passed.
+- `git diff --check`: passed.
+- Bruno: not applicable — no externally observable HTTP API behavior changed. Exact startup and storage-request
+  metadata behavior is covered below the HTTP boundary. The active Lead Email Finder stack was owned by another
+  checkout, so its collections were not run.
+
+No connection strings, CA contents, KMS IDs, credentials, customer addresses, or object contents were recorded.
 
 ## Plan readiness
 
-Ready to implement
+Implemented and validated
