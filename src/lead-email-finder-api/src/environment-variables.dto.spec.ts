@@ -129,6 +129,156 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(environment.PROXY_LEASE_TTL_MS).toBe(60000)
     })
 
+    it.each([
+        ['no account-discovery configuration', {}],
+        ['a proxy alone', { CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080' }],
+        [
+            'a complete Office Apps selection',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'office_apps',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'a complete selection with the proxy in a secret file',
+            {
+                CATCH_ALL_HTTP_PROXY_URL_FILE: '/run/secrets/catch_all_http_proxy_url',
+                CATCH_ALL_PROVIDER: 'office_apps',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'a complete Mimecast UK selection',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'mimecast',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'uk',
+            },
+        ],
+    ])('accepts %s', (_name, configuration): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, configuration)
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects an account-discovery proxy file outside the secret directory', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            CATCH_ALL_HTTP_PROXY_URL_FILE: '/tmp/catch_all_http_proxy_url',
+            CATCH_ALL_PROVIDER: 'office_apps',
+            CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+            CATCH_ALL_PROVIDER_REGION: 'us',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            'CATCH_ALL_HTTP_PROXY_URL_FILE',
+        )
+    })
+
+    it('rejects duplicate inline and file proxy sources without exposing either value', (): void => {
+        const proxyUrl = 'http://proxy-user:proxy-password@proxy.example:8080'
+        const proxyFile = '/run/secrets/catch_all_http_proxy_url'
+
+        expect(() =>
+            normalizeEnvironmentConfiguration({
+                CATCH_ALL_HTTP_PROXY_URL: proxyUrl,
+                CATCH_ALL_HTTP_PROXY_URL_FILE: proxyFile,
+            }),
+        ).toThrow('CATCH_ALL_HTTP_PROXY_URL: multiple-sources')
+
+        try {
+            normalizeEnvironmentConfiguration({
+                CATCH_ALL_HTTP_PROXY_URL: proxyUrl,
+                CATCH_ALL_HTTP_PROXY_URL_FILE: proxyFile,
+            })
+        } catch (error) {
+            expect(String(error)).not.toContain(proxyUrl)
+            expect(String(error)).not.toContain(proxyFile)
+        }
+    })
+
+    it.each([
+        [
+            'a provider without a proxy',
+            {
+                CATCH_ALL_PROVIDER: 'office_apps',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'a provider without an approval ID',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'office_apps',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'a provider without a region',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'office_apps',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+            },
+        ],
+        [
+            'an approval ID without a provider',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+            },
+        ],
+        [
+            'a region without a provider',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'LinkedIn',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'linkedin',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'an unknown provider',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'unknown',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'us',
+            },
+        ],
+        [
+            'Mimecast with an unsupported region',
+            {
+                CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
+                CATCH_ALL_PROVIDER: 'mimecast',
+                CATCH_ALL_PROVIDER_APPROVAL_ID: 'approval-fixture-1',
+                CATCH_ALL_PROVIDER_REGION: 'eu',
+            },
+        ],
+    ])('rejects %s', (_name, configuration): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, configuration)
+        const accountDiscoveryProperties = [
+            'CATCH_ALL_PROVIDER',
+            'CATCH_ALL_PROVIDER_APPROVAL_ID',
+            'CATCH_ALL_PROVIDER_REGION',
+        ]
+
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toEqual(
+            expect.arrayContaining(accountDiscoveryProperties.filter(property => property in configuration)),
+        )
+    })
+
     it('transforms a configured SMTP port from an environment variable', (): void => {
         const environment = plainToInstance(
             EnvironmentVariablesDto,

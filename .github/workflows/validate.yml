@@ -45,6 +45,14 @@ jobs:
       - name: Test documentation linter
         run: corepack pnpm test:docs-lint
 
+      - name: Validate account-discovery approvals
+        env:
+          ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm privacy:account-discovery-approvals-check
+
+      - name: Scan for LinkedIn session material
+        run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
+
       - name: Lint changed documentation with Harper
         continue-on-error: true
         env:
@@ -85,3 +93,17 @@ jobs:
 
       - name: Build production image
         run: docker build --tag lead-email-finder:ci .
+
+      - name: Test packaged account-discovery manifest
+        run: >-
+          docker run --rm --entrypoint node lead-email-finder:ci
+          -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs');
+          const { parse } = require('yaml');
+          const path = '/app/config/privacy/account-discovery-approvals.yaml';
+          const manifest = parse(readFileSync(path, 'utf8'));
+          if (manifest.schemaVersion !== 1 || manifest.revision !== 'initial-empty' || manifest.approvals.length !== 0)
+          process.exit(1);
+          const stat = statSync(path);
+          if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1);
+          try { accessSync(path, constants.W_OK); process.exit(1); }
+          catch (error) { if (error.code !== 'EACCES') throw error; }"

@@ -36,8 +36,7 @@ export class MicrosoftGetCredentialType implements ICatchAllVerifier {
         'sec-ch-ua-platform': '"Android"',
     }
 
-    private static readonly DATA = {
-        username: '<EMAIL>',
+    private static readonly BODY_TEMPLATE = Object.freeze({
         isOtherIdpSupported: true,
         checkPhones: true,
         isRemoteNGCSupported: true,
@@ -50,7 +49,7 @@ export class MicrosoftGetCredentialType implements ICatchAllVerifier {
         federationFlags: 0,
         isSignup: false,
         isAccessPassSupported: true,
-    }
+    })
 
     private static readonly PARAMS = {
         mkt: 'en-GB',
@@ -73,19 +72,21 @@ export class MicrosoftGetCredentialType implements ICatchAllVerifier {
     verify: (email: string) => Promise<boolean> = async email => {
         const {
             URL: url,
-            DATA: data,
+            BODY_TEMPLATE: bodyTemplate,
             PARAMS: params,
             HEADERS: headers,
             EXISTS_RESULT: existsResult,
         } = MicrosoftGetCredentialType
-
-        data.username = email
+        const body = {
+            ...bodyTemplate,
+            username: email,
+        }
 
         try {
             const {
                 data: { IfExistsResult },
             } = await firstValueFrom(
-                this.httpClient.post<MicrosoftGetCredsResponseData>(url, data, {
+                this.httpClient.post<MicrosoftGetCredsResponseData>(url, body, {
                     params,
                     headers,
                 }),

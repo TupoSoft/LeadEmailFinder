@@ -7,9 +7,8 @@ request:
   scripts:
     - type: before-request
       code: |-
-        // Always mint a fresh token rather than caching one for the run: this collection's later requests
-        // (proving the deprecated legacy route actually debits a credit) wait out the same slow, pre-existing
-        // catch-all HTTP probe delay documented in the README, so a cached token can expire before the run ends.
+        // Always mint a fresh token rather than caching one for the run: this collection performs a long sequence of
+        // verification, proxy-state, and billing requests, so a cached token can expire before the run ends.
         const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded' },

@@ -1,7 +1,7 @@
 import { MicrosoftGetCredentialType } from './microsoft-get-credential-type.service'
 import { HttpService } from '@nestjs/axios'
 import { Logger } from '@nestjs/common'
-import { of, throwError } from 'rxjs'
+import { of, Subject, throwError } from 'rxjs'
 import { Test } from '@nestjs/testing'
 
 describe('MicrosoftGetCredentialType', () => {
@@ -49,6 +49,30 @@ describe('MicrosoftGetCredentialType', () => {
 
         const result = await service.verify(email)
         expect(result).toBe(false)
+    })
+
+    it('should keep request bodies isolated while verification calls overlap', async () => {
+        const firstResponse = new Subject<any>()
+        const secondResponse = new Subject<any>()
+
+        httpService.post.mockReturnValueOnce(firstResponse).mockReturnValueOnce(secondResponse)
+
+        const firstResult = service.verify('first@example.com')
+        const secondResult = service.verify('second@example.com')
+
+        const firstBody = httpService.post.mock.calls[0][1]
+        const secondBody = httpService.post.mock.calls[1][1]
+
+        expect(firstBody).toEqual(expect.objectContaining({ username: 'first@example.com' }))
+        expect(secondBody).toEqual(expect.objectContaining({ username: 'second@example.com' }))
+        expect(firstBody).not.toBe(secondBody)
+
+        secondResponse.next({ data: { IfExistsResult: 0 } })
+        secondResponse.complete()
+        firstResponse.next({ data: { IfExistsResult: 0 } })
+        firstResponse.complete()
+
+        await expect(Promise.all([firstResult, secondResult])).resolves.toEqual([true, true])
     })
 
     it('should log an error and return false when the HTTP request fails', async () => {

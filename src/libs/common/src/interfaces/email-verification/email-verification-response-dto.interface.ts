@@ -1,5 +1,8 @@
 import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '../../enums'
 
+// Retained only so rows written by older synchronized development databases remain readable.
+export type EmailVerificationReadSource = EmailVerificationSource | 'linkedin'
+
 export interface IEmailVerificationResponseDto {
     email: string
 
@@ -13,7 +16,7 @@ export interface IEmailVerificationResponseDto {
 
     targetExchange?: string
 
-    sources: EmailVerificationSource[]
+    sources: EmailVerificationReadSource[]
 
     exists: boolean | null
 

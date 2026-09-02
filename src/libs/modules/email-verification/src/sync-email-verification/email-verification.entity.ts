@@ -1,5 +1,9 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm'
-import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
+import {
+    EmailPatternEnum,
+    EmailVerificationReadSource,
+    EmailVerificationReason,
+} from '@tuposoft/lead-email-finder/common'
 import { AutoMap } from '@automapper/classes'
 
 @Entity('email_verifications')
@@ -51,7 +55,7 @@ export class EmailVerification {
 
     @Column({ type: 'simple-array' })
     @AutoMap(() => [String])
-    sources: EmailVerificationSource[]
+    sources: EmailVerificationReadSource[]
 
     @CreateDateColumn()
     createdAt: Date

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { MicrosoftLogin } from './microsoft-login.service'
 import { HttpService } from '@nestjs/axios'
-import { of, throwError } from 'rxjs'
+import { of, Subject, throwError } from 'rxjs'
 
 describe('MicrosoftLogin', () => {
     let microsoftLogin: jest.Mocked<MicrosoftLogin>
@@ -59,6 +59,30 @@ describe('MicrosoftLogin', () => {
 
         const result = await microsoftLogin.verify('test@example.com')
         expect(result).toBe(false)
+    })
+
+    it('should keep request bodies isolated while verification calls overlap', async () => {
+        const firstResponse = new Subject<any>()
+        const secondResponse = new Subject<any>()
+
+        httpService.post.mockReturnValueOnce(firstResponse).mockReturnValueOnce(secondResponse)
+
+        const firstResult = microsoftLogin.verify('first@example.com')
+        const secondResult = microsoftLogin.verify('second@example.com')
+
+        const firstBody = httpService.post.mock.calls[0][1]
+        const secondBody = httpService.post.mock.calls[1][1]
+
+        expect(firstBody).toEqual(expect.objectContaining({ username: 'first@example.com' }))
+        expect(secondBody).toEqual(expect.objectContaining({ username: 'second@example.com' }))
+        expect(firstBody).not.toBe(secondBody)
+
+        secondResponse.next({ data: {} })
+        secondResponse.complete()
+        firstResponse.next({ data: {} })
+        firstResponse.complete()
+
+        await expect(Promise.all([firstResult, secondResult])).resolves.toEqual([false, false])
     })
 
     it('should return false if HTTP request succeeds', async () => {

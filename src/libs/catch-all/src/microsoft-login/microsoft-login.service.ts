@@ -15,15 +15,14 @@ export class MicrosoftLogin implements ICatchAllVerifier {
         'Content-Type': 'application/x-www-form-urlencoded',
     }
 
-    private static readonly BODY = {
+    private static readonly BODY_TEMPLATE = Object.freeze({
         resource: 'https://graph.windows.net',
         client_id: '1b730954-1685-4b74-9bfd-dac224a7b894',
         client_info: '1',
         grant_type: 'password',
-        username: '<EMAIL>',
         password: 'Password1',
         scope: 'openid',
-    }
+    })
 
     private static readonly USER_EXISTS_ERROR_CODES = new Set([
         MicrosoftLoginErrorCode.InvalidGrant,
@@ -37,8 +36,11 @@ export class MicrosoftLogin implements ICatchAllVerifier {
     constructor(private readonly httpService: HttpService) {}
 
     verify: (email: string) => Promise<boolean> = async email => {
-        const { URL: url, HEADERS: headers, BODY: body } = MicrosoftLogin
-        body.username = email
+        const { URL: url, HEADERS: headers, BODY_TEMPLATE: bodyTemplate } = MicrosoftLogin
+        const body = {
+            ...bodyTemplate,
+            username: email,
+        }
 
         try {
             await firstValueFrom(

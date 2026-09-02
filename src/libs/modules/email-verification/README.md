@@ -14,6 +14,8 @@ compatibility route kept billing- and permission-equivalent to its replacement.
   BullMQ parent/child job fan-out per row and an S3-backed result file.
 - Domain and email persistence used to cache verification results and avoid rechecking the same address.
 - The SMTP verification engine itself: MX resolution, catch-all detection, and proxy-leased SMTP connections.
+- Default-deny account-discovery enrichment, including one-provider selection and approval checks performed during
+  startup and immediately before every outbound disclosure.
 - An internal, admin-only cache of stored `Email` records (`/emails`), not itself a verification endpoint.
 
 ## Non-Responsibilities
@@ -27,6 +29,8 @@ compatibility route kept billing- and permission-equivalent to its replacement.
   [`identity`](../identity/README.md) and [`auth`](../auth/README.md).
 - No production transport or object-encryption policy — the API composition root validates that policy and supplies
   one shared common token to this module's S3 infrastructure adapters.
+- No vendor, legal, transfer, security, or customer-authorization approval policy — repository owners supply that
+  evidence through the fixed account-discovery approval manifest.
 
 ## Privacy and Data Lifecycle
 
@@ -86,12 +90,12 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 
 ## Persistence
 
-| Entity              | Table                 | Ownership and identity                                      |
-| ------------------- | --------------------- | ----------------------------------------------------------- |
-| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                       |
-| `Domain`            | `domains`             | Shared technical policy; domain name                        |
-| `Email`             | `emails`              | Organization plus normalized address                        |
-| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps  |
+| Entity              | Table                 | Ownership and identity                                     |
+| ------------------- | --------------------- | ---------------------------------------------------------- |
+| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                      |
+| `Domain`            | `domains`             | Shared technical policy; domain name                       |
+| `Email`             | `emails`              | Organization plus normalized address                       |
+| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps |
 
 ## S3 / Storage
 
@@ -107,12 +111,20 @@ override.
 ## Configuration
 
 - `S3_BUCKET`
-- `CATCH_ALL_HTTP_PROXY_URL` (optional — catch-all verifiers are inactive entirely when unset)
+- `CATCH_ALL_HTTP_PROXY_URL` (optional transport; never activates a provider by itself)
+- `CATCH_ALL_PROVIDER` (optional; one of `microsoft_get_credential_type`, `microsoft_login`, `mimecast`, or
+  `office_apps`)
+- `CATCH_ALL_PROVIDER_APPROVAL_ID` and `CATCH_ALL_PROVIDER_REGION` (required with `CATCH_ALL_PROVIDER`)
 - `SMTP_PORT` (optional, default 25)
+
+The runtime always reads `config/privacy/account-discovery-approvals.yaml`; no environment variable can redirect that
+path. The committed manifest is empty, so the default development and SMTP workflows select no external provider.
+Provider selection also requires the proxy and an exact active, effective, unexpired approval match. Mimecast regions
+are limited to `us` and `uk`.
 
 ## Validation
 
-Focused tests are grouped by subarea under `src/`:
+Focused tests are grouped by behavior:
 
 - **Synchronous**: `sync-email-verification/sync-email-verification.controller.spec.ts`
 - **Deprecated synchronous**: `old-sync-email-verification/old-sync-email-verification.controller.spec.ts`,
@@ -130,6 +142,11 @@ Focused tests are grouped by subarea under `src/`:
   `email/email.controller.spec.ts`, `email/email.service.spec.ts`
 - **SMTP engine**: `email-verifier/email-verifier.spec.ts`, `email-verifier/smtp/smtp-client.factory.spec.ts`,
   `email-verifier/smtp/smtp-client.spec.ts`, `email-verifier/smtp/smtp-verifier.spec.ts`
+- **Account discovery**: `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
+  `application/account-discovery/select-account-discovery-verifier.spec.ts`,
+  `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
+  `scripts/privacy/account-discovery-approvals.spec.ts` and
+  `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
 

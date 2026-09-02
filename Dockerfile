@@ -60,6 +60,9 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 USER node
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder \
+    /app/config/privacy/account-discovery-approvals.yaml \
+    ./config/privacy/account-discovery-approvals.yaml
 
 EXPOSE 3000
 

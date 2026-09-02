@@ -55,14 +55,17 @@ The development Compose stack defaults `NODE_ENV` to `development`. It also load
 gitignored file exists. Create it only when you need to configure local overrides such as:
 
 ```dotenv
-CATCH_ALL_HTTP_PROXY_URL=<HTTP proxy URL reachable from the API container>
 PROXY_MX_REQUESTS_PER_MINUTE=10
 PROXY_LEASE_TTL_MS=60000
 ```
 
-`CATCH_ALL_HTTP_PROXY_URL` is optional; catch-all verifiers remain inactive when it is unset. The Compose stack reads
-its database, Redis, and S3 settings from files in `docker/secrets/`; keep those files available locally and never
-commit real production credentials.
+The committed account-discovery approval manifest is empty, so external account-discovery providers are disabled by
+default. `CATCH_ALL_HTTP_PROXY_URL` alone never activates one. A future repository-approved activation must set one
+supported `CATCH_ALL_PROVIDER` together with `CATCH_ALL_HTTP_PROXY_URL` (inline or through
+`CATCH_ALL_HTTP_PROXY_URL_FILE`), `CATCH_ALL_PROVIDER_APPROVAL_ID`, and `CATCH_ALL_PROVIDER_REGION`; the application
+still fails to start unless those values match one active, effective, unexpired approval in the fixed manifest. The
+Compose stack reads its database, Redis, and S3 settings from files in `docker/secrets/`; keep those files available
+locally and never commit real production credentials.
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
