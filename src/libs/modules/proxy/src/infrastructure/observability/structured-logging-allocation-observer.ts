@@ -16,7 +16,6 @@ export class StructuredLoggingAllocationObserver implements IAllocationObserver 
         if (event.outcome === 'acquired') {
             this.logger.log('Proxy allocation acquired', {
                 outcome: event.outcome,
-                mxHost: event.mxHost,
                 proxyId: event.proxyId,
                 proxyState: event.proxyState,
                 durationMs: event.durationMs,
@@ -26,7 +25,6 @@ export class StructuredLoggingAllocationObserver implements IAllocationObserver 
 
         this.logger.warn('Proxy allocation exhausted', {
             outcome: event.outcome,
-            mxHost: event.mxHost,
             durationMs: event.durationMs,
         })
     }
@@ -34,7 +32,6 @@ export class StructuredLoggingAllocationObserver implements IAllocationObserver 
     onConnectionOutcome(event: ConnectionOutcomeEvent): void {
         const fields = {
             outcome: event.outcome,
-            mxHost: event.mxHost,
             proxyId: event.proxyId,
             durationMs: event.durationMs,
         }
@@ -50,7 +47,6 @@ export class StructuredLoggingAllocationObserver implements IAllocationObserver 
     onLeaseRelease(event: LeaseReleaseEvent): void {
         const fields = {
             outcome: event.outcome,
-            mxHost: event.mxHost,
             proxyId: event.proxyId,
             durationMs: event.durationMs,
         }

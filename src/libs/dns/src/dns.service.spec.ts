@@ -2,6 +2,7 @@ import { DNSTypeMap } from '../../common/src'
 import { DnsService } from './dns.service'
 import { Redis } from 'ioredis'
 import { Test } from '@nestjs/testing'
+import { Logger } from '@nestjs/common'
 import { resolveMx, reverse } from 'node:dns/promises'
 
 jest.mock('node:dns/promises', () => ({
@@ -12,6 +13,7 @@ jest.mock('node:dns/promises', () => ({
 describe('DnsService', () => {
     let dnsService: DnsService
     let mockedRedis: jest.Mocked<Redis>
+    let mockedLogger: jest.Mocked<Pick<Logger, 'debug'>>
 
     const resolveMxMock = resolveMx as jest.MockedFunction<typeof resolveMx>
     const reverseMock = reverse as jest.MockedFunction<typeof reverse>
@@ -26,12 +28,19 @@ describe('DnsService', () => {
                         set: jest.fn(),
                     },
                 },
+                {
+                    provide: Logger,
+                    useValue: {
+                        debug: jest.fn(),
+                    },
+                },
                 DnsService,
             ],
         }).compile()
 
         dnsService = moduleRef.get(DnsService)
         mockedRedis = moduleRef.get(Redis)
+        mockedLogger = moduleRef.get(Logger)
     })
 
     afterEach(() => {
@@ -40,33 +49,39 @@ describe('DnsService', () => {
 
     describe('resolve', () => {
         it('should return cached records if present', async () => {
+            const sentinelDomain = 'sentinel-personal-address.example'
             const cachedMXRecords: DNSTypeMap['MX'] = [{ exchange: 'mail.example.com', priority: 10 }]
             mockedRedis.get.mockResolvedValueOnce(JSON.stringify(cachedMXRecords))
 
-            const result = await dnsService.resolve('example.com', 'MX')
+            const result = await dnsService.resolve(sentinelDomain, 'MX')
 
-            expect(mockedRedis.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
+            expect(mockedRedis.get).toHaveBeenCalledWith(`DNS_CACHE:MX:${sentinelDomain}`)
             expect(result).toEqual(cachedMXRecords)
+            expect(mockedLogger.debug).toHaveBeenCalledWith('dns_cache_hit', { recordType: 'MX' })
+            expect(JSON.stringify(mockedLogger.debug.mock.calls)).not.toContain(sentinelDomain)
         })
 
         it('should fetch and cache records if not present in cache', async () => {
+            const sentinelDomain = 'sentinel-personal-address.example'
             const mxRecords: DNSTypeMap['MX'] = [{ exchange: 'mail.example.com', priority: 10 }]
             resolveMxMock.mockResolvedValueOnce(mxRecords)
 
             mockedRedis.get.mockResolvedValueOnce(null) // No cache
             mockedRedis.set.mockResolvedValueOnce('OK')
 
-            const result = await dnsService.resolve('example.com', 'MX')
+            const result = await dnsService.resolve(sentinelDomain, 'MX')
 
-            expect(mockedRedis.get).toHaveBeenCalledWith('DNS_CACHE:MX:example.com')
-            expect(resolveMxMock).toHaveBeenCalledWith('example.com')
+            expect(mockedRedis.get).toHaveBeenCalledWith(`DNS_CACHE:MX:${sentinelDomain}`)
+            expect(resolveMxMock).toHaveBeenCalledWith(sentinelDomain)
             expect(mockedRedis.set).toHaveBeenCalledWith(
-                'DNS_CACHE:MX:example.com',
+                `DNS_CACHE:MX:${sentinelDomain}`,
                 JSON.stringify(mxRecords),
                 'EX',
                 DnsService.DEFAULT_TTL_SECONDS,
             )
             expect(result).toEqual(mxRecords)
+            expect(mockedLogger.debug).toHaveBeenCalledWith('dns_lookup_started', { recordType: 'MX' })
+            expect(JSON.stringify(mockedLogger.debug.mock.calls)).not.toContain(sentinelDomain)
         })
 
         it('should use reverse lookup for PTR records', async () => {

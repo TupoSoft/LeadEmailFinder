@@ -29,9 +29,11 @@ export class OfficeApps implements ICatchAllVerifier {
             }
         } catch (error: unknown) {
             if (isNativeError(error)) {
-                this.logger.debug(
-                    `OfficeApps catch all verification ended in error for email ${email}: ${error.message}`,
-                )
+                this.logger.debug({
+                    event: 'account_discovery_verification',
+                    provider: 'office_apps',
+                    outcome: 'failed',
+                })
             }
         }
 

@@ -20,6 +20,7 @@ import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modul
 import { AuthenticationCompositionModule } from './authentication/authentication-composition.module'
 import { PostgresModuleOptionsFactoryImpl } from './postgres-module-options-factory-impl'
 import { CustomerObjectWriteSecurityModule } from './customer-object-write-security.module'
+import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
 
 @Module({
     imports: [
@@ -35,7 +36,7 @@ import { CustomerObjectWriteSecurityModule } from './customer-object-write-secur
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),
-        LoggerModule.forRoot(),
+        LoggerModule.forRoot({ pinoHttp: createPiiSafePinoHttpOptions() }),
         BullModule.forRootAsync({
             useFactory: (connection: Redis) => ({
                 connection,

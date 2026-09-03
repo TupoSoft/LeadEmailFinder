@@ -5,7 +5,7 @@ interface ConstructorOptions {
 export class EmailAlreadyExistsException extends Error {
     name = 'EmailAlreadyExistsException'
 
-    constructor({ email }: ConstructorOptions) {
-        super(`Email ${email} already exists`)
+    constructor(_options: ConstructorOptions) {
+        super('Email already exists.')
     }
 }

@@ -149,6 +149,25 @@ describe('EmailVerifier', () => {
         expect(result.reason).toBe(EmailVerificationReason.Unknown)
     })
 
+    it('rejects an unknown SMTP reason without copying the address or reason into the assertion', async () => {
+        const sentinel = 'unique-person@private.example'
+        smtpVerifierMock.verify.mockResolvedValueOnce({
+            email: sentinel,
+            exists: null,
+            reason: sentinel as never,
+        })
+
+        const error = await emailVerifier
+            .verify({ organizationId, email: sentinel })
+            .catch((caughtError: unknown) => caughtError)
+
+        expect(error).toMatchObject({
+            name: 'AssertionError',
+            message: 'email_verification_reason_unknown',
+        })
+        expect((error as { message: string }).message).not.toContain(sentinel)
+    })
+
     it('should extract correct MX domain from target exchange', async () => {
         const request = verificationOptions()
 

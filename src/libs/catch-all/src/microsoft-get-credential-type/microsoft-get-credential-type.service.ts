@@ -95,9 +95,11 @@ export class MicrosoftGetCredentialType implements ICatchAllVerifier {
             return existsResult.includes(IfExistsResult)
         } catch (error: unknown) {
             if (isNativeError(error)) {
-                this.logger.debug(
-                    `microsoft_4 catch all verification ended in error for email ${email}: ${error.message}`,
-                )
+                this.logger.debug({
+                    event: 'account_discovery_verification',
+                    provider: 'microsoft_get_credential_type',
+                    outcome: 'failed',
+                })
             }
         }
 

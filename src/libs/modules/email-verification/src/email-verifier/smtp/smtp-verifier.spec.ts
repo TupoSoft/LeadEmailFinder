@@ -2,6 +2,7 @@ import { SmtpVerifier } from './smtp-verifier'
 import { SmtpVerificationReason } from './smtp.enums'
 import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
+import { Logger } from '@nestjs/common'
 
 interface SmtpVerifierInternals {
     tryConnect: jest.Mock
@@ -21,8 +22,10 @@ describe('SmtpVerifier', () => {
     let smtpClientFactory: { create: jest.Mock }
     let smtpVerificationRepo: { findOneBy: jest.Mock; create: jest.Mock; save: jest.Mock }
     let allocationObserver: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
+    let loggerErrorSpy: jest.SpiedFunction<Logger['error']>
 
     beforeEach(() => {
+        loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation()
         proxyAllocator = { acquire: jest.fn(), release: jest.fn() }
         smtpClientFactory = { create: jest.fn() }
         smtpVerificationRepo = { findOneBy: jest.fn(), create: jest.fn(), save: jest.fn() }
@@ -36,6 +39,10 @@ describe('SmtpVerifier', () => {
             allocationObserver as unknown as IAllocationObserver,
         )
         internals = verifier as unknown as SmtpVerifierInternals
+    })
+
+    afterEach(() => {
+        loggerErrorSpy.mockRestore()
     })
 
     it('connects using the client created by the injected factory', async () => {
@@ -130,8 +137,11 @@ describe('SmtpVerifier', () => {
         expect(smtpVerificationRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
     })
 
-    it('returns an unknown result when lease allocation is unavailable', async () => {
-        proxyAllocator.acquire.mockRejectedValue(new Error('Redis unavailable'))
+    it('returns an unknown result without logging a remote allocation error message', async () => {
+        const sentinel = 'unique-person@private.example'
+        const remoteError = new Error(`Redis unavailable for ${sentinel}`)
+        Object.defineProperty(remoteError, 'constructor', { value: { name: sentinel } })
+        proxyAllocator.acquire.mockRejectedValue(remoteError)
         smtpVerificationRepo.findOneBy.mockResolvedValue(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
 
@@ -140,6 +150,8 @@ describe('SmtpVerifier', () => {
             exists: null,
             reason: SmtpVerificationReason.Unknown,
         })
+        expect(loggerErrorSpy).toHaveBeenCalledWith('smtp_connection_failed', { errorClass: 'Error' })
+        expect(JSON.stringify(loggerErrorSpy.mock.calls)).not.toContain(sentinel)
     })
 
     it('returns a conclusive result only from the requesting organization cache', async () => {

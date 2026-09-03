@@ -76,15 +76,21 @@ describe('MicrosoftGetCredentialType', () => {
     })
 
     it('should log an error and return false when the HTTP request fails', async () => {
-        const email = 'test@example.com'
-        const errorMessage = 'HTTP error'
+        const email = 'microsoft-get-credential-type-sentinel@example.test'
+        const encodedEmail = encodeURIComponent(email)
+        const errorMessage = `HTTP error echoed ${email} and ${encodedEmail}`
 
         httpService.post.mockImplementation(() => throwError(() => new Error(errorMessage)))
 
         const result = await service.verify(email)
         expect(result).toBe(false)
-        expect(logger.debug).toHaveBeenCalledWith(
-            `microsoft_4 catch all verification ended in error for email ${email}: ${errorMessage}`,
-        )
+        expect(logger.debug).toHaveBeenCalledWith({
+            event: 'account_discovery_verification',
+            provider: 'microsoft_get_credential_type',
+            outcome: 'failed',
+        })
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(email)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(encodedEmail)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(errorMessage)
     })
 })

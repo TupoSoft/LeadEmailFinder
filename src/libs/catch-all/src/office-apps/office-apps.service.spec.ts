@@ -54,16 +54,23 @@ describe('OfficeApps', () => {
     })
 
     it('should return false for an error response', async () => {
-        const mockEmail = 'test@example.com'
-        const error = new Error('Network Error')
+        const mockEmail = 'office-apps-sentinel@example.test'
+        const encodedEmail = encodeURIComponent(mockEmail)
+        const errorMessage = `Network error echoed ${mockEmail} and ${encodedEmail}`
+        const error = new Error(errorMessage)
 
         httpService.get.mockReturnValue(throwError(() => error))
 
         const result = await officeApps.verify(mockEmail)
 
         expect(result).toBe(false)
-        expect(logger.debug).toHaveBeenCalledWith(
-            `OfficeApps catch all verification ended in error for email ${mockEmail}: ${error.message}`,
-        )
+        expect(logger.debug).toHaveBeenCalledWith({
+            event: 'account_discovery_verification',
+            provider: 'office_apps',
+            outcome: 'failed',
+        })
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(mockEmail)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(encodedEmail)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(errorMessage)
     })
 })

@@ -86,10 +86,13 @@ describe('EmailService', () => {
     it('checks duplicates with the composite organization and address identity', async () => {
         emailRepo.existsBy.mockResolvedValue(true)
 
-        await expect(service.createEmail(otherOrganizationId, { email, exists: true })).rejects.toThrow(
-            EmailAlreadyExistsException,
-        )
+        const error = await service
+            .createEmail(otherOrganizationId, { email, exists: true })
+            .catch((caughtError: unknown) => caughtError)
 
+        expect(error).toBeInstanceOf(EmailAlreadyExistsException)
+        expect((error as Error).message).toBe('Email already exists.')
+        expect((error as Error).message).not.toContain(email)
         expect(emailRepo.existsBy).toHaveBeenCalledWith({ organizationId: otherOrganizationId, id: email })
         expect(emailRepo.save).not.toHaveBeenCalled()
     })
@@ -119,8 +122,11 @@ describe('EmailService', () => {
     it('conceals a missing or foreign address as not found', async () => {
         emailRepo.findOneBy.mockResolvedValue(null)
 
-        await expect(service.getEmail(organizationId, email)).rejects.toThrow(EmailNotFoundException)
+        const error = await service.getEmail(organizationId, email).catch((caughtError: unknown) => caughtError)
 
+        expect(error).toBeInstanceOf(EmailNotFoundException)
+        expect((error as Error).message).toBe('Email not found.')
+        expect((error as Error).message).not.toContain(email)
         expect(emailRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
         expect(mapper.map).not.toHaveBeenCalled()
     })

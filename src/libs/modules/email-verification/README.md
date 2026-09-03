@@ -48,6 +48,22 @@ BullMQ jobs still have no terminal-age cleanup, and batch inputs and results hav
 establish consent, lawful basis, marketing eligibility, or permission to contact, and this module does not send
 commercial messages or own final suppression duties.
 
+## Operational Logging
+
+Automatic HTTP completion logs use an allowlist configured at the API composition root. A request record contains
+only a server-generated UUID, method, and sanitized path; a response record contains only its status code, alongside
+the numeric response duration. Query strings are discarded, and email-administration paths are recorded as
+`/emails/:sensitive`.
+
+Application events may contain only stable operation or provider codes, SMTP numeric and enhanced status codes,
+durations, and opaque internal request, job, database, or proxy IDs. DNS events retain the record type, and proxy
+lifecycle events retain outcomes without the submitted domain or derived MX host.
+
+Logs must never contain a submitted email, local part, submitted domain, stable email hash, raw URL, query value,
+request header or body, cookie, authorization value, or client address or port. The same prohibition covers SMTP
+commands and replies, provider payloads and remote error messages, and exception messages derived from external
+input. Error records use a stable operation code and validated error class; they omit message text and stacks.
+
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes four top-level Nest

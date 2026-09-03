@@ -106,10 +106,16 @@ describe('HTMLSynonymFinder', () => {
         expect(results.length).toBe(expectedLength)
     })
 
-    it('should return empty array if homepage cannot be fetched', async () => {
-        mockedHttpService.get.mockReturnValueOnce(throwError(() => new Error('Network Error')))
-        const results = await finder.findSynonymDomains('https://unreachable.com')
-        expect(mockedLogger.error).toHaveBeenCalled()
+    it('should return empty array without logging the domain or remote error if the homepage cannot be fetched', async () => {
+        const sentinel = 'unique-person@private.example'
+        const remoteError = new Error(`Network error for ${sentinel}`)
+        Object.defineProperty(remoteError, 'constructor', { value: { name: sentinel } })
+        mockedHttpService.get.mockReturnValueOnce(throwError(() => remoteError))
+
+        const results = await finder.findSynonymDomains(`https://${sentinel}`)
+
+        expect(mockedLogger.error).toHaveBeenCalledWith('domain_synonym_fetch_failed', { errorClass: 'Error' })
+        expect(JSON.stringify(mockedLogger.error.mock.calls)).not.toContain(sentinel)
         expect(results).toEqual([])
     })
 

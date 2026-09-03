@@ -1,0 +1,30 @@
+info:
+  name: 14-reject-duplicate-email-create
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{baseUrl}}/emails"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "email": "person@lef.test",
+        "exists": false
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects a duplicate cache record without echoing its address', function() {
+          expect(res.status).to.equal(409);
+          expect(res.body.message).to.equal('Email already exists.');
+          expect(JSON.stringify(res.body)).not.to.include('person@lef.test');
+        });

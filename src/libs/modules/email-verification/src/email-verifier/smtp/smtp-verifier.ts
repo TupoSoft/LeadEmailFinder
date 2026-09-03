@@ -1,7 +1,7 @@
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import { IDnsService, ISmtpVerificationResponse, ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
+import { IDnsService, ISmtpVerificationResponse, ISmtpVerifier, safeErrorType } from '@tuposoft/lead-email-finder/common'
 import {
     ALLOCATION_OBSERVER_TOKEN,
     ConnectionOutcomeEvent,
@@ -236,7 +236,7 @@ export class SmtpVerifier implements ISmtpVerifier {
 
             const clientDomain = getDomain(clientHostname)
 
-            ok(clientDomain !== null, new Error(`Invalid client domain: ${clientDomain}`))
+            ok(clientDomain !== null, new Error('smtp_client_domain_invalid'))
 
             const senderUsername = 'contact'
             const senderEmail = `${senderUsername}@${clientDomain}`
@@ -329,7 +329,9 @@ export class SmtpVerifier implements ISmtpVerifier {
 
     private logConnectionError(error: unknown): void {
         if (isNativeError(error)) {
-            this.logger.error(`Error while connecting to SMTP server: ${error.message}`)
+            this.logger.error('smtp_connection_failed', {
+                errorClass: safeErrorType(error),
+            })
         }
     }
 
@@ -357,7 +359,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         } catch (error) {
             client?.end()
 
-            ok(isNativeError(error), new Error(String(error)))
+            ok(isNativeError(error), new Error('smtp_connection_error_invalid'))
 
             if (error instanceof SmtpException) {
                 await this.handleSmtpError(error)

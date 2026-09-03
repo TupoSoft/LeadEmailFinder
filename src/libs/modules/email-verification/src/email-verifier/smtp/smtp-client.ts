@@ -18,6 +18,7 @@ import { SmtpClientTimeoutException } from './smtp-client-timeout.exception'
 import { SmtpException } from './smtp.exception'
 import { SmtpResponse } from './smtp-response.interface'
 import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
+import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number
@@ -34,6 +35,7 @@ export interface SmtpClientConstructorOptions {
 }
 
 type SmtpStatusCode = SmtpErrorStatusCode | SmtpOkStatusCode
+type SmtpCommandKind = 'helo' | 'mail_from' | 'rcpt_to' | 'quit'
 
 export class SmtpClient implements ISmtpClient {
     private static readonly DEFAULT_TIMEOUT_CONFIG: Required<SmtpClientTimeoutConfig> = {
@@ -66,7 +68,9 @@ export class SmtpClient implements ISmtpClient {
         // Destroying a socket with an error (see destroySocket()) makes it emit that error asynchronously;
         // without a listener, Node treats an unconsumed socket 'error' event as an uncaught exception.
         this.socket.on('error', error => {
-            this.logger.debug(`Socket error: ${error.message}`)
+            this.logger.debug('smtp_socket_error', {
+                errorClass: safeErrorType(error),
+            })
         })
     }
 
@@ -120,20 +124,20 @@ export class SmtpClient implements ISmtpClient {
     }
 
     async helo(hostname: string): Promise<void> {
-        await this.sendCommand(`HELO ${hostname}`)
+        await this.sendCommand(`HELO ${hostname}`, 'helo')
     }
 
     async mailFrom(email: string): Promise<void> {
-        await this.sendCommandWithTimeout(`MAIL FROM: <${email}>`, this.timeouts.mail)
+        await this.sendCommandWithTimeout(`MAIL FROM: <${email}>`, 'mail_from', this.timeouts.mail)
     }
 
     async rcptTo(email: string): Promise<void> {
-        await this.sendCommandWithTimeout(`RCPT TO: <${email}>`, this.timeouts.rcpt)
+        await this.sendCommandWithTimeout(`RCPT TO: <${email}>`, 'rcpt_to', this.timeouts.rcpt)
     }
 
     async quit(): Promise<void> {
         if (this.socket.readyState !== 'closed') {
-            await this.sendCommand('QUIT')
+            await this.sendCommand('QUIT', 'quit')
         }
     }
 
@@ -143,16 +147,15 @@ export class SmtpClient implements ISmtpClient {
 
     private async readResponse(signal?: AbortSignal): Promise<SmtpResponse> {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX, undefined, signal)
-        this.logger.log(`Response: ${response}`)
-
         const smtpResponse = parseSmtpResponse(response)
         const { code, enhancedCode, message } = smtpResponse
+        const responseFields = {
+            smtpResponseCode: code,
+            smtpResponseEnhancedCode: enhancedCode,
+        }
 
         if (SmtpClient.isNegativeStatusCode(code)) {
-            this.logger.error(`Error in SMTP response: ${message}`, {
-                smtpResponseCode: code,
-                smtpResponseEnhancedCode: enhancedCode,
-            })
+            this.logger.error('smtp_response_rejected', responseFields)
 
             throw new SmtpException({
                 code,
@@ -163,20 +166,21 @@ export class SmtpClient implements ISmtpClient {
             })
         }
 
+        this.logger.log('smtp_response_received', responseFields)
         return smtpResponse
     }
 
-    private async sendCommand(command: string, signal?: AbortSignal): Promise<void> {
-        this.logger.log(`Sending command: ${command}`)
+    private async sendCommand(command: string, commandKind: SmtpCommandKind, signal?: AbortSignal): Promise<void> {
+        this.logger.log('smtp_command_sent', { commandKind })
 
         await write(this.socket, `${command}\r\n`, signal)
         await this.readResponse(signal)
     }
 
-    private async sendCommandWithTimeout(command: string, timeout: number): Promise<void> {
+    private async sendCommandWithTimeout(command: string, commandKind: SmtpCommandKind, timeout: number): Promise<void> {
         try {
             await promiseWithTimeout(
-                signal => this.sendCommand(command, signal),
+                signal => this.sendCommand(command, commandKind, signal),
                 timeout,
                 new SmtpClientTimeoutException(),
             )

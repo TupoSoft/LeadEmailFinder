@@ -154,7 +154,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
             const errors = await validate(csvRecord)
 
             if (errors.length > 0) {
-                throw new Error('Validation failed. ' + errors.map(error => error.toString()).join(','))
+                throw new Error('batch_email_verification_row_invalid')
             }
 
             rowCount++
