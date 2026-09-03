@@ -230,6 +230,27 @@ describe('BatchEmailVerificationProcessor', () => {
         expect(csv).toBe('id,email\nid-1,person@lef.test\nid-2,other@lef.test\n')
     })
 
+    it('rejects an invalid row without copying its address into the queue error', async () => {
+        const sentinel = 'unique-person@private.example'
+        const csv = Readable.toWeb(Readable.from([`email\n"${sentinel} extra"\n`]))
+        s3.getObject.mockResolvedValue({ Body: { transformToWebStream: () => csv } })
+        job.data = {
+            step: BatchEmailVerificationJobStep.Validate,
+            bucket: 'bucket',
+            key: 'organizations/org-1/uploads/file.csv',
+            organizationId: 'org-1',
+            credentialId: 'cred-1',
+        }
+        const processor = await buildProcessor(Readable.from([], { objectMode: true }))
+
+        const error = await processor.process(job, 'token').catch((caughtError: unknown) => caughtError)
+
+        expect(error).toBeInstanceOf(Error)
+        expect((error as Error).message).toBe('batch_email_verification_row_invalid')
+        expect((error as Error).message).not.toContain(sentinel)
+        expect(job.updateData).not.toHaveBeenCalled()
+    })
+
     it('propagates the parent organization and batch id to every async child job', async () => {
         const csv = Readable.toWeb(Readable.from(['email\nperson@lef.test\nother@lef.test\n']))
         s3.getObject.mockResolvedValue({ Body: { transformToWebStream: () => csv } })

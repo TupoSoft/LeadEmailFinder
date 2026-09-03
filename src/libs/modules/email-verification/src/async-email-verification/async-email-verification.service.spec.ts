@@ -44,11 +44,18 @@ describe('AsyncEmailVerificationService', () => {
         })
 
         it('throws when the queue returns a job without an id', async () => {
+            const sentinel = 'unique-person@private.example'
             queue.add.mockResolvedValue({ id: undefined })
 
-            await expect(service.verifyAsync({ email: 'person@lef.test' }, principal)).rejects.toThrow(
-                /Failed to add job to queue/,
-            )
+            const error = await service.verifyAsync({ email: sentinel }, principal).catch((caughtError: unknown) => {
+                return caughtError
+            })
+
+            expect(error).toMatchObject({
+                name: 'AssertionError',
+                message: 'async_email_verification_job_id_missing',
+            })
+            expect((error as { message: string }).message).not.toContain(sentinel)
         })
     })
 
@@ -81,6 +88,24 @@ describe('AsyncEmailVerificationService', () => {
             await expect(service.getAsyncVerificationState('job-1', principal)).resolves.toEqual({
                 state: 'waiting',
             })
+        })
+
+        it('rejects an unknown queue state without copying job data into the assertion', async () => {
+            const sentinel = 'unique-person@private.example'
+            queue.getJob.mockResolvedValue({
+                data: { email: sentinel, organizationId: 'org-1', credentialId: 'cred-1' },
+                getState: jest.fn().mockResolvedValue(`unexpected-${sentinel}`),
+            })
+
+            const error = await service
+                .getAsyncVerificationState('job-1', principal)
+                .catch((caughtError: unknown) => caughtError)
+
+            expect(error).toMatchObject({
+                name: 'AssertionError',
+                message: 'async_email_verification_state_unknown',
+            })
+            expect((error as { message: string }).message).not.toContain(sentinel)
         })
     })
 })

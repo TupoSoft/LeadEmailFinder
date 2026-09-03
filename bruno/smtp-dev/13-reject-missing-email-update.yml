@@ -24,4 +24,6 @@ runtime:
       code: |-
         test('conceals an email outside the authenticated organization as not found', function() {
           expect(res.status).to.equal(404);
+          expect(res.body.message).to.equal('Email not found.');
+          expect(JSON.stringify(res.body)).not.to.include('missing@lef.test');
         });

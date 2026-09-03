@@ -1,5 +1,5 @@
 import { extractDomains, findRelevantLinks } from './domain.util'
-import { IDomainSynonymFinder } from '@tuposoft/lead-email-finder/common'
+import { IDomainSynonymFinder, safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
@@ -41,7 +41,9 @@ export class HTMLDomainSynonymFinder implements IDomainSynonymFinder {
             return Array.from(foundDomains)
         } catch (error) {
             if (isNativeError(error)) {
-                this.logger.error(`Error while fetching synonyms for domain ${domain}: ${error.message}`)
+                this.logger.error('domain_synonym_fetch_failed', {
+                    errorClass: safeErrorType(error),
+                })
             }
 
             return []

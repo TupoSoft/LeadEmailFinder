@@ -5,7 +5,7 @@ export function parseSmtpResponse(rawResponse: string): SmtpResponse {
     const match = regex.exec(rawResponse)
 
     if (match == null) {
-        throw new Error(`Invalid SMTP response: "${rawResponse}"`)
+        throw new Error('smtp_response_invalid')
     }
 
     const [, code, enhancedCode, message] = match

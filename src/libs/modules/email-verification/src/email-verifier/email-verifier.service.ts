@@ -59,7 +59,7 @@ export class EmailVerifier implements IEmailVerifier {
             wrongEmail,
         )
         const reason = fromStringToEnum(EmailVerificationReason, reasonString)
-        ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
+        ok(reason, 'email_verification_reason_unknown')
 
         emailVerification.targetExchange = targetExchange
         emailVerification.mxDomain = EmailVerifier.extractMxDomain(targetExchange)
@@ -72,7 +72,7 @@ export class EmailVerifier implements IEmailVerifier {
                 email,
             )
             const reason = fromStringToEnum(EmailVerificationReason, reasonString)
-            ok(reason, `Unknown reason: ${reasonString}. Email: ${wrongEmail}`)
+            ok(reason, 'email_verification_reason_unknown')
 
             emailVerification.exists = exists
             emailVerification.reason = reason

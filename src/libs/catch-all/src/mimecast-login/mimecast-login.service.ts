@@ -91,7 +91,11 @@ export class MimecastLogin {
             throw new Error('Mimecast login failed')
         } catch (error) {
             if (isNativeError(error)) {
-                this.logger.debug(`Mimecast catch all verification ended in error for email ${email}: ${error.message}`)
+                this.logger.debug({
+                    event: 'account_discovery_verification',
+                    provider: 'mimecast',
+                    outcome: 'failed',
+                })
             }
 
             return false

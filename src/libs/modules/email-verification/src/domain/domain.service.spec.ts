@@ -78,7 +78,11 @@ describe('DomainService', () => {
 
             domainRepoMock.findOneBy.mockResolvedValue(null)
 
-            await expect(service.getDomain(domainName)).rejects.toThrow(DomainNotFoundException)
+            const error = await service.getDomain(domainName).catch((caughtError: unknown) => caughtError)
+
+            expect(error).toBeInstanceOf(DomainNotFoundException)
+            expect((error as Error).message).toBe('Domain not found.')
+            expect((error as Error).message).not.toContain(domainName)
             expect(domainRepoMock.findOneBy).toHaveBeenCalledWith({ id: domainName })
             expect(mapperMock.map).not.toHaveBeenCalled()
         })

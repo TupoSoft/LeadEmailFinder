@@ -87,16 +87,23 @@ describe('MimecastLogin', () => {
     })
 
     it('should return false if the selected regional request fails', async () => {
-        const email = 'test@example.com'
+        const email = 'mimecast-sentinel@example.test'
+        const encodedEmail = encodeURIComponent(email)
+        const errorMessage = `Request failed for ${email} (${encodedEmail})`
 
-        httpService.post.mockReturnValueOnce(throwError(() => new Error('Request failed')))
+        httpService.post.mockReturnValueOnce(throwError(() => new Error(errorMessage)))
 
         const result = await mimecastLogin.forRegion('uk').verify(email)
 
         expect(result).toBe(false)
         expect(httpService.post).toHaveBeenCalledTimes(1)
-        expect(logger.debug).toHaveBeenCalledWith(
-            expect.stringContaining(`Mimecast catch all verification ended in error for email ${email}`),
-        )
+        expect(logger.debug).toHaveBeenCalledWith({
+            event: 'account_discovery_verification',
+            provider: 'mimecast',
+            outcome: 'failed',
+        })
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(email)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(encodedEmail)
+        expect(JSON.stringify(logger.debug.mock.calls)).not.toContain(errorMessage)
     })
 })

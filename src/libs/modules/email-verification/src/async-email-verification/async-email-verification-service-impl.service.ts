@@ -28,10 +28,7 @@ export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerification
             { jobId: randomUUID() },
         )
 
-        ok(
-            id,
-            `Failed to add job to queue. Job ID is undefined. Queue name: async-email-verification. Job data: ${email}`,
-        )
+        ok(id, 'async_email_verification_job_id_missing')
 
         return { id }
     }
@@ -45,7 +42,7 @@ export class AsyncEmailVerificationServiceImpl implements AsyncEmailVerification
         const stateString = await job.getState()
         const state = fromStringToEnum(JobState, stateString)
 
-        ok(state, `Unknown job state: ${stateString}. Job ID: ${id}. Job email: ${job.data.email}`)
+        ok(state, 'async_email_verification_state_unknown')
 
         if (state !== JobState.COMPLETED) {
             return {

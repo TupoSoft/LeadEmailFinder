@@ -145,8 +145,11 @@ describe('EmailVerificationService', () => {
     it('rejects a forbidden shared domain before reading or writing tenant state', async () => {
         domainService.isVerificationAllowed.mockResolvedValue(false)
 
-        await expect(service.verify({ organizationId, email })).rejects.toThrow(DomainVerificationForbiddenException)
+        const error = await service.verify({ organizationId, email }).catch((caughtError: unknown) => caughtError)
 
+        expect(error).toBeInstanceOf(DomainVerificationForbiddenException)
+        expect((error as Error).message).toBe('Email verification is forbidden for this domain.')
+        expect((error as Error).message).not.toContain('example.test')
         expect(domainService.isVerificationAllowed).toHaveBeenCalledWith('example.test')
         expect(emailService.upsertEmail).not.toHaveBeenCalled()
         expect(emailVerifier.verify).not.toHaveBeenCalled()

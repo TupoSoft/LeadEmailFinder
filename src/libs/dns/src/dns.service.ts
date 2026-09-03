@@ -8,6 +8,8 @@ export class DnsService implements IDnsService {
     public static readonly DEFAULT_TTL_SECONDS = parseTimeString('1d')
     public static readonly DEFAULT_CACHE_KEY_PREFIX = 'DNS_CACHE'
 
+    @Inject(Logger)
+    @Optional()
     private readonly logger = new Logger(DnsService.name)
 
     constructor(
@@ -21,11 +23,11 @@ export class DnsService implements IDnsService {
 
         const cachedRecords = await this.getCachedRecords<T>(name, type)
         if (cachedRecords != null) {
-            this.logger.debug(`Using cached ${type} records for ${name}`)
+            this.logger.debug('dns_cache_hit', { recordType: type })
             return cachedRecords
         }
 
-        this.logger.debug(`Fetching ${type} records for ${name}`)
+        this.logger.debug('dns_lookup_started', { recordType: type })
         const records = await fetchRecords(name, type)
 
         await this.cacheRecords(name, type, records)

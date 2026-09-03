@@ -40,7 +40,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.log).toHaveBeenCalledWith('Proxy allocation acquired', {
                 outcome: 'acquired',
-                mxHost: 'mx.example.com',
                 proxyId: 'proxy-id',
                 proxyState: 'active',
                 durationMs: 12,
@@ -53,7 +52,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.warn).toHaveBeenCalledWith('Proxy allocation exhausted', {
                 outcome: 'exhausted',
-                mxHost: 'mx.example.com',
                 durationMs: 8,
             })
             expect(mockedLogger.log).not.toHaveBeenCalled()
@@ -71,7 +69,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.log).toHaveBeenCalledWith('SMTP connection outcome', {
                 outcome: 'connected',
-                mxHost: 'mx.example.com',
                 proxyId: 'proxy-id',
                 durationMs: 30,
             })
@@ -87,7 +84,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.warn).toHaveBeenCalledWith('SMTP connection outcome', {
                 outcome: 'failed',
-                mxHost: 'mx.example.com',
                 proxyId: 'proxy-id',
                 durationMs: 30,
             })
@@ -105,7 +101,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.log).toHaveBeenCalledWith('Proxy lease release outcome', {
                 outcome: 'released',
-                mxHost: 'mx.example.com',
                 proxyId: 'proxy-id',
                 durationMs: 5,
             })
@@ -121,7 +116,6 @@ describe('StructuredLoggingAllocationObserver', () => {
 
             expect(mockedLogger.warn).toHaveBeenCalledWith('Proxy lease release outcome', {
                 outcome: 'failed',
-                mxHost: 'mx.example.com',
                 proxyId: 'proxy-id',
                 durationMs: 5,
             })
@@ -144,9 +138,12 @@ describe('StructuredLoggingAllocationObserver', () => {
         )
 
         for (const fields of allLoggedFields) {
+            expect(fields).not.toHaveProperty('mxHost')
             expect(fields).not.toHaveProperty('user')
             expect(fields).not.toHaveProperty('password')
             expect(fields).not.toHaveProperty('auth')
         }
+
+        expect(JSON.stringify(allLoggedFields)).not.toContain('mx.example.com')
     })
 })
