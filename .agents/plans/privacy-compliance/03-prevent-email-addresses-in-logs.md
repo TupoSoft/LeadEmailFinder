@@ -248,7 +248,7 @@ this logging contract.
 
 Run the logger, HTTP, SMTP, provider, and exception-focused tests:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/common/src/utils/safe-error-type.spec.ts src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/libs/modules/email-verification/src/email-verifier/email-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.util.spec.ts src/libs/modules/email-verification/src/domain/domain-synonym-finder.spec.ts src/libs/modules/email-verification/src/domain/domain.service.spec.ts src/libs/modules/email-verification/src/email/email.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.processor.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts src/libs/modules/email-verification/src/sync-email-verification/email-verification.service.spec.ts src/libs/catch-all/src/microsoft-get-credential-type/microsoft-get-credential-type.service.spec.ts src/libs/catch-all/src/microsoft-login/microsoft-login.service.spec.ts src/libs/catch-all/src/mimecast-login/mimecast-login.service.spec.ts src/libs/catch-all/src/office-apps/office-apps.service.spec.ts src/libs/dns/src/dns.service.spec.ts src/libs/modules/proxy/src/infrastructure/observability/structured-logging-allocation-observer.spec.ts --runInBand
+    corepack pnpm test -- src/libs/common/src/utils/safe-error-type.spec.ts src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/libs/modules/email-verification/src/email-verifier/email-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.util.spec.ts src/libs/modules/email-verification/src/domain/domain-synonym-finder.spec.ts src/libs/modules/email-verification/src/domain/domain.service.spec.ts src/libs/modules/email-verification/src/email/email.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.processor.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts src/libs/modules/email-verification/src/sync-email-verification/email-verification.service.spec.ts src/libs/catch-all/src/microsoft-get-credential-type/microsoft-get-credential-type.service.spec.ts src/libs/catch-all/src/microsoft-login/microsoft-login.service.spec.ts src/libs/catch-all/src/mimecast-login/mimecast-login.service.spec.ts src/libs/catch-all/src/office-apps/office-apps.service.spec.ts src/libs/dns/src/dns.service.spec.ts src/libs/modules/proxy/src/infrastructure/observability/structured-logging-allocation-observer.spec.ts --runInBand
     corepack pnpm architecture:check
 
 Run these static audits and inspect every match. Raw protocol strings may occur only where the SMTP transport
@@ -259,10 +259,10 @@ constructs commands and in fixture assertions; no logger argument may contain an
 
 Finish with:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
+    corepack pnpm typecheck
+    corepack pnpm lint
+    corepack pnpm test:ci
+    corepack pnpm build
     corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/03-prevent-email-addresses-in-logs.md bruno/smtp-dev/README.md
     git diff --check
 
