@@ -157,21 +157,23 @@ describeWithPostgres('verification organization ownership', () => {
                 id: address,
                 exists: true,
                 reason: SmtpVerificationReason.AcceptedEmail,
+                secureTransport: true,
             }),
             smtpRepository.create({
                 organizationId: organizationBId,
                 id: address,
                 exists: false,
                 reason: SmtpVerificationReason.RejectedEmail,
+                secureTransport: true,
             }),
         ])
 
-        await expect(emailRepository.findOneByOrFail({ organizationId: organizationAId, id: address })).resolves.toEqual(
-            expect.objectContaining({ exists: true, lastVerificationId: verificationA.id }),
-        )
-        await expect(emailRepository.findOneByOrFail({ organizationId: organizationBId, id: address })).resolves.toEqual(
-            expect.objectContaining({ exists: false, lastVerificationId: verificationB.id }),
-        )
+        await expect(
+            emailRepository.findOneByOrFail({ organizationId: organizationAId, id: address }),
+        ).resolves.toEqual(expect.objectContaining({ exists: true, lastVerificationId: verificationA.id }))
+        await expect(
+            emailRepository.findOneByOrFail({ organizationId: organizationBId, id: address }),
+        ).resolves.toEqual(expect.objectContaining({ exists: false, lastVerificationId: verificationB.id }))
         await expect(
             verificationRepository.findOneBy({ organizationId: organizationAId, id: verificationB.id }),
         ).resolves.toBeNull()
@@ -305,7 +307,10 @@ describeWithPostgres('verification organization ownership', () => {
                 organizationId: organizationAId,
                 credentialId: randomUUID(),
             },
-            updateData: jest.fn(function (this: Job<BatchEmailVerificationJobData>, data: BatchEmailVerificationJobData) {
+            updateData: jest.fn(function (
+                this: Job<BatchEmailVerificationJobData>,
+                data: BatchEmailVerificationJobData,
+            ) {
                 this.data = data
                 return Promise.resolve()
             }),

@@ -295,6 +295,18 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 
+    it('accepts a nonempty SMTP-only CA file path', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { SMTP_TLS_CA_FILE: '/smtp-tls/ca.crt' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects an empty SMTP-only CA file path', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { SMTP_TLS_CA_FILE: '' })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
+    })
+
     it('accepts a local Keycloak issuer and API audience', (): void => {
         const environment = plainToInstance(EnvironmentVariablesDto, {
             OIDC_ISSUER_URL: 'http://localhost:58080/realms/lead-email-finder',

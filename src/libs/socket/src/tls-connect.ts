@@ -28,6 +28,18 @@ export async function tlsConnectAsync(
     }
 
     const socket = createSocket()
-    await once(socket, 'secureConnect', { signal })
-    return socket
+
+    try {
+        await once(socket, 'secureConnect', { signal })
+        return socket
+    } catch (error) {
+        if (!socket.destroyed) {
+            socket.destroy()
+        }
+        const rawSocket = isConnectionOptions(param1) ? param1.socket : undefined
+        if (rawSocket != null && !rawSocket.destroyed) {
+            rawSocket.destroy()
+        }
+        throw error
+    }
 }

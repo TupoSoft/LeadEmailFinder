@@ -1,7 +1,7 @@
 info:
-  name: 10-legacy-verify-consumes-credit
+  name: 11-legacy-verify-consumes-credit
   type: http
-  seq: 10
+  seq: 11
 
 http:
   method: GET

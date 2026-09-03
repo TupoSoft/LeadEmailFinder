@@ -1,7 +1,12 @@
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
-import { IDnsService, ISmtpVerificationResponse, ISmtpVerifier, safeErrorType } from '@tuposoft/lead-email-finder/common'
+import {
+    IDnsService,
+    ISmtpVerificationResponse,
+    ISmtpVerifier,
+    safeErrorType,
+} from '@tuposoft/lead-email-finder/common'
 import {
     ALLOCATION_OBSERVER_TOKEN,
     ConnectionOutcomeEvent,
@@ -19,6 +24,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { DNS_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
 import { SmtpException } from './smtp.exception'
+import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 import { getDomain } from 'tldts'
 import { ISmtpClient } from './smtp-client.interface'
@@ -126,16 +132,16 @@ export class SmtpVerifier implements ISmtpVerifier {
         @Inject(ALLOCATION_OBSERVER_TOKEN) private readonly allocationObserver: IAllocationObserver,
     ) {}
 
-    private static isTemporarilyBlocked(result: Pick<SmtpVerification, 'reason'> | null): result is {
-        reason: SmtpVerificationReason.TemporarilyBlocked
-    } {
-        return result?.reason === SmtpVerificationReason.TemporarilyBlocked
+    private static isTemporarilyBlocked(
+        result: Pick<SmtpVerification, 'reason' | 'secureTransport'> | null,
+    ): result is { reason: SmtpVerificationReason.TemporarilyBlocked; secureTransport: true } {
+        return result?.secureTransport === true && result.reason === SmtpVerificationReason.TemporarilyBlocked
     }
 
-    private static hasEmailVerificationOutcome(result: Pick<SmtpVerification, 'exists'> | null): result is {
-        exists: boolean
-    } {
-        return result?.exists != null
+    private static hasEmailVerificationOutcome(
+        result: Pick<SmtpVerification, 'exists' | 'secureTransport'> | null,
+    ): result is { exists: boolean; secureTransport: true } {
+        return result?.secureTransport === true && result.exists != null
     }
 
     verify = async (organizationId: string, email: string): Promise<ISmtpVerificationResponse> => {
@@ -192,6 +198,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         let smtpRecord = await this.smtpVerificationRepo.findOneBy(cacheKey)
         smtpRecord ??= this.smtpVerificationRepo.create(cacheKey)
         Object.assign(smtpRecord, result)
+        smtpRecord.secureTransport = leasedClient.client.secureTransport
         await this.smtpVerificationRepo.save(smtpRecord)
 
         return result
@@ -232,7 +239,7 @@ export class SmtpVerifier implements ISmtpVerifier {
         try {
             const [clientHostname] = isIP(hostname) !== 0 ? await this.dnsService.resolve(hostname, 'PTR') : [hostname]
 
-            await client.helo(clientHostname)
+            await client.startSession(clientHostname)
 
             const clientDomain = getDomain(clientHostname)
 
@@ -252,6 +259,15 @@ export class SmtpVerifier implements ISmtpVerifier {
                 targetExchange,
             }
         } catch (error) {
+            if (error instanceof SmtpSecureTransportUnavailableException) {
+                return {
+                    email,
+                    exists: null,
+                    reason: SmtpVerificationReason.SecureTransportUnavailable,
+                    targetExchange,
+                }
+            }
+
             if (error instanceof SmtpException) {
                 const result = await this.handleSmtpError(error)
                 return { ...result, email }

@@ -22,6 +22,10 @@ export class EmailProfile extends AutomapperProfile {
                 destination => destination.email,
                 mapFrom(source => source.id),
             ),
+            forMember<Email, EmailResponseDto>(
+                destination => destination.exists,
+                mapFrom(source => source.exists),
+            ),
         ]
     }
 }

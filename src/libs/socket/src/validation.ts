@@ -7,9 +7,8 @@ export const netConnectOptsValidationSchema = z.object({
     port: z.number().int().positive(),
 }) satisfies ZodType<NetConnectOpts>
 
-export const connectionOptionsValidationSchema = z.intersection(
-    z.object({
-        socket: z.instanceof(Socket),
-    }),
-    netConnectOptsValidationSchema,
-) satisfies ZodType<ConnectionOptions>
+export const connectionOptionsValidationSchema = z.object({
+    socket: z.instanceof(Socket),
+    host: z.string().nonempty().optional(),
+    port: z.number().int().positive().optional(),
+}) satisfies ZodType<ConnectionOptions>

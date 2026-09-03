@@ -1,14 +1,17 @@
 import { Socket } from 'node:net'
+import { type ConnectionOptions as TlsConnectionOptions, type TLSSocket } from 'node:tls'
 import {
+    DEFAULT_EHLO_TIMEOUT,
     DEFAULT_GREETING_TIMEOUT,
     DEFAULT_MAIL_TIMEOUT,
     DEFAULT_RCPT_TIMEOUT,
     DEFAULT_SMTP_CLIENT_TIMEOUT,
+    DEFAULT_STARTTLS_TIMEOUT,
     SMTP_PORT,
     SMTP_RESPONSE_REGEX,
 } from './smtp.constants'
 import { hostname as osHostname } from 'os'
-import { connect, ConnectionTimeoutError, readUntil, write } from '@tuposoft/lead-email-finder/socket'
+import { connect, ConnectionTimeoutError, readUntil, tlsConnectAsync, write } from '@tuposoft/lead-email-finder/socket'
 import { parseSmtpResponse, promiseWithTimeout } from './smtp.util'
 import { Logger } from '@nestjs/common'
 import { isNativeError } from 'node:util/types'
@@ -19,9 +22,12 @@ import { SmtpException } from './smtp.exception'
 import { SmtpResponse } from './smtp-response.interface'
 import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
 import { safeErrorType } from '@tuposoft/lead-email-finder/common'
+import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number
+    ehlo: number
+    startTls: number
     mail: number
     rcpt: number
 }
@@ -30,16 +36,19 @@ export interface SmtpClientConstructorOptions {
     host: string
     port?: number
     proxy?: IProxy
-    timeouts?: SmtpClientTimeoutConfig
+    timeouts?: Partial<SmtpClientTimeoutConfig>
     signal?: AbortSignal
+    ca?: TlsConnectionOptions['ca']
 }
 
 type SmtpStatusCode = SmtpErrorStatusCode | SmtpOkStatusCode
-type SmtpCommandKind = 'helo' | 'mail_from' | 'rcpt_to' | 'quit'
+type SmtpCommandKind = 'ehlo' | 'starttls' | 'mail_from' | 'rcpt_to' | 'quit'
 
 export class SmtpClient implements ISmtpClient {
     private static readonly DEFAULT_TIMEOUT_CONFIG: Required<SmtpClientTimeoutConfig> = {
         greeting: DEFAULT_GREETING_TIMEOUT,
+        ehlo: DEFAULT_EHLO_TIMEOUT,
+        startTls: DEFAULT_STARTTLS_TIMEOUT,
         mail: DEFAULT_MAIL_TIMEOUT,
         rcpt: DEFAULT_RCPT_TIMEOUT,
     }
@@ -47,31 +56,30 @@ export class SmtpClient implements ISmtpClient {
     public readonly exchange: string
     public readonly port: number
     public readonly hostname: string
+    public secureTransport = false
 
     private readonly timeouts: Required<SmtpClientTimeoutConfig>
-    private readonly socket: Socket
+    private socket: Socket | TLSSocket
     private readonly proxy?: IProxy
     private readonly signal?: AbortSignal
+    private readonly ca?: TlsConnectionOptions['ca']
     private readonly logger = new Logger(SmtpClient.name)
 
-    constructor({ host, port = SMTP_PORT, proxy, timeouts, signal }: SmtpClientConstructorOptions) {
+    constructor({ host, port = SMTP_PORT, proxy, timeouts, signal, ca }: SmtpClientConstructorOptions) {
         this.exchange = host
         this.port = port
         this.proxy = proxy
         this.signal = signal
         this.hostname = proxy != null ? proxy.host : osHostname()
-        this.timeouts = timeouts ?? SmtpClient.DEFAULT_TIMEOUT_CONFIG
+        this.ca = ca
+        this.timeouts = { ...SmtpClient.DEFAULT_TIMEOUT_CONFIG, ...timeouts }
         this.socket = new Socket({
             signal,
         })
 
         // Destroying a socket with an error (see destroySocket()) makes it emit that error asynchronously;
         // without a listener, Node treats an unconsumed socket 'error' event as an uncaught exception.
-        this.socket.on('error', error => {
-            this.logger.debug('smtp_socket_error', {
-                errorClass: safeErrorType(error),
-            })
-        })
+        this.attachSocketErrorLogger(this.socket)
     }
 
     private static isNegativeStatusCode(code: SmtpStatusCode): code is SmtpErrorStatusCode {
@@ -117,22 +125,55 @@ export class SmtpClient implements ISmtpClient {
         }
     }
 
-    private destroySocket(error: unknown): void {
-        if (!this.socket.destroyed) {
-            this.socket.destroy(isNativeError(error) ? error : undefined)
+    async startSession(hostname: string): Promise<void> {
+        try {
+            const firstEhlo = await this.sendCommandWithTimeout('EHLO ' + hostname, 'ehlo', this.timeouts.ehlo)
+            if (firstEhlo.code !== SmtpOkStatusCode.OK || !firstEhlo.capabilities.includes('STARTTLS')) {
+                throw new SmtpSecureTransportUnavailableException()
+            }
+
+            await promiseWithTimeout(
+                async signal => {
+                    const startTlsResponse = await this.sendCommand('STARTTLS', 'starttls', signal)
+                    if (startTlsResponse.code !== SmtpOkStatusCode.ServiceReady) {
+                        throw new SmtpSecureTransportUnavailableException()
+                    }
+
+                    const tlsOptions: TlsConnectionOptions = {
+                        socket: this.socket,
+                        servername: this.exchange,
+                        rejectUnauthorized: true,
+                    }
+                    if (this.ca !== undefined) {
+                        tlsOptions.ca = this.ca
+                    }
+
+                    this.socket = await tlsConnectAsync(tlsOptions, signal)
+                    this.secureTransport = true
+                    this.attachSocketErrorLogger(this.socket)
+                },
+                this.timeouts.startTls,
+                new SmtpClientTimeoutException(),
+            )
+
+            const secondEhlo = await this.sendCommandWithTimeout('EHLO ' + hostname, 'ehlo', this.timeouts.ehlo)
+            if (secondEhlo.code !== SmtpOkStatusCode.OK) {
+                throw new SmtpSecureTransportUnavailableException()
+            }
+        } catch (error) {
+            this.destroySocket(error)
+            throw error instanceof SmtpSecureTransportUnavailableException
+                ? error
+                : new SmtpSecureTransportUnavailableException(error)
         }
     }
 
-    async helo(hostname: string): Promise<void> {
-        await this.sendCommand(`HELO ${hostname}`, 'helo')
-    }
-
     async mailFrom(email: string): Promise<void> {
-        await this.sendCommandWithTimeout(`MAIL FROM: <${email}>`, 'mail_from', this.timeouts.mail)
+        await this.sendCommandWithTimeout('MAIL FROM: <' + email + '>', 'mail_from', this.timeouts.mail)
     }
 
     async rcptTo(email: string): Promise<void> {
-        await this.sendCommandWithTimeout(`RCPT TO: <${email}>`, 'rcpt_to', this.timeouts.rcpt)
+        await this.sendCommandWithTimeout('RCPT TO: <' + email + '>', 'rcpt_to', this.timeouts.rcpt)
     }
 
     async quit(): Promise<void> {
@@ -143,6 +184,12 @@ export class SmtpClient implements ISmtpClient {
 
     end(): void {
         this.socket.end()
+    }
+
+    private destroySocket(error: unknown): void {
+        if (!this.socket.destroyed) {
+            this.socket.destroy(isNativeError(error) ? error : undefined)
+        }
     }
 
     private async readResponse(signal?: AbortSignal): Promise<SmtpResponse> {
@@ -170,16 +217,24 @@ export class SmtpClient implements ISmtpClient {
         return smtpResponse
     }
 
-    private async sendCommand(command: string, commandKind: SmtpCommandKind, signal?: AbortSignal): Promise<void> {
+    private async sendCommand(
+        command: string,
+        commandKind: SmtpCommandKind,
+        signal?: AbortSignal,
+    ): Promise<SmtpResponse> {
         this.logger.log('smtp_command_sent', { commandKind })
 
-        await write(this.socket, `${command}\r\n`, signal)
-        await this.readResponse(signal)
+        await write(this.socket, command + '\r\n', signal)
+        return this.readResponse(signal)
     }
 
-    private async sendCommandWithTimeout(command: string, commandKind: SmtpCommandKind, timeout: number): Promise<void> {
+    private async sendCommandWithTimeout(
+        command: string,
+        commandKind: SmtpCommandKind,
+        timeout: number,
+    ): Promise<SmtpResponse> {
         try {
-            await promiseWithTimeout(
+            return await promiseWithTimeout(
                 signal => this.sendCommand(command, commandKind, signal),
                 timeout,
                 new SmtpClientTimeoutException(),
@@ -188,5 +243,13 @@ export class SmtpClient implements ISmtpClient {
             this.destroySocket(error)
             throw error
         }
+    }
+
+    private attachSocketErrorLogger(socket: Socket | TLSSocket): void {
+        socket.on('error', error => {
+            this.logger.debug('smtp_socket_error', {
+                errorClass: safeErrorType(error),
+            })
+        })
     }
 }

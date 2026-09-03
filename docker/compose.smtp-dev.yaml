@@ -4,6 +4,7 @@ services:
       - 172.28.0.53
     environment:
       SMTP_PORT: 2525
+      SMTP_TLS_CA_FILE: /smtp-dev-tls/ca.crt
       # The base stack's OIDC_ISSUER_URL (http://localhost:58080/...) is host-facing, for the browser-driven
       # BFF login redirect (see docker/compose.yaml). Inside this container's own network namespace, "localhost"
       # is the container itself, not Keycloak, so the containerized api can neither fetch JWKS nor validate an
@@ -11,12 +12,16 @@ services:
       # name for this overlay only, which never drives a browser login (see bootstrap-proxy.sh, which requests
       # its own tokens from this same host so the issued token's iss claim matches).
       OIDC_ISSUER_URL: http://keycloak:8080/realms/lead-email-finder
+    volumes:
+      - ./smtp-dev/tls/ca.crt:/smtp-dev-tls/ca.crt:ro
     depends_on:
       coredns:
         condition: service_started
       keycloak:
         condition: service_healthy
       mailpit:
+        condition: service_healthy
+      plaintext-mailpit:
         condition: service_healthy
       smtp-dev-dns-cache-reset:
         condition: service_completed_successfully
@@ -41,6 +46,12 @@ services:
       MP_DISABLE_VERSION_CHECK: true
       MP_SMTP_BIND_ADDR: 0.0.0.0:2525
       MP_SMTP_DISABLE_RDNS: true
+      MP_SMTP_TLS_CERT: /smtp-dev-tls/smtp.crt
+      MP_SMTP_TLS_KEY: /smtp-dev-tls/smtp.key
+      MP_SMTP_REQUIRE_STARTTLS: true
+    volumes:
+      - ./smtp-dev/tls/smtp.crt:/smtp-dev-tls/smtp.crt:ro
+      - ./smtp-dev/tls/smtp.key:/smtp-dev-tls/smtp.key:ro
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 5s
@@ -50,6 +61,23 @@ services:
     networks:
       default:
         ipv4_address: 172.28.0.25
+
+  plaintext-mailpit:
+    image: axllent/mailpit:v1.30.7
+    restart: unless-stopped
+    environment:
+      MP_DISABLE_VERSION_CHECK: true
+      MP_SMTP_BIND_ADDR: 0.0.0.0:2525
+      MP_SMTP_DISABLE_RDNS: true
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      default:
+        ipv4_address: 172.28.0.26
 
   smtp-dev-proxy:
     image: ghcr.io/3proxy/3proxy:0.9.8
@@ -84,6 +112,8 @@ services:
       api:
         condition: service_healthy
       mailpit:
+        condition: service_healthy
+      plaintext-mailpit:
         condition: service_healthy
       smtp-dev-dns-cache-reset:
         condition: service_completed_successfully

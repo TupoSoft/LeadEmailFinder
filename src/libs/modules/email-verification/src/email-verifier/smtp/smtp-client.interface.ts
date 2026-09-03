@@ -1,10 +1,11 @@
 export interface ISmtpClient {
-    exchange: string
-    port: number
-    hostname: string
+    readonly exchange: string
+    readonly port: number
+    readonly hostname: string
+    readonly secureTransport: boolean
 
     connect: () => Promise<void>
-    helo: (hostname: string) => Promise<void>
+    startSession: (hostname: string) => Promise<void>
     mailFrom: (senderEmail: string) => Promise<void>
     rcptTo: (receiverEmail: string) => Promise<void>
     quit: () => Promise<void>

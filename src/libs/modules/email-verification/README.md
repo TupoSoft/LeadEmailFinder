@@ -13,7 +13,7 @@ compatibility route kept billing- and permission-equivalent to its replacement.
 - CSV batch verification (`POST /verifyBatch/csv`, status polling, and durable result download), including a
   BullMQ parent/child job fan-out per row and an S3-backed result file.
 - Domain and email persistence used to cache verification results and avoid rechecking the same address.
-- The SMTP verification engine itself: MX resolution, catch-all detection, and proxy-leased SMTP connections.
+- The SMTP verification engine itself: MX resolution, catch-all detection, and proxy-leased SMTP connections that require certificate-verified STARTTLS before either envelope address is sent.
 - Default-deny account-discovery enrichment, including one-provider selection and approval checks performed during
   startup and immediately before every outbound disclosure.
 - An internal, admin-only cache of stored `Email` records (`/emails`), not itself a verification endpoint.
@@ -106,12 +106,12 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 
 ## Persistence
 
-| Entity              | Table                 | Ownership and identity                                     |
-| ------------------- | --------------------- | ---------------------------------------------------------- |
-| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                      |
-| `Domain`            | `domains`             | Shared technical policy; domain name                       |
-| `Email`             | `emails`              | Organization plus normalized address                       |
-| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps |
+| Entity              | Table                 | Ownership and identity                                                                |
+| ------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                                                 |
+| `Domain`            | `domains`             | Shared technical policy; domain name                                                  |
+| `Email`             | `emails`              | Organization plus normalized address                                                  |
+| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
 
 ## S3 / Storage
 
@@ -132,6 +132,7 @@ override.
   `office_apps`)
 - `CATCH_ALL_PROVIDER_APPROVAL_ID` and `CATCH_ALL_PROVIDER_REGION` (required with `CATCH_ALL_PROVIDER`)
 - `SMTP_PORT` (optional, default 25)
+- `SMTP_TLS_CA_FILE` (optional path to an SMTP-only PEM root; default Node trust remains active)
 
 The runtime always reads `config/privacy/account-discovery-approvals.yaml`; no environment variable can redirect that
 path. The committed manifest is empty, so the default development and SMTP workflows select no external provider.
@@ -155,9 +156,10 @@ Focused tests are grouped by behavior:
   `batch-email-verification/multer-options-factory-impl.service.spec.ts`; the two writer specifications reuse the
   common customer-object security contract for production and development mappings
 - **Domain/Email persistence**: `domain/domain.service.spec.ts`, `domain/domain-synonym-finder.spec.ts`,
-  `email/email.controller.spec.ts`, `email/email.service.spec.ts`
+  `email/email.controller.spec.ts`, `email/email.profile.spec.ts`, `email/email.service.spec.ts`
 - **SMTP engine**: `email-verifier/email-verifier.spec.ts`, `email-verifier/smtp/smtp-client.factory.spec.ts`,
-  `email-verifier/smtp/smtp-client.spec.ts`, `email-verifier/smtp/smtp-verifier.spec.ts`
+  `email-verifier/smtp/smtp-client.spec.ts`, `email-verifier/smtp/smtp-verifier.spec.ts`,
+  `infrastructure/smtp/smtp-trust.spec.ts`, and `../../socket/src/tls-connect.spec.ts`
 - **Account discovery**: `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
   `application/account-discovery/select-account-discovery-verifier.spec.ts`,
   `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
@@ -166,8 +168,7 @@ Focused tests are grouped by behavior:
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
 
-[`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a local,
-Docker-network-only SMTP fixture, proving application plumbing rather than real-world deliverability. It also
+[`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated
 `GET /verify` route costs the same one credit as `POST /verify`, including the `402` rejection at zero balance.
 Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the

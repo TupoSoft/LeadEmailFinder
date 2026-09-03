@@ -1,7 +1,7 @@
 info:
-  name: 12-update-owned-email
+  name: 13-update-owned-email
   type: http
-  seq: 12
+  seq: 13
 
 http:
   method: PATCH

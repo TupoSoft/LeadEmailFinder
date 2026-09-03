@@ -1,7 +1,7 @@
 info:
-  name: 08-legacy-verify-requires-credit
+  name: 09-legacy-verify-requires-credit
   type: http
-  seq: 8
+  seq: 9
 
 http:
   method: GET
