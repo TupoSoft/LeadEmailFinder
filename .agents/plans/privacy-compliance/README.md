@@ -126,6 +126,10 @@ converge.
     independently durable append-only authority, backup-captured high-water marks, restore epoch fence and target, bounded
     enumeration, and fail-closed release contract; depends on `privacy-compliance/11`, `privacy-compliance/12`, and
     `privacy-compliance/15`.
+34. [Trace Verification Operations with Opaque Identifiers](34-trace-verification-operations-with-opaque-identifiers.md) —
+    returns the server request UUID, links it to existing job, batch, and verification UUIDs through safe lifecycle
+    events, and adds an organization-owned verification-result lookup; depends on `privacy-compliance/03` and
+    `privacy-compliance/04`.
 
 The graph is acyclic. Plan 02 can merge with an empty approval manifest before plan 10. Module-architecture plans 10,
 13, 14, 11, 15, and 16 split core/persistence, discovery, SMTP/proxy, synchronous, asynchronous, and batch delivery;
@@ -134,6 +138,10 @@ managed processor-copy policy evidence, and plan 15 owns restore runtime. Plan 3
 authority after those foundations. Plans 20, 21, 31, and 22 append dispositions, access-export lifecycle, correction,
 and request/clock/support events to that authority before terminal state; plan 22 still owns the first permitted
 disposable verification-privacy activation.
+
+Plan 34 is the operational follow-up to plans 03 and 04. It preserves log-content minimization while making ordinary
+sync, async, and batch verification work traceable through existing opaque IDs and the organization-owned result store.
+It does not depend on or extend the separate privacy-request authority, retention, restore, or managed-sink branches.
 
 The controller branch builds the fake-tested core and hold-query/guard contracts in plan 13. Plan 32 supplies the one
 durable legal-hold provider before plans 16, 17, and 27–30 add local attribution/session, financial, human/organization,
@@ -184,6 +192,9 @@ and counsel inputs rather than invented production facts.
   watermark. Plan 08 owns stable subject/write-ingestion safety; plan 20 owns disposition replay, plan 21 owns access-
   export invalidation, plan 31 owns dual-subject correction replay, plan 22 owns request-control replay, plan 32 owns
   legal-hold replay, and plan 18 owns controller lifecycle replay.
+- Plan 34 owns ordinary verification correlation through server-generated request IDs and existing job, batch, and
+  verification IDs. Logs retain only safe links and reason/stage codes; only an organization-owned application read
+  can resolve a verification ID to an address. Plan 11 continues to own managed log-sink access and retention.
 - A local privacy-control row is a projection, never the only restore authority. A workflow cannot expose a terminal
   request, receipt, disposition, correction, export lifecycle, controller action, retention disposition, or legal-hold
   transition until its minimal pseudonymous plan-33 event is durably appended and verified. Restore consumers enumerate
