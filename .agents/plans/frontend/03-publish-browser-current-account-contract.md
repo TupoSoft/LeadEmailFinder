@@ -18,9 +18,9 @@ the same stable `401` boundary as an expired session.
 - [x] (2026-09-04) Replaced the raw session response with a human-session-only current-account DTO.
 - [x] (2026-09-04) Defined stable authentication and wrong-credential-kind responses.
 - [x] (2026-09-04) Added source Swagger annotations, focused tests, Bruno coverage, and module documentation.
-- [ ] (2026-09-04) Static, focused, repository-wide, build, and synthetic Bruno validation passed. The guarded live
-  BFF and Bruno commands remain pending because this checkout has no `.dev/keycloak` fixtures or running owned stack;
-  the existing disposable Docker volumes were not reset without explicit authorization.
+- [x] (2026-09-05) Completed static, focused, repository-wide, build, synthetic Bruno, and isolated live-stack
+  validation. The live BFF suite passed four tests with zero skips, and Bruno passed five requests and six tests with
+  zero skips.
 
 ## Plan dependencies
 
@@ -49,7 +49,9 @@ the same stable `401` boundary as an expired session.
   while provider-origin failures retain their original error and become redacted `5xx` responses.
 - The live BFF and Bruno launchers correctly failed closed before executing because this worktree has no generated
   `.dev/keycloak` fixture directory or running checkout-owned Compose stack. Repository CI still exercised the pinned
-  Bruno CLI against the real five-request collection through its synthetic HTTP fixture.
+  Bruno CLI against the real five-request collection through its synthetic HTTP fixture. An isolated `lef498live`
+  Compose project then supplied fresh containers and separate volumes, allowing both live gates to pass without
+  deleting or reusing the preexisting `lef_*` volumes.
 
 ## Decision Log
 
@@ -102,11 +104,10 @@ identity-owned state and exhaustive BFF/auth policies, while service-client crea
 The global authentication boundary returns one code-only rejection envelope, and unexpected database, Redis, JOSE
 provider, or programming errors still propagate to Nest's redacted server-error response.
 
-Focused, repository-wide, architecture, type, lint, build, OpenAPI, and synthetic Bruno checks pass. Direct live BFF
-and Bruno execution still requires a provisioned checkout-owned development stack. This worktree had no generated
-Keycloak fixture files or running containers, so both guarded launchers failed before executing; existing named
-disposable volumes were deliberately preserved. After the user provisions or explicitly resets that stack, rerun
-`corepack pnpm test:bff-live` and `corepack pnpm bruno:bff-sessions` to close the final validation checkbox.
+Focused, repository-wide, architecture, type, lint, build, OpenAPI, synthetic Bruno, and live-stack checks pass. The
+live checks used a fresh checkout-owned `lef498live` Compose project with separate volumes: the BFF suite exercised
+real Keycloak, PostgreSQL, and Redis behavior, and the Bruno collection exercised the host-published API with a real
+service-client token. The preexisting `lef_*` volumes were not changed.
 
 ## Context and Orientation
 
@@ -290,7 +291,7 @@ missing, duplicate, and organization-inconsistent account authentication maps to
 `403 { "code": "human_session_required" }`; injected reader, verifier-provider, and other unexpected faults remain
 redacted `500 { "statusCode": 500, "message": "Internal server error" }`.
 
-Validation evidence from 2026-09-04:
+Validation evidence through 2026-09-05:
 
 - Focused plan selector: 5 suites and 28 tests passed.
 - Additional auth transport, JOSE classification, and generated OpenAPI contract selector: 3 suites and 27 tests
@@ -301,8 +302,10 @@ Validation evidence from 2026-09-04:
   passed all 15 Node runner tests. The runner exercised the pinned Bruno 4.1.0 CLI against the real BFF collection:
   five requests and six assertions passed with none skipped.
 - `corepack pnpm build` compiled 583 files with zero type-checker issues.
-- `corepack pnpm test:bff-live` and `corepack pnpm bruno:bff-sessions` stopped safely before test execution because the
-  checkout-owned `.dev/keycloak` fixtures and running stack were absent; no live pass is claimed.
+- `COMPOSE_PROJECT_NAME=lef498live corepack pnpm test:bff-live` passed four live tests with zero skips across the
+  public issuer and internal token, refresh, logout, and key-retrieval routes.
+- `COMPOSE_PROJECT_NAME=lef498live corepack pnpm bruno:bff-sessions` passed five requests and six tests with no skipped
+  requests using Bruno 4.1.0 and a real service-client token.
 - The exact six-file `corepack pnpm docs:lint -- ...` command passed after the final prose updates. The final
   `git diff --check` result belongs in the implementation handoff.
 
