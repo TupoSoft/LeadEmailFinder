@@ -12,9 +12,12 @@ the API host's `AuthenticationCompositionModule` does that instead, so auth has 
   `OidcCredentialAuthenticator`.
 - The `CredentialAuthenticator`/`ExtractedCredential`/`CredentialRejectedError` contract that every credential
   authenticator implements, including the one owned by `bff-session`, so `AuthGuard` can translate any rejection
-  into a 401 without knowing which authenticator produced it.
+  into the code-only `401 { "code": "authentication_required" }` response without knowing which authenticator
+  produced it.
 - Role-to-permission mapping (`RolePermissionPolicy`) and the `PermissionsGuard`/`@RequirePermissions()` pair
   that controllers use to authorize a resolved principal.
+- The ordered permissions each human membership role may grant to a service client, exposed through the
+  `ServiceClientGrantPolicy` contract and its `SERVICE_CLIENT_GRANT_POLICY` injection token.
 - The reusable `AuthGuard` (attaches the resolved principal to the request) and the `@Public()` escape hatch.
 
 ## Non-Responsibilities
@@ -35,15 +38,17 @@ the API host's `AuthenticationCompositionModule` does that instead, so auth has 
 [`src/index.ts`](src/index.ts) exports: `AuthModule`, `AuthenticationService`, the `credential-authenticator`
 contract (`CredentialAuthenticator`, `ExtractedCredential`, `CredentialRejectedError`, `CREDENTIAL_AUTHENTICATORS`),
 `CredentialExtractor` (and its `BFF_SESSION_COOKIE_NAME` constant), `OidcCredentialAuthenticator`,
-`RolePermissionPolicy`, `AuthGuard`, `PermissionsGuard`, `@CurrentPrincipal()`, `@Public()`, `request-principal`
-(`getAuthPrincipal`/`setAuthPrincipal`), and `@RequirePermissions()`.
+`RolePermissionPolicy`, the `ServiceClientGrantPolicy` contract, `SERVICE_CLIENT_GRANT_POLICY` token, exact
+`SERVICE_CLIENT_GRANTABLE_PERMISSIONS` values, `AuthGuard`, `PermissionsGuard`, `@CurrentPrincipal()`, `@Public()`,
+`request-principal` (`getAuthPrincipal`/`setAuthPrincipal`), and `@RequirePermissions()`.
 
 `ServiceCredentialResolver`, the OIDC token verifier, and everything under `infrastructure/jose/` are **not**
 part of the barrel and are internal to this module.
 
-`AuthModule` itself provides and exports only `CredentialExtractor` and `OidcCredentialAuthenticator` (plus their
-private infrastructure dependencies) — the ingredients a composition root needs to build `AuthenticationService`.
-It does not provide `AuthenticationService` or register any guard globally; see
+`AuthModule` provides and exports `CredentialExtractor`, `OidcCredentialAuthenticator`, and the
+`SERVICE_CLIENT_GRANT_POLICY` token (plus their private dependencies). The first two are the ingredients a composition
+root needs to build `AuthenticationService`; the grant policy is shared by account presentation and authoritative
+service-client creation. The module does not provide `AuthenticationService` or register any guard globally; see
 [`authentication-composition.module.ts`](../../../lead-email-finder-api/src/authentication/authentication-composition.module.ts).
 
 ## Dependencies
@@ -57,7 +62,8 @@ No controllers. `AuthGuard` and `PermissionsGuard` are reusable providers other 
 module) register as guards:
 
 - `AuthGuard` — authenticates the request via `AuthenticationService` and attaches the resolved `AuthPrincipal`;
-  translates any `CredentialRejectedError` into a 401, and lets any other error propagate unchanged.
+  translates any `CredentialRejectedError` into the exact code-only `401 { "code": "authentication_required" }`
+  response without forwarding its message, and lets any other error propagate unchanged.
 - `PermissionsGuard` + `@RequirePermissions('<permission>')` — authorizes an already-resolved principal by role,
   via `RolePermissionPolicy`.
 
@@ -74,11 +80,19 @@ None owned. Reads active service credentials through identity's `ActiveServiceCr
 - `OIDC_AUDIENCE`
 - `OIDC_JWKS_URI` (optional — overrides where JWKS is fetched from, independently of the issuer URL)
 
+The JOSE adapter reports expected failures in token format, algorithm, signature, claims, expiry, and key selection as a
+framework-free token rejection. `OidcCredentialAuthenticator` converts only that signal into
+`CredentialRejectedError`. JWKS retrieval, timeout, malformed-provider-response, and unexpected programming failures
+keep their original error so the HTTP boundary returns a redacted `5xx` rather than misreporting an outage as bad
+credentials.
+
 ## Validation
 
 Focused tests live in `src/`, including `application/authentication.service.spec.ts`,
 `application/credential-extractor.spec.ts`, `application/oidc-credential-authenticator.spec.ts`,
-`application/role-permission-policy.service.spec.ts`, `application/service-credential-resolver.service.spec.ts`,
+`application/role-permission-policy.service.spec.ts`,
+`application/default-service-client-grant-policy.service.spec.ts`,
+`application/service-credential-resolver.service.spec.ts`,
 `auth.module.spec.ts`, `auth-guard-wiring.integration.spec.ts`, `api/auth.guard.spec.ts`,
 `api/permissions.guard.spec.ts`, `infrastructure/jose/oidc-configuration.spec.ts`, and the live-Keycloak-gated
 `infrastructure/jose/jose-oidc-token-verifier.live-keycloak.integration.spec.ts` and

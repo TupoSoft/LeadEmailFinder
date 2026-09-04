@@ -2,13 +2,22 @@ import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import {
     ACTIVE_MEMBERSHIP_READER,
+    CURRENT_ACCOUNT_READER,
     ActiveMembershipReader,
+    CurrentAccountReader,
     ExternalIdentityResolver,
     IdentityModule,
 } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    AuthModule,
+    SERVICE_CLIENT_GRANT_POLICY,
+    ServiceClientGrantPolicy,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from './application/bff-session-configuration'
 import { BffSessionFlowService } from './application/bff-session-flow.service'
 import { BffSessionCredentialAuthenticator } from './application/bff-session-credential-authenticator'
+import { BrowserCapabilityPolicy } from './application/browser-capability-policy'
+import { CurrentAccountService } from './application/current-account.service'
 import { HumanMembershipResolver } from './application/human-membership-resolver.service'
 import { ID_TOKEN_VERIFIER, IdTokenVerifier } from './application/id-token-verifier'
 import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './application/oauth-provider-client'
@@ -27,7 +36,7 @@ import { CsrfGuard } from './api/csrf.guard'
 import { OriginGuard } from './api/origin.guard'
 
 @Module({
-    imports: [ConfigModule, IdentityModule],
+    imports: [ConfigModule, IdentityModule, AuthModule],
     controllers: [BffSessionController],
     providers: [
         {
@@ -56,6 +65,16 @@ import { OriginGuard } from './api/origin.guard'
             provide: HumanMembershipResolver,
             useFactory: (reader: ActiveMembershipReader) => new HumanMembershipResolver(reader),
             inject: [ACTIVE_MEMBERSHIP_READER],
+        },
+        BrowserCapabilityPolicy,
+        {
+            provide: CurrentAccountService,
+            useFactory: (
+                currentAccountReader: CurrentAccountReader,
+                browserCapabilityPolicy: BrowserCapabilityPolicy,
+                serviceClientGrantPolicy: ServiceClientGrantPolicy,
+            ) => new CurrentAccountService(currentAccountReader, browserCapabilityPolicy, serviceClientGrantPolicy),
+            inject: [CURRENT_ACCOUNT_READER, BrowserCapabilityPolicy, SERVICE_CLIENT_GRANT_POLICY],
         },
         {
             provide: BffSessionFlowService,

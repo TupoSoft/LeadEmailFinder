@@ -13,12 +13,14 @@ the same stable `401` boundary as an expired session.
 
 ## Progress
 
-- [ ] (2026-08-31) Add the identity-owned current-account reader port and TypeORM adapter.
-- [ ] (2026-08-31) Publish exact browser capabilities and one auth-owned service-client grant policy.
-- [ ] (2026-08-31) Replace the raw session response with a human-session-only current-account DTO.
-- [ ] (2026-08-31) Define stable authentication and wrong-credential-kind responses.
-- [ ] (2026-08-31) Add source Swagger annotations, focused tests, Bruno coverage, and module documentation.
-- [ ] (2026-08-31) Run architecture, persistence, serialization, and live-session validation and record evidence.
+- [x] (2026-09-04) Added the identity-owned current-account reader port and TypeORM adapter.
+- [x] (2026-09-04) Published exact browser capabilities and one auth-owned service-client grant policy.
+- [x] (2026-09-04) Replaced the raw session response with a human-session-only current-account DTO.
+- [x] (2026-09-04) Defined stable authentication and wrong-credential-kind responses.
+- [x] (2026-09-04) Added source Swagger annotations, focused tests, Bruno coverage, and module documentation.
+- [ ] (2026-09-04) Static, focused, repository-wide, build, and synthetic Bruno validation passed. The guarded live
+  BFF and Bruno commands remain pending because this checkout has no `.dev/keycloak` fixtures or running owned stack;
+  the existing disposable Docker volumes were not reset without explicit authorization.
 
 ## Plan dependencies
 
@@ -39,6 +41,15 @@ the same stable `401` boundary as an expired session.
 - External-identity and membership email fields are nullable, so the browser contract must preserve `null`.
 - Identity still exports persistence entities through a temporary compatibility surface. This plan must use only the
   public reader ports and domain records; `module-architecture/08` owns removing those legacy entity exports.
+- A malformed percent escape in any cookie value made `decodeURIComponent` throw `URIError` before authentication
+  could produce the stable rejection envelope. The extractor now ignores only that malformed cookie pair, preserving
+  a separately valid session cookie and allowing an absent usable credential to reach the ordinary `401` boundary.
+- JOSE uses `JOSENotSupported` both for unsupported presented-token algorithms and for some unsupported provider key
+  shapes. Wrapping only the remote key-resolution call makes the origin observable: token-origin failures are `401`,
+  while provider-origin failures retain their original error and become redacted `5xx` responses.
+- The live BFF and Bruno launchers correctly failed closed before executing because this worktree has no generated
+  `.dev/keycloak` fixture directory or running checkout-owned Compose stack. Repository CI still exercised the pinned
+  Bruno CLI against the real five-request collection through its synthetic HTTP fixture.
 
 ## Decision Log
 
@@ -68,10 +79,34 @@ the same stable `401` boundary as an expired session.
 - Decision: Model current-account email as `string | null` and standardize `Email unavailable` as the browser fallback.
   Rationale: Missing identity email is valid persisted state; neither the API nor UI should manufacture an address.
   Date/Author: 2026-08-31, project planning.
+- Decision: Require `CurrentAccountReader` to return no account unless it finds exactly one active membership for the
+  principal's external identity and that row belongs to the principal's organization.
+  Rationale: The current-account response must not choose between duplicate memberships or combine stale guard state
+  with a different organization; all such post-guard inconsistencies use the generic authentication boundary.
+  Date/Author: 2026-09-04, implementation.
+- Decision: Publish a named cookie security scheme for `GET /v1/auth/session` and constrain the Swagger grant enum to
+  the six permissions the shared grant policy can actually return.
+  Rationale: Generated clients need the genuine browser credential and grant contract, not the broader backend
+  permission union.
+  Date/Author: 2026-09-04, implementation.
+- Decision: Classify JOSE failures at the framework-free verifier boundary and distinguish errors originating inside
+  remote key resolution from errors in the presented token.
+  Rationale: Invalid credentials must normalize to `401`, but provider retrieval, response, or key-import failures are
+  operational faults and must remain redacted `5xx` responses.
+  Date/Author: 2026-09-04, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The source implementation is complete. `GET /v1/auth/session` now assembles one serializer-safe account document from
+identity-owned state and exhaustive BFF/auth policies, while service-client creation enforces the same grant ceiling.
+The global authentication boundary returns one code-only rejection envelope, and unexpected database, Redis, JOSE
+provider, or programming errors still propagate to Nest's redacted server-error response.
+
+Focused, repository-wide, architecture, type, lint, build, OpenAPI, and synthetic Bruno checks pass. Direct live BFF
+and Bruno execution still requires a provisioned checkout-owned development stack. This worktree had no generated
+Keycloak fixture files or running containers, so both guarded launchers failed before executing; existing named
+disposable volumes were deliberately preserved. After the user provisions or explicitly resets that stack, rerun
+`corepack pnpm test:bff-live` and `corepack pnpm bruno:bff-sessions` to close the final validation checkbox.
 
 ## Context and Orientation
 
@@ -233,9 +268,46 @@ shared Keycloak, Redis, or database state from another checkout.
 
 ## Artifacts and Notes
 
-Record a redacted current-account example, the null-email case, capability matrix, grant matrix, failure matrix,
-focused test counts, and Bruno summary. Never record authorization codes, cookies, CSRF values, client secrets,
-tokens, Redis values, provider payloads, or real account data.
+Redacted owner response, also covered with `"email": null`:
+
+    {
+      "email": "owner@example.test",
+      "membership": { "id": "00000000-0000-4000-8000-000000000001", "role": "owner" },
+      "organization": { "id": "00000000-0000-4000-8000-000000000002", "name": "Example Organization" },
+      "capabilities": ["verification.run", "verification.read", "team.manage", "service_clients.manage", "billing.read", "billing.manage"],
+      "grantableServiceClientPermissions": ["verification:run", "verification:read", "members:manage", "credentials:manage", "billing:read", "billing:manage"]
+    }
+
+The role tables are exact. A member receives the two verification capabilities and no grantable permissions. An
+administrator adds team and service-client management plus four grantable verification/member/credential
+permissions. An owner adds the two billing values to each applicable list. A platform administrator receives only
+the three platform browser capabilities and no grantable permissions. No role changes were made to authoritative
+backend permissions.
+
+Failure evidence is exact: missing, opaque, malformed JWT-shaped, malformed-cookie, expired-session, inactive,
+missing, duplicate, and organization-inconsistent account authentication maps to
+`401 { "code": "authentication_required" }`; a valid service-client bearer maps to
+`403 { "code": "human_session_required" }`; injected reader, verifier-provider, and other unexpected faults remain
+redacted `500 { "statusCode": 500, "message": "Internal server error" }`.
+
+Validation evidence from 2026-09-04:
+
+- Focused plan selector: 5 suites and 28 tests passed.
+- Additional auth transport, JOSE classification, and generated OpenAPI contract selector: 3 suites and 27 tests
+  passed.
+- `corepack pnpm typecheck` passed; `corepack pnpm lint` passed with zero errors and one unrelated existing warning in
+  `src/libs/config/src/load-secrets.spec.ts`; architecture passed for nine modules with 108 baselined violations.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci` passed 1,659 Jest tests with 63 gated tests skipped, then
+  passed all 15 Node runner tests. The runner exercised the pinned Bruno 4.1.0 CLI against the real BFF collection:
+  five requests and six assertions passed with none skipped.
+- `corepack pnpm build` compiled 583 files with zero type-checker issues.
+- `corepack pnpm test:bff-live` and `corepack pnpm bruno:bff-sessions` stopped safely before test execution because the
+  checkout-owned `.dev/keycloak` fixtures and running stack were absent; no live pass is claimed.
+- The exact six-file `corepack pnpm docs:lint -- ...` command passed after the final prose updates. The final
+  `git diff --check` result belongs in the implementation handoff.
+
+Never record authorization codes, cookies, CSRF values, client secrets, tokens, Redis values, provider payloads, or
+real account data.
 
 The human-session boundary, nullable account schema, capability/grant policies, guard-aligned failure contract, module
 ownership, validation, and one-pull-request scope are decision-complete.

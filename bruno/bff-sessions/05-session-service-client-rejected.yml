@@ -1,0 +1,20 @@
+info:
+  name: 05-session-service-client-rejected
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/auth/session"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects a valid service-client bearer at the human-session boundary', function() {
+          expect(res.status).to.equal(403);
+          expect(res.body).to.deep.equal({ code: 'human_session_required' });
+        });

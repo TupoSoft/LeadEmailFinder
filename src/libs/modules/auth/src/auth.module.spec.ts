@@ -3,6 +3,8 @@ import { ACTIVE_SERVICE_CREDENTIAL_READER } from '@tuposoft/lead-email-finder/mo
 import { AuthModule } from './auth.module'
 import { CredentialExtractor } from './application/credential-extractor'
 import { OidcCredentialAuthenticator } from './application/oidc-credential-authenticator'
+import { RolePermissionPolicy } from './application/role-permission-policy.service'
+import { SERVICE_CLIENT_GRANT_POLICY } from './application/service-client-grant-policy'
 import { ServiceCredentialResolver } from './application/service-credential-resolver.service'
 
 describe('AuthModule', () => {
@@ -15,7 +17,15 @@ describe('AuthModule', () => {
         expect(providers).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ provide: CredentialExtractor }),
-                expect.objectContaining({ provide: ServiceCredentialResolver, inject: [ACTIVE_SERVICE_CREDENTIAL_READER] }),
+                expect.objectContaining({
+                    provide: SERVICE_CLIENT_GRANT_POLICY,
+                    inject: [RolePermissionPolicy],
+                    useFactory: expect.any(Function),
+                }),
+                expect.objectContaining({
+                    provide: ServiceCredentialResolver,
+                    inject: [ACTIVE_SERVICE_CREDENTIAL_READER],
+                }),
                 expect.objectContaining({ provide: OidcCredentialAuthenticator }),
             ]),
         )
@@ -28,14 +38,16 @@ describe('AuthModule', () => {
         )
 
         expect(providedTokens.some(token => token?.toString() === 'Symbol(APP_GUARD)')).toBe(false)
-        expect(providedTokens.some(token => typeof token === 'function' && token.name === 'AuthenticationService')).toBe(
-            false,
-        )
+        expect(
+            providedTokens.some(token => typeof token === 'function' && token.name === 'AuthenticationService'),
+        ).toBe(false)
     })
 
-    it('exports the OIDC authenticator and its infrastructure dependencies', () => {
+    it('exports the OIDC authenticator ingredients and service-client grant policy', () => {
         const exports = Reflect.getMetadata(MODULE_METADATA.EXPORTS, AuthModule) as unknown[]
 
-        expect(exports).toEqual(expect.arrayContaining([CredentialExtractor, OidcCredentialAuthenticator]))
+        expect(exports).toEqual(
+            expect.arrayContaining([CredentialExtractor, OidcCredentialAuthenticator, SERVICE_CLIENT_GRANT_POLICY]),
+        )
     })
 })

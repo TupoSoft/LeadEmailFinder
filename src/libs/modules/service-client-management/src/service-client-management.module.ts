@@ -8,9 +8,18 @@ import {
     ServiceCredentialDirectory,
     ServiceCredentialWriter,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import {
+    AuthModule,
+    PermissionsGuard,
+    RolePermissionPolicy,
+    SERVICE_CLIENT_GRANT_POLICY,
+    ServiceClientGrantPolicy,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import { ServiceClientsController } from './api/service-clients.controller'
-import { KEYCLOAK_SERVICE_CLIENT_ADMIN, KeycloakServiceClientAdmin } from './application/ports/keycloak-service-client-admin'
+import {
+    KEYCLOAK_SERVICE_CLIENT_ADMIN,
+    KeycloakServiceClientAdmin,
+} from './application/ports/keycloak-service-client-admin'
 import { ServiceClientCreationService } from './application/service-client-creation.service'
 import { ServiceClientDeletionService } from './application/service-client-deletion.service'
 import { ServiceClientDisablementService } from './application/service-client-disablement.service'
@@ -24,7 +33,7 @@ import { createServiceClientManagementConfiguration } from './infrastructure/con
 import { KeycloakServiceClientAdminClient } from './infrastructure/keycloak/keycloak-service-client-admin-client.service'
 
 @Module({
-    imports: [ConfigModule, IdentityModule, KeycloakAdminHttpModule],
+    imports: [ConfigModule, IdentityModule, AuthModule, KeycloakAdminHttpModule],
     controllers: [ServiceClientsController],
     providers: [
         RolePermissionPolicy,
@@ -45,14 +54,14 @@ import { KeycloakServiceClientAdminClient } from './infrastructure/keycloak/keyc
                 SERVICE_CREDENTIAL_WRITER,
                 KEYCLOAK_SERVICE_CLIENT_ADMIN,
                 SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
-                RolePermissionPolicy,
+                SERVICE_CLIENT_GRANT_POLICY,
             ],
             useFactory: (
                 writer: ServiceCredentialWriter,
                 keycloakAdmin: KeycloakServiceClientAdmin,
                 configuration: ServiceClientManagementConfiguration,
-                rolePermissionPolicy: RolePermissionPolicy,
-            ) => new ServiceClientCreationService(writer, keycloakAdmin, configuration, rolePermissionPolicy),
+                serviceClientGrantPolicy: ServiceClientGrantPolicy,
+            ) => new ServiceClientCreationService(writer, keycloakAdmin, configuration, serviceClientGrantPolicy),
         },
         {
             provide: ServiceClientListingService,

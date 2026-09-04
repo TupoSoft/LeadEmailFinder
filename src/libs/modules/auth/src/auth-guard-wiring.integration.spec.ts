@@ -1,15 +1,21 @@
-import { Controller, Get, INestApplication, Module, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { Controller, Get, INestApplication, Module, UseGuards } from '@nestjs/common'
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService } from './application/authentication.service'
+import { CredentialRejectedError } from './application/credential-authenticator'
+import { CredentialExtractor } from './application/credential-extractor'
+import { OidcCredentialAuthenticator } from './application/oidc-credential-authenticator'
+import { OidcTokenVerifier } from './application/oidc-token-verifier'
 import { RolePermissionPolicy } from './application/role-permission-policy.service'
+import { ServiceCredentialResolver } from './application/service-credential-resolver.service'
 import { AuthGuard } from './api/auth.guard'
 import { CurrentPrincipal } from './api/current-principal.decorator'
 import { PermissionsGuard } from './api/permissions.guard'
 import { Public } from './api/public.decorator'
 import { RequirePermissions } from './api/require-permissions.decorator'
+import { JoseOidcTokenVerifier } from './infrastructure/jose/jose-oidc-token-verifier'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
     authenticate: jest.fn(),
@@ -68,6 +74,16 @@ function principalWith(overrides: Partial<AuthPrincipal>): AuthPrincipal {
     }
 }
 
+function authenticationServiceUsing(tokenVerifier: OidcTokenVerifier): AuthenticationService {
+    const serviceCredentialResolver = {
+        resolveActive: jest.fn(),
+    } as unknown as ServiceCredentialResolver
+
+    return new AuthenticationService(new CredentialExtractor(), [
+        new OidcCredentialAuthenticator(tokenVerifier, serviceCredentialResolver),
+    ])
+}
+
 describe('AuthGuard + CurrentPrincipal wiring', () => {
     let app: INestApplication
 
@@ -76,7 +92,7 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
             imports: [AuthIntegrationTestModule],
         }).compile()
 
-        app = moduleRef.createNestApplication()
+        app = moduleRef.createNestApplication({ logger: false })
         await app.init()
     })
 
@@ -94,10 +110,24 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
         expect(authenticationServiceMock.authenticate).not.toHaveBeenCalled()
     })
 
-    it('rejects a protected route when authentication fails', async () => {
-        authenticationServiceMock.authenticate.mockRejectedValue(new UnauthorizedException('missing credential'))
+    it('rejects a protected route with the stable code-only response when authentication fails', async () => {
+        authenticationServiceMock.authenticate.mockRejectedValue(
+            new CredentialRejectedError('Authentication credential is missing'),
+        )
 
-        await request(app.getHttpServer()).get('/auth-integration-test/protected').expect(401)
+        await request(app.getHttpServer())
+            .get('/auth-integration-test/protected')
+            .expect(401, { code: 'authentication_required' })
+    })
+
+    it('treats malformed session-cookie encoding as an exact code-only 401 without leaking the parser error', async () => {
+        const authenticationService = new AuthenticationService(new CredentialExtractor(), [])
+        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
+
+        await request(app.getHttpServer())
+            .get('/auth-integration-test/protected')
+            .set('cookie', 'lef_session=%ZZ')
+            .expect(401, { code: 'authentication_required' })
     })
 
     it('resolves @CurrentPrincipal() from the authenticated request', async () => {
@@ -121,9 +151,45 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
     })
 
     it('rejects an unauthenticated request to a permission-gated route with 401, not 403', async () => {
-        authenticationServiceMock.authenticate.mockRejectedValue(new UnauthorizedException('missing credential'))
+        const authenticationService = authenticationServiceUsing(
+            new JoseOidcTokenVerifier({
+                issuer: 'https://issuer.example.test',
+                audience: 'lead-email-finder-api',
+                jwksUri: 'https://issuer.example.test/jwks',
+            }),
+        )
+        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
 
-        await request(app.getHttpServer()).get('/auth-integration-test/admin-only').expect(401)
+        await request(app.getHttpServer())
+            .get('/auth-integration-test/admin-only')
+            .set('authorization', 'Bearer header.payload.signature')
+            .expect(401, { code: 'authentication_required' })
+    })
+
+    it('preserves an unexpected verifier fault as a redacted 500', async () => {
+        const tokenVerifier: OidcTokenVerifier = {
+            verify: jest.fn().mockRejectedValue(new Error('JWKS endpoint secret failed')),
+        }
+        const authenticationService = authenticationServiceUsing(tokenVerifier)
+        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
+
+        await request(app.getHttpServer())
+            .get('/auth-integration-test/protected')
+            .set('authorization', 'Bearer header.payload.signature')
+            .expect(500, { statusCode: 500, message: 'Internal server error' })
+    })
+
+    it('rejects an opaque bearer token through the real authentication chain without invoking OIDC verification', async () => {
+        const tokenVerifier: OidcTokenVerifier = { verify: jest.fn() }
+        const authenticationService = authenticationServiceUsing(tokenVerifier)
+        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
+
+        await request(app.getHttpServer())
+            .get('/auth-integration-test/protected')
+            .set('authorization', 'Bearer opaque-token')
+            .expect(401, { code: 'authentication_required' })
+
+        expect(tokenVerifier.verify).not.toHaveBeenCalled()
     })
 
     it('rejects a member-role principal from a platform:admin-gated route with 403 (privilege escalation)', async () => {

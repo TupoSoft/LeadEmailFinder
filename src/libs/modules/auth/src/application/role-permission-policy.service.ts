@@ -13,11 +13,15 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthRole, readonly AuthPermission
 }
 
 export class RolePermissionPolicy {
+    effectivePermissionsForRole(role: AuthRole): readonly AuthPermission[] {
+        return ROLE_PERMISSIONS[role]
+    }
+
     effectivePermissionsFor(principal: AuthPrincipal): readonly AuthPermission[] {
         if (principal.credentialKind === 'service_client') {
             return principal.permissions
         }
 
-        return ROLE_PERMISSIONS[principal.membershipRole]
+        return this.effectivePermissionsForRole(principal.membershipRole)
     }
 }

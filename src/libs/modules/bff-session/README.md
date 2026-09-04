@@ -10,6 +10,8 @@ browser-session mutation across the whole application.
 - Issuing, reading, refreshing, and revoking the encrypted `lef_session` cookie and the paired `lef_csrf_token`.
 - Resolving a human identity's active organization membership at authentication time
   (`HumanMembershipResolver`), so a disabled membership invalidates the session on the next request.
+- Publishing the browser-safe current-account document for an authenticated human session, including deterministic
+  presentation capabilities and the service-client permissions the account may grant.
 - Enforcing Origin and CSRF double-submit checks on every unsafe request authenticated by the session cookie,
   via `BrowserSessionMutationGuard` — installed globally by the API host's `AuthenticationCompositionModule`,
   not by this module or by `auth`.
@@ -18,13 +20,14 @@ browser-session mutation across the whole application.
 
 - No M2M/OIDC bearer authentication (owned by [`auth`](../auth/README.md)); this module only produces one of
   the two credential kinds the application's authentication chain accepts.
-- No role/permission policy — authorization decisions are made by the `PermissionsGuard` in `auth`, not here.
+- No endpoint authorization policy — authorization decisions are made by the `PermissionsGuard` in `auth`, not here.
+  The BFF-owned `BrowserCapabilityPolicy` provides presentation hints only and is never authoritative for an API call.
 - Does not compose the application's authenticator chain or register any global guard — the API host's
   `AuthenticationCompositionModule` does that, using this module's `BffSessionCredentialAuthenticator` and
   `BrowserSessionMutationGuard` alongside the equivalents owned by `auth`.
-- No membership/organization persistence — this module reads active memberships only through identity's
-  `ActiveMembershipReader` port, and resolves/creates external identities only through identity's
-  `ExternalIdentityResolver`; it does not own or write those tables.
+- No membership/organization persistence — this module reads authentication-time membership state through
+  identity's `ActiveMembershipReader`, reads browser account fields through `CurrentAccountReader`, and
+  resolves/creates external identities through `ExternalIdentityResolver`; it does not own or write those tables.
 
 ## Public API
 
@@ -33,15 +36,17 @@ browser-session mutation across the whole application.
 session crypto, and Redis stores are internal implementation, not part of the intentional public surface.
 
 This module depends only on the public barrel `auth` exposes — `CredentialAuthenticator`, `ExtractedCredential`,
-`CredentialRejectedError`, `BFF_SESSION_COOKIE_NAME`, `CurrentPrincipal`, `Public`, and `getAuthPrincipal` are all
-imported through `@tuposoft/lead-email-finder/modules/auth`. `auth` has no source dependency on this module.
+`CredentialRejectedError`, `BFF_SESSION_COOKIE_NAME`, `CurrentPrincipal`, `Public`, `getAuthPrincipal`, and the
+`ServiceClientGrantPolicy` contract and token are all imported through
+`@tuposoft/lead-email-finder/modules/auth`. `auth` has no source dependency on this module.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `ExternalIdentityResolver`, the `ActiveMembershipReader` port, and the
-  `AuthPrincipal`/role/permission types.
+- [`identity`](../identity/README.md) — `ExternalIdentityResolver`, the `ActiveMembershipReader` and
+  `CurrentAccountReader` ports, and the `AuthPrincipal`/role/permission types.
 - [`auth`](../auth/README.md) — the `CredentialAuthenticator` contract, `CredentialRejectedError`, the session
-  cookie name constant, and the current-principal decorator/accessor, all through the public barrel auth exposes.
+  cookie name constant, current-principal decorator/accessor, and shared `ServiceClientGrantPolicy`, all through the
+  public barrel auth exposes.
 
 ## HTTP Surface
 
@@ -51,8 +56,13 @@ imported through `@tuposoft/lead-email-finder/modules/auth`. `auth` has no sourc
 | ------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `v1/auth/login`    | Public — redirects to Keycloak with a PKCE S256 challenge                                                                                     |
 | `GET`  | `v1/auth/callback` | Public — exchanges the authorization code, sets the session/CSRF cookies                                                                      |
-| `GET`  | `v1/auth/session`  | Authenticated (bearer or session cookie) — returns the current `AuthPrincipal`                                                                |
+| `GET`  | `v1/auth/session`  | Human session — returns browser-safe email, membership, organization, capabilities, and grantable service-client permissions                  |
 | `POST` | `v1/auth/logout`   | Authenticated; unsafe method, so `BrowserSessionMutationGuard` also requires a matching Origin and CSRF token for a `human_session` principal |
+
+`GET v1/auth/session` preserves nullable email and never returns credential kind, issuer, subject, credential ID,
+tokens, session identifiers, or raw principal permissions. Missing or unusable account authentication returns the
+exact `401 { "code": "authentication_required" }` response. An authenticated service client returns the exact
+`403 { "code": "human_session_required" }` response.
 
 ## Persistence
 
@@ -93,14 +103,17 @@ Focused tests live in `src/`, including `application/bff-session-flow.service.sp
 including rejection of the internal issuer),
 `application/human-membership-resolver.service.spec.ts`, `application/session-token-refresher.service.spec.ts`,
 `application/bff-session-credential-authenticator.spec.ts`, `bff-session.module.spec.ts`,
+`application/browser-capability-policy.spec.ts`, `application/current-account.service.spec.ts`,
 `api/browser-session-mutation.guard.spec.ts`, `api/csrf.guard.spec.ts`, `api/origin.guard.spec.ts`,
-`api/bff-session.controller.spec.ts`, `infrastructure/redis/redis-session-store.spec.ts`,
+`api/bff-session.controller.spec.ts`, `api/bff-session.swagger.spec.ts`,
+`infrastructure/redis/redis-session-store.spec.ts`,
 `bff-session-guard-wiring.integration.spec.ts`, and the live-Keycloak-gated
 `bff-session-flow.live-keycloak.integration.spec.ts` (real login, disabled-membership invalidation, replay
 rejection, and a genuine CSRF/Origin round trip).
 
-[`bruno/bff-sessions`](../../../../bruno/bff-sessions/README.md) exercises the HTTP-boundary behavior that
-doesn't require a real Keycloak session: unauthenticated `401` responses on `session` and `logout`, a correctly
-constructed PKCE login redirect, and login-state/`state` mismatch rejection on `callback`. The full authenticated round
-trip — including CSRF/Origin enforcement against a genuine cookie — is covered instead by
+[`bruno/bff-sessions`](../../../../bruno/bff-sessions/README.md) exercises HTTP boundaries that do not require a real
+Keycloak human session. It covers the exact unauthenticated `401` response on `session`, an exact human-only `403`
+response for a valid service-client bearer, an unauthenticated request to log out, and a correctly constructed PKCE
+login redirect. It also covers login-state/`state` mismatch rejection on `callback`. The full authenticated round trip —
+including the current-account contract and CSRF/Origin enforcement against a genuine cookie — is covered instead by
 `bff-session-flow.live-keycloak.integration.spec.ts` above.

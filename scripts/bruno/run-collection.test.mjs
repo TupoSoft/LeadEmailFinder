@@ -55,9 +55,11 @@ test('accepts only an exact registered collection with no extra command argument
 })
 
 test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {
-    assert.deepEqual(collectionEnvironment('bff-sessions', metadata), {
+    assert.deepEqual(collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential), {
         BRUNO_API_URL: metadata.apiUrl,
         OIDC_ISSUER_URL: issuer,
+        KEYCLOAK_SERVICE_CLIENT_ID: serviceClient.clientId,
+        KEYCLOAK_SERVICE_CLIENT_SECRET: serviceClient.clientSecret,
     })
     const environment = collectionEnvironment('smtp-dev', metadata, serviceClient, serviceCredential)
     assert.equal(environment.BRUNO_API_URL, 'http://api:3000')
@@ -76,7 +78,7 @@ test('rejects missing or mismatched fixture metadata without exposing its values
         [serviceClient, { ...serviceCredential, issuers: [] }],
     ]) {
         assert.throws(
-            () => collectionEnvironment('smtp-dev', metadata, client, credential),
+            () => collectionEnvironment('bff-sessions', metadata, client, credential),
             error => {
                 assert.match(error.message, /matching provisioned/)
                 assert.ok(!error.message.includes(serviceClient.clientSecret))
@@ -98,9 +100,12 @@ test('token-minting collections always use developer sandbox and credentials nev
         () => cliArguments('smtp-dev', { ...environment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
         /prerequisites/,
     )
-    assert.equal(
-        cliArguments('bff-sessions', collectionEnvironment('bff-sessions', metadata), '/tmp/report')[4],
-        'safe',
+    const bffEnvironment = collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential)
+    assert.equal(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')[4], 'developer')
+    assert.ok(!JSON.stringify(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')).includes(serviceClient.clientSecret))
+    assert.throws(
+        () => cliArguments('bff-sessions', { ...bffEnvironment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
+        /prerequisites/,
     )
 })
 
@@ -131,10 +136,18 @@ test('rejects skipped, failed, and mismatched report counts even after a success
 
 test('pinned CLI executes the real BFF collection and deletes reports on success and failure', async () => {
     let wrongIssuer = false
+    let baseUrl
     const server = createServer((request, response) => {
+        if (request.url === '/realms/lead-email-finder/protocol/openid-connect/token') {
+            response.writeHead(200, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ access_token: 'synthetic-service-client-token' }))
+            return
+        }
         if (request.url === '/v1/auth/login') {
             const url = new URL(
-                `${wrongIssuer ? 'http://keycloak:8080/realms/lead-email-finder' : issuer}/protocol/openid-connect/auth`,
+                `${
+                    wrongIssuer ? 'http://keycloak:8080/realms/lead-email-finder' : `${baseUrl}/realms/lead-email-finder`
+                }/protocol/openid-connect/auth`,
             )
             for (const [key, value] of Object.entries({
                 response_type: 'code',
@@ -150,17 +163,34 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
                 location: url.toString(),
                 'set-cookie': 'lef_login_state=test-cookie; HttpOnly; Path=/',
             })
-        } else response.writeHead(401)
-        response.end('{}')
+            response.end('{}')
+            return
+        }
+        if (request.url === '/v1/auth/session' && request.headers.authorization) {
+            response.writeHead(403, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ code: 'human_session_required' }))
+            return
+        }
+        response.writeHead(401, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ code: 'authentication_required' }))
     })
     await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
-    const baseUrl = `http://127.0.0.1:${server.address().port}`
+    baseUrl = `http://127.0.0.1:${server.address().port}`
+    const testMetadata = { apiUrl: baseUrl, keycloakUrl: baseUrl }
+    const testIssuer = `${baseUrl}/realms/lead-email-finder`
+    const testServiceClient = { ...serviceClient, issuer: testIssuer }
+    const testServiceCredential = { ...serviceCredential, issuers: [testIssuer] }
     const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'lef-bruno-test-'))
     const previousTemp = process.env.TMPDIR
     process.env.TMPDIR = temporaryRoot
     try {
-        const environment = collectionEnvironment('bff-sessions', { ...metadata, apiUrl: baseUrl })
-        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 4, tests: 5 })
+        const environment = collectionEnvironment(
+            'bff-sessions',
+            testMetadata,
+            testServiceClient,
+            testServiceCredential,
+        )
+        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 5, tests: 6 })
         assert.deepEqual(await readdir(temporaryRoot), [])
         wrongIssuer = true
         await assert.rejects(executeCollection('bff-sessions', environment, checkoutRoot), /raw output is withheld/)

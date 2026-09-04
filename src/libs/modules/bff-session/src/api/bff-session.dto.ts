@@ -1,6 +1,12 @@
-import { Expose } from 'class-transformer'
+import { Expose, Type } from 'class-transformer'
 import { IsNotEmpty, IsString } from 'class-validator'
-import { AuthCredentialKind, AuthPermission, AuthPrincipal, AuthRole } from '@tuposoft/lead-email-finder/modules/identity'
+import { ApiProperty } from '@nestjs/swagger'
+import { AUTH_ROLES, AuthRole } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    SERVICE_CLIENT_GRANTABLE_PERMISSIONS,
+    ServiceClientGrantablePermission,
+} from '@tuposoft/lead-email-finder/modules/auth'
+import { BROWSER_CAPABILITIES, BrowserCapability } from '../application/browser-capability-policy'
 
 export class AuthCallbackQueryDto {
     @IsString()
@@ -12,25 +18,68 @@ export class AuthCallbackQueryDto {
     state: string
 }
 
-export class SessionResponseDto implements AuthPrincipal {
+export class CurrentAccountMembershipDto {
+    @ApiProperty({ type: String, format: 'uuid', description: 'Active organization membership identifier.' })
     @Expose()
-    credentialKind: AuthCredentialKind
+    id: string
 
+    @ApiProperty({ enum: AUTH_ROLES, description: 'Role of the active organization membership.' })
     @Expose()
-    issuer: string
+    role: AuthRole
+}
 
+export class CurrentAccountOrganizationDto {
+    @ApiProperty({ type: String, format: 'uuid', description: 'Active organization identifier.' })
     @Expose()
-    subject: string
+    id: string
 
+    @ApiProperty({ type: String, description: 'Display name of the active organization.' })
     @Expose()
-    organizationId: string
+    name: string
+}
 
+export class CurrentAccountContextDto {
+    @ApiProperty({
+        type: String,
+        format: 'email',
+        nullable: true,
+        example: 'owner@example.test',
+        description: 'Current external-identity email, or null when the provider has no email.',
+    })
     @Expose()
-    membershipRole: AuthRole
+    email: string | null
 
+    @ApiProperty({ type: CurrentAccountMembershipDto })
     @Expose()
-    permissions: readonly AuthPermission[]
+    @Type(() => CurrentAccountMembershipDto)
+    membership: CurrentAccountMembershipDto
 
+    @ApiProperty({ type: CurrentAccountOrganizationDto })
     @Expose()
-    credentialId: string
+    @Type(() => CurrentAccountOrganizationDto)
+    organization: CurrentAccountOrganizationDto
+
+    @ApiProperty({ enum: BROWSER_CAPABILITIES, isArray: true, description: 'Presentation-only browser capabilities.' })
+    @Expose()
+    capabilities: readonly BrowserCapability[]
+
+    @ApiProperty({
+        enum: SERVICE_CLIENT_GRANTABLE_PERMISSIONS,
+        isArray: true,
+        description: 'Ordered permissions this human account may grant to a service client.',
+    })
+    @Expose()
+    grantableServiceClientPermissions: readonly ServiceClientGrantablePermission[]
+}
+
+export class AuthenticationRequiredResponseDto {
+    @ApiProperty({ enum: ['authentication_required'] })
+    @Expose()
+    code: 'authentication_required'
+}
+
+export class HumanSessionRequiredResponseDto {
+    @ApiProperty({ enum: ['human_session_required'] })
+    @Expose()
+    code: 'human_session_required'
 }

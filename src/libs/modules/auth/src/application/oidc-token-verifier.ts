@@ -8,3 +8,11 @@ export interface VerifiedOidcToken {
 export interface OidcTokenVerifier {
     verify(token: string): Promise<VerifiedOidcToken>
 }
+
+/** Expected rejection of a presented OIDC token. Infrastructure failures must use their original error. */
+export class OidcTokenRejectedError extends Error {
+    constructor() {
+        super('OIDC access token is invalid')
+        this.name = 'OidcTokenRejectedError'
+    }
+}

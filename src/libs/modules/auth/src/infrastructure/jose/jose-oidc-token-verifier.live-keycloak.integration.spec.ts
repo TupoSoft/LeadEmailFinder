@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common'
+import { OidcTokenRejectedError } from '../../application/oidc-token-verifier'
 import { JoseOidcTokenVerifier } from './jose-oidc-token-verifier'
 import { OidcConfiguration } from './oidc-configuration'
 
@@ -65,7 +65,7 @@ describeWithKeycloak('JoseOidcTokenVerifier against a live Keycloak realm', () =
         const token = await obtainClientCredentialsToken()
         const verifier = new JoseOidcTokenVerifier({ ...configuration, audience: 'a-different-audience' })
 
-        await expect(verifier.verify(token)).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(token)).rejects.toThrow(OidcTokenRejectedError)
     })
 
     it('rejects a tampered token', async () => {
@@ -73,7 +73,7 @@ describeWithKeycloak('JoseOidcTokenVerifier against a live Keycloak realm', () =
         const tampered = tamperSignature(token)
         const verifier = new JoseOidcTokenVerifier(configuration)
 
-        await expect(verifier.verify(tampered)).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(tampered)).rejects.toThrow(OidcTokenRejectedError)
     })
 
     it('rejects when the JWKS endpoint is unreachable', async () => {
@@ -83,6 +83,6 @@ describeWithKeycloak('JoseOidcTokenVerifier against a live Keycloak realm', () =
             jwksUri: 'https://127.0.0.1:1/protocol/openid-connect/certs',
         })
 
-        await expect(verifier.verify(token)).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(token)).rejects.not.toThrow(OidcTokenRejectedError)
     })
 })

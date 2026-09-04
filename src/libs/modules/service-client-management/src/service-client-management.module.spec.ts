@@ -1,10 +1,7 @@
 import { MODULE_METADATA } from '@nestjs/common/constants'
 import { ConfigService } from '@nestjs/config'
-import {
-    SERVICE_CREDENTIAL_DIRECTORY,
-    SERVICE_CREDENTIAL_WRITER,
-} from '@tuposoft/lead-email-finder/modules/identity'
-import { RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER } from '@tuposoft/lead-email-finder/modules/identity'
+import { AuthModule, SERVICE_CLIENT_GRANT_POLICY } from '@tuposoft/lead-email-finder/modules/auth'
 import { KEYCLOAK_SERVICE_CLIENT_ADMIN } from './application/ports/keycloak-service-client-admin'
 import { ServiceClientCreationService } from './application/service-client-creation.service'
 import { ServiceClientDeletionService } from './application/service-client-deletion.service'
@@ -24,11 +21,20 @@ interface ProviderMetadata {
 }
 
 describe('ServiceClientManagementModule', () => {
-    const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, ServiceClientManagementModule) as ProviderMetadata[]
+    const providers = Reflect.getMetadata(
+        MODULE_METADATA.PROVIDERS,
+        ServiceClientManagementModule,
+    ) as ProviderMetadata[]
 
     function providerFor(token: unknown): ProviderMetadata | undefined {
         return providers.find(provider => provider.provide === token)
     }
+
+    it('imports auth to consume its shared service-client grant policy', () => {
+        const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, ServiceClientManagementModule) as unknown[]
+
+        expect(imports).toContain(AuthModule)
+    })
 
     it('binds the feature configuration and private Keycloak port', () => {
         expect(providerFor(SERVICE_CLIENT_MANAGEMENT_CONFIGURATION)).toEqual(
@@ -47,7 +53,7 @@ describe('ServiceClientManagementModule', () => {
             SERVICE_CREDENTIAL_WRITER,
             KEYCLOAK_SERVICE_CLIENT_ADMIN,
             SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
-            RolePermissionPolicy,
+            SERVICE_CLIENT_GRANT_POLICY,
         ])
         expect(providerFor(ServiceClientListingService)?.inject).toEqual([SERVICE_CREDENTIAL_DIRECTORY])
         expect(providerFor(ServiceClientRotationService)?.inject).toEqual([

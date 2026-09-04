@@ -11,9 +11,11 @@ who is acting and what they are allowed to do.
 - External human identities (one row per Keycloak subject) and service credentials (one row per M2M client).
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
-- A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, and `ActiveServiceCredentialReader`,
-  used by `bff-session` (identity resolution on OIDC return, active-membership checks) and `auth` (active
-  service-credential checks) since `module-architecture/03`.
+- A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, `ActiveServiceCredentialReader`, and
+  `CurrentAccountReader`, used by `bff-session` (identity resolution on OIDC return, active-membership checks, and
+  browser-safe current-account fields) and `auth` (active service-credential checks). The current-account reader
+  returns data only for exactly one active membership in the authenticated organization and preserves a nullable
+  external-identity email.
 - Atomic credit-ledger persistence (`CreditLedgerStore`) — locking, idempotent debit/grant, and balance
   mutation — used by `credits` since `module-architecture/04`. Identity owns the transaction and locking
   mechanics and reports immutable grant facts through `CreditGrantPersistenceResult`; `credits` owns the
@@ -50,14 +52,16 @@ the public surface of `identity` is its whole `src/` tree — there is no intern
 barrel. It splits into two parts:
 
 **Supported application ports** — the contract new and migrating consumers should depend on: `IdentityModule`,
-`ExternalIdentityResolver`, the eleven ports and their injection tokens (`ExternalIdentityStore`/
+`ExternalIdentityResolver`, the twelve ports and their injection tokens (`ExternalIdentityStore`/
 `EXTERNAL_IDENTITY_STORE`, `ActiveMembershipReader`/`ACTIVE_MEMBERSHIP_READER`, `ActiveServiceCredentialReader`/
-`ACTIVE_SERVICE_CREDENTIAL_READER`, `CreditLedgerStore`/`CREDIT_LEDGER_STORE`,
+`ACTIVE_SERVICE_CREDENTIAL_READER`, `CurrentAccountReader`/`CURRENT_ACCOUNT_READER`, `CreditLedgerStore`/
+`CREDIT_LEDGER_STORE`,
 `OrganizationRegistrationStore`/`ORGANIZATION_REGISTRATION_STORE`, `InvitationStore`/`INVITATION_STORE`,
 `InvitationAcceptanceStore`/`INVITATION_ACCEPTANCE_STORE`, `MembershipDirectory`/`MEMBERSHIP_DIRECTORY`,
 `MembershipMutationStore`/`MEMBERSHIP_MUTATION_STORE`, `ServiceCredentialDirectory`/
-`SERVICE_CREDENTIAL_DIRECTORY`, `ServiceCredentialWriter`/`SERVICE_CREDENTIAL_WRITER`), their record types
-(`ExternalIdentityRecord`, `OrganizationMembershipRecord`, `ServiceCredentialRecord`,
+`SERVICE_CREDENTIAL_DIRECTORY`, `ServiceCredentialWriter`/`SERVICE_CREDENTIAL_WRITER`), their input and record types
+(`ExternalIdentityRecord`, `OrganizationMembershipRecord`, `CurrentAccountReadInput`, `CurrentAccountRecord`,
+`ServiceCredentialRecord`,
 `ServiceCredentialDetailRecord`, `OrganizationRecord`, `OrganizationInvitationRecord`,
 `OrganizationMembershipDetailRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
 `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
@@ -110,8 +114,8 @@ Identity owns each of the following TypeORM entities, registered via `TypeOrmMod
 
 Every entity carries an `organizationId` foreign key back to `Organization`, cascading on delete except
 `OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same nine tables are also
-reachable through the eleven supported ports above, for the narrower operations and fields each contract exposes.
-`ActiveMembershipReader`, `ActiveServiceCredentialReader`, `MembershipDirectory`, and
+reachable through the twelve supported ports above, for the narrower operations and fields each contract exposes.
+`ActiveMembershipReader`, `ActiveServiceCredentialReader`, `CurrentAccountReader`, `MembershipDirectory`, and
 `ServiceCredentialDirectory` are read-only. `OrganizationRegistrationStore`, `InvitationStore.issueWithAudit`, and
 the operation-shaped `ServiceCredentialWriter` methods use identity-owned transactions for their paired state/audit
 writes. Its conditional mutation outcomes keep disablement idempotent and prevent stale callers from overwriting a
@@ -138,6 +142,7 @@ Focused tests live in `src/`: `application/external-identity-resolver.service.sp
 `infrastructure/persistence/typeorm-external-identity-store.spec.ts`,
 `infrastructure/persistence/typeorm-active-membership-reader.spec.ts`,
 `infrastructure/persistence/typeorm-active-service-credential-reader.spec.ts`,
+`infrastructure/persistence/typeorm-current-account-reader.spec.ts`,
 `infrastructure/persistence/typeorm-credit-ledger-store.spec.ts`,
 `infrastructure/persistence/typeorm-organization-registration-store.spec.ts`,
 `infrastructure/persistence/typeorm-invitation-store.spec.ts`,
