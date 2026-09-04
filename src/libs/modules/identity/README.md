@@ -16,7 +16,8 @@ who is acting and what they are allowed to do.
   service-credential checks) since `module-architecture/03`.
 - Atomic credit-ledger persistence (`CreditLedgerStore`) — locking, idempotent debit/grant, and balance
   mutation — used by `credits` since `module-architecture/04`. Identity owns the transaction and locking
-  mechanics; `credits` owns the business rules (strict-vs-clamped debit, replay semantics, exception mapping).
+  mechanics and reports immutable grant facts through `CreditGrantPersistenceResult`; `credits` owns the
+  business rules (strict-vs-clamped debit, platform replay conflicts, exception mapping).
 - Organization/invitation registration, invitation lookup and failure-audit append, locked invitation-acceptance
   sessions, membership listing, and locked membership-mutation sessions (`OrganizationRegistrationStore`,
   `InvitationStore`, `InvitationAcceptanceStore`, `MembershipDirectory`, `MembershipMutationStore`) — used by
@@ -60,6 +61,9 @@ barrel. It splits into two parts:
 `ServiceCredentialDetailRecord`, `OrganizationRecord`, `OrganizationInvitationRecord`,
 `OrganizationMembershipDetailRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
 `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
+The ledger port also exports `CreditDebitOutcome` and `CreditGrantPersistenceResult`. The grant result contains
+the `inserted` or `existing` disposition, the recorded grant amount, and the current authoritative balance.
+Identity does not interpret amount mismatches or platform reference namespaces.
 
 **Test-fixture-only surface** — every entity class listed under Persistence below, exported from the TypeScript
 barrel for exactly one purpose. It lets another module's own real-Postgres or live-Keycloak integration test build
@@ -115,6 +119,13 @@ concurrent disable or recreating a deleted credential. `InvitationAcceptanceStor
 instead hold a manually managed `QueryRunner` transaction open across the caller's Keycloak call (see Responsibility
 above).
 
+Credit grants atomically insert a zero-balance account with `ON CONFLICT DO NOTHING`, then acquire a pessimistic
+write lock on the persisted account row. This serializes first grants even when no account existed before either
+transaction started, without resetting an existing balance. Grant insertion targets the unique organization and
+reference pair; an insertion conflict reads the winning grant without changing the balance. Other database errors
+abort the transaction. Both `credit()` and `creditOnce()` use this path; `creditOnce()` still returns the originally
+recorded amount. No schema change, migration, or data reset is required.
+
 ## Configuration
 
 None. This module reads no environment variables.
@@ -137,8 +148,11 @@ Focused tests live in `src/`: `application/external-identity-resolver.service.sp
 `infrastructure/persistence/typeorm-service-credential-writer.spec.ts`, and
 `infrastructure/persistence/identity-schema.integration.spec.ts` (schema-level, gated on `TEST_POSTGRES_URL`). The
 real-Postgres behavioral coverage for `CreditLedgerStore` (locking, concurrent debit/grant, replay) lives in the
-`application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapter;
-the same is true for `MembershipMutationStore` final-owner locking, exercised through the
+`application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapter.
+The platform cases include first grants without an existing account, duplicate and distinct concurrent keys,
+and amount conflicts. The ledger unit suite covers immutable persistence results, account insertion before
+locking, winning-grant lookup after a unique conflict, and propagation of unrelated database errors.
+`MembershipMutationStore` final-owner locking is exercised through the
 `application/membership-mutation-concurrency.integration.spec.ts` file owned by `organization-onboarding`.
 
 No Bruno collection targets identity directly — its persistence is exercised indirectly through every other

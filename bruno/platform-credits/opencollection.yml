@@ -1,0 +1,13 @@
+opencollection: 1.0.0
+
+info:
+  name: Platform Credit Idempotency
+
+request:
+  scripts:
+    - type: before-request
+      code: |-
+        if (!bru.getVar('grantKey')) {
+          const { randomUUID } = require('node:crypto');
+          bru.setVar('grantKey', randomUUID());
+        }
