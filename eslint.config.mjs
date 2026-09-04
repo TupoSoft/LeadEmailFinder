@@ -63,8 +63,8 @@ export default tseslint.config(
         },
     },
     {
-        name: 'documentation-tooling',
-        files: ['scripts/docs/*.mjs'],
+        name: 'javascript-tooling',
+        files: ['scripts/docs/*.mjs', 'scripts/bruno/*.mjs', 'scripts/testing/*.mjs'],
         languageOptions: {
             sourceType: 'module',
             parserOptions: {

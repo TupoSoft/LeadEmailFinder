@@ -7,6 +7,7 @@ import {
     obtainClientCredentialsToken,
     provisionCustomerServiceClient,
     setCreditBalance,
+    seedCustomerFixture,
     upsertCustomerServiceCredential,
 } from './customer-fixture'
 
@@ -21,9 +22,9 @@ function jsonResponse(status: number, body: unknown): Response {
 
 describe('createOrganizationWithOwner', () => {
     it('creates the organization and returns the invitation token', async () => {
-        const fetchImpl = jest.fn().mockResolvedValue(
-            jsonResponse(201, { organizationId: 'org-1', invitation: { token: 'raw-token' } }),
-        )
+        const fetchImpl = jest
+            .fn()
+            .mockResolvedValue(jsonResponse(201, { organizationId: 'org-1', invitation: { token: 'raw-token' } }))
 
         const result = await createOrganizationWithOwner('http://localhost:53000', 'platform-token', fetchImpl)
 
@@ -40,7 +41,9 @@ describe('createOrganizationWithOwner', () => {
     it('throws with the response body on failure', async () => {
         const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(403, { message: 'forbidden' }))
 
-        await expect(createOrganizationWithOwner('http://localhost:53000', 'platform-token', fetchImpl)).rejects.toThrow('403')
+        await expect(
+            createOrganizationWithOwner('http://localhost:53000', 'platform-token', fetchImpl),
+        ).rejects.toThrow('403')
     })
 })
 
@@ -63,7 +66,10 @@ describe('setCreditBalance', () => {
         const balance = await setCreditBalance('http://localhost:53000', 'platform-token', 'org-1', 1000, fetchImpl)
 
         expect(balance).toBe(1000)
-        expect(fetchImpl).toHaveBeenCalledWith('http://localhost:53000/credits/org-1', expect.objectContaining({ method: 'PUT' }))
+        expect(fetchImpl).toHaveBeenCalledWith(
+            'http://localhost:53000/credits/org-1',
+            expect.objectContaining({ method: 'PUT' }),
+        )
     })
 })
 
@@ -98,7 +104,12 @@ describe('upsertCustomerServiceCredential', () => {
 
         expect(query).toHaveBeenCalledWith(
             expect.stringContaining('ON CONFLICT (issuer, subject) DO UPDATE'),
-            expect.arrayContaining(['org-1', 'service-account-1', 'lef-svc-dev-fixture', CUSTOMER_SERVICE_CLIENT_PERMISSIONS]),
+            expect.arrayContaining([
+                'org-1',
+                'service-account-1',
+                'lef-svc-dev-fixture',
+                CUSTOMER_SERVICE_CLIENT_PERMISSIONS,
+            ]),
         )
     })
 })
@@ -115,6 +126,41 @@ describe('obtainClientCredentialsToken', () => {
     it('throws when the grant fails', async () => {
         const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(401, { error: 'invalid_client' }))
 
-        await expect(obtainClientCredentialsToken('https://issuer', 'client-1', 'wrong', fetchImpl)).rejects.toThrow('invalid_client')
+        await expect(obtainClientCredentialsToken('https://issuer', 'client-1', 'wrong', fetchImpl)).rejects.toThrow(
+            'invalid_client',
+        )
+    })
+})
+
+describe('seedCustomerFixture', () => {
+    it('seeds the customer credential only under the public issuer', async () => {
+        const issuer = 'http://localhost:58080/realms/lead-email-finder'
+        const fetchImpl = jest
+            .fn()
+            .mockResolvedValueOnce(jsonResponse(201, { organizationId: 'org-1', invitation: { token: 'invitation' } }))
+            .mockResolvedValueOnce(jsonResponse(201, {}))
+            .mockResolvedValueOnce(jsonResponse(200, { balance: 1000 }))
+        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+        api.request
+            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }])
+            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
+            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
+            .mockResolvedValueOnce({ value: 'test-secret' })
+            .mockResolvedValueOnce({ id: 'subject-1' })
+        const query = jest.fn().mockResolvedValue(undefined)
+
+        const result = await seedCustomerFixture({
+            apiUrl: 'http://localhost:53000',
+            issuer,
+            platformToken: 'test-token',
+            api,
+            dataSource: { query } as unknown as DataSource,
+            fetchImpl,
+        })
+
+        expect(result.issuers).toEqual([issuer])
+        expect(query).toHaveBeenCalledTimes(1)
+        expect(query).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining([issuer]))
+        expect(JSON.stringify(query.mock.calls)).not.toContain('keycloak:8080')
     })
 })

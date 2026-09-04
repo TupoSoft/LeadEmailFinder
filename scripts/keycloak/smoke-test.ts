@@ -15,18 +15,18 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
     return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>
 }
 
-async function waitForRealm(issuer: string): Promise<void> {
+async function waitForRealm(retrievalUrl: string): Promise<Record<string, unknown>> {
     const deadline = Date.now() + 120_000
     while (Date.now() < deadline) {
         try {
-            const response = await fetch(`${issuer}/.well-known/openid-configuration`)
-            if (response.ok) return
+            const response = await fetch(`${retrievalUrl}/.well-known/openid-configuration`)
+            if (response.ok) return (await response.json()) as Record<string, unknown>
         } catch {
             // The disposable service may still be starting.
         }
         await new Promise(resolvePromise => setTimeout(resolvePromise, 1_000))
     }
-    throw new Error(`Keycloak realm did not become ready at ${issuer}`)
+    throw new Error('Keycloak realm did not become ready')
 }
 
 async function main(): Promise<void> {
@@ -34,8 +34,17 @@ async function main(): Promise<void> {
     const credentials = JSON.parse(await readFile(secretsFile, 'utf8')) as ServiceClientCredentials
     const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
     const bffCredentials = JSON.parse(await readFile(bffSecretsFile, 'utf8')) as BffClientCredentials
-    await waitForRealm(credentials.issuer)
-    const tokenResponse = await fetch(`${credentials.issuer}/protocol/openid-connect/token`, {
+    const retrievalUrl = process.env.OIDC_BACKCHANNEL_URL ?? credentials.issuer
+    const discovery = await waitForRealm(retrievalUrl)
+    if (
+        discovery.issuer !== credentials.issuer ||
+        discovery.authorization_endpoint !== `${credentials.issuer}/protocol/openid-connect/auth` ||
+        discovery.token_endpoint !== `${retrievalUrl}/protocol/openid-connect/token` ||
+        discovery.jwks_uri !== `${retrievalUrl}/protocol/openid-connect/certs`
+    ) {
+        throw new Error('Keycloak discovery did not preserve public identity and selected protocol routes')
+    }
+    const tokenResponse = await fetch(`${retrievalUrl}/protocol/openid-connect/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -57,7 +66,7 @@ async function main(): Promise<void> {
     }
 
     const callback = bffCredentials.redirectUris[0]
-    const authorizationUrl = new URL(`${credentials.issuer}/protocol/openid-connect/auth`)
+    const authorizationUrl = new URL(`${retrievalUrl}/protocol/openid-connect/auth`)
     authorizationUrl.search = new URLSearchParams({
         client_id: bffCredentials.clientId,
         redirect_uri: callback,

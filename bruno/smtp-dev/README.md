@@ -43,28 +43,23 @@ override the overlay's CoreDNS fixture. It is safe when the cache is already emp
 again on demand.
 
 `keycloak:bootstrap-credential` seeds a `Platform Operations (development)` organization. It grants the
-pre-provisioned `lef-development-service` M2M client every permission, including `platform:admin`, under both
-the host-facing Keycloak issuer and the container-internal issuer used by `smtp-dev`. Both `bootstrap-proxy.sh`
-and this collection authenticate as that client through OAuth Client Credentials instead of a raw API key.
+pre-provisioned `lef-development-service` M2M client every permission, including `platform:admin`, under the
+public Keycloak issuer. Both `bootstrap-proxy.sh` and this collection authenticate through the internal token
+endpoint, whose tokens still carry that public issuer. The collection checks this claim before each API request.
 
-**This collection must run inside the Docker network created for `smtp-dev`, not on the host.** The
-`docker/compose.smtp-dev.yaml` file overrides `OIDC_ISSUER_URL` for `api` with the container-internal
-`http://keycloak:8080/realms/lead-email-finder` URL. The same constraint required `bootstrap-proxy.sh` to move
-away from `X-Api-Key`; see the Decision Log in `.agents/plans/auth/09-remove-api-key-authentication.md`. A
-token minted from the host-published `http://localhost:58080/...` URL has a different `iss` claim and is
-rejected. Run the collection in a throwaway container attached to the same network:
+Run the pinned collection launcher from the repository root:
 
 ```shell
-docker run --rm --network lef_default \
-  -v "$(pwd)/bruno/smtp-dev:/collection" \
-  -e OIDC_ISSUER_URL="http://keycloak:8080/realms/lead-email-finder" \
-  -e KEYCLOAK_SERVICE_CLIENT_ID="lef-development-service" \
-  -e KEYCLOAK_SERVICE_CLIENT_SECRET="$(jq -r .clientSecret .dev/keycloak/service-client.json)" \
-  -e PLATFORM_ORGANIZATION_ID="$(jq -r .organizationId .dev/keycloak/service-credential.json)" \
-  node:22-alpine sh -c "cd /collection && npm install -g @usebruno/cli && bru run --env local --sandbox developer --env-var baseUrl=http://api:3000"
+corepack pnpm bruno:smtp-dev
 ```
 
-`--sandbox developer` is required because the default `safe` sandbox does not provide the `fetch` function
-needed by the token-minting `before-request` script. `--env-var baseUrl=http://api:3000` replaces the
-host-facing `baseUrl` from the `local` environment with the container-internal URL. The host address
-`localhost:53000` is not reachable from this throwaway container.
+The launcher confirms that this checkout owns the API and SMTP fixture containers, then runs the installed Bruno
+CLI inside the API container with `bru run --env local --sandbox developer`. It loads ignored development
+credentials without printing them, selects `http://api:3000` and the internal Keycloak protocol endpoint explicitly,
+and fails on missing prerequisites, skipped requests, failed assertions, or zero executed tests. The developer
+sandbox supplies the `fetch` function needed by the token-minting script.
+
+For a stack started with `docker compose -p <project>`, set `COMPOSE_PROJECT_NAME` to the same project when running
+the launcher. The launcher records ownership of the working directory in ignored `.dev/keycloak/development-stack.json` metadata.
+The API continues to validate `http://localhost:58080/realms/lead-email-finder` in every overlay, and its browser
+login redirects remain public.

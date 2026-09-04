@@ -179,9 +179,9 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
 
 ## 5. Bootstrap Authentication
 
-The API uses the container-internal Keycloak issuer in this overlay. Refuse to overwrite a preexisting local
-Keycloak fixture, then mark the directory as owned by this run. Provision and seed the development M2M credential
-from inside the API container so its token has the matching issuer claim:
+The overlay inherits the public Keycloak issuer and internal protocol routes from the base stack. Refuse to
+overwrite a preexisting local Keycloak fixture, then mark the directory as owned by this run. Provision and seed
+the development M2M credential through the internal administrator address while recording the public identity:
 
 ```shell
 test ! -e .dev/keycloak || {
@@ -193,6 +193,7 @@ touch .dev/keycloak/.paddle-fixture-owned
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
   exec -T api sh -ec '
   export KEYCLOAK_URL=http://keycloak:8080
+  export KEYCLOAK_PUBLIC_URL=http://localhost:58080
   export POSTGRES_URL="$(cat /run/secrets/postgres_url)"
   pnpm keycloak:provision
   pnpm keycloak:bootstrap-credential

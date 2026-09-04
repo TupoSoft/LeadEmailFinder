@@ -345,6 +345,31 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 
+    it('accepts an internal OIDC back-channel URL independently of the public issuer', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            OIDC_ISSUER_URL: 'http://localhost:58080/realms/lead-email-finder',
+            OIDC_BACKCHANNEL_URL: 'http://keycloak:8080/realms/lead-email-finder/',
+            OIDC_JWKS_URI: 'http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs',
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it.each([
+        '',
+        'keycloak',
+        'ftp://keycloak/realms/lead-email-finder',
+        'http://user:secret@keycloak/realms/lead-email-finder',
+        'http://keycloak/realms/lead-email-finder?secret=private',
+        'http://keycloak/realms/lead-email-finder#private',
+    ])('rejects an invalid OIDC back-channel URL %p', (value): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, { OIDC_BACKCHANNEL_URL: value })
+
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            'OIDC_BACKCHANNEL_URL',
+        )
+    })
+
     it('accepts a valid BFF session configuration', (): void => {
         const environment = plainToInstance(EnvironmentVariablesDto, {
             APP_BASE_URL: 'http://localhost:53000',

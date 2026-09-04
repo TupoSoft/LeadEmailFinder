@@ -34,10 +34,10 @@ services:
       TYPEORM_SYNCHRONIZE: true
 
       OIDC_ISSUER_URL: http://localhost:58080/realms/lead-email-finder
+      OIDC_BACKCHANNEL_URL: http://keycloak:8080/realms/lead-email-finder
       OIDC_AUDIENCE: lead-email-finder-api
-      # OIDC_ISSUER_URL is host-facing (the browser redirect target and the token issuer-claim check), and is
-      # unreachable from inside this container's own network namespace. Fetch JWKS via the container-internal
-      # Keycloak hostname instead so this service can actually verify incoming OAuth bearer tokens.
+      # Browser redirects and issuer validation remain public; protocol calls and both verifiers' key
+      # retrieval use the Compose network. An internal transport address never becomes a trusted issuer.
       OIDC_JWKS_URI: http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs
 
       APP_BASE_URL: http://localhost:53000
