@@ -4,6 +4,7 @@ import { ExternalIdentityResolver } from './application/external-identity-resolv
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
 import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
+import { CURRENT_ACCOUNT_READER } from './application/ports/current-account-reader'
 import { EXTERNAL_IDENTITY_STORE, ExternalIdentityStore } from './application/ports/external-identity-store'
 import { INVITATION_ACCEPTANCE_STORE } from './application/ports/invitation-acceptance-store'
 import { INVITATION_STORE } from './application/ports/invitation-store'
@@ -24,6 +25,7 @@ import { ServiceCredential } from './infrastructure/persistence/service-credenti
 import { TypeOrmActiveMembershipReader } from './infrastructure/persistence/typeorm-active-membership-reader'
 import { TypeOrmActiveServiceCredentialReader } from './infrastructure/persistence/typeorm-active-service-credential-reader'
 import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-credit-ledger-store'
+import { TypeOrmCurrentAccountReader } from './infrastructure/persistence/typeorm-current-account-reader'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 import { TypeOrmInvitationAcceptanceStore } from './infrastructure/persistence/typeorm-invitation-acceptance-store'
 import { TypeOrmInvitationStore } from './infrastructure/persistence/typeorm-invitation-store'
@@ -51,6 +53,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         TypeOrmExternalIdentityStore,
         TypeOrmActiveMembershipReader,
         TypeOrmActiveServiceCredentialReader,
+        TypeOrmCurrentAccountReader,
         TypeOrmCreditLedgerStore,
         TypeOrmOrganizationRegistrationStore,
         TypeOrmInvitationStore,
@@ -62,6 +65,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         { provide: EXTERNAL_IDENTITY_STORE, useExisting: TypeOrmExternalIdentityStore },
         { provide: ACTIVE_MEMBERSHIP_READER, useExisting: TypeOrmActiveMembershipReader },
         { provide: ACTIVE_SERVICE_CREDENTIAL_READER, useExisting: TypeOrmActiveServiceCredentialReader },
+        { provide: CURRENT_ACCOUNT_READER, useExisting: TypeOrmCurrentAccountReader },
         { provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore },
         { provide: ORGANIZATION_REGISTRATION_STORE, useExisting: TypeOrmOrganizationRegistrationStore },
         { provide: INVITATION_STORE, useExisting: TypeOrmInvitationStore },
@@ -80,6 +84,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         EXTERNAL_IDENTITY_STORE,
         ACTIVE_MEMBERSHIP_READER,
         ACTIVE_SERVICE_CREDENTIAL_READER,
+        CURRENT_ACCOUNT_READER,
         CREDIT_LEDGER_STORE,
         ORGANIZATION_REGISTRATION_STORE,
         INVITATION_STORE,

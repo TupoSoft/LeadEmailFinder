@@ -5,7 +5,7 @@ import {
     ServiceCredentialDetailRecord,
     ServiceCredentialWriter,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { ServiceClientGrantPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import {
     ServiceClientAccessDeniedError,
     ServiceClientPermissionCeilingExceededError,
@@ -23,7 +23,7 @@ export class ServiceClientCreationService {
         private readonly credentialWriter: ServiceCredentialWriter,
         private readonly keycloakAdmin: KeycloakServiceClientAdmin,
         private readonly configuration: ServiceClientManagementConfiguration,
-        private readonly rolePermissionPolicy: RolePermissionPolicy,
+        private readonly serviceClientGrantPolicy: ServiceClientGrantPolicy,
     ) {}
 
     async create(
@@ -42,7 +42,8 @@ export class ServiceClientCreationService {
             throw new ServiceClientAccessDeniedError('Only an owner or admin may create service clients')
         }
 
-        const allowedPermissions = this.rolePermissionPolicy.effectivePermissionsFor(actor)
+        const allowedPermissions: readonly AuthPermission[] =
+            this.serviceClientGrantPolicy.grantablePermissionsFor(actor.membershipRole)
         const excessPermissions = permissions.filter(permission => !allowedPermissions.includes(permission))
         if (excessPermissions.length > 0) {
             throw new ServiceClientPermissionCeilingExceededError(excessPermissions)

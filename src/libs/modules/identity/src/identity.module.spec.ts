@@ -3,6 +3,7 @@ import { ExternalIdentityResolver } from './application/external-identity-resolv
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
 import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
+import { CURRENT_ACCOUNT_READER } from './application/ports/current-account-reader'
 import { EXTERNAL_IDENTITY_STORE } from './application/ports/external-identity-store'
 import { INVITATION_ACCEPTANCE_STORE } from './application/ports/invitation-acceptance-store'
 import { INVITATION_STORE } from './application/ports/invitation-store'
@@ -15,6 +16,7 @@ import { IdentityModule } from './identity.module'
 import { TypeOrmActiveMembershipReader } from './infrastructure/persistence/typeorm-active-membership-reader'
 import { TypeOrmActiveServiceCredentialReader } from './infrastructure/persistence/typeorm-active-service-credential-reader'
 import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-credit-ledger-store'
+import { TypeOrmCurrentAccountReader } from './infrastructure/persistence/typeorm-current-account-reader'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 import { TypeOrmInvitationAcceptanceStore } from './infrastructure/persistence/typeorm-invitation-acceptance-store'
 import { TypeOrmInvitationStore } from './infrastructure/persistence/typeorm-invitation-store'
@@ -47,6 +49,10 @@ describe('IdentityModule', () => {
                     useExisting: TypeOrmActiveServiceCredentialReader,
                 }),
                 expect.objectContaining({ provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore }),
+                expect.objectContaining({
+                    provide: CURRENT_ACCOUNT_READER,
+                    useExisting: TypeOrmCurrentAccountReader,
+                }),
                 expect.objectContaining({
                     provide: ORGANIZATION_REGISTRATION_STORE,
                     useExisting: TypeOrmOrganizationRegistrationStore,
@@ -83,6 +89,7 @@ describe('IdentityModule', () => {
                 ACTIVE_MEMBERSHIP_READER,
                 ACTIVE_SERVICE_CREDENTIAL_READER,
                 CREDIT_LEDGER_STORE,
+                CURRENT_ACCOUNT_READER,
                 ORGANIZATION_REGISTRATION_STORE,
                 INVITATION_STORE,
                 INVITATION_ACCEPTANCE_STORE,

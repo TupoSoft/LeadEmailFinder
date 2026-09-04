@@ -1,9 +1,13 @@
 import {
     AuthPrincipal,
+    AuthRole,
     ServiceCredentialDetailRecord,
     ServiceCredentialWriter,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import {
+    ServiceClientGrantablePermission,
+    ServiceClientGrantPolicy,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import {
     ServiceClientAccessDeniedError,
     ServiceClientPermissionCeilingExceededError,
@@ -43,7 +47,22 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
 describe('ServiceClientCreationService', () => {
     let credentialWriter: jest.Mocked<ServiceCredentialWriter>
     let keycloakAdmin: jest.Mocked<KeycloakServiceClientAdmin>
+    let serviceClientGrantPolicy: jest.Mocked<ServiceClientGrantPolicy>
     let service: ServiceClientCreationService
+
+    const grantablePermissionsByRole: Readonly<Record<AuthRole, readonly ServiceClientGrantablePermission[]>> = {
+        member: [],
+        admin: ['verification:run', 'verification:read', 'members:manage', 'credentials:manage'],
+        owner: [
+            'verification:run',
+            'verification:read',
+            'members:manage',
+            'credentials:manage',
+            'billing:read',
+            'billing:manage',
+        ],
+        platform_admin: [],
+    }
 
     beforeEach(() => {
         credentialWriter = {
@@ -57,11 +76,14 @@ describe('ServiceClientCreationService', () => {
             rotateSecret: jest.fn(),
             deleteClient: jest.fn(),
         }
+        serviceClientGrantPolicy = {
+            grantablePermissionsFor: jest.fn(role => grantablePermissionsByRole[role]),
+        }
         service = new ServiceClientCreationService(
             credentialWriter,
             keycloakAdmin,
             { issuer: 'https://issuer' },
-            new RolePermissionPolicy(),
+            serviceClientGrantPolicy,
         )
     })
 
@@ -85,12 +107,33 @@ describe('ServiceClientCreationService', () => {
         await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow(ServiceClientAccessDeniedError)
     })
 
-    it('rejects permissions beyond the actor own effective permissions', async () => {
+    it('authoritatively rejects an admin forged broader grant', async () => {
         const actor = principalFixture({ membershipRole: 'admin' })
 
-        await expect(service.create(actor, 'org-1', null, ['billing:manage'])).rejects.toThrow(
+        await expect(service.create(actor, 'org-1', null, ['billing:manage'])).rejects.toMatchObject({
+            excessPermissions: ['billing:manage'],
+        })
+        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
+    })
+
+    it('authoritatively rejects an owner forged platform grant', async () => {
+        const actor = principalFixture({ membershipRole: 'owner' })
+
+        await expect(service.create(actor, 'org-1', null, ['platform:admin'])).rejects.toBeInstanceOf(
             ServiceClientPermissionCeilingExceededError,
         )
+        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
+    })
+
+    it('rejects a stale broader selection against the injected grant policy', async () => {
+        const actor = principalFixture({ membershipRole: 'owner' })
+        serviceClientGrantPolicy.grantablePermissionsFor.mockReturnValue(['verification:run'])
+
+        await expect(
+            service.create(actor, 'org-1', null, ['verification:run', 'billing:manage']),
+        ).rejects.toMatchObject({
+            excessPermissions: ['billing:manage'],
+        })
         expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
     })
 
@@ -102,6 +145,7 @@ describe('ServiceClientCreationService', () => {
         await expect(
             service.create(actor, 'org-1', null, ['verification:run', 'credentials:manage']),
         ).resolves.toBeDefined()
+        expect(serviceClientGrantPolicy.grantablePermissionsFor).toHaveBeenCalledWith('admin')
     })
 
     it('leaves no local row when the Keycloak call fails', async () => {

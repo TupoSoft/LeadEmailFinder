@@ -343,7 +343,7 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
     }, 30_000)
 
     it(
-        'signs a member in, exposes only the AuthPrincipal shape, and enforces the disabled-membership check on the next request',
+        'publishes the current account, preserves null email, and rejects post-guard and disabled membership state',
         async () => {
             const username = `bff-test-member-${randomUUID()}`
             const password = randomBytes(12).toString('base64url')
@@ -384,20 +384,51 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
                 .get('/v1/auth/session')
                 .set('cookie', sessionCookie)
                 .expect(200)
-            expect(sessionResponse.body).toEqual({
-                credentialKind: 'human_session',
-                issuer,
-                subject: userId,
-                organizationId: organization.id,
-                membershipRole: 'member',
-                permissions: [],
-                credentialId: externalIdentity.id,
-            })
+            const expectedAccount = {
+                email: `${username}@example.test`,
+                membership: { id: membership.id, role: 'member' },
+                organization: { id: organization.id, name: organization.name },
+                capabilities: ['verification.run', 'verification.read'],
+                grantableServiceClientPermissions: [],
+            }
+            expect(sessionResponse.body).toEqual(expectedAccount)
+            for (const internalField of ['credentialKind', 'issuer', 'subject', 'credentialId', 'permissions']) {
+                expect(sessionResponse.body).not.toHaveProperty(internalField)
+            }
             expect(JSON.stringify(sessionResponse.body)).not.toMatch(/access_token|refresh_token|id_token/i)
 
+            await externalIdentityRepo.update(externalIdentity.id, { email: null })
+            const nullEmailResponse = await request(app.getHttpServer())
+                .get('/v1/auth/session')
+                .set('cookie', sessionCookie)
+                .expect(200)
+            expect(nullEmailResponse.body).toEqual({ ...expectedAccount, email: null })
+
+            const unexpectedOrganization = await organizationRepo.save(
+                organizationRepo.create({ name: `bff-test-unexpected-org-${randomUUID()}` }),
+            )
+            const unexpectedMembership = await membershipRepo.save(
+                membershipRepo.create({
+                    organizationId: unexpectedOrganization.id,
+                    externalIdentityId: externalIdentity.id,
+                    role: 'member',
+                    status: 'active',
+                }),
+            )
+            const unavailableAccountResponse = await request(app.getHttpServer())
+                .get('/v1/auth/session')
+                .set('cookie', sessionCookie)
+                .expect(401)
+            expect(unavailableAccountResponse.body).toEqual({ code: 'authentication_required' })
+
+            await membershipRepo.update(unexpectedMembership.id, { status: 'disabled' })
             await membershipRepo.update(membership.id, { status: 'disabled' })
 
-            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
+            const disabledMembershipResponse = await request(app.getHttpServer())
+                .get('/v1/auth/session')
+                .set('cookie', sessionCookie)
+                .expect(401)
+            expect(disabledMembershipResponse.body).toEqual({ code: 'authentication_required' })
         },
         30_000,
     )

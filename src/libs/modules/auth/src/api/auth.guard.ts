@@ -29,7 +29,7 @@ export class AuthGuard implements CanActivate {
             principal = await this.authenticationService.authenticate(request.headers)
         } catch (error) {
             if (error instanceof CredentialRejectedError) {
-                throw new UnauthorizedException(error.message)
+                throw new UnauthorizedException({ code: 'authentication_required' })
             }
             throw error
         }

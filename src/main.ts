@@ -6,6 +6,7 @@ import { Logger } from 'pino-nestjs'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { configurePiiSafeRequestLogging } from './lead-email-finder-api/src/configure-pii-safe-request-logging'
+import { BFF_SESSION_COOKIE_NAME } from '@tuposoft/lead-email-finder/modules/auth'
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
@@ -31,6 +32,7 @@ async function bootstrap(): Promise<void> {
     documentBuilder.setContact('Lead Email Finder Support', url, 'contact@leademailfinder.com')
     documentBuilder.addServer(url, 'Production server')
     documentBuilder.addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'oidc')
+    documentBuilder.addCookieAuth(BFF_SESSION_COOKIE_NAME, { type: 'apiKey' }, BFF_SESSION_COOKIE_NAME)
 
     const config = documentBuilder.build()
 

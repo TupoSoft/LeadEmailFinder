@@ -55,6 +55,20 @@ describe('CredentialExtractor', () => {
 
         expect(credential).toBeUndefined()
     })
+
+    it('treats a malformed percent-encoded session cookie as absent', () => {
+        const credential = extractor.extract({ cookie: `${BFF_SESSION_COOKIE_NAME}=%ZZ` })
+
+        expect(credential).toBeUndefined()
+    })
+
+    it('ignores a malformed unrelated cookie without hiding a valid session cookie', () => {
+        const credential = extractor.extract({
+            cookie: `unrelated=%ZZ; ${BFF_SESSION_COOKIE_NAME}=valid-session`,
+        })
+
+        expect(credential).toEqual({ scheme: 'session-cookie', token: 'valid-session' })
+    })
 })
 
 describe('isJwtShapedToken', () => {

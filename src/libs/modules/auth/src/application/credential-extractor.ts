@@ -14,11 +14,20 @@ function parseCookieHeader(header: string | undefined): Record<string, string> {
     return Object.fromEntries(
         header
             .split(';')
-            .map((part): [string, string] => {
+            .flatMap((part): [string, string][] => {
                 const separatorIndex = part.indexOf('=')
-                return separatorIndex === -1
-                    ? [part.trim(), '']
-                    : [part.slice(0, separatorIndex).trim(), decodeURIComponent(part.slice(separatorIndex + 1).trim())]
+                const name = (separatorIndex === -1 ? part : part.slice(0, separatorIndex)).trim()
+                const encodedValue = separatorIndex === -1 ? '' : part.slice(separatorIndex + 1).trim()
+
+                try {
+                    return [[name, decodeURIComponent(encodedValue)]]
+                } catch (error) {
+                    if (error instanceof URIError) {
+                        return []
+                    }
+
+                    throw error
+                }
             })
             .filter(([name]) => name.length > 0),
     )

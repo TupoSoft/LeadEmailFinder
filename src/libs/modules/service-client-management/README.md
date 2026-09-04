@@ -8,6 +8,8 @@ kept consistent through compensation on partial failure.
 
 - Self-service life cycle for organization-owned M2M service clients: create, list, rotate the client secret,
   disable, and delete.
+- Authoritative rejection of requested service-client permissions outside the auth-owned grant ceiling for the
+  caller's membership role.
 - Keeping the local `ServiceCredential` record and the corresponding Keycloak client consistent, including
   compensating (reverting the Keycloak-side change) when the paired local mutation fails.
 
@@ -33,16 +35,16 @@ vocabulary. `infrastructure/config/` adapts Nest configuration to the plain appl
 
 Application and domain import neither Nest nor TypeORM. `service-client-management.module.ts` constructs each use
 case through an explicit factory, injecting identity's directory/writer ports, the private Keycloak port, the
-framework-free role-permission policy, and the issuer as plain configuration. The controller alone translates
-application/domain failures to HTTP behavior.
+framework-free auth-owned service-client grant policy, and the issuer as plain configuration. The controller alone
+translates application/domain failures to HTTP behavior.
 
 ## Dependencies
 
 - [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthPermission`, `ServiceCredentialDetailRecord`, and the
   `ServiceCredentialDirectory`/`ServiceCredentialWriter` persistence ports with their injection tokens. This module
   imports no identity TypeORM entity, repository, or `DataSource`.
-- [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`,
-  `RequirePermissions`.
+- [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `RequirePermissions`,
+  and the shared `ServiceClientGrantPolicy` contract and injection token.
 - `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
   (`KeycloakAdminHttpModule`, `KEYCLOAK_ADMIN_HTTP`), also imported by
   [`organization-onboarding`](../organization-onboarding/README.md). This module's own
@@ -93,6 +95,9 @@ Focused tests live in `src/`: `application/service-client-creation.service.spec.
 `infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts`. Identity's adapter behavior
 is covered by `infrastructure/persistence/typeorm-service-credential-directory.spec.ts` and
 `infrastructure/persistence/typeorm-service-credential-writer.spec.ts` in the identity module.
+
+The creation service tests cover the injected grant-policy boundary and reject forged or stale broader permission
+selections before any Keycloak side effect.
 
 [`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) proves only
 rejection paths — missing credential, a cross-organization actor, and unsupported/duplicate permissions —

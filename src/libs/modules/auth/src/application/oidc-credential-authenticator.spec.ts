@@ -1,6 +1,7 @@
 import { ServiceCredentialRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import { CredentialRejectedError } from './credential-authenticator'
 import { OidcCredentialAuthenticator } from './oidc-credential-authenticator'
-import { OidcTokenVerifier } from './oidc-token-verifier'
+import { OidcTokenRejectedError, OidcTokenVerifier } from './oidc-token-verifier'
 import { ServiceCredentialResolver } from './service-credential-resolver.service'
 
 describe('OidcCredentialAuthenticator', () => {
@@ -64,6 +65,23 @@ describe('OidcCredentialAuthenticator', () => {
             const principal = await authenticator.authenticate({ scheme: 'bearer', token: 'a.b.c' })
 
             expect(principal.organizationId).toBe('true-organization-id')
+        })
+
+        it('maps an expected token rejection to the shared credential-rejection boundary', async () => {
+            tokenVerifier.verify.mockRejectedValue(new OidcTokenRejectedError())
+
+            await expect(authenticator.authenticate({ scheme: 'bearer', token: 'a.b.c' })).rejects.toThrow(
+                CredentialRejectedError,
+            )
+            expect(serviceCredentialResolver.resolveActive).not.toHaveBeenCalled()
+        })
+
+        it('preserves an unexpected verifier failure', async () => {
+            const unexpected = new Error('JWKS endpoint unavailable')
+            tokenVerifier.verify.mockRejectedValue(unexpected)
+
+            await expect(authenticator.authenticate({ scheme: 'bearer', token: 'a.b.c' })).rejects.toBe(unexpected)
+            expect(serviceCredentialResolver.resolveActive).not.toHaveBeenCalled()
         })
     })
 })

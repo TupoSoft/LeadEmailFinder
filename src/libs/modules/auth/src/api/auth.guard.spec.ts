@@ -1,4 +1,4 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common'
+import { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { AuthenticationService } from '../application/authentication.service'
 import { CredentialRejectedError } from '../application/credential-authenticator'
@@ -33,11 +33,16 @@ describe('AuthGuard', () => {
         expect(authenticationService.authenticate).not.toHaveBeenCalled()
     })
 
-    it('rejects a non-public route with 401 when authentication rejects the credential', async () => {
+    it('rejects a non-public route with the stable code-only 401 when authentication rejects the credential', async () => {
         reflector.getAllAndOverride.mockReturnValue(false)
-        authenticationService.authenticate.mockRejectedValue(new CredentialRejectedError('missing credential'))
+        const rejection = new CredentialRejectedError('membership org-1 is disabled')
 
-        await expect(guard.canActivate(contextFor({ headers: {} }))).rejects.toThrow(UnauthorizedException)
+        authenticationService.authenticate.mockRejectedValue(rejection)
+
+        await expect(guard.canActivate(contextFor({ headers: {} }))).rejects.toMatchObject({
+            response: { code: 'authentication_required' },
+            status: 401,
+        })
     })
 
     it('propagates an unrecognized error from authenticate unchanged', async () => {

@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
-    'bff-sessions': Object.freeze({ requests: 4, sandbox: 'safe', network: 'host' }),
+    'bff-sessions': Object.freeze({ requests: 5, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 22, sandbox: 'developer', network: 'compose' }),
 })
 
@@ -84,9 +84,6 @@ const serviceCredentialSchema = z.object({
 export function collectionEnvironment(name, metadata, serviceClient, serviceCredential) {
     const collection = registeredCollection(name)
     const publicIssuer = `${metadata.keycloakUrl.replace(/\/$/, '')}/realms/lead-email-finder`
-    if (collection.network === 'host') {
-        return { BRUNO_API_URL: metadata.apiUrl, OIDC_ISSUER_URL: publicIssuer }
-    }
     const client = serviceClientSchema.safeParse(serviceClient)
     const credential = serviceCredentialSchema.safeParse(serviceCredential)
     if (
@@ -96,7 +93,15 @@ export function collectionEnvironment(name, metadata, serviceClient, serviceCred
         credential.data.keycloakClientId !== client.data.clientId ||
         !credential.data.issuers.includes(publicIssuer)
     ) {
-        throw new Error('SMTP Bruno requires matching provisioned local service-client and service-credential metadata')
+        throw new Error('Bruno requires matching provisioned local service-client and service-credential metadata')
+    }
+    if (collection.network === 'host') {
+        return {
+            BRUNO_API_URL: metadata.apiUrl,
+            OIDC_ISSUER_URL: publicIssuer,
+            KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
+            KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
+        }
     }
     return {
         BRUNO_API_URL: 'http://api:3000',
@@ -113,10 +118,10 @@ export function cliArguments(name, environment, reportFile) {
     if (
         !environment.BRUNO_API_URL ||
         !environment.OIDC_ISSUER_URL ||
+        !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
+        !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
         (collection.network === 'compose' &&
             (!environment.OIDC_BACKCHANNEL_URL ||
-                !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
-                !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
                 !environment.PLATFORM_ORGANIZATION_ID))
     ) {
         throw new Error('Bruno collection prerequisites are missing')
@@ -193,19 +198,18 @@ export async function runCollection(args, checkoutRoot) {
     const metadata = await loadDevelopmentStack(checkoutRoot)
     const api = await inspectDevelopmentService(checkoutRoot, metadata, 'api', '3000/tcp', metadata.apiUrl)
     await inspectDevelopmentService(checkoutRoot, metadata, 'keycloak', '8080/tcp', metadata.keycloakUrl)
-    let environment
+    const readMetadata = async metadataFile =>
+        JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', metadataFile), 'utf8'))
+    const environment = collectionEnvironment(
+        name,
+        metadata,
+        await readMetadata('service-client.json'),
+        await readMetadata('service-credential.json'),
+    )
     if (collection.network === 'compose') {
         for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
             await inspectDevelopmentService(checkoutRoot, metadata, service)
         }
-        const readMetadata = async name =>
-            JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', name), 'utf8'))
-        environment = collectionEnvironment(
-            name,
-            metadata,
-            await readMetadata('service-client.json'),
-            await readMetadata('service-credential.json'),
-        )
         const command = execFileAsync(
             'docker',
             ['exec', '--interactive', '--workdir', '/app', api.id, 'node', '--input-type=module', '-e', composeWorker],
@@ -220,7 +224,6 @@ export async function runCollection(args, checkoutRoot) {
             .parse(JSON.parse(stdout))
         return counts
     }
-    environment = collectionEnvironment(name, metadata)
     return executeCollection(name, environment, checkoutRoot)
 }
 

@@ -13,4 +13,5 @@ runtime:
       code: |-
         test('rejects a session lookup with no session cookie', function() {
           expect(res.status).to.equal(401);
+          expect(res.body).to.deep.equal({ code: 'authentication_required' });
         });

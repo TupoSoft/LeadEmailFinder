@@ -1,7 +1,7 @@
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { CredentialAuthenticator, ExtractedCredential } from './credential-authenticator'
+import { CredentialAuthenticator, CredentialRejectedError, ExtractedCredential } from './credential-authenticator'
 import { isJwtShapedToken } from './credential-extractor'
-import { OidcTokenVerifier } from './oidc-token-verifier'
+import { OidcTokenRejectedError, OidcTokenVerifier, VerifiedOidcToken } from './oidc-token-verifier'
 import { ServiceCredentialResolver } from './service-credential-resolver.service'
 
 export class OidcCredentialAuthenticator implements CredentialAuthenticator {
@@ -15,7 +15,18 @@ export class OidcCredentialAuthenticator implements CredentialAuthenticator {
     }
 
     async authenticate(credential: ExtractedCredential): Promise<AuthPrincipal> {
-        const { issuer, subject } = await this.tokenVerifier.verify(credential.token)
+        let verifiedToken: VerifiedOidcToken
+        try {
+            verifiedToken = await this.tokenVerifier.verify(credential.token)
+        } catch (error) {
+            if (error instanceof OidcTokenRejectedError) {
+                throw new CredentialRejectedError('OIDC access token is invalid')
+            }
+
+            throw error
+        }
+
+        const { issuer, subject } = verifiedToken
         const serviceCredential = await this.serviceCredentialResolver.resolveActive(issuer, subject)
 
         return {
