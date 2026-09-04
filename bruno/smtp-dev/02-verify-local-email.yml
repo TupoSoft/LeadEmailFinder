@@ -7,6 +7,8 @@ http:
   method: POST
   url: '{{baseUrl}}/verify'
   headers:
+    - name: X-Request-ID
+      value: caller-controlled-correlation
     - name: Content-Type
       value: application/json
     - name: Authorization
@@ -24,9 +26,16 @@ runtime:
       code: |-
         test('verifies the local address through the registered SOCKS5 proxy', function() {
           expect(res.status).to.equal(201);
+          expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          bru.setVar('verificationId', res.body.id);
           expect(res.body.email).to.equal('person@lef.test');
           expect(res.body.catchAll).to.equal(true);
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
           expect(res.body.sources).to.deep.equal([]);
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

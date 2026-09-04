@@ -13,6 +13,7 @@ import { SmtpVerifier } from './email-verifier/smtp/smtp-verifier'
 import { SmtpVerificationReason } from './email-verifier/smtp/smtp.enums'
 import { EmailVerification } from './sync-email-verification/email-verification.entity'
 import { EmailVerificationService } from './sync-email-verification/email-verification.service'
+import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 
 jest.mock('@aws-sdk/lib-storage')
 
@@ -177,6 +178,18 @@ describeWithPostgres('verification organization ownership', () => {
         await expect(
             verificationRepository.findOneBy({ organizationId: organizationAId, id: verificationB.id }),
         ).resolves.toBeNull()
+
+        const resultReader = new TypeOrmVerificationResultReader(verificationRepository)
+        await expect(
+            resultReader.findOwned({ organizationId: organizationAId, id: verificationA.id }),
+        ).resolves.toEqual(expect.objectContaining({ id: verificationA.id, email: address, exists: true }))
+        await expect(
+            resultReader.findOwned({ organizationId: organizationBId, id: verificationB.id }),
+        ).resolves.toEqual(expect.objectContaining({ id: verificationB.id, email: address, exists: false }))
+        await expect(
+            resultReader.findOwned({ organizationId: organizationAId, id: verificationB.id }),
+        ).resolves.toBeNull()
+        await expect(resultReader.findOwned({ organizationId: organizationAId, id: randomUUID() })).resolves.toBeNull()
 
         const dnsService = { resolve: jest.fn() }
         const smtpVerifier = new SmtpVerifier(

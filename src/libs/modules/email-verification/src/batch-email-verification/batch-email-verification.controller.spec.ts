@@ -16,10 +16,12 @@ import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
 import { JobNotFoundException } from './job-not-found.exception'
 
 const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
+const requestId = '11584325-be4b-4219-8a2c-06ba72b710d0'
 const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
 
 class FixturePrincipalMiddleware implements NestMiddleware {
     use(req: Request, _res: Response, next: NextFunction): void {
+        req.id = requestId
         setAuthPrincipal(req, principal)
         next()
     }
@@ -69,7 +71,10 @@ describe('BatchEmailVerificationController', () => {
     it('requires verification:run to upload and verification:read to check status/results', () => {
         expect(Reflect.getMetadata(GUARDS_METADATA, BatchEmailVerificationController)).toEqual([PermissionsGuard])
         expect(
-            Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, BatchEmailVerificationController.prototype.uploadFile),
+            Reflect.getMetadata(
+                REQUIRED_PERMISSIONS_METADATA_KEY,
+                BatchEmailVerificationController.prototype.uploadFile,
+            ),
         ).toEqual(['verification:run'])
         expect(
             Reflect.getMetadata(
@@ -104,6 +109,7 @@ describe('BatchEmailVerificationController', () => {
             expect(batchEmailVerificationService.uploadFile).toHaveBeenCalledWith(
                 expect.objectContaining({ originalname: 'test.csv' }),
                 principal,
+                requestId,
             )
         })
 

@@ -1,0 +1,48 @@
+info:
+  name: 22-read-completed-async-verification
+  type: http
+  seq: 22
+
+http:
+  method: GET
+  url: '{{baseUrl}}/verifyAsync/{{asyncJobId}}'
+  headers:
+    - name: Authorization
+      value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        const statusUrl = `${bru.getEnvVar('baseUrl')}/verifyAsync/${bru.getVar('asyncJobId')}`;
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const response = await fetch(statusUrl, {
+            headers: { Authorization: `Bearer ${bru.getVar('serviceClientToken')}` },
+          });
+          if (!response.ok) {
+            throw new Error(`Async status request failed with HTTP ${response.status}`);
+          }
+          const payload = await response.json();
+          if (payload.state === 'completed') {
+            break;
+          }
+          if (payload.state === 'failed' || attempt === 29) {
+            throw new Error('Asynchronous verification did not complete successfully.');
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    - type: tests
+      code: |-
+        test('returns the persisted verification UUID with the completed result', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.state).to.equal('completed');
+          expect(res.body.result.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.body.result.id).not.to.equal(bru.getVar('asyncJobId'));
+          expect(res.body.result.email).to.equal('person@lef.test');
+          expect(res.body.result.reason).to.equal('accepted_email');
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
+        });

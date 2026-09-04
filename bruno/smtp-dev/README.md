@@ -3,10 +3,19 @@
 This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
 and restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
 that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
-a successful request. The final requests update the authenticated organization's stored email and prove that an
-address outside that organization's cache is concealed as `404 Not Found` rather than created implicitly. The final
-request also proves that creating a duplicate cache entry returns `409 Conflict`. Both rejection bodies use generic
+a successful request. Later requests update the authenticated organization's stored email and prove that an
+address outside that organization's cache is concealed as `404 Not Found` rather than created implicitly. Another
+request proves that creating a duplicate cache entry returns `409 Conflict`. Both rejection bodies use generic
 messages and do not echo the submitted address.
+
+Every response must include a server-generated UUID in `X-Request-ID`, including rejected requests. Synchronous,
+legacy, and asynchronous requests submit a caller-controlled header and verify that the server replaces it.
+The synchronous results expose persisted verification UUIDs; the deprecated response body continues to omit `id`.
+Requests 16–19 read an owned result through `GET /verifications/:id`, confirm that a random missing UUID returns
+`404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 20–22 add one credit,
+enqueue asynchronous verification, and poll for a completed result with its own persisted verification UUID.
+The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
+identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
 The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
 internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another

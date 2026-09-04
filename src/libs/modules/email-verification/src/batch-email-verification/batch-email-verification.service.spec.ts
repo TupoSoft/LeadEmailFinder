@@ -1,3 +1,7 @@
+import {
+    VERIFICATION_TRACE_OBSERVER,
+    VerificationTraceObserver,
+} from '../application/verification-trace/verification-trace-observer'
 import { Test, TestingModule } from '@nestjs/testing'
 import { BatchEmailVerificationServiceImpl } from './batch-email-verification-service-impl.service'
 import { getQueueToken } from '@nestjs/bullmq'
@@ -24,6 +28,7 @@ const file: BatchEmailVerificationFile = {
 }
 
 describe('BatchEmailVerificationService', () => {
+    let traceObserver: jest.Mocked<VerificationTraceObserver>
     let service: BatchEmailVerificationServiceImpl
     let queue: { getJob: jest.Mock; add: jest.Mock }
     let s3: { getObject: jest.Mock }
@@ -32,11 +37,19 @@ describe('BatchEmailVerificationService', () => {
     const otherPrincipal = { organizationId: 'org-2', credentialId: 'cred-2' } as AuthPrincipal
 
     beforeEach(async () => {
+        traceObserver = {
+            enqueued: jest.fn(),
+            completed: jest.fn(),
+            failed: jest.fn(),
+            batchCompleted: jest.fn(),
+        }
+
         queue = { getJob: jest.fn(), add: jest.fn() }
         s3 = { getObject: jest.fn() }
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                { provide: VERIFICATION_TRACE_OBSERVER, useValue: traceObserver },
                 BatchEmailVerificationServiceImpl,
                 {
                     provide: getQueueToken('batch-email-verification'),
@@ -79,6 +92,52 @@ describe('BatchEmailVerificationService', () => {
                 expect.objectContaining({ jobId: expect.any(String) }),
             )
         })
+    })
+
+    it('links the batch request to the exact returned job using only safe trace fields', async () => {
+        queue.add.mockResolvedValue({ id: 'returned-batch-id' })
+
+        await service.uploadFile(file, principal, 'server-request-id')
+
+        expect(traceObserver.enqueued).toHaveBeenCalledWith({
+            requestId: 'server-request-id',
+            mode: 'batch',
+            jobId: 'returned-batch-id',
+        })
+        expect((queue.add.mock.calls as unknown[][])[0][1]).not.toHaveProperty('requestId')
+    })
+
+    it('preserves successful batch submission when its observer throws', async () => {
+        queue.add.mockResolvedValue({ id: 'batch-1' })
+        traceObserver.enqueued.mockImplementation(() => {
+            throw new Error('observer unavailable')
+        })
+
+        await expect(service.uploadFile(file, principal, 'request-id')).resolves.toEqual({ id: 'batch-1' })
+        expect(queue.add).toHaveBeenCalledTimes(1)
+        expect(traceObserver.failed).not.toHaveBeenCalled()
+    })
+
+    it('traces dispatch failures without exposing the upload location or replacing the original error', async () => {
+        const error = new Error('private-file-location')
+        queue.add.mockRejectedValue(error)
+        traceObserver.failed.mockImplementation(() => {
+            throw new Error('observer unavailable')
+        })
+
+        await expect(service.uploadFile(file, principal, 'request-id')).rejects.toBe(error)
+
+        expect(traceObserver.failed).toHaveBeenCalledWith({
+            operationId: 'request-id',
+            mode: 'batch',
+            jobId: expect.any(String),
+            batchId: expect.any(String),
+            stage: 'queue_dispatch',
+            errorType: 'Error',
+            durationMs: expect.any(Number),
+        })
+        expect(JSON.stringify(traceObserver.failed.mock.calls)).not.toContain('private-file-location')
+        expect(traceObserver.enqueued).not.toHaveBeenCalled()
     })
 
     describe('getBatchStatus', () => {
@@ -128,7 +187,13 @@ describe('BatchEmailVerificationService', () => {
             ['empty batch at upload stage', BatchEmailVerificationJobStep.UploadResults, 0, 0, 100],
             ['finish with no children', BatchEmailVerificationJobStep.Finish, 0, 0, 100],
             ['finish always reports 100 regardless of counts', BatchEmailVerificationJobStep.Finish, 5, 5, 100],
-            ['defensive: inconsistent negative counts never escape as NaN/Infinity', BatchEmailVerificationJobStep.WaitForChildren, -1, -1, 100],
+            [
+                'defensive: inconsistent negative counts never escape as NaN/Infinity',
+                BatchEmailVerificationJobStep.WaitForChildren,
+                -1,
+                -1,
+                100,
+            ],
         ])('reports bounded progress: %s', async (_description, step, processed, unprocessed, expectedProgress) => {
             const id = randomUUID()
 

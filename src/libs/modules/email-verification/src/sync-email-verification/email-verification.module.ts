@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
 import {
     DOMAIN_SERVICE_TOKEN,
     EMAIL_SERVICE_TOKEN,
@@ -17,6 +18,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [
+        VerificationTraceModule,
         TypeOrmModule.forFeature([EmailVerification]),
         EmailVerifierModule,
         EmailModule,

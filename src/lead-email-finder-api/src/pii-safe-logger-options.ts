@@ -9,6 +9,8 @@ const SENSITIVE_PATH_SEGMENT = ':sensitive'
 const SAFE_ERROR_MESSAGE = 'application_error'
 const MAX_PATH_DECODE_PASSES = 5
 const EMAIL_SEGMENT_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u
+const UUID_PATH_SEGMENT_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
+const VERIFICATION_ID_ROUTES = new Set(['verifications', 'verifyasync', 'verifybatch'])
 
 type ExpressIncomingMessage = IncomingMessage & { originalUrl?: string }
 
@@ -54,11 +56,20 @@ function isSensitivePathSegment(
     rawSegment: string,
 ): boolean {
     const decodedSegment = decodedSegments[index]
+    const precedingSegment = decodedSegments[index - 1]
+    const parentRoute = precedingSegment?.value.toLowerCase()
+    const isInvalidVerificationId =
+        rawSegment.length > 0 &&
+        precedingSegment?.completelyDecoded &&
+        VERIFICATION_ID_ROUTES.has(parentRoute) &&
+        !(parentRoute === 'verifybatch' && decodedSegment.value === 'csv') &&
+        !UUID_PATH_SEGMENT_PATTERN.test(decodedSegment.value)
 
     return (
         !decodedSegment.completelyDecoded ||
         decodedSegment.value.includes('@') ||
         EMAIL_SEGMENT_PATTERN.test(decodedSegment.value) ||
+        isInvalidVerificationId ||
         isEmailAdministrationValue(decodedSegments, index, rawSegment)
     )
 }
@@ -97,24 +108,28 @@ function hasOwnErrorBinding(value: unknown): boolean {
 export function createPiiSafePinoHttpOptions(): Options {
     const requestIds = new WeakMap<IncomingMessage, string>()
 
-    const requestIdFor = (request: IncomingMessage): string => {
-        const existingRequestId = requestIds.get(request)
-        if (existingRequestId) {
-            return existingRequestId
-        }
-
-        const requestId = randomUUID()
+    const requestIdFor = (request: IncomingMessage, response?: ServerResponse): string => {
+        const requestId = requestIds.get(request) ?? randomUUID()
         requestIds.set(request, requestId)
+        request.id = requestId
+        if (response && !response.headersSent) {
+            response.setHeader('X-Request-ID', requestId)
+        }
         return requestId
     }
 
     return {
-        genReqId: request => requestIdFor(request),
+        genReqId: (request, response) => requestIdFor(request, response),
+        customProps: (request, response) => {
+            // Pino skips genReqId when earlier middleware has assigned request.id.
+            // Always restore the private server ID before application handlers run.
+            requestIdFor(request, response)
+            return {}
+        },
         wrapSerializers: false,
         serializers: {
             req: (request: ExpressIncomingMessage) => {
                 const id = requestIdFor(request)
-                request.id = id
 
                 return {
                     id,

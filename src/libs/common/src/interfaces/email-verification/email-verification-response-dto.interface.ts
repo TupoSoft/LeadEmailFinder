@@ -4,6 +4,8 @@ import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } fr
 export type EmailVerificationReadSource = EmailVerificationSource | 'linkedin'
 
 export interface IEmailVerificationResponseDto {
+    id: string
+
     email: string
 
     domain: string

@@ -37,7 +37,21 @@ export class AsyncEmailVerificationProcessor extends WorkerHost {
         job: Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>,
     ): Promise<IEmailVerificationResponseDto> {
         const { organizationId, email, format, batchId } = job.data
-        const response = await this.emailVerificationService.verify({ organizationId, email, format, batchId })
+        const response = await this.emailVerificationService.verify({
+            organizationId,
+            email,
+            format,
+            batchId,
+            trace: job.id
+                ? {
+                      operationId: job.id,
+                      mode: batchId ? 'batch_child' : 'async',
+                      jobId: job.id,
+                      ...(batchId ? { batchId } : {}),
+                      attempt: Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, (job.attemptsMade ?? 0) + 1)),
+                  }
+                : undefined,
+        })
 
         if (response.reason === EmailVerificationReason.TemporarilyBlocked) {
             throw new GreylistedException(response.email)

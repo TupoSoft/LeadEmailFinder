@@ -20,9 +20,20 @@ import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
-import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } from '@tuposoft/lead-email-finder/common'
+import {
+    CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN,
+    CustomerObjectWriteSecurity,
+    safeErrorType,
+} from '@tuposoft/lead-email-finder/common'
 import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
 import { deriveResultsKey } from './derive-results-key'
+import {
+    NOOP_VERIFICATION_TRACE_OBSERVER,
+    observeSafely,
+    VERIFICATION_TRACE_OBSERVER,
+    VerificationFailureStage,
+    VerificationTraceObserver,
+} from '../application/verification-trace/verification-trace-observer'
 
 type S3UploadSecurityParameters =
     | {
@@ -57,35 +68,79 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
         private readonly dataSource: DataSource,
         private readonly creditsService: CreditsService,
+        @Inject(VERIFICATION_TRACE_OBSERVER)
+        private readonly traceObserver: VerificationTraceObserver = NOOP_VERIFICATION_TRACE_OBSERVER,
     ) {
         super()
     }
 
     async process(job: Job<BatchEmailVerificationJobData, string>, token: string): Promise<string> {
-        while (job.data.step !== BatchEmailVerificationJobStep.Finish) {
-            switch (job.data.step) {
-                case BatchEmailVerificationJobStep.Validate:
-                    await this.validateFile(job)
-                    break
-                case BatchEmailVerificationJobStep.Process:
-                    await this.processFile(job)
-                    break
-                case BatchEmailVerificationJobStep.WaitForChildren:
-                    await this.waitForChildren(job, token)
-                    break
-                case BatchEmailVerificationJobStep.UploadResults:
-                    await this.uploadResults(job)
-                    break
-                default:
-                    this.handleDefault(job)
+        const startedAt = Date.now()
+        let stage: VerificationFailureStage = 'batch_validation'
+
+        try {
+            while (job.data.step !== BatchEmailVerificationJobStep.Finish) {
+                switch (job.data.step) {
+                    case BatchEmailVerificationJobStep.Validate:
+                        stage = 'batch_validation'
+                        await this.validateFile(job)
+                        break
+                    case BatchEmailVerificationJobStep.Process:
+                        stage = 'queue_dispatch'
+                        await this.processFile(job)
+                        break
+                    case BatchEmailVerificationJobStep.WaitForChildren:
+                        stage = 'queue_dispatch'
+                        await this.waitForChildren(job, token)
+                        break
+                    case BatchEmailVerificationJobStep.UploadResults:
+                        stage = 'batch_result_publication'
+                        await this.uploadResults(job)
+                        break
+                    default:
+                        this.handleDefault(job)
+                }
             }
+
+            await this.traceCompletion(job, startedAt)
+            return job.data.resultFilePath
+        } catch (error) {
+            if (!(error instanceof WaitingChildrenError) && job.id) {
+                observeSafely(() =>
+                    this.traceObserver.failed({
+                        operationId: job.id!,
+                        mode: 'batch',
+                        jobId: job.id,
+                        batchId: job.id,
+                        attempt: Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, (job.attemptsMade ?? 0) + 1)),
+                        stage,
+                        errorType: safeErrorType(error),
+                        durationMs: Date.now() - startedAt,
+                    }),
+                )
+            }
+            throw error
         }
+    }
 
-        const {
-            data: { resultFilePath },
-        } = job
-
-        return resultFilePath
+    private async traceCompletion(job: Job<BatchEmailVerificationJobData, string>, startedAt: number): Promise<void> {
+        try {
+            if (!job.id) return
+            const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
+            const boundedCount = (count: number): number =>
+                Number.isFinite(count) ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(count))) : 0
+            const processedCount = boundedCount(processed)
+            const unprocessedCount = boundedCount(unprocessed)
+            this.traceObserver.batchCompleted({
+                batchId: job.id,
+                total: boundedCount(processedCount + unprocessedCount),
+                processed: processedCount,
+                unprocessed: unprocessedCount,
+                durationMs: Date.now() - startedAt,
+            })
+        } catch {
+            // Reading observational counts or publishing telemetry cannot fail a completed batch.
+        }
     }
 
     private async uploadResults(job: Job<BatchEmailVerificationJobData>): Promise<void> {

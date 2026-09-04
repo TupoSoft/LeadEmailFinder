@@ -18,14 +18,14 @@ its local part, domain, MX host, SMTP text, provider payload, credentials, or in
 
 ## Progress
 
-- [ ] (2026-09-03) Characterize current request, job, batch, verification-result, response, and logging contracts.
-- [ ] (2026-09-03) Return the authoritative server request ID on every HTTP response and reject caller-controlled
+- [x] (2026-09-04) Characterize current request, job, batch, verification-result, response, and logging contracts.
+- [x] (2026-09-04) Return the authoritative server request ID on every HTTP response and reject caller-controlled
       correlation.
-- [ ] (2026-09-03) Add the verification trace observer and propagate safe identifiers through sync, async, and batch
+- [x] (2026-09-04) Add the verification trace observer and propagate safe identifiers through sync, async, and batch
       orchestration.
-- [ ] (2026-09-03) Expose persisted verification IDs and add an organization-owned read-by-ID operation.
-- [ ] (2026-09-03) Add captured-log, authorization, HTTP, queue, persistence, Bruno, documentation, and full-suite
-      validation.
+- [x] (2026-09-04) Expose persisted verification IDs and add an organization-owned read-by-ID operation.
+- [x] (2026-09-04) Add captured-log, authorization, HTTP, queue, persistence, Bruno, documentation, and full-suite
+      validation. Bruno static validation passed; runtime execution remains unverified without the fixture stack.
 
 ## Plan dependencies
 
@@ -33,6 +33,18 @@ its local part, domain, MX host, SMTP text, provider payload, credentials, or in
 - `privacy-compliance/04`
 
 ## Surprises & Discoveries
+
+- Discovery: built-in JSON parsing can reject a request before Nest module middleware runs. Early bootstrap request
+  logging is required to include parser failures and routes registered before initialization.
+  Evidence: the malformed JSON regression returned `400` without `X-Request-ID` under module-only logging.
+  Date/Author: 2026-09-04, Codex implementation.
+- Discovery: the architecture gate prohibits new layer files from importing the old response DTO path. Moving the DTO
+  into `api/` resolves two existing placement violations without changing the entity schema.
+  Evidence: the reviewed baseline shrank from 110 to 108 entries; no new violations were introduced.
+  Date/Author: 2026-09-04, Codex implementation.
+- Discovery: completed async results require explicit nested DTO conversion under the global serializer settings.
+  Evidence: `GetAsyncVerificationStatusResponseDto.result` now uses `Type` to retain public result fields and `id`.
+  Date/Author: 2026-09-04, Codex implementation.
 
 - Discovery: the PII-safe Pino configuration generates and logs a request UUID but never returns it to the caller or
   passes it to verification orchestration.
@@ -55,6 +67,14 @@ its local part, domain, MX host, SMTP text, provider payload, credentials, or in
   Date/Author: 2026-09-03, Codex planning.
 
 ## Decision Log
+
+- Decision: use a framework-independent result reader port with a TypeORM adapter wired at the existing composition
+  root. Keep the existing entity in place and move only the shared response DTO into the canonical API layer.
+  Rationale: ownership is one repository predicate, so an extra forwarding service would add no business rule.
+  Date/Author: 2026-09-04, Codex implementation.
+- Decision: keep trace context in the common verification command contract and the observer port inside the module.
+  Rationale: common contracts cannot import a business module; technical logging remains behind its injected port.
+  Date/Author: 2026-09-04, Codex implementation.
 
 - Decision: Keep three identifier meanings explicit: request ID identifies one HTTP exchange; job and batch IDs
   identify queued work; and verification ID identifies one persisted result.
@@ -97,21 +117,40 @@ its local part, domain, MX host, SMTP text, provider payload, credentials, or in
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the request header, safe lifecycle events across all four entry points, persisted result IDs, and the
+organization-owned result lookup. Early bootstrap logging also covers malformed JSON and routes registered before
+Nest initialization. It preserves raw request bytes and emits one automatic completion record per request. Invalid
+verification and job ID path values are sanitized before logging. Captured JSON tests exercise real controllers,
+services, processors, and the logging adapter with synthetic private values; infrastructure boundaries use fixtures.
+
+The full Jest suite passed with 179 suites and 1,494 tests; 10 suites and 52 infrastructure-dependent tests were
+skipped. The three PostgreSQL ownership tests passed separately against a disposable PostgreSQL 18 container, which
+was removed after validation. Typecheck, build, lint, and the module architecture gate passed. Lint retains one
+preexisting return-type warning in `load-secrets.spec.ts`. The architecture baseline decreased from 110 to 108 entries
+because the response DTO now occupies the required API layer. There is no schema change or material SOLID trade-off.
+
+Bruno coverage was updated and statically validated: 29 YAML files and 31 embedded scripts parsed successfully. Live
+Bruno execution remains unverified because the local fixture stack and credentials are absent. This limitation does
+not affect the in-process HTTP tests or the separately executed PostgreSQL ownership checks.
+
+The first full-suite run encountered an unrelated randomized ciphertext test failure: its replacement character can
+match the original character and leave the input unchanged. The focused rerun passed, and the full-suite rerun passed.
+The unrelated test was left unchanged.
 
 ## Context and Orientation
 
 Plan 03 configures Pino in `src/lead-email-finder-api/src/pii-safe-logger-options.ts`. Its request serializer emits only
 `id`, `method`, and sanitized `path`; its response serializer emits only `statusCode`; its error serializer emits only a
-validated type. `genReqId` creates a UUID and stores it on the Express request. The API currently does not return that
-UUID, and application services, BullMQ processors, and structured verification logs do not receive it.
+validated type. `genReqId` creates a UUID and stores it on the Express request. Before this implementation, the API did not return that
+UUID, and application services, BullMQ processors, and structured verification logs did not receive it.
 
 The current synchronous entry point is
 `src/libs/modules/email-verification/src/sync-email-verification/sync-email-verification.controller.ts`; the deprecated
 compatibility entry point is in `old-sync-email-verification/old-sync-email-verification.controller.ts`.
 `EmailVerificationService` validates the domain, prepares the organization-owned email cache, runs `EmailVerifier`,
 saves an append-only `EmailVerification`, updates `lastVerificationId`, and returns the saved object without
-`organizationId`. The entity UUID is present internally, but the common response interface and serialized DTO omit it.
+`organizationId`. Before this implementation, the entity UUID was present internally, but the common response interface and serialized
+DTO omitted it.
 The response already contains the submitted email and bounded reason, so the caller knows the immediate result even
 though an operator cannot correlate that result from logs.
 
@@ -294,7 +333,7 @@ application correlation content.
 
 Run focused request-header, trace-observer, service, queue, result-reader, authorization, and captured-log tests:
 
-    corepack pnpm test -- src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/libs/modules/email-verification/src/sync-email-verification/email-verification.service.spec.ts src/libs/modules/email-verification/src/sync-email-verification/sync-email-verification.controller.spec.ts src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-http.integration.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.processor.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.service.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts src/libs/modules/email-verification/src/operational-trace/verification-trace-observer.spec.ts src/libs/modules/email-verification/src/operational-trace/verification-result-http.integration.spec.ts --runInBand
+    corepack pnpm test -- src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/libs/modules/email-verification/src/sync-email-verification/email-verification.service.spec.ts src/libs/modules/email-verification/src/sync-email-verification/sync-email-verification.controller.spec.ts src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-http.integration.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.service.spec.ts src/libs/modules/email-verification/src/async-email-verification/async-email-verification.processor.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.service.spec.ts src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.spec.ts src/libs/modules/email-verification/src/infrastructure/verification-trace/logging-verification-trace-observer.spec.ts src/libs/modules/email-verification/src/infrastructure/verification-trace/verification-trace.integration.spec.ts src/libs/modules/email-verification/src/api/verification-result-http.integration.spec.ts src/libs/modules/email-verification/src/infrastructure/typeorm-verification-result-reader.spec.ts --runInBand
     corepack pnpm architecture:check
 
 Use a unique synthetic sentinel. Exercise synchronous success, expected rejection, and thrown failure; deprecated sync;
@@ -308,7 +347,7 @@ Run repository checks:
     corepack pnpm lint
     corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/34-trace-verification-operations-with-opaque-identifiers.md bruno/smtp-dev/README.md
+    corepack pnpm docs:lint -- .agents/plans/privacy-compliance/34-trace-verification-operations-with-opaque-identifiers.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md bruno/batch-verification/README.md
     git diff --check
 
 Extend the nearest `bruno/smtp-dev` sequence. Assert a UUID `X-Request-ID` on success and rejection, assert that a
@@ -341,6 +380,16 @@ schema; disposable HTTP and persistence tests clean up their synthetic organizat
 observer wiring and response-header change restores the prior behavior without rolling back data.
 
 ## Artifacts and Notes
+
+Validation completed on 2026-09-04. `corepack pnpm test:ci` passed with 1,494 tests; `corepack pnpm typecheck`,
+`corepack pnpm lint`, `corepack pnpm build`, `corepack pnpm architecture:check`, and `git diff --check` passed.
+The focused PostgreSQL command was:
+
+    TEST_POSTGRES_URL=<disposable-database-url-ending-in-_test> corepack pnpm test -- src/libs/modules/email-verification/src/verification-organization-ownership.integration.spec.ts --runInBand
+
+This passed all three ownership scenarios, including owned, foreign, and missing verification-ID lookup. The Harper
+command in Validation passed for all four changed Markdown files. Bruno runtime remains unverified as described above.
+
 
 Record only synthetic request, job, batch, and verification UUIDs; fixed event/mode/stage/reason codes; captured event
 counts; HTTP statuses; test totals; and sanitized Bruno results. Do not record real addresses, domains, MX hosts,

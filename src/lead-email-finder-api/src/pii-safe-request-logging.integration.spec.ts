@@ -1,10 +1,27 @@
-import { Controller, Get, INestApplication, Param, Patch } from '@nestjs/common'
+import {
+    CanActivate,
+    Controller,
+    ForbiddenException,
+    Get,
+    INestApplication,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    RawBodyRequest,
+    Req,
+    UnauthorizedException,
+    UseGuards,
+} from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { randomUUID } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
+import type { NextFunction, Request, Response } from 'express'
 import type { DestinationStream } from 'pino'
 import { Logger, LoggerModule } from 'pino-nestjs'
 import request from 'supertest'
 import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
+import { configurePiiSafeRequestLogging } from './configure-pii-safe-request-logging'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const capturedLines: Record<string, unknown>[] = []
@@ -14,11 +31,49 @@ const destination: DestinationStream = {
     },
 }
 
+class UnauthenticatedTestGuard implements CanActivate {
+    canActivate(): never {
+        throw new UnauthorizedException()
+    }
+}
+
+class ForbiddenTestGuard implements CanActivate {
+    canActivate(): never {
+        throw new ForbiddenException()
+    }
+}
+
 @Controller()
 class PiiSafeRequestLoggingTestController {
+    constructor(private readonly logger: Logger) {}
+
     @Get('verify')
-    verify(): { ok: true } {
-        return { ok: true }
+    verify(@Req() incoming: IncomingMessage): { ok: true; requestId: IncomingMessage['id'] } {
+        this.logger.log('verification_test_handler')
+        return { ok: true, requestId: incoming.id }
+    }
+
+    @Get('validation/:id')
+    validate(@Param('id', new ParseUUIDPipe()) id: string): { id: string } {
+        return { id }
+    }
+
+    @Get('unauthenticated')
+    @UseGuards(UnauthenticatedTestGuard)
+    unauthenticated(): void {}
+
+    @Get('forbidden')
+    @UseGuards(ForbiddenTestGuard)
+    forbidden(): void {}
+
+    @Get('unexpected')
+    unexpected(): never {
+        throw new Error('Private provider response')
+    }
+
+    @Post('raw-body')
+    rawBody(@Req() incoming: RawBodyRequest<Request>): { body: unknown; rawBody: string | undefined } {
+        return { body: incoming.body as unknown, rawBody: incoming.rawBody?.toString('utf8') }
     }
 
     @Patch('emails/:email')
@@ -29,20 +84,37 @@ class PiiSafeRequestLoggingTestController {
 
 describe('PII-safe request logging', () => {
     let app: INestApplication
+    let preexistingRequestId: string | undefined
 
     beforeAll(async () => {
         const moduleRef: TestingModule = await Test.createTestingModule({
             imports: [
                 LoggerModule.forRoot({
+                    useExisting: true,
                     pinoHttp: [createPiiSafePinoHttpOptions(), destination],
                 }),
             ],
             controllers: [PiiSafeRequestLoggingTestController],
         }).compile()
 
-        app = moduleRef.createNestApplication()
+        app = moduleRef.createNestApplication({ rawBody: true })
+        app.use((incoming: Request, _response: Response, next: NextFunction) => {
+            if (preexistingRequestId) {
+                incoming.id = preexistingRequestId
+            }
+            next()
+        })
+        configurePiiSafeRequestLogging(app, destination)
+        app.getHttpAdapter().get('/early-route', (_incoming: Request, response: Response) => {
+            response.json({ ok: true })
+        })
         app.useLogger(app.get(Logger))
         await app.init()
+    })
+
+    beforeEach(() => {
+        capturedLines.length = 0
+        preexistingRequestId = undefined
     })
 
     afterAll(async () => {
@@ -59,7 +131,7 @@ describe('PII-safe request logging', () => {
         const forwardedAddress = '198.51.100.77'
         const attackerRequestId = 'attacker-request-' + randomUUID()
 
-        await request(app.getHttpServer())
+        const success = await request(app.getHttpServer())
             .get('/verify?email=' + encodedSentinel)
             .set('Authorization', authorization)
             .set('Cookie', cookie)
@@ -68,7 +140,7 @@ describe('PII-safe request logging', () => {
             .set('X-Request-ID', attackerRequestId)
             .expect(200)
 
-        await request(app.getHttpServer())
+        const failure = await request(app.getHttpServer())
             .patch('/emails/' + encodedSentinel)
             .set('Authorization', authorization)
             .set('Cookie', cookie)
@@ -108,6 +180,9 @@ describe('PII-safe request logging', () => {
         }
         expect(new Set(requestIds).size).toBe(2)
         expect(requestIds).not.toContain(attackerRequestId)
+        expect(success.headers['x-request-id']).toBe(requestIds[0])
+        expect((success.body as { requestId: string }).requestId).toBe(requestIds[0])
+        expect(failure.headers['x-request-id']).toBe(requestIds[1])
 
         for (const log of capturedLines.filter(line => typeof line.req === 'object' && line.req !== null)) {
             expect(Object.keys(log.req as Record<string, unknown>).sort()).toEqual(['id', 'method', 'path'])
@@ -123,5 +198,92 @@ describe('PII-safe request logging', () => {
         expect(completeOutput).not.toContain(forwardedAddress)
         expect(completeOutput).not.toContain(attackerRequestId)
         expect(completeOutput).not.toContain('127.0.0.1')
+    })
+
+    it.each([
+        ['/verify', 200],
+        ['/validation/not-a-uuid', 400],
+        ['/unauthenticated', 401],
+        ['/forbidden', 403],
+        ['/missing', 404],
+        ['/unexpected', 500],
+        ['/early-route', 200],
+    ])('returns a server UUID matching the log for %s (%i) despite a preexisting ID', async (path, status) => {
+        preexistingRequestId = 'middleware-secret-' + randomUUID()
+        const attackerHeader = 'header-secret-' + randomUUID()
+
+        const response = await request(app.getHttpServer())
+            .get(path)
+            .set('X-Request-ID', attackerHeader)
+            .expect(status)
+        await new Promise<void>(resolve => setImmediate(resolve))
+
+        const responseId: unknown = response.headers['x-request-id']
+        expect(responseId).toEqual(expect.stringMatching(UUID_PATTERN))
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(automaticLogs[0]).toEqual(expect.objectContaining({
+            req: { id: responseId, method: 'GET', path },
+            res: { statusCode: status },
+        }))
+        if (path === '/verify') {
+            expect((response.body as { requestId: string }).requestId).toBe(responseId)
+            expect(capturedLines.find(line => line.msg === 'verification_test_handler')).toEqual(
+                expect.objectContaining({ req: { id: responseId, method: 'GET', path } }),
+            )
+        }
+
+        const completeOutput = JSON.stringify(capturedLines)
+        expect(completeOutput).not.toContain(preexistingRequestId)
+        expect(completeOutput).not.toContain(attackerHeader)
+        expect(completeOutput).not.toContain('Private provider response')
+    })
+
+    it('returns a request UUID when JSON parsing rejects the body', async () => {
+        const response = await request(app.getHttpServer())
+            .patch('/emails/invalid')
+            .set('Content-Type', 'application/json')
+            .send('{')
+            .expect(400)
+
+        expect(response.headers['x-request-id']).toEqual(expect.stringMatching(UUID_PATTERN))
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(automaticLogs[0]).toEqual(expect.objectContaining({
+            req: { id: response.headers['x-request-id'], method: 'PATCH', path: '/emails/:sensitive' },
+            res: { statusCode: 400 },
+        }))
+    })
+
+    it('preserves the exact raw body used to validate webhook signatures', async () => {
+        const rawBody = '{ "privatePayload": "synthetic-webhook-sentinel" }'
+        const response = await request(app.getHttpServer())
+            .post('/raw-body')
+            .set('Content-Type', 'application/json')
+            .send(rawBody)
+            .expect(201)
+
+        expect(response.body).toEqual({ body: JSON.parse(rawBody) as unknown, rawBody })
+        expect(response.headers['x-request-id']).toEqual(expect.stringMatching(UUID_PATTERN))
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(JSON.stringify(capturedLines)).not.toContain('synthetic-webhook-sentinel')
+    })
+
+    it.each([
+        ['/verifications/', '', 'private-domain.test'],
+        ['/verifyAsync/', '', 'provider-credential-secret'],
+        ['/verifyBatch/', '/results', 'private-batch-domain.test'],
+    ])('conceals non-UUID values on %s result routes', async (prefix, suffix, privateValue) => {
+        const response = await request(app.getHttpServer())
+            .get(prefix + privateValue + suffix)
+            .expect(404)
+
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(automaticLogs[0]).toEqual(expect.objectContaining({
+            req: { id: response.headers['x-request-id'], method: 'GET', path: prefix + ':sensitive' + suffix },
+        }))
+        expect(JSON.stringify(capturedLines)).not.toContain(privateValue)
     })
 })

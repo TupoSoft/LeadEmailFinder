@@ -13,6 +13,7 @@ compatibility route kept billing- and permission-equivalent to its replacement.
 - CSV batch verification (`POST /verifyBatch/csv`, status polling, and durable result download), including a
   BullMQ parent/child job fan-out per row and an S3-backed result file.
 - Domain and email persistence used to cache verification results and avoid rechecking the same address.
+- Organization-owned result lookup by verification UUID (`GET /verifications/:id`).
 - The SMTP verification engine itself: MX resolution, catch-all detection, and proxy-leased SMTP connections that require certificate-verified STARTTLS before either envelope address is sent.
 - Default-deny account-discovery enrichment, including one-provider selection and approval checks performed during
   startup and immediately before every outbound disclosure.
@@ -52,7 +53,8 @@ commercial messages or own final suppression duties.
 
 Automatic HTTP completion logs use an allowlist configured at the API composition root. A request record contains
 only a server-generated UUID, method, and sanitized path; a response record contains only its status code, alongside
-the numeric response duration. Query strings are discarded, and email-administration paths are recorded as
+the numeric response duration. Every HTTP response returns this UUID in `X-Request-ID`, including parser, validation,
+authentication, authorization, and application failures. Incoming request IDs are ignored. Query strings are discarded, and email-administration paths are recorded as
 `/emails/:sensitive`.
 
 Application events may contain only stable operation or provider codes, SMTP numeric and enhanced status codes,
@@ -64,6 +66,23 @@ request header or body, cookie, authorization value, or client address or port. 
 commands and replies, provider payloads and remote error messages, and exception messages derived from external
 input. Error records use a stable operation code and validated error class; they omit message text and stacks.
 
+Request IDs identify HTTP exchanges. Job and batch IDs identify queued work, and verification IDs identify persisted
+results. Current synchronous and completed async responses expose the verification `id`; the deprecated response body
+is unchanged. Batch CSV files retain their existing verification `id` column.
+
+A narrow `VerificationTraceObserver` application port receives lifecycle events. Its logging adapter emits
+`verification_enqueued`, `verification_completed`, `verification_failed`, and `verification_batch_completed`.
+Allowed fields include UUIDs checked by the adapter, fixed execution modes and failure stages, existing verification
+reason codes, validated error types, bounded durations, attempt numbers, and counts. A synchronous operation uses its request
+ID; a worker uses its existing job ID, and a batch child includes its parent batch ID. Submission events link the
+request ID to the returned job ID. Retries may produce multiple events for the same job; events do not promise exactly
+one delivery. Observer failures cannot change results, credits, persistence, or job outcomes.
+
+A caller can provide Support with one of these opaque IDs. Support can follow the log events to a persisted
+verification ID. Resolving that ID to an address requires an authenticated application read with `verification:read`
+in the owning organization. Log access alone cannot resolve an address. Missing and foreign verification IDs both
+return the same `404`; the endpoint accepts no organization override and provides no list or address search.
+
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes four top-level Nest
@@ -71,7 +90,9 @@ submodules — `SyncEmailVerificationModule`, `AsyncEmailVerificationModule`, `B
 `OldSyncEmailVerificationModule` (the deprecated route) — plus, transitively, `DomainModule`, `EmailModule`, and
 `EmailVerifierModule` (which in turn composes an SMTP submodule). Several of these submodules have their own
 internal barrels, but none of that is exported again by the top-level `src/index.ts`: from outside this module, the
-only public surface is `EmailVerificationModule` itself and the HTTP/queue behavior below.
+only public surface is `EmailVerificationModule` itself and the HTTP/queue behavior below. The top-level module also
+wires the internal result reader and its controller. The shared result DTO lives in `src/api/`; the trace port lives
+in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
 
 ## Dependencies
 
@@ -90,6 +111,7 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 | -------------------------- | --------------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
 | `POST`                     | `/verify`                   | `verification:run` + one credit | Current synchronous verification                                               |
 | `GET`                      | `/verify`                   | `verification:run` + one credit | **Deprecated** — same authorization and billing as `POST /verify`              |
+| `GET`                      | `/verifications/:id`       | `verification:read`             | Owned persisted result; `404` for missing or foreign IDs, `400` for invalid UUIDs |
 | `POST`                     | `/verifyAsync`              | `verification:run` + one credit | `202 Accepted`; enqueues an async job                                          |
 | `GET`                      | `/verifyAsync/:id`          | `verification:read`             | `404` if the job doesn't exist or isn't owned by the caller                    |
 | `POST`                     | `/verifyBatch/csv`          | `verification:run`              | `202 Accepted`; multipart CSV upload, `100MB` max                              |
@@ -142,6 +164,12 @@ are limited to `us` and `uk`.
 ## Validation
 
 Focused tests are grouped by behavior:
+
+- **Operational tracing**: `infrastructure/verification-trace/logging-verification-trace-observer.spec.ts`,
+  `infrastructure/verification-trace/verification-trace.integration.spec.ts`, the synchronous service and queue
+  specifications, and the API composition root's request logging tests
+- **Result lookup**: `api/verification-result-http.integration.spec.ts`,
+  `infrastructure/typeorm-verification-result-reader.spec.ts`, and the PostgreSQL ownership integration test
 
 - **Synchronous**: `sync-email-verification/sync-email-verification.controller.spec.ts`
 - **Deprecated synchronous**: `old-sync-email-verification/old-sync-email-verification.controller.spec.ts`,

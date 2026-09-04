@@ -19,7 +19,7 @@ export interface GetAsyncVerificationStatus {
 }
 
 export interface AsyncEmailVerificationService {
-    verifyAsync(options: VerifyAsyncRequest, principal: AuthPrincipal): Promise<VerifyAsyncResponse>
+    verifyAsync(options: VerifyAsyncRequest, principal: AuthPrincipal, requestId?: string): Promise<VerifyAsyncResponse>
 
     getAsyncVerificationState(id: string, principal: AuthPrincipal): Promise<GetAsyncVerificationStatus>
 }

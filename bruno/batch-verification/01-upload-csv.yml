@@ -23,6 +23,12 @@ runtime:
       code: |-
         test('enqueues a batch verification job', function() {
           expect(res.status).to.equal(202);
-          expect(res.body.id).to.be.a('string');
+          expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(Object.keys(res.body)).to.deep.equal(['id']);
           bru.setVar('batchJobId', res.body.id);
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

@@ -1,0 +1,31 @@
+info:
+  name: 20-add-credit-for-async-verification
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: '{{baseUrl}}/credits/{{organizationId}}'
+  headers:
+    - name: Authorization
+      value: 'Bearer {{serviceClientToken}}'
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      { "amount": 1 }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('adds a credit for asynchronous verification', function() {
+          expect(res.status).to.equal(201);
+          expect(res.body.balance).to.be.at.least(1);
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
+        });
