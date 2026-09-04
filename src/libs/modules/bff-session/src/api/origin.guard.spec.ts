@@ -5,6 +5,8 @@ import { OriginGuard } from './origin.guard'
 const configuration: BffSessionConfiguration = {
     appBaseUrl: 'http://localhost:53000',
     issuer: 'https://issuer',
+    backchannelUrl: 'http://keycloak:8080/realms/lead-email-finder',
+    jwksUri: 'http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs',
     clientId: 'lef-web-bff',
     clientSecret: 'secret',
     sessionIdleTimeoutMs: 1000,

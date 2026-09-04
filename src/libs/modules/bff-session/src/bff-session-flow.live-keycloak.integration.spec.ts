@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
 import { Redis } from 'ioredis'
+import { decodeJwt } from 'jose'
 import request from 'supertest'
 import {
     Organization,
@@ -24,6 +25,9 @@ import {
 } from '@tuposoft/lead-email-finder/modules/auth'
 import { BffSessionCredentialAuthenticator, BffSessionModule, BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session'
 import { BFF_CSRF_COOKIE_NAME } from './api/bff-cookie-names'
+import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from './application/bff-session-configuration'
+import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './application/oauth-provider-client'
+import { SESSION_STORE, SessionStore } from './application/session-store'
 
 // Deliberately its own env vars, not TEST_OIDC_*/TEST_POSTGRES_URL: this test drives a real Keycloak
 // browser login (distinct from the M2M client-credentials tests) and does its own dropSchema+synchronize
@@ -36,6 +40,8 @@ const postgresUrl = process.env['TEST_BFF_POSTGRES_URL']
 const redisUrl = process.env['TEST_BFF_REDIS_URL']
 const keycloakAdminUsername = process.env['TEST_BFF_KEYCLOAK_ADMIN_USERNAME']
 const keycloakAdminPassword = process.env['TEST_BFF_KEYCLOAK_ADMIN_PASSWORD']
+const backchannelUrl = process.env['TEST_BFF_BACKCHANNEL_URL'] ?? issuer
+const jwksUri = process.env['TEST_BFF_JWKS_URI'] ?? `${issuer}/protocol/openid-connect/certs`
 
 const describeWithKeycloakRedisAndPostgres =
     issuer && clientId && clientSecret && postgresUrl && redisUrl && keycloakAdminUsername && keycloakAdminPassword
@@ -56,11 +62,22 @@ const identityEntities = [Organization, ExternalIdentity, OrganizationMembership
 class TestRedisModule {}
 
 function keycloakBaseUrl(): string {
-    return issuer!.replace(/\/realms\/.+$/, '')
+    return backchannelUrl!.replace(/\/realms\/.+$/, '')
 }
 
 function realmName(): string {
     return issuer!.split('/realms/')[1]
+}
+
+// The simulated browser runs in the API container during test:bff-live. Assert each browser URL is public,
+// then route only this browser driver's HTTP transport to Keycloak; the application receives no rewrite.
+function browserTransportUrl(publicUrl: string): string {
+    const url = new URL(publicUrl)
+    expect(url.origin).toBe(new URL(issuer!).origin)
+    const transport = new URL(backchannelUrl!)
+    url.host = transport.host
+    url.protocol = transport.protocol
+    return url.toString()
 }
 
 class CookieJar {
@@ -119,7 +136,7 @@ async function createKeycloakUser(adminToken: string, username: string, password
         }),
     })
     if (response.status !== 201) {
-        throw new Error(`Failed to create Keycloak user: HTTP ${response.status}: ${await response.text()}`)
+        throw new Error(`Failed to create Keycloak user: HTTP ${response.status}`)
     }
     const location = response.headers.get('location')
     if (!location) {
@@ -171,6 +188,8 @@ async function attemptBrowserLogin(
     const loginResponse = await request(app.getHttpServer()).get('/v1/auth/login').redirects(0)
     expect(loginResponse.status).toBe(302)
     const authorizationUrl: string = loginResponse.headers.location
+    expect(new URL(authorizationUrl).origin).toBe(new URL(issuer!).origin)
+    expect(new URL(authorizationUrl).pathname).toBe(`${new URL(issuer!).pathname}/protocol/openid-connect/auth`)
     const loginStateCookieHeader = (loginResponse.headers['set-cookie'] as unknown as string[]).find(cookie =>
         cookie.startsWith('lef_login_state='),
     )
@@ -180,7 +199,7 @@ async function attemptBrowserLogin(
     const loginStateCookie = loginStateCookieHeader.split(';')[0]
 
     const keycloakJar = new CookieJar()
-    const formResponse = await fetch(authorizationUrl, { redirect: 'manual' })
+    const formResponse = await fetch(browserTransportUrl(authorizationUrl), { redirect: 'manual' })
     keycloakJar.applyResponse(formResponse)
     const formHtml = await formResponse.text()
     const $ = load(formHtml)
@@ -189,7 +208,7 @@ async function attemptBrowserLogin(
         throw new Error('Could not find the Keycloak login form action URL')
     }
 
-    const submitResponse = await fetch(formAction, {
+    const submitResponse = await fetch(browserTransportUrl(formAction), {
         method: 'POST',
         redirect: 'manual',
         headers: {
@@ -215,6 +234,11 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
     let externalIdentityRepo: Repository<ExternalIdentity>
     let membershipRepo: Repository<OrganizationMembership>
     let adminToken: string
+    let sessionStore: SessionStore
+    let oauthProvider: OAuthProviderClient
+    let fetchSpy: jest.SpiedFunction<typeof fetch>
+    const protocolRequests: Array<{ url: string; grantType: string | null; status: number }> = []
+    const sessionIds: string[] = []
     const createdUserIds: string[] = []
 
     beforeAll(async () => {
@@ -234,11 +258,30 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
         await schemaDataSource.destroy()
 
         process.env['OIDC_ISSUER_URL'] = issuer
+        process.env['OIDC_BACKCHANNEL_URL'] = backchannelUrl
+        process.env['OIDC_JWKS_URI'] = jwksUri
         process.env['OIDC_AUDIENCE'] = 'lead-email-finder-api'
         process.env['APP_BASE_URL'] = appBaseUrl
         process.env['BFF_CLIENT_ID'] = clientId
         process.env['BFF_CLIENT_SECRET'] = clientSecret
         process.env['SESSION_ENCRYPTION_KEY'] = randomBytes(32).toString('base64url')
+
+        if (process.env['TEST_BFF_EXPECT_PUBLIC_UNREACHABLE'] === 'true') {
+            await expect(fetch(`${issuer}/protocol/openid-connect/certs`, { signal: AbortSignal.timeout(3_000) })).rejects.toThrow()
+        }
+        const originalFetch = globalThis.fetch
+        fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+            const response = await originalFetch(input, init)
+            const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
+            if (url.pathname.endsWith('/protocol/openid-connect/token') || url.pathname.endsWith('/protocol/openid-connect/logout')) {
+                protocolRequests.push({
+                    url: `${url.origin}${url.pathname}`,
+                    grantType: init?.body instanceof URLSearchParams ? init.body.get('grant_type') : null,
+                    status: response.status,
+                })
+            }
+            return response
+        })
 
         const moduleRef: TestingModule = await Test.createTestingModule({
             imports: [
@@ -279,6 +322,12 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
         externalIdentityRepo = moduleRef.get(getRepositoryToken(ExternalIdentity))
         membershipRepo = moduleRef.get(getRepositoryToken(OrganizationMembership))
         redis = moduleRef.get(Redis)
+        sessionStore = moduleRef.get(SESSION_STORE)
+        oauthProvider = moduleRef.get(OAUTH_PROVIDER_CLIENT)
+        const configuration = moduleRef.get<BffSessionConfiguration>(BFF_SESSION_CONFIGURATION)
+        expect(configuration.issuer).toBe(issuer)
+        expect(configuration.backchannelUrl).toBe(backchannelUrl)
+        expect(configuration.jwksUri).toBe(jwksUri)
 
         adminToken = await authenticateKeycloakAdmin()
     }, 60_000)
@@ -287,8 +336,10 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
         for (const userId of createdUserIds) {
             await deleteKeycloakUser(adminToken, userId).catch(() => undefined)
         }
-        await redis.quit()
-        await app.close()
+        for (const sessionId of sessionIds) await sessionStore?.delete(sessionId)
+        fetchSpy?.mockRestore()
+        await redis?.quit()
+        await app?.close()
     }, 30_000)
 
     it(
@@ -324,6 +375,10 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
 
             const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
             const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+            sessionIds.push(sessionCookie.slice('lef_session='.length))
+
+            expect(protocolRequests.some(entry => entry.grantType === 'authorization_code' &&
+                entry.url === `${backchannelUrl}/protocol/openid-connect/token` && entry.status === 200)).toBe(true)
 
             const sessionResponse = await request(app.getHttpServer())
                 .get('/v1/auth/session')
@@ -348,7 +403,7 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
     )
 
     it(
-        'enforces the global Origin/CSRF guard for a genuinely authenticated browser-session mutation',
+        'refreshes and revokes the provider session through the back channel while enforcing Origin and CSRF',
         async () => {
             const username = `bff-test-csrf-${randomUUID()}`
             const password = randomBytes(12).toString('base64url')
@@ -379,9 +434,22 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
 
             const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
             const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+            const sessionId = sessionCookie.slice('lef_session='.length)
+            sessionIds.push(sessionId)
             const csrfCookie = setCookies.find(cookie => cookie.startsWith(`${BFF_CSRF_COOKIE_NAME}=`))!.split(';')[0]
             const csrfToken = csrfCookie.split('=')[1]
             const bothCookies = `${sessionCookie}; ${csrfCookie}`
+
+            const initialSession = await sessionStore.get(sessionId)
+            expect(initialSession).toBeDefined()
+            expect(decodeJwt(initialSession!.accessToken).iss).toBe(issuer)
+            await sessionStore.save(sessionId, { ...initialSession!, accessTokenExpiresAt: Date.now() - 1 })
+            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
+            const refreshedSession = await sessionStore.get(sessionId)
+            expect(refreshedSession!.accessTokenExpiresAt).toBeGreaterThan(Date.now())
+            expect(decodeJwt(refreshedSession!.accessToken).iss).toBe(issuer)
+            expect(protocolRequests.some(entry => entry.grantType === 'refresh_token' &&
+                entry.url === `${backchannelUrl}/protocol/openid-connect/token` && entry.status === 200)).toBe(true)
 
             // Missing Origin/Referer entirely.
             await request(app.getHttpServer()).post('/v1/auth/logout').set('cookie', bothCookies).expect(403)
@@ -423,6 +491,8 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
                 .expect(204)
 
             await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
+            expect(protocolRequests.some(entry => entry.url === `${backchannelUrl}/protocol/openid-connect/logout` && entry.status === 204)).toBe(true)
+            await expect(oauthProvider.refreshTokens(refreshedSession!.refreshToken)).rejects.toThrow()
         },
         30_000,
     )
@@ -456,6 +526,9 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
                 .set('cookie', loginStateCookie)
                 .redirects(0)
             expect(firstCallback.status).toBe(302)
+            const sessionCookie = (firstCallback.headers['set-cookie'] as unknown as string[])
+                .find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+            sessionIds.push(sessionCookie.slice('lef_session='.length))
 
             const replayedCallback = await request(app.getHttpServer())
                 .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)

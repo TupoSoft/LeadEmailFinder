@@ -36,6 +36,8 @@ describe('RedisSessionStore', () => {
         configuration = {
             appBaseUrl: 'http://localhost:53000',
             issuer: 'https://issuer',
+            backchannelUrl: 'http://keycloak:8080/realms/lead-email-finder',
+            jwksUri: 'http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs',
             clientId: 'client',
             clientSecret: 'secret',
             sessionIdleTimeoutMs: 8 * 60 * 60 * 1000,

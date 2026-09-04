@@ -69,6 +69,34 @@ locally and never commit real production credentials.
 
 `PROXY_MX_REQUESTS_PER_MINUTE` and `PROXY_LEASE_TTL_MS` are optional proxy-fleet limits. They default to 10 MX attempts per minute and a 60-second egress lease.
 
+#### Browser and Provider Routing
+
+`OIDC_ISSUER_URL` is the public Keycloak realm URL used by browser redirects and token issuer validation.
+`OIDC_BACKCHANNEL_URL` optionally selects the realm URL for server-side code exchange, refresh, and logout.
+`OIDC_JWKS_URI` optionally selects the key retrieval URL for both bearer and BFF ID-token verification.
+When omitted, these retrieval addresses fall back to the public issuer's protocol endpoints.
+
+The local stack uses `http://localhost:58080/realms/lead-email-finder` as its public issuer and
+`http://keycloak:8080/realms/lead-email-finder` for internal protocol calls. Keycloak pins its public hostname
+and enables dynamic back-channel routing, so requests through either address produce the same public issuer.
+The SMTP and Paddle overlays inherit this configuration. Host-run applications can omit both retrieval overrides.
+URL configuration accepts HTTP or HTTPS, rejects credentials, queries, and fragments, and reports invalid keys
+without printing their values.
+
+After provisioning this checkout's stack, run the provider and HTTP checks:
+
+```shell
+corepack pnpm keycloak:smoke
+corepack pnpm test:bff-live
+corepack pnpm bruno:bff-sessions
+# After starting the SMTP overlay:
+corepack pnpm bruno:smtp-dev
+```
+
+For an isolated Compose project, set `COMPOSE_PROJECT_NAME` to its name when running these launchers. They verify
+ownership of the working directory, load ignored fixture metadata, and fail if their suites skip or execute no tests.
+The live BFF runner uses only the dedicated `bff_session_test` database. It never resets the application's database.
+
 #### Production Transport and Customer-Object Storage
 
 `NODE_ENV=production` enables fail-closed transport and object-write checks at startup:

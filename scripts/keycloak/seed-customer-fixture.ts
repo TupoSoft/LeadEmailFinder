@@ -26,7 +26,7 @@ async function main(): Promise<void> {
 
     try {
         const platformToken = await obtainClientCredentialsToken(
-            serviceClient.issuer,
+            process.env.OIDC_BACKCHANNEL_URL ?? serviceClient.issuer,
             serviceClient.clientId,
             serviceClient.clientSecret,
             fetch,

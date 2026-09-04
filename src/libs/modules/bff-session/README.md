@@ -64,6 +64,8 @@ adapters), not Postgres.
 
 - `APP_BASE_URL`
 - `OIDC_ISSUER_URL`
+- `OIDC_BACKCHANNEL_URL` (optional; defaults to the public issuer)
+- `OIDC_JWKS_URI` (optional; defaults to the public issuer's `/protocol/openid-connect/certs` endpoint)
 - `BFF_CLIENT_ID`
 - `BFF_CLIENT_SECRET`
 - `SESSION_IDLE_TIMEOUT_MS` (optional, default 8 hours)
@@ -72,9 +74,23 @@ adapters), not Postgres.
 
 `isSecureCookie` is derived from the scheme of `APP_BASE_URL` rather than read from its own variable.
 
+The public issuer controls browser authorization redirects, ID-token issuer validation, and the identity stored in
+the session. Only token exchange, refresh, and provider logout use `OIDC_BACKCHANNEL_URL`. JWKS retrieval uses
+`OIDC_JWKS_URI` independently of both realm bases. Setting an internal retrieval address never permits an internal
+issuer claim. Omitting both optional variables preserves single-address deployments.
+
+The configuration factory removes trailing slashes from both realm bases. Provider URLs must be absolute HTTP(S)
+URLs without credentials, whitespace, query parameters, or fragments. Invalid values stop startup with diagnostics
+that identify the variable without repeating its value.
+
 ## Validation
 
 Focused tests live in `src/`, including `application/bff-session-flow.service.spec.ts`,
+`infrastructure/config/bff-session-configuration.spec.ts`,
+`infrastructure/keycloak/keycloak-oauth-client.spec.ts`,
+`infrastructure/jose/jose-id-token-verifier.spec.ts`,
+`infrastructure/jose/jose-id-token-verifier.integration.spec.ts` (real signatures and independent JWKS retrieval,
+including rejection of the internal issuer),
 `application/human-membership-resolver.service.spec.ts`, `application/session-token-refresher.service.spec.ts`,
 `application/bff-session-credential-authenticator.spec.ts`, `bff-session.module.spec.ts`,
 `api/browser-session-mutation.guard.spec.ts`, `api/csrf.guard.spec.ts`, `api/origin.guard.spec.ts`,

@@ -1,5 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common'
-import { jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { BffSessionConfiguration } from '../../application/bff-session-configuration'
 import { JoseIdTokenVerifier } from './jose-id-token-verifier'
 
@@ -14,6 +14,8 @@ describe('JoseIdTokenVerifier', () => {
     const configuration: BffSessionConfiguration = {
         appBaseUrl: 'http://localhost:53000',
         issuer: 'https://issuer.example.test/realms/lead-email-finder',
+        backchannelUrl: 'http://keycloak:8080/realms/lead-email-finder',
+        jwksUri: 'http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs',
         clientId: 'lef-web-bff',
         clientSecret: 'secret',
         sessionIdleTimeoutMs: 1000,
@@ -35,6 +37,10 @@ describe('JoseIdTokenVerifier', () => {
         const result = await verifier.verify('a.b.c', 'the-nonce')
 
         expect(result).toEqual({ issuer: configuration.issuer, subject: 'human-1', email: 'person@example.test' })
+        expect(createRemoteJWKSet).toHaveBeenCalledWith(
+            new URL(configuration.jwksUri),
+            expect.objectContaining({ timeoutDuration: 5000 }),
+        )
         expect(mockedJwtVerify).toHaveBeenCalledWith(
             'a.b.c',
             'remote-jwk-set',

@@ -19,6 +19,12 @@ runtime:
 
           var location = res.headers['location'];
           expect(location).to.be.a('string');
+          expect(location.split('?')[0]).to.equal(
+            bru.getEnvVar('oidcIssuerUrl') + '/protocol/openid-connect/auth'
+          );
+          expect(location).to.include(
+            'redirect_uri=' + encodeURIComponent(bru.getEnvVar('baseUrl') + '/v1/auth/callback')
+          );
           expect(location).to.include('response_type=code');
           expect(location).to.include('client_id=lef-web-bff');
           expect(location).to.include('code_challenge_method=S256');

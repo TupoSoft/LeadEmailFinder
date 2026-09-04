@@ -1,9 +1,6 @@
 services:
   api:
     environment:
-      # The verification workflow mints its M2M token through this container-internal issuer, so the issuer
-      # claim and the API's validation target must use the same URL.
-      OIDC_ISSUER_URL: http://keycloak:8080/realms/lead-email-finder
       PAYMENTS_PROVIDER: paddle
       PAYMENTS_CREDIT_PACKS: '{"starter":{"credits":100,"amountMinor":500,"currency":"USD","providerPriceId":"${PADDLE_STARTER_PRICE_ID:?Set PADDLE_STARTER_PRICE_ID to the sandbox pri_ identifier}"}}'
       PAYMENTS_CHECKOUT_URL: ${PADDLE_CHECKOUT_URL:-http://localhost:57000/checkout.html}

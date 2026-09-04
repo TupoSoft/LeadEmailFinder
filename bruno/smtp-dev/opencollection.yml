@@ -9,7 +9,7 @@ request:
       code: |-
         // Always mint a fresh token rather than caching one for the run: this collection performs a long sequence of
         // verification, proxy-state, and billing requests, so a cached token can expire before the run ends.
-        const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
+        const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
@@ -21,5 +21,9 @@ request:
         const payload = await response.json();
         if (!response.ok || !payload.access_token) {
           throw new Error(`Client Credentials token request failed with HTTP ${response.status}`);
+        }
+        const claims = JSON.parse(Buffer.from(payload.access_token.split('.')[1], 'base64url').toString('utf8'));
+        if (claims.iss !== bru.getEnvVar('oidcIssuerUrl')) {
+          throw new Error('The internal token endpoint must preserve the public issuer');
         }
         bru.setVar('serviceClientToken', payload.access_token);

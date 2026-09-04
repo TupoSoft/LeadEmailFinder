@@ -92,7 +92,7 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
 
     async revokeSession(refreshToken: string): Promise<void> {
         try {
-            await fetch(`${this.configuration.issuer}/protocol/openid-connect/logout`, {
+            await fetch(`${this.configuration.backchannelUrl}/protocol/openid-connect/logout`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -107,7 +107,7 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
     }
 
     private async postToken(params: Record<string, string>): Promise<KeycloakTokenResponse> {
-        const response = await fetch(`${this.configuration.issuer}/protocol/openid-connect/token`, {
+        const response = await fetch(`${this.configuration.backchannelUrl}/protocol/openid-connect/token`, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
