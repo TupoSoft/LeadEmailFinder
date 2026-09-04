@@ -1,7 +1,7 @@
 info:
-  name: 13-reject-missing-email-update
+  name: 14-reject-missing-email-update
   type: http
-  seq: 13
+  seq: 14
 
 http:
   method: PATCH

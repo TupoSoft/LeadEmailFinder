@@ -278,6 +278,11 @@ export class EnvironmentVariablesDto {
     @Max(65535)
     SMTP_PORT?: number
 
+    @IsOptional()
+    @IsString()
+    @IsNotEmpty()
+    SMTP_TLS_CA_FILE?: string
+
     @IsEnum(PaymentsProviderName)
     PAYMENTS_PROVIDER: PaymentsProviderName
 

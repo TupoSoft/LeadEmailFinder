@@ -3,6 +3,7 @@ import { SmtpVerificationReason } from './smtp.enums'
 import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
 import { Logger } from '@nestjs/common'
+import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
 
 interface SmtpVerifierInternals {
     tryConnect: jest.Mock
@@ -164,6 +165,7 @@ describe('SmtpVerifier', () => {
                 exists: true,
                 reason: SmtpVerificationReason.AcceptedEmail,
                 targetExchange: 'mx.example.com',
+                secureTransport: true,
             }
         })
         internals.getExchanges = jest.fn().mockResolvedValue([])
@@ -196,6 +198,7 @@ describe('SmtpVerifier', () => {
             reason: SmtpVerificationReason.TemporarilyBlocked,
             targetExchange: 'mx.example.com',
             proxyId: 'proxy-id',
+            secureTransport: true,
         })
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
         internals.getSmtpClient = jest.fn().mockResolvedValue({ attemptedConnection: false })
@@ -219,7 +222,7 @@ describe('SmtpVerifier', () => {
 
     it('releases the selected allocation after SMTP verification completes', async () => {
         const allocation = createAllocation('proxy-id')
-        const client = {} as any
+        const client = { secureTransport: true } as any
         const result = {
             email,
             exists: true,
@@ -246,9 +249,86 @@ describe('SmtpVerifier', () => {
                 id: email,
                 exists: true,
                 reason: SmtpVerificationReason.AcceptedEmail,
+                secureTransport: true,
             }),
         )
         expect(proxyAllocator.release).toHaveBeenCalledWith(allocation)
+    })
+
+    it('ignores a conclusive cache row that is not proven to use secure transport', async () => {
+        smtpVerificationRepo.findOneBy.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            secureTransport: false,
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+            email,
+            exists: false,
+            reason: SmtpVerificationReason.NoMxRecords,
+        })
+        expect(internals.getExchanges).toHaveBeenCalledTimes(1)
+    })
+
+    it('maps STARTTLS negotiation failure before sending either address-bearing command', async () => {
+        const client = {
+            hostname: 'client.example.com',
+            exchange: 'mx.example.com',
+            secureTransport: false,
+            startSession: jest.fn().mockRejectedValue(new SmtpSecureTransportUnavailableException()),
+            mailFrom: jest.fn(),
+            rcptTo: jest.fn(),
+            quit: jest.fn(),
+            end: jest.fn(),
+        } as unknown as ISmtpClient
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.SecureTransportUnavailable,
+            targetExchange: 'mx.example.com',
+        })
+        expect(client.startSession).toHaveBeenCalledWith('client.example.com')
+        expect(client.mailFrom).not.toHaveBeenCalled()
+        expect(client.rcptTo).not.toHaveBeenCalled()
+        expect(client.end).toHaveBeenCalledTimes(1)
+    })
+
+    it('retries repeated secure-transport failures instead of caching them as mailbox outcomes', async () => {
+        const allocation = createAllocation('proxy-id')
+        const cachedFailure = {
+            organizationId,
+            id: email,
+            exists: null,
+            reason: SmtpVerificationReason.SecureTransportUnavailable,
+            secureTransport: false,
+        }
+        const result = {
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.SecureTransportUnavailable,
+            targetExchange: 'mx.example.com',
+        }
+        smtpVerificationRepo.findOneBy.mockResolvedValue(cachedFailure)
+        smtpVerificationRepo.save.mockResolvedValue(undefined)
+        internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
+        internals.getSmtpClient = jest.fn().mockResolvedValue({
+            leasedClient: { client: { secureTransport: false }, allocation },
+            attemptedConnection: true,
+        })
+        internals.tryVerify = jest.fn().mockResolvedValue(result)
+        proxyAllocator.release.mockResolvedValue(true)
+
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
+        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
+
+        expect(internals.getSmtpClient).toHaveBeenCalledTimes(2)
+        expect(internals.tryVerify).toHaveBeenCalledTimes(2)
+        expect(smtpVerificationRepo.save).toHaveBeenCalledTimes(2)
+        expect(proxyAllocator.release).toHaveBeenCalledTimes(2)
     })
 })
 

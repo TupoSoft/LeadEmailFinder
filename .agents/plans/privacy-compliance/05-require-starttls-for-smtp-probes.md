@@ -13,10 +13,10 @@ received no address-bearing command.
 
 ## Progress
 
-- [ ] (2026-08-30) Add strict STARTTLS negotiation, default-preserving trust, SNI, and abort-aware deadlines.
-- [ ] (2026-08-30) Fail safely before mailbox commands and expose the secure-transport failure reason.
-- [ ] (2026-08-30) Prevent reuse of SMTP cache entries not proven to come from an encrypted session.
-- [ ] (2026-08-30) Add TLS and plaintext SMTP fixtures, focused trust/socket/SMTP tests, Bruno coverage, and full
+- [x] (2026-09-03) Add strict STARTTLS negotiation, default-preserving trust, SNI, and abort-aware deadlines.
+- [x] (2026-09-03) Fail safely before mailbox commands and expose the secure-transport failure reason.
+- [x] (2026-09-03) Prevent reuse of SMTP cache entries not proven to come from an encrypted session.
+- [x] (2026-09-03) Add TLS and plaintext SMTP fixtures, focused trust/socket/SMTP tests, Bruno coverage, and full
       validation.
 
 ## Plan dependencies
@@ -26,7 +26,9 @@ received no address-bearing command.
 
 ## Surprises & Discoveries
 
-None yet.
+- The architecture gate rejects new production files beside the baselined legacy SMTP implementation. The new trust loader and secure-transport exception therefore live under `src/infrastructure/smtp` while the existing client remains in place.
+- The first overlay startup after `dev:reset` recreated `lef_default` while reusing base containers, which dropped Docker service aliases. A one-time forced recreation restored the aliases; the documented clean start already runs `docker compose down` before starting the overlay.
+- The complete Bruno run exposed a gap in the nullable boolean object mapping: `PATCH /emails/:email` persisted `false` but omitted `exists` from the response. An explicit member mapping and focused test restored the documented response contract.
 
 ## Decision Log
 
@@ -68,9 +70,16 @@ None yet.
   defaults.
   Date/Author: 2026-08-30, Codex.
 
+- Decision: Keep new SMTP transport helpers in the email-verification infrastructure layer instead of extending the legacy source-placement baseline.
+  Rationale: The module architecture gate forbids new production files outside layered directories, and transport trust is an infrastructure responsibility.
+  Date/Author: 2026-09-03, Codex.
+- Decision: Repair the existing `EmailProfile` nullable `exists` mapping discovered by the required full Bruno run.
+  Rationale: The endpoint already promises the field, the existing Bruno request asserts it, and the narrow explicit mapping avoids weakening acceptance coverage.
+  Date/Author: 2026-09-03, Codex.
+
 ## Outcomes & Retrospective
 
-Not started.
+Strict STARTTLS, SMTP-only custom trust, secure-cache proof, deterministic TLS and plaintext fixtures, and the public `secure_transport_unavailable` result are implemented and fully validated. The live plaintext fixture received no address-bearing command. All focused and repository-wide gates pass; lint retains one unrelated warning in `src/libs/config/src/load-secrets.spec.ts`. No follow-up work remains in this plan.
 
 ## Context and Orientation
 
@@ -160,7 +169,7 @@ failures remain non-affirmative and must not turn an older plaintext row into a 
 tests to cover old false rows, true secure rows, and repeated failures.
 
 Create fixture-only CA, certificate, and private-key files under `docker/smtp-dev/tls/`, clearly marked as
-non-secret and non-production. Configure the existing Mailpit service in `docker/compose.smtp-dev.yaml` with the
+nonsecret and non-production. Configure the existing Mailpit service in `docker/compose.smtp-dev.yaml` with the
 certificate, key, and required STARTTLS. Mount the CA read-only into the API and worker services and set
 `SMTP_TLS_CA_FILE` to that file. Do not use `NODE_EXTRA_CA_CERTS` for the fixture because this plan keeps the
 extra trust scoped to SMTP connections. Add a second Mailpit service with no TLS certificate as an intentional
@@ -245,7 +254,7 @@ use `node:tls` and the existing socket library.
 
 Run parser, trust, TLS, SMTP client/factory/verifier, and module-focused tests with open-handle detection:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/socket/src/tls-connect.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-trust.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.util.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.factory.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.module.spec.ts --runInBand --detectOpenHandles
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/socket/src/tls-connect.spec.ts src/libs/modules/email-verification/src/infrastructure/smtp/smtp-trust.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.util.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-client.factory.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp-verifier.spec.ts src/libs/modules/email-verification/src/email-verifier/smtp/smtp.module.spec.ts --runInBand --detectOpenHandles
     corepack pnpm architecture:check
 
 The trust-loader tests must stub a recognizable default/public-root PEM and assert that it remains in the composed
@@ -257,6 +266,7 @@ Before using the shared Docker project, inspect the Compose working-directory la
 checkout owns it. For an owned disposable stack, reset synchronized data, start both SMTP fixtures, and check health:
 
     pnpm dev:reset -- --confirm-project=LEF
+    docker compose -f docker/compose.yaml down
     docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
     curl --fail --silent http://localhost:53000/health
 
@@ -292,11 +302,14 @@ HELO/plaintext, or bypassing the secure-cache predicate.
 
 ## Artifacts and Notes
 
-Record the exact protocol sequence, default trust composition, fixture trust composition, certificate hostname,
-secure/failed cache behavior, socket resource-release counts, lease resource-release counts, plaintext-fixture negative transcript assertion, Bruno totals,
-and focused/full validation totals. Do not record real addresses, proxy credentials, tokens, raw third-party SMTP
-replies, or any non-fixture certificate material.
+- Focused STARTTLS/trust/parser/verifier/configuration/mapping suite: 9 suites and 116 tests passed with open-handle detection.
+- Full test suite: 175 suites and 1,424 tests passed; 10 suites and 52 tests were skipped by their existing conditions. Typecheck, lint, build, architecture, documentation lint, Compose rendering, certificate verification, and `git diff --check` passed.
+- Live secure protocol order observed in PII-safe structured logs: `ehlo`, `starttls`, `ehlo`, `mail_from`, `rcpt_to`, `quit`.
+- The latest plaintext request logged only `ehlo`; no address-bearing command or `DATA` was emitted.
+- The fixture certificate verifies against `docker/smtp-dev/tls/ca.crt` with SAN `smtp.lef.test`.
+- Bruno: 15 of 15 requests and tests passed inside `lef_default`, covering secure success, plaintext rejection, proxy drain/restore, legacy credits, and admin cache behavior.
+- No real addresses, credentials, proxy secrets, external SMTP replies, or non-fixture certificate material were recorded.
 
 ## Plan readiness
 
-Ready to implement
+Completed and validated.

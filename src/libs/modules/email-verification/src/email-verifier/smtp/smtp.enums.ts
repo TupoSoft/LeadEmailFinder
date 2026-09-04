@@ -28,5 +28,6 @@ export enum SmtpVerificationReason {
     NoConnect = 'no_connect',
     ExceededStorage = 'exceeded_storage',
     SenderBlocked = 'sender_blocked',
+    SecureTransportUnavailable = 'secure_transport_unavailable',
     Unknown = 'unknown',
 }

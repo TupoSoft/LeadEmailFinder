@@ -1,7 +1,7 @@
 info:
-  name: 09-add-credit-for-legacy-verify
+  name: 10-add-credit-for-legacy-verify
   type: http
-  seq: 9
+  seq: 10
 
 http:
   method: POST

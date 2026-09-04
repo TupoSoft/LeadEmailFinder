@@ -16,6 +16,9 @@ export class SmtpVerification {
     @Column({ type: 'boolean', nullable: true })
     exists: boolean | null
 
+    @Column({ type: 'boolean', default: false })
+    secureTransport: boolean
+
     @Column({ nullable: true })
     targetExchange?: string
 

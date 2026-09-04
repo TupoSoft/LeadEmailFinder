@@ -1,7 +1,7 @@
 info:
-  name: 14-reject-duplicate-email-create
+  name: 15-reject-duplicate-email-create
   type: http
-  seq: 14
+  seq: 15
 
 http:
   method: POST

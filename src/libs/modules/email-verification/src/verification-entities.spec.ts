@@ -49,6 +49,15 @@ describe('organization-owned verification entities', () => {
         expect(indexes).toContainEqual(expectedColumns)
     })
 
+    it('marks SMTP cache transport proof as required and false by default', () => {
+        const secureTransport = metadata.columns.find(
+            column => column.target === SmtpVerification && column.propertyName === 'secureTransport',
+        )
+
+        expect(secureTransport?.options).toEqual(expect.objectContaining({ type: 'boolean', default: false }))
+        expect(secureTransport?.options.nullable).not.toBe(true)
+    })
+
     it('stores SMTP cache lifecycle timestamps as absolute instants', () => {
         const createdAt = metadata.columns.find(
             column => column.target === SmtpVerification && column.propertyName === 'createdAt',

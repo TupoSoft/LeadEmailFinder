@@ -11,6 +11,7 @@ export interface ISmtpVerificationResponse {
         | 'no_connect'
         | 'exceeded_storage'
         | 'sender_blocked'
+        | 'secure_transport_unavailable'
         | 'unknown'
     exists: boolean | null
     targetExchange?: string

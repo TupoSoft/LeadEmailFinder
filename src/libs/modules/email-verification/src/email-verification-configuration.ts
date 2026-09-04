@@ -11,4 +11,5 @@ export interface CatchAllProxyConfiguration {
 
 export interface SmtpConfiguration {
     SMTP_PORT?: number
+    SMTP_TLS_CA_FILE?: string
 }

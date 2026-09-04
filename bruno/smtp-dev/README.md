@@ -1,9 +1,6 @@
 # Local SMTP Development Bruno Collection
 
-This collection verifies `person@lef.test` through the opt-in, Docker-network-only SMTP fixture. The fixture
-accepts every recipient, so this checks application, DNS, proxy, and SMTP wiring rather than real-world
-deliverability. The verification assertion also proves that the default empty approval manifest produces no external
-account-discovery source. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
+This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
 and restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
 that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
 a successful request. The final requests update the authenticated organization's stored email and prove that an
@@ -19,7 +16,7 @@ cache in the way.
 Start the fixture from the repository root:
 
 ```shell
-pnpm dev:reset
+pnpm dev:reset -- --confirm-project=LEF
 docker compose -f docker/compose.yaml down
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
@@ -28,6 +25,8 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --bu
 generated `.dev/keycloak/service-client.json` file. If the file is missing, the overlay fails without creating a
 directory in its place. Provisioning also repairs an empty directory left by older Compose configurations, while
 refusing to remove a nonempty directory.
+
+The checked-in CA, certificate, and private key are fixture-only material. They are not secrets and must never be reused outside local development. `SMTP_TLS_CA_FILE` points the API at the fixture root for SMTP connections only; the loader appends it to Node's effective default roots instead of replacing public trust.
 
 The overlay runs `smtp-dev-dns-cache-reset` before starting the API or reconciling the fixture proxy. This
 one-shot service clears the shared Redis `DNS_CACHE:*` namespace so answers cached by the base stack cannot

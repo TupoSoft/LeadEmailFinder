@@ -1,7 +1,7 @@
 info:
-  name: 06-restore-local-proxy
+  name: 05-drain-local-proxy
   type: http
-  seq: 6
+  seq: 5
 
 http:
   method: PATCH
@@ -15,15 +15,15 @@ http:
     type: json
     data: |-
       {
-        "state": "active"
+        "state": "draining"
       }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('restores the local development proxy for future runs', function() {
+        test('drains the local development proxy', function() {
           expect(res.status).to.equal(200);
           expect(res.body.id).to.equal(bru.getVar('proxyId'));
-          expect(res.body.state).to.equal('active');
+          expect(res.body.state).to.equal('draining');
         });

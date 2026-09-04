@@ -1,5 +1,5 @@
 info:
-  name: 01-add-verification-credit
+  name: 01-add-verification-credits
   type: http
   seq: 1
 
@@ -15,15 +15,15 @@ http:
     type: json
     data: |-
       {
-        "amount": 1
+        "amount": 2
       }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('adds one verification credit to the bootstrap-seeded platform organization', function() {
+        test('adds two verification credits to the bootstrap-seeded platform organization', function() {
           expect(res.status).to.equal(201);
           expect(res.body.balance).to.be.a('number');
-          expect(res.body.balance).to.be.at.least(1);
+          expect(res.body.balance).to.be.at.least(2);
         });
