@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm'
-import { ServiceCredentialSeed, smtpDevIssuer } from './bootstrap-service-credential'
+import { ServiceCredentialSeed } from './bootstrap-service-credential'
 import { KeycloakAdminPort } from './keycloak-admin-api'
 import { REALM } from './provisioning'
 
@@ -207,10 +207,7 @@ export async function seedCustomerFixture(deps: {
     await setCreditBalance(apiUrl, platformToken, organizationId, CUSTOMER_CREDIT_BALANCE, fetchImpl)
 
     const { subject } = await provisionCustomerServiceClient(api, CUSTOMER_SERVICE_CLIENT_ID)
-    const seeds: ServiceCredentialSeed[] = [
-        { issuer, keycloakClientId: CUSTOMER_SERVICE_CLIENT_ID },
-        { issuer: smtpDevIssuer(issuer), keycloakClientId: CUSTOMER_SERVICE_CLIENT_ID },
-    ]
+    const seeds: ServiceCredentialSeed[] = [{ issuer, keycloakClientId: CUSTOMER_SERVICE_CLIENT_ID }]
     for (const seed of seeds) {
         await upsertCustomerServiceCredential(dataSource, organizationId, subject, seed)
     }

@@ -14,6 +14,74 @@ function configServiceWith(values: Record<string, unknown>): ConfigService {
 }
 
 describe('createBffSessionConfiguration', () => {
+    const values = {
+        APP_BASE_URL: 'http://localhost:53000',
+        OIDC_ISSUER_URL: 'http://localhost:58080/realms/lead-email-finder',
+        BFF_CLIENT_ID: 'lef-web-bff',
+        BFF_CLIENT_SECRET: 'secret',
+    }
+
+    it('uses the public issuer for both fallbacks when routing overrides are absent', () => {
+        const configuration = createBffSessionConfiguration(configServiceWith(values))
+
+        expect(configuration.issuer).toBe(values.OIDC_ISSUER_URL)
+        expect(configuration.backchannelUrl).toBe(values.OIDC_ISSUER_URL)
+        expect(configuration.jwksUri).toBe(`${values.OIDC_ISSUER_URL}/protocol/openid-connect/certs`)
+    })
+
+    it('normalizes realm bases and configures JWKS retrieval independently', () => {
+        const configuration = createBffSessionConfiguration(
+            configServiceWith({
+                ...values,
+                OIDC_ISSUER_URL: `${values.OIDC_ISSUER_URL}///`,
+                OIDC_BACKCHANNEL_URL: 'http://keycloak:8080/realms/lead-email-finder///',
+                OIDC_JWKS_URI: 'http://keys:8080/custom/certs',
+            }),
+        )
+
+        expect(configuration.issuer).toBe(values.OIDC_ISSUER_URL)
+        expect(configuration.backchannelUrl).toBe('http://keycloak:8080/realms/lead-email-finder')
+        expect(configuration.jwksUri).toBe('http://keys:8080/custom/certs')
+    })
+
+    it('derives JWKS from the normalized public issuer even when a back-channel URL is configured', () => {
+        const configuration = createBffSessionConfiguration(
+            configServiceWith({
+                ...values,
+                OIDC_ISSUER_URL: `${values.OIDC_ISSUER_URL}/`,
+                OIDC_BACKCHANNEL_URL: 'http://keycloak:8080/realms/lead-email-finder',
+            }),
+        )
+
+        expect(configuration.jwksUri).toBe(`${values.OIDC_ISSUER_URL}/protocol/openid-connect/certs`)
+    })
+
+    describe.each(['OIDC_ISSUER_URL', 'OIDC_BACKCHANNEL_URL', 'OIDC_JWKS_URI'])('%s validation', key => {
+        it.each([
+            '',
+            'keycloak',
+            '/realms/lead-email-finder',
+            'ftp://keycloak/realms/lead-email-finder',
+            'http:///keycloak',
+            'http://',
+            'http://user:secret@keycloak/realms/lead-email-finder',
+            'http://keycloak/realms/lead-email-finder?secret=private',
+            'http://keycloak/realms/lead-email-finder#private',
+            ' http://keycloak/realms/lead-email-finder',
+            'http://keycloak/realms/lead-email-finder\n',
+            'http://keycloak\\other/realms/lead-email-finder',
+            null,
+            42,
+        ])('rejects invalid or incompatible value %p without exposing it', value => {
+            const createConfiguration = (): unknown =>
+                createBffSessionConfiguration(configServiceWith({ ...values, [key]: value }))
+
+            expect(createConfiguration).toThrow(
+                new Error(`${key} must be an absolute HTTP(S) URL without credentials, whitespace, query, or fragment`),
+            )
+        })
+    })
+
     it('applies default idle and absolute timeouts when not configured', () => {
         const configuration = createBffSessionConfiguration(
             configServiceWith({

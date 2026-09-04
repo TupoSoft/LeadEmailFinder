@@ -18,7 +18,9 @@ async function main(): Promise<void> {
         password: process.env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin-development-only',
     })
     await api.authenticate()
-    const provisioner = new KeycloakProvisioner(api, baseUrl, {
+    // The administrator may connect through the Docker network while token identity stays public.
+    const publicBaseUrl = process.env.KEYCLOAK_PUBLIC_URL ?? baseUrl
+    const provisioner = new KeycloakProvisioner(api, publicBaseUrl, {
         bffRedirectUris: listFromEnvironment('KEYCLOAK_BFF_REDIRECT_URIS', 'http://localhost:53000/v1/auth/callback'),
         bffPostLogoutRedirectUris: listFromEnvironment(
             'KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS',

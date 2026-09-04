@@ -213,6 +213,18 @@ export class EnvironmentVariablesDto {
     @IsString()
     OIDC_AUDIENCE: string
 
+    // Optional realm base for server-side exchange, refresh, and logout; the public issuer stays unchanged.
+    @IsOptional()
+    @IsUrl({
+        require_protocol: true,
+        require_tld: false,
+        protocols: ['http', 'https'],
+        disallow_auth: true,
+        allow_query_components: false,
+        allow_fragments: false,
+    })
+    OIDC_BACKCHANNEL_URL?: string
+
     // Optional: overrides where this server fetches JWKS from, independently of OIDC_ISSUER_URL (which stays
     // host-facing for the browser redirect and the token issuer-claim check). Only set where the containerized
     // api can't reach OIDC_ISSUER_URL directly — see oidc-configuration.ts.

@@ -11,13 +11,13 @@ and no container-only hostname appears in browser redirects or identity claims.
 
 ## Progress
 
-- [ ] (2026-08-31) Add a validated optional OIDC back-channel URL with a compatibility fallback.
-- [ ] (2026-08-31) Route token exchange, refresh, and provider logout through the internal address only.
-- [ ] (2026-08-31) Give BFF ID-token verification an internal JWKS retrieval address.
-- [ ] (2026-08-31) Configure the public Keycloak hostname and dynamic back channel in local Compose.
-- [ ] (2026-08-31) Remove development-overlay issuer workarounds and rerun their token flows.
-- [ ] (2026-08-31) Update BFF, environment, Docker, and Bruno documentation.
-- [ ] (2026-08-31) Validate focused configuration, live Keycloak, architecture, and repository behavior.
+- [x] (2026-09-04) Add a validated optional OIDC back-channel URL with a compatibility fallback.
+- [x] (2026-09-04) Route token exchange, refresh, and provider logout through the internal address only.
+- [x] (2026-09-04) Give BFF ID-token verification an internal JWKS retrieval address.
+- [x] (2026-09-04) Configure the public Keycloak hostname and dynamic back channel in local Compose.
+- [x] (2026-09-04) Remove overlay issuer workarounds, rerun SMTP token flows, and validate the Paddle Compose configuration.
+- [x] (2026-09-04) Update BFF, environment, Docker, and Bruno documentation.
+- [x] (2026-09-04) Validate focused configuration, live Keycloak, architecture, and repository behavior.
 
 ## Plan dependencies
 
@@ -25,6 +25,15 @@ and no container-only hostname appears in browser redirects or identity claims.
 - `auth/10`
 
 ## Surprises & Discoveries
+
+- (2026-09-04) Implementation is on `kk/497-oidc-provider-routing`; issue #497 is assigned and its project
+  status is In Progress. Both prerequisite implementations are present in the starting revision `64a9ff1`.
+- (2026-09-04) The repository already pins `@usebruno/cli` at `4.1.0`; no dependency change is necessary.
+- (2026-09-04) Docker is available, but existing `lef` volumes have no evidence tying them to this checkout.
+  Validation uses fresh project `lef-497-8a5f` and its own volumes. The existing volumes remain untouched.
+- (2026-09-04) Both platform and customer bootstrap scripts seed an extra internal-issuer credential. These
+  workarounds are removed along with the SMTP and Paddle overlay overrides. Internal provisioning can specify
+  `KEYCLOAK_PUBLIC_URL` independently of its administrator transport address.
 
 - `OIDC_ISSUER_URL` currently serves two incompatible purposes. It is the public issuer and browser authorization
   base, but `KeycloakOAuthClient` also posts server-side token, refresh, and logout requests to it.
@@ -34,6 +43,12 @@ and no container-only hostname appears in browser redirects or identity claims.
   an established precedent for safe network routing without identity drift.
 
 ## Decision Log
+
+- Decision: Run validation in the isolated `lef-497-8a5f` Compose project and validate container ownership in
+  both reusable launchers. Discover and save ignored stack metadata automatically from the confirmed containers.
+  Rationale: The commands must work after provisioning without manual secret exports, and live checks must not
+  reset volumes whose ownership is unproven.
+  Date/Author: 2026-09-04, implementation.
 
 - Decision: Add optional `OIDC_BACKCHANNEL_URL` and default it to `OIDC_ISSUER_URL` when absent.
   Rationale: Existing host-run and single-origin environments remain compatible, while Compose can use its internal
@@ -66,7 +81,16 @@ and no container-only hostname appears in browser redirects or identity claims.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the public identity/internal transport boundary and the reusable live BFF and Bruno launchers.
+The base stack and SMTP overlay preserve public browser redirects and token claims while the containerized API
+exchanges, refreshes, revokes, and verifies tokens through internal provider addresses. The optional settings
+retain their public-address fallbacks. No schema, public route, cookie, or permission contract changed.
+
+Focused tests, the live provider suite, both Bruno collections, type checking, lint, build, and the architecture
+gate passed. The full repository suite passed with its unrelated environment-gated tests skipped. The Paddle
+Compose configuration passed static validation; a full Paddle sandbox run remains unverified because this
+checkout has no Paddle credentials. No material SOLID trade-off was introduced; provider routing remains in
+infrastructure adapters behind the existing application ports.
 
 ## Context and Orientation
 
@@ -176,7 +200,8 @@ runtime service, persistence entity, browser API, or external dependency.
 
 Run the focused BFF configuration and OAuth-client tests, then the repository checks:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- bff-session-configuration.spec.ts keycloak-oauth-client.spec.ts jose-id-token-verifier.spec.ts --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm exec jest bff-session-configuration.spec.ts keycloak-oauth-client.spec.ts jose-id-token-verifier.spec.ts jose-id-token-verifier.integration.spec.ts environment-variables.dto.spec.ts --runInBand
+    corepack pnpm test:oidc-runners
     corepack pnpm typecheck
     corepack pnpm lint
     corepack pnpm architecture:check
@@ -214,6 +239,40 @@ service-start evidence. Do not weaken issuer validation or replace public browse
 hostname.
 
 ## Artifacts and Notes
+
+Validation completed on 2026-09-04:
+
+- Started fresh Compose project `lef-497-8a5f` from this checkout, using its own three named data volumes.
+  Existing `lef` volumes were neither reset nor used. Provisioned Keycloak and seeded platform, operator,
+  and customer fixtures against the containerized API. Both platform and customer credentials use one public issuer.
+- Public issuer: `http://localhost:58080/realms/lead-email-finder`. Protocol base:
+  `http://keycloak:8080/realms/lead-email-finder`. JWKS retrieval uses that internal base's certs endpoint.
+- `corepack pnpm keycloak:smoke` passed on the host and through `docker compose -p lef-497-8a5f
+  -f docker/compose.yaml exec -T api corepack pnpm keycloak:smoke`. Discovery, issued claims, selected token
+  and JWKS endpoints, and rejection of non-S256 PKCE all passed.
+- Focused BFF configuration, OAuth, Jose, and environment DTO checks: 148 tests across five suites passed,
+  including six tests using actual RSA signatures and a local JWKS server. BFF regression: 173 passed.
+- `COMPOSE_PROJECT_NAME=lef-497-8a5f corepack pnpm test:bff-live`: four tests passed, zero skipped, on both
+  the base and SMTP stacks. The final run also proved that the public issuer is unreachable inside the API
+  container while internal JWKS verification succeeds. Refresh succeeded and the provider rejected a refresh
+  token after logout.
+- `COMPOSE_PROJECT_NAME=lef-497-8a5f corepack pnpm bruno:bff-sessions`: four requests and five assertions passed.
+- `COMPOSE_PROJECT_NAME=lef-497-8a5f corepack pnpm bruno:smtp-dev`: 22 requests and 44 assertions passed,
+  including public issuer checks on tokens minted internally. The pinned CLI uses `bru run --env local`.
+- A host-side browser driver exercised the actual Compose API through login, callback, session lookup, logout,
+  and rejection of the revoked cookie. Completed the isolated owner's required name fields and MFA enrollment;
+  realm policy was unchanged. No codes, tokens, cookies, or MFA material were retained in the evidence.
+- The Paddle Compose configuration preserves the public issuer and internal routes. Full
+  Paddle sandbox execution is an external validation limit because credentials are unavailable.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 184 suites and 1,606 tests passed; 10 optional suites
+  and 63 environment-gated tests were skipped. The BFF live suite was independently run as described above.
+- `corepack pnpm test:oidc-runners`: 15 tests passed, zero skipped. `test:ci` now also runs these tests.
+- `corepack pnpm typecheck`, `corepack pnpm build`, and `corepack pnpm architecture:check` passed. The
+  architecture baseline remains unchanged at 108 existing violations across nine modules.
+- `corepack pnpm lint` passed with one existing return-type warning in `src/libs/config/src/load-secrets.spec.ts`.
+- `corepack pnpm docs:lint -- README.md src/libs/modules/bff-session/README.md bruno/bff-sessions/README.md bruno/smtp-dev/README.md docker/paddle-dev/README.md .agents/plans/frontend/02-route-oidc-provider-traffic-safely.md`
+  and `git diff --check` passed.
+
 
 Record the normalized public and internal realm bases, redacted redirect host, token issuer value, selected protocol
 destinations, focused test counts, overlay results, and Bruno summary. Never record authorization codes, cookies,

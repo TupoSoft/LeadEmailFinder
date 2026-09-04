@@ -5,15 +5,32 @@ import {
     ensurePlatformOrganization,
     PLATFORM_ORGANIZATION_NAME,
     resolveServiceAccountSubject,
-    smtpDevIssuer,
+    bootstrapServiceCredential,
     upsertServiceCredential,
 } from './bootstrap-service-credential'
 
-describe('smtpDevIssuer', () => {
-    it('replaces the host with the container-internal Keycloak service name', () => {
-        expect(smtpDevIssuer('http://localhost:58080/realms/lead-email-finder')).toBe(
-            'http://keycloak:8080/realms/lead-email-finder',
-        )
+describe('bootstrapServiceCredential', () => {
+    it('seeds only the public issuer even when the administrator uses an internal transport', async () => {
+        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+        api.request
+            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-development-service' }])
+            .mockResolvedValueOnce({ id: 'service-account-1' })
+        const query = jest
+            .fn()
+            .mockResolvedValueOnce([{ id: 'org-1' }])
+            .mockResolvedValue(undefined)
+        const issuer = 'http://localhost:58080/realms/lead-email-finder'
+
+        const result = await bootstrapServiceCredential(api, { query } as unknown as DataSource, {
+            issuer,
+            clientId: 'lef-development-service',
+            clientSecret: 'test-secret',
+        })
+
+        expect(result.seeds).toEqual([{ issuer, keycloakClientId: 'lef-development-service' }])
+        expect(query).toHaveBeenCalledTimes(2)
+        expect(query).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining([issuer]))
+        expect(JSON.stringify(query.mock.calls)).not.toContain('keycloak:8080')
     })
 })
 

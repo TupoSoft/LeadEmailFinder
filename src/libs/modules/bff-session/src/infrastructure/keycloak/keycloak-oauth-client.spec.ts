@@ -1,9 +1,13 @@
+import { ConfigService } from '@nestjs/config'
 import { BffSessionConfiguration } from '../../application/bff-session-configuration'
+import { createBffSessionConfiguration } from '../config/bff-session-configuration'
 import { KeycloakOAuthClient, OAuthTokenExchangeFailedError } from './keycloak-oauth-client'
 
 const configuration: BffSessionConfiguration = {
     appBaseUrl: 'http://localhost:53000',
     issuer: 'http://localhost:58080/realms/lead-email-finder',
+    backchannelUrl: 'http://keycloak:8080/realms/lead-email-finder',
+    jwksUri: 'http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/certs',
     clientId: 'lef-web-bff',
     clientSecret: 'bff-secret',
     sessionIdleTimeoutMs: 1000,
@@ -13,12 +17,50 @@ const configuration: BffSessionConfiguration = {
 
 describe('KeycloakOAuthClient', () => {
     let client: KeycloakOAuthClient
-    let fetchMock: jest.Mock
+    let fetchMock: jest.Mock<Promise<Partial<Response>>, [string, RequestInit]>
+    const originalFetch = global.fetch
 
     beforeEach(() => {
         client = new KeycloakOAuthClient(configuration)
         fetchMock = jest.fn()
         global.fetch = fetchMock as never
+    })
+
+    afterEach(() => {
+        global.fetch = originalFetch
+    })
+
+    it('uses normalized public endpoints for every request when the back-channel override is absent', async () => {
+        const fallback = createBffSessionConfiguration(
+            new ConfigService({
+                APP_BASE_URL: configuration.appBaseUrl,
+                OIDC_ISSUER_URL: `${configuration.issuer}///`,
+                BFF_CLIENT_ID: configuration.clientId,
+                BFF_CLIENT_SECRET: configuration.clientSecret,
+            }),
+        )
+        client = new KeycloakOAuthClient(fallback)
+        fetchMock.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({ id_token: 'id', access_token: 'access', refresh_token: 'refresh' }),
+        })
+
+        const authorizationUrl = new URL(client.buildAuthorizationUrl({
+            redirectUri: `${configuration.appBaseUrl}/v1/auth/callback`,
+            state: 'state',
+            nonce: 'nonce',
+            codeChallenge: 'challenge',
+        }))
+        await client.exchangeAuthorizationCode({ code: 'code', redirectUri: 'callback', codeVerifier: 'verifier' })
+        await client.refreshTokens('refresh')
+        await client.revokeSession('refresh')
+
+        expect(authorizationUrl.origin + authorizationUrl.pathname).toBe(`${configuration.issuer}/protocol/openid-connect/auth`)
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+            `${configuration.issuer}/protocol/openid-connect/token`,
+            `${configuration.issuer}/protocol/openid-connect/token`,
+            `${configuration.issuer}/protocol/openid-connect/logout`,
+        ])
     })
 
     describe('buildAuthorizationUrl', () => {
@@ -68,6 +110,19 @@ describe('KeycloakOAuthClient', () => {
                 accessTokenExpiresInSeconds: 300,
                 refreshTokenExpiresInSeconds: 1800,
             })
+            expect(fetchMock).toHaveBeenCalledWith(
+                `${configuration.backchannelUrl}/protocol/openid-connect/token`,
+                expect.objectContaining({ method: 'POST' }),
+            )
+            const body = fetchMock.mock.calls[0][1].body as URLSearchParams
+            expect(Object.fromEntries(body)).toEqual({
+                client_id: configuration.clientId,
+                client_secret: configuration.clientSecret,
+                grant_type: 'authorization_code',
+                code: 'auth-code',
+                redirect_uri: 'http://localhost:53000/v1/auth/callback',
+                code_verifier: 'verifier',
+            })
         })
 
         it('throws when Keycloak rejects the exchange (e.g. wrong PKCE verifier)', async () => {
@@ -115,6 +170,13 @@ describe('KeycloakOAuthClient', () => {
                 accessTokenExpiresInSeconds: 300,
                 refreshTokenExpiresInSeconds: 1800,
             })
+            expect(fetchMock).toHaveBeenCalledWith(
+                `${configuration.backchannelUrl}/protocol/openid-connect/token`,
+                expect.objectContaining({ method: 'POST' }),
+            )
+            const body = fetchMock.mock.calls[0][1].body as URLSearchParams
+            expect(body.get('grant_type')).toBe('refresh_token')
+            expect(body.get('refresh_token')).toBe('old-refresh')
         })
 
         it('throws when the refresh token is rejected', async () => {
@@ -141,9 +203,11 @@ describe('KeycloakOAuthClient', () => {
             await client.revokeSession('refresh-token')
 
             expect(fetchMock).toHaveBeenCalledWith(
-                `${configuration.issuer}/protocol/openid-connect/logout`,
+                `${configuration.backchannelUrl}/protocol/openid-connect/logout`,
                 expect.objectContaining({ method: 'POST' }),
             )
+            const body = fetchMock.mock.calls[0][1].body as URLSearchParams
+            expect(body.get('refresh_token')).toBe('refresh-token')
         })
     })
 })

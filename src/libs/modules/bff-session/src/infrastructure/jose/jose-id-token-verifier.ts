@@ -43,7 +43,7 @@ export class JoseIdTokenVerifier implements IdTokenVerifier {
 
     private getJwks(): RemoteJwkSet {
         if (!this.jwks) {
-            this.jwks = createRemoteJWKSet(new URL(`${this.configuration.issuer}/protocol/openid-connect/certs`), {
+            this.jwks = createRemoteJWKSet(new URL(this.configuration.jwksUri), {
                 cooldownDuration: 30_000,
                 timeoutDuration: 5_000,
             })

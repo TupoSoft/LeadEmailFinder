@@ -1,0 +1,175 @@
+import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, resolve } from 'node:path'
+import test from 'node:test'
+import { fileURLToPath } from 'node:url'
+import {
+    assertExecutedReport,
+    cliArguments,
+    collectionEnvironment,
+    composeWorker,
+    executeCollection,
+    registeredCollection,
+    runCollection,
+} from './run-collection.mjs'
+
+const checkoutRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const metadata = { apiUrl: 'http://localhost:53000', keycloakUrl: 'http://localhost:58080' }
+const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
+const serviceClient = { issuer, clientId: 'local-service', clientSecret: 'synthetic-secret-never-log' }
+const serviceCredential = {
+    organizationId: '2ea277e5-954a-4c3d-9464-cfbb0b2e1779',
+    keycloakClientId: serviceClient.clientId,
+    issuers: [issuer],
+}
+
+function report() {
+    return [
+        {
+            summary: {
+                totalRequests: 1,
+                passedRequests: 1,
+                failedRequests: 0,
+                errorRequests: 0,
+                skippedRequests: 0,
+                totalTests: 1,
+                passedTests: 1,
+                failedTests: 0,
+                failedAssertions: 0,
+            },
+            results: [{ testResults: [{ status: 'pass' }] }],
+        },
+    ]
+}
+
+test('accepts only an exact registered collection with no extra command arguments', async () => {
+    assert.equal(registeredCollection('bff-sessions').network, 'host')
+    assert.equal(registeredCollection('smtp-dev').network, 'compose')
+    for (const name of ['../smtp-dev', '/tmp/collection', 'constructor', '__proto__', 'unknown']) {
+        assert.throws(() => registeredCollection(name), /registered/)
+    }
+    await assert.rejects(runCollection([], checkoutRoot), /exactly one/)
+    await assert.rejects(runCollection(['bff-sessions', '--sandbox=developer'], checkoutRoot), /exactly one/)
+})
+
+test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {
+    assert.deepEqual(collectionEnvironment('bff-sessions', metadata), {
+        BRUNO_API_URL: metadata.apiUrl,
+        OIDC_ISSUER_URL: issuer,
+    })
+    const environment = collectionEnvironment('smtp-dev', metadata, serviceClient, serviceCredential)
+    assert.equal(environment.BRUNO_API_URL, 'http://api:3000')
+    assert.equal(environment.OIDC_BACKCHANNEL_URL, 'http://keycloak:8080/realms/lead-email-finder')
+    assert.equal(environment.OIDC_ISSUER_URL, issuer)
+    assert.equal(environment.KEYCLOAK_SERVICE_CLIENT_SECRET, serviceClient.clientSecret)
+})
+
+test('rejects missing or mismatched fixture metadata without exposing its values', () => {
+    for (const [client, credential] of [
+        [undefined, serviceCredential],
+        [serviceClient, undefined],
+        [{ ...serviceClient, issuer: 'http://keycloak:8080/realms/lead-email-finder' }, serviceCredential],
+        [serviceClient, { ...serviceCredential, keycloakClientId: 'another-client' }],
+        [serviceClient, { ...serviceCredential, organizationId: 'not-a-uuid' }],
+        [serviceClient, { ...serviceCredential, issuers: [] }],
+    ]) {
+        assert.throws(
+            () => collectionEnvironment('smtp-dev', metadata, client, credential),
+            error => {
+                assert.match(error.message, /matching provisioned/)
+                assert.ok(!error.message.includes(serviceClient.clientSecret))
+                return true
+            },
+        )
+    }
+})
+
+test('token-minting collections always use developer sandbox and credentials never enter arguments', () => {
+    const environment = collectionEnvironment('smtp-dev', metadata, serviceClient, serviceCredential)
+    const args = cliArguments('smtp-dev', environment, '/tmp/report.json')
+    assert.deepEqual(args.slice(0, 5), ['run', '--env', 'local', '--sandbox', 'developer'])
+    assert.ok(args.includes('--reporter-skip-all-headers'))
+    assert.ok(args.includes('--reporter-skip-body'))
+    assert.ok(!JSON.stringify(args).includes(serviceClient.clientSecret))
+    assert.ok(!composeWorker.includes(serviceClient.clientSecret))
+    assert.throws(
+        () => cliArguments('smtp-dev', { ...environment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
+        /prerequisites/,
+    )
+    assert.equal(
+        cliArguments('bff-sessions', collectionEnvironment('bff-sessions', metadata), '/tmp/report')[4],
+        'safe',
+    )
+})
+
+test('requires every registered request and a nonzero passing test count', () => {
+    assert.deepEqual(assertExecutedReport(report(), 1), { requests: 1, tests: 1 })
+    for (const invalid of [[], [{ summary: { totalRequests: 0, totalTests: 0 }, results: [] }]]) {
+        assert.throws(() => assertExecutedReport(invalid, 1))
+    }
+    assert.throws(() => assertExecutedReport(report(), 2))
+})
+
+test('rejects skipped, failed, and mismatched report counts even after a successful process exit', () => {
+    for (const field of ['skippedRequests', 'failedRequests', 'errorRequests', 'failedTests', 'failedAssertions']) {
+        const value = report()
+        value[0].summary[field] = 1
+        assert.throws(() => assertExecutedReport(value, 1))
+    }
+    const [successful] = report()
+    for (const value of [
+        { ...successful, skipped: true },
+        { ...successful, results: [{ skipped: true, testResults: [{ status: 'pass' }] }] },
+        { ...successful, results: [{ error: 'failure', testResults: [{ status: 'pass' }] }] },
+        { ...successful, results: [{ testResults: [{ status: 'skip' }] }] },
+        { ...successful, summary: { ...successful.summary, totalTests: 2, passedTests: 2 } },
+    ])
+        assert.throws(() => assertExecutedReport([value], 1))
+})
+
+test('pinned CLI executes the real BFF collection and deletes reports on success and failure', async () => {
+    let wrongIssuer = false
+    const server = createServer((request, response) => {
+        if (request.url === '/v1/auth/login') {
+            const url = new URL(
+                `${wrongIssuer ? 'http://keycloak:8080/realms/lead-email-finder' : issuer}/protocol/openid-connect/auth`,
+            )
+            for (const [key, value] of Object.entries({
+                response_type: 'code',
+                client_id: 'lef-web-bff',
+                code_challenge_method: 'S256',
+                code_challenge: 'test-challenge',
+                state: 'test-state',
+                nonce: 'test-nonce',
+                redirect_uri: `${baseUrl}/v1/auth/callback`,
+            }))
+                url.searchParams.set(key, value)
+            response.writeHead(302, {
+                location: url.toString(),
+                'set-cookie': 'lef_login_state=test-cookie; HttpOnly; Path=/',
+            })
+        } else response.writeHead(401)
+        response.end('{}')
+    })
+    await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
+    const baseUrl = `http://127.0.0.1:${server.address().port}`
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'lef-bruno-test-'))
+    const previousTemp = process.env.TMPDIR
+    process.env.TMPDIR = temporaryRoot
+    try {
+        const environment = collectionEnvironment('bff-sessions', { ...metadata, apiUrl: baseUrl })
+        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 4, tests: 5 })
+        assert.deepEqual(await readdir(temporaryRoot), [])
+        wrongIssuer = true
+        await assert.rejects(executeCollection('bff-sessions', environment, checkoutRoot), /raw output is withheld/)
+        assert.deepEqual(await readdir(temporaryRoot), [])
+    } finally {
+        if (previousTemp === undefined) delete process.env.TMPDIR
+        else process.env.TMPDIR = previousTemp
+        server.closeAllConnections()
+        await new Promise(resolveClosed => server.close(resolveClosed))
+        await rm(temporaryRoot, { recursive: true, force: true })
+    }
+})

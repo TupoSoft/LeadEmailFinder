@@ -1,4 +1,6 @@
 name: local
 variables:
   - name: baseUrl
-    value: http://localhost:53000
+    value: "{{process.env.BRUNO_API_URL}}"
+  - name: oidcIssuerUrl
+    value: "{{process.env.OIDC_ISSUER_URL}}"

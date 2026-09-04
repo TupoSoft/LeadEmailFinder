@@ -29,12 +29,6 @@ export interface ServiceCredentialSeed {
     keycloakClientId: string
 }
 
-export function smtpDevIssuer(baseIssuer: string): string {
-    // The containerized smtp-dev overlay's api service resolves Keycloak by its Docker service name, not
-    // localhost: see docker/compose.smtp-dev.yaml's own OIDC_ISSUER_URL override for the api service.
-    return baseIssuer.replace(/^https?:\/\/[^/]+/, 'http://keycloak:8080')
-}
-
 export async function resolveServiceAccountSubject(api: KeycloakAdminPort, clientId: string): Promise<string> {
     const [client] = await api.request<Array<{ id: string; clientId: string }>>(
         'GET',
@@ -98,10 +92,7 @@ export async function bootstrapServiceCredential(
 ): Promise<{ organizationId: string; subject: string; seeds: ServiceCredentialSeed[] }> {
     const subject = await resolveServiceAccountSubject(api, clientId)
     const organizationId = await ensurePlatformOrganization(dataSource)
-    const seeds: ServiceCredentialSeed[] = [
-        { issuer, keycloakClientId: clientId },
-        { issuer: smtpDevIssuer(issuer), keycloakClientId: clientId },
-    ]
+    const seeds: ServiceCredentialSeed[] = [{ issuer, keycloakClientId: clientId }]
     for (const seed of seeds) {
         await upsertServiceCredential(dataSource, organizationId, subject, seed)
     }

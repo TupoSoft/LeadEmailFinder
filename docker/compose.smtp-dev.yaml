@@ -5,13 +5,6 @@ services:
     environment:
       SMTP_PORT: 2525
       SMTP_TLS_CA_FILE: /smtp-dev-tls/ca.crt
-      # The base stack's OIDC_ISSUER_URL (http://localhost:58080/...) is host-facing, for the browser-driven
-      # BFF login redirect (see docker/compose.yaml). Inside this container's own network namespace, "localhost"
-      # is the container itself, not Keycloak, so the containerized api can neither fetch JWKS nor validate an
-      # incoming token's issuer claim against that URL. Override to the container-internal Keycloak service
-      # name for this overlay only, which never drives a browser login (see bootstrap-proxy.sh, which requests
-      # its own tokens from this same host so the issued token's iss claim matches).
-      OIDC_ISSUER_URL: http://keycloak:8080/realms/lead-email-finder
     volumes:
       - ./smtp-dev/tls/ca.crt:/smtp-dev-tls/ca.crt:ro
     depends_on:
