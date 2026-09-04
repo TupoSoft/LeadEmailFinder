@@ -1,5 +1,5 @@
 import { CreditLedgerStore } from '@tuposoft/lead-email-finder/modules/identity'
-import { InsufficientCreditsException } from '../domain/credits.error'
+import { CreditIdempotencyConflict, InsufficientCreditsException } from '../domain/credits.error'
 
 export class CreditsService {
     constructor(private readonly store: CreditLedgerStore) {}
@@ -17,7 +17,16 @@ export class CreditsService {
     }
 
     async credit(organizationId: string, amount: number, reference: string): Promise<number> {
-        return this.store.credit(organizationId, amount, reference)
+        const result = await this.store.credit(organizationId, amount, reference)
+        return result.balance
+    }
+
+    async addPlatformCredits(organizationId: string, amount: number, idempotencyKey: string): Promise<number> {
+        const result = await this.store.credit(organizationId, amount, `platform-credit-add:${idempotencyKey}`)
+        if (result.disposition === 'existing' && result.recordedAmount !== amount) {
+            throw new CreditIdempotencyConflict()
+        }
+        return result.balance
     }
 
     async creditOnce(organizationId: string, amount: number, reference: string): Promise<number> {

@@ -1,0 +1,16 @@
+name: local
+variables:
+  - name: baseUrl
+    value: "{{process.env.BRUNO_API_URL}}"
+  - name: organizationId
+    value: "{{process.env.BRUNO_ORGANIZATION_ID}}"
+  - name: absentDuplicateOrganizationId
+    value: "{{process.env.BRUNO_ABSENT_DUPLICATE_ORGANIZATION_ID}}"
+  - name: absentDistinctOrganizationId
+    value: "{{process.env.BRUNO_ABSENT_DISTINCT_ORGANIZATION_ID}}"
+  - name: absentConflictOrganizationId
+    value: "{{process.env.BRUNO_ABSENT_CONFLICT_ORGANIZATION_ID}}"
+  - name: platformToken
+    value: "{{process.env.BRUNO_PLATFORM_TOKEN}}"
+  - name: customerToken
+    value: "{{process.env.BRUNO_CUSTOMER_TOKEN}}"

@@ -5,3 +5,11 @@ export class InsufficientCreditsException extends Error {
         super(`Insufficient credits for organization: ${organizationId}`)
     }
 }
+
+export class CreditIdempotencyConflict extends Error {
+    name = 'CreditIdempotencyConflict'
+
+    constructor() {
+        super('Idempotency-Key has already been used for a different credit amount')
+    }
+}
