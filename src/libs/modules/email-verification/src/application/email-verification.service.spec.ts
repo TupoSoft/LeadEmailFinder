@@ -1,4 +1,5 @@
 import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
+import { Email } from '../domain/email'
 import { EmailVerification, NewEmailVerification } from '../domain/email-verification'
 import { DomainVerificationForbiddenError } from '../domain/errors'
 import { DomainPolicyService } from './domain-policy.service'
@@ -119,7 +120,7 @@ describe('EmailVerificationOrchestrator', () => {
             if (stage === 'verification_probe') mailboxVerification.verify.mockRejectedValue(error)
             if (stage === 'verification_persist') verificationStore.create.mockRejectedValue(error)
             if (stage === 'email_cache_finalize')
-                emailAdministration.upsertEmail.mockResolvedValueOnce(undefined).mockRejectedValueOnce(error)
+                emailAdministration.upsertEmail.mockResolvedValueOnce({} as Email).mockRejectedValueOnce(error)
             observer.failed.mockImplementation(() => {
                 throw new Error('observer unavailable')
             })

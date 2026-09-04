@@ -94,6 +94,20 @@ only public surface is `EmailVerificationModule` itself and the HTTP/queue behav
 wires the internal result reader and its controller. The shared result DTO lives in `src/api/`; the trace port lives
 in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
 
+## Pure Core (Not Yet Wired)
+
+`src/domain/` and `src/application/` also hold a framework-free domain and application core
+(`module-architecture/10`), added alongside the flat implementation above. It defines plain `Email`,
+`DomainPolicy`, `EmailVerification`, and `SmtpVerification` records and typed errors, plus seven purpose-specific
+ports under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
+`MxResolver`, `DomainSynonymDiscovery`, and `MailboxProbe` — and the central verification sequence
+(`EmailVerificationOrchestrator`, `MailboxVerificationService`) plus email/domain administration use cases
+(`EmailAdministrationService`, `DomainPolicyService`) built on top of them. None of it is wired into
+`EmailVerificationModule`, imports any port implementation, or changes any route, DTO, or persistence behavior
+yet. `module-architecture/17` implements the four persistence ports. `module-architecture/18` implements the
+three network ports, composes the final module, moves the `/emails` administration API, and cuts every delivery
+mode over to this core.
+
 ## Dependencies
 
 - [`credits`](../credits/README.md) — `CreditGuard` on every billed route, and `CreditsService.debit()` called
@@ -195,6 +209,9 @@ Focused tests are grouped by behavior:
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
+- **Pure core (not yet wired)**: `application/domain-policy.service.spec.ts`,
+  `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,
+  `application/email-verification.service.spec.ts`
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated

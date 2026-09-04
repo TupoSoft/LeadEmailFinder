@@ -14,13 +14,14 @@ the running module over.
 
 ## Progress
 
-- [ ] Confirm this narrowed scope's own size projection stays under 1,000 non-documentation additions plus
-  deletions.
-- [ ] Characterize verification, email, and domain-policy business rules from the current flat implementation.
-- [ ] Define pure domain records, policies, and typed errors.
-- [ ] Define application commands, results, and the seven purpose-specific persistence/network ports.
-- [ ] Move the central verification sequence and email/domain administration use cases onto the new ports.
-- [ ] Complete focused, architecture, and full validation for the new code (additive only; nothing is wired in yet).
+- [x] Confirm this narrowed scope's own size projection stays under 1,000 non-documentation additions plus
+  deletions. Actual: 873 (`git diff --numstat -M origin/master...HEAD -- . ':!*.md' ':!pnpm-lock.yaml'`), purely
+  additive (0 deletions).
+- [x] Characterize verification, email, and domain-policy business rules from the current flat implementation.
+- [x] Define pure domain records, policies, and typed errors.
+- [x] Define application commands, results, and the seven purpose-specific persistence/network ports.
+- [x] Move the central verification sequence and email/domain administration use cases onto the new ports.
+- [x] Complete focused, architecture, and full validation for the new code (additive only; nothing is wired in yet).
 
 ## Plan dependencies
 
@@ -49,6 +50,23 @@ the running module over.
 - `EmailVerificationService` is stored in the synchronous delivery folder even though sync, deprecated-sync,
   async, and batch callers all use it. This plan moves its business logic into a new, framework-free
   `application/` class; the old class and its callers are untouched until the cutover in plan 18.
+- The existing `email-verifier/email-verifier.service.ts` (`EmailVerifier`/`IEmailVerifier`) is a second
+  orchestrator nested inside the outer `EmailVerificationService`. It decides the wrong-address catch-all probe,
+  the real-address retry, and the HTTP account-discovery fallback. It delegates all MX resolution, proxying, and
+  socket work to `ISmtpVerifier.verify(organizationId, email)` as one opaque call, and that whole call is exactly
+  the shape of the `MailboxProbe` port. This plan therefore absorbs the decision logic of `EmailVerifier` into a new
+  `MailboxVerificationService`, called by the new outer `EmailVerificationOrchestrator` — collapsing two Nest
+  classes into two framework-free ones with the same split of responsibility.
+- Today's only MX-resolution call site is inside `SmtpVerifier.getExchanges`, entirely inside the mailbox-probe
+  black box; nothing in the application layer calls MX resolution directly. `HTMLDomainSynonymFinder` (the
+  existing counterpart to `DomainSynonymDiscovery`) is registered but never injected anywhere today, a dead
+  feature. Both `MxResolver` and `DomainSynonymDiscovery`, and likewise `SmtpVerificationStore`, are therefore
+  ports this plan defines but does not itself consume: they exist for the future real `MailboxProbe` adapter
+  (`module-architecture/14`) to consume internally, at the infrastructure level, not for application code to call.
+- There is no formally named `AccountDiscovery` interface in the codebase today — the mechanism this family of
+  plans refers to by that name is the existing `ICatchAllVerifier[]` array selected by
+  `selectAccountDiscoveryVerifier` and injected via `CATCH_ALL_VERIFIERS_TOKEN`. This plan reuses that mechanism
+  unchanged, exactly as originally intended, rather than introducing a redundant parallel port.
 
 ## Decision Log
 
@@ -87,10 +105,23 @@ the running module over.
   for plan 17).
   Rationale: The repository has no production environment, and this plan doesn't reach persistence.
   Date/Author: 2026-08-30, Codex planning (retained from the original plan).
+- Decision: Derive the second-level MX domain with a small pure `domain/mx-domain.ts` helper wrapping `tldts`
+  directly, instead of the existing `getSecondLevelDomain` reexport from `@tuposoft/lead-email-finder/dns`.
+  Rationale: `@tuposoft/lead-email-finder/dns` is a banned technical internal alias for domain/application
+  layers per the architecture checker, even though the specific function is pure string parsing with no input or
+  output; `tldts` itself carries no such restriction.
+  Date/Author: 2026-09-04, Claude Sonnet 5.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented as scoped: 20 new files (5 domain, 7 ports, 4 application services + 4 matching specs), 873
+non-documentation lines, purely additive, well under the 1,000-line gate. 69 new focused tests pass; the
+architecture checker reports the same 108 baselined violations as before (no new violations, no growth).
+The decision logic of `EmailVerifier` — wrong-address catch-all probe, real-address retry, HTTP account-discovery
+fallback — was absorbed into the new `MailboxVerificationService` rather than staying a separate port. It
+delegates entirely to the single opaque `MailboxProbe` call; see Surprises & Discoveries for the reasoning.
+`MxResolver`, `DomainSynonymDiscovery`, and `SmtpVerificationStore` are defined but not consumed by any code in
+this plan; they exist for the future real `MailboxProbe` adapter in `module-architecture/14` to consume internally.
 
 ## Context and Orientation
 
@@ -217,11 +248,19 @@ No database, queue, or Docker state is affected. No reset procedure is required.
 
 ## Artifacts and Notes
 
-Record the per-path size projection and actual count, the final domain/application file list, and the seven port
-signatures. Do not record raw addresses beyond local fixtures.
+Size projection: 873 non-documentation additions plus deletions (purely additive), against the 1,000-line gate.
+
+New files: `domain/email.ts`, `domain/domain-policy.ts`, `domain/email-verification.ts`, `domain/smtp-verification.ts`,
+`domain/mx-domain.ts`, `domain/errors.ts`; `application/ports/{email-store,domain-store,verification-store,
+smtp-verification-store,mx-resolver,domain-synonym-discovery,mailbox-probe}.ts`; `application/{domain-policy,
+email-administration,mailbox-verification,email-verification}.service.ts` and their four matching `.spec.ts` files.
+
+Port signatures: `EmailStore.{findByAddress,findAllForOrganization,create,update,upsert}`;
+`DomainStore.findByName`; `VerificationStore.create`; `SmtpVerificationStore.{findByAddress,upsert}`;
+`MxResolver.resolve`; `DomainSynonymDiscovery.findSynonymDomains`; `MailboxProbe.probe`.
 
 ## Plan readiness
 
-Ready after the binding size projection confirms fewer than 1,000 non-documentation additions plus deletions for
-this narrowed scope. A real partial-implementation measurement projects it to fit comfortably (see Surprises &
-Discoveries); confirm with the actual projection regardless, and narrow further if it does not.
+Implemented and fully validated: 69 new focused tests pass, the full jest suite (188 suites, 1,634 tests) passes,
+`architecture:check` reports the same 108 baselined violations as before (no growth), and `typecheck`/`lint`/
+`build`/`docs:lint`/`git diff --check` all pass. Pull request not yet opened.
