@@ -326,10 +326,10 @@ workflow. No migration, backfill, or production recovery step is introduced.
 Record only redacted organization and membership IDs, HTTP statuses, test counts, browser widths, and pass/fail
 evidence. Never record invitation URLs, raw tokens, passwords, cookies, or screenshots containing them.
 
-## Plan readiness
-
 The member contract, invitation preview/acceptance boundary, secret lifecycle, response-generation fence, state
 matrix, validation, recovery, and single-vertical-pull-request scope are decision-complete. There is no hidden
 product choice, and the plan can be validated independently once its listed dependencies are complete.
+
+## Plan readiness
 
 Ready to implement.

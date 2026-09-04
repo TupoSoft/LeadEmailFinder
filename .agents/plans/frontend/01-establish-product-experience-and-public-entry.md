@@ -232,10 +232,10 @@ Retain the approved concept, the final narrow and desktop screenshots, a summary
 and a short list of intentional concept-to-code differences. Do not commit browser caches, full test traces from
 successful runs, or generated build output.
 
-## Plan readiness
-
 This plan has one independently observable outcome and maps to one pull request. The visual approval is an explicit
 first implementation milestone, not a hidden product choice; all stack, scope, route, interaction, and validation
 decisions needed to begin are recorded above.
+
+## Plan readiness
 
 Ready to implement.

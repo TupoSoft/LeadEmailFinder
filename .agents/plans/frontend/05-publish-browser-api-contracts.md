@@ -255,9 +255,9 @@ Record the initial path/security matrix, normalized snapshot diff, generated-fil
 focused test counts, and two-run drift result. Never record cookies, CSRF values, authorization codes, tokens, client
 secrets, raw environment dumps, or provider payloads.
 
-## Plan readiness
-
 The Swagger source, initial operation boundary, normalized artifact, generated output path, script contract,
 transport behavior, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

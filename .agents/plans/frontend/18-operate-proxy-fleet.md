@@ -308,10 +308,10 @@ Record only synthetic/redacted proxy IDs, hostnames, cursor suffixes if necessar
 test counts, browser widths, and cleanup outcome. Never record proxy users/passwords, cookies, access tokens, raw
 external endpoints, or screenshots containing sensitive input.
 
-## Plan readiness
-
 The cursor and redaction contracts, explicit credential replacement, lifecycle/blacklist/delete behavior,
 late-response fence, state matrix, validation, recovery, and one-pull-request scope are decision-complete. There is
 no hidden product choice, and the plan can be validated independently once its listed dependencies are complete.
+
+## Plan readiness
 
 Ready to implement.

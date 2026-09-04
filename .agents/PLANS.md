@@ -2,7 +2,7 @@
 
 This document defines the required format for an execution plan, called an ExecPlan. An ExecPlan is a self-contained, living design document that an engineer or coding agent can follow to deliver one working pull request without relying on conversation history.
 
-## How to use ExecPlans
+## How to Use ExecPlans
 
 Create one ExecPlan for every implementation task. Store it under `.agents/plans/<feature>/` and keep the feature `README.md` limited to task order, dependencies, shared constraints, and links.
 
@@ -10,31 +10,31 @@ When authoring a plan, inspect the current repository and resolve implementation
 
 When implementing a plan, update it at every meaningful stopping point. Record unexpected findings in `Surprises & Discoveries`, decisions and their rationale in `Decision Log`, and the delivered result in `Outcomes & Retrospective`. The file must remain sufficient for another engineer to resume from it alone.
 
-Each ExecPlan corresponds to exactly one pull request. Do not silently expand it to adjacent cleanup or a later roadmap task. If new work is independently useful, add a new ExecPlan and link it from the feature roadmap.
+Each ExecPlan corresponds to exactly one pull request. Do not silently expand it to adjacent cleanup or a later road map task. If new work is independently useful, add a new ExecPlan and link it from the feature road map.
 
 ## Requirements
 
-Every ExecPlan must:
+Every ExecPlan must meet these requirements:
 
-- be self-contained and understandable to someone new to the repository;
-- describe one observable outcome rather than a collection of unrelated edits;
-- identify its goal, scope, non-goals, dependencies, and what it unlocks;
-- name the narrowest known files, modules, contracts, and integration points;
-- specify public interfaces and externally visible behavior when they change;
-- cover relevant success, failure, authorization, concurrency, idempotency, and recovery behavior;
-- contain observable, pass-or-fail acceptance criteria;
-- state exact focused validation separately from acceptance criteria;
-- preserve unrelated repository behavior and user changes;
-- remain safe to repeat or provide an explicit recovery procedure;
-- avoid claiming validation passed until the commands have actually completed successfully.
+- Be self-contained and understandable without prior repository knowledge.
+- Describe one observable outcome rather than a collection of unrelated edits.
+- Identify its goal, scope, non-goals, dependencies, and what it unlocks.
+- Name the narrowest known files, modules, contracts, and integration points.
+- Specify public interfaces and externally visible behavior when they change.
+- Cover relevant success, failure, authorization, concurrency, idempotency, and recovery behavior.
+- Contain observable, pass-or-fail acceptance criteria.
+- State exact focused validation separately from acceptance criteria.
+- Preserve unrelated repository behavior and user changes.
+- Remain safe to repeat or provide an explicit recovery procedure.
+- Avoid claiming validation passed until the commands have actually completed successfully.
 
 While this repository has no production environment, plans must not introduce TypeORM migrations, Keycloak data migrations, backfills, production rollout, high availability, or production recovery work. Incompatible development schema changes use `TYPEORM_SYNCHRONIZE=true` against disposable data and must provide an explicit reset and reseed path.
 
-## Required structure
+## Required Structure
 
 Every ExecPlan uses the following sections.
 
-# <Short, behavior-focused title>
+# <Short, Behavior-Focused Title>
 
 State that the file is a living document maintained according to `.agents/PLANS.md`.
 
@@ -62,7 +62,7 @@ Record unexpected facts and concise evidence. Use `None yet.` until implementati
 
 ## Decision Log
 
-Record each material decision, rationale, date, and author. Include decisions already fixed by the roadmap.
+Record each material decision, rationale, date, and author. Include decisions already fixed by the road map.
 
 ## Outcomes & Retrospective
 
@@ -102,7 +102,11 @@ Capture only concise evidence needed to resume or verify the work.
 
 ## Plan readiness
 
-Before implementation begins, confirm that the plan is decision-complete, has no hidden product choice, maps to one pull request, and can be validated independently. End the plan with one of: `Ready to implement`, `Ready after <decision>`, or `Blocked by <evidence>`.
+Before implementation begins, confirm that the plan is decision-complete, has no hidden product choice, maps to one pull request, and can be validated independently. End the plan with a `## Plan readiness` section containing only one of: `Ready to implement`, `Ready after <decision>`, or `Blocked by <evidence>`. A final period is optional.
+
+Keep supporting explanations in `Artifacts and Notes` or another appropriate section. The synchronizer reads the
+entire readiness section; extra prose around `Ready to implement` makes readiness unrecognized and places a
+plan in Backlog when its work has not started.
 
 Dependency ordering belongs in `Plan dependencies`, not in this readiness sentence. `Ready to implement`
 means the plan itself is decision-complete even when an incomplete prerequisite keeps it in the project backlog.

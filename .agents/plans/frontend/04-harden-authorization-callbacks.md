@@ -211,9 +211,9 @@ Record the safe redirect matrix, concurrent state/exchange/session counts, focus
 Never record provider query values, authorization codes, state values, cookies, CSRF values, tokens, Redis values,
 passwords, or real user data.
 
-## Plan readiness
-
 The atomic state boundary, route-local validation, redirect taxonomy, cookie cleanup, unexpected-error behavior,
 validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

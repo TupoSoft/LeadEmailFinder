@@ -247,9 +247,9 @@ file mode, first/second bootstrap outcomes, live callback results, and redaction
 OTP values, passwords, cookies, authorization codes, access/refresh tokens, BFF session values, admin credentials,
 page HTML, QR images, or the contents of `browser-users.json`.
 
-## Plan readiness
-
 The exact fixtures, real MFA boundary, first-enrollment flow, local secret lifecycle, stale-state failure policy,
 shared login interface, validation, recovery, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

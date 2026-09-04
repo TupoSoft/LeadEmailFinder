@@ -350,10 +350,10 @@ focused test counts, session-replacement and authentication-generation race evid
 for desktop and narrow views. Do not record login credentials, cookies, CSRF values, OAuth parameters, tokens, or
 real user/account data.
 
-## Plan readiness
-
 The authentication boundary, redirect safety policy, atomic session replacement, session/error behavior, response-generation fence, UI states,
 design constraints, test matrix, and one-pull-request boundary are decision-complete. Later feature routes can
 consume the shared shell without reopening these choices.
+
+## Plan readiness
 
 Ready to implement.

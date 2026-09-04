@@ -253,9 +253,9 @@ Record the cursor contract, redacted synthetic IDs, page sizes, HTTP statuses, g
 browser widths, premium result, and cleanup outcome. Never record invitation URLs/tokens, passwords, cookies, access
 tokens, real customer names, or screenshots containing secrets.
 
-## Plan readiness
-
 The directory ownership, cursor contract, platform creation flow, one-time invitation handling, state matrix,
 validation, and one-pull-request boundary are decision-complete.
+
+## Plan readiness
 
 Ready to implement.
