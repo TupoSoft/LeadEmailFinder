@@ -12,12 +12,12 @@ the requests began.
 
 ## Progress
 
-- [ ] (2026-08-31) Require and validate caller-owned UUID idempotency keys on additive platform credits.
-- [ ] (2026-08-31) Return an outcome-bearing persistence result and keep replay policy in `CreditsService`.
-- [ ] (2026-08-31) Serialize account creation and grant application for a brand-new organization.
-- [ ] (2026-08-31) Update every additive HTTP caller, source contract, Bruno request, and fixture.
-- [ ] (2026-08-31) Add sequential and real-PostgreSQL concurrency/conflict coverage.
-- [ ] (2026-08-31) Run focused, architecture, prose, and repository validation and record evidence.
+- [x] (2026-09-04) Require canonical caller-owned UUID keys, reject repeated headers, and preserve authentication and authorization.
+- [x] (2026-09-04) Return inserted/existing persistence facts and keep platform replay/conflict policy in `CreditsService`.
+- [x] (2026-09-04) Serialize account creation and grants, including first operations without an existing account row.
+- [x] (2026-09-04) Update every additive HTTP caller, source contract, Bruno request, and fixture.
+- [x] (2026-09-04) Add sequential and real-PostgreSQL concurrency/conflict coverage; all 19 database tests passed.
+- [x] (2026-09-04) Focused, repository, architecture, build, prose, controlled Bruno, live Keycloak-backed Bruno, and SMTP workflow checks passed; validation evidence is recorded below.
 
 ## Plan dependencies
 
@@ -25,6 +25,13 @@ the requests began.
 - `module-architecture/04`
 
 ## Surprises & Discoveries
+
+- (2026-09-04) The pinned Bruno launcher and disposable-stack metadata described in frontend Plan 02 do not exist in this checkout.
+  This task adds the narrow platform-credit launcher and an isolated PostgreSQL test runner; full OIDC stack work
+  remains in Plan 02. Docker is available, and PostgreSQL concurrency validation can run independently.
+- (2026-09-04) This pnpm version forwards the separator in `pnpm test -- <arguments>` to Jest. Options after that
+  separator become test-name patterns. The database runner uses `pnpm exec jest` so JSON reporting and serial
+  execution are applied, and removes old reports before starting to prevent stale success evidence.
 
 - `CreditsController` currently generates `randomUUID()` for every `POST /credits/:organizationId`, so a caller
   cannot repeat the same durable reference after losing a response.
@@ -34,6 +41,16 @@ the requests began.
   but its absent-row path constructs an unsaved account that cannot serialize two first operations with a row-level lock.
 
 ## Decision Log
+
+- Decision: Add a dedicated PostgreSQL Compose file and a narrow platform-credit Bruno launcher in this task.
+  Rationale: The referenced shared launcher is absent. The database runner validates ownership of existing containers, keeps
+  credentials in ignored private metadata, and can prove ledger races without implementing the broader OIDC plan.
+  The Bruno launcher requires an existing verified local stack and fails when its metadata is missing.
+  Date/Author: 2026-09-04, implementation.
+- Decision: Accept only lowercase canonical UUID text at the HTTP boundary.
+  Rationale: Equivalent textual representations must not create separate operation references. Malformed, combined,
+  repeated, uppercase, and namespaced input is rejected before ledger access.
+  Date/Author: 2026-09-04, implementation.
 
 - Decision: Require a caller-supplied UUID `Idempotency-Key` on additive platform-credit requests and prefix it with a
   private platform-adjustment namespace before passing it to persistence.
@@ -63,7 +80,16 @@ the requests began.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the additive HTTP contract and atomic ledger behavior. Matching retries return the current balance with
+`201`; conflicting amounts return `409`. General payment grants and one-time restoration preserve their existing
+return semantics. Account creation and grant persistence share a transaction and persisted-row lock. No schema change
+or migration was required, and no new architecture debt was introduced.
+
+The dedicated PostgreSQL suite passed all 19 tests. Both a controlled Nest HTTP fixture and the full local
+Keycloak-backed launcher passed the 16-request Bruno collection against real PostgreSQL. The live run used a new
+checkout-owned Compose project and the existing provisioning, platform credential, operator, and customer fixture
+scripts. The launcher also rejected missing metadata before any side effects. The existing SMTP workflow passed
+22 requests and 44 tests through the repository's TLS mail servers and proxy setup, with no skipped requests.
 
 ## Context and Orientation
 
@@ -211,6 +237,34 @@ cannot supply a stable key, it must not retry automatically; do not restore cont
 workaround.
 
 ## Artifacts and Notes
+
+Implementation branch: `kk/511-idempotent-platform-credits`. Issue #511 is assigned to the requesting user and remains
+In Progress until review and merge.
+
+Validation recorded on 2026-09-04:
+
+- `corepack pnpm test:credits-postgres`: 19 passed, zero skipped. Existing and absent-account fixtures both cover
+  equivalent replay, conflicting reuse, concurrent duplicates, different keys, and conflicting first requests.
+  Duplicate first grants produce one account, one grant, and balance 5. Distinct first grants of 3 and 7 produce one
+  account, two grants, and balance 10. Conflicting first amounts produce one winner and one conflict.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 183 suites and 1,546 tests passed; 10 external suites and
+  63 tests skipped because their environment variables were absent. The dedicated credits database run above
+  supplies separate nonzero evidence for that suite.
+- `corepack pnpm typecheck`, `corepack pnpm architecture:check`, and `corepack pnpm build`: passed. The architecture
+  baseline remains unchanged at 108 entries. Build compiled 571 files.
+- `corepack pnpm lint`: passed with one existing return-type warning in `src/libs/config/src/load-secrets.spec.ts`.
+- Controlled Bruno execution: 16 requests and 16 tests passed. Synthetic fixture balances changed from 0 to 26, 13,
+  5, and 17; account counts were 1 each and grant counts were 4, 1, 2, and 1. Synthetic organizations and temporary
+  reports were removed afterward. No full keys or credentials were printed.
+- `corepack pnpm bruno:platform-credits`: initially failed before side effects because ignored development metadata
+  was absent. After starting the new `lef-511-d454` Compose project and running existing provisioning and fixture
+  scripts, the live Keycloak-backed run passed all 16 requests and 16 tests with zero skips. The four fixture balances,
+  account counts, and grant counts matched the controlled run. The launcher removed all synthetic organizations
+  and temporary reports.
+- The existing SMTP collection ran inside the API container with pinned Bruno 4.1.0, `bru run --env local`, and the
+  developer sandbox: 22 requests and 44 tests passed, with zero failures, errors, or skips. Proxy bootstrap succeeded.
+- `corepack pnpm docs:lint -- .agents/plans/frontend/16-make-platform-credit-additions-idempotent.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md bruno/platform-credits/README.md`:
+  all four Markdown files passed Harper. `git diff --check` passed.
 
 Record redacted organization IDs, only key suffixes when necessary, requested amounts, statuses, before/after
 balances, account/grant row counts, test counts, and cleanup outcome. Never record complete keys, cookies, access

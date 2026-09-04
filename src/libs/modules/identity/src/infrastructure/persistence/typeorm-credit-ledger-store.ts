@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
-import { CreditDebitOutcome, CreditLedgerStore } from '../../application/ports/credit-ledger-store'
+import {
+    CreditDebitOutcome,
+    CreditGrantPersistenceResult,
+    CreditLedgerStore,
+} from '../../application/ports/credit-ledger-store'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
@@ -59,40 +63,57 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
         })
     }
 
-    async credit(organizationId: string, amount: number, reference: string): Promise<number> {
+    async credit(organizationId: string, amount: number, reference: string): Promise<CreditGrantPersistenceResult> {
         return this.dataSource.transaction(async manager => {
-            const account =
-                (await manager.findOne(OrganizationCreditAccount, {
-                    where: { organizationId },
-                    lock: { mode: 'pessimistic_write' },
-                })) ?? Object.assign(new OrganizationCreditAccount(), { organizationId, balance: 0 })
+            // Persist before locking: an absent row cannot serialize concurrent first grants.
+            await manager
+                .createQueryBuilder()
+                .insert()
+                .into(OrganizationCreditAccount)
+                .values({ organizationId, balance: 0 })
+                .onConflict('("organizationId") DO NOTHING')
+                .execute()
+            const account = await manager.findOneOrFail(OrganizationCreditAccount, {
+                where: { organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            const existing = await manager.findOne(CreditGrant, { where: { organizationId, reference } })
 
-            if (await manager.existsBy(CreditGrant, { organizationId, reference })) {
-                return account.balance
+            if (existing) {
+                return Object.freeze({
+                    disposition: 'existing',
+                    recordedAmount: existing.amount,
+                    balance: account.balance,
+                })
+            }
+
+            const inserted = await manager
+                .createQueryBuilder()
+                .insert()
+                .into(CreditGrant)
+                .values({ organizationId, reference, amount })
+                .onConflict('("organizationId", "reference") DO NOTHING')
+                .returning(['amount'])
+                .execute()
+
+            if ((inserted.raw as unknown[]).length === 0) {
+                // Only the reference conflict is ignored; unrelated database failures still abort the transaction.
+                const winner = await manager.findOneOrFail(CreditGrant, { where: { organizationId, reference } })
+                return Object.freeze({
+                    disposition: 'existing',
+                    recordedAmount: winner.amount,
+                    balance: account.balance,
+                })
             }
 
             account.balance += amount
             const saved = await manager.save(OrganizationCreditAccount, account)
-            await manager.insert(CreditGrant, { organizationId, reference, amount })
-            return saved.balance
+            return Object.freeze({ disposition: 'inserted', recordedAmount: amount, balance: saved.balance })
         })
     }
 
     async creditOnce(organizationId: string, amount: number, reference: string): Promise<number> {
-        return this.dataSource.transaction(async manager => {
-            const account =
-                (await manager.findOne(OrganizationCreditAccount, {
-                    where: { organizationId },
-                    lock: { mode: 'pessimistic_write' },
-                })) ?? Object.assign(new OrganizationCreditAccount(), { organizationId, balance: 0 })
-            const existing = await manager.findOne(CreditGrant, { where: { organizationId, reference } })
-            if (existing) return existing.amount
-
-            account.balance += amount
-            await manager.save(OrganizationCreditAccount, account)
-            await manager.insert(CreditGrant, { organizationId, reference, amount })
-            return amount
-        })
+        return (await this.credit(organizationId, amount, reference)).recordedAmount
     }
 
     async getBalance(organizationId: string): Promise<number> {
@@ -101,7 +122,8 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
     }
 
     async setBalance(organizationId: string, amount: number): Promise<number> {
-        const account = (await this.accountRepo.findOneBy({ organizationId })) ?? this.accountRepo.create({ organizationId })
+        const account =
+            (await this.accountRepo.findOneBy({ organizationId })) ?? this.accountRepo.create({ organizationId })
         account.balance = amount
 
         const saved = await this.accountRepo.save(account)

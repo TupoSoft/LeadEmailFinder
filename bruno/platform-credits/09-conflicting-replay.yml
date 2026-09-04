@@ -1,0 +1,26 @@
+info:
+  name: 09-conflicting-replay
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+    - name: Idempotency-Key
+      value: "{{grantKey}}"
+  body:
+    type: json
+    data: '{ "amount": 8 }'
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('conflicting replay', function() {
+          expect(res.status).to.equal(409);
+        });

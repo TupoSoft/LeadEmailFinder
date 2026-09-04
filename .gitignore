@@ -139,6 +139,7 @@ tmp
 **/src/metadata.ts
 .dev/keycloak/
 .dev/paddle/
+.dev/credits-postgres/
 
 # Protobuf
 **/*.proto

@@ -1,5 +1,5 @@
 import { CreditLedgerStore } from '@tuposoft/lead-email-finder/modules/identity'
-import { InsufficientCreditsException } from '../domain/credits.error'
+import { CreditIdempotencyConflict, InsufficientCreditsException } from '../domain/credits.error'
 import { CreditsService } from './credits.service'
 
 describe('CreditsService', () => {
@@ -69,11 +69,40 @@ describe('CreditsService', () => {
     })
 
     describe('credit', () => {
-        it('delegates to the store and returns the resulting balance', async () => {
-            store.credit.mockResolvedValue(15)
+        it.each(['inserted', 'existing'] as const)(
+            'returns the balance for %s without applying platform amount-conflict policy',
+            async disposition => {
+                store.credit.mockResolvedValue({ disposition, recordedAmount: 10, balance: 15 })
 
-            await expect(service.credit('org-1', 5, 'ref-1')).resolves.toBe(15)
-            expect(store.credit).toHaveBeenCalledWith('org-1', 5, 'ref-1')
+                await expect(service.credit('org-1', 5, 'payment:ref-1')).resolves.toBe(15)
+                expect(store.credit).toHaveBeenCalledWith('org-1', 5, 'payment:ref-1')
+            },
+        )
+    })
+
+    describe('addPlatformCredits', () => {
+        const key = '841668a4-3ba2-4a6d-92a9-969bd60c5121'
+
+        it.each(['inserted', 'existing'] as const)('returns the authoritative balance for %s', async disposition => {
+            store.credit.mockResolvedValue({ disposition, recordedAmount: 5, balance: 23 })
+
+            await expect(service.addPlatformCredits('org-1', 5, key)).resolves.toBe(23)
+            expect(store.credit).toHaveBeenCalledWith('org-1', 5, `platform-credit-add:${key}`)
+        })
+
+        it('rejects an existing reference with a different amount', async () => {
+            store.credit.mockResolvedValue({ disposition: 'existing', recordedAmount: 5, balance: 23 })
+
+            await expect(service.addPlatformCredits('org-1', 9, key)).rejects.toThrow(CreditIdempotencyConflict)
+            expect(store.credit).toHaveBeenCalledTimes(1)
+            expect(store.setBalance).not.toHaveBeenCalled()
+        })
+
+        it('preserves a storage failure instead of treating it as replay', async () => {
+            const failure = new Error('ledger unavailable')
+            store.credit.mockRejectedValue(failure)
+
+            await expect(service.addPlatformCredits('org-1', 5, key)).rejects.toBe(failure)
         })
     })
 
