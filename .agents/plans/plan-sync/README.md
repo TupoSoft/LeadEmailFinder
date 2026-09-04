@@ -7,6 +7,7 @@ This road map makes the ExecPlans under `.agents/plans/` visible on the `TupoSof
 3. [Preserve assigned work in progress](03-preserve-assigned-work-in-progress.md)
 4. [Enforce truthful ExecPlan metadata](04-enforce-truthful-execplan-metadata.md)
 5. [Prepare reusable ExecPlan Sync adoption](05-adopt-reusable-execplan-sync-action.md)
+6. [Restore actionable frontend plans](06-restore-actionable-frontend-plans.md)
 
 Shared decisions:
 

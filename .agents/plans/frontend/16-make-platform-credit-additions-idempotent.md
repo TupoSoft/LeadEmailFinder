@@ -216,9 +216,9 @@ Record redacted organization IDs, only key suffixes when necessary, requested am
 balances, account/grant row counts, test counts, and cleanup outcome. Never record complete keys, cookies, access
 tokens, invitation secrets, real customer data, or payment-provider payloads.
 
-## Plan readiness
-
 The header contract, namespacing, outcome-bearing port, application-owned conflict policy, absent-account
 serialization, caller migration, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

@@ -293,10 +293,10 @@ redacted job-state timing, premium-audit result, and desktop/narrow screenshots.
 only. Do not record real addresses, job IDs, organization IDs, cookies, CSRF values, tokens, SMTP exchanges, proxy
 details, or raw failures.
 
-## Plan readiness
-
 The endpoint choice, post-`module-architecture/15` layer ownership, public state/failure/unavailable contract,
 organization-isolation source, one-credit uncertainty policy, result semantics, route recovery, permission behavior,
 state matrix, validation, and one-pull-request boundary are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

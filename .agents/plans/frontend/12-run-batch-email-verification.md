@@ -409,10 +409,10 @@ redacted job-transition and progress evidence, downloaded synthetic row count, p
 screenshots. Use only synthetic CSV data. Do not record real filenames, real addresses, or result contents. Do not
 record job or organization IDs, object keys, cookies, CSRF values, tokens, credentials, SMTP dialogue, or raw failures.
 
-## Plan readiness
-
 The post-`module-architecture/16` upload boundary, size-split contingency, safe asynchronous failure contract,
 progress semantics, uncertain-mutation policy, retained-result and expiry behavior, permission, and recovery states,
 validation matrix, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

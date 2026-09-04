@@ -303,10 +303,10 @@ when the whole local environment is intentionally being recreated; no migration 
 Record client IDs only when synthetic or redacted, plus status codes, test counts, browser widths, and pass/fail
 evidence. Never record a client secret, session cookie, access token, clipboard payload, or secret-bearing download.
 
-## Plan readiness
-
 The grantable-permission boundary, list ordering, one-time create/rotate secret lifecycle, destructive actions,
 late-response fence, state matrix, validation, recovery, and one-pull-request scope are decision-complete. There is
 no hidden product choice, and the plan can be validated independently once its listed dependencies are complete.
+
+## Plan readiness
 
 Ready to implement.

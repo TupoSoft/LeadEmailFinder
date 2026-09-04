@@ -260,10 +260,10 @@ assertions, Swagger server result, required CI results, redacted login network e
 Never record cookies, CSRF values, OAuth codes or tokens, client secrets, full environment dumps, or container
 volumes.
 
-## Plan readiness
-
 The route map, image boundary, security headers, privacy-plan API logger dependency, gateway email/secret path
 sanitization, Compose topology, reset safety, required CI coverage, browser smoke, validation, and one-pull-request
 scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

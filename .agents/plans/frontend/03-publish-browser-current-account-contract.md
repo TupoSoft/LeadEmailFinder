@@ -237,9 +237,9 @@ Record a redacted current-account example, the null-email case, capability matri
 focused test counts, and Bruno summary. Never record authorization codes, cookies, CSRF values, client secrets,
 tokens, Redis values, provider payloads, or real account data.
 
-## Plan readiness
-
 The human-session boundary, nullable account schema, capability/grant policies, guard-aligned failure contract, module
 ownership, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

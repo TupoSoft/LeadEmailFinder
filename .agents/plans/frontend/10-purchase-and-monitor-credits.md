@@ -341,9 +341,9 @@ Bruno counts, premium-audit result, and desktop/narrow screenshots for catalog, 
 record cookies, access tokens, service-client secrets, webhook secrets, Paddle keys, provider payloads, real purchase
 identifiers, or customer data.
 
-## Plan readiness
-
 The current-organization API boundary, customer-safe pack projection, `checkout` uncertainty policy, return-state behavior,
 financial consistency rules, UI state matrix, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

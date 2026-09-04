@@ -202,9 +202,9 @@ Record the path-to-consumer fixture matrix, redacted change-discovery output, ea
 check name/result. Never record repository tokens, event payload secrets, environment dumps, cookies, user data, or
 service credentials.
 
-## Plan readiness
-
 The classifier contract, conservative fan-out, successful no-op behavior, exact YAML/workflow linter, stable
 aggregate check, failure semantics, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

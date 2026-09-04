@@ -219,9 +219,9 @@ Record the normalized public and internal realm bases, redacted redirect host, t
 destinations, focused test counts, overlay results, and Bruno summary. Never record authorization codes, cookies,
 CSRF values, client secrets, access tokens, refresh tokens, or provider payloads.
 
-## Plan readiness
-
 The public/back-channel boundary, configuration fallback, Keycloak topology, overlay cleanup, validation, and
 one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.

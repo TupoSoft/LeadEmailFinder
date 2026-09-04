@@ -259,9 +259,9 @@ Record redacted organization IDs, key suffixes only when necessary, requested am
 balances, test counts, browser widths, and cleanup outcome. Never record complete keys, cookies, access tokens,
 invitation secrets, real customer data, or payment-provider payloads.
 
-## Plan readiness
-
 The generated browser boundary, financial UI distinction, same-key lifecycle, uncertainty policy, recovery, design
 states, validation, and one-pull-request scope are decision-complete.
+
+## Plan readiness
 
 Ready to implement.
