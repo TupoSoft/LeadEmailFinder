@@ -1,0 +1,24 @@
+info:
+  name: 04-missing-idempotency-key
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+  body:
+    type: json
+    data: '{ "amount": 7 }'
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('missing idempotency key', function() {
+          expect(res.status).to.equal(400);
+        });

@@ -1,0 +1,29 @@
+info:
+  name: 01-missing-authentication
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Idempotency-Key
+      value: "{{missingAuthKey}}"
+  body:
+    type: json
+    data: '{ "amount": 7 }'
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (!bru.getVar('missingAuthKey')) {
+          bru.setVar('missingAuthKey', require('node:crypto').randomUUID());
+        }
+    - type: tests
+      code: |-
+        test('missing authentication', function() {
+          expect(res.status).to.equal(401);
+        });

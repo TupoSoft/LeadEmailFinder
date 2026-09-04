@@ -7,7 +7,8 @@ billing workflows.
 ## Responsibility
 
 - Reading an organization's current credit balance.
-- Administrative balance mutation (`addCredits`, `setBalance`) for platform operators.
+- Administrative balance mutation (`addPlatformCredits`, `setBalance`) for platform operators. Additions use a
+  caller-owned operation key, return the current balance for equivalent retries, and reject conflicting amounts.
 - `CreditGuard` — an HTTP guard that debits one credit from the caller's organization before a request proceeds,
   rejecting with `402` when the balance is insufficient.
 - `CreditsService.debit()`/grant application logic used directly by other modules (for example, batch
@@ -27,9 +28,9 @@ billing workflows.
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports `CreditsModule`, `CreditGuard`, `CreditsService`, and
-`InsufficientCreditsException`. The controller and its DTOs are internal — they back the admin HTTP surface
-below but are not part of the intentional public API other modules should import.
+[`src/index.ts`](src/index.ts) exports `CreditsModule`, `CreditGuard`, `CreditsService`,
+`InsufficientCreditsException`, and `CreditIdempotencyConflict`. The controller and its DTOs are internal — they back
+the admin HTTP surface below but are not part of the intentional public API other modules should import.
 
 `CreditsService` is a framework-free `application/` class built from an explicit factory in `credits.module.ts`;
 it has no `infrastructure/` layer of its own since its one adapter (`TypeOrmCreditLedgerStore`) lives in identity.
@@ -51,6 +52,24 @@ it has no `infrastructure/` layer of its own since its one adapter (`TypeOrmCred
 | `POST` | `/credits/:organizationId` | `platform:admin` |
 | `PUT`  | `/credits/:organizationId` | `platform:admin` |
 
+An additive `POST` requires exactly one `Idempotency-Key` header containing a canonical lowercase UUID and a body
+with a positive integer `amount`. One logical addition owns one UUID. A retry uses the same organization, key, and
+amount; a separate addition uses a new UUID. Both the first successful addition and an equivalent replay return
+`201` with `{ "balance": <current balance> }`. The response reflects the authoritative balance at the time of the
+request, including any intervening operations. Reusing the same organization and key with a different amount returns
+`409` without another grant or balance change.
+
+Missing, repeated, combined, or malformed keys return `400`, as do invalid organization UUIDs or amounts. Invalid
+requests never reach the ledger. Missing or invalid authentication returns `401`; an authenticated caller without
+`platform:admin` receives `403`. Error responses do not include the supplied key. Absolute `PUT` and balance `GET`
+operations do not require an idempotency key. Source Swagger annotations describe the additive contract while the
+controller remains excluded from the published document and the browser allow list.
+
+`addPlatformCredits()` prefixes the accepted key with the private `platform-credit-add:` namespace and interprets the
+ledger's inserted or existing grant result. Only an existing grant with a different recorded amount raises
+`CreditIdempotencyConflict`, which the controller maps to `409`. General `credit()` still returns the current balance
+for either persistence outcome, preserving payment grant behavior and references.
+
 `CreditGuard` is applied by other modules' controllers (for example synchronous and async email verification) —
 it is not itself mounted on any route here.
 
@@ -70,14 +89,35 @@ None. This module reads no environment variables.
 
 ## Validation
 
-Focused tests live in `src/`: `api/credits.controller.spec.ts`, `api/credits.guard.spec.ts`,
-`application/credits.service.spec.ts` (mocks `CreditLedgerStore` directly), `credits.module.spec.ts`
-(provider/export wiring), and `application/credits.service.integration.spec.ts` (schema-level, gated on
-`TEST_CREDITS_POSTGRES_URL`, exercised through the real `IdentityModule` and its `TypeOrmCreditLedgerStore`
-adapter). The integration tests cover clamped debit results, zero-result replay after replenishment, one-time
-restoration, and concurrent ledger idempotency against real PostgreSQL.
+Focused tests live in `src/`:
 
-No Bruno collection is dedicated to credits — its balance and debit behavior is exercised indirectly instead.
+- `api/credits.controller.spec.ts` and `api/credits.guard.spec.ts` cover transport orchestration and spending.
+- `api/credit-idempotency-key.spec.ts` covers canonical parsing and duplicate-header rejection.
+- `api/credits-http.integration.spec.ts` covers real Nest authentication and permission guards, validation, status
+  codes, replay/conflict mapping, serialization, and unchanged balance lookup and set behavior.
+- `application/credits.service.spec.ts` mocks `CreditLedgerStore` directly.
+- `credits.module.spec.ts` covers provider and export wiring.
+- `application/credits.service.integration.spec.ts` runs schema-level checks, gated on `TEST_CREDITS_POSTGRES_URL`,
+  through the real `IdentityModule` and its `TypeOrmCreditLedgerStore` adapter.
+
+The integration tests cover clamped debit results, zero-result replay after replenishment, one-time
+restoration, and concurrent ledger idempotency against real PostgreSQL. Platform addition coverage includes sequential
+replay, amount conflicts, and concurrent grants with matching and different keys, including organizations without a
+credit account. `corepack pnpm test:credits-postgres` runs the dedicated disposable database suite.
+
+The PostgreSQL runner starts only `docker/compose.credits-test.yaml`, using a Compose project derived from the
+checkout's absolute path and a database named `credits_test`. It validates existing container ownership before
+starting or reusing the container. It saves the generated password and loopback connection URL in ignored
+`.dev/credits-postgres/stack.json` with private file permissions, reloads that metadata for Jest, and rejects
+skipped or empty test runs. An externally supplied `TEST_CREDITS_POSTGRES_URL` cannot redirect this runner.
+Each run synchronizes a fresh schema in that test database; it does not reset application data or seed customers.
+The container keeps its database in temporary memory. To remove it after testing, read `projectName` from the
+ignored metadata and run `CREDITS_TEST_PASSWORD=unused docker compose -p <projectName> -f docker/compose.credits-test.yaml down`.
+Rerunning the test command recreates the same isolated stack and schema.
+
+[`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) exercises additive success, replay, conflict,
+header validation, authentication, authorization, and concurrent retries. Run it with
+`corepack pnpm bruno:platform-credits` against the developer sandbox.
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the resulting balance back
 through the admin API above after a webhook grant. Both
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) and

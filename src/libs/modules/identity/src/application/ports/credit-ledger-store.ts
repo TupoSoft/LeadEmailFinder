@@ -2,10 +2,16 @@ export const CREDIT_LEDGER_STORE = Symbol('CREDIT_LEDGER_STORE')
 
 export type CreditDebitOutcome = 'applied' | 'replayed' | 'account-missing' | 'insufficient-balance'
 
+export type CreditGrantPersistenceResult = {
+    readonly disposition: 'inserted' | 'existing'
+    readonly recordedAmount: number
+    readonly balance: number
+}
+
 /**
- * Atomic credit-ledger operations backing `credits`' business rules. Every mutating method locks the
- * organization's account row and is idempotent per `(organizationId, reference)`: a replayed reference never
- * repeats its effect and returns the value recorded on first application, not a recomputation.
+ * Atomic credit-ledger operations backing `credits`' business rules. Referenced operations are idempotent per
+ * `(organizationId, reference)`: a replayed reference never repeats its effect. Grant results distinguish the
+ * amount recorded on first application from the account's current balance; callers own replay policy.
  */
 export interface CreditLedgerStore {
     /**
@@ -20,8 +26,8 @@ export interface CreditLedgerStore {
      */
     debitUpTo(organizationId: string, amount: number, reference: string): Promise<number>
 
-    /** Grants credits, creating the account if needed. A replayed reference returns the current balance. */
-    credit(organizationId: string, amount: number, reference: string): Promise<number>
+    /** Grants credits, creating and locking the account if needed, and reports immutable persistence facts. */
+    credit(organizationId: string, amount: number, reference: string): Promise<CreditGrantPersistenceResult>
 
     /**
      * Grants credits once. A replayed reference returns the originally granted amount, not the current balance.

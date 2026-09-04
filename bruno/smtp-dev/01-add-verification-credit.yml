@@ -7,6 +7,8 @@ http:
   method: POST
   url: "{{baseUrl}}/credits/{{organizationId}}"
   headers:
+    - name: Idempotency-Key
+      value: "{{smtpVerificationCreditKey}}"
     - name: Content-Type
       value: application/json
     - name: Authorization
@@ -20,6 +22,12 @@ http:
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        // One UUID belongs to this logical add; any explicit retry must reuse it.
+        if (!bru.getVar('smtpVerificationCreditKey')) {
+          bru.setVar('smtpVerificationCreditKey', require('node:crypto').randomUUID());
+        }
     - type: tests
       code: |-
         test('adds two verification credits to the bootstrap-seeded platform organization', function() {

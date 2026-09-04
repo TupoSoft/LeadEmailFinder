@@ -7,6 +7,8 @@ http:
   method: POST
   url: '{{baseUrl}}/credits/{{organizationId}}'
   headers:
+    - name: Idempotency-Key
+      value: "{{smtpAsyncCreditKey}}"
     - name: Authorization
       value: 'Bearer {{serviceClientToken}}'
     - name: Content-Type
@@ -18,6 +20,12 @@ http:
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        // One UUID belongs to this logical add; any explicit retry must reuse it.
+        if (!bru.getVar('smtpAsyncCreditKey')) {
+          bru.setVar('smtpAsyncCreditKey', require('node:crypto').randomUUID());
+        }
     - type: tests
       code: |-
         test('adds a credit for asynchronous verification', function() {

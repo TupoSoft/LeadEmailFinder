@@ -1,0 +1,26 @@
+info:
+  name: 05-malformed-idempotency-key
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+    - name: Idempotency-Key
+      value: "not-a-uuid"
+  body:
+    type: json
+    data: '{ "amount": 7 }'
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('malformed idempotency key', function() {
+          expect(res.status).to.equal(400);
+        });
