@@ -5,7 +5,8 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 ## Purpose / Big Picture
 
 Move SMTP socket/protocol handling, proxy leasing, mailbox-result caching, and mailbox-probe orchestration behind the
-plan-10 port, then finish the email-verification core/network composition. No recipient or generated sender may be
+plan-10 port, then recompose the email-verification module to swap this plan's real mailbox adapter in for the
+temporary compatibility one from plan 18. No recipient or generated sender may be
 sent before verified STARTTLS, and every lease and socket must reach a bounded terminal cleanup path. A developer can
 observe the result through pure mailbox-policy tests, SMTP/proxy adapter contracts, deterministic TLS-capable and
 plaintext fixtures, a narrowed module tree, and removal of the remaining core/network architecture-baseline keys.
@@ -23,6 +24,8 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
 - `module-architecture/05`
 - `module-architecture/10`
 - `module-architecture/13`
+- `module-architecture/17`
+- `module-architecture/18`
 - `privacy-compliance/03`
 - `privacy-compliance/05`
 
@@ -56,8 +59,9 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
   abort-aware phase deadlines, deterministic socket destruction, and exactly-once lease release.
   Rationale: These are observable safety and resource-lifecycle contracts, not implementation details to simplify.
   Date/Author: 2026-08-30, Codex planning.
-- Decision: Finish only core/discovery/mailbox Nest composition here. Legacy sync, deprecated-sync, async, and batch
-  modules remain registered until plans 11, 15, and 16 move them.
+- Decision: Recompose only the core/discovery/mailbox Nest wiring here, swapping this plan's real mailbox adapter in
+  for the temporary compatibility one from plan 18. Legacy sync, deprecated-sync, async, and batch modules remain registered
+  until plans 11, 15, and 16 move them.
   Rationale: Network-adapter completion is independently deployable and leaves delivery changes bounded.
   Date/Author: 2026-08-30, Codex planning.
 
@@ -67,10 +71,11 @@ Not started.
 
 ## Context and Orientation
 
-Plan 10 supplies the pure verification core, organization-aware stores, and `MailboxProbe` port. Plan 13 supplies MX,
-synonym, and account-discovery adapters. The remaining legacy network area is
-`src/libs/modules/email-verification/src/email-verifier/smtp/`, which opens the proxy-backed socket and interprets SMTP
-replies. Plan 10 temporarily binds that code to the mailbox port.
+Plan 10 supplies the pure verification core and the `MailboxProbe` port. Plan 17 supplies the organization-aware
+`SmtpVerificationStore` implementation. Plan 13 supplies MX, synonym, and account-discovery adapters. The remaining
+legacy network area is `src/libs/modules/email-verification/src/email-verifier/smtp/`, which opens the proxy-backed
+socket and interprets SMTP replies. Plan 18 temporarily binds that code to the mailbox port through a compatibility
+adapter.
 
 Privacy plan 05 requires strict STARTTLS, verified peer identity, no plaintext fallback, secure-transport cache
 provenance, bounded deadlines, and deterministic cleanup. Privacy plan 03 forbids address-bearing commands, replies,
@@ -80,8 +85,8 @@ module must not reach into proxy infrastructure.
 ## Scope and Non-Goals
 
 Relocate the SMTP client, factory, reply parser, timeout/error mapping, proxy-leased verifier, cache integration, Nest
-bindings, and focused tests. Replace the plan-10 mailbox compatibility adapter, finish internal core/network module
-composition, update module/SMTP fixture documentation, and shrink remaining baseline keys unrelated to delivery.
+bindings, and focused tests. Replace the mailbox compatibility adapter from plan 18, recompose the internal core/network
+module wiring, update module/SMTP fixture documentation, and shrink remaining baseline keys unrelated to delivery.
 
 Do not change SMTP classification, commands, timeouts, trust model, proxy selection, lease semantics, cache TTL or
 ownership, provider discovery, HTTP routes, credits, queues, S3, schemas, public exports, or configuration names.
@@ -97,7 +102,7 @@ socket termination.
 
 Move protocol types and pure parsing to the narrowest inward layer that has no socket/framework dependency. Move the
 socket client/factory and proxy adapter to infrastructure. The adapter receives an organization-aware probe command
-and loads only secure cache entries through the plan-10 store. It leases through the plan-05 public proxy token,
+and loads only secure cache entries through the plan-17 `SmtpVerificationStore`. It leases through the plan-05 public proxy token,
 performs the strict privacy-plan-05 protocol, stores the result with secure provenance, and releases the lease through
 one bounded path.
 
@@ -113,8 +118,8 @@ sync, deprecated-sync, async, and batch keys remain assigned to plans 11, 15, an
 ## Interfaces and Dependencies
 
 The adapter implements the plan-10 `MailboxProbe` port with organization ID, mailbox address value, MX target, and
-bounded execution context. It consumes plan-10 `SmtpVerificationStore`, plan-13 discovery values, and plan-05 public
-proxy lease interfaces. No SMTP, proxy, DNS, TypeORM, or provider implementation becomes public.
+bounded execution context. It consumes the plan-17 `SmtpVerificationStore`, plan-13 discovery values, and plan-05
+public proxy lease interfaces. No SMTP, proxy, DNS, TypeORM, or provider implementation becomes public.
 
 Configuration stays the privacy-plan-05 contract, including `SMTP_PORT`, optional `SMTP_TLS_CA_FILE`, and the existing
 phase deadlines. No HTTP, queue, S3, database-schema, or public TypeScript interface changes. The top-level barrel

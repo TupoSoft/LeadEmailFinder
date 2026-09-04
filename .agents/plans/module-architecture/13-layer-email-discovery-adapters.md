@@ -22,6 +22,7 @@ one exact approved provider is selected.
 ## Plan dependencies
 
 - `module-architecture/10`
+- `module-architecture/18`
 - `privacy-compliance/02`
 - `privacy-compliance/03`
 
@@ -70,8 +71,10 @@ Not started.
 ## Context and Orientation
 
 Plan 10 places pure verification policy and the `MxResolver`, `DomainSynonymDiscovery`, and `AccountDiscovery` ports
-under the email-verification application boundary. It temporarily binds legacy implementations so runtime behavior
-continues. Current MX resolution comes from `src/libs/dns/`; synonym retrieval and parsing live in the misleading
+under the email-verification application boundary. Plan 18 temporarily binds legacy implementations behind thin
+compatibility adapters for `MxResolver` and `DomainSynonymDiscovery` so runtime behavior continues (`AccountDiscovery`
+already has a real, non-compatibility adapter from a prior privacy-compliance plan and needs no replacement here).
+Current MX resolution comes from `src/libs/dns/`; synonym retrieval and parsing live in the misleading
 `email-verification/src/domain/` feature folder; concrete external account checks live in `src/libs/catch-all/` and
 are composed through `email-verifier/`.
 
@@ -83,8 +86,9 @@ only; it does not authorize a vendor or approve a manifest entry.
 ## Scope and Non-Goals
 
 Relocate and adapt DNS resolution, HTTP synonym retrieval, pure parsing, account-discovery selection, provider
-clients, response mapping, and their configuration bindings. Replace plan-10 compatibility bindings, move focused
-tests, update the module README, and remove only discovery-related baseline keys.
+clients, response mapping, and their configuration bindings. Replace the `MxResolver` and
+`DomainSynonymDiscovery` compatibility bindings from plan 18, move focused tests, update the module README, and
+remove only discovery-related baseline keys.
 
 Do not change mailbox SMTP/proxy probing; plan 14 owns it. Do not change core heuristics, provider allowlist, approval
 schema or evidence, fixed purpose, supported regions, request count, response meaning, retries, request deadline policy,
