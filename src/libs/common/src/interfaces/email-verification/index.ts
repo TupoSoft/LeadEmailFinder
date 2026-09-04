@@ -1,4 +1,5 @@
 export * from './verify-options.interface'
+export * from './verification-trace-context.interface'
 export * from './email-verification-result-dto.interface'
 export * from './email-verification-response-dto.interface'
 export * from './email-verification-service.interface'

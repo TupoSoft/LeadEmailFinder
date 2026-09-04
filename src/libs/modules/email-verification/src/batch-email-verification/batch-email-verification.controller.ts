@@ -8,6 +8,7 @@ import {
     Param,
     ParseFilePipeBuilder,
     Post,
+    Req,
     SerializeOptions,
     StreamableFile,
     UploadedFile,
@@ -15,7 +16,7 @@ import {
     UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Express } from 'express'
+import { Express, Request } from 'express'
 import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import {
     GetBatchStatusRequestParamsDto,
@@ -63,8 +64,13 @@ export class BatchEmailVerificationController {
         )
         file: Express.MulterS3.File,
         @CurrentPrincipal() principal: AuthPrincipal,
+        @Req() request: Request,
     ): Promise<UploadFileResponseDto> {
-        return await this.batchEmailVerificationService.uploadFile(file, principal)
+        return await this.batchEmailVerificationService.uploadFile(
+            file,
+            principal,
+            typeof request.id === 'string' ? request.id : undefined,
+        )
     }
 
     @Get(':id')

@@ -1,4 +1,5 @@
-import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common'
+import type { Request } from 'express'
+import { Controller, Req, Get, Inject, Query, UseGuards } from '@nestjs/common'
 import { IEmailVerificationService } from '@tuposoft/lead-email-finder/common'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 import { OldSyncEmailVerificationRequestQueryDto } from './old-sync-email-verification-request-query.dto'
@@ -25,9 +26,11 @@ export class OldSyncEmailVerificationController {
     async verifyEmail(
         @Query() emailVerificationRequestDto: OldSyncEmailVerificationRequestQueryDto,
         @CurrentPrincipal() principal: AuthPrincipal,
+        @Req() request?: Request,
     ): Promise<OldSyncEmailVerificationResponseDto> {
         const result = await this.emailVerificationService.verify({
             organizationId: principal.organizationId,
+            ...(typeof request?.id === 'string' ? { trace: { operationId: request.id, mode: 'deprecated_sync' } } : {}),
             email: emailVerificationRequestDto.email,
         })
         return this.mapper.map(result, EmailVerificationResponseDto, OldSyncEmailVerificationResponseDto)

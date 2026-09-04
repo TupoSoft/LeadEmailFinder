@@ -23,6 +23,11 @@ describe('sanitizeRequestTarget', () => {
         ['/other/sentinel@example.test/details', '/other/:sensitive/details'],
         ['/health?email=sentinel@example.test', '/health'],
         ['/encoded/non%20sensitive', '/encoded/non%20sensitive'],
+        ['/verifications/private-domain.test', '/verifications/:sensitive'],
+        ['/verifyAsync/private-credential', '/verifyAsync/:sensitive'],
+        ['/verifyBatch/private-domain.test/results', '/verifyBatch/:sensitive/results'],
+        ['/verifyBatch/csv', '/verifyBatch/csv'],
+        ['/verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3', '/verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3'],
     ])('sanitizes %s as %s', (rawUrl, expected) => {
         expect(sanitizeRequestTarget(rawUrl)).toBe(expected)
     })
@@ -38,6 +43,35 @@ describe('sanitizeRequestTarget', () => {
 })
 
 describe('createPiiSafePinoHttpOptions', () => {
+    it('reuses only its private server UUID for the request, response header, and serializer', () => {
+        const options = createPiiSafePinoHttpOptions()
+        const request = {
+            id: 'caller-controlled-id',
+            headers: { 'x-request-id': 'caller-controlled-header' },
+        } as unknown as IncomingMessage
+        const response = { setHeader: jest.fn() } as unknown as ServerResponse
+        const generatedId = options.genReqId?.(request, response)
+
+        expect(generatedId).toEqual(expect.stringMatching(UUID_PATTERN))
+        expect(request.id).toBe(generatedId)
+        expect(response.setHeader).toHaveBeenLastCalledWith('X-Request-ID', generatedId)
+
+        request.id = 'replacement-caller-id'
+        expect(options.genReqId?.(request, response)).toBe(generatedId)
+        expect(options.serializers?.req(request)).toEqual(expect.objectContaining({ id: generatedId }))
+    })
+
+    it('sets the authoritative request ID when Pino skips genReqId for an existing request.id', () => {
+        const options = createPiiSafePinoHttpOptions()
+        const request = { id: 'caller-controlled-id' } as unknown as IncomingMessage
+        const response = { setHeader: jest.fn() } as unknown as ServerResponse
+
+        expect(options.customProps?.(request, response)).toEqual({})
+        expect(request.id).toEqual(expect.stringMatching(UUID_PATTERN))
+        expect(response.setHeader).toHaveBeenCalledWith('X-Request-ID', request.id)
+        expect(options.serializers?.req(request)).toEqual(expect.objectContaining({ id: request.id }))
+    })
+
     it('allowlists request and response fields and replaces a preexisting request ID', () => {
         const options = createPiiSafePinoHttpOptions()
         const serializers = options.serializers

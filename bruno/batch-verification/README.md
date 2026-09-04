@@ -4,21 +4,22 @@ Uploads a small fixture CSV through `POST /verifyBatch/csv`, then polls `GET /ve
 job completes, asserting every observed `progress` value is a finite number within `[0, 100]` and that
 the completed job reports exactly `100`. A third request independently polls `GET /verifyBatch/:id` to
 completion (a fixed wait is not reliable here) and then downloads `GET /verifyBatch/:id/results`, asserting
-the returned CSV's `email` column matches the uploaded fixture addresses exactly.
+the returned CSV's `email` column matches the uploaded fixture addresses exactly. Every response includes a
+server-generated `X-Request-ID` UUID. The upload retains its single `id` field containing the batch UUID, and each
+CSV row retains its persisted verification UUID in the existing `id` column.
 
-Run it against the local Compose API, authenticating as the seeded **customer** M2M client
-`lef-svc-dev-fixture` (organization "Acme Development Customer", 1000 seeded credits) via OAuth Client
-Credentials — **not** the platform-operations `lef-development-service` client used by most other
-collections in this repo: `verification:run` debits a credit from the caller's own organization, and the
-platform-operations organization is deliberately seeded with zero credits, so authenticating as
-`lef-development-service` here fails every upload with `InsufficientCreditsException`.
+Run this collection against the local Compose API using OAuth Client Credentials. Authenticate as the seeded
+**customer** M2M client `lef-svc-dev-fixture`, which belongs to "Acme Development Customer" and has 1000 seeded
+credits. The `verification:run` permission debits a credit from the caller's own organization. The platform client
+`lef-development-service` belongs to an organization seeded with zero credits, so its uploads fail with
+`InsufficientCreditsException`.
 
 ```shell
 pnpm dev:reset
 ```
 
-`lef-svc-dev-fixture`'s secret is never written to disk (unlike `service-client.json`) — fetch it live from
-the Keycloak Admin API using the org-admin service credentials `pnpm dev:reset` already wrote:
+The secret for `lef-svc-dev-fixture` is never written to disk. Fetch it from the Keycloak Admin API using the
+organization administrator service credentials that `pnpm dev:reset` already wrote:
 
 ```shell
 export OIDC_ISSUER_URL=$(jq -r .issuer .dev/keycloak/service-client.json)

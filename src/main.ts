@@ -5,9 +5,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { Logger } from 'pino-nestjs'
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common'
 import { NestExpressApplication } from '@nestjs/platform-express'
+import { configurePiiSafeRequestLogging } from './lead-email-finder-api/src/configure-pii-safe-request-logging'
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
+    configurePiiSafeRequestLogging(app)
     app.disable('x-powered-by')
     app.enable('trust proxy')
     app.useLogger(app.get(Logger))

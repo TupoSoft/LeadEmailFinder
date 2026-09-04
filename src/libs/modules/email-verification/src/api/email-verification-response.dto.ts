@@ -5,10 +5,15 @@ import {
     EmailVerificationReason,
     IEmailVerificationResponseDto,
 } from '@tuposoft/lead-email-finder/common'
-import { IsEmail, IsFQDN } from 'class-validator'
+import { IsEmail, IsFQDN, IsUUID } from 'class-validator'
 import { AutoMap } from '@automapper/classes'
 
 export class EmailVerificationResponseDto implements IEmailVerificationResponseDto {
+    @Expose()
+    @IsUUID()
+    @AutoMap()
+    id: string
+
     @Expose()
     @IsEmail()
     @AutoMap()

@@ -4,7 +4,7 @@ import {
     VerifyAsyncRequest,
     VerifyAsyncResponse,
 } from './async-email-verification-service.interface'
-import { Expose } from 'class-transformer'
+import { Expose, Type } from 'class-transformer'
 import { EmailVerificationResponseDto } from '../sync-email-verification'
 import { JobState } from '@tuposoft/lead-email-finder/common'
 import { IsUUID } from 'class-validator'
@@ -31,5 +31,6 @@ export class GetAsyncVerificationStatusResponseDto implements GetAsyncVerificati
     state: JobState
 
     @Expose()
+    @Type(() => EmailVerificationResponseDto)
     result?: EmailVerificationResponseDto
 }

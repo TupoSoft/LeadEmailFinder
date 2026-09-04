@@ -112,6 +112,7 @@ describe('deprecated GET /verify HTTP boundary', () => {
         principal = runPrincipal
         creditsServiceMock.debit.mockResolvedValue(undefined)
         emailVerificationServiceMock.verify.mockResolvedValue({
+            id: '20000000-0000-4000-8000-000000000001',
             email: 'test@example.com',
             localPart: 'test',
             domain: 'example.com',

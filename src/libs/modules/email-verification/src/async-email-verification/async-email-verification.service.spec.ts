@@ -1,3 +1,7 @@
+import {
+    VERIFICATION_TRACE_OBSERVER,
+    VerificationTraceObserver,
+} from '../application/verification-trace/verification-trace-observer'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getQueueToken } from '@nestjs/bullmq'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
@@ -5,16 +9,25 @@ import { AsyncEmailVerificationServiceImpl } from './async-email-verification-se
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 
 describe('AsyncEmailVerificationService', () => {
+    let traceObserver: jest.Mocked<VerificationTraceObserver>
     let service: AsyncEmailVerificationServiceImpl
     let queue: { add: jest.Mock; getJob: jest.Mock }
 
     const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
 
     beforeEach(async () => {
+        traceObserver = {
+            enqueued: jest.fn(),
+            completed: jest.fn(),
+            failed: jest.fn(),
+            batchCompleted: jest.fn(),
+        }
+
         queue = { add: jest.fn(), getJob: jest.fn() }
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                { provide: VERIFICATION_TRACE_OBSERVER, useValue: traceObserver },
                 AsyncEmailVerificationServiceImpl,
                 {
                     provide: getQueueToken('async-email-verification'),
@@ -57,6 +70,58 @@ describe('AsyncEmailVerificationService', () => {
             })
             expect((error as { message: string }).message).not.toContain(sentinel)
         })
+    })
+
+    it('links the request to the exact returned job without adding request data to the queue', async () => {
+        queue.add.mockResolvedValue({ id: 'returned-job-id' })
+
+        await service.verifyAsync({ email: 'sentinel@private.example' }, principal, 'server-request-id')
+
+        expect(traceObserver.enqueued).toHaveBeenCalledWith({
+            requestId: 'server-request-id',
+            mode: 'async',
+            jobId: 'returned-job-id',
+        })
+        expect((queue.add.mock.calls as unknown[][])[0][1]).toEqual({
+            email: 'sentinel@private.example',
+            organizationId: 'org-1',
+            credentialId: 'cred-1',
+        })
+    })
+
+    it('preserves successful queue submission when its observer throws', async () => {
+        queue.add.mockResolvedValue({ id: 'job-1' })
+        traceObserver.enqueued.mockImplementation(() => {
+            throw new Error('observer unavailable')
+        })
+
+        await expect(
+            service.verifyAsync({ email: 'sentinel@private.example' }, principal, 'request-id'),
+        ).resolves.toEqual({ id: 'job-1' })
+        expect(queue.add).toHaveBeenCalledTimes(1)
+        expect(traceObserver.failed).not.toHaveBeenCalled()
+    })
+
+    it('emits only safe dispatch failure fields and rethrows the same error despite observer failure', async () => {
+        const error = new Error('sentinel@private.example queue diagnostics')
+        queue.add.mockRejectedValue(error)
+        traceObserver.failed.mockImplementation(() => {
+            throw new Error('observer unavailable')
+        })
+
+        await expect(service.verifyAsync({ email: 'sentinel@private.example' }, principal, 'request-id')).rejects.toBe(
+            error,
+        )
+        expect(traceObserver.enqueued).not.toHaveBeenCalled()
+        expect(traceObserver.failed).toHaveBeenCalledWith({
+            operationId: 'request-id',
+            mode: 'async',
+            jobId: expect.any(String),
+            stage: 'queue_dispatch',
+            errorType: 'Error',
+            durationMs: expect.any(Number),
+        })
+        expect(JSON.stringify(traceObserver.failed.mock.calls)).not.toContain('sentinel')
     })
 
     describe('getAsyncVerificationState', () => {

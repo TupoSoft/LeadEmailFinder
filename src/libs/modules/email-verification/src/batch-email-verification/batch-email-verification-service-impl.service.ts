@@ -12,13 +12,19 @@ import {
     GetBatchStatusResponse,
 } from './batch-email-verification-service.interface'
 import { JobNotFoundException } from './job-not-found.exception'
-import { fromStringToEnum, JobState } from '@tuposoft/lead-email-finder/common'
+import { fromStringToEnum, JobState, safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { Readable } from 'stream'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
 import { ReadableStream } from 'node:stream/web'
 import { parseS3ResultLocation } from './parse-s3-result-location'
+import {
+    NOOP_VERIFICATION_TRACE_OBSERVER,
+    observeSafely,
+    VERIFICATION_TRACE_OBSERVER,
+    VerificationTraceObserver,
+} from '../application/verification-trace/verification-trace-observer'
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value))
@@ -30,6 +36,8 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
         @InjectQueue(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
         private readonly batchEmailVerificationQueue: Queue<BatchEmailVerificationJobData, string>,
         @Inject(getS3ConnectionToken('default')) private readonly s3: S3,
+        @Inject(VERIFICATION_TRACE_OBSERVER)
+        private readonly traceObserver: VerificationTraceObserver = NOOP_VERIFICATION_TRACE_OBSERVER,
     ) {}
 
     async getBatchResults(id: string, principal: AuthPrincipal): Promise<Readable> {
@@ -107,25 +115,41 @@ export class BatchEmailVerificationServiceImpl implements BatchEmailVerification
     async uploadFile(
         { bucket, key }: BatchEmailVerificationFile,
         principal: AuthPrincipal,
+        requestId: string = randomUUID(),
     ): Promise<EnqueueBatchResponse> {
-        const batchEmailVerificationJob = await this.batchEmailVerificationQueue.add(
-            BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
-            {
-                step: BatchEmailVerificationJobStep.Validate,
-                bucket,
-                key,
-                organizationId: principal.organizationId,
-                credentialId: principal.credentialId,
-            },
-            { jobId: randomUUID() },
-        )
+        const startedAt = Date.now()
+        const jobId = randomUUID()
 
-        const { id } = batchEmailVerificationJob
+        try {
+            const { id } = await this.batchEmailVerificationQueue.add(
+                BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
+                {
+                    step: BatchEmailVerificationJobStep.Validate,
+                    bucket,
+                    key,
+                    organizationId: principal.organizationId,
+                    credentialId: principal.credentialId,
+                },
+                { jobId },
+            )
 
-        ok(id, 'Failed to add job to queue. Job ID is undefined. Queue name: batch-email-verification.')
+            ok(id, 'Failed to add job to queue. Job ID is undefined. Queue name: batch-email-verification.')
+            observeSafely(() => this.traceObserver.enqueued({ requestId, mode: 'batch', jobId: id }))
 
-        return {
-            id,
+            return { id }
+        } catch (error) {
+            observeSafely(() =>
+                this.traceObserver.failed({
+                    operationId: requestId,
+                    mode: 'batch',
+                    jobId,
+                    batchId: jobId,
+                    stage: 'queue_dispatch',
+                    errorType: safeErrorType(error),
+                    durationMs: Date.now() - startedAt,
+                }),
+            )
+            throw error
         }
     }
 }

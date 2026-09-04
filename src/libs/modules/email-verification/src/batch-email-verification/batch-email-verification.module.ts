@@ -1,3 +1,4 @@
+import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
 import { Module } from '@nestjs/common'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
 import { BullModule } from '@nestjs/bullmq'
@@ -13,6 +14,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [
+        VerificationTraceModule,
         BullModule.registerQueue({ name: BATCH_EMAIL_VERIFICATION_QUEUE_NAME }),
         BullModule.registerQueue({ name: 'async-email-verification' }),
         MulterModule.registerAsync({

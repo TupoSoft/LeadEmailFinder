@@ -36,7 +36,7 @@ import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
         AutomapperModule.forRoot({
             strategyInitializer: classes(),
         }),
-        LoggerModule.forRoot({ pinoHttp: createPiiSafePinoHttpOptions() }),
+        LoggerModule.forRoot({ useExisting: true, pinoHttp: createPiiSafePinoHttpOptions() }),
         BullModule.forRootAsync({
             useFactory: (connection: Redis) => ({
                 connection,

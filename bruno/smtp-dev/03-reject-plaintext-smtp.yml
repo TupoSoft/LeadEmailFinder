@@ -7,6 +7,8 @@ http:
   method: POST
   url: "{{baseUrl}}/verify"
   headers:
+    - name: X-Request-ID
+      value: caller-controlled-correlation
     - name: Content-Type
       value: application/json
     - name: Authorization
@@ -24,10 +26,16 @@ runtime:
       code: |-
         test('rejects the plaintext MX before disclosing either SMTP envelope address', function() {
           expect(res.status).to.equal(201);
+          expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
           expect(res.body.email).to.equal('person@plaintext.lef.test');
           expect(res.body.exists).to.equal(null);
           expect(res.body.catchAll).to.equal(null);
           expect(res.body.reason).to.equal('secure_transport_unavailable');
           expect(res.body.targetExchange).to.equal('smtp-plaintext.lef.test');
           expect(res.body.sources).to.deep.equal([]);
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

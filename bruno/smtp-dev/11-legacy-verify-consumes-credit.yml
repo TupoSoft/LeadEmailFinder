@@ -7,6 +7,8 @@ http:
   method: GET
   url: "{{baseUrl}}/verify?email=person@lef.test"
   headers:
+    - name: X-Request-ID
+      value: caller-controlled-correlation
     - name: Authorization
       value: "Bearer {{serviceClientToken}}"
 
@@ -16,8 +18,14 @@ runtime:
       code: |-
         test('verifies the local address through the deprecated legacy route and debits a credit', function() {
           expect(res.status).to.equal(200);
+          expect(res.body).not.to.have.property('id');
           expect(res.body.email).to.equal('person@lef.test');
           expect(res.body.catchAll).to.equal('enabled');
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

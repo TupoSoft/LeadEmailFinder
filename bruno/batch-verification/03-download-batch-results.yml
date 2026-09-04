@@ -49,9 +49,20 @@ runtime:
           const lines = res.body.trim().split('\n').filter((line) => line.length > 0);
           const header = lines[0].split(',');
           const emailIndex = header.indexOf('email');
+          const idIndex = header.indexOf('id');
+          expect(idIndex).to.be.at.least(0);
+          for (const line of lines.slice(1)) {
+            const id = line.split(',')[idIndex];
+            expect(id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          }
 
           expect(emailIndex).to.be.at.least(0);
 
           const emails = lines.slice(1).map((line) => line.split(',')[emailIndex]).sort();
           expect(emails).to.deep.equal(['other@lef.test', 'person@lef.test']);
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

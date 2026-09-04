@@ -1,3 +1,4 @@
+import { Request } from 'express'
 import {
     Body,
     Controller,
@@ -8,6 +9,7 @@ import {
     NotFoundException,
     Param,
     Post,
+    Req,
     SerializeOptions,
     UseGuards,
 } from '@nestjs/common'
@@ -38,10 +40,15 @@ export class AsyncEmailVerificationController {
     @HttpCode(HttpStatus.ACCEPTED)
     @SerializeOptions({ type: VerifyAsyncResponseDto })
     async verifyAsync(
-        @Body() request: VerifyAsyncRequestBodyDto,
+        @Body() body: VerifyAsyncRequestBodyDto,
         @CurrentPrincipal() principal: AuthPrincipal,
+        @Req() request: Request,
     ): Promise<VerifyAsyncResponseDto> {
-        return await this.asyncEmailVerificationService.verifyAsync(request, principal)
+        return await this.asyncEmailVerificationService.verifyAsync(
+            body,
+            principal,
+            typeof request.id === 'string' ? request.id : undefined,
+        )
     }
 
     @Get(':id')

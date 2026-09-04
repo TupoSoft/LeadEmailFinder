@@ -1,3 +1,4 @@
+import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
 import { Module } from '@nestjs/common'
 import { BullModule } from '@nestjs/bullmq'
 import { AsyncEmailVerificationServiceImpl } from './async-email-verification-service-impl.service'
@@ -13,6 +14,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 
 @Module({
     imports: [
+        VerificationTraceModule,
         SyncEmailVerificationModule,
         BullModule.registerQueue({
             name: 'async-email-verification',
