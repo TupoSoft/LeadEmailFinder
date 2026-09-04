@@ -200,5 +200,5 @@ run results (collections and pass/fail counts) once implementation completes.
 
 ## Plan readiness
 
-Ready to implement once `module-architecture/10` and `module-architecture/17` both merge; confirm the actual
-per-path projection before writing code regardless of the estimate above.
+Ready after `module-architecture/10` and `module-architecture/17` both merge and this plan's own binding size
+projection confirms fewer than 1,000 non-documentation additions plus deletions.

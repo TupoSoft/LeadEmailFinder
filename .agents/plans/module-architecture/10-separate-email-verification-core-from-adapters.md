@@ -222,6 +222,6 @@ signatures. Do not record raw addresses beyond local fixtures.
 
 ## Plan readiness
 
-Ready to implement — this narrowed scope is projected to fit comfortably under the 1,000-line gate based on a
-real partial-implementation measurement (see Surprises & Discoveries); confirm with the actual per-path
-projection before writing code regardless.
+Ready after the binding size projection confirms fewer than 1,000 non-documentation additions plus deletions for
+this narrowed scope. A real partial-implementation measurement projects it to fit comfortably (see Surprises &
+Discoveries); confirm with the actual projection regardless, and narrow further if it does not.

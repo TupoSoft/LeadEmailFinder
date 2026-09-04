@@ -173,5 +173,5 @@ resets are easy to script later.
 
 ## Plan readiness
 
-Ready to implement once `module-architecture/10` merges; confirm the actual per-path projection before writing
-code regardless of the estimate above.
+Ready after `module-architecture/10` merges and this plan's own binding size projection confirms fewer than
+1,000 non-documentation additions plus deletions.
