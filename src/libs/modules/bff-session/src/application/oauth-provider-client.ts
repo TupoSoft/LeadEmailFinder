@@ -21,6 +21,17 @@ export interface RefreshedTokens {
     readonly refreshTokenExpiresInSeconds: number | null
 }
 
+/**
+ * Expected rejection of an authorization-code grant by the OAuth provider.
+ * Infrastructure, configuration, and malformed-response failures must use a different error.
+ */
+export class AuthorizationCodeGrantRejectedError extends Error {
+    constructor() {
+        super('Authorization code grant was rejected')
+        this.name = 'AuthorizationCodeGrantRejectedError'
+    }
+}
+
 export interface OAuthProviderClient {
     buildAuthorizationUrl(params: {
         readonly redirectUri: string

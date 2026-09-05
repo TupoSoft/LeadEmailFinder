@@ -1,9 +1,9 @@
 import { ExternalIdentityResolver } from '@tuposoft/lead-email-finder/modules/identity'
 import { SessionRecord } from '../domain/session-record'
 import { BffSessionConfiguration } from './bff-session-configuration'
-import { HumanMembershipResolver } from './human-membership-resolver.service'
+import { HumanMembershipResolver, SingleActiveMembershipRequiredError } from './human-membership-resolver.service'
 import { IdTokenVerifier } from './id-token-verifier'
-import { OAuthProviderClient } from './oauth-provider-client'
+import { AuthorizationCodeGrantRejectedError, OAuthProviderClient } from './oauth-provider-client'
 import { PendingLoginStateStore } from './pending-login-state-store'
 import { computeCodeChallengeS256, generateCodeVerifier, generateCsrfToken, generateNonce, generateState } from './pkce'
 import { SessionStore } from './session-store'
@@ -14,7 +14,7 @@ export interface LoginStart {
 }
 
 export interface CallbackInput {
-    readonly code: string
+    readonly code: string | undefined
     readonly state: string
     readonly cookieState: string | undefined
     readonly existingSessionId: string | undefined
@@ -80,6 +80,10 @@ export class BffSessionFlowService {
             throw new LoginStateInvalidError('Login state is invalid, expired, or was already used')
         }
 
+        if (typeof input.code !== 'string' || input.code.trim().length === 0) {
+            throw new AuthorizationCodeExchangeFailedError()
+        }
+
         let tokenResponse
         try {
             tokenResponse = await this.oauthProviderClient.exchangeAuthorizationCode({
@@ -87,21 +91,32 @@ export class BffSessionFlowService {
                 redirectUri: pending.redirectUri,
                 codeVerifier: pending.codeVerifier,
             })
-        } catch {
-            throw new AuthorizationCodeExchangeFailedError()
+        } catch (error) {
+            if (error instanceof AuthorizationCodeGrantRejectedError) {
+                throw new AuthorizationCodeExchangeFailedError()
+            }
+
+            throw error
         }
 
         const verifiedIdToken = await this.idTokenVerifier.verify(tokenResponse.idToken, pending.nonce)
-        const externalIdentity = await this.externalIdentityResolver.resolveOrCreate(
+        const externalIdentity = await this.externalIdentityResolver.findExisting(
             verifiedIdToken.issuer,
             verifiedIdToken.subject,
+        )
+        if (!externalIdentity) {
+            throw new SingleActiveMembershipRequiredError()
+        }
+
+        const membership = await this.humanMembershipResolver.resolveActiveForLogin(externalIdentity.id)
+        const synchronizedIdentity = await this.externalIdentityResolver.synchronizeEmail(
+            externalIdentity,
             verifiedIdToken.email,
         )
-        const membership = await this.humanMembershipResolver.resolveActiveForLogin(externalIdentity.id)
 
         const now = Date.now()
         const record: SessionRecord = {
-            externalIdentityId: externalIdentity.id,
+            externalIdentityId: synchronizedIdentity.id,
             organizationId: membership.organizationId,
             issuer: verifiedIdToken.issuer,
             subject: verifiedIdToken.subject,

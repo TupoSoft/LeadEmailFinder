@@ -5,18 +5,18 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 ## Purpose / Big Picture
 
 Make the browser authorization response one-shot and recoverable before frontend generation begins. Missing or bad
-provider parameters, expired state, and account failures covered by the contract redirect to one same-origin error route with a
-stable safe code. Two concurrent requests cannot exchange the same authorization code from one pending login, and
-raw provider or exception details never enter the browser URL.
+provider parameters, expired state, and account failures covered by the contract redirect to one same-origin error
+route with a stable safe code. Two concurrent requests cannot exchange the same authorization code from one pending
+login, and raw provider or exception details never enter the browser URL.
 
 ## Progress
 
-- [ ] (2026-08-31) Replace pending-login-state read/delete with one atomic consume operation.
-- [ ] (2026-08-31) Move provider-query validation inside the authorization-response boundary.
-- [ ] (2026-08-31) Map recoverable failures to stable same-origin redirects and clear transient state.
-- [ ] (2026-08-31) Add concurrent replay, status, redirect, cookie, and redaction coverage.
-- [ ] (2026-08-31) Update source Swagger annotations, BFF documentation, and Bruno coverage.
-- [ ] (2026-08-31) Run focused, live-provider, architecture, prose, and repository validation.
+- [x] (2026-09-05) Replaced pending-login-state read/delete with one atomic consume operation.
+- [x] (2026-09-05) Moved provider-query validation inside the authorization-response boundary.
+- [x] (2026-09-05) Mapped recoverable failures to stable same-origin redirects and cleared transient state.
+- [x] (2026-09-05) Added concurrent replay, status, redirect, cookie, and redaction coverage.
+- [x] (2026-09-05) Updated source Swagger annotations, module documentation, and Bruno coverage.
+- [x] (2026-09-05) Ran focused, live-provider, Bruno, architecture, prose, build, and repository validation.
 
 ## Plan dependencies
 
@@ -27,12 +27,17 @@ raw provider or exception details never enter the browser URL.
 
 ## Surprises & Discoveries
 
-- The Redis pending-state adapter currently reads and deletes in separate calls, so concurrent requests can both
-  observe the same value before either deletes it.
-- The global validation pipe rejects missing `code` or `state` before the controller runs. A missing provider query
-  therefore returns `400` today and cannot reach a redirect mapper implemented only inside the controller.
-- Provider exchange, membership activation, and session issuance occur after the state read. State must be consumed
-  before any of them to make replay safety authoritative.
+- The application port and callback flow already exposed and called `consume`; only the Redis adapter implemented
+  that contract as separate `GET` and `DEL` commands, which did not make first-consumer-wins behavior atomic.
+- The global validation pipe previously rejected missing `code` or `state` before the controller ran, so a missing
+  provider query returned `400` and could not reach a controller redirect mapper.
+- `ExternalIdentityResolver.resolveOrCreate` created an identity before active-membership resolution. That left an
+  identity or updated email behind on an `active_membership_required` redirect, contrary to this plan's recovery
+  guarantee.
+- Cookie parsing decoded every fragment without a failure boundary. One malformed percent escape, including in an
+  unrelated cookie, could turn the callback into an unexpected `500`.
+- The configured JOSE audience check accepts the configured client when it appears among multiple audiences. Without
+  an explicit trusted co-audience policy, the callback needs a stricter single-audience and authorized-party check.
 
 ## Decision Log
 
@@ -66,10 +71,41 @@ raw provider or exception details never enter the browser URL.
   Rationale: Converting every exception into a benign redirect would hide outages and make operations failures
   indistinguishable from user-recoverable authorization outcomes.
   Date/Author: 2026-08-31, project planning.
+- Decision: Implement the pending-state consume operation with Redis `GETDEL`.
+  Rationale: The repository's ioredis version exposes the command directly, and one server-side command makes the
+  first-consumer-wins guarantee explicit without a custom script.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Look up an existing external identity, resolve active membership, and only then synchronize its email.
+  Never create an identity from the browser callback.
+  Rationale: A recoverable account rejection must not persist new identity data or update an existing record, while a
+  successful login should retain email synchronization.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Ignore only a malformed cookie fragment and continue parsing the remaining fragments.
+  Rationale: A user-controlled percent escape must not escape the callback policy as a `500`, and an unrelated bad
+  fragment must not erase a valid login-state cookie.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Require exactly one configured BFF audience and require a present `azp` claim to equal the BFF client.
+  Rationale: No trusted co-audience policy is configured, so accepting an additional audience or another authorized
+  party would make the ID-token boundary broader than intended.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Keep deterministic callback-recovery cases in Bruno and use the dedicated live-Keycloak HTTP suite for
+  the successful callback.
+  Rationale: A successful callback requires a hosted human login and a database membership. The existing live runner
+  owns that disposable fixture lifecycle, while the Bruno collection can prove missing, mismatched, consumed, and
+  replayed state without adding a second credential-seeding contract.
+  Date/Author: 2026-09-05, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+The callback is now one-shot at the Redis boundary and predictable at the browser boundary. Recoverable state,
+authorization-grant, and account failures use three fixed same-origin redirects; provider-integrity failures remain
+generic `502` responses, and unexpected infrastructure or programming errors remain generic `500` responses. Every
+callback outcome clears the scoped state cookie and carries the two privacy headers.
+
+Review exposed three useful defenses beyond the initial mechanical change. Malformed cookie percent escapes are
+isolated per fragment. Unknown or unauthorized identities cannot be created or updated by a safe account redirect,
+and ID tokens cannot introduce an untrusted co-audience or authorized party. No schema, migration, external
+dependency, production configuration, or browser code changed.
 
 ## Context and Orientation
 
@@ -78,12 +114,11 @@ sessions, the pending-login-state store, provider exchange, and `GET /v1/auth/ca
 public issuer and private provider routing. `frontend/03` establishes the stable `active_membership_required` account
 category that this route reuses without exposing membership detail.
 
-`BffCallbackQueryDto` currently requires nonempty `code` and `state`, while the application's global validation pipe
-runs before the controller. Expected missing-field behavior must therefore be changed at the transport boundary, not
-merely caught around the existing application-service call.
+The callback now reads the raw query and applies a non-throwing route-local parser, so missing or malformed provider
+fields reach the callback recovery policy despite the application's global validation pipe.
 
 The login-state cookie and Redis record are distinct. Clearing the browser cookie does not atomically consume Redis
-state, and deleting Redis state does not remove the cookie. The implementation and tests must prove both behaviors.
+state, and deleting Redis state does not remove the cookie. The implementation and tests prove both behaviors.
 
 Before editing the BFF module, implementation must read `src/libs/modules/AGENTS.md`,
 `src/libs/modules/README.md`, and `src/libs/modules/bff-session/README.md` and keep that README current.
@@ -101,10 +136,9 @@ source annotations; `frontend/08` later renders the error route.
 
 ## Plan of Work
 
-Replace the pending-state port's public read and delete sequence with one `consume(stateId)` operation. Implement it
-with Redis `GETDEL` where supported or one Lua script with equivalent atomic semantics. Return an immutable pending
-record once and no value on every later call. Remove unused read/delete methods from the public port and update its
-in-memory test adapter to enforce the same contract.
+Keep the pending-state port's existing `consume(stateId)` operation and replace the Redis adapter's separate `GET` and
+`DEL` commands with `GETDEL`. Return the parsed immutable pending record once and no value on every later call. Keep
+the in-memory live-test adapter's first-consumer-wins behavior aligned with the Redis contract.
 
 Replace the throwing `BffCallbackQueryDto` path with a raw-query or route-local parser whose output represents either
 one nonempty string per field or a typed recoverable failure. It must not throw through the global validation pipe
@@ -134,14 +168,17 @@ existing safe application redirect. Unexpected Redis outages, provider transport
 rejection category, and programming errors retain the existing redacted server-error behavior.
 
 Add deterministic concurrency tests that release two requests against the same state simultaneously and assert one
-state value, at most one provider exchange, and at most one session. Add HTTP tests for all missing or malformed query cases,
-expired/mismatched/replayed state, each typed provider rejection/infrastructure branch, membership failure, success,
-and unexpected server failure.
-Assert status, `Location`, cookie expiry, percent encoding, log redaction, and the absence of query secrets.
+state value, at most one provider exchange, and at most one session. Add HTTP tests for all missing or malformed query
+cases, malformed cookie encoding, expired/mismatched/replayed state, each typed provider rejection/infrastructure
+branch, membership failure, success, and unexpected server failure.
+Assert status, `Location`, cookie expiry, percent encoding, response redaction, and the absence of query secrets.
 
 Own the route's source Swagger query/redirect/error annotations here. Extend `bruno/bff-sessions` with documented
 redirect cases using disposable values and no committed tokens. `frontend/05` will export these annotations without
 redefining the operation.
+
+Use the Bruno collection for deterministic login-entry and recovery behavior. Keep the successful callback in the
+dedicated live-Keycloak HTTP suite because it owns the required hosted-login user and database-membership fixture.
 
 ## Interfaces and Dependencies
 
@@ -176,9 +213,11 @@ external service, entity, schema, or browser dependency is introduced.
 
 ## Validation
 
-Run the pending-state adapter, authorization-flow, controller, cookie, redirect, and two-request concurrency tests:
+Run the pending-state adapter, authorization flow, identity resolver, controller, cookie parser/options, Swagger,
+provider adapter, JOSE verifier, redirect, and two-request concurrency tests, plus the Bruno launcher contract:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- pending-login-state bff-session-flow bff-session.controller --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- pending-login-state bff-session-flow bff-session.controller parse-cookie-header cookie-options bff-session.swagger keycloak-oauth-client jose-id-token-verifier external-identity-resolver --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp node --test scripts/bruno/run-collection.test.mjs
     corepack pnpm typecheck
     corepack pnpm lint
     corepack pnpm architecture:check
@@ -189,7 +228,7 @@ After confirming the Compose project belongs to this checkout, run the live prov
     corepack pnpm bruno:bff-sessions
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/bff-session/README.md bruno/bff-sessions/README.md .agents/plans/frontend/04-harden-authorization-callbacks.md
+    corepack pnpm docs:lint -- src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md bruno/bff-sessions/README.md .agents/plans/frontend/04-harden-authorization-callbacks.md
     git diff --check
 
 Record exact concurrency counts, HTTP statuses, redirect hosts/codes, cookie/header assertions, nonzero live-test
@@ -207,9 +246,40 @@ shared Keycloak, Redis, or database state. No migration, backfill, or production
 
 ## Artifacts and Notes
 
-Record the safe redirect matrix, concurrent state/exchange/session counts, focused test counts, and Bruno summary.
-Never record provider query values, authorization codes, state values, cookies, CSRF values, tokens, Redis values,
-passwords, or real user data.
+The delivered callback matrix is:
+
+| Outcome | HTTP result |
+| --- | --- |
+| Missing, malformed, mismatched, expired, or replayed state | `302 /auth/error?code=login_state_invalid` |
+| Missing or malformed code, or explicit authorization-grant rejection | `302 /auth/error?code=authorization_code_exchange_failed` |
+| Missing or non-unique active membership | `302 /auth/error?code=active_membership_required` |
+| ID-token integrity or claim rejection | Redacted `502` without `Location` |
+| Unexpected provider, infrastructure, or programming failure | Redacted `500` without `Location` |
+| Successful callback | `302` to `APP_BASE_URL` with session and CSRF cookies |
+
+Every row clears the transient state cookie and uses `Cache-Control: no-store` plus
+`Referrer-Policy: no-referrer`. The deterministic two-request test records two consume attempts, one fulfilled
+callback, one `LoginStateInvalidError`, and exactly one provider exchange, verifier call, identity lookup,
+membership lookup, email synchronization, and session creation.
+
+Validation on 2026-09-05 produced these nonsecret results:
+
+- Focused Jest selection: 10 suites and 141 tests passed; the separately gated live suite was selected but skipped
+  four tests until the dedicated runner supplied its environment.
+- Bruno launcher contract: seven Node tests passed. The real Compose collection then passed eight requests and nine
+  assertions with Bruno 4.1.0 and no skipped requests.
+- Dedicated live Keycloak runner: four tests passed with zero skipped across public issuer and internal token,
+  refresh, logout, and JWKS routes.
+- Full `test:ci`: 193 Jest suites and 1,765 tests passed; 10 suites and 63 tests with unrelated external gates skipped.
+  All 15 runner tests then passed.
+- Type checking, the 604-file build, the module architecture gate (nine modules and 108 baselined violations), and
+  `git diff --check` passed. ESLint passed with one preexisting warning in
+  `src/libs/config/src/load-secrets.spec.ts`.
+- Harper passed the four changed Markdown files with the exact command in Validation.
+
+No provider query values, authorization codes, state values, cookies, CSRF values, tokens, Redis values, passwords,
+or real user data were retained in these artifacts. The uniquely named `lef499` Compose containers, network, and
+volumes used for live validation were removed afterward.
 
 The atomic state boundary, route-local validation, redirect taxonomy, cookie cleanup, unexpected-error behavior,
 validation, and one-pull-request scope are decision-complete.

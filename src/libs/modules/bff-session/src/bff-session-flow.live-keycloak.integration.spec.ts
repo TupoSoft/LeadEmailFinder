@@ -23,7 +23,11 @@ import {
     CredentialExtractor,
     OidcCredentialAuthenticator,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { BffSessionCredentialAuthenticator, BffSessionModule, BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session'
+import {
+    BffSessionCredentialAuthenticator,
+    BffSessionModule,
+    BrowserSessionMutationGuard,
+} from '@tuposoft/lead-email-finder/modules/bff-session'
 import { BFF_CSRF_COOKIE_NAME } from './api/bff-cookie-names'
 import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from './application/bff-session-configuration'
 import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './application/oauth-provider-client'
@@ -49,7 +53,13 @@ const describeWithKeycloakRedisAndPostgres =
         : describe.skip
 
 const appBaseUrl = 'http://localhost:53000'
-const identityEntities = [Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
+const identityEntities = [
+    Organization,
+    ExternalIdentity,
+    OrganizationMembership,
+    ServiceCredential,
+    OrganizationCreditAccount,
+]
 
 // BffSessionModule injects Redis without importing RedisModule itself, relying on it being registered
 // globally elsewhere in the real app (via DnsModule). This test's module graph has no such registration,
@@ -267,13 +277,18 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
         process.env['SESSION_ENCRYPTION_KEY'] = randomBytes(32).toString('base64url')
 
         if (process.env['TEST_BFF_EXPECT_PUBLIC_UNREACHABLE'] === 'true') {
-            await expect(fetch(`${issuer}/protocol/openid-connect/certs`, { signal: AbortSignal.timeout(3_000) })).rejects.toThrow()
+            await expect(
+                fetch(`${issuer}/protocol/openid-connect/certs`, { signal: AbortSignal.timeout(3_000) }),
+            ).rejects.toThrow()
         }
         const originalFetch = globalThis.fetch
         fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
             const response = await originalFetch(input, init)
             const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
-            if (url.pathname.endsWith('/protocol/openid-connect/token') || url.pathname.endsWith('/protocol/openid-connect/logout')) {
+            if (
+                url.pathname.endsWith('/protocol/openid-connect/token') ||
+                url.pathname.endsWith('/protocol/openid-connect/logout')
+            ) {
                 protocolRequests.push({
                     url: `${url.origin}${url.pathname}`,
                     grantType: init?.body instanceof URLSearchParams ? init.body.get('grant_type') : null,
@@ -314,7 +329,10 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
 
         app = moduleRef.createNestApplication()
         app.useGlobalInterceptors(
-            new ClassSerializerInterceptor(app.get(Reflector), { strategy: 'excludeAll', enableImplicitConversion: true }),
+            new ClassSerializerInterceptor(app.get(Reflector), {
+                strategy: 'excludeAll',
+                enableImplicitConversion: true,
+            }),
         )
         await app.init()
 
@@ -342,260 +360,290 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
         await app?.close()
     }, 30_000)
 
-    it(
-        'publishes the current account, preserves null email, and rejects post-guard and disabled membership state',
-        async () => {
-            const username = `bff-test-member-${randomUUID()}`
-            const password = randomBytes(12).toString('base64url')
-            const userId = await createKeycloakUser(adminToken, username, password)
-            createdUserIds.push(userId)
+    it('publishes the current account, preserves null email, and rejects post-guard and disabled membership state', async () => {
+        const username = `bff-test-member-${randomUUID()}`
+        const password = randomBytes(12).toString('base64url')
+        const userId = await createKeycloakUser(adminToken, username, password)
+        createdUserIds.push(userId)
 
-            const organization = await organizationRepo.save(organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }))
-            const externalIdentity = await externalIdentityRepo.save(
-                externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
-            )
-            const membership = await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: organization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'member',
-                    status: 'active',
-                }),
-            )
+        const organization = await organizationRepo.save(
+            organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }),
+        )
+        const externalIdentity = await externalIdentityRepo.save(
+            externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
+        )
+        const membership = await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: organization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'member',
+                status: 'active',
+            }),
+        )
 
-            const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
-            expect(result.reachedCallback).toBe(true)
+        const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
+        expect(result.reachedCallback).toBe(true)
 
-            const callbackResponse = await request(app.getHttpServer())
-                .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
-                .set('cookie', loginStateCookie)
-                .redirects(0)
-            expect(callbackResponse.status).toBe(302)
-            expect(callbackResponse.headers.location).toBe(appBaseUrl)
+        const callbackResponse = await request(app.getHttpServer())
+            .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
+            .set('cookie', loginStateCookie)
+            .redirects(0)
+        expect(callbackResponse.status).toBe(302)
+        expect(callbackResponse.headers.location).toBe(appBaseUrl)
+        expect(callbackResponse.headers['cache-control']).toBe('no-store')
+        expect(callbackResponse.headers['referrer-policy']).toBe('no-referrer')
 
-            const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
-            const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
-            sessionIds.push(sessionCookie.slice('lef_session='.length))
+        const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
+        expect(setCookies).toEqual(
+            expect.arrayContaining([
+                expect.stringMatching(
+                    /^lef_login_state=;.*Path=\/v1\/auth;.*Expires=Thu, 01 Jan 1970 00:00:00 GMT.*HttpOnly.*SameSite=Lax/i,
+                ),
+            ]),
+        )
+        const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+        sessionIds.push(sessionCookie.slice('lef_session='.length))
 
-            expect(protocolRequests.some(entry => entry.grantType === 'authorization_code' &&
-                entry.url === `${backchannelUrl}/protocol/openid-connect/token` && entry.status === 200)).toBe(true)
+        expect(
+            protocolRequests.some(
+                entry =>
+                    entry.grantType === 'authorization_code' &&
+                    entry.url === `${backchannelUrl}/protocol/openid-connect/token` &&
+                    entry.status === 200,
+            ),
+        ).toBe(true)
 
-            const sessionResponse = await request(app.getHttpServer())
-                .get('/v1/auth/session')
-                .set('cookie', sessionCookie)
-                .expect(200)
-            const expectedAccount = {
-                email: `${username}@example.test`,
-                membership: { id: membership.id, role: 'member' },
-                organization: { id: organization.id, name: organization.name },
-                capabilities: ['verification.run', 'verification.read'],
-                grantableServiceClientPermissions: [],
-            }
-            expect(sessionResponse.body).toEqual(expectedAccount)
-            for (const internalField of ['credentialKind', 'issuer', 'subject', 'credentialId', 'permissions']) {
-                expect(sessionResponse.body).not.toHaveProperty(internalField)
-            }
-            expect(JSON.stringify(sessionResponse.body)).not.toMatch(/access_token|refresh_token|id_token/i)
+        const sessionResponse = await request(app.getHttpServer())
+            .get('/v1/auth/session')
+            .set('cookie', sessionCookie)
+            .expect(200)
+        const expectedAccount = {
+            email: `${username}@example.test`,
+            membership: { id: membership.id, role: 'member' },
+            organization: { id: organization.id, name: organization.name },
+            capabilities: ['verification.run', 'verification.read'],
+            grantableServiceClientPermissions: [],
+        }
+        expect(sessionResponse.body).toEqual(expectedAccount)
+        for (const internalField of ['credentialKind', 'issuer', 'subject', 'credentialId', 'permissions']) {
+            expect(sessionResponse.body).not.toHaveProperty(internalField)
+        }
+        expect(JSON.stringify(sessionResponse.body)).not.toMatch(/access_token|refresh_token|id_token/i)
 
-            await externalIdentityRepo.update(externalIdentity.id, { email: null })
-            const nullEmailResponse = await request(app.getHttpServer())
-                .get('/v1/auth/session')
-                .set('cookie', sessionCookie)
-                .expect(200)
-            expect(nullEmailResponse.body).toEqual({ ...expectedAccount, email: null })
+        await externalIdentityRepo.update(externalIdentity.id, { email: null })
+        const nullEmailResponse = await request(app.getHttpServer())
+            .get('/v1/auth/session')
+            .set('cookie', sessionCookie)
+            .expect(200)
+        expect(nullEmailResponse.body).toEqual({ ...expectedAccount, email: null })
 
-            const unexpectedOrganization = await organizationRepo.save(
-                organizationRepo.create({ name: `bff-test-unexpected-org-${randomUUID()}` }),
-            )
-            const unexpectedMembership = await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: unexpectedOrganization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'member',
-                    status: 'active',
-                }),
-            )
-            const unavailableAccountResponse = await request(app.getHttpServer())
-                .get('/v1/auth/session')
-                .set('cookie', sessionCookie)
-                .expect(401)
-            expect(unavailableAccountResponse.body).toEqual({ code: 'authentication_required' })
+        const unexpectedOrganization = await organizationRepo.save(
+            organizationRepo.create({ name: `bff-test-unexpected-org-${randomUUID()}` }),
+        )
+        const unexpectedMembership = await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: unexpectedOrganization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'member',
+                status: 'active',
+            }),
+        )
+        const unavailableAccountResponse = await request(app.getHttpServer())
+            .get('/v1/auth/session')
+            .set('cookie', sessionCookie)
+            .expect(401)
+        expect(unavailableAccountResponse.body).toEqual({ code: 'authentication_required' })
 
-            await membershipRepo.update(unexpectedMembership.id, { status: 'disabled' })
-            await membershipRepo.update(membership.id, { status: 'disabled' })
+        await membershipRepo.update(unexpectedMembership.id, { status: 'disabled' })
+        await membershipRepo.update(membership.id, { status: 'disabled' })
 
-            const disabledMembershipResponse = await request(app.getHttpServer())
-                .get('/v1/auth/session')
-                .set('cookie', sessionCookie)
-                .expect(401)
-            expect(disabledMembershipResponse.body).toEqual({ code: 'authentication_required' })
-        },
-        30_000,
-    )
+        const disabledMembershipResponse = await request(app.getHttpServer())
+            .get('/v1/auth/session')
+            .set('cookie', sessionCookie)
+            .expect(401)
+        expect(disabledMembershipResponse.body).toEqual({ code: 'authentication_required' })
+    }, 30_000)
 
-    it(
-        'refreshes and revokes the provider session through the back channel while enforcing Origin and CSRF',
-        async () => {
-            const username = `bff-test-csrf-${randomUUID()}`
-            const password = randomBytes(12).toString('base64url')
-            const userId = await createKeycloakUser(adminToken, username, password)
-            createdUserIds.push(userId)
+    it('refreshes and revokes the provider session through the back channel while enforcing Origin and CSRF', async () => {
+        const username = `bff-test-csrf-${randomUUID()}`
+        const password = randomBytes(12).toString('base64url')
+        const userId = await createKeycloakUser(adminToken, username, password)
+        createdUserIds.push(userId)
 
-            const organization = await organizationRepo.save(organizationRepo.create({ name: `bff-test-csrf-org-${randomUUID()}` }))
-            const externalIdentity = await externalIdentityRepo.save(
-                externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
-            )
-            await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: organization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'member',
-                    status: 'active',
-                }),
-            )
+        const organization = await organizationRepo.save(
+            organizationRepo.create({ name: `bff-test-csrf-org-${randomUUID()}` }),
+        )
+        const externalIdentity = await externalIdentityRepo.save(
+            externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
+        )
+        await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: organization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'member',
+                status: 'active',
+            }),
+        )
 
-            const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
-            expect(result.reachedCallback).toBe(true)
+        const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
+        expect(result.reachedCallback).toBe(true)
 
-            const callbackResponse = await request(app.getHttpServer())
-                .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
-                .set('cookie', loginStateCookie)
-                .redirects(0)
-            expect(callbackResponse.status).toBe(302)
+        const callbackResponse = await request(app.getHttpServer())
+            .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
+            .set('cookie', loginStateCookie)
+            .redirects(0)
+        expect(callbackResponse.status).toBe(302)
 
-            const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
-            const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
-            const sessionId = sessionCookie.slice('lef_session='.length)
-            sessionIds.push(sessionId)
-            const csrfCookie = setCookies.find(cookie => cookie.startsWith(`${BFF_CSRF_COOKIE_NAME}=`))!.split(';')[0]
-            const csrfToken = csrfCookie.split('=')[1]
-            const bothCookies = `${sessionCookie}; ${csrfCookie}`
+        const setCookies = callbackResponse.headers['set-cookie'] as unknown as string[]
+        const sessionCookie = setCookies.find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
+        const sessionId = sessionCookie.slice('lef_session='.length)
+        sessionIds.push(sessionId)
+        const csrfCookie = setCookies.find(cookie => cookie.startsWith(`${BFF_CSRF_COOKIE_NAME}=`))!.split(';')[0]
+        const csrfToken = csrfCookie.split('=')[1]
+        const bothCookies = `${sessionCookie}; ${csrfCookie}`
 
-            const initialSession = await sessionStore.get(sessionId)
-            expect(initialSession).toBeDefined()
-            expect(decodeJwt(initialSession!.accessToken).iss).toBe(issuer)
-            await sessionStore.save(sessionId, { ...initialSession!, accessTokenExpiresAt: Date.now() - 1 })
-            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
-            const refreshedSession = await sessionStore.get(sessionId)
-            expect(refreshedSession!.accessTokenExpiresAt).toBeGreaterThan(Date.now())
-            expect(decodeJwt(refreshedSession!.accessToken).iss).toBe(issuer)
-            expect(protocolRequests.some(entry => entry.grantType === 'refresh_token' &&
-                entry.url === `${backchannelUrl}/protocol/openid-connect/token` && entry.status === 200)).toBe(true)
+        const initialSession = await sessionStore.get(sessionId)
+        expect(initialSession).toBeDefined()
+        expect(decodeJwt(initialSession!.accessToken).iss).toBe(issuer)
+        await sessionStore.save(sessionId, { ...initialSession!, accessTokenExpiresAt: Date.now() - 1 })
+        await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
+        const refreshedSession = await sessionStore.get(sessionId)
+        expect(refreshedSession!.accessTokenExpiresAt).toBeGreaterThan(Date.now())
+        expect(decodeJwt(refreshedSession!.accessToken).iss).toBe(issuer)
+        expect(
+            protocolRequests.some(
+                entry =>
+                    entry.grantType === 'refresh_token' &&
+                    entry.url === `${backchannelUrl}/protocol/openid-connect/token` &&
+                    entry.status === 200,
+            ),
+        ).toBe(true)
 
-            // Missing Origin/Referer entirely.
-            await request(app.getHttpServer()).post('/v1/auth/logout').set('cookie', bothCookies).expect(403)
+        // Missing Origin/Referer entirely.
+        await request(app.getHttpServer()).post('/v1/auth/logout').set('cookie', bothCookies).expect(403)
 
-            // A cross-origin attacker page sending the victim's cookie and a spoofed CSRF header pair it made
-            // up itself: this is the exact attack this guard exists to stop, so it must fail even though the
-            // attacker can freely choose a header value that "matches" a cookie it also controls.
-            await request(app.getHttpServer())
-                .post('/v1/auth/logout')
-                .set('origin', 'https://evil.example.test')
-                .set('cookie', bothCookies)
-                .set('x-csrf-token', csrfToken)
-                .expect(403)
+        // A cross-origin attacker page sending the victim's cookie and a spoofed CSRF header pair it made
+        // up itself: this is the exact attack this guard exists to stop, so it must fail even though the
+        // attacker can freely choose a header value that "matches" a cookie it also controls.
+        await request(app.getHttpServer())
+            .post('/v1/auth/logout')
+            .set('origin', 'https://evil.example.test')
+            .set('cookie', bothCookies)
+            .set('x-csrf-token', csrfToken)
+            .expect(403)
 
-            // Correct Origin, missing CSRF header.
-            await request(app.getHttpServer())
-                .post('/v1/auth/logout')
-                .set('origin', appBaseUrl)
-                .set('cookie', bothCookies)
-                .expect(403)
+        // Correct Origin, missing CSRF header.
+        await request(app.getHttpServer())
+            .post('/v1/auth/logout')
+            .set('origin', appBaseUrl)
+            .set('cookie', bothCookies)
+            .expect(403)
 
-            // Correct Origin, CSRF header present but not matching the cookie.
-            await request(app.getHttpServer())
-                .post('/v1/auth/logout')
-                .set('origin', appBaseUrl)
-                .set('cookie', bothCookies)
-                .set('x-csrf-token', 'not-the-real-token')
-                .expect(403)
+        // Correct Origin, CSRF header present but not matching the cookie.
+        await request(app.getHttpServer())
+            .post('/v1/auth/logout')
+            .set('origin', appBaseUrl)
+            .set('cookie', bothCookies)
+            .set('x-csrf-token', 'not-the-real-token')
+            .expect(403)
 
-            // Every rejected mutation above must have left the session intact.
-            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
+        // Every rejected mutation above must have left the session intact.
+        await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(200)
 
-            // Matching Origin and CSRF token reaches the controller and actually logs out.
-            await request(app.getHttpServer())
-                .post('/v1/auth/logout')
-                .set('origin', appBaseUrl)
-                .set('cookie', bothCookies)
-                .set('x-csrf-token', csrfToken)
-                .expect(204)
+        // Matching Origin and CSRF token reaches the controller and actually logs out.
+        await request(app.getHttpServer())
+            .post('/v1/auth/logout')
+            .set('origin', appBaseUrl)
+            .set('cookie', bothCookies)
+            .set('x-csrf-token', csrfToken)
+            .expect(204)
 
-            await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
-            expect(protocolRequests.some(entry => entry.url === `${backchannelUrl}/protocol/openid-connect/logout` && entry.status === 204)).toBe(true)
-            await expect(oauthProvider.refreshTokens(refreshedSession!.refreshToken)).rejects.toThrow()
-        },
-        30_000,
-    )
+        await request(app.getHttpServer()).get('/v1/auth/session').set('cookie', sessionCookie).expect(401)
+        expect(
+            protocolRequests.some(
+                entry => entry.url === `${backchannelUrl}/protocol/openid-connect/logout` && entry.status === 204,
+            ),
+        ).toBe(true)
+        await expect(oauthProvider.refreshTokens(refreshedSession!.refreshToken)).rejects.toThrow()
+    }, 30_000)
 
-    it(
-        'rejects a replayed authorization code and state',
-        async () => {
-            const username = `bff-test-replay-${randomUUID()}`
-            const password = randomBytes(12).toString('base64url')
-            const userId = await createKeycloakUser(adminToken, username, password)
-            createdUserIds.push(userId)
+    it('rejects a replayed authorization code and state', async () => {
+        const username = `bff-test-replay-${randomUUID()}`
+        const password = randomBytes(12).toString('base64url')
+        const userId = await createKeycloakUser(adminToken, username, password)
+        createdUserIds.push(userId)
 
-            const organization = await organizationRepo.save(organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }))
-            const externalIdentity = await externalIdentityRepo.save(
-                externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
-            )
-            await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: organization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'member',
-                    status: 'active',
-                }),
-            )
+        const organization = await organizationRepo.save(
+            organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }),
+        )
+        const externalIdentity = await externalIdentityRepo.save(
+            externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
+        )
+        await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: organization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'member',
+                status: 'active',
+            }),
+        )
 
-            const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
-            expect(result.reachedCallback).toBe(true)
+        const { result, loginStateCookie } = await attemptBrowserLogin(app, username, password)
+        expect(result.reachedCallback).toBe(true)
 
-            const firstCallback = await request(app.getHttpServer())
-                .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
-                .set('cookie', loginStateCookie)
-                .redirects(0)
-            expect(firstCallback.status).toBe(302)
-            const sessionCookie = (firstCallback.headers['set-cookie'] as unknown as string[])
-                .find(cookie => cookie.startsWith('lef_session='))!.split(';')[0]
-            sessionIds.push(sessionCookie.slice('lef_session='.length))
+        const firstCallback = await request(app.getHttpServer())
+            .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
+            .set('cookie', loginStateCookie)
+            .redirects(0)
+        expect(firstCallback.status).toBe(302)
+        const sessionCookie = (firstCallback.headers['set-cookie'] as unknown as string[])
+            .find(cookie => cookie.startsWith('lef_session='))!
+            .split(';')[0]
+        sessionIds.push(sessionCookie.slice('lef_session='.length))
 
-            const replayedCallback = await request(app.getHttpServer())
-                .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
-                .set('cookie', loginStateCookie)
-                .redirects(0)
-            expect(replayedCallback.status).toBe(401)
-        },
-        30_000,
-    )
+        const replayedCallback = await request(app.getHttpServer())
+            .get(`${result.callbackUrl!.pathname}${result.callbackUrl!.search}`)
+            .set('cookie', loginStateCookie)
+            .redirects(0)
+        expect(replayedCallback.status).toBe(302)
+        expect(replayedCallback.headers.location).toBe(`${appBaseUrl}/auth/error?code=login_state_invalid`)
+        expect(replayedCallback.headers['cache-control']).toBe('no-store')
+        expect(replayedCallback.headers['referrer-policy']).toBe('no-referrer')
+        expect(replayedCallback.headers.location).not.toContain(result.callbackUrl!.searchParams.get('code'))
+        expect(replayedCallback.headers.location).not.toContain(result.callbackUrl!.searchParams.get('state'))
+        expect(replayedCallback.headers['set-cookie']).toEqual(
+            expect.arrayContaining([
+                expect.stringMatching(
+                    /^lef_login_state=;.*Path=\/v1\/auth;.*Expires=Thu, 01 Jan 1970 00:00:00 GMT.*HttpOnly.*SameSite=Lax/i,
+                ),
+            ]),
+        )
+    }, 30_000)
 
-    it(
-        'blocks an owner-role user from completing login without satisfying the MFA requirement',
-        async () => {
-            const username = `bff-test-owner-${randomUUID()}`
-            const password = randomBytes(12).toString('base64url')
-            const userId = await createKeycloakUser(adminToken, username, password)
-            createdUserIds.push(userId)
-            await assignRealmRole(adminToken, userId, 'owner')
+    it('blocks an owner-role user from completing login without satisfying the MFA requirement', async () => {
+        const username = `bff-test-owner-${randomUUID()}`
+        const password = randomBytes(12).toString('base64url')
+        const userId = await createKeycloakUser(adminToken, username, password)
+        createdUserIds.push(userId)
+        await assignRealmRole(adminToken, userId, 'owner')
 
-            const organization = await organizationRepo.save(organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }))
-            const externalIdentity = await externalIdentityRepo.save(
-                externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
-            )
-            await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: organization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'owner',
-                    status: 'active',
-                }),
-            )
+        const organization = await organizationRepo.save(
+            organizationRepo.create({ name: `bff-test-org-${randomUUID()}` }),
+        )
+        const externalIdentity = await externalIdentityRepo.save(
+            externalIdentityRepo.create({ issuer, subject: userId, email: `${username}@example.test` }),
+        )
+        await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: organization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'owner',
+                status: 'active',
+            }),
+        )
 
-            const { result } = await attemptBrowserLogin(app, username, password)
+        const { result } = await attemptBrowserLogin(app, username, password)
 
-            expect(result.reachedCallback).toBe(false)
-        },
-        30_000,
-    )
+        expect(result.reachedCallback).toBe(false)
+    }, 30_000)
 })

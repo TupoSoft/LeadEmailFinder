@@ -19,6 +19,10 @@ runtime:
 
           var location = res.headers['location'];
           expect(location).to.be.a('string');
+          var authorizationUrl = new URL(location);
+          var callbackState = authorizationUrl.searchParams.get('state');
+          expect(callbackState).to.be.a('string').and.not.to.equal('');
+          bru.setVar('callbackState', callbackState);
           expect(location.split('?')[0]).to.equal(
             bru.getEnvVar('oidcIssuerUrl') + '/protocol/openid-connect/auth'
           );
@@ -41,4 +45,7 @@ runtime:
 
           expect(loginStateCookie).to.be.a('string');
           expect(loginStateCookie.toLowerCase()).to.include('httponly');
+          var loginStateCookiePair = loginStateCookie.split(';')[0];
+          expect(loginStateCookiePair).to.equal('lef_login_state=' + bru.getVar('callbackState'));
+          bru.setVar('loginStateCookie', loginStateCookiePair);
         });

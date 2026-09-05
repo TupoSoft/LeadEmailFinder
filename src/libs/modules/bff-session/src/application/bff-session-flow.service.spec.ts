@@ -1,13 +1,17 @@
-import { ExternalIdentityRecord, ExternalIdentityResolver, OrganizationMembershipRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    ExternalIdentityRecord,
+    ExternalIdentityResolver,
+    OrganizationMembershipRecord,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { BffSessionConfiguration } from './bff-session-configuration'
 import {
     AuthorizationCodeExchangeFailedError,
     BffSessionFlowService,
     LoginStateInvalidError,
 } from './bff-session-flow.service'
-import { HumanMembershipResolver } from './human-membership-resolver.service'
-import { IdTokenVerifier } from './id-token-verifier'
-import { OAuthProviderClient } from './oauth-provider-client'
+import { HumanMembershipResolver, SingleActiveMembershipRequiredError } from './human-membership-resolver.service'
+import { IdTokenVerificationFailedError, IdTokenVerifier } from './id-token-verifier'
+import { AuthorizationCodeGrantRejectedError, OAuthProviderClient } from './oauth-provider-client'
 import { PendingLoginStateStore } from './pending-login-state-store'
 import { SessionStore } from './session-store'
 
@@ -28,7 +32,7 @@ describe('BffSessionFlowService', () => {
     let idTokenVerifier: jest.Mocked<IdTokenVerifier>
     let pendingLoginStateStore: jest.Mocked<PendingLoginStateStore>
     let sessionStore: jest.Mocked<SessionStore>
-    let externalIdentityResolver: jest.Mocked<Pick<ExternalIdentityResolver, 'resolveOrCreate'>>
+    let externalIdentityResolver: jest.Mocked<Pick<ExternalIdentityResolver, 'findExisting' | 'synchronizeEmail'>>
     let humanMembershipResolver: jest.Mocked<Pick<HumanMembershipResolver, 'resolveActiveForLogin'>>
     let service: BffSessionFlowService
 
@@ -41,8 +45,13 @@ describe('BffSessionFlowService', () => {
         }
         idTokenVerifier = { verify: jest.fn() }
         pendingLoginStateStore = { create: jest.fn(), consume: jest.fn() }
-        sessionStore = { create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn().mockResolvedValue(undefined) }
-        externalIdentityResolver = { resolveOrCreate: jest.fn() }
+        sessionStore = {
+            create: jest.fn(),
+            get: jest.fn(),
+            save: jest.fn(),
+            delete: jest.fn().mockResolvedValue(undefined),
+        }
+        externalIdentityResolver = { findExisting: jest.fn(), synchronizeEmail: jest.fn() }
         humanMembershipResolver = { resolveActiveForLogin: jest.fn() }
 
         service = new BffSessionFlowService(
@@ -75,6 +84,13 @@ describe('BffSessionFlowService', () => {
     })
 
     describe('handleCallback', () => {
+        const pendingState = {
+            nonce: 'nonce-1',
+            codeVerifier: 'verifier-1',
+            redirectUri: 'http://localhost:53000/v1/auth/callback',
+            createdAt: Date.now(),
+        }
+
         function validCallbackInput(
             overrides: Partial<Parameters<typeof service.handleCallback>[0]> = {},
         ): Parameters<typeof service.handleCallback>[0] {
@@ -87,10 +103,34 @@ describe('BffSessionFlowService', () => {
             }
         }
 
+        function arrangeSuccessfulCallback(): void {
+            pendingLoginStateStore.consume.mockResolvedValue(pendingState)
+            oauthProviderClient.exchangeAuthorizationCode.mockResolvedValue({
+                idToken: 'id-token',
+                accessToken: 'access-token',
+                refreshToken: 'refresh-token',
+                accessTokenExpiresInSeconds: 300,
+                refreshTokenExpiresInSeconds: 1800,
+            })
+            idTokenVerifier.verify.mockResolvedValue({ issuer: 'https://issuer', subject: 'human-1', email: null })
+            const externalIdentity: ExternalIdentityRecord = {
+                id: 'identity-1',
+                issuer: 'https://issuer',
+                subject: 'human-1',
+                email: null,
+            }
+            externalIdentityResolver.findExisting.mockResolvedValue(externalIdentity)
+            externalIdentityResolver.synchronizeEmail.mockResolvedValue(externalIdentity)
+            humanMembershipResolver.resolveActiveForLogin.mockResolvedValue({
+                organizationId: 'org-1',
+            } as OrganizationMembershipRecord)
+            sessionStore.create.mockResolvedValue('new-session-id')
+        }
+
         it('rejects when the login-state cookie is missing', async () => {
-            await expect(
-                service.handleCallback(validCallbackInput({ cookieState: undefined })),
-            ).rejects.toThrow(LoginStateInvalidError)
+            await expect(service.handleCallback(validCallbackInput({ cookieState: undefined }))).rejects.toThrow(
+                LoginStateInvalidError,
+            )
             expect(pendingLoginStateStore.consume).not.toHaveBeenCalled()
         })
 
@@ -106,38 +146,75 @@ describe('BffSessionFlowService', () => {
             await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(LoginStateInvalidError)
         })
 
-        it('rejects when the authorization code exchange fails (e.g. wrong PKCE verifier)', async () => {
-            pendingLoginStateStore.consume.mockResolvedValue({
-                nonce: 'nonce-1',
-                codeVerifier: 'verifier-1',
-                redirectUri: 'http://localhost:53000/v1/auth/callback',
-                createdAt: Date.now(),
-            })
-            oauthProviderClient.exchangeAuthorizationCode.mockRejectedValue(new Error('invalid_grant'))
+        it.each([undefined, '', '   '])(
+            'consumes valid state before rejecting a missing or blank authorization code (%p)',
+            async code => {
+                pendingLoginStateStore.consume.mockResolvedValue(pendingState)
 
-            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(AuthorizationCodeExchangeFailedError)
+                await expect(service.handleCallback(validCallbackInput({ code }))).rejects.toThrow(
+                    AuthorizationCodeExchangeFailedError,
+                )
+                expect(pendingLoginStateStore.consume).toHaveBeenCalledWith('the-state')
+                expect(oauthProviderClient.exchangeAuthorizationCode).not.toHaveBeenCalled()
+            },
+        )
+
+        it('maps an explicit authorization-code grant rejection to the recoverable callback error', async () => {
+            pendingLoginStateStore.consume.mockResolvedValue(pendingState)
+            oauthProviderClient.exchangeAuthorizationCode.mockRejectedValue(new AuthorizationCodeGrantRejectedError())
+
+            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(
+                AuthorizationCodeExchangeFailedError,
+            )
+        })
+
+        it('preserves provider infrastructure failures for the redacted server-error boundary', async () => {
+            const providerFailure = new Error('provider transport failed')
+            pendingLoginStateStore.consume.mockResolvedValue(pendingState)
+            oauthProviderClient.exchangeAuthorizationCode.mockRejectedValue(providerFailure)
+
+            await expect(service.handleCallback(validCallbackInput())).rejects.toBe(providerFailure)
+            expect(idTokenVerifier.verify).not.toHaveBeenCalled()
+            expect(sessionStore.create).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            { caseName: 'typed integrity rejection', verifierFailure: new IdTokenVerificationFailedError() },
+            { caseName: 'unexpected verifier fault', verifierFailure: new Error('unexpected verifier fault') },
+        ])('preserves ID-token verifier failures for the HTTP error mapper: $caseName', async ({ verifierFailure }) => {
+            arrangeSuccessfulCallback()
+            idTokenVerifier.verify.mockRejectedValue(verifierFailure)
+
+            await expect(service.handleCallback(validCallbackInput())).rejects.toBe(verifierFailure)
+            expect(externalIdentityResolver.findExisting).not.toHaveBeenCalled()
+            expect(sessionStore.create).not.toHaveBeenCalled()
+        })
+
+        it('does not create or update an identity when the verified subject is unknown', async () => {
+            arrangeSuccessfulCallback()
+            externalIdentityResolver.findExisting.mockResolvedValue(undefined)
+
+            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(
+                SingleActiveMembershipRequiredError,
+            )
+            expect(externalIdentityResolver.synchronizeEmail).not.toHaveBeenCalled()
+            expect(humanMembershipResolver.resolveActiveForLogin).not.toHaveBeenCalled()
+            expect(sessionStore.create).not.toHaveBeenCalled()
+        })
+
+        it('does not update identity data or create a session when active membership resolution fails', async () => {
+            arrangeSuccessfulCallback()
+            humanMembershipResolver.resolveActiveForLogin.mockRejectedValue(new SingleActiveMembershipRequiredError())
+
+            await expect(service.handleCallback(validCallbackInput())).rejects.toThrow(
+                SingleActiveMembershipRequiredError,
+            )
+            expect(externalIdentityResolver.synchronizeEmail).not.toHaveBeenCalled()
+            expect(sessionStore.create).not.toHaveBeenCalled()
         })
 
         it('creates a session and deletes the prior one when rotating', async () => {
-            pendingLoginStateStore.consume.mockResolvedValue({
-                nonce: 'nonce-1',
-                codeVerifier: 'verifier-1',
-                redirectUri: 'http://localhost:53000/v1/auth/callback',
-                createdAt: Date.now(),
-            })
-            oauthProviderClient.exchangeAuthorizationCode.mockResolvedValue({
-                idToken: 'id-token',
-                accessToken: 'access-token',
-                refreshToken: 'refresh-token',
-                accessTokenExpiresInSeconds: 300,
-                refreshTokenExpiresInSeconds: 1800,
-            })
-            idTokenVerifier.verify.mockResolvedValue({ issuer: 'https://issuer', subject: 'human-1', email: null })
-            externalIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentityRecord)
-            humanMembershipResolver.resolveActiveForLogin.mockResolvedValue({
-                organizationId: 'org-1',
-            } as OrganizationMembershipRecord)
-            sessionStore.create.mockResolvedValue('new-session-id')
+            arrangeSuccessfulCallback()
 
             const result = await service.handleCallback(validCallbackInput({ existingSessionId: 'old-session-id' }))
 
@@ -150,29 +227,54 @@ describe('BffSessionFlowService', () => {
         })
 
         it('does not attempt to delete a prior session when none exists', async () => {
-            pendingLoginStateStore.consume.mockResolvedValue({
-                nonce: 'nonce-1',
-                codeVerifier: 'verifier-1',
-                redirectUri: 'http://localhost:53000/v1/auth/callback',
-                createdAt: Date.now(),
-            })
-            oauthProviderClient.exchangeAuthorizationCode.mockResolvedValue({
-                idToken: 'id-token',
-                accessToken: 'access-token',
-                refreshToken: 'refresh-token',
-                accessTokenExpiresInSeconds: 300,
-                refreshTokenExpiresInSeconds: 1800,
-            })
-            idTokenVerifier.verify.mockResolvedValue({ issuer: 'https://issuer', subject: 'human-1', email: null })
-            externalIdentityResolver.resolveOrCreate.mockResolvedValue({ id: 'identity-1' } as ExternalIdentityRecord)
-            humanMembershipResolver.resolveActiveForLogin.mockResolvedValue({
-                organizationId: 'org-1',
-            } as OrganizationMembershipRecord)
-            sessionStore.create.mockResolvedValue('new-session-id')
+            arrangeSuccessfulCallback()
 
             await service.handleCallback(validCallbackInput())
 
             expect(sessionStore.delete).not.toHaveBeenCalled()
+        })
+
+        it('allows only one of two concurrent callbacks to exchange tokens and create a session', async () => {
+            arrangeSuccessfulCallback()
+
+            let arrivals = 0
+            let storedState: typeof pendingState | undefined = pendingState
+            let releaseConsumers!: () => void
+            const consumersReleased = new Promise<void>(resolve => {
+                releaseConsumers = resolve
+            })
+            let announceBothConsumers!: () => void
+            const bothConsumersArrived = new Promise<void>(resolve => {
+                announceBothConsumers = resolve
+            })
+            pendingLoginStateStore.consume.mockImplementation(async () => {
+                arrivals += 1
+                if (arrivals === 2) {
+                    announceBothConsumers()
+                }
+                await consumersReleased
+                const consumed = storedState
+                storedState = undefined
+                return consumed
+            })
+
+            const first = service.handleCallback(validCallbackInput())
+            const second = service.handleCallback(validCallbackInput())
+            await bothConsumersArrived
+            releaseConsumers()
+
+            const results = await Promise.allSettled([first, second])
+
+            expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+            const [rejection] = results.filter(result => result.status === 'rejected')
+            expect(rejection).toMatchObject({ reason: expect.any(LoginStateInvalidError) })
+            expect(pendingLoginStateStore.consume).toHaveBeenCalledTimes(2)
+            expect(oauthProviderClient.exchangeAuthorizationCode).toHaveBeenCalledTimes(1)
+            expect(idTokenVerifier.verify).toHaveBeenCalledTimes(1)
+            expect(externalIdentityResolver.findExisting).toHaveBeenCalledTimes(1)
+            expect(externalIdentityResolver.synchronizeEmail).toHaveBeenCalledTimes(1)
+            expect(humanMembershipResolver.resolveActiveForLogin).toHaveBeenCalledTimes(1)
+            expect(sessionStore.create).toHaveBeenCalledTimes(1)
         })
     })
 

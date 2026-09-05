@@ -11,11 +11,19 @@ import { ExternalIdentityConflictError, ExternalIdentityStore } from './ports/ex
 export class ExternalIdentityResolver {
     constructor(private readonly store: ExternalIdentityStore) {}
 
+    async findExisting(issuer: string, subject: string): Promise<ExternalIdentityRecord | undefined> {
+        return this.store.findByIssuerAndSubject(issuer, subject)
+    }
+
+    async synchronizeEmail(existing: ExternalIdentityRecord, email: string | null): Promise<ExternalIdentityRecord> {
+        return existing.email !== email ? this.store.updateEmail(existing, email) : existing
+    }
+
     async resolveOrCreate(issuer: string, subject: string, email: string | null): Promise<ExternalIdentityRecord> {
-        const existing = await this.store.findByIssuerAndSubject(issuer, subject)
+        const existing = await this.findExisting(issuer, subject)
 
         if (existing) {
-            return existing.email !== email ? this.store.updateEmail(existing, email) : existing
+            return this.synchronizeEmail(existing, email)
         }
 
         try {

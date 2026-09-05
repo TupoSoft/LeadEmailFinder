@@ -13,6 +13,28 @@ describe('ExternalIdentityResolver', () => {
 
     const existing: ExternalIdentityRecord = { id: 'id-1', issuer: 'iss', subject: 'sub', email: 'a@example.test' }
 
+    it('finds an existing identity without creating or updating one', async () => {
+        storeMock.findByIssuerAndSubject.mockResolvedValueOnce(existing)
+
+        await expect(resolver.findExisting('iss', 'sub')).resolves.toBe(existing)
+        expect(storeMock.create).not.toHaveBeenCalled()
+        expect(storeMock.updateEmail).not.toHaveBeenCalled()
+    })
+
+    it('synchronizes a changed email without creating another identity', async () => {
+        const updated: ExternalIdentityRecord = { ...existing, email: 'b@example.test' }
+        storeMock.updateEmail.mockResolvedValueOnce(updated)
+
+        await expect(resolver.synchronizeEmail(existing, 'b@example.test')).resolves.toBe(updated)
+        expect(storeMock.updateEmail).toHaveBeenCalledWith(existing, 'b@example.test')
+        expect(storeMock.create).not.toHaveBeenCalled()
+    })
+
+    it('does not write when the existing email is already current', async () => {
+        await expect(resolver.synchronizeEmail(existing, existing.email)).resolves.toBe(existing)
+        expect(storeMock.updateEmail).not.toHaveBeenCalled()
+    })
+
     it('returns the existing record unchanged when the email matches', async () => {
         storeMock.findByIssuerAndSubject.mockResolvedValueOnce(existing)
 

@@ -1,11 +1,12 @@
-import { UnauthorizedException } from '@nestjs/common'
 import { createServer, Server } from 'node:http'
 import { AddressInfo } from 'node:net'
 import { exportJWK, generateKeyPair, JWTPayload, KeyLike, SignJWT } from 'jose'
 import { BffSessionConfiguration } from '../../application/bff-session-configuration'
+import { IdTokenVerificationFailedError } from '../../application/id-token-verifier'
 import { JoseIdTokenVerifier } from './jose-id-token-verifier'
 
 describe('JoseIdTokenVerifier with a reachable JWKS endpoint and unreachable public issuer', () => {
+    const clientId = 'lef-web-bff'
     let server: Server
     let signingKey: KeyLike
     let untrustedKey: KeyLike
@@ -30,7 +31,7 @@ describe('JoseIdTokenVerifier with a reachable JWKS endpoint and unreachable pub
             issuer: 'http://127.0.0.1:9/realms/public',
             backchannelUrl: 'http://keycloak:8080/realms/public',
             jwksUri: `http://127.0.0.1:${port}/internal/certs`,
-            clientId: 'lef-web-bff',
+            clientId,
             clientSecret: 'secret',
             sessionIdleTimeoutMs: 1000,
             sessionAbsoluteTimeoutMs: 2000,
@@ -75,23 +76,39 @@ describe('JoseIdTokenVerifier with a reachable JWKS endpoint and unreachable pub
     it('rejects a correctly signed token claiming the internal issuer', async () => {
         const token = await signToken({ iss: configuration.backchannelUrl })
 
-        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
         expect(requests).toEqual(['/internal/certs'])
     })
 
     it.each([
         ['audience', { aud: 'another-client' }],
+        ['additional audience', { aud: [clientId, 'another-client'], azp: clientId }],
+        ['authorized party', { azp: 'another-client' }],
         ['expiry', { exp: 1 }],
+        ['missing expiry', { exp: undefined }],
         ['nonce', { nonce: 'another-login' }],
     ])('continues to reject an invalid %s', async (_name, overrides) => {
         const token = await signToken(overrides as JWTPayload)
 
-        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
     })
 
     it('continues to reject an untrusted signature', async () => {
         const token = await signToken({}, untrustedKey)
 
-        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(UnauthorizedException)
+        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
+    })
+
+    it.each([
+        ['empty subject', { sub: '' }],
+        ['non-string email', { email: ['person@example.test'] }],
+    ])('rejects a malformed %s claim shape', async (_name, overrides) => {
+        const token = await signToken(overrides as JWTPayload)
+
+        await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
+    })
+
+    it('rejects a malformed compact token', async () => {
+        await expect(verifier.verify('not-a-jwt', 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
     })
 })

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import {
+    AuthorizationCodeGrantRejectedError,
     ExchangeAuthorizationCodeRequest,
     OAuthProviderClient,
     OAuthTokenResponse,
@@ -7,21 +8,41 @@ import {
 } from '../../application/oauth-provider-client'
 import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from '../../application/bff-session-configuration'
 
-export class OAuthTokenExchangeFailedError extends Error {
-    constructor(reason: string) {
-        super(`OAuth token exchange failed: ${reason}`)
-        this.name = 'OAuthTokenExchangeFailedError'
+export class OAuthTokenRequestFailedError extends Error {
+    constructor() {
+        super('OAuth provider token request failed')
+        this.name = 'OAuthTokenRequestFailedError'
     }
 }
 
 interface KeycloakTokenResponse {
-    id_token?: string
-    access_token?: string
-    refresh_token?: string
-    expires_in?: number
-    refresh_expires_in?: number
-    error?: string
-    error_description?: string
+    readonly id_token?: unknown
+    readonly access_token?: unknown
+    readonly refresh_token?: unknown
+    readonly expires_in?: unknown
+    readonly refresh_expires_in?: unknown
+    readonly error?: unknown
+}
+
+type TokenRequest =
+    | {
+          readonly grant_type: 'authorization_code'
+          readonly code: string
+          readonly redirect_uri: string
+          readonly code_verifier: string
+      }
+    | { readonly grant_type: 'refresh_token'; readonly refresh_token: string }
+
+function isJsonObject(value: unknown): value is KeycloakTokenResponse {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0
+}
+
+function isOptionalLifetime(value: unknown): value is number | undefined {
+    return value === undefined || (typeof value === 'number' && Number.isFinite(value) && value >= 0)
 }
 
 @Injectable()
@@ -59,8 +80,14 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
             code_verifier: request.codeVerifier,
         })
 
-        if (!response.id_token || !response.access_token || !response.refresh_token) {
-            throw new OAuthTokenExchangeFailedError('response is missing required tokens')
+        if (
+            !isNonEmptyString(response.id_token) ||
+            !isNonEmptyString(response.access_token) ||
+            !isNonEmptyString(response.refresh_token) ||
+            !isOptionalLifetime(response.expires_in) ||
+            !isOptionalLifetime(response.refresh_expires_in)
+        ) {
+            throw new OAuthTokenRequestFailedError()
         }
 
         return {
@@ -78,8 +105,13 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
             refresh_token: refreshToken,
         })
 
-        if (!response.access_token || !response.refresh_token) {
-            throw new OAuthTokenExchangeFailedError('refresh response is missing required tokens')
+        if (
+            !isNonEmptyString(response.access_token) ||
+            !isNonEmptyString(response.refresh_token) ||
+            !isOptionalLifetime(response.expires_in) ||
+            !isOptionalLifetime(response.refresh_expires_in)
+        ) {
+            throw new OAuthTokenRequestFailedError()
         }
 
         return {
@@ -106,7 +138,7 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
         }
     }
 
-    private async postToken(params: Record<string, string>): Promise<KeycloakTokenResponse> {
+    private async postToken(params: TokenRequest): Promise<KeycloakTokenResponse> {
         const response = await fetch(`${this.configuration.backchannelUrl}/protocol/openid-connect/token`, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -117,10 +149,27 @@ export class KeycloakOAuthClient implements OAuthProviderClient {
             }),
         })
 
-        const payload = (await response.json().catch(() => ({}))) as KeycloakTokenResponse
+        let payload: unknown
+        try {
+            payload = await response.json()
+        } catch {
+            throw new OAuthTokenRequestFailedError()
+        }
+
+        if (!isJsonObject(payload)) {
+            throw new OAuthTokenRequestFailedError()
+        }
 
         if (!response.ok) {
-            throw new OAuthTokenExchangeFailedError(payload.error_description ?? payload.error ?? `HTTP ${response.status}`)
+            if (
+                params.grant_type === 'authorization_code' &&
+                response.status === 400 &&
+                payload.error === 'invalid_grant'
+            ) {
+                throw new AuthorizationCodeGrantRejectedError()
+            }
+
+            throw new OAuthTokenRequestFailedError()
         }
 
         return payload

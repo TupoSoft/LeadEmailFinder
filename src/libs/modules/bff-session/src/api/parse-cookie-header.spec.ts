@@ -23,6 +23,12 @@ describe('parseCookieHeader', () => {
     it('ignores a value-less cookie fragment', () => {
         expect(parseCookieHeader('flag; lef_session=abc123')).toEqual({ flag: '', lef_session: 'abc123' })
     })
+
+    it('ignores malformed encoded fragments without losing valid cookies', () => {
+        expect(parseCookieHeader('junk=%; lef_login_state=valid-state')).toEqual({
+            lef_login_state: 'valid-state',
+        })
+    })
 })
 
 describe('firstHeaderValue', () => {

@@ -3,9 +3,12 @@
 This collection checks the browser session HTTP contract against the local Compose API. Session lookup rejects a
 missing session with the exact `401 { "code": "authentication_required" }` response, and a valid service-client bearer
 with the exact `403 { "code": "human_session_required" }` response. An unauthenticated request to log out is rejected
-with `401`. Login redirects to the configured public Keycloak authorization endpoint with PKCE S256, state, nonce, and a
-public callback URL, and sets an `HttpOnly` login-state cookie. A callback with a missing or mismatched login-state
-cookie is rejected with `401`.
+with `401`. Login redirects to the configured public Keycloak authorization endpoint with PKCE S256, state, nonce,
+and a public callback URL, and sets an `HttpOnly` login-state cookie. The callback checks first prove that a missing
+state and a mismatched state cookie redirect to `login_state_invalid` without consuming the valid pending state. The
+same state with no authorization code is then consumed and redirects to `authorization_code_exchange_failed`, and a
+replay redirects to `login_state_invalid`. All four redirects clear the transient cookie, disable caching and referrer
+forwarding, and contain no submitted code or state value.
 
 Run the repository command from the checkout root after provisioning the development stack:
 
@@ -20,7 +23,7 @@ the local stack; set `COMPOSE_PROJECT_NAME` when using a project other than `lef
 from that metadata, so no credential exports or global CLI installation are needed.
 
 The launcher reads the checkout-owned service-client fixture, obtains a short-lived token without logging its client
-secret or bearer value, and sends the token only for the human-session boundary check. It requires all five requests
+secret or bearer value, and sends the token only for the human-session boundary check. It requires all eight requests
 and their tests to execute successfully. Missing prerequisites, a skipped request, zero executed tests, and mismatched
 report counts fail the command. It captures raw CLI output, omits headers and bodies from temporary reports, and
 removes those reports after execution to keep credentials and cookies out of logs and retained artifacts.
