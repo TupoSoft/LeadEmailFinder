@@ -14,14 +14,15 @@ additively and does not wire them into `email-verification.module.ts`.
 
 ## Progress
 
-- [ ] Confirm this plan's own size projection stays under 1,000 non-documentation additions plus deletions.
-- [ ] Move the four entities to `infrastructure/persistence/typeorm/`, updated for the organization-owned shape
+- [x] Confirm this plan's own size projection stays under 1,000 non-documentation additions plus deletions.
+  Actual: 721 (`git diff --numstat -M origin/master...HEAD -- . ':!*.md' ':!pnpm-lock.yaml'`), purely additive.
+- [x] Move the four entities to `infrastructure/persistence/typeorm/`, updated for the organization-owned shape
   from privacy-compliance/04.
-- [ ] Implement `TypeOrmEmailStore`, `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and
+- [x] Implement `TypeOrmEmailStore`, `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and
   `TypeOrmSmtpVerificationStore` against the ports from `module-architecture/10`.
-- [ ] Add contract tests for each store and real-Postgres organization-isolation tests for the three
+- [x] Add contract tests for each store and real-Postgres organization-isolation tests for the three
   organization-owned stores.
-- [ ] Complete focused, architecture, and full validation for the new code (additive only; nothing is wired in
+- [x] Complete focused, architecture, and full validation for the new code (additive only; nothing is wired in
   yet).
 
 ## Plan dependencies
@@ -34,6 +35,30 @@ additively and does not wire them into `email-verification.module.ts`.
 - This plan exists because the original, unsplit `module-architecture/10` was found to be `size/xl` even under
   its own prescribed two-way split; see the Surprises section of `module-architecture/10` for the full record.
   This plan covers only the persistence quarter of that original scope.
+- "Move" the four entities turned out to mean duplicate, not relocate. The old entity files and their repository
+  consumers stay completely untouched, matching the additive-only discipline of `module-architecture/10` and
+  this plan. The new TypeORM classes are new files mapping the same tables, coexisting with the originals until
+  the cutover in `module-architecture/18` deletes the originals. Named them with an explicit `Entity` suffix
+  (`EmailEntity`, `DomainPolicyEntity`, `EmailVerificationEntity`, `SmtpVerificationEntity`) to keep them
+  unambiguous from both the old entity classes and the plain domain interfaces sharing the same bare names.
+- The old `SmtpVerification` entity's `reason` column used the `SmtpVerificationReason` enum from
+  `email-verifier/smtp/smtp.enums.ts`, a file with no recognized architecture layer. Importing it from the new
+  `infrastructure/` entity would have been a genuine new `layer-dependency` violation (an infrastructure file
+  importing an unclassified "module root" file), not a baselined one — the checker flags any classified-layer
+  source importing an unclassified target. Declared the same string-literal set locally in the new entity file
+  instead, keyed against `ISmtpVerificationResponse['reason']` from `@tuposoft/lead-email-finder/common` with a
+  `satisfies` clause so the enum column values and the domain type can never silently drift apart.
+- The plan's own Validation section prescribed a dedicated `email_verification_persistence_test` database
+  created ad hoc against the running container. CI's real convention (`.github/workflows/validate.yml`) is
+  different. A single shared Postgres service database (`lef_identity_test`) backs every real-Postgres test.
+  Each test file gets its own dedicated CI step naming that file by path plus a uniquely named environment
+  variable (`TEST_POSTGRES_URL`, `TEST_CREDITS_POSTGRES_URL`, `TEST_PAYMENT_WEBHOOK_POSTGRES_URL`, all pointing at
+  the same database), with per-test-run schema isolation (`schema = '<name>_${process.pid}'`) preventing
+  collisions. The main `Test` step (`pnpm test:ci`) sets none of these, so any real-Postgres test — including the
+  existing `verification-organization-ownership.integration.spec.ts` in this same module — silently skips unless
+  it has its own dedicated CI step. This plan's new test uses `TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL` and
+  adds the matching CI step (`Test email-verification persistence stores against a real database`) so it
+  actually executes in CI instead of always skipping.
 
 ## Decision Log
 
@@ -131,9 +156,13 @@ Before writing code, record the projection using the same command as `module-arc
     git fetch origin master
     git diff --numstat -M origin/master...HEAD -- . ':!*.md' ':!pnpm-lock.yaml' | awk '{a+=$1; d+=$2} END {print a+d}'
 
-Before running the real-Postgres specs, create a disposable test database against the running container:
+Before running the real-Postgres spec locally, create a disposable `_test`-suffixed database against the
+running container and point `TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL` at it (CI instead reuses the
+shared `lef_identity_test` service database via a dedicated step in `.github/workflows/validate.yml`):
 
-    docker exec lef-postgres-1 psql -U postgres -c "CREATE DATABASE email_verification_persistence_test;"
+    docker exec lef-postgres-1 psql -U postgres -c "CREATE DATABASE lef_email_verification_test;"
+    TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL="postgresql://postgres:postgres@localhost:<mapped-port>/lef_email_verification_test" \
+      corepack pnpm test -- typeorm-stores-organization-isolation.integration.spec.ts --runInBand
 
 Run focused and architecture coverage:
 
@@ -156,22 +185,34 @@ behavior. Bruno: not applicable — this plan adds no route and wires nothing in
 
 ## Idempotence and Recovery
 
-This plan only adds files; rerunning any step is safe. Drop and recreate the disposable test database if a prior
-run left it in an inconsistent state:
+This plan only adds files; rerunning any step is safe. Drop and recreate the local disposable database if a
+prior run left it in an inconsistent state:
 
-    docker exec lef-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS email_verification_persistence_test;"
-    docker exec lef-postgres-1 psql -U postgres -c "CREATE DATABASE email_verification_persistence_test;"
+    docker exec lef-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS lef_email_verification_test;"
+    docker exec lef-postgres-1 psql -U postgres -c "CREATE DATABASE lef_email_verification_test;"
 
-No other database, queue, or Docker state is affected.
+No other database, queue, or Docker state is affected. CI's shared `lef_identity_test` service database resets
+itself every run since it is a fresh container.
 
 ## Artifacts and Notes
 
-Record the per-path size projection and actual count, and the final store file list. Also record the reset/reseed
-steps for the moved entities. TypeORM synchronization recreates the moved tables' schema automatically against
-disposable development data. Document the exact table names here once the move lands, so schema-incompatible
-resets are easy to script later.
+Size projection: 721 non-documentation additions plus deletions (purely additive), against the 1,000-line gate.
+
+New files: `infrastructure/persistence/typeorm/{email,domain-policy,email-verification,smtp-verification}.entity.ts`;
+`infrastructure/persistence/typeorm-{email,domain,verification,smtp-verification}.store.ts` and their four
+matching `.spec.ts` contract tests; `infrastructure/persistence/typeorm-stores-organization-isolation.integration.spec.ts`;
+a new CI step in `.github/workflows/validate.yml` (`Test email-verification persistence stores against a real
+database`, environment variable `TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL`).
+
+Reset/reseed: TypeORM synchronization recreates `emails`, `domains`, `email_verifications`, and
+`smtp_verifications` automatically against disposable development data — these are the same tables and columns
+the original entities already own, so no separate reset procedure is needed beyond the existing one for those
+tables.
 
 ## Plan readiness
 
-Ready after `module-architecture/10` merges and this plan's own binding size projection confirms fewer than
-1,000 non-documentation additions plus deletions.
+Implemented and fully validated: 17 new focused tests pass (15 contract + 2 real-Postgres organization-isolation),
+the full jest suite (197 suites, 1,780 tests) passes, `architecture:check` reports the same 108 baselined
+violations as before (no growth), and `typecheck`/`lint`/`docs:lint`/`git diff --check` all pass. Local `build`
+could not be verified in this session due to an unrelated, recurring root-owned `dist/` directory in this
+development environment; CI runs a clean build in its own container. Pull request not yet opened.

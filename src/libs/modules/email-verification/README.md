@@ -104,9 +104,17 @@ ports under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationS
 (`EmailVerificationOrchestrator`, `MailboxVerificationService`) plus email/domain administration use cases
 (`EmailAdministrationService`, `DomainPolicyService`) built on top of them. None of it is wired into
 `EmailVerificationModule`, imports any port implementation, or changes any route, DTO, or persistence behavior
-yet. `module-architecture/17` implements the four persistence ports. `module-architecture/18` implements the
-three network ports, composes the final module, moves the `/emails` administration API, and cuts every delivery
-mode over to this core.
+yet.
+
+`infrastructure/persistence/` now also holds the four persistence-port adapters from `module-architecture/17` —
+`TypeOrmEmailStore`, `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and `TypeOrmSmtpVerificationStore` — over
+duplicate `EmailEntity`, `DomainPolicyEntity`, `EmailVerificationEntity`, and `SmtpVerificationEntity` TypeORM
+classes under `infrastructure/persistence/typeorm/`, mapping the same `emails`, `domains`, `email_verifications`,
+and `smtp_verifications` tables the flat implementation's original entities already own. These, too, are
+additive and unwired: nothing registers them with TypeORM, and the original entities and repositories keep
+serving every existing route. `module-architecture/18` implements the three network ports, composes the final
+module, moves the `/emails` administration API, and cuts every delivery mode over to this core, at which point
+the original entities and the flat implementation are deleted.
 
 ## Dependencies
 
@@ -212,6 +220,11 @@ Focused tests are grouped by behavior:
 - **Pure core (not yet wired)**: `application/domain-policy.service.spec.ts`,
   `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,
   `application/email-verification.service.spec.ts`
+- **Persistence stores (not yet wired)**: `infrastructure/persistence/typeorm-email.store.spec.ts`,
+  `infrastructure/persistence/typeorm-domain.store.spec.ts`,
+  `infrastructure/persistence/typeorm-verification.store.spec.ts`,
+  `infrastructure/persistence/typeorm-smtp-verification.store.spec.ts`, and the real-Postgres
+  `infrastructure/persistence/typeorm-stores-organization-isolation.integration.spec.ts`
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated
