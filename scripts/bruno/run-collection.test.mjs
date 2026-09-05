@@ -46,6 +46,7 @@ function report() {
 
 test('accepts only an exact registered collection with no extra command arguments', async () => {
     assert.equal(registeredCollection('bff-sessions').network, 'host')
+    assert.equal(registeredCollection('bff-sessions').tests, 9)
     assert.equal(registeredCollection('smtp-dev').network, 'compose')
     for (const name of ['../smtp-dev', '/tmp/collection', 'constructor', '__proto__', 'unknown']) {
         assert.throws(() => registeredCollection(name), /registered/)
@@ -102,7 +103,11 @@ test('token-minting collections always use developer sandbox and credentials nev
     )
     const bffEnvironment = collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential)
     assert.equal(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')[4], 'developer')
-    assert.ok(!JSON.stringify(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')).includes(serviceClient.clientSecret))
+    assert.ok(
+        !JSON.stringify(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')).includes(
+            serviceClient.clientSecret,
+        ),
+    )
     assert.throws(
         () => cliArguments('bff-sessions', { ...bffEnvironment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
         /prerequisites/,
@@ -110,11 +115,12 @@ test('token-minting collections always use developer sandbox and credentials nev
 })
 
 test('requires every registered request and a nonzero passing test count', () => {
-    assert.deepEqual(assertExecutedReport(report(), 1), { requests: 1, tests: 1 })
+    assert.deepEqual(assertExecutedReport(report(), 1, 1), { requests: 1, tests: 1 })
     for (const invalid of [[], [{ summary: { totalRequests: 0, totalTests: 0 }, results: [] }]]) {
         assert.throws(() => assertExecutedReport(invalid, 1))
     }
     assert.throws(() => assertExecutedReport(report(), 2))
+    assert.throws(() => assertExecutedReport(report(), 1, 2))
 })
 
 test('rejects skipped, failed, and mismatched report counts even after a successful process exit', () => {
@@ -136,6 +142,7 @@ test('rejects skipped, failed, and mismatched report counts even after a success
 
 test('pinned CLI executes the real BFF collection and deletes reports on success and failure', async () => {
     let wrongIssuer = false
+    let pendingStateAvailable = false
     let baseUrl
     const server = createServer((request, response) => {
         if (request.url === '/realms/lead-email-finder/protocol/openid-connect/token') {
@@ -144,9 +151,12 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             return
         }
         if (request.url === '/v1/auth/login') {
+            pendingStateAvailable = true
             const url = new URL(
                 `${
-                    wrongIssuer ? 'http://keycloak:8080/realms/lead-email-finder' : `${baseUrl}/realms/lead-email-finder`
+                    wrongIssuer
+                        ? 'http://keycloak:8080/realms/lead-email-finder'
+                        : `${baseUrl}/realms/lead-email-finder`
                 }/protocol/openid-connect/auth`,
             )
             for (const [key, value] of Object.entries({
@@ -161,9 +171,61 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
                 url.searchParams.set(key, value)
             response.writeHead(302, {
                 location: url.toString(),
-                'set-cookie': 'lef_login_state=test-cookie; HttpOnly; Path=/',
+                'set-cookie': 'lef_login_state=test-state; Max-Age=600; Path=/v1/auth; HttpOnly; SameSite=Lax',
             })
             response.end('{}')
+            return
+        }
+        if (request.url === '/v1/auth/callback?state=test-state') {
+            if (request.headers.cookie !== 'lef_login_state=test-state' || !pendingStateAvailable) {
+                response.writeHead(500).end()
+                return
+            }
+            pendingStateAvailable = false
+            response.writeHead(302, {
+                location: `${baseUrl}/auth/error?code=authorization_code_exchange_failed`,
+                'set-cookie':
+                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
+                'cache-control': 'no-store',
+                'referrer-policy': 'no-referrer',
+            })
+            response.end()
+            return
+        }
+        if (request.url === '/v1/auth/callback?code=synthetic-code') {
+            if (!pendingStateAvailable) {
+                response.writeHead(500).end()
+                return
+            }
+            response.writeHead(302, {
+                location: `${baseUrl}/auth/error?code=login_state_invalid`,
+                'set-cookie':
+                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
+                'cache-control': 'no-store',
+                'referrer-policy': 'no-referrer',
+            })
+            response.end()
+            return
+        }
+        if (request.url === '/v1/auth/callback?code=synthetic-code&state=test-state') {
+            const isMismatch = request.headers.cookie === 'lef_login_state=mismatched-state'
+            const isReplay = request.headers.cookie === 'lef_login_state=test-state'
+            if (
+                (isMismatch && !pendingStateAvailable) ||
+                (isReplay && pendingStateAvailable) ||
+                (!isMismatch && !isReplay)
+            ) {
+                response.writeHead(500).end()
+                return
+            }
+            response.writeHead(302, {
+                location: `${baseUrl}/auth/error?code=login_state_invalid`,
+                'set-cookie':
+                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
+                'cache-control': 'no-store',
+                'referrer-policy': 'no-referrer',
+            })
+            response.end()
             return
         }
         if (request.url === '/v1/auth/session' && request.headers.authorization) {
@@ -190,7 +252,7 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             testServiceClient,
             testServiceCredential,
         )
-        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 5, tests: 6 })
+        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 8, tests: 9 })
         assert.deepEqual(await readdir(temporaryRoot), [])
         wrongIssuer = true
         await assert.rejects(executeCollection('bff-sessions', environment, checkoutRoot), /raw output is withheld/)

@@ -7,6 +7,8 @@ browser-session mutation across the whole application.
 ## Responsibility
 
 - Starting and completing the Keycloak Authorization Code + PKCE login flow for human users.
+- Atomically consuming each pending login state once and mapping recoverable callback failures to stable,
+  same-origin browser redirects without provider or identity details.
 - Issuing, reading, refreshing, and revoking the encrypted `lef_session` cookie and the paired `lef_csrf_token`.
 - Resolving a human identity's active organization membership at authentication time
   (`HumanMembershipResolver`), so a disabled membership invalidates the session on the next request.
@@ -26,8 +28,9 @@ browser-session mutation across the whole application.
   `AuthenticationCompositionModule` does that, using this module's `BffSessionCredentialAuthenticator` and
   `BrowserSessionMutationGuard` alongside the equivalents owned by `auth`.
 - No membership/organization persistence — this module reads authentication-time membership state through
-  identity's `ActiveMembershipReader`, reads browser account fields through `CurrentAccountReader`, and
-  resolves/creates external identities through `ExternalIdentityResolver`; it does not own or write those tables.
+  identity's `ActiveMembershipReader`, reads browser account fields through `CurrentAccountReader`, and finds an
+  existing external identity through `ExternalIdentityResolver`. The callback synchronizes its email only after
+  active-membership resolution succeeds and never creates an identity; this module does not own those tables.
 
 ## Public API
 
@@ -55,7 +58,7 @@ This module depends only on the public barrel `auth` exposes — `CredentialAuth
 | Method | Path               | Access                                                                                                                                        |
 | ------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`  | `v1/auth/login`    | Public — redirects to Keycloak with a PKCE S256 challenge                                                                                     |
-| `GET`  | `v1/auth/callback` | Public — exchanges the authorization code, sets the session/CSRF cookies                                                                      |
+| `GET`  | `v1/auth/callback` | Public — consumes pending state, exchanges the authorization code, and sets the session/CSRF cookies                                          |
 | `GET`  | `v1/auth/session`  | Human session — returns browser-safe email, membership, organization, capabilities, and grantable service-client permissions                  |
 | `POST` | `v1/auth/logout`   | Authenticated; unsafe method, so `BrowserSessionMutationGuard` also requires a matching Origin and CSRF token for a `human_session` principal |
 
@@ -64,11 +67,31 @@ tokens, session identifiers, or raw principal permissions. Missing or unusable a
 exact `401 { "code": "authentication_required" }` response. An authenticated service client returns the exact
 `403 { "code": "human_session_required" }` response.
 
+`GET v1/auth/callback` parses the provider query locally so missing, blank, repeated, or non-string `state` and
+`code` values reach the browser recovery policy instead of the global validation response. State is checked and
+atomically consumed before the authorization code is validated or exchanged. Recoverable failures redirect to
+`${APP_BASE_URL}/auth/error` with exactly one of these codes:
+
+- `login_state_invalid`
+- `authorization_code_exchange_failed`
+- `active_membership_required`
+
+Only an explicit OAuth `400 invalid_grant` response to the authorization-code exchange uses the code-exchange
+redirect. Provider transport, throttling, server, client-configuration, malformed-response, and ID-token integrity
+failures remain redacted `5xx` responses. ID-token integrity validation rejects an audience other than the configured
+BFF client, any additional audience without an explicit trust policy, and a present authorized-party claim that does
+not equal the BFF client. The callback looks up an existing external identity and resolves its active membership
+before synchronizing email, so `active_membership_required` does not create or update an identity. Every callback
+response clears the transient login-state cookie and sets `Cache-Control: no-store` and
+`Referrer-Policy: no-referrer`; successful handling still redirects to `APP_BASE_URL` and issues the session and CSRF
+cookies.
+
 ## Persistence
 
 None owned. Session and pending-login state live in Redis, behind this module's own `SessionStore` and
 `PendingLoginStateStore` application ports (`RedisSessionStore`, `RedisPendingLoginStateStore` are their only
-adapters), not Postgres.
+adapters), not Postgres. Pending login state is consumed with one atomic Redis `GETDEL`, so concurrent callback
+requests cannot both obtain the same verifier and nonce.
 
 ## Configuration
 
@@ -95,25 +118,28 @@ that identify the variable without repeating its value.
 
 ## Validation
 
-Focused tests live in `src/`, including `application/bff-session-flow.service.spec.ts`,
-`infrastructure/config/bff-session-configuration.spec.ts`,
-`infrastructure/keycloak/keycloak-oauth-client.spec.ts`,
-`infrastructure/jose/jose-id-token-verifier.spec.ts`,
-`infrastructure/jose/jose-id-token-verifier.integration.spec.ts` (real signatures and independent JWKS retrieval,
-including rejection of the internal issuer),
+Focused application tests include `application/bff-session-flow.service.spec.ts`,
 `application/human-membership-resolver.service.spec.ts`, `application/session-token-refresher.service.spec.ts`,
-`application/bff-session-credential-authenticator.spec.ts`, `bff-session.module.spec.ts`,
-`application/browser-capability-policy.spec.ts`, `application/current-account.service.spec.ts`,
-`api/browser-session-mutation.guard.spec.ts`, `api/csrf.guard.spec.ts`, `api/origin.guard.spec.ts`,
-`api/bff-session.controller.spec.ts`, `api/bff-session.swagger.spec.ts`,
-`infrastructure/redis/redis-session-store.spec.ts`,
-`bff-session-guard-wiring.integration.spec.ts`, and the live-Keycloak-gated
-`bff-session-flow.live-keycloak.integration.spec.ts` (real login, disabled-membership invalidation, replay
-rejection, and a genuine CSRF/Origin round trip).
+`application/bff-session-credential-authenticator.spec.ts`, `application/browser-capability-policy.spec.ts`, and
+`application/current-account.service.spec.ts`.
+
+Provider, configuration, and storage contracts use `infrastructure/config/bff-session-configuration.spec.ts`,
+`infrastructure/keycloak/keycloak-oauth-client.spec.ts`, the two `infrastructure/jose/jose-id-token-verifier` specs,
+and the two `infrastructure/redis/redis-*-store.spec.ts` files. The JOSE integration spec uses real signatures and an
+independent JWKS address, including rejection of the internal issuer.
+
+The API boundary uses `api/bff-session.controller.spec.ts`, `api/bff-session.swagger.spec.ts`,
+`api/parse-cookie-header.spec.ts`, and the Origin, CSRF, and browser-session-mutation guard specs. Module composition
+is covered by `bff-session.module.spec.ts` and `bff-session-guard-wiring.integration.spec.ts`.
+
+The live-Keycloak-gated `bff-session-flow.live-keycloak.integration.spec.ts` covers real login, disabled-membership
+invalidation, replay rejection, and a genuine CSRF/Origin round trip.
 
 [`bruno/bff-sessions`](../../../../bruno/bff-sessions/README.md) exercises HTTP boundaries that do not require a real
 Keycloak human session. It covers the exact unauthenticated `401` response on `session`, an exact human-only `403`
 response for a valid service-client bearer, an unauthenticated request to log out, and a correctly constructed PKCE
-login redirect. It also covers login-state/`state` mismatch rejection on `callback`. The full authenticated round trip —
-including the current-account contract and CSRF/Origin enforcement against a genuine cookie — is covered instead by
-`bff-session-flow.live-keycloak.integration.spec.ts` above.
+login redirect. It also proves that a missing state and a mismatched state cookie redirect with
+`login_state_invalid`, that the mismatch leaves the valid state usable, that a missing authorization code then
+consumes it and redirects safely, and that replaying the consumed state returns `login_state_invalid`. The full
+authenticated round trip — including the current-account contract and CSRF/Origin enforcement against a genuine
+cookie — is covered instead by `bff-session-flow.live-keycloak.integration.spec.ts` above.

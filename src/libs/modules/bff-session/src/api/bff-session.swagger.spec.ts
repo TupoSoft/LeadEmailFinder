@@ -30,7 +30,7 @@ import { BffSessionController } from './bff-session.controller'
 })
 class BffSessionSwaggerTestModule {}
 
-describe('BFF current-account Swagger contract', () => {
+describe('BFF Swagger contracts', () => {
     let app: INestApplication
     let document: OpenAPIObject
 
@@ -91,5 +91,49 @@ describe('BFF current-account Swagger contract', () => {
             },
         })
         expect(JSON.stringify(permissionsSchema)).not.toContain('platform:admin')
+    })
+
+    it('publishes the callback query, redirect, privacy-header, and redacted error contract', () => {
+        const operation = document.paths['/v1/auth/callback']?.get
+
+        expect(operation?.parameters).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'code',
+                    in: 'query',
+                    required: false,
+                    schema: { type: 'string' },
+                }),
+                expect.objectContaining({
+                    name: 'state',
+                    in: 'query',
+                    required: false,
+                    schema: { type: 'string' },
+                }),
+            ]),
+        )
+        expect(operation?.responses['302']).toMatchObject({
+            description: expect.stringContaining('login_state_invalid'),
+            headers: {
+                Location: { schema: { type: 'string', format: 'uri' } },
+                'Set-Cookie': { schema: { type: 'string' } },
+                'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
+                'Referrer-Policy': { schema: { type: 'string', enum: ['no-referrer'] } },
+            },
+        })
+        expect(JSON.stringify(operation?.responses['302'])).toContain('authorization_code_exchange_failed')
+        expect(JSON.stringify(operation?.responses['302'])).toContain('active_membership_required')
+        for (const status of ['500', '502']) {
+            expect(operation?.responses[status]).toMatchObject({
+                headers: {
+                    'Set-Cookie': { schema: { type: 'string' } },
+                    'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
+                    'Referrer-Policy': { schema: { type: 'string', enum: ['no-referrer'] } },
+                },
+            })
+        }
+        expect(operation?.responses).not.toHaveProperty('400')
+        expect(operation?.responses).not.toHaveProperty('401')
+        expect(operation?.responses).not.toHaveProperty('403')
     })
 })

@@ -12,10 +12,12 @@ who is acting and what they are allowed to do.
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
 - A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, `ActiveServiceCredentialReader`, and
-  `CurrentAccountReader`, used by `bff-session` (identity resolution on OIDC return, active-membership checks, and
-  browser-safe current-account fields) and `auth` (active service-credential checks). The current-account reader
-  returns data only for exactly one active membership in the authenticated organization and preserves a nullable
-  external-identity email.
+  `CurrentAccountReader`, used by `bff-session` (existing-identity lookup and deferred email synchronization on OIDC
+  return, active-membership checks, and browser-safe current-account fields) and `auth` (active service-credential
+  checks). `ExternalIdentityResolver.findExisting` performs a read without creating an identity, while
+  `synchronizeEmail` updates an already accepted identity when needed; `resolveOrCreate` retains the explicit
+  creation workflow. The current-account reader returns data only for exactly one active membership in the
+  authenticated organization and preserves a nullable external-identity email.
 - Atomic credit-ledger persistence (`CreditLedgerStore`) — locking, idempotent debit/grant, and balance
   mutation — used by `credits` since `module-architecture/04`. Identity owns the transaction and locking
   mechanics and reports immutable grant facts through `CreditGrantPersistenceResult`; `credits` owns the
@@ -68,6 +70,8 @@ barrel. It splits into two parts:
 The ledger port also exports `CreditDebitOutcome` and `CreditGrantPersistenceResult`. The grant result contains
 the `inserted` or `existing` disposition, the recorded grant amount, and the current authoritative balance.
 Identity does not interpret amount mismatches or platform reference namespaces.
+`ExternalIdentityResolver` separates lookup, email synchronization, and explicit create-if-missing behavior so a
+consumer can defer identity writes until its own authorization preconditions have passed.
 
 **Test-fixture-only surface** — every entity class listed under Persistence below, exported from the TypeScript
 barrel for exactly one purpose. It lets another module's own real-Postgres or live-Keycloak integration test build

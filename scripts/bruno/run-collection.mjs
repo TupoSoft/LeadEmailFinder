@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
-    'bff-sessions': Object.freeze({ requests: 5, sandbox: 'developer', network: 'host' }),
+    'bff-sessions': Object.freeze({ requests: 8, tests: 9, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 22, sandbox: 'developer', network: 'compose' }),
 })
 
@@ -41,7 +41,7 @@ const passingResult = z.object({
 })
 
 // Match the existing platform-credit launcher's fail-closed report contract.
-export function assertExecutedReport(report, expectedRequests) {
+export function assertExecutedReport(report, expectedRequests, expectedTests) {
     const parsed = z
         .array(
             z.object({
@@ -62,6 +62,7 @@ export function assertExecutedReport(report, expectedRequests) {
         summary.totalRequests !== expectedRequests ||
         summary.passedRequests !== expectedRequests ||
         results.length !== expectedRequests ||
+        (expectedTests !== undefined && summary.totalTests !== expectedTests) ||
         summary.totalTests !== summary.passedTests ||
         results.reduce((count, result) => count + result.testResults.length, 0) !== summary.totalTests
     ) {
@@ -121,8 +122,7 @@ export function cliArguments(name, environment, reportFile) {
         !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
         !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
         (collection.network === 'compose' &&
-            (!environment.OIDC_BACKCHANNEL_URL ||
-                !environment.PLATFORM_ORGANIZATION_ID))
+            (!environment.OIDC_BACKCHANNEL_URL || !environment.PLATFORM_ORGANIZATION_ID))
     ) {
         throw new Error('Bruno collection prerequisites are missing')
     }
@@ -163,7 +163,11 @@ export async function executeCollection(name, environment, checkoutRoot) {
                 maxBuffer: 8 * 1024 * 1024,
             },
         )
-        return assertExecutedReport(JSON.parse(await readFile(reportFile, 'utf8')), collection.requests)
+        return assertExecutedReport(
+            JSON.parse(await readFile(reportFile, 'utf8')),
+            collection.requests,
+            collection.tests,
+        )
     } catch {
         throw new Error(
             'The registered Bruno collection failed; raw output is withheld to protect credentials and cookies',
@@ -220,7 +224,10 @@ export async function runCollection(args, checkoutRoot) {
         command.child.stdin.end(JSON.stringify({ name, environment }))
         const { stdout } = await command
         const counts = z
-            .object({ requests: z.literal(collection.requests), tests: z.number().int().positive() })
+            .object({
+                requests: z.literal(collection.requests),
+                tests: collection.tests === undefined ? z.number().int().positive() : z.literal(collection.tests),
+            })
             .parse(JSON.parse(stdout))
         return counts
     }

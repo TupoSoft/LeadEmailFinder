@@ -19,13 +19,11 @@ export class RedisPendingLoginStateStore implements PendingLoginStateStore {
     }
 
     async consume(state: string): Promise<PendingLoginState | undefined> {
-        const raw = await withRedisTimeout('login-state:consume', this.redis.get(this.key(state)))
+        const raw = await withRedisTimeout('login-state:consume', this.redis.getdel(this.key(state)))
 
-        if (!raw) {
+        if (raw === null) {
             return undefined
         }
-
-        await withRedisTimeout('login-state:consume-delete', this.redis.del(this.key(state)))
 
         return JSON.parse(raw) as PendingLoginState
     }

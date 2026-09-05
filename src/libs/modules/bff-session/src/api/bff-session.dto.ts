@@ -1,5 +1,4 @@
 import { Expose, Type } from 'class-transformer'
-import { IsNotEmpty, IsString } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import { AUTH_ROLES, AuthRole } from '@tuposoft/lead-email-finder/modules/identity'
 import {
@@ -7,16 +6,6 @@ import {
     ServiceClientGrantablePermission,
 } from '@tuposoft/lead-email-finder/modules/auth'
 import { BROWSER_CAPABILITIES, BrowserCapability } from '../application/browser-capability-policy'
-
-export class AuthCallbackQueryDto {
-    @IsString()
-    @IsNotEmpty()
-    code: string
-
-    @IsString()
-    @IsNotEmpty()
-    state: string
-}
 
 export class CurrentAccountMembershipDto {
     @ApiProperty({ type: String, format: 'uuid', description: 'Active organization membership identifier.' })

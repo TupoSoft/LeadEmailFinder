@@ -1,7 +1,8 @@
 import { ConfigService } from '@nestjs/config'
 import { BffSessionConfiguration } from '../../application/bff-session-configuration'
+import { AuthorizationCodeGrantRejectedError } from '../../application/oauth-provider-client'
 import { createBffSessionConfiguration } from '../config/bff-session-configuration'
-import { KeycloakOAuthClient, OAuthTokenExchangeFailedError } from './keycloak-oauth-client'
+import { KeycloakOAuthClient, OAuthTokenRequestFailedError } from './keycloak-oauth-client'
 
 const configuration: BffSessionConfiguration = {
     appBaseUrl: 'http://localhost:53000',
@@ -13,6 +14,16 @@ const configuration: BffSessionConfiguration = {
     sessionIdleTimeoutMs: 1000,
     sessionAbsoluteTimeoutMs: 2000,
     isSecureCookie: false,
+}
+
+async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
+    try {
+        await promise
+    } catch (error) {
+        return error
+    }
+
+    throw new Error('Expected promise to reject')
 }
 
 describe('KeycloakOAuthClient', () => {
@@ -45,17 +56,21 @@ describe('KeycloakOAuthClient', () => {
             json: () => Promise.resolve({ id_token: 'id', access_token: 'access', refresh_token: 'refresh' }),
         })
 
-        const authorizationUrl = new URL(client.buildAuthorizationUrl({
-            redirectUri: `${configuration.appBaseUrl}/v1/auth/callback`,
-            state: 'state',
-            nonce: 'nonce',
-            codeChallenge: 'challenge',
-        }))
+        const authorizationUrl = new URL(
+            client.buildAuthorizationUrl({
+                redirectUri: `${configuration.appBaseUrl}/v1/auth/callback`,
+                state: 'state',
+                nonce: 'nonce',
+                codeChallenge: 'challenge',
+            }),
+        )
         await client.exchangeAuthorizationCode({ code: 'code', redirectUri: 'callback', codeVerifier: 'verifier' })
         await client.refreshTokens('refresh')
         await client.revokeSession('refresh')
 
-        expect(authorizationUrl.origin + authorizationUrl.pathname).toBe(`${configuration.issuer}/protocol/openid-connect/auth`)
+        expect(authorizationUrl.origin + authorizationUrl.pathname).toBe(
+            `${configuration.issuer}/protocol/openid-connect/auth`,
+        )
         expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
             `${configuration.issuer}/protocol/openid-connect/token`,
             `${configuration.issuer}/protocol/openid-connect/token`,
@@ -84,6 +99,12 @@ describe('KeycloakOAuthClient', () => {
     })
 
     describe('exchangeAuthorizationCode', () => {
+        const exchangeRequest = {
+            code: 'auth-code',
+            redirectUri: 'http://localhost:53000/v1/auth/callback',
+            codeVerifier: 'verifier',
+        }
+
         it('returns tokens from a successful exchange', async () => {
             fetchMock.mockResolvedValue({
                 ok: true,
@@ -97,11 +118,7 @@ describe('KeycloakOAuthClient', () => {
                     }),
             })
 
-            const result = await client.exchangeAuthorizationCode({
-                code: 'auth-code',
-                redirectUri: 'http://localhost:53000/v1/auth/callback',
-                codeVerifier: 'verifier',
-            })
+            const result = await client.exchangeAuthorizationCode(exchangeRequest)
 
             expect(result).toEqual({
                 idToken: 'id-token',
@@ -125,32 +142,101 @@ describe('KeycloakOAuthClient', () => {
             })
         })
 
-        it('throws when Keycloak rejects the exchange (e.g. wrong PKCE verifier)', async () => {
+        it('throws the typed grant rejection only for an OAuth 400 invalid_grant response', async () => {
             fetchMock.mockResolvedValue({
                 ok: false,
                 status: 400,
-                json: () => Promise.resolve({ error: 'invalid_grant', error_description: 'PKCE verification failed' }),
+                json: () =>
+                    Promise.resolve({
+                        error: 'invalid_grant',
+                        error_description: 'provider detail must remain private',
+                    }),
             })
 
-            await expect(
-                client.exchangeAuthorizationCode({
-                    code: 'auth-code',
-                    redirectUri: 'http://localhost:53000/v1/auth/callback',
-                    codeVerifier: 'wrong-verifier',
-                }),
-            ).rejects.toThrow(OAuthTokenExchangeFailedError)
+            const error = await captureRejection(client.exchangeAuthorizationCode(exchangeRequest))
+
+            expect(error).toBeInstanceOf(AuthorizationCodeGrantRejectedError)
+            expect((error as Error).message).toBe('Authorization code grant was rejected')
+            expect((error as Error).message).not.toContain('provider detail')
         })
 
-        it('throws when the response is missing required tokens', async () => {
-            fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) })
+        it.each([
+            ['another OAuth 400 error', 400, { error: 'invalid_request', error_description: 'private detail' }],
+            ['an unknown OAuth 400 error', 400, { error: 'provider_specific', error_description: 'private detail' }],
+            ['a client authentication failure', 401, { error: 'invalid_grant', error_description: 'private detail' }],
+            ['a throttling response', 429, { error: 'invalid_grant', error_description: 'private detail' }],
+            ['a provider server failure', 503, { error: 'invalid_grant', error_description: 'private detail' }],
+        ])('keeps %s outside the recoverable grant-rejection category', async (_name, status, payload) => {
+            fetchMock.mockResolvedValue({
+                ok: false,
+                status,
+                json: () => Promise.resolve(payload),
+            })
 
-            await expect(
-                client.exchangeAuthorizationCode({
-                    code: 'auth-code',
-                    redirectUri: 'http://localhost:53000/v1/auth/callback',
-                    codeVerifier: 'verifier',
-                }),
-            ).rejects.toThrow(OAuthTokenExchangeFailedError)
+            const error = await captureRejection(client.exchangeAuthorizationCode(exchangeRequest))
+
+            expect(error).toBeInstanceOf(OAuthTokenRequestFailedError)
+            expect(error).not.toBeInstanceOf(AuthorizationCodeGrantRejectedError)
+            expect((error as Error).message).toBe('OAuth provider token request failed')
+            expect((error as Error).message).not.toContain('private detail')
+        })
+
+        it.each([
+            ['missing required tokens', {}],
+            ['an error-shaped success', { error: 'invalid_grant' }],
+            ['a non-string ID token', { id_token: 42, access_token: 'access', refresh_token: 'refresh' }],
+            ['a blank access token', { id_token: 'id', access_token: '   ', refresh_token: 'refresh' }],
+            ['a non-string refresh token', { id_token: 'id', access_token: 'access', refresh_token: {} }],
+            [
+                'a malformed access-token lifetime',
+                { id_token: 'id', access_token: 'access', refresh_token: 'refresh', expires_in: '300' },
+            ],
+            [
+                'a malformed refresh-token lifetime',
+                { id_token: 'id', access_token: 'access', refresh_token: 'refresh', refresh_expires_in: -1 },
+            ],
+        ])('keeps a 2xx response with %s outside the recoverable category', async (_name, payload) => {
+            fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(payload) })
+
+            const error = await captureRejection(client.exchangeAuthorizationCode(exchangeRequest))
+
+            expect(error).toBeInstanceOf(OAuthTokenRequestFailedError)
+            expect(error).not.toBeInstanceOf(AuthorizationCodeGrantRejectedError)
+        })
+
+        it.each([
+            ['null', null],
+            ['an array', []],
+            ['a string', 'not an object'],
+        ])('rejects %s JSON without classifying it as a grant rejection', async (_name, payload) => {
+            fetchMock.mockResolvedValue({ ok: false, status: 400, json: () => Promise.resolve(payload) })
+
+            const error = await captureRejection(client.exchangeAuthorizationCode(exchangeRequest))
+
+            expect(error).toBeInstanceOf(OAuthTokenRequestFailedError)
+            expect(error).not.toBeInstanceOf(AuthorizationCodeGrantRejectedError)
+        })
+
+        it('redacts an invalid JSON response', async () => {
+            fetchMock.mockResolvedValue({
+                ok: false,
+                status: 400,
+                json: () => Promise.reject(new Error('raw parser detail must remain private')),
+            })
+
+            const error = await captureRejection(client.exchangeAuthorizationCode(exchangeRequest))
+
+            expect(error).toBeInstanceOf(OAuthTokenRequestFailedError)
+            expect((error as Error).message).not.toContain('raw parser detail')
+        })
+
+        it.each([
+            ['transport failure', new Error('network unavailable')],
+            ['timeout', Object.assign(new Error('request timed out'), { name: 'TimeoutError' })],
+        ])('preserves a %s as an infrastructure failure', async (_name, failure) => {
+            fetchMock.mockRejectedValue(failure)
+
+            await expect(client.exchangeAuthorizationCode(exchangeRequest)).rejects.toBe(failure)
         })
     })
 
@@ -159,7 +245,12 @@ describe('KeycloakOAuthClient', () => {
             fetchMock.mockResolvedValue({
                 ok: true,
                 json: () =>
-                    Promise.resolve({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 300, refresh_expires_in: 1800 }),
+                    Promise.resolve({
+                        access_token: 'new-access',
+                        refresh_token: 'new-refresh',
+                        expires_in: 300,
+                        refresh_expires_in: 1800,
+                    }),
             })
 
             const result = await client.refreshTokens('old-refresh')
@@ -179,14 +270,18 @@ describe('KeycloakOAuthClient', () => {
             expect(body.get('refresh_token')).toBe('old-refresh')
         })
 
-        it('throws when the refresh token is rejected', async () => {
+        it('does not classify a rejected refresh-token grant as an authorization-code rejection', async () => {
             fetchMock.mockResolvedValue({
                 ok: false,
                 status: 400,
-                json: () => Promise.resolve({ error: 'invalid_grant' }),
+                json: () => Promise.resolve({ error: 'invalid_grant', error_description: 'refresh token expired' }),
             })
 
-            await expect(client.refreshTokens('expired-refresh')).rejects.toThrow(OAuthTokenExchangeFailedError)
+            const error = await captureRejection(client.refreshTokens('expired-refresh'))
+
+            expect(error).toBeInstanceOf(OAuthTokenRequestFailedError)
+            expect(error).not.toBeInstanceOf(AuthorizationCodeGrantRejectedError)
+            expect((error as Error).message).not.toContain('refresh token expired')
         })
     })
 

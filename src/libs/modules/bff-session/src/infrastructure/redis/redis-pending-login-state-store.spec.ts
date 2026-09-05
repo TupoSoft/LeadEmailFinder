@@ -3,17 +3,20 @@ import { PendingLoginState } from '../../domain/pending-login-state'
 import { RedisPendingLoginStateStore } from './redis-pending-login-state-store'
 
 function sampleState(): PendingLoginState {
-    return { nonce: 'nonce-1', codeVerifier: 'verifier-1', redirectUri: 'http://localhost:53000/v1/auth/callback', createdAt: Date.now() }
+    return {
+        nonce: 'nonce-1',
+        codeVerifier: 'verifier-1',
+        redirectUri: 'http://localhost:53000/v1/auth/callback',
+        createdAt: Date.now(),
+    }
 }
 
 describe('RedisPendingLoginStateStore', () => {
-    let redis: jest.Mocked<Pick<Redis, 'get' | 'set' | 'del'>>
+    let redis: jest.Mocked<Pick<Redis, 'getdel' | 'set'>>
     let store: RedisPendingLoginStateStore
 
     beforeEach(() => {
-        redis = { get: jest.fn(), set: jest.fn(), del: jest.fn() } as unknown as jest.Mocked<
-            Pick<Redis, 'get' | 'set' | 'del'>
-        >
+        redis = { getdel: jest.fn(), set: jest.fn() } as unknown as jest.Mocked<Pick<Redis, 'getdel' | 'set'>>
         store = new RedisPendingLoginStateStore(redis as unknown as Redis)
     })
 
@@ -23,31 +26,33 @@ describe('RedisPendingLoginStateStore', () => {
         expect(redis.set).toHaveBeenCalledWith(expect.stringContaining('state-1'), expect.any(String), 'EX', 600)
     })
 
-    it('returns undefined and does not delete when no state is stored', async () => {
-        redis.get.mockResolvedValue(null)
+    it('returns undefined when no state is stored', async () => {
+        redis.getdel.mockResolvedValue(null)
 
         await expect(store.consume('state-1')).resolves.toBeUndefined()
-        expect(redis.del).not.toHaveBeenCalled()
+        expect(redis.getdel).toHaveBeenCalledWith('bff-login-state:state-1')
     })
 
-    it('returns and deletes the state on first consumption', async () => {
+    it('atomically returns and deletes the state on first consumption', async () => {
         const state = sampleState()
-        redis.get.mockResolvedValue(JSON.stringify(state))
+        redis.getdel.mockResolvedValue(JSON.stringify(state))
 
         const result = await store.consume('state-1')
 
         expect(result).toEqual(state)
-        expect(redis.del).toHaveBeenCalledWith(expect.stringContaining('state-1'))
+        expect(redis.getdel).toHaveBeenCalledWith('bff-login-state:state-1')
     })
 
     it('returns undefined on a second consumption of the same state (anti-replay)', async () => {
         const state = sampleState()
-        redis.get.mockResolvedValueOnce(JSON.stringify(state)).mockResolvedValueOnce(null)
+        redis.getdel.mockResolvedValueOnce(JSON.stringify(state)).mockResolvedValueOnce(null)
 
         const first = await store.consume('state-1')
         const second = await store.consume('state-1')
 
         expect(first).toEqual(state)
         expect(second).toBeUndefined()
+        expect(redis.getdel).toHaveBeenNthCalledWith(1, 'bff-login-state:state-1')
+        expect(redis.getdel).toHaveBeenNthCalledWith(2, 'bff-login-state:state-1')
     })
 })

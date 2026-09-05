@@ -1,5 +1,10 @@
 import { BffSessionConfiguration } from '../application/bff-session-configuration'
-import { buildCsrfCookieOptions, buildLoginStateCookieOptions, buildSessionCookieOptions } from './cookie-options'
+import {
+    buildCsrfCookieOptions,
+    buildLoginStateClearCookieOptions,
+    buildLoginStateCookieOptions,
+    buildSessionCookieOptions,
+} from './cookie-options'
 
 function configWith(isSecureCookie: boolean): BffSessionConfiguration {
     return {
@@ -34,9 +39,18 @@ describe('cookie-options', () => {
         expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/v1/auth', maxAge: 600_000 })
     })
 
+    it('clears login state with the original scope and security attributes but no lifetime', () => {
+        const options = buildLoginStateClearCookieOptions(configWith(false))
+
+        expect(options).toEqual({ httpOnly: true, sameSite: 'lax', path: '/v1/auth', secure: false })
+        expect(options).not.toHaveProperty('maxAge')
+        expect(options).not.toHaveProperty('expires')
+    })
+
     it('marks cookies secure when the app base URL is https', () => {
         expect(buildSessionCookieOptions(configWith(true)).secure).toBe(true)
         expect(buildCsrfCookieOptions(configWith(true)).secure).toBe(true)
         expect(buildLoginStateCookieOptions(configWith(true)).secure).toBe(true)
+        expect(buildLoginStateClearCookieOptions(configWith(true)).secure).toBe(true)
     })
 })

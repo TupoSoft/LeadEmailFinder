@@ -9,3 +9,11 @@ export interface VerifiedIdToken {
 export interface IdTokenVerifier {
     verify(idToken: string, expectedNonce: string): Promise<VerifiedIdToken>
 }
+
+/** ID-token integrity or claim validation failed. Infrastructure failures must use their original error. */
+export class IdTokenVerificationFailedError extends Error {
+    constructor() {
+        super('ID token verification failed')
+        this.name = 'IdTokenVerificationFailedError'
+    }
+}
