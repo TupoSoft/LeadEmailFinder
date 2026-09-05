@@ -33,8 +33,11 @@
         "dev:reset": "sh docker/scripts/dev-reset.sh",
         "docs:lint": "node scripts/docs/lint.mjs",
         "docs:lint:changed": "node scripts/docs/lint-changed.mjs",
+        "design:lint": "pnpm --filter @tuposoft/lead-email-finder-web exec design.md lint ../../DESIGN.md",
+        "ui:audit": "node scripts/frontend/audit-premium-ui.mjs --mode strict",
         "lint": "eslint .",
         "test:docs-lint": "node --test --test-isolation=none scripts/docs/*.test.mjs",
+        "test:ui-audit": "node --test scripts/frontend/audit-premium-ui.test.mjs",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true"
     },

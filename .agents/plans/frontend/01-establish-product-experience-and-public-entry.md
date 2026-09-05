@@ -12,14 +12,14 @@ baselines make later frontend pull requests extensions of one product rather tha
 
 ## Progress
 
-- [ ] (2026-08-31) Generate a product-specific public-entry concept with `ImageGen` and obtain explicit user approval.
-- [ ] (2026-08-31) Record the approved visual and interaction contract in root `DESIGN.md`, root `UX-CONTRACT.md`,
+- [x] (2026-09-05) Generated a product-specific public-entry concept with `ImageGen` and obtained explicit user approval.
+- [x] (2026-09-05) Recorded the approved visual and interaction contract in root `DESIGN.md`, root `UX-CONTRACT.md`,
       and `premium-ui.json`.
-- [ ] (2026-08-31) Add the independently buildable React 19, TypeScript, and Vite 8 `apps/web` workspace.
-- [ ] (2026-08-31) Implement the polished public root and not-found routes from the approved concept.
-- [ ] (2026-08-31) Add `Vitest`, React Testing Library, Playwright, `axe`, visual-regression coverage, and required web CI.
-- [ ] (2026-08-31) Validate keyboard use, narrow layouts, reduced motion, accessibility, and approved visual fidelity.
-- [ ] (2026-08-31) Run focused validation and update this living plan with evidence and outcomes.
+- [x] (2026-09-05) Added the independently buildable React 19, TypeScript, and Vite 8 `apps/web` workspace.
+- [x] (2026-09-05) Implemented the polished public root and not-found routes from the approved concept.
+- [x] (2026-09-05) Added `Vitest`, React Testing Library, Playwright, `axe`, visual-regression coverage, and required web CI.
+- [x] (2026-09-05) Validated keyboard use, narrow layouts, reduced motion, accessibility, and approved visual fidelity.
+- [x] (2026-09-05) Finished integrated validation and recorded the final evidence and outcome.
 
 ## Plan dependencies
 
@@ -27,7 +27,19 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- The approved orange accent reaches only 2.8:1 against the bone canvas, so normal-size accent text uses the darker
+  `#B63817` derivative while decorative rules retain the approved orange.
+- Root ESLint and Jest discovery reached the new workspace. Package-owned frontend gates plus explicit root ignores
+  keep the backend and browser test environments independent.
+- Declaring workspace package globs also made an unfiltered `pnpm install` traverse both projects. Backend, web, and
+  plan-sync CI jobs now select only the dependency graph they execute.
+- The Browser capability was unavailable in this task. Direct Playwright validation used Chromium's regular
+  `chromium` channel; local browser startup also needed preexisting runtime libraries and writable temporary browser
+  directories. Those workstation paths are not part of repository configuration.
+- GitHub's Ubuntu runner resolved the original system sans stack differently from the local Linux host, changing line
+  breaks and full-page snapshot heights. The pinned self-hosted Inter asset removes that environmental dependency.
+- The current `@google/design.md` package exposes the `design.md` binary. A pinned web-workspace dependency and
+  `corepack pnpm design:lint` provide a stable repository command instead of the plan's original one-off invocation.
 
 ## Decision Log
 
@@ -61,18 +73,48 @@ None yet.
   Rationale: These are separate product and operations decisions and are unnecessary to validate the first product
   experience locally.
   Date/Author: 2026-08-31, project planning.
+- Decision: Accept the generated desktop-and-narrow concept as the visual direction for implementation.
+  Rationale: The user explicitly approved its editorial hierarchy, signal-path motif, semantic palette, and responsive
+  composition before styled component work began.
+  Date/Author: 2026-09-05, user and Codex.
+- Decision: Use a contrast-safe dark accent for responsibility copy and reserve the approved orange for nonessential
+  marks.
+  Rationale: This preserves the approved palette while meeting text and focus contrast requirements.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Make primitive design-token-to-CSS mappings complete and bidirectional, and map every component recipe
+  value to its CSS consumers.
+  Rationale: A declared subset could pass while undocumented runtime properties, component values, or untracked
+  design values drifted. The audit now rejects missing or stale mappings, literal component values, and raw component
+  colors.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Keep backend validation intact and add a separate unconditional web job.
+  Rationale: Independent jobs preserve the current API gate while making the new browser package and design contracts
+  required on every pull request.
+  Date/Author: 2026-09-05, Codex.
+- Decision: Bundle the pinned OFL Inter variable font with the web application.
+  Rationale: Visual baselines must exercise the same type metrics locally and in CI without relying on different Linux
+  font fallback packages or a third-party runtime request.
+  Date/Author: 2026-09-05, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+The repository now has an independently buildable public browser entry and deliberate not-found route, backed by the
+approved concept, durable design and interaction contracts, a strict repository-owned audit, and an unconditional
+web CI job. The pages make no API request and expose only working route or fragment links. Sequential keyboard tests,
+both responsive browser projects, explicit 390-pixel checks, reduced motion, `axe`, and four committed visual
+baselines cover the observable behavior.
+
+Implementation review found and fixed incomplete primitive and component token-drift detection, raw component colors,
+misleading directional links, incomplete tab-order and scrollbar coverage, and an overly broad capability list in the
+new audit. Later frontend plans can extend this foundation. All in-scope behavior is complete.
 
 ## Context and Orientation
 
-The repository currently contains a NestJS API in `src/`, a single root `package.json`, and a
-`pnpm-workspace.yaml` that pins pnpm behavior but declares no workspace package globs. There is no browser source,
-frontend build, product design contract, or browser test project. The existing API and Docker stack remain outside
-this pull request; `frontend/06` will connect them through one origin. The current Validate workflow covers only the
-backend, so this plan must add required web checks rather than leave the new package locally validated only.
+Before this implementation, the repository contained a NestJS API in `src/`, a single root package, and a
+`pnpm-workspace.yaml` with no package globs. The delivered `apps/web` package now owns the independent browser build,
+routes, and tests; root `DESIGN.md`, `UX-CONTRACT.md`, and `premium-ui.json` own its durable product contracts. The
+existing API and Docker runtime remain separate; `frontend/06` will connect them through one origin. The Validate
+workflow retains the backend job and adds an unconditional web job.
 
 `DESIGN.md` is the durable visual system: product character, approved reference image, typography, color, spacing,
 shape, motion, responsive rules, and rationale. `UX-CONTRACT.md` is the canonical route and interaction map:
@@ -207,7 +249,7 @@ performed the interactive review.
 
 Validate the durable contracts and prose:
 
-    npx -p @google/design.md designmd lint DESIGN.md
+    corepack pnpm design:lint
     corepack pnpm ui:audit
     corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/README.md .agents/plans/frontend/01-establish-product-experience-and-public-entry.md
     git diff --check
@@ -228,9 +270,27 @@ No persistent application data, schema reset, Docker cleanup, or reseed is invol
 
 ## Artifacts and Notes
 
-Retain the approved concept, the final narrow and desktop screenshots, a summary of the Playwright HTML report, the `axe` results,
-and a short list of intentional concept-to-code differences. Do not commit browser caches, full test traces from
-successful runs, or generated build output.
+Retain the approved concept, the final narrow and desktop screenshots, a summary of the Playwright run, the `axe`
+results, and a short list of intentional concept-to-code differences. Do not commit browser caches, full test traces
+from successful runs, or generated build output.
+
+- Approved concept: `apps/web/design/concepts/public-entry-approved.png`, SHA-256
+  `db63bc197f1e432e9eb8a8732fefaa7ff36112663e0e06026eed0aa801ead937`.
+- Visual evidence: four committed root/not-found baselines under
+  `apps/web/tests/e2e/visual.spec.ts-snapshots/` for desktop and narrow Chromium.
+- Browser evidence: `verify:ui` built the production bundle and passed 26 of 26 behavior, keyboard, 320/390-pixel,
+  reduced-motion, `axe`, and visual checks across both Playwright projects. The Browser capability was unavailable, so
+  direct Playwright performed the interactive review.
+- Static evidence: web lint, typecheck, and five component tests passed; the official `Design.md` linter reported zero
+  errors and warnings; 12 audit tests and both repository and skill strict audits reported zero findings. Harper passed
+  the exact four-file command recorded under Validation.
+- Repository evidence: frozen installation, root lint and typecheck, 197 backend suites with 1,780 tests, 15 repository
+  runner tests, the NestJS build, the production Docker build, and `git diff --check` passed. Root lint retains one
+  unrelated warning in `src/libs/config/src/load-secrets.spec.ts`.
+- Intentional concept differences: self-hosted Inter replaces the generated type approximation, contrast-safe dark
+  orange carries normal-size accent text, explanatory copy is larger, directional link labels match their real
+  destinations, and the unapproved generated copyright line is absent. The 320-pixel headline uses four lines to
+  preserve its display scale.
 
 This plan has one independently observable outcome and maps to one pull request. The visual approval is an explicit
 first implementation milestone, not a hidden product choice; all stack, scope, route, interaction, and validation

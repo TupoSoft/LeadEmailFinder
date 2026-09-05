@@ -1,0 +1,140 @@
+.page {
+    display: flex;
+    width: min(calc(100% - var(--space-page-gutter) - var(--space-page-gutter)), var(--page-max));
+    min-height: calc(100vh - var(--space-page-gutter) - var(--space-page-gutter));
+    flex-direction: column;
+    margin: var(--space-page-gutter) auto;
+    border: var(--rule-width) solid var(--color-rule-soft);
+    border-radius: var(--radius-panel);
+    background: var(--color-canvas);
+    box-shadow: 0 var(--shadow-page-y) var(--shadow-page-blur) var(--color-shadow);
+}
+
+.main {
+    display: grid;
+    grid-template-columns: minmax(20rem, 0.8fr) minmax(25rem, 1.2fr);
+    align-items: center;
+    gap: var(--space-page-gutter-wide);
+    min-height: 34rem;
+    flex: 1;
+    padding: var(--space-section) var(--space-page-gutter-wide);
+}
+
+.message {
+    position: relative;
+    z-index: 1;
+}
+
+.code {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--color-accent-text);
+    font-family: var(--font-display);
+    font-size: var(--font-size-utility);
+    line-height: var(--line-height-utility);
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}
+
+.message h1 {
+    max-width: 8ch;
+    margin-bottom: 1.25rem;
+    font-family: var(--font-display);
+    font-size: clamp(var(--font-size-display), 7vw, var(--font-size-display-large));
+    font-weight: 800;
+    line-height: var(--line-height-display-large);
+    letter-spacing: -0.07em;
+}
+
+.message p {
+    max-width: 28rem;
+    margin-bottom: 0.35rem;
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+}
+
+.guidance {
+    color: var(--color-evergreen);
+}
+
+.homeLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-top: 1.75rem;
+    padding: 0.8rem 0;
+    border-bottom: 0.125rem solid currentColor;
+    color: var(--color-evergreen);
+    font-size: var(--font-size-compact);
+    font-weight: 800;
+    line-height: var(--line-height-compact);
+    text-decoration: none;
+    transition: gap calc(var(--motion-fast-milliseconds) * 1ms) ease-out;
+}
+
+.homeLink:hover,
+.homeLink:focus-visible {
+    gap: 2rem;
+}
+
+.diagram {
+    position: relative;
+    min-height: 20rem;
+    color: var(--color-circuit-strong);
+}
+
+.circuit {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.brokenSignal {
+    position: absolute;
+    top: 54%;
+    right: 8%;
+    left: 5%;
+    border-top: 0.125rem dotted var(--color-ink);
+}
+
+.brokenSignal::after {
+    position: absolute;
+    top: -0.5rem;
+    left: 58%;
+    width: 1.2rem;
+    height: 1rem;
+    background: var(--color-canvas);
+    content: '';
+    transform: rotate(-35deg);
+}
+
+@media (max-width: 48rem) {
+    .page {
+        width: 100%;
+        min-height: 100dvh;
+        margin: 0;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .main {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        min-height: 31rem;
+        padding: 3rem 1rem;
+    }
+
+    .message h1 {
+        max-width: 10ch;
+        font-size: 3.25rem;
+    }
+
+    .message p {
+        font-size: var(--font-size-compact);
+    }
+
+    .diagram {
+        min-height: 8rem;
+    }
+}
