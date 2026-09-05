@@ -213,6 +213,5 @@ tables.
 
 Implemented and fully validated: 17 new focused tests pass (15 contract + 2 real-Postgres organization-isolation),
 the full jest suite (197 suites, 1,780 tests) passes, `architecture:check` reports the same 108 baselined
-violations as before (no growth), and `typecheck`/`lint`/`docs:lint`/`git diff --check` all pass. Local `build`
-could not be verified in this session due to an unrelated, recurring root-owned `dist/` directory in this
-development environment; CI runs a clean build in its own container. Pull request not yet opened.
+violations as before (no growth), and `typecheck`/`lint`/`docs:lint`/`git diff --check`/`build` all pass (617
+files compiled with `swc`, 0 issues). Pull request open (#538); CI's `validate` check passed.
