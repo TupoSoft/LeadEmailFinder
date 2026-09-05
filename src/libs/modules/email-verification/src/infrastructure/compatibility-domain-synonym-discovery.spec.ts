@@ -1,18 +1,18 @@
-import { HTMLDomainSynonymFinder } from './domain-synonym-finder'
+import { CompatibilityDomainSynonymDiscovery } from './compatibility-domain-synonym-discovery'
 import { Test } from '@nestjs/testing'
 import { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 import { Logger } from '@nestjs/common'
 
-describe('HTMLSynonymFinder', () => {
-    let finder: HTMLDomainSynonymFinder
+describe('CompatibilityDomainSynonymDiscovery', () => {
+    let finder: CompatibilityDomainSynonymDiscovery
     let mockedHttpService: jest.Mocked<HttpService>
     let mockedLogger: jest.Mocked<Logger>
 
     beforeAll(async () => {
         const moduleRef = await Test.createTestingModule({
             providers: [
-                HTMLDomainSynonymFinder,
+                CompatibilityDomainSynonymDiscovery,
                 {
                     provide: HttpService,
                     useValue: {
@@ -28,7 +28,7 @@ describe('HTMLSynonymFinder', () => {
             ],
         }).compile()
 
-        finder = moduleRef.get(HTMLDomainSynonymFinder)
+        finder = moduleRef.get(CompatibilityDomainSynonymDiscovery)
         mockedHttpService = moduleRef.get(HttpService)
         mockedLogger = moduleRef.get(Logger)
     })

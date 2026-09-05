@@ -9,7 +9,7 @@ import { OldSyncEmailVerificationModule } from './old-sync-email-verification'
 import { VerificationResultsController } from './api/verification-results.controller'
 import { VERIFICATION_RESULT_READER } from './application/verification-result-reader'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
-import { EmailVerification } from './sync-email-verification/email-verification.entity'
+import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
 
 @Module({
     imports: [
@@ -24,8 +24,9 @@ import { EmailVerification } from './sync-email-verification/email-verification.
         PermissionsGuard,
         {
             provide: VERIFICATION_RESULT_READER,
-            inject: [getRepositoryToken(EmailVerification)],
-            useFactory: (repository: Repository<EmailVerification>) => new TypeOrmVerificationResultReader(repository),
+            inject: [getRepositoryToken(EmailVerificationEntity)],
+            useFactory: (repository: Repository<EmailVerificationEntity>) =>
+                new TypeOrmVerificationResultReader(repository),
         },
     ],
 })

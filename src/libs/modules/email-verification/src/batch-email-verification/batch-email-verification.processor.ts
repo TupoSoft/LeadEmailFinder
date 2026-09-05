@@ -14,7 +14,7 @@ import { BatchEmailVerificationCsvRowDto } from './batch-email-verification-csv-
 import { validate } from 'class-validator'
 import { randomUUID } from 'node:crypto'
 import { InjectRepository } from '@nestjs/typeorm'
-import { EmailVerification } from '../sync-email-verification'
+import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/email-verification.entity'
 import { DataSource, Repository } from 'typeorm'
 import { stringify } from 'csv-stringify'
 import { Upload } from '@aws-sdk/lib-storage'
@@ -65,7 +65,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         private readonly customerObjectWriteSecurity: CustomerObjectWriteSecurity,
         @InjectQueue('async-email-verification')
         private readonly asyncEmailVerificationQueue: Queue<AsyncEmailVerificationJobData>,
-        @InjectRepository(EmailVerification) private readonly emailVerificationRepo: Repository<EmailVerification>,
+        @InjectRepository(EmailVerificationEntity) private readonly emailVerificationRepo: Repository<EmailVerificationEntity>,
         private readonly dataSource: DataSource,
         private readonly creditsService: CreditsService,
         @Inject(VERIFICATION_TRACE_OBSERVER)
@@ -153,7 +153,7 @@ export class BatchEmailVerificationProcessor extends WorkerHost {
         // the stringifier which raw column to read; `header` keeps the CSV's own column names unprefixed.
         const queryAlias = 'ev'
         const columns = this.dataSource
-            .getMetadata(EmailVerification)
+            .getMetadata(EmailVerificationEntity)
             .columns.filter(({ propertyName }) => propertyName !== 'organizationId')
             .map(({ propertyName }) => ({ key: `${queryAlias}_${propertyName}`, header: propertyName }))
         const cursor = await this.emailVerificationRepo
