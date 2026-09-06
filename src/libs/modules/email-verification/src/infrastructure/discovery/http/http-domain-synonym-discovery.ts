@@ -1,17 +1,17 @@
-import { extractDomains, findRelevantLinks } from './domain-synonym-discovery.util'
+import { extractDomains, findRelevantLinks } from '../../../domain/domain-synonym-parser'
 import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { isNativeError } from 'node:util/types'
-import { DomainSynonymDiscovery } from '../application/ports/domain-synonym-discovery'
+import { DomainSynonymDiscovery } from '../../../application/ports/domain-synonym-discovery'
 
-/** Wraps the existing HTML-scraping synonym lookup unchanged; module-architecture/13 replaces this with a real adapter. */
+/** Retrieves homepage and relevant pages through the configured HTTP transport. */
 @Injectable()
-export class CompatibilityDomainSynonymDiscovery implements DomainSynonymDiscovery {
+export class HttpDomainSynonymDiscovery implements DomainSynonymDiscovery {
     @Inject(Logger)
     @Optional()
-    private readonly logger = new Logger(CompatibilityDomainSynonymDiscovery.name)
+    private readonly logger = new Logger(HttpDomainSynonymDiscovery.name)
 
     constructor(private readonly httpService: HttpService) {}
 
@@ -19,19 +19,14 @@ export class CompatibilityDomainSynonymDiscovery implements DomainSynonymDiscove
         try {
             const foundDomains = new Set<string>()
 
-            const { data: homepageHTML } = await firstValueFrom(this.httpService.get<string>(domain))
+            const homepageHTML = await this.fetchPage(domain)
 
             const domainsFromHome = extractDomains(homepageHTML)
             domainsFromHome.forEach(d => foundDomains.add(d))
 
             const relevantLinks = findRelevantLinks(homepageHTML, domain)
 
-            const fetchPromises = relevantLinks.map(
-                async link =>
-                    await firstValueFrom(this.httpService.get<string>(link)).then(({ data: pageHTML }) =>
-                        extractDomains(pageHTML),
-                    ),
-            )
+            const fetchPromises = relevantLinks.map(async link => extractDomains(await this.fetchPage(link)))
 
             const results = await Promise.allSettled(fetchPromises)
             results.forEach(result => {
@@ -50,5 +45,15 @@ export class CompatibilityDomainSynonymDiscovery implements DomainSynonymDiscove
 
             return []
         }
+    }
+
+    private async fetchPage(url: string): Promise<string> {
+        // Keep the injected transport's deadline and retry policy. This adapter adds no retries
+        // or recursive traversal, and each unique contact/privacy link is requested only once.
+        const { data } = await firstValueFrom(this.httpService.get<unknown>(url))
+        if (typeof data !== 'string') {
+            throw new Error('domain_synonym_content_invalid')
+        }
+        return data
     }
 }

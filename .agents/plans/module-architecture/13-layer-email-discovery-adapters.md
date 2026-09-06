@@ -12,10 +12,10 @@ are delivered separately by `account-discovery/01` and `account-discovery/02` an
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize MX resolution, synonym retrieval, parsing, and failure behavior.
-- [ ] (2026-08-30) Move DNS and HTTP synonym retrieval into purpose-specific infrastructure adapters.
-- [ ] (2026-09-06) Reuse the completed internal account-discovery boundary without changing its policy or providers.
-- [ ] (2026-08-30) Shrink domain-discovery baseline keys and complete focused, runtime, architecture, and full checks.
+- [x] (2026-09-06) Characterize MX resolution, synonym retrieval, parsing, and failure behavior.
+- [x] (2026-09-06) Move DNS and HTTP synonym retrieval into purpose-specific infrastructure adapters.
+- [ ] (2026-09-06) Integrate the completed account-discovery boundary after #548; its prerequisite #547 is also open.
+- [x] (2026-09-06) Verify the unchanged baseline and complete focused, runtime, architecture, and full checks for the current composition.
 
 ## Plan dependencies
 
@@ -34,6 +34,15 @@ are delivered separately by `account-discovery/01` and `account-discovery/02` an
 - The separate account-discovery plans now introduce the formal port and internalize providers after the cutover.
   This plan retains its stable `module-architecture/13` identity and owns DNS and domain synonyms only.
 
+- PR #545 was implemented before the ownership change in #544 merged. Its original combined implementation is
+  preserved in commit `02bf522`. On 2026-09-06, the user chose to align #545 with the new domain-only scope.
+  Account-discovery code, its tests, and its baseline entry are restored to match master in the merge resolution.
+- The new `account-discovery/02` prerequisite is not implemented yet. The domain adapters can be tested with the
+  existing account-discovery composition, but this does not fulfill the prerequisite. Keep #545 draft and complete
+  the final integration after #548 lands.
+- The injected HTTP transport owns request deadlines and retry behavior. The current composition sets neither an
+  adapter-specific deadline nor a retry policy, and this refactor preserves those defaults.
+
 ## Decision Log
 
 - Decision: Put MX resolution and remote synonym retrieval under `src/infrastructure/discovery/{dns,http}/`.
@@ -50,9 +59,21 @@ are delivered separately by `account-discovery/01` and `account-discovery/02` an
   Rationale: This pull request changes dependency direction and source ownership, not verification policy.
   Date/Author: 2026-09-06, Codex planning.
 
+- Decision: Resolve the conflict by retaining only DNS, HTTP synonym retrieval, and parser changes in #545.
+  Restore account-discovery implementation and composition to master, preserve the new plan dependencies, and
+  retain the original work in Git history.
+  Rationale: The user selected the narrower scope established by #544. Account discovery has separate owners
+  in #547 and #548, and its planned evidence interface differs from the earlier implementation.
+  Date/Author: 2026-09-06, Codex implementation, following the user's scope selection.
+
 ## Outcomes & Retrospective
 
-Not started.
+The two domain-discovery compatibility adapters are replaced, and deterministic parsing now lives in domain.
+The current account-discovery composition, SMTP implementation, public interfaces, and architecture baseline match
+master. Validation of the narrowed diff passed: 104 focused tests, 1,793 full-suite tests, and all 15 runner tests.
+The full Jest run skipped 11 opt-in suites and 65 tests. The existing SMTP collection passed 22 requests and
+44 tests with zero account-discovery proxy requests. Integration with the future account-discovery boundary remains
+pending #548; this plan is not marked complete.
 
 ## Context and Orientation
 
@@ -178,9 +199,36 @@ fixtures through their documented commands. Preserve another checkout's containe
 
 ## Artifacts and Notes
 
-Record the domain adapter map, contract scenarios, removed baseline entries, retained account-discovery binding,
-SMTP Bruno totals, and actual validation results. Never record credentials, raw addresses, provider payloads,
-address-bearing SMTP transcripts, or external response bodies.
+The implemented adapters are `infrastructure/discovery/dns/dns-mx-resolver.ts` and
+`infrastructure/discovery/http/http-domain-synonym-discovery.ts`; their pure parser is
+`domain/domain-synonym-parser.ts`. The synchronous composition replaces only the two discovery registrations.
+Account discovery retains `CATCH_ALL_VERIFIERS_TOKEN` and the existing `EmailVerifierModule` until its own plans land.
+No baseline entry is removed by the narrowed domain-only diff.
+
+Validation totals from the earlier combined implementation remain historical evidence in commit `02bf522`.
+Fresh validation of the narrowed scope completed on 2026-09-06:
+
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/discovery src/libs/modules/email-verification/src/domain src/libs/modules/email-verification/src/infrastructure/account-discovery src/libs/modules/email-verification/src/application/account-discovery src/libs/modules/email-verification/src/application/mailbox-verification.service.spec.ts src/libs/modules/email-verification/src/email-verifier/email-verifier.module.spec.ts src/libs/catch-all/src src/libs/dns/src --runInBand`
+  passed 16 suites and 104 tests.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci` passed 200 Jest suites and 1,793 tests.
+  Its 11 opt-in suites and 65 skipped tests remain unverified; all 15 OIDC/Bruno runner tests passed.
+- `corepack pnpm typecheck`, `corepack pnpm build`, and `corepack pnpm lint` passed.
+  ESLint retained one existing return-type warning in `src/libs/config/src/load-secrets.spec.ts`.
+- `corepack pnpm architecture:check` passed with 9 modules and the unchanged 69 baseline entries.
+  The security scan returned no findings, and the approval check confirmed the unchanged empty manifest.
+- `DOCKER_HOST=unix:///run/user/1000/docker.sock DOCKER_CONFIG=/tmp/lef458-docker COMPOSE_PROJECT_NAME=lef45854fd corepack pnpm bruno:smtp-dev`
+  passed 22 requests and 44 tests with zero skips. The isolated proxy counted both HTTP and CONNECT positive
+  controls, then remained at zero after reset throughout the collection. Provider selection, approval ID, and
+  region remained absent. This run reused retained fixture data, including the secure SMTP cache result;
+  the plaintext fixture exercised the EHLO rejection path.
+- Ignored evidence at `.dev/keycloak/issue-458-smtp-narrowed-scope-validation.json` records source fingerprints,
+  container ownership, counters, and sanitized log totals. Task-owned containers and the temporary environment
+  file are removed after validation; unrelated containers are preserved.
+- `corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/module-architecture/13-layer-email-discovery-adapters.md`
+  passed Harper for all three files. `git diff --check` passed, and independent review found no actionable
+  architectural issue.
+
+Never record credentials, raw addresses, provider payloads, address-bearing SMTP transcripts, or external responses.
 
 ## Plan readiness
 
