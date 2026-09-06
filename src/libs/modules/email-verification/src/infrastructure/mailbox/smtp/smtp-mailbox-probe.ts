@@ -1,34 +1,26 @@
 import { ok } from 'node:assert'
 import { isNativeError } from 'node:util/types'
 import { isIP } from 'node:net'
+import { IDnsService, safeErrorType } from '@tuposoft/lead-email-finder/common'
 import {
-    IDnsService,
-    ISmtpVerificationResponse,
-    ISmtpVerifier,
-    safeErrorType,
-} from '@tuposoft/lead-email-finder/common'
-import {
-    ALLOCATION_OBSERVER_TOKEN,
     ConnectionOutcomeEvent,
     IAllocationObserver,
     IProxy,
     IProxyAllocator,
     IProxyService,
     LeasedProxy,
-    PROXY_ALLOCATOR_TOKEN,
-    PROXY_SERVICE_TOKEN,
 } from '@tuposoft/lead-email-finder/modules/proxy'
-import { SmtpVerification } from './smtp-verification.entity'
-import { Inject, Injectable, Logger } from '@nestjs/common'
-import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
-import { DNS_SERVICE_TOKEN, SMTP_CLIENT_FACTORY_TOKEN } from './smtp.constants'
-import { SmtpException } from './smtp.exception'
-import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
-import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
+import { Logger } from '@nestjs/common'
 import { getDomain } from 'tldts'
+import { MailboxProbe, MailboxProbeResult } from '../../../application/ports/mailbox-probe'
+import { MxResolver } from '../../../application/ports/mx-resolver'
+import { SmtpVerificationStore, SmtpVerificationUpdate } from '../../../application/ports/smtp-verification-store'
+import { SmtpVerification } from '../../../domain/smtp-verification'
 import { ISmtpClient } from './smtp-client.interface'
 import { ISmtpClientFactory } from './smtp-client-factory.interface'
+import { SmtpException } from './smtp.exception'
+import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
+import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
 
 interface GetExchangesParams {
     domain: string
@@ -57,11 +49,11 @@ interface SmtpClientAcquisition {
 
 type SmtpErrorHandlingStrategy = [
     (error: SmtpException) => boolean,
-    (error: SmtpException) => Omit<ISmtpVerificationResponse, 'email'>,
+    (error: SmtpException) => Omit<MailboxProbeResult, 'email'>,
 ]
 
-@Injectable()
-export class SmtpVerifier implements ISmtpVerifier {
+/** Implements the `MailboxProbe` port with the proxy-leased SMTP protocol, replacing module-architecture/18's compatibility wrapper. */
+export class SmtpMailboxProbe implements MailboxProbe {
     private static readonly smtpErrorHandlingStrategies: SmtpErrorHandlingStrategy[] = [
         [
             ({ targetExchange, message }) =>
@@ -121,15 +113,16 @@ export class SmtpVerifier implements ISmtpVerifier {
         ],
     ]
 
-    private readonly logger = new Logger(SmtpVerifier.name)
+    private readonly logger = new Logger(SmtpMailboxProbe.name)
 
     constructor(
-        @Inject(DNS_SERVICE_TOKEN) private readonly dnsService: IDnsService,
-        @Inject(PROXY_SERVICE_TOKEN) private readonly proxyService: IProxyService,
-        @Inject(PROXY_ALLOCATOR_TOKEN) private readonly proxyAllocator: IProxyAllocator,
-        @Inject(SMTP_CLIENT_FACTORY_TOKEN) private readonly smtpClientFactory: ISmtpClientFactory,
-        @InjectRepository(SmtpVerification) private readonly smtpVerificationRepo: Repository<SmtpVerification>,
-        @Inject(ALLOCATION_OBSERVER_TOKEN) private readonly allocationObserver: IAllocationObserver,
+        private readonly dnsService: IDnsService,
+        private readonly mxResolver: MxResolver,
+        private readonly proxyService: IProxyService,
+        private readonly proxyAllocator: IProxyAllocator,
+        private readonly smtpClientFactory: ISmtpClientFactory,
+        private readonly smtpVerificationStore: SmtpVerificationStore,
+        private readonly allocationObserver: IAllocationObserver,
     ) {}
 
     private static isTemporarilyBlocked(
@@ -144,15 +137,14 @@ export class SmtpVerifier implements ISmtpVerifier {
         return result?.secureTransport === true && result.exists != null
     }
 
-    verify = async (organizationId: string, email: string): Promise<ISmtpVerificationResponse> => {
+    async probe(organizationId: string, email: string): Promise<MailboxProbeResult> {
         const [, domain] = email.split('@')
-        const cacheKey = { organizationId, id: email }
 
         const getExchangesParams: GetExchangesParams = { domain }
         const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
 
-        const cachedResult = await this.smtpVerificationRepo.findOneBy(cacheKey)
-        if (SmtpVerifier.hasEmailVerificationOutcome(cachedResult)) {
+        const cachedResult = await this.smtpVerificationStore.findByAddress(organizationId, email)
+        if (SmtpMailboxProbe.hasEmailVerificationOutcome(cachedResult)) {
             const { id: cachedEmail, exists, targetExchange, reason } = cachedResult
 
             return {
@@ -163,7 +155,7 @@ export class SmtpVerifier implements ISmtpVerifier {
             }
         }
 
-        if (SmtpVerifier.isTemporarilyBlocked(cachedResult)) {
+        if (SmtpMailboxProbe.isTemporarilyBlocked(cachedResult)) {
             const { proxyId, targetExchange } = cachedResult
 
             getExchangesParams.targetExchange = targetExchange
@@ -188,24 +180,27 @@ export class SmtpVerifier implements ISmtpVerifier {
             }
         }
 
-        let result: ISmtpVerificationResponse
+        let result: MailboxProbeResult
         try {
             result = await this.tryVerify({ client: leasedClient.client, email })
         } finally {
             await this.releaseAllocation(leasedClient.allocation)
         }
 
-        let smtpRecord = await this.smtpVerificationRepo.findOneBy(cacheKey)
-        smtpRecord ??= this.smtpVerificationRepo.create(cacheKey)
-        Object.assign(smtpRecord, result)
-        smtpRecord.secureTransport = leasedClient.client.secureTransport
-        await this.smtpVerificationRepo.save(smtpRecord)
+        const update: SmtpVerificationUpdate = {
+            reason: result.reason,
+            exists: result.exists,
+            targetExchange: result.targetExchange,
+            proxyId: result.proxyId,
+            secureTransport: leasedClient.client.secureTransport,
+        }
+        await this.smtpVerificationStore.upsert(organizationId, email, update)
 
         return result
     }
 
-    private async handleSmtpError(error: SmtpException): Promise<Omit<ISmtpVerificationResponse, 'email'>> {
-        const strategy = SmtpVerifier.smtpErrorHandlingStrategies.find(([predicate]) => predicate(error))
+    private async handleSmtpError(error: SmtpException): Promise<Omit<MailboxProbeResult, 'email'>> {
+        const strategy = SmtpMailboxProbe.smtpErrorHandlingStrategies.find(([predicate]) => predicate(error))
         const { targetExchange, proxyId } = error
 
         if (strategy == null) {
@@ -228,12 +223,11 @@ export class SmtpVerifier implements ISmtpVerifier {
     }
 
     private async getExchanges({ domain, targetExchange }: GetExchangesParams): Promise<string[]> {
-        const mxRecords = await this.dnsService.resolve(domain, 'MX')
-        const exchanges = mxRecords.map(({ exchange }) => exchange)
+        const exchanges = await this.mxResolver.resolve(domain)
         return targetExchange != null ? exchanges.filter(exchange => exchange === targetExchange) : exchanges
     }
 
-    private async tryVerify({ client, email }: TryVerifyParams): Promise<ISmtpVerificationResponse> {
+    private async tryVerify({ client, email }: TryVerifyParams): Promise<MailboxProbeResult> {
         const { hostname, exchange: targetExchange } = client
 
         try {

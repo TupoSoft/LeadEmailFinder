@@ -22,7 +22,7 @@ import { SmtpException } from './smtp.exception'
 import { SmtpResponse } from './smtp-response.interface'
 import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
 import { safeErrorType } from '@tuposoft/lead-email-finder/common'
-import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
+import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number

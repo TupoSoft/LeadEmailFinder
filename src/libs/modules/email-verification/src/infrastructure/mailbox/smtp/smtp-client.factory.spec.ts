@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ConfigService } from '@nestjs/config'
-import { SmtpConfiguration } from '../../email-verification-configuration'
+import { SmtpConfiguration } from '../../../domain/email-verification-configuration'
 import { SmtpClientFactory } from './smtp-client.factory'
 
 const fixtureCaPath = resolve(process.cwd(), 'docker/smtp-dev/tls/ca.crt')
