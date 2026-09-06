@@ -154,3 +154,16 @@ pricing, API, and verification actions remain absent until their owning plans im
 - **Project audit:** `corepack pnpm ui:audit` must exit zero in strict mode. The audit does not execute or replace the
   runtime commands declared in `premium-ui.json`.
 - **Design contract lint:** `corepack pnpm design:lint` must exit zero with no warnings.
+
+
+## Browser Origin and Route Ownership
+
+The built product is served at `http://localhost:53000/` by the web gateway. Hard refreshes of UI routes preserve
+React Router navigation and its global not-found experience. The gateway reserves `/v1`, `/verify`, `/verifyAsync`,
+`/verifyBatch`, `/emails`, `/credits`, and `/docs`, including their descendants, for the API. It also reserves
+`/health`, `/openapi.json`, `/docs-json`, and `/docs-yaml`. Unknown API paths retain backend JSON errors.
+
+The gateway preserves API cookies, redirect locations, CSRF headers, and restrictive callback cache and referrer
+headers. The serving topology introduces no authentication controls or feature screens. Its source contract is
+`.agents/plans/frontend/06-serve-web-and-api-from-one-origin.md`; browser verification is owned by
+`apps/web/tests/gateway` and the `corepack pnpm test:web-live` launcher.

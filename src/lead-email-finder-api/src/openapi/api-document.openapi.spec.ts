@@ -1,10 +1,10 @@
 import { INestApplication, Module } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import type { OpenAPIObject } from '@nestjs/swagger'
+import { OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import request from 'supertest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { registerApiDocumentation } from './api-document'
+import { buildApiDocuments, registerApiDocumentation } from './api-document'
 
 @Module({})
 class DocumentationTestModule {}
@@ -34,7 +34,27 @@ describe('API documentation routes', () => {
         expect(json.body).toEqual(browser)
         const configuration = await request(app.getHttpServer()).get('/docs/swagger-ui-init.js').expect(200)
         expect(configuration.text).toContain('/v1/excluded-runtime-only')
+        expect(configuration.text).toMatch(/"servers":\s*\[\s*\{\s*"url":\s*"\/"/u)
         expect((json.body as OpenAPIObject).paths).not.toHaveProperty('/v1/excluded-runtime-only')
+    })
+
+    it('builds the runtime server relative to the serving origin regardless of API_URL', async () => {
+        const createDocument = jest.spyOn(SwaggerModule, 'createDocument').mockReturnValue(structuredClone(browser))
+        const metadata = jest.spyOn(SwaggerModule, 'loadPluginMetadata').mockResolvedValue(undefined)
+        try {
+            const documents = await buildApiDocuments(app, () => Promise.resolve({}), {
+                url: 'http://api:3000',
+                version: 'test',
+            })
+
+            expect(createDocument).toHaveBeenCalledWith(app, expect.objectContaining({
+                servers: [{ url: '/', description: 'API server' }],
+            }))
+            expect(documents.browser).toEqual(browser)
+        } finally {
+            createDocument.mockRestore()
+            metadata.mockRestore()
+        }
     })
 
     it.each(['/', '/docs-json', '/docs-yaml'])('does not register %s', async path => {

@@ -11,6 +11,14 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('leaves the direct API root available for the product route', function() {
-          expect(res.status).to.equal(404);
+        test('serves the product through the same-origin gateway with document security headers', function() {
+          expect(res.status).to.equal(200);
+          expect(res.headers['content-type']).to.include('text/html');
+          expect(res.body).to.include('<div id="root">');
+          expect(res.headers['cache-control']).to.equal('no-cache');
+          expect(res.headers['x-content-type-options']).to.equal('nosniff');
+          expect(res.headers['x-frame-options']).to.equal('DENY');
+          expect(res.headers['referrer-policy']).to.equal('strict-origin-when-cross-origin');
+          expect(res.headers['content-security-policy']).to.include("default-src 'self'");
+          expect(res.headers['content-security-policy']).to.include("frame-ancestors 'none'");
         });

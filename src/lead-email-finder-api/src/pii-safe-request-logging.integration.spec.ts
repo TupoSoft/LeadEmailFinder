@@ -286,4 +286,56 @@ describe('PII-safe request logging', () => {
         }))
         expect(JSON.stringify(capturedLines)).not.toContain(privateValue)
     })
+
+    it.each(['/v1/organizations/invitations/', '/accept-invitation/'])(
+        'conceals invitation credentials on %s routes, including rejected requests',
+        async prefix => {
+            const token = 'invitation-token-' + randomUUID()
+            const code = 'callback-code-' + randomUUID()
+            const state = 'callback-state-' + randomUUID()
+            const response = await request(app.getHttpServer())
+                .get(prefix + token + '?code=' + code + '&state=' + state)
+                .expect(404)
+
+            const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+            expect(automaticLogs).toHaveLength(1)
+            expect(automaticLogs[0]).toEqual(expect.objectContaining({
+                req: {
+                    id: response.headers['x-request-id'],
+                    method: 'GET',
+                    path: prefix + ':sensitive',
+                },
+                res: { statusCode: 404 },
+            }))
+            expect(response.headers['x-request-id']).toEqual(expect.stringMatching(UUID_PATTERN))
+            const output = JSON.stringify(capturedLines)
+            for (const marker of [token, code, state]) expect(output).not.toContain(marker)
+        },
+    )
+
+    it.each([
+        ['/v1/organizations/invitations%2F', '/v1/organizations/:sensitive'],
+        ['/v1/organizations%252Finvitations/', '/v1/organizations%252Finvitations/:sensitive'],
+        ['/accept-invitation%252F', '/:sensitive'],
+        ['/emails%2F', '/:sensitive'],
+        ['/emails%252F', '/:sensitive'],
+        ['/api%252Femails/', '/api%252Femails/:sensitive'],
+        ['/verifications%2F', '/:sensitive'],
+        ['/verifyAsync%252F', '/:sensitive'],
+        ['/verifyBatch%2F', '/:sensitive'],
+        ['/api%252FverifyAsync/', '/api%252FverifyAsync/:sensitive'],
+        ['/verifyAsync/3b6e879d-b4ed-4a44-b121-710f16ee92c3%2F', '/verifyAsync/:sensitive'],
+        ['/api%2FverifyBatch/csv%252F', '/api%2FverifyBatch/:sensitive'],
+    ])('conceals protected path values when encoded separators reach %s', async (prefix, path) => {
+        const privateValue = 'encoded-sensitive-' + randomUUID()
+        const response = await request(app.getHttpServer()).get(prefix + privateValue).expect(404)
+
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(automaticLogs[0]).toEqual(expect.objectContaining({
+            req: { id: response.headers['x-request-id'], method: 'GET', path },
+            res: { statusCode: 404 },
+        }))
+        expect(JSON.stringify(capturedLines)).not.toContain(privateValue)
+    })
 })

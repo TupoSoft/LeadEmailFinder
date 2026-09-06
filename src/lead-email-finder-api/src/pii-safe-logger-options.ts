@@ -11,6 +11,7 @@ const MAX_PATH_DECODE_PASSES = 5
 const EMAIL_SEGMENT_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u
 const UUID_PATH_SEGMENT_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 const VERIFICATION_ID_ROUTES = new Set(['verifications', 'verifyasync', 'verifybatch'])
+const SENSITIVE_VALUE_ROUTES = new Set(['emails', 'invitations', 'accept-invitation'])
 
 type ExpressIncomingMessage = IncomingMessage & { originalUrl?: string }
 
@@ -37,17 +38,9 @@ function decodePathSegment(segment: string): DecodedPathSegment {
     return { value, completelyDecoded: false }
 }
 
-function isEmailAdministrationValue(
-    decodedSegments: readonly DecodedPathSegment[],
-    index: number,
-    rawSegment: string,
-): boolean {
-    if (rawSegment.length === 0 || index === 0) {
-        return false
-    }
-
-    const precedingSegment = decodedSegments[index - 1]
-    return precedingSegment.completelyDecoded && precedingSegment.value.toLowerCase() === 'emails'
+function isInvalidVerificationValue(route: string, value: string): boolean {
+    return VERIFICATION_ID_ROUTES.has(route) && value.length > 0 &&
+        !(route === 'verifybatch' && value === 'csv') && !UUID_PATH_SEGMENT_PATTERN.test(value)
 }
 
 function isSensitivePathSegment(
@@ -58,19 +51,30 @@ function isSensitivePathSegment(
     const decodedSegment = decodedSegments[index]
     const precedingSegment = decodedSegments[index - 1]
     const parentRoute = precedingSegment?.value.toLowerCase()
+    const decodedPathParts = decodedSegment.value.split('/').filter(Boolean)
+    const parentPathPart = parentRoute?.split('/').filter(Boolean).at(-1) ?? ''
+    const isSensitiveRouteValue =
+        rawSegment.length > 0 && (
+            (precedingSegment?.completelyDecoded && SENSITIVE_VALUE_ROUTES.has(parentPathPart)) ||
+            decodedPathParts.some((part, partIndex) =>
+                SENSITIVE_VALUE_ROUTES.has(part.toLowerCase()) && partIndex < decodedPathParts.length - 1,
+            )
+        )
     const isInvalidVerificationId =
-        rawSegment.length > 0 &&
-        precedingSegment?.completelyDecoded &&
-        VERIFICATION_ID_ROUTES.has(parentRoute) &&
-        !(parentRoute === 'verifybatch' && decodedSegment.value === 'csv') &&
-        !UUID_PATH_SEGMENT_PATTERN.test(decodedSegment.value)
+        rawSegment.length > 0 && (
+            (precedingSegment?.completelyDecoded &&
+                isInvalidVerificationValue(parentPathPart, decodedSegment.value)) ||
+            decodedPathParts.some((part, partIndex) =>
+                isInvalidVerificationValue(part.toLowerCase(), decodedPathParts[partIndex + 1] ?? ''),
+            )
+        )
 
     return (
         !decodedSegment.completelyDecoded ||
         decodedSegment.value.includes('@') ||
+        isSensitiveRouteValue ||
         EMAIL_SEGMENT_PATTERN.test(decodedSegment.value) ||
-        isInvalidVerificationId ||
-        isEmailAdministrationValue(decodedSegments, index, rawSegment)
+        isInvalidVerificationId
     )
 }
 

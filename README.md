@@ -90,7 +90,8 @@ Browser callers use `createBrowserApiClient` in `apps/web/src/api/browser-api-cl
 URLs and same-origin credentials. Its middleware reads only the readable `lef_csrf_token` cookie and adds the
 decoded value as `x-csrf-token` for unsafe methods, preserving an explicit caller header. The current-account
 adapter uses generated response types. Browser code does not read the HTTP-only session cookie or store tokens.
-The API and web application still run independently; serving them through one origin belongs to `frontend/06`.
+The API and web images build independently and share the browser origin at `http://localhost:53000`.
+The Nginx gateway serves the product and forwards explicit API paths, including Swagger and the browser contract.
 
 ### Environment Variables
 
@@ -185,12 +186,24 @@ This will:
 
 - Start the application in a detached mode.
 
-When the API health check passes, use:
+When both web and API health checks pass, use:
 
-- API documentation: http://localhost:53000/docs
-- Health check: http://localhost:53000/health
+- Product: <http://localhost:53000/>
+- API documentation: <http://localhost:53000/docs>
+- [Browser API contract](http://localhost:53000/openapi.json)
+- API health: <http://localhost:53000/health>
 
-The application listens on port `3000` inside its container and is published on host port `53000`.
+The web gateway publishes `53000:8080`. The API listens on `api:3000` inside Compose and has no default host port.
+Unknown API descendants return JSON errors; unknown UI routes render the product's not-found page. Swagger uses the
+relative server URL `/`, so its requests stay on the origin that served the documentation.
+
+Use the built gateway for authenticated browser flows. To work on UI code with Vite while the gateway owns port
+53000, run `corepack pnpm --filter @tuposoft/lead-email-finder-web dev` on Vite's default port. Its explicit API proxy
+uses `http://localhost:53000`; `WEB_API_PROXY_TARGET` selects a different backend for standalone development.
+The API's configured `APP_BASE_URL` still governs login redirects and CSRF origin checks.
+
+See [the gateway development guide](docker/README.md) for route ownership, browser headers, safe logging,
+independent image checks, and live browser validation.
 
 ### Debugging the Application
 

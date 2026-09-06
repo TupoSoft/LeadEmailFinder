@@ -176,3 +176,51 @@ jobs:
 
       - name: Test web visual baselines
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual
+
+  gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build independent development API image
+        run: docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .
+
+      - name: Build independent static web image
+        run: docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .
+
+      - name: Validate Compose topology
+        run: docker compose -f docker/compose.yaml config --quiet
+
+      - name: Test Vite and Nginx route ownership and privacy
+        run: corepack pnpm test:gateway
+
+      - name: Install Chromium
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
+
+      - name: Reset, provision, and check disposable development stack
+        run: corepack pnpm dev:reset -- --confirm-project=LEF
+
+      - name: Test genuine same-origin browser session and log privacy
+        run: corepack pnpm test:web-live
+
+      - name: Test BFF and gateway HTTP contracts with Bruno
+        run: corepack pnpm bruno:bff-sessions
+
+      - name: Report service health
+        if: always()
+        run: docker compose -f docker/compose.yaml ps
+
+      - name: Stop this runner's disposable stack
+        if: always()
+        run: docker compose -f docker/compose.yaml down --volumes

@@ -42,23 +42,31 @@ export function validateBffInputs(inputs) {
     let backchannel
     let jwks
     let redis
+    let appBaseUrl
     try {
         issuer = new URL(inputs.TEST_BFF_ISSUER_URL)
         backchannel = new URL(inputs.TEST_BFF_BACKCHANNEL_URL)
         jwks = new URL(inputs.TEST_BFF_JWKS_URI)
         redis = new URL(inputs.TEST_BFF_REDIS_URL)
+        appBaseUrl = new URL(inputs.TEST_BFF_APP_BASE_URL ?? 'http://localhost:53000')
     } catch {
         throw new Error('Invalid BFF live provider or Redis configuration')
     }
     if (
         issuer.protocol !== 'http:' ||
         issuer.hostname !== 'localhost' ||
-        issuer.port !== '58080' ||
+        !issuer.port ||
+        Number(issuer.port) === 0 ||
         issuer.pathname !== '/realms/lead-email-finder' ||
         issuer.username ||
         issuer.password ||
         issuer.search ||
         issuer.hash ||
+        appBaseUrl.protocol !== 'http:' ||
+        appBaseUrl.hostname !== 'localhost' ||
+        !appBaseUrl.port ||
+        Number(appBaseUrl.port) === 0 ||
+        appBaseUrl.origin !== (inputs.TEST_BFF_APP_BASE_URL ?? 'http://localhost:53000') ||
         backchannel.href !== 'http://keycloak:8080/realms/lead-email-finder' ||
         jwks.href !== `${backchannel.href}/protocol/openid-connect/certs` ||
         redis.href !== 'redis://redis:6379'
@@ -100,6 +108,7 @@ export function buildBffInputs(metadata, credentials) {
     postgres.pathname = '/bff_session_test'
     return validateBffInputs({
         TEST_BFF_ISSUER_URL: credentials.issuer,
+        TEST_BFF_APP_BASE_URL: metadata.apiUrl,
         TEST_BFF_CLIENT_ID: credentials.clientId,
         TEST_BFF_CLIENT_SECRET: credentials.clientSecret,
         TEST_BFF_POSTGRES_URL: postgres.toString(),
@@ -119,7 +128,8 @@ export function runBffLive() {
     const inputs = buildBffInputs(metadata, credentials)
     // Confirm live labels again immediately before creating the only database this command can target.
     const postgres = inspectDevelopmentService(checkoutRoot, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
-    const api = inspectDevelopmentService(checkoutRoot, metadata, 'api', '3000/tcp', metadata.apiUrl)
+    const api = inspectDevelopmentService(checkoutRoot, metadata, 'api')
+    inspectDevelopmentService(checkoutRoot, metadata, 'web', '8080/tcp', metadata.apiUrl)
     const exists = runDevelopmentCommand(
         'docker',
         [
