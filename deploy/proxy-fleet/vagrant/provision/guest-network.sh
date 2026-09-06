@@ -5,6 +5,7 @@ PROGRAM='proxy-fleet lab network'
 HELPER='/usr/local/libexec/proxy-fleet-lab-network'
 UNIT_NAME='proxy-fleet-lab-network.service'
 UNIT="/etc/systemd/system/$UNIT_NAME"
+NETWORKD_DIRECTORY='/etc/systemd/network'
 # A lab-reserved numeric protocol lets the verifier prune only routes created by this script.
 ROUTE_PROTOCOL='98'
 fail() {
@@ -103,6 +104,73 @@ discover_underlay_interface() {
 '*) fail 'underlay interface is missing or ambiguous' ;;
     esac
     [ "$UNDERLAY_INTERFACE" != "$EGRESS_INTERFACE" ] || fail 'underlay interface conflicts with egress interface'
+}
+discover_networkd_route_file() {
+    case "$UNDERLAY_INTERFACE" in
+        '' | '.' | '..' | -* | *[!a-zA-Z0-9_.-]*) fail 'underlay interface is unsafe for networkd configuration' ;;
+    esac
+    command -v networkctl >/dev/null 2>&1 || fail 'required command is unavailable: networkctl'
+    network_status=$(networkctl status "$UNDERLAY_INTERFACE" --json=short --no-pager)
+    # Read the single unescaped string field emitted by the pinned networkctl JSON format.
+    # Missing, duplicate, null, escaped, or unexpected paths fail the exact comparison.
+    network_file=$(printf '%s\n' "$network_status" | awk -F '"' '
+        { for (i = 2; i <= NF; i += 2) if ($i == "NetworkFile") {
+            count += 1
+            if ($(i + 1) !~ /^[[:space:]]*:[[:space:]]*$/) exit 1
+            print $(i + 2)
+        } }
+        END { if (count != 1) exit 1 }
+    ') || fail 'underlay network metadata has no unique network file'
+    network_basename="10-netplan-$UNDERLAY_INTERFACE.network"
+    [ "$network_file" = "/run/systemd/network/$network_basename" ] ||
+        fail 'underlay is not managed by the expected Vagrant Netplan network file'
+    NETWORKD_ROUTES_DIRECTORY="$NETWORKD_DIRECTORY/$network_basename.d"
+    NETWORKD_ROUTES_FILE="$NETWORKD_ROUTES_DIRECTORY/50-proxy-fleet-lab-routes.conf"
+}
+ensure_networkd_route_directory() {
+    route_directory=$1
+    case "$route_directory" in
+        /*) ;;
+        *) fail 'networkd route directory is unsafe' ;;
+    esac
+    checked_directory=$route_directory
+    while :; do
+        if [ -e "$checked_directory" ] || [ -L "$checked_directory" ]; then
+            if [ ! -d "$checked_directory" ] || [ -L "$checked_directory" ]; then
+                fail 'networkd route directory is unsafe'
+            fi
+            stat -c '%u:%g:%a' "$checked_directory" |
+                awk -F: '$1 == 0 && $2 == 0 && $3 ~ /^[0-7]*[0-7][0145][0145]$/ { safe = 1 } END { exit !safe }' ||
+                fail 'networkd route directory is unsafe'
+        elif [ "$checked_directory" != "$route_directory" ]; then
+            fail 'networkd route parent directory is missing'
+        fi
+        [ "$checked_directory" != '/' ] || break
+        checked_directory=${checked_directory%/*}
+        [ -n "$checked_directory" ] || checked_directory='/'
+    done
+    if [ ! -d "$route_directory" ]; then
+        install -d -o root -g root -m 0755 "$route_directory"
+    fi
+}
+write_networkd_routes() {
+    route_candidate=$1
+    while IFS=' ' read -r destination gateway; do
+        [ -z "$destination" ] && continue
+        printf '[Route]\nDestination=%s\nGateway=%s\nProtocol=%s\n\n' \
+            "$destination" "$gateway" "$ROUTE_PROTOCOL"
+    done <<EOF >"$route_candidate"
+$RETURN_ROUTES
+EOF
+}
+configure_networkd_routes() {
+    [ -n "$RETURN_ROUTES" ] || return 0
+    discover_networkd_route_file
+    ensure_networkd_route_directory "$NETWORKD_ROUTES_DIRECTORY"
+    write_networkd_routes "$1"
+    install_if_changed "$1" "$NETWORKD_ROUTES_FILE" 0644
+    # Existing exact-route reconciliation applies immediately. A later boot or Netplan
+    # refresh reads this drop-in without a broad reload during guest provisioning.
 }
 apply_egress() {
     if ip link show dev "$EGRESS_INTERFACE" >/dev/null 2>&1; then
@@ -212,13 +280,14 @@ if [ "$MODE" = 'apply' ]; then
     fi
     exit 0
 fi
-ensure_helper_directory
-install_if_changed "$0" "$HELPER" 0755
 unit_candidate=$(mktemp /tmp/proxy-fleet-lab-network.XXXXXX)
 trap 'rm -f -- "$unit_candidate"' EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+configure_networkd_routes "$unit_candidate"
+ensure_helper_directory
+install_if_changed "$0" "$HELPER" 0755
 write_unit "$unit_candidate"
 install_if_changed "$unit_candidate" "$UNIT" 0644
 [ "$CHANGED" -eq 0 ] || systemctl daemon-reload

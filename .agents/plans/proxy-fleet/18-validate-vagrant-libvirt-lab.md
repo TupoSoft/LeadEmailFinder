@@ -36,7 +36,7 @@ None yet.
   while allowing plan 17 to finish against its own VirtualBox criteria. The dependency points from this plan to
   plan 17; plan 17 does not wait for this plan.
   Date/Author: 2026-09-06, project owner and Codex planning.
-- Decision: Retain the shared box pin, two CPUs, 2,048 megabytes of memory, topology, and guest provisioner.
+- Decision: Retain two CPUs for libvirt, the shared box pin, 2,048 megabytes of memory, topology, and guest provisioner.
   Rationale: VirtualBox boot failures do not justify changing libvirt configuration or weakening the resource contract.
   Fix only defects demonstrated by this matrix, with focused regression coverage where applicable.
   Date/Author: 2026-09-06, Codex planning.
@@ -64,12 +64,12 @@ The libvirt provider uses `qemu:///system`. Its management network is `vagrant-l
 `192.168.121.0/24`; the definition deliberately retains that management network on destruction. A separate isolated
 network, `proxy-fleet-lab`, uses `192.168.250.0/24`, host address `192.168.250.1`, no forwarding, and no DHCP.
 
-| Machine | Ansible group | Underlay address | Guest state owned by this lab |
-| --- | --- | --- | --- |
-| `proxy-manager-1` | `swarm_managers` | `192.168.250.11/24` | No dummy interface or test return routes |
-| `proxy-node-a` | `proxy_nodes` | `192.168.250.12/24` | `198.18.0.21/32` and `198.18.0.22/32` on `lef-egress0` |
-| `proxy-node-b` | `proxy_nodes` | `192.168.250.13/24` | `198.18.0.23/32` on `lef-egress0` |
-| `verifier-1` | `verification_workers` | `192.168.250.14/24` | Three host routes: `.21` and `.22` through `.12`, and `.23` through `.13` |
+| Machine           | Ansible group          | Underlay address    | Guest state owned by this lab                                             |
+| ----------------- | ---------------------- | ------------------- | ------------------------------------------------------------------------- |
+| `proxy-manager-1` | `swarm_managers`       | `192.168.250.11/24` | No dummy interface or test return routes                                  |
+| `proxy-node-a`    | `proxy_nodes`          | `192.168.250.12/24` | `198.18.0.21/32` and `198.18.0.22/32` on `lef-egress0`                    |
+| `proxy-node-b`    | `proxy_nodes`          | `192.168.250.13/24` | `198.18.0.23/32` on `lef-egress0`                                         |
+| `verifier-1`      | `verification_workers` | `192.168.250.14/24` | Three host routes: `.21` and `.22` through `.12`, and `.23` through `.13` |
 
 The verifier routes use numeric protocol `98` in the main routing table. All route destinations above are in
 `198.18.0.0/24`, and all gateways are on the declared underlay. WireGuard overlay addresses `172.29.10.1/28` through
@@ -78,7 +78,9 @@ does not create those listeners or deploy WireGuard.
 
 `provision/guest-network.sh` runs only inside the two proxies and verifier. It installs the helper
 `/usr/local/libexec/proxy-fleet-lab-network` with root ownership and mode `0755`, and the unit
-`/etc/systemd/system/proxy-fleet-lab-network.service` with root ownership and mode `0644`. The enabled systemd unit
+`/etc/systemd/system/proxy-fleet-lab-network.service` with root ownership and mode `0644`. The verifier additionally owns
+`/etc/systemd/network/10-netplan-<underlay-interface>.network.d/50-proxy-fleet-lab-routes.conf`, also root-owned with mode
+`0644`. It declares exactly the three protocol-98 routes so they survive Vagrant's later Netplan reconfiguration. The enabled systemd unit
 restores the owned guest networking after boot. The provisioner must preserve unrelated interfaces, routes, DNS, NAT,
 IP forwarding, and reverse-path filtering. Existing route regression tests are in
 `scripts/testing/proxy-fleet-guest-network.spec.ts`.
@@ -89,7 +91,7 @@ and identity paths through an ignored file at `.vagrant/proxy-fleet/ssh-config`.
 
 ## Scope and Non-Goals
 
-This pull request records the native Linux/libvirt matrix in this plan and updates the existing Vagrant README with
+This plan's implementation pull request will record the native Linux/libvirt matrix in this plan and update the existing Vagrant README with
 any verified operator guidance. A demonstrated validation failure may justify a narrow fix in the existing
 `Vagrantfile`, inventory, or guest provisioner, together with focused tests and renewed checks of affected shared
 behavior. Record the failure and rationale before changing implementation. Broader changes require a separate plan.
@@ -144,7 +146,9 @@ provider networks, cached boxes, or resources belonging to another Vagrant envir
 - First provisioning preserves every guest's unrelated network snapshot exactly. Proxy address sets and verifier
   protocol-98 route sets match the inventory exactly, and the verifier reaches all three test addresses by ICMP.
   The manager receives no lab helper, unit, dummy interface, or owned routes; the verifier receives no dummy interface.
-- The helper and unit have the declared root ownership and modes on both proxies and the verifier. All three units
+- The helper and unit have the declared root ownership and modes on both proxies and the verifier. The verifier's
+  networkd fragment declares exactly its three routes and has the required root ownership and mode; it is absent
+  from the other guests. All three units
   are active and enabled. Repeated provisioning leaves network state, file contents, metadata, and modification times
   unchanged, and all functional checks still pass.
 - After all four guests actually halt and boot with provisioning disabled, each has a changed boot identifier.
@@ -265,11 +269,16 @@ change the expected numeric protocol. Exact route output is normalized only for 
       vagrant ssh "$machine" -c 'set -eu; systemctl is-active --quiet proxy-fleet-lab-network.service; systemctl is-enabled --quiet proxy-fleet-lab-network.service; test "$(stat -c "%u:%g:%a" /usr/local/libexec/proxy-fleet-lab-network)" = 0:0:755; test "$(stat -c "%u:%g:%a" /etc/systemd/system/proxy-fleet-lab-network.service)" = 0:0:644'
     done
 
+On the verifier, require exactly one owned networkd fragment matching the discovered underlay interface. Its content
+must contain exactly the three inventory destinations and gateways as `[Route]` sections with `Protocol=98`; require
+root ownership and mode `0644`. Require this fragment to be absent on the manager and both proxies. Include it in the
+file comparisons below, and repeat these assertions after provisioning, reboot, and recreation.
+
 For repeated provisioning, compare the captured IPv4 address and main-table route state, unrelated network facts,
 and installed file hashes and metadata. Modification times must stay unchanged when the existing files are correct.
 
     owned_snapshot='set -eu; addresses=$(ip -o -4 address show); printf "%s\n" "$addresses" | sed -E "s/ valid_lft .*//"; ip -N -o -4 route show table main'
-    file_snapshot='set -eu; for file in /usr/local/libexec/proxy-fleet-lab-network /etc/systemd/system/proxy-fleet-lab-network.service; do if test -f "$file"; then sha256sum "$file"; stat -c "%n %u:%g:%a:%y" "$file"; fi; done'
+    file_snapshot='set -eu; for file in /usr/local/libexec/proxy-fleet-lab-network /etc/systemd/system/proxy-fleet-lab-network.service /etc/systemd/network/10-netplan-*.network.d/50-proxy-fleet-lab-routes.conf; do if test -f "$file"; then sha256sum "$file"; stat -c "%n %u:%g:%a:%y" "$file"; fi; done'
     for machine in $machines; do
       vagrant ssh "$machine" -c "$network_snapshot; $owned_snapshot; $file_snapshot" > "$evidence_dir/$machine.repeat-before"
       vagrant ssh "$machine" -c "$file_snapshot" > "$evidence_dir/$machine.files-before"
@@ -376,7 +385,7 @@ Do not copy provider domain IDs, boot IDs, SSH private-key paths, raw SSH config
 or host-specific absolute paths into tracked documentation.
 
 The future implementation pull request owns this complete validation outcome and any narrowly justified fixes.
-Link it to this plan's synced issue. Keep broader feature work and the unresolved VirtualBox lifecycle evidence in
+Link it to this plan's synced issue. Keep broader feature work and VirtualBox lifecycle validation in
 their own plans. The current documentation split itself neither executes this matrix nor marks any step complete.
 
 ## Plan readiness

@@ -10,6 +10,7 @@ hosts = all.fetch("hosts")
 groups = all.fetch("children")
 box = lab.fetch("box")
 resources = lab.fetch("resources")
+virtualbox = lab.fetch("virtualbox")
 underlay = lab.fetch("underlay")
 libvirt = lab.fetch("libvirt")
 management_network = libvirt.fetch("management_network")
@@ -33,9 +34,9 @@ Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  config.vm.provider "virtualbox" do |virtualbox|
-    virtualbox.cpus = resources.fetch("cpus")
-    virtualbox.memory = resources.fetch("memory_mb")
+  config.vm.provider "virtualbox" do |provider|
+    provider.cpus = virtualbox.fetch("cpus")
+    provider.memory = resources.fetch("memory_mb")
   end
 
   config.vm.provider "libvirt" do |provider|

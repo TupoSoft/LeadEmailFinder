@@ -36,6 +36,15 @@ jobs:
         with:
           node-version: 24
 
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Test Vagrant provider configuration
+        run: |
+          ruby -c deploy/proxy-fleet/vagrant/Vagrantfile
+          ruby scripts/testing/proxy-fleet-vagrant-config.test.rb
+
       - name: Enable Corepack
         run: corepack enable
 

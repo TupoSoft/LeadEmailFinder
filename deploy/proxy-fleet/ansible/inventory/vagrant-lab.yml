@@ -11,6 +11,8 @@ all:
       resources:
         cpus: 2
         memory_mb: 2048
+      virtualbox:
+        cpus: 1
       underlay:
         name: "proxy-fleet-lab"
         cidr: "192.168.250.0/24"

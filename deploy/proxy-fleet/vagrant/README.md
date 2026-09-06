@@ -12,6 +12,11 @@ Validation is tracked separately: [plan 17](../../../.agents/plans/proxy-fleet/1
 owns Windows WSL2/VirtualBox checks, and [plan 18](../../../.agents/plans/proxy-fleet/18-validate-vagrant-libvirt-lab.md)
 owns native Linux/libvirt checks. The shared libvirt configuration is present, but its live validation remains pending.
 
+Each VirtualBox guest uses one CPU; each libvirt guest uses two CPUs. Both providers allocate 2,048 megabytes per
+guest. The inventory declares the VirtualBox override at `all.vars.vagrant_lab.virtualbox.cpus`. One CPU avoids the
+reproduced early boot stall in the pinned guest's RAID6 initialization when Windows Hyper-V is active. Keep the declared
+allocation when reproducing this lab's validation; increasing it requires new boot and lifecycle checks.
+
 ## Prerequisites
 
 Use Vagrant 2.4.9 or later on an AMD64 host. The `Vagrantfile` pins `bento/ubuntu-24.04` version `202508.03.0`, so the
@@ -100,7 +105,10 @@ vagrant up
 
 Vagrant configures the provider management adapter and an isolated, non-forwarded `192.168.250.0/24` underlay. The
 proxy guests own their declared RFC 2544 addresses on `lef-egress0`; the verifier owns three exact return routes. A
-systemd `oneshot` restores only that guest state after reboot.
+systemd `oneshot` restores that guest state after reboot. The verifier also declares its exact protocol-98 routes in
+`/etc/systemd/network/10-netplan-<underlay-interface>.network.d/50-proxy-fleet-lab-routes.conf`. This dedicated file lets
+networkd retain the routes when Vagrant reapplies Netplan after startup. Provisioning changes only the owned fragment
+and does not reload networkd or alter global network policy.
 
 Repeated provisioning preserves already correct verifier routes. Stale route cleanup removes only RFC 2544 host
 routes carrying the lab's reserved protocol `98`, preserving subnet routes that this provisioner cannot create.
@@ -139,6 +147,13 @@ After an interrupted command, wait for its Vagrant process to exit, run `vagrant
 command. Preserve `.vagrant/` if Vagrant reports a machine it cannot operate, and diagnose that environment before
 changing raw VirtualBox or libvirt resources. If `.vagrant/` is lost while provider resources remain, this lab does not
 claim automatic ownership recovery.
+
+With the pinned box, Guest Additions can log an RCU nesting warning during initialization. The warning was observed
+separately from the reproduced boot stall and is consistent with
+[VirtualBox issue 359](https://github.com/VirtualBox/virtualbox/issues/359). Its broader impact remains unverified;
+this lab's acceptance covers the documented development lifecycle and guest networking, not general kernel stability
+or production workloads. Preserve guest and provider logs when diagnosing a new failure. Debugger register and stack
+probes can wake a stalled virtual CPU, so avoid them during an undisturbed boot validation.
 
 This is development tooling. It does not discover unrelated provider resources, allocate public IP addresses, prove
 Internet egress, or provide transactional rollback, concurrent lifecycle safety, production deployment, or production

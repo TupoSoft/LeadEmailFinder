@@ -32,7 +32,8 @@ Dev-workflow fix discovered during a 2026-08-22 full E2E pass, independently del
 
 Vagrant-native development lab with Windows WSL2/VirtualBox validation:
 
-17. [Provision a Vagrant-native proxy-fleet development lab](17-provision-vagrant-native-development-lab.md)
+17. [Provision a Vagrant-native proxy-fleet development lab](17-provision-vagrant-native-development-lab.md) — initial
+    implementation merged in PR #518; VirtualBox validation completed in follow-up PR #549
 
 Native Linux provider validation, independently deliverable after plan 17:
 
@@ -63,6 +64,8 @@ Shared decisions:
 - One `Vagrantfile` consumes the tracked lab inventory so guest roles, fixed addresses, and provisioning stay
   provider-neutral while thin provider blocks handle VirtualBox and libvirt differences. Vagrant-generated state and
   captured SSH facts remain ignored and replaceable; secret material follows the existing plan-12 Vault workflow.
+- VirtualBox guests use one CPU to avoid the reproduced Windows Hyper-V boot stall; libvirt guests retain two CPUs.
+  Both providers allocate 2,048 megabytes per guest. The tracked inventory declares these resources.
 - The lab targets Windows 11 WSL2 with Windows VirtualBox and native AMD64 Linux with libvirt/KVM. Plan 17 owns
   VirtualBox validation; plan 18 owns the native Linux/libvirt matrix. Provider parity requires complete evidence
   from both plans. The Vagrant Hyper-V provider, VMware, macOS, ARM, cloud hosting, and production operations remain
