@@ -3,12 +3,12 @@ import { HttpModule } from '@nestjs/axios'
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
-import { ICatchAllVerifier, ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
+import { ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
 import { EmailVerifierModule } from '../email-verifier'
-import { CATCH_ALL_VERIFIERS_TOKEN } from '../email-verifier/email-verifier.constants'
+import { ACCOUNT_DISCOVERY_TOKEN, AccountDiscovery } from '../application/ports/account-discovery'
 import { SmtpVerifier } from '../email-verifier/smtp'
 import { EmailEntity } from '../infrastructure/persistence/typeorm/email.entity'
 import { DomainPolicyEntity } from '../infrastructure/persistence/typeorm/domain-policy.entity'
@@ -71,9 +71,9 @@ import { EmailAdministrationController } from '../api/http/email-administration/
         },
         {
             provide: MailboxVerificationService,
-            inject: [MAILBOX_PROBE, CATCH_ALL_VERIFIERS_TOKEN],
-            useFactory: (mailboxProbe: CompatibilityMailboxProbe, accountDiscoveryVerifiers: ICatchAllVerifier[]) =>
-                new MailboxVerificationService(mailboxProbe, accountDiscoveryVerifiers),
+            inject: [MAILBOX_PROBE, ACCOUNT_DISCOVERY_TOKEN],
+            useFactory: (mailboxProbe: CompatibilityMailboxProbe, accountDiscovery: AccountDiscovery) =>
+                new MailboxVerificationService(mailboxProbe, accountDiscovery),
         },
         {
             provide: EmailVerificationOrchestrator,

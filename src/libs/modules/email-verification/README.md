@@ -98,9 +98,9 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 The module is layered (`module-architecture/10`, `/13`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
-administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and seven purpose-specific ports
+administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
 under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
-`MxResolver`, `DomainSynonymDiscovery`, and `MailboxProbe`; `infrastructure/` holds their adapters, and `api/`
+`MxResolver`, `DomainSynonymDiscovery`, `MailboxProbe`, and `AccountDiscovery`; `infrastructure/` holds technical adapters, and `api/`
 holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
 client.
 
@@ -120,9 +120,18 @@ supplied text without network access. These discovery ports remain registered fo
 `module-architecture/14`; the current SMTP engine retains its existing DNS path.
 
 `infrastructure/compatibility-mailbox-probe.ts` still wraps the SMTP engine. Its replacement and SMTP/proxy
-reorganization belong to `module-architecture/14`. Account discovery retains its existing verifier-array binding
-through `EmailVerifierModule`. The new internal evidence port and provider relocation belong to
-`account-discovery/01` and `account-discovery/02`; their integration remains a prerequisite for completing plan 13.
+reorganization belong to `module-architecture/14`.
+
+`application/ports/account-discovery.ts` defines the private `AccountDiscovery` evidence port and its injection
+token. `MailboxVerificationService` decides when discovery is useful and maps known source names into verification
+results. `AccountDiscoveryService` calls at most one approved provider and returns fresh positive evidence;
+disabled discovery, negative responses, and per-call failures return an empty list without claiming account absence
+or logging provider errors. Invalid selection still rejects initialization, and the approval wrapper checks
+validity again before dispatch. `infrastructure/account-discovery/account-discovery-composition.ts` rejects a
+selection containing more than one provider. `EmailVerifierModule` exports the discovery token and reexports
+`SmtpModule`; the active mailbox factory injects the port. The shared `ICatchAllVerifier` contract and technical
+clients under `src/libs/catch-all/` remain in place until `account-discovery/02`. This later relocation remains a
+prerequisite for completing plan 13. The public barrel still exports only `EmailVerificationModule`.
 
 `sync-email-verification/email-verification.module.ts` composes the core: it registers the three consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
@@ -237,8 +246,12 @@ Focused tests are grouped by behavior:
 - **SMTP engine**: `email-verifier/smtp/smtp-client.factory.spec.ts`, `email-verifier/smtp/smtp-client.spec.ts`,
   `email-verifier/smtp/smtp-verifier.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
   `../../socket/src/tls-connect.spec.ts`
-- **Account discovery**: `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
+- **Account discovery**: `application/account-discovery/account-discovery.service.spec.ts`,
+  `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
   `application/account-discovery/select-account-discovery-verifier.spec.ts`,
+  `infrastructure/account-discovery/account-discovery-composition.spec.ts`,
+  `infrastructure/account-discovery/account-discovery-wiring.spec.ts` (real Nest composition with fake outbound
+  dependencies, covering positive evidence, disabled discovery, and approval expiry),
   `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
   `scripts/privacy/account-discovery-approvals.spec.ts` and
   `scripts/security/scan-linkedin-session-material.spec.ts`

@@ -8,21 +8,21 @@ import {
     MimecastLogin,
     OfficeApps,
 } from '@tuposoft/lead-email-finder/catch-all'
-import { ACCOUNT_DISCOVERY_CLOCK_TOKEN, CATCH_ALL_VERIFIERS_TOKEN } from './email-verifier.constants'
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from './email-verifier.constants'
+import { AccountDiscovery, ACCOUNT_DISCOVERY_TOKEN } from '../application/ports/account-discovery'
 import { CatchAllProxyConfiguration } from '../email-verification-configuration'
 import { loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
 import {
     AccountDiscoveryApprovalView,
     Clock,
 } from '../application/account-discovery/approved-account-discovery-verifier'
-import { composeAccountDiscoveryVerifiers } from '../infrastructure/account-discovery/account-discovery-composition'
+import { composeAccountDiscovery } from '../infrastructure/account-discovery/account-discovery-composition'
 
 const SYSTEM_CLOCK: Clock = Object.freeze({ now: () => new Date() })
 
 type AccountDiscoveryManifestLoader = () => Promise<{ approvals: readonly AccountDiscoveryApprovalView[] }>
 
-export async function configuredAccountDiscoveryVerifiers(
+export async function configuredAccountDiscovery(
     configService: ConfigService<CatchAllProxyConfiguration, true>,
     clock: Clock,
     microsoftGetCredentialType: MicrosoftGetCredentialType,
@@ -30,10 +30,10 @@ export async function configuredAccountDiscoveryVerifiers(
     mimecastLogin: MimecastLogin,
     officeApps: OfficeApps,
     loadManifest: AccountDiscoveryManifestLoader = loadAccountDiscoveryApprovals,
-): Promise<ICatchAllVerifier[]> {
+): Promise<AccountDiscovery> {
     const manifest = await loadManifest()
 
-    return composeAccountDiscoveryVerifiers(
+    return composeAccountDiscovery(
         {
             CATCH_ALL_HTTP_PROXY_URL: configService.get('CATCH_ALL_HTTP_PROXY_URL'),
             CATCH_ALL_PROVIDER: configService.get('CATCH_ALL_PROVIDER'),
@@ -54,8 +54,8 @@ export async function configuredAccountDiscoveryVerifiers(
             useValue: SYSTEM_CLOCK,
         },
         {
-            provide: CATCH_ALL_VERIFIERS_TOKEN,
-            useFactory: configuredAccountDiscoveryVerifiers,
+            provide: ACCOUNT_DISCOVERY_TOKEN,
+            useFactory: configuredAccountDiscovery,
             inject: [
                 ConfigService,
                 ACCOUNT_DISCOVERY_CLOCK_TOKEN,
@@ -66,6 +66,6 @@ export async function configuredAccountDiscoveryVerifiers(
             ],
         },
     ],
-    exports: [SmtpModule, CATCH_ALL_VERIFIERS_TOKEN],
+    exports: [SmtpModule, ACCOUNT_DISCOVERY_TOKEN],
 })
 export class EmailVerifierModule {}
