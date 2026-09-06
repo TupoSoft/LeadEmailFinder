@@ -17,6 +17,10 @@ enqueue asynchronous verification, and poll for a completed result with its own 
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
+The DNS and domain-synonym adapters are registered under `infrastructure/discovery/dns/` and
+`infrastructure/discovery/http/`. The SMTP compatibility adapter retains the existing DNS/proxy path until the
+mailbox refactor. Account discovery keeps its current default-deny composition and approval checks.
+
 The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
 internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another
 proxy. `/v1/proxies/healthy` runs the same `state = active` eligibility query as the allocator without that

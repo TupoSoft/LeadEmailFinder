@@ -16,8 +16,8 @@ import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/e
 import { TypeOrmEmailStore } from '../infrastructure/persistence/typeorm-email.store'
 import { TypeOrmDomainStore } from '../infrastructure/persistence/typeorm-domain.store'
 import { TypeOrmVerificationStore } from '../infrastructure/persistence/typeorm-verification.store'
-import { CompatibilityMxResolver } from '../infrastructure/compatibility-mx-resolver'
-import { CompatibilityDomainSynonymDiscovery } from '../infrastructure/compatibility-domain-synonym-discovery'
+import { DnsMxResolver } from '../infrastructure/discovery/dns/dns-mx-resolver'
+import { HttpDomainSynonymDiscovery } from '../infrastructure/discovery/http/http-domain-synonym-discovery'
 import { CompatibilityMailboxProbe } from '../infrastructure/compatibility-mailbox-probe'
 import { EmailAdministrationService } from '../application/email-administration.service'
 import { DomainPolicyService } from '../application/domain-policy.service'
@@ -57,12 +57,12 @@ import { EmailAdministrationController } from '../api/http/email-administration/
         {
             provide: MX_RESOLVER,
             inject: [DnsService],
-            useFactory: (dnsService: DnsService) => new CompatibilityMxResolver(dnsService),
+            useFactory: (dnsService: DnsService) => new DnsMxResolver(dnsService),
         },
-        CompatibilityDomainSynonymDiscovery,
+        HttpDomainSynonymDiscovery,
         {
             provide: DOMAIN_SYNONYM_DISCOVERY,
-            useExisting: CompatibilityDomainSynonymDiscovery,
+            useExisting: HttpDomainSynonymDiscovery,
         },
         {
             provide: MAILBOX_PROBE,

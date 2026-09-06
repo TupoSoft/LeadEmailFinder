@@ -95,7 +95,7 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 
 ## Architecture
 
-The module is layered (`module-architecture/10`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+The module is layered (`module-architecture/10`, `/13`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and seven purpose-specific ports
@@ -108,12 +108,21 @@ client.
 `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and `TypeOrmSmtpVerificationStore` — over `EmailEntity`,
 `DomainPolicyEntity`, `EmailVerificationEntity`, and `SmtpVerificationEntity` TypeORM classes under
 `infrastructure/persistence/typeorm/`, mapping the `emails`, `domains`, `email_verifications`, and
-`smtp_verifications` tables. `infrastructure/compatibility-mx-resolver.ts`,
-`infrastructure/compatibility-domain-synonym-discovery.ts`, and `infrastructure/compatibility-mailbox-probe.ts`
-implement the three network ports. The mailbox probe and MX resolver are thin wrappers around the unchanged DNS
-and SMTP engine described below. The domain-synonym adapter is the same HTML-scraping implementation this module
-always had, relocated to its new layer. `module-architecture/13` and `module-architecture/14` each replace one of
-these three with a real, independently architected adapter.
+`smtp_verifications` tables.
+
+`infrastructure/discovery/dns/dns-mx-resolver.ts` implements `MxResolver` over the technical DNS library, preserving
+its cache, record ordering, and empty-result behavior for failed DNS queries. Unexpected adapter failures cross
+this boundary only as the stable `dns_mx_resolution_failed` error. `infrastructure/discovery/http/` owns
+`HttpDomainSynonymDiscovery`: it retrieves the homepage and relevant links, keeps results from successful pages,
+and inherits the injected HTTP transport's timeout and retry configuration. The default composition adds no
+adapter-specific timeout or retry. `domain/domain-synonym-parser.ts` extracts domains and relevant links from
+supplied text without network access. These discovery ports remain registered for the mailbox refactor in
+`module-architecture/14`; the current SMTP engine retains its existing DNS path.
+
+`infrastructure/compatibility-mailbox-probe.ts` still wraps the SMTP engine. Its replacement and SMTP/proxy
+reorganization belong to `module-architecture/14`. Account discovery retains its existing verifier-array binding
+through `EmailVerifierModule`. The new internal evidence port and provider relocation belong to
+`account-discovery/01` and `account-discovery/02`; their integration remains a prerequisite for completing plan 13.
 
 `sync-email-verification/email-verification.module.ts` composes the core: it registers the three consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
@@ -221,8 +230,10 @@ Focused tests are grouped by behavior:
   `infrastructure/persistence/typeorm-verification.store.spec.ts`,
   `infrastructure/persistence/typeorm-smtp-verification.store.spec.ts`, and the real-Postgres
   `infrastructure/persistence/typeorm-stores-organization-isolation.integration.spec.ts`
-- **Network compatibility adapters**: `infrastructure/compatibility-mx-resolver.spec.ts`,
-  `infrastructure/compatibility-mailbox-probe.spec.ts`, `infrastructure/compatibility-domain-synonym-discovery.spec.ts`
+- **DNS and synonym discovery**: specifications below `infrastructure/discovery/dns/` and
+  `infrastructure/discovery/http/`, plus `domain/domain-synonym-parser.spec.ts`; deterministic DNS and local HTTP
+  fixtures cover success, failures, configured deadlines, and parsing
+- **Mailbox compatibility adapter**: `infrastructure/compatibility-mailbox-probe.spec.ts`
 - **SMTP engine**: `email-verifier/smtp/smtp-client.factory.spec.ts`, `email-verifier/smtp/smtp-client.spec.ts`,
   `email-verifier/smtp/smtp-verifier.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
   `../../socket/src/tls-connect.spec.ts`

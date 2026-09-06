@@ -65,6 +65,11 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
   Rationale: Network-adapter completion is independently deployable and leaves delivery changes bounded.
   Date/Author: 2026-08-30, Codex planning.
 
+- Decision: Reuse the internal account-discovery boundary delivered after plan 18 and before plan 13.
+  Rationale: Its separate plans own provider relocation and approval policy; SMTP recomposition must preserve that
+  binding and remove only the obsolete SMTP wrapper it still consumes.
+  Date/Author: 2026-09-06, Codex planning.
+
 ## Outcomes & Retrospective
 
 Not started.
@@ -72,10 +77,11 @@ Not started.
 ## Context and Orientation
 
 Plan 10 supplies the pure verification core and the `MailboxProbe` port. Plan 17 supplies the organization-aware
-`SmtpVerificationStore` implementation. Plan 13 supplies MX, synonym, and account-discovery adapters. The remaining
-legacy network area is `src/libs/modules/email-verification/src/email-verifier/smtp/`, which opens the proxy-backed
-socket and interprets SMTP replies. Plan 18 temporarily binds that code to the mailbox port through a compatibility
-adapter.
+`SmtpVerificationStore` implementation. Plan 13 supplies MX and synonym adapters. The prerequisite
+`account-discovery/02`, inherited through plan 13, supplies the existing private account-discovery module and port.
+The remaining legacy network area is `src/libs/modules/email-verification/src/email-verifier/smtp/`, which opens
+the proxy-backed socket and interprets SMTP replies. Plan 18 temporarily binds that code to the mailbox port through
+a compatibility adapter.
 
 Privacy plan 05 requires strict STARTTLS, verified peer identity, no plaintext fallback, secure-transport cache
 provenance, bounded deadlines, and deterministic cleanup. Privacy plan 03 forbids address-bearing commands, replies,
@@ -106,8 +112,11 @@ and loads only secure cache entries through the plan-17 `SmtpVerificationStore`.
 performs the strict privacy-plan-05 protocol, stores the result with secure provenance, and releases the lease through
 one bounded path.
 
-Bind plan-13 discovery plus the mailbox adapter to the core without exporting implementation tokens. Remove the old
-SMTP module and compatibility registration only after the recomposed Nest module passes its real-adapter tests.
+Bind plan-13 DNS/synonym discovery plus the mailbox adapter to the core without exporting implementation tokens.
+Reuse `infrastructure/account-discovery/account-discovery.module.ts` and `ACCOUNT_DISCOVERY_TOKEN` from the completed
+account-discovery plans without recreating selection or moving providers. Remove the old SMTP module, the remaining
+`EmailVerifierModule` reexport wrapper, and the mailbox compatibility registration only after the recomposed Nest
+module passes its real-adapter tests.
 Ensure API/application/domain imports do not reference Node sockets, TLS, proxy implementations, SMTP classes, or
 TypeORM entities.
 
@@ -118,8 +127,10 @@ sync, deprecated-sync, async, and batch keys remain assigned to plans 11, 15, an
 ## Interfaces and Dependencies
 
 The adapter implements the plan-10 `MailboxProbe` port with organization ID, mailbox address value, MX target, and
-bounded execution context. It consumes the plan-17 `SmtpVerificationStore`, plan-13 discovery values, and plan-05
-public proxy lease interfaces. No SMTP, proxy, DNS, TypeORM, or provider implementation becomes public.
+bounded execution context. It consumes the plan-17 `SmtpVerificationStore`, plan-13 DNS/synonym discovery values,
+and plan-05 public proxy lease interfaces. Account-discovery policy and provider composition remain owned by
+`account-discovery/01` and `account-discovery/02`. No SMTP, proxy, DNS, TypeORM, or provider implementation
+becomes public.
 
 Configuration stays the privacy-plan-05 contract, including `SMTP_PORT`, optional `SMTP_TLS_CA_FILE`, and the existing
 phase deadlines. No HTTP, queue, S3, database-schema, or public TypeScript interface changes. The top-level barrel
