@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
-    'bff-sessions': Object.freeze({ requests: 8, tests: 9, sandbox: 'developer', network: 'host' }),
+    'bff-sessions': Object.freeze({ requests: 13, tests: 14, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 22, sandbox: 'developer', network: 'compose' }),
 })
 

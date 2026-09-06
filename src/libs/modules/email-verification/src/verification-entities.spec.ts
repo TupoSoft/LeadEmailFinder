@@ -1,8 +1,8 @@
 import { DataSource, DataSourceOptions, getMetadataArgsStorage } from 'typeorm'
-import { Domain } from './domain/domain.entity'
-import { Email } from './email/email.entity'
-import { SmtpVerification } from './email-verifier/smtp/smtp-verification.entity'
-import { EmailVerification } from './sync-email-verification/email-verification.entity'
+import { DomainPolicyEntity as Domain } from './infrastructure/persistence/typeorm/domain-policy.entity'
+import { EmailEntity as Email } from './infrastructure/persistence/typeorm/email.entity'
+import { SmtpVerificationEntity as SmtpVerification } from './infrastructure/persistence/typeorm/smtp-verification.entity'
+import { EmailVerificationEntity as EmailVerification } from './infrastructure/persistence/typeorm/email-verification.entity'
 
 class MetadataDataSource extends DataSource {
     constructor(options: DataSourceOptions) {

@@ -9,11 +9,8 @@ import { Logger, LoggerModule } from 'pino-nestjs'
 import request from 'supertest'
 import type { NextFunction, Request, Response } from 'express'
 import type { Job, Queue } from 'bullmq'
-import type { Repository } from 'typeorm'
 import {
     EmailVerificationReason,
-    IDomainService,
-    IEmailService,
     IEmailVerificationResponseDto,
     IEmailVerificationResultDto,
 } from '@tuposoft/lead-email-finder/common'
@@ -22,9 +19,13 @@ import { CreditGuard, CreditsService } from '@tuposoft/lead-email-finder/modules
 import type { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { createPiiSafePinoHttpOptions } from '../../../../../../lead-email-finder-api/src/pii-safe-logger-options'
 import { configurePiiSafeRequestLogging } from '../../../../../../lead-email-finder-api/src/configure-pii-safe-request-logging'
-import { EmailVerificationService } from '../../sync-email-verification/email-verification.service'
+import { EmailVerificationOrchestrator } from '../../application/email-verification.service'
+import { DomainPolicyService } from '../../application/domain-policy.service'
+import { EmailAdministrationService } from '../../application/email-administration.service'
+import { MailboxVerificationService } from '../../application/mailbox-verification.service'
+import { VerificationStore } from '../../application/ports/verification-store'
+import { EmailVerification } from '../../domain/email-verification'
 import { SyncEmailVerificationController } from '../../sync-email-verification/sync-email-verification.controller'
-import { EmailVerification } from '../../sync-email-verification/email-verification.entity'
 import { OldSyncEmailVerificationController } from '../../old-sync-email-verification/old-sync-email-verification.controller'
 import { OldSyncEmailVerificationProfile } from '../../old-sync-email-verification/old-sync-email-verification.profile'
 import { AsyncEmailVerificationController } from '../../async-email-verification/async-email-verification.controller'
@@ -91,19 +92,18 @@ describe('captured verification trace chain', () => {
 
     beforeAll(async () => {
         const observer = new LoggingVerificationTraceObserver()
-        const repository = {
-            create: (record: Partial<EmailVerification>) => record,
-            save: (record: EmailVerification): Promise<EmailVerification> => {
-                const saved = { ...record, id: randomUUID(), createdAt: new Date() }
+        const store: Pick<VerificationStore, 'create'> = {
+            create: (organizationId: string, record: unknown): Promise<EmailVerification> => {
+                const saved = { ...(record as object), organizationId, id: randomUUID(), createdAt: new Date() } as EmailVerification
                 persisted.push(saved)
                 return Promise.resolve(saved)
             },
         }
-        const service = new EmailVerificationService(
-            verifier,
-            repository as unknown as Repository<EmailVerification>,
-            { upsertEmail: jest.fn().mockResolvedValue(undefined) } as unknown as IEmailService,
-            { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as unknown as IDomainService,
+        const service = new EmailVerificationOrchestrator(
+            verifier as unknown as MailboxVerificationService,
+            store as VerificationStore,
+            { upsertEmail: jest.fn().mockResolvedValue(undefined) } as unknown as EmailAdministrationService,
+            { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as unknown as DomainPolicyService,
             observer,
         )
         const asyncService = new AsyncEmailVerificationServiceImpl(

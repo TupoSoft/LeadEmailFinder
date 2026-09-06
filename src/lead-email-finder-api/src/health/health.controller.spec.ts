@@ -4,6 +4,7 @@ import { HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@
 import { NestApplication } from '@nestjs/core'
 import request from 'supertest'
 import { HttpStatus } from '@nestjs/common'
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 
 describe('HealthController', () => {
     let app: NestApplication
@@ -44,6 +45,39 @@ describe('HealthController', () => {
 
     it('should be defined', () => {
         expect(controller).toBeDefined()
+    })
+
+    it('publishes a public health operation with the PostgreSQL result and unavailable response', () => {
+        const document = SwaggerModule.createDocument(app, new DocumentBuilder().build())
+        const operation = document.paths['/health']?.get
+
+        expect(operation).toMatchObject({ operationId: 'getHealth', security: [] })
+        for (const status of ['200', '503']) {
+            expect(operation?.responses[status]).toMatchObject({
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            required: ['status', 'details'],
+                            properties: {
+                                status: { type: 'string', enum: ['ok', 'error', 'shutting_down'] },
+                                details: {
+                                    type: 'object',
+                                    required: ['postgres'],
+                                    properties: {
+                                        postgres: {
+                                            type: 'object',
+                                            required: ['status'],
+                                            properties: { status: { type: 'string', enum: ['up', 'down'] } },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            })
+        }
     })
 
     describe('check', () => {

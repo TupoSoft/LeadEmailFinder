@@ -87,34 +87,41 @@ return the same `404`; the endpoint accepts no organization override and provide
 
 [`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes four top-level Nest
 submodules — `SyncEmailVerificationModule`, `AsyncEmailVerificationModule`, `BatchEmailVerificationModule`, and
-`OldSyncEmailVerificationModule` (the deprecated route) — plus, transitively, `DomainModule`, `EmailModule`, and
-`EmailVerifierModule` (which in turn composes an SMTP submodule). Several of these submodules have their own
-internal barrels, but none of that is exported again by the top-level `src/index.ts`: from outside this module, the
-only public surface is `EmailVerificationModule` itself and the HTTP/queue behavior below. The top-level module also
-wires the internal result reader and its controller. The shared result DTO lives in `src/api/`; the trace port lives
-in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
+`OldSyncEmailVerificationModule` (the deprecated route). Several of these submodules have their own internal
+barrels, but none of that is exported again by the top-level `src/index.ts`: from outside this module, the only
+public surface is `EmailVerificationModule` itself and the HTTP/queue behavior below. The top-level module also
+wires the internal result reader and its controller. The shared result DTO lives in `src/api/`; the trace port
+lives in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
 
-## Pure Core (Not Yet Wired)
+## Architecture
 
-`src/domain/` and `src/application/` also hold a framework-free domain and application core
-(`module-architecture/10`), added alongside the flat implementation above. It defines plain `Email`,
-`DomainPolicy`, `EmailVerification`, and `SmtpVerification` records and typed errors, plus seven purpose-specific
-ports under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
-`MxResolver`, `DomainSynonymDiscovery`, and `MailboxProbe` — and the central verification sequence
-(`EmailVerificationOrchestrator`, `MailboxVerificationService`) plus email/domain administration use cases
-(`EmailAdministrationService`, `DomainPolicyService`) built on top of them. None of it is wired into
-`EmailVerificationModule`, imports any port implementation, or changes any route, DTO, or persistence behavior
-yet.
+The module is layered (`module-architecture/10`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+`EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
+verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
+administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and seven purpose-specific ports
+under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
+`MxResolver`, `DomainSynonymDiscovery`, and `MailboxProbe`; `infrastructure/` holds their adapters, and `api/`
+holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
+client.
 
-`infrastructure/persistence/` now also holds the four persistence-port adapters from `module-architecture/17` —
-`TypeOrmEmailStore`, `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and `TypeOrmSmtpVerificationStore` — over
-duplicate `EmailEntity`, `DomainPolicyEntity`, `EmailVerificationEntity`, and `SmtpVerificationEntity` TypeORM
-classes under `infrastructure/persistence/typeorm/`, mapping the same `emails`, `domains`, `email_verifications`,
-and `smtp_verifications` tables the flat implementation's original entities already own. These, too, are
-additive and unwired: nothing registers them with TypeORM, and the original entities and repositories keep
-serving every existing route. `module-architecture/18` implements the three network ports, composes the final
-module, moves the `/emails` administration API, and cuts every delivery mode over to this core, at which point
-the original entities and the flat implementation are deleted.
+`infrastructure/persistence/` holds the four persistence-port adapters — `TypeOrmEmailStore`,
+`TypeOrmDomainStore`, `TypeOrmVerificationStore`, and `TypeOrmSmtpVerificationStore` — over `EmailEntity`,
+`DomainPolicyEntity`, `EmailVerificationEntity`, and `SmtpVerificationEntity` TypeORM classes under
+`infrastructure/persistence/typeorm/`, mapping the `emails`, `domains`, `email_verifications`, and
+`smtp_verifications` tables. `infrastructure/compatibility-mx-resolver.ts`,
+`infrastructure/compatibility-domain-synonym-discovery.ts`, and `infrastructure/compatibility-mailbox-probe.ts`
+implement the three network ports. The mailbox probe and MX resolver are thin wrappers around the unchanged DNS
+and SMTP engine described below. The domain-synonym adapter is the same HTML-scraping implementation this module
+always had, relocated to its new layer. `module-architecture/13` and `module-architecture/14` each replace one of
+these three with a real, independently architected adapter.
+
+`sync-email-verification/email-verification.module.ts` composes the core: it registers the three consumed
+persistence entities with TypeORM, builds every application service and port through explicit factory providers
+(no bare `@Injectable()` on a framework-free class), and binds the shared `EmailVerificationServiceToken` to
+`EmailVerificationOrchestrator`. The other three delivery modes (`old-sync-email-verification`,
+`async-email-verification`, `batch-email-verification`) consume that same token, unchanged from how they always
+consumed the module's core verification service. The `/emails` administration API lives at
+`api/http/email-administration/`, wired to `EmailAdministrationService`.
 
 ## Dependencies
 
@@ -150,12 +157,12 @@ the original entities and the flat implementation are deleted.
 
 ## Persistence
 
-| Entity              | Table                 | Ownership and identity                                                                |
-| ------------------- | --------------------- | ------------------------------------------------------------------------------------- |
-| `EmailVerification` | `email_verifications` | Required organization; UUID result ID                                                 |
-| `Domain`            | `domains`             | Shared technical policy; domain name                                                  |
-| `Email`             | `emails`              | Organization plus normalized address                                                  |
-| `SmtpVerification`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
+| Entity                    | Table                 | Ownership and identity                                                                |
+| -------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `EmailVerificationEntity`  | `email_verifications` | Required organization; UUID result ID                                                 |
+| `DomainPolicyEntity`       | `domains`             | Shared technical policy; domain name                                                  |
+| `EmailEntity`              | `emails`              | Organization plus normalized address                                                  |
+| `SmtpVerification`         | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
 
 ## S3 / Storage
 
@@ -205,11 +212,20 @@ Focused tests are grouped by behavior:
   `batch-email-verification/parse-s3-result-location.spec.ts`,
   `batch-email-verification/multer-options-factory-impl.service.spec.ts`; the two writer specifications reuse the
   common customer-object security contract for production and development mappings
-- **Domain/Email persistence**: `domain/domain.service.spec.ts`, `domain/domain-synonym-finder.spec.ts`,
-  `email/email.controller.spec.ts`, `email/email.profile.spec.ts`, `email/email.service.spec.ts`
-- **SMTP engine**: `email-verifier/email-verifier.spec.ts`, `email-verifier/smtp/smtp-client.factory.spec.ts`,
-  `email-verifier/smtp/smtp-client.spec.ts`, `email-verifier/smtp/smtp-verifier.spec.ts`,
-  `infrastructure/smtp/smtp-trust.spec.ts`, and `../../socket/src/tls-connect.spec.ts`
+- **Email administration**: `api/http/email-administration/email-administration.controller.spec.ts`
+- **Domain/application core**: `application/domain-policy.service.spec.ts`,
+  `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,
+  `application/email-verification.service.spec.ts`
+- **Persistence stores**: `infrastructure/persistence/typeorm-email.store.spec.ts`,
+  `infrastructure/persistence/typeorm-domain.store.spec.ts`,
+  `infrastructure/persistence/typeorm-verification.store.spec.ts`,
+  `infrastructure/persistence/typeorm-smtp-verification.store.spec.ts`, and the real-Postgres
+  `infrastructure/persistence/typeorm-stores-organization-isolation.integration.spec.ts`
+- **Network compatibility adapters**: `infrastructure/compatibility-mx-resolver.spec.ts`,
+  `infrastructure/compatibility-mailbox-probe.spec.ts`, `infrastructure/compatibility-domain-synonym-discovery.spec.ts`
+- **SMTP engine**: `email-verifier/smtp/smtp-client.factory.spec.ts`, `email-verifier/smtp/smtp-client.spec.ts`,
+  `email-verifier/smtp/smtp-verifier.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
+  `../../socket/src/tls-connect.spec.ts`
 - **Account discovery**: `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
   `application/account-discovery/select-account-discovery-verifier.spec.ts`,
   `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
@@ -217,14 +233,6 @@ Focused tests are grouped by behavior:
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
-- **Pure core (not yet wired)**: `application/domain-policy.service.spec.ts`,
-  `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,
-  `application/email-verification.service.spec.ts`
-- **Persistence stores (not yet wired)**: `infrastructure/persistence/typeorm-email.store.spec.ts`,
-  `infrastructure/persistence/typeorm-domain.store.spec.ts`,
-  `infrastructure/persistence/typeorm-verification.store.spec.ts`,
-  `infrastructure/persistence/typeorm-smtp-verification.store.spec.ts`, and the real-Postgres
-  `infrastructure/persistence/typeorm-stores-organization-isolation.integration.spec.ts`
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated

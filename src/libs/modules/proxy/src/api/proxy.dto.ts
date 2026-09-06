@@ -1,16 +1,6 @@
 import { Exclude, Expose, Type } from 'class-transformer'
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import {
-    IsEnum,
-    IsInt,
-    IsNotEmpty,
-    IsOptional,
-    IsString,
-    IsUUID,
-    Max,
-    Min,
-    ValidateNested,
-} from 'class-validator'
+import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator'
 import { ProxyLifecycle } from '../domain/proxy-lifecycle'
 import { ProxyProtocol } from '../domain/proxy-protocol'
 
@@ -39,6 +29,7 @@ export class ProxyDto {
     port: number
 
     @Exclude()
+    @ApiHideProperty()
     auth?: never
 
     @ApiProperty({ enum: ProxyLifecycle })

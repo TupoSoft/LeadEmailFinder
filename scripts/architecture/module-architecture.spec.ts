@@ -277,6 +277,35 @@ describe('module architecture structure', () => {
         expect(result.violations).toEqual([])
     })
 
+    it('ignores the exact Nest-generated Swagger aggregate after a build', () => {
+        const fixture = new FixtureRepository().addModule('customers', {
+            files: { 'api/customer.dto.ts': 'export class CustomerDto {}\n' },
+        })
+        fixture.addRootFile(
+            'src/metadata.ts',
+            "export default async () => ({ models: [[await import('./libs/modules/customers/src/api/customer.dto'), { CustomerDto: {} }]] })\n",
+        )
+
+        expect(scan(fixture)).toEqual([])
+    })
+
+    it.each(['src/other/metadata.ts', 'src/metadata-helper.ts', 'src/libs/common/src/metadata.ts'])(
+        'still checks private module imports from %s',
+        path => {
+            const fixture = new FixtureRepository().addModule('customers', {
+                files: { 'api/customer.dto.ts': 'export class CustomerDto {}\n' },
+            })
+            fixture.addRootFile(
+                path,
+                `export const metadata = import('${MODULE_ALIAS_PREFIX}customers/api/customer.dto')\n`,
+            )
+
+            expect(violationsFor(fixture, 'cross-module-public-api')).toEqual([
+                expect.objectContaining({ source: path }),
+            ])
+        },
+    )
+
     it('reports invalid names and missing module structure', () => {
         const fixture = new FixtureRepository()
             .addModule('Bad_Name')

@@ -67,6 +67,22 @@ tokens, session identifiers, or raw principal permissions. Missing or unusable a
 exact `401 { "code": "authentication_required" }` response. An authenticated service client returns the exact
 `403 { "code": "human_session_required" }` response.
 
+These four operations and `GET /health` form the initial generated browser contract at `/openapi.json`. The full
+runtime Swagger UI lives at `/docs`. The API host owns document generation and an exact operation allow list; this
+module owns the route, response, cookie, and CSRF annotations that feed both documents. The stable operation IDs are
+`loginBrowserSession`, `completeBrowserAuthorization`, `getCurrentAccount`, and `logoutBrowserSession`. The callback
+operation publishes its safe redirect codes in the `x-callback-error-codes` OpenAPI extension because the codes are
+part of the redirect URL, not a JSON response body. Logout describes the session cookie and CSRF header as a combined
+security requirement and documents the Origin check with its Referer fallback.
+
+After changing a browser-facing source annotation, update and check the committed contract and generated types:
+
+```shell
+corepack pnpm openapi:export
+corepack pnpm openapi:generate
+corepack pnpm openapi:check
+```
+
 `GET v1/auth/callback` parses the provider query locally so missing, blank, repeated, or non-string `state` and
 `code` values reach the browser recovery policy instead of the global validation response. State is checked and
 atomically consumed before the authorization code is validated or exchanged. Recoverable failures redirect to

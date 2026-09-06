@@ -10,6 +10,12 @@
                 "ignore": ["src/libs/common/src/testing/**"]
             }
         },
-        "typeCheck": true
+        "typeCheck": true,
+        "plugins": [
+            {
+                "name": "@nestjs/swagger",
+                "options": { "introspectComments": true }
+            }
+        ]
     }
 }

@@ -1,0 +1,130 @@
+import { CompatibilityDomainSynonymDiscovery } from './compatibility-domain-synonym-discovery'
+import { Test } from '@nestjs/testing'
+import { HttpService } from '@nestjs/axios'
+import { of, throwError } from 'rxjs'
+import { Logger } from '@nestjs/common'
+
+describe('CompatibilityDomainSynonymDiscovery', () => {
+    let finder: CompatibilityDomainSynonymDiscovery
+    let mockedHttpService: jest.Mocked<HttpService>
+    let mockedLogger: jest.Mocked<Logger>
+
+    beforeAll(async () => {
+        const moduleRef = await Test.createTestingModule({
+            providers: [
+                CompatibilityDomainSynonymDiscovery,
+                {
+                    provide: HttpService,
+                    useValue: {
+                        get: jest.fn(),
+                    },
+                },
+                {
+                    provide: Logger,
+                    useValue: {
+                        error: jest.fn(),
+                    },
+                },
+            ],
+        }).compile()
+
+        finder = moduleRef.get(CompatibilityDomainSynonymDiscovery)
+        mockedHttpService = moduleRef.get(HttpService)
+        mockedLogger = moduleRef.get(Logger)
+    })
+
+    beforeEach(() => {
+        jest.resetAllMocks()
+    })
+
+    it('should return an empty array if homepage has no emails', async () => {
+        mockedHttpService.get.mockReturnValueOnce(
+            of({ data: '<html lang="en"><body>No emails here</body></html>' }) as any,
+        )
+
+        const results = await finder.findSynonymDomains('https://fakeurl.com')
+        expect(results).toEqual([])
+    })
+
+    it('should return domains from homepage if found', async () => {
+        const expectedLength = 1
+        mockedHttpService.get.mockReturnValueOnce(
+            of({ data: '<html lang="en"><body>Email me at hello@gmail.com</body></html>' } as any),
+        )
+        mockedHttpService.get.mockReturnValueOnce(
+            of({ data: '<html lang="en"><body>No more emails</body></html>' } as any),
+        )
+
+        const results = await finder.findSynonymDomains('https://fakeurl.com')
+        expect(results).toContain('gmail.com')
+        expect(results.length).toBe(expectedLength)
+    })
+
+    it('should follow contact and privacy links and parse them too', async () => {
+        const expectedLength = 3
+
+        mockedHttpService.get.mockReturnValueOnce(
+            of({
+                data: `
+            <html lang="en">
+                <body>
+                    <a href="/contact">Contact</a>
+                    <a href="/privacy-policy">Privacy</a>
+                    <p>Homepage email: user1@example.com</p>
+                </body>
+            </html>
+        `,
+            } as any),
+        )
+
+        mockedHttpService.get.mockReturnValueOnce(
+            of({
+                data: `
+            <html lang="en">
+                <body>
+                    <p>Contact page email: support@example.org</p>
+                </body>
+            </html>
+        `,
+            } as any),
+        )
+
+        mockedHttpService.get.mockReturnValueOnce(
+            of({
+                data: `
+            <html lang="en">
+                <body>
+                    <p>Privacy page email: privacy@example.net</p>
+                </body>
+            </html>
+        `,
+            } as any),
+        )
+
+        const results = await finder.findSynonymDomains('https://fakeurl.com')
+        expect(results).toEqual(expect.arrayContaining(['example.com', 'example.org', 'example.net']))
+        expect(results.length).toBe(expectedLength)
+    })
+
+    it('should return empty array without logging the domain or remote error if the homepage cannot be fetched', async () => {
+        const sentinel = 'unique-person@private.example'
+        const remoteError = new Error(`Network error for ${sentinel}`)
+        Object.defineProperty(remoteError, 'constructor', { value: { name: sentinel } })
+        mockedHttpService.get.mockReturnValueOnce(throwError(() => remoteError))
+
+        const results = await finder.findSynonymDomains(`https://${sentinel}`)
+
+        expect(mockedLogger.error).toHaveBeenCalledWith('domain_synonym_fetch_failed', { errorClass: 'Error' })
+        expect(JSON.stringify(mockedLogger.error.mock.calls)).not.toContain(sentinel)
+        expect(results).toEqual([])
+    })
+
+    it('should return an empty array if badly formatted email', async () => {
+        mockedHttpService.get.mockReturnValueOnce(
+            of({ data: '<html lang="en"><body> My email is: igor @tuposoft.com</body></html>' } as any),
+        )
+
+        const results = await finder.findSynonymDomains('https://fakeurl.com')
+        expect(results).toEqual([])
+    })
+})

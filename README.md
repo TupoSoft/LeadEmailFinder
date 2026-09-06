@@ -49,6 +49,49 @@ privacy notice.
 
 ## Development
 
+### Browser API Contracts
+
+The API serves its full Swagger UI at `/docs` and a normalized browser contract at `/openapi.json`.
+The API root is reserved for the product. The implicit Swagger routes `/docs-json` and `/docs-yaml` are disabled.
+The initial browser surface contains `GET /health`, `GET /v1/auth/login`, `GET /v1/auth/callback`,
+`GET /v1/auth/session`, and `POST /v1/auth/logout`. Payments, verification, and proxy operations remain in the full
+documentation. Each later browser feature must explicitly extend the method and path allow list in
+`src/lead-email-finder-api/src/openapi/browser-document.ts` and publish its source annotations.
+
+After changing an included controller or DTO, run these commands from the repository root:
+
+```sh
+corepack pnpm openapi:export
+corepack pnpm openapi:generate
+corepack pnpm openapi:check
+```
+
+The first command writes only `packages/api-client/openapi/lead-email-finder.json`. The second generates only
+`packages/api-client/src/schema.d.ts` from that snapshot. Commit both artifacts with the source change; never edit
+them by hand. Stage newly created artifacts before their first check; untracked files also fail validation.
+The check command exports and generates in a temporary directory, compares both files byte for byte,
+and fails on missing or stale output without changing either file. CI runs this check unconditionally.
+
+Export uses the real application module and the same Swagger plugin options, annotations, serialization setup,
+and document builder as the runtime. A dedicated child process installs a fixed configuration fixture, ignores
+ambient settings and `.env` files, and uses Nest preview mode. Provider construction, lifecycle hooks, and network
+connections are forbidden. PostgreSQL, Redis, S3, SMTP, Keycloak, and payment-provider services are unnecessary.
+Normal application startup still validates its runtime configuration.
+
+The private `@tuposoft/lead-email-finder-api-client` workspace exports generated schema types and a typed
+`openapi-fetch` factory. It builds independently:
+
+```sh
+corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
+corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
+```
+
+Browser callers use `createBrowserApiClient` in `apps/web/src/api/browser-api-client.ts`. This factory uses relative
+URLs and same-origin credentials. Its middleware reads only the readable `lef_csrf_token` cookie and adds the
+decoded value as `x-csrf-token` for unsafe methods, preserving an explicit caller header. The current-account
+adapter uses generated response types. Browser code does not read the HTTP-only session cookie or store tokens.
+The API and web application still run independently; serving them through one origin belongs to `frontend/06`.
+
 ### Environment Variables
 
 The development Compose stack defaults `NODE_ENV` to `development`. It also loads `docker/.env` when that optional,
@@ -144,7 +187,7 @@ This will:
 
 When the API health check passes, use:
 
-- API documentation: http://localhost:53000/
+- API documentation: http://localhost:53000/docs
 - Health check: http://localhost:53000/health
 
 The application listens on port `3000` inside its container and is published on host port `53000`.
@@ -209,13 +252,13 @@ before stopping the tunnel or deleting its local ID and signature secret.
 
 The development Compose stack starts the following supporting services:
 
-| Service    | Host address           | Purpose                                         |
-| ---------- | ---------------------- | ----------------------------------------------- |
-| API        | http://localhost:53000 | Lead Email Finder API and Swagger documentation |
-| PostgreSQL | `localhost:55432`      | Application database                            |
-| Redis      | `localhost:56379`      | Queue and cache storage                         |
-| Bull Board | http://localhost:54000 | Queue dashboard                                 |
-| Garage/S3  | http://localhost:59000 | S3-compatible object storage                    |
+| Service    | Host address                | Purpose                             |
+| ---------- | --------------------------- | ----------------------------------- |
+| API        | http://localhost:53000/docs | Lead Email Finder API documentation |
+| PostgreSQL | `localhost:55432`           | Application database                |
+| Redis      | `localhost:56379`           | Queue and cache storage             |
+| Bull Board | http://localhost:54000      | Queue dashboard                     |
+| Garage/S3  | http://localhost:59000      | S3-compatible object storage        |
 
 The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
 the ordinary development stack.

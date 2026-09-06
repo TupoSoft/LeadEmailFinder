@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
@@ -46,7 +46,8 @@ function report() {
 
 test('accepts only an exact registered collection with no extra command arguments', async () => {
     assert.equal(registeredCollection('bff-sessions').network, 'host')
-    assert.equal(registeredCollection('bff-sessions').tests, 9)
+    assert.equal(registeredCollection('bff-sessions').requests, 13)
+    assert.equal(registeredCollection('bff-sessions').tests, 14)
     assert.equal(registeredCollection('smtp-dev').network, 'compose')
     for (const name of ['../smtp-dev', '/tmp/collection', 'constructor', '__proto__', 'unknown']) {
         assert.throws(() => registeredCollection(name), /registered/)
@@ -141,10 +142,29 @@ test('rejects skipped, failed, and mismatched report counts even after a success
 })
 
 test('pinned CLI executes the real BFF collection and deletes reports on success and failure', async () => {
+    const browserContract = await readFile(
+        resolve(checkoutRoot, 'packages/api-client/openapi/lead-email-finder.json'),
+        'utf8',
+    )
     let wrongIssuer = false
     let pendingStateAvailable = false
     let baseUrl
     const server = createServer((request, response) => {
+        if (request.url === '/docs') {
+            response.writeHead(200, { 'content-type': 'text/html' })
+            response.end('<html><body><div id="swagger-ui"></div></body></html>')
+            return
+        }
+        if (request.url === '/openapi.json') {
+            response.writeHead(200, { 'content-type': 'application/json' })
+            response.end(browserContract)
+            return
+        }
+        if (['/', '/docs-json', '/docs-yaml'].includes(request.url)) {
+            response.writeHead(404, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ statusCode: 404, message: 'Not Found' }))
+            return
+        }
         if (request.url === '/realms/lead-email-finder/protocol/openid-connect/token') {
             response.writeHead(200, { 'content-type': 'application/json' })
             response.end(JSON.stringify({ access_token: 'synthetic-service-client-token' }))
@@ -252,7 +272,10 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             testServiceClient,
             testServiceCredential,
         )
-        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), { requests: 8, tests: 9 })
+        assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), {
+            requests: 13,
+            tests: 14,
+        })
         assert.deepEqual(await readdir(temporaryRoot), [])
         wrongIssuer = true
         await assert.rejects(executeCollection('bff-sessions', environment, checkoutRoot), /raw output is withheld/)
