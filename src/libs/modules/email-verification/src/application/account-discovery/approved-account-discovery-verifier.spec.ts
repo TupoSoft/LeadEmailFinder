@@ -51,6 +51,29 @@ describe('isAccountDiscoveryApprovalAvailable', () => {
 })
 
 describe('ApprovedAccountDiscoveryVerifier', () => {
+    it('redacts unexpected provider errors at the application boundary', async () => {
+        const email = 'boundary-sentinel@example.test'
+        const externalMessage = `Provider echoed ${email} ${encodeURIComponent(email)} credential-sentinel`
+        const verifier = {
+            sourceName: 'microsoft_2',
+            verify: jest.fn().mockRejectedValue(new Error(externalMessage)),
+        } satisfies ICatchAllVerifier
+        const approvedVerifier = new ApprovedAccountDiscoveryVerifier(verifier, approval(), selection, {
+            now: () => new Date('2026-09-02T10:30:00Z'),
+        })
+
+        const error: unknown = await approvedVerifier.verify(email).catch((error: unknown) => error)
+
+        expect(error).toMatchObject({
+            message: ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
+            code: ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
+        })
+        expect(error).not.toHaveProperty('cause')
+        expect(String(error)).not.toContain(email)
+        expect(String(error)).not.toContain(encodeURIComponent(email))
+        expect(String(error)).not.toContain('credential-sentinel')
+    })
+
     it('delegates while the approval is available', async () => {
         const verifier = {
             sourceName: 'microsoft_2',

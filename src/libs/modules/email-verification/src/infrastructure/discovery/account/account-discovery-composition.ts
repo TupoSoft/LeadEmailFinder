@@ -8,13 +8,13 @@ import {
     AccountDiscoveryApprovalView,
     AccountDiscoveryProviderUnavailableError,
     Clock,
-} from '../../application/account-discovery/approved-account-discovery-verifier'
+} from '../../../application/account-discovery/approved-account-discovery-verifier'
 import {
     AccountDiscoveryProviderConfiguration,
     AccountDiscoveryVerifierFactories,
     selectAccountDiscoveryVerifier,
-} from '../../application/account-discovery/select-account-discovery-verifier'
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+} from './select-account-discovery-verifier'
+import { AccountDiscovery } from '../../../application/ports/account-discovery'
 
 export interface AccountDiscoveryProviderAdapters {
     microsoftGetCredentialType: MicrosoftGetCredentialType
@@ -38,11 +38,11 @@ function verifierFactories(adapters: AccountDiscoveryProviderAdapters): AccountD
     }
 }
 
-export function composeAccountDiscoveryVerifiers(
+export function composeAccountDiscovery(
     configuration: AccountDiscoveryProviderConfiguration,
     approvals: readonly AccountDiscoveryApprovalView[],
     adapters: AccountDiscoveryProviderAdapters,
     clock: Clock,
-): ICatchAllVerifier[] {
+): AccountDiscovery | undefined {
     return selectAccountDiscoveryVerifier(configuration, approvals, verifierFactories(adapters), clock)
 }

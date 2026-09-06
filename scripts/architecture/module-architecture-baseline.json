@@ -39,7 +39,6 @@
         "source-placement|src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.ts|batch-email-verification/multer-options-factory-impl.service.ts",
         "source-placement|src/libs/modules/email-verification/src/batch-email-verification/parse-s3-result-location.ts|batch-email-verification/parse-s3-result-location.ts",
         "source-placement|src/libs/modules/email-verification/src/email-verification-configuration.ts|email-verification-configuration.ts",
-        "source-placement|src/libs/modules/email-verification/src/email-verifier/email-verifier.constants.ts|email-verifier/email-verifier.constants.ts",
         "source-placement|src/libs/modules/email-verification/src/email-verifier/email-verifier.module.ts|email-verifier/email-verifier.module.ts",
         "source-placement|src/libs/modules/email-verification/src/email-verifier/index.ts|email-verifier/index.ts",
         "source-placement|src/libs/modules/email-verification/src/email-verifier/smtp/index.ts|email-verifier/smtp/index.ts",

@@ -1,5 +1,6 @@
-import { EmailVerificationReason, EmailVerificationSource, ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
 import { MailboxVerificationService } from './mailbox-verification.service'
+import { AccountDiscovery } from './ports/account-discovery'
 import { MailboxProbe, MailboxProbeResult } from './ports/mailbox-probe'
 
 const email = 'danilo@microsoft.com'
@@ -7,19 +8,19 @@ const [, domain] = email.split('@')
 const organizationId = '1d33b587-bc90-49f7-9693-92d72cc5c271'
 const wrongEmail = `tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak@${domain}`
 
-function fakeCatchAllVerifier(sourceName: ICatchAllVerifier['sourceName']): jest.Mocked<ICatchAllVerifier> {
+function fakeCatchAllVerifier(sourceName: AccountDiscovery['sourceName']): jest.Mocked<AccountDiscovery> {
     return { sourceName, verify: jest.fn() }
 }
 
 describe('MailboxVerificationService', () => {
     let mailboxProbe: jest.Mocked<MailboxProbe>
-    let accountDiscoveryVerifiers: Array<jest.Mocked<ICatchAllVerifier>>
+    let accountDiscovery: jest.Mocked<AccountDiscovery>
     let service: MailboxVerificationService
 
     beforeEach(() => {
         mailboxProbe = { probe: jest.fn() }
-        accountDiscoveryVerifiers = [fakeCatchAllVerifier('microsoft_1'), fakeCatchAllVerifier('microsoft_2')]
-        service = new MailboxVerificationService(mailboxProbe, accountDiscoveryVerifiers)
+        accountDiscovery = fakeCatchAllVerifier('microsoft_1')
+        service = new MailboxVerificationService(mailboxProbe, accountDiscovery)
     })
 
     function probeResult(overrides: Partial<MailboxProbeResult> = {}): MailboxProbeResult {
@@ -42,8 +43,12 @@ describe('MailboxVerificationService', () => {
 
     it('probes the real address when the domain is not a catch-all', async () => {
         mailboxProbe.probe
-            .mockResolvedValueOnce(probeResult({ exists: false, targetExchange: 'domain.com', reason: 'no_mx_records' }))
-            .mockResolvedValueOnce(probeResult({ exists: true, targetExchange: 'domain.com', reason: 'accepted_email' }))
+            .mockResolvedValueOnce(
+                probeResult({ exists: false, targetExchange: 'domain.com', reason: 'no_mx_records' }),
+            )
+            .mockResolvedValueOnce(
+                probeResult({ exists: true, targetExchange: 'domain.com', reason: 'accepted_email' }),
+            )
 
         const result = await service.verify(organizationId, email)
 
@@ -58,15 +63,61 @@ describe('MailboxVerificationService', () => {
         mailboxProbe.probe.mockResolvedValueOnce(
             probeResult({ exists: true, targetExchange: 'domain.com', reason: 'blacklisted' }),
         )
-        const [microsoft1, microsoft2] = accountDiscoveryVerifiers
-        microsoft1.verify.mockResolvedValue(true)
-        microsoft2.verify.mockResolvedValue(false)
+        accountDiscovery.verify.mockResolvedValue(true)
 
         const result = await service.verify(organizationId, email)
 
-        expect(result.sources).toContain(microsoft1.sourceName)
+        expect(result.sources).toEqual([accountDiscovery.sourceName])
+        expect(accountDiscovery.verify).toHaveBeenCalledTimes(1)
+        expect(accountDiscovery.verify).toHaveBeenCalledWith(email)
         expect(result.exists).toBe(true)
         expect(result.reason).toBe(EmailVerificationReason.Webmail)
+    })
+
+    it('preserves the SMTP outcome when account discovery is disabled', async () => {
+        service = new MailboxVerificationService(mailboxProbe, undefined)
+        mailboxProbe.probe.mockResolvedValue(probeResult({ exists: true, reason: 'accepted_email' }))
+
+        await expect(service.verify(organizationId, email)).resolves.toMatchObject({
+            catchAll: true,
+            exists: null,
+            reason: EmailVerificationReason.AcceptedEmail,
+            sources: [],
+        })
+        expect(accountDiscovery.verify).not.toHaveBeenCalled()
+    })
+
+    it.each(['false', 'rejected', 'unknown source'])(
+        'preserves the SMTP outcome for account discovery returning %s',
+        async outcome => {
+            mailboxProbe.probe.mockResolvedValue(probeResult({ exists: true, reason: 'accepted_email' }))
+            if (outcome === 'rejected') {
+                accountDiscovery.verify.mockRejectedValue(new Error('external-fixture-message'))
+            } else {
+                accountDiscovery.verify.mockResolvedValue(outcome === 'unknown source')
+            }
+            if (outcome === 'unknown source') {
+                service = new MailboxVerificationService(mailboxProbe, { ...accountDiscovery, sourceName: 'unknown' })
+            }
+
+            await expect(service.verify(organizationId, email)).resolves.toMatchObject({
+                catchAll: true,
+                exists: null,
+                reason: EmailVerificationReason.AcceptedEmail,
+                sources: [],
+            })
+            expect(accountDiscovery.verify).toHaveBeenCalledTimes(1)
+        },
+    )
+
+    it('does not consult account discovery for a definitive mailbox result', async () => {
+        mailboxProbe.probe
+            .mockResolvedValueOnce(probeResult({ exists: false, reason: 'rejected_email' }))
+            .mockResolvedValueOnce(probeResult({ exists: true, reason: 'accepted_email' }))
+
+        await service.verify(organizationId, email)
+
+        expect(accountDiscovery.verify).not.toHaveBeenCalled()
     })
 
     it('reports an unknown reason when no probe determines an outcome', async () => {
@@ -80,7 +131,9 @@ describe('MailboxVerificationService', () => {
 
     it('rejects an unrecognized probe reason without leaking the address into the assertion', async () => {
         const sentinel = 'unique-person@private.example'
-        mailboxProbe.probe.mockResolvedValueOnce(probeResult({ email: sentinel, exists: null, reason: sentinel as never }))
+        mailboxProbe.probe.mockResolvedValueOnce(
+            probeResult({ email: sentinel, exists: null, reason: sentinel as never }),
+        )
 
         const error = await service.verify(organizationId, sentinel).catch((caughtError: unknown) => caughtError)
 

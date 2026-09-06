@@ -13,11 +13,11 @@ one exact approved provider is selected.
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize MX, synonym, parser, provider-selection, approval, retry, and failure behavior.
-- [ ] (2026-08-30) Move DNS and HTTP synonym retrieval into purpose-specific infrastructure adapters.
-- [ ] (2026-08-30) Move approved account-discovery implementations behind one default-deny adapter boundary.
-- [ ] (2026-08-30) Preserve the approval manifest, PII-safe logging, concurrency, and compatibility result mapping.
-- [ ] (2026-08-30) Shrink discovery-owned baseline keys and complete focused, runtime, architecture, and full checks.
+- [x] (2026-09-06) Characterize MX, synonym, parser, provider-selection, approval, retry, and failure behavior.
+- [x] (2026-09-06) Move DNS and HTTP synonym retrieval into purpose-specific infrastructure adapters.
+- [x] (2026-09-06) Move approved account-discovery implementations behind one default-deny adapter boundary.
+- [x] (2026-09-06) Preserve the approval manifest, PII-safe logging, concurrency, and compatibility result mapping.
+- [x] (2026-09-06) Shrink discovery-owned baseline keys and complete focused, runtime, architecture, and full checks.
 
 ## Plan dependencies
 
@@ -28,7 +28,23 @@ one exact approved provider is selected.
 
 ## Surprises & Discoveries
 
-- The current `domain/domain-synonym-finder.ts` combines remote HTTP retrieval and deterministic HTML/link parsing.
+- Plan 18 has already moved synonym retrieval and parsing to the compatibility adapter and utility under
+  `infrastructure/`. MX and synonym ports are registered but the current SMTP engine still owns its existing DNS
+  path; plan 14 performs the mailbox cutover.
+- The core still consumes `ICatchAllVerifier[]`; there is no dedicated `AccountDiscovery` port despite the original
+  plan description. Configuration already selects zero or one provider, so this change makes that constraint
+  explicit in the application contract.
+- Synonym HTTP retrieval has no adapter-specific timeout, retry, or response-size setting. Preserve the injected
+  HTTP client's configuration and its default behavior; deterministic fixtures can supply a deadline without
+  introducing a new runtime policy.
+- The technical HTTP options factory constructs its proxy URL before the discovery module factory runs.
+  Invalid URL errors can retain the submitted URL, so sanitization must occur in the options constructor itself.
+- The first full-suite run encountered an unrelated intermittent session-encryption test: it overwrites the first
+  random ciphertext character with `x`, which sometimes leaves the ciphertext unchanged. The unchanged test passed
+  on a focused retry; its source is outside this plan.
+- Host `build` and `openapi:check` commands write the same `dist/` mounted by the development API watcher. Running
+  them together stopped the API and caused connection failures in Bruno. Finish those checks before restarting
+  the API and running the collection.
 - The technical `src/libs/catch-all/` library owns concrete provider clients and HTTP configuration, while the
   business module decides how provider evidence participates in a verification result.
 - Privacy plan 02 removes the LinkedIn adapter and makes the committed approval manifest empty by default; a network
@@ -63,20 +79,37 @@ one exact approved provider is selected.
   values, provider bodies, responses, credentials, or external message text.
   Rationale: Moving adapters must not create a second sensitive log path.
   Date/Author: 2026-08-30, Codex planning.
+- Decision: Replace the core's provider array with `AccountDiscovery | undefined`, and move configuration and
+  provider composition into `infrastructure/discovery/account/`. Keep approval validation in application.
+  Rationale: The existing configuration permits at most one provider; the core contract should express that rule
+  without provider payloads or configuration keys.
+  Date/Author: 2026-09-06, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The DNS and synonym compatibility adapters are replaced, the parser is a pure domain transformation, and account
+discovery uses a single optional application port with infrastructure-owned configuration and provider composition.
+Unexpected DNS, provider, manifest, and malformed-proxy exceptions are redacted. No approval manifest entry or
+provider activation is added. All focused and required local checks passed. The existing SMTP collection passed
+22 requests and 44 tests, with no skipped requests or tests and zero HTTP or CONNECT requests to the counting
+proxy fixture. The full Jest run passed 201 suites and 1,842 tests, with 11 opt-in suites and 65 tests skipped;
+all 15 OIDC and Bruno runner tests passed.
+
+The architecture baseline shrank from 69 to 68 keys, removing only the deleted discovery constants entry. SMTP
+and delivery keys remain unchanged. Review found no material SOLID violation. The DNS and synonym ports remain
+registered for plan 14, and the existing transport configuration remains authoritative: this plan adds neither
+a timeout nor a retry policy. Provider success is tested with deterministic fixtures, without live vendor calls.
+No schema, route, queue, public barrel, approval evidence, or external provider activation changed.
 
 ## Context and Orientation
 
-Plan 10 places pure verification policy and the `MxResolver`, `DomainSynonymDiscovery`, and `AccountDiscovery` ports
-under the email-verification application boundary. Plan 18 temporarily binds legacy implementations behind thin
+Plan 10 places pure verification policy and the `MxResolver` and `DomainSynonymDiscovery` ports under the
+email-verification application boundary. This plan adds the missing explicit `AccountDiscovery` port. Plan 18 temporarily binds legacy implementations behind thin
 compatibility adapters for `MxResolver` and `DomainSynonymDiscovery` so runtime behavior continues (`AccountDiscovery`
-already has a real, non-compatibility adapter from a prior privacy-compliance plan and needs no replacement here).
-Current MX resolution comes from `src/libs/dns/`; synonym retrieval and parsing live in the misleading
-`email-verification/src/domain/` feature folder; concrete external account checks live in `src/libs/catch-all/` and
-are composed through `email-verifier/`.
+already has approval policy from a prior privacy-compliance plan but still uses the shared verifier-array contract).
+Current MX resolution comes from `src/libs/dns/`; synonym retrieval and parsing live in the compatibility
+adapter and utility below `email-verification/src/infrastructure/`; concrete external account checks live in
+`src/libs/catch-all/` and were previously composed through `email-verifier/`.
 
 Privacy plan 02 establishes an empty-by-default approval manifest, removes LinkedIn session material and its adapter,
 permits only named technical providers, and requires one matching active approval. Privacy plan 03 ensures requests,
@@ -103,7 +136,7 @@ mismatched approval, results from each allowed provider, concurrent inputs, and 
 synthetic domains and addresses and never real vendor credentials.
 
 Implement `MxResolver` over the technical DNS library without exposing its service class. Split synonym behavior so
-the application requests discovery through a port, the HTTP adapter retrieves bounded content with existing retry
+the application requests discovery through a port, the HTTP adapter retrieves content with the injected transport's existing retry
 and timeout semantics, and a pure parser handles supplied content. Map failures to existing stable application
 outcomes rather than leaking HTTP/DNS errors.
 
@@ -118,7 +151,7 @@ keys may disappear, while SMTP and all delivery keys remain for plans 14, 11, 15
 
 ## Interfaces and Dependencies
 
-The plan implements the internal plan-10 `MxResolver`, `DomainSynonymDiscovery`, and `AccountDiscovery` interfaces.
+The plan implements the internal `MxResolver`, `DomainSynonymDiscovery`, and `AccountDiscovery` interfaces.
 Inputs and outputs are domain/application values, not Node DNS results, Axios responses, or provider payloads. The
 configuration and fixed approval manifest contract from privacy plan 02 remains exact. No public HTTP, queue,
 database, S3, or TypeScript API changes.
@@ -147,7 +180,7 @@ completed discovery side when composing mailbox probing.
 
 Run discovery and privacy regression suites:
 
-    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/discovery src/libs/modules/email-verification/src/domain src/libs/catch-all/src src/libs/dns/src --runInBand
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/discovery src/libs/modules/email-verification/src/domain src/libs/modules/email-verification/src/application/account-discovery src/libs/modules/email-verification/src/application/mailbox-verification.service.spec.ts src/libs/catch-all/src src/libs/dns/src --runInBand
     corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
     corepack pnpm architecture:baseline
     corepack pnpm architecture:check
@@ -183,9 +216,35 @@ reconcile commands. Preserve another checkout's containers and unrelated user ch
 
 ## Artifacts and Notes
 
-Record the adapter map, approval/configuration matrix, provider dispatch counts, concurrency, and sentinel-log
-results, removed baseline keys, SMTP Bruno totals, and full validation. Never record approval secrets, credentials,
-raw addresses, provider payloads, SMTP transcripts, or external responses.
+Validation completed on 2026-09-06:
+
+- The focused command above passed 17 suites and 153 tests. The provider contracts cover every allowed source
+  and both boolean results. They reject invalid selection and approvals whose fields, status, or validity period
+  do not match. Tests also cover expiry
+  after startup, concurrent distinct inputs with reversed completion order, one request without fallback, transport
+  failures, and sentinel scans of logs and thrown errors. DNS and local HTTP fixtures cover cache/order,
+  no records, status failures, malformed content, and configured deadline failures.
+- `corepack pnpm architecture:baseline` removed only
+  `source-placement|src/libs/modules/email-verification/src/email-verifier/email-verifier.constants.ts|email-verifier/email-verifier.constants.ts`.
+  `corepack pnpm architecture:check` passed with 9 modules and 68 baseline keys.
+- `corepack pnpm privacy:account-discovery-approvals-check` reported the unchanged empty approval manifest.
+  `corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree` returned an empty finding list.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck`, `lint`, `test:ci`, and `build` passed.
+  The full suite totals and opt-in skips are recorded above. ESLint reported zero errors and one existing
+  return-type warning in `src/libs/config/src/load-secrets.spec.ts`. `corepack pnpm openapi:check` passed.
+- `corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/module-architecture/13-layer-email-discovery-adapters.md`
+  passed Harper for all three files. `git diff --check` passed.
+- `DOCKER_HOST=unix:///run/user/1000/docker.sock DOCKER_CONFIG=/tmp/lef458-docker COMPOSE_PROJECT_NAME=lef45854fd corepack pnpm bruno:smtp-dev`
+  passed using Bruno 4.1.0: 22 requests, 44 tests, zero skipped. The launcher verified this checkout's Compose
+  ownership. An isolated counting HTTP/CONNECT sink refused forwarding; a control probe confirmed one observed
+  request before resetting the counter. Both counters were zero before and after the collection. Only the local
+  proxy was configured; provider, approval ID, and region were absent, and approvals remained empty.
+- Ignored local evidence is in `.dev/keycloak/issue-458-smtp-validation.json`. It records aggregate results, zero-dispatch
+  counters, sanitized log checks, and ownership labels for all 12 project containers. No raw input, provider
+  response, credential, or SMTP transcript is committed. Task-owned containers and the temporary proxy-only
+  environment file are removed after validation; isolated volumes and ignored development metadata remain.
+
+The adapter map is documented under Architecture in the module README. This change is one pull request for #458.
 
 ## Plan readiness
 

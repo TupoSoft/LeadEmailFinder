@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscovery } from '../../../application/ports/account-discovery'
 import {
     AccountDiscoveryApprovalView,
     AccountDiscoveryProviderName,
@@ -7,7 +7,7 @@ import {
     ApprovedAccountDiscoveryVerifier,
     Clock,
     isAccountDiscoveryApprovalAvailable,
-} from './approved-account-discovery-verifier'
+} from '../../../application/account-discovery/approved-account-discovery-verifier'
 
 const ACCOUNT_DISCOVERY_PROVIDERS = new Set<AccountDiscoveryProviderName>([
     'microsoft_get_credential_type',
@@ -25,7 +25,7 @@ export interface AccountDiscoveryProviderConfiguration {
 
 export type AccountDiscoveryVerifierFactories = Record<
     AccountDiscoveryProviderName,
-    (region: string) => ICatchAllVerifier
+    (region: string) => AccountDiscovery
 >
 
 function selectedConfiguration(
@@ -64,11 +64,11 @@ export function selectAccountDiscoveryVerifier(
     approvals: readonly AccountDiscoveryApprovalView[],
     verifierFactories: AccountDiscoveryVerifierFactories,
     clock: Clock,
-): ICatchAllVerifier[] {
+): AccountDiscovery | undefined {
     const selection = selectedConfiguration(configuration)
 
     if (!selection) {
-        return []
+        return undefined
     }
 
     const approval = approvals.find(candidate => candidate.id === selection.approvalId)
@@ -79,5 +79,5 @@ export function selectAccountDiscoveryVerifier(
 
     const verifier = verifierFactories[selection.provider](selection.region)
 
-    return [new ApprovedAccountDiscoveryVerifier(verifier, approval, selection, clock)]
+    return new ApprovedAccountDiscoveryVerifier(verifier, approval, selection, clock)
 }
