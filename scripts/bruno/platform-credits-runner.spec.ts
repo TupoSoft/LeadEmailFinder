@@ -44,18 +44,18 @@ describe('platform credit Bruno runner', () => {
 
     it('confirms the container checkout, service, running state, and published endpoint', () => {
         const container: ComposeContainer = {
-            Config: { Labels: { 'com.docker.compose.project': 'lef-test', 'com.docker.compose.service': 'api',
+            Config: { Labels: { 'com.docker.compose.project': 'lef-test', 'com.docker.compose.service': 'web',
                 'com.docker.compose.project.working_dir': '/checkout/docker' } },
-            State: { Running: true }, NetworkSettings: { Ports: { '3000/tcp': [{ HostIp: '127.0.0.1', HostPort: '53000' }] } },
+            State: { Running: true }, NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '53000' }] } },
         }
         const check = (value: ComposeContainer, root = '/checkout', endpoint = 'http://localhost:53000'): void =>
-            assertOwnedContainer(value, root, 'lef-test', 'api', '3000/tcp', endpoint)
+            assertOwnedContainer(value, root, 'lef-test', 'web', '8080/tcp', endpoint)
         expect(() => check(container)).not.toThrow()
         expect(() => check(container, '/other')).toThrow()
         expect(() => check(container, '/checkout', 'http://localhost:53001')).toThrow()
         expect(() => check({ ...container, State: { Running: false } })).toThrow()
         const withHostIp = (hostIp: string): ComposeContainer => ({ ...container,
-            NetworkSettings: { Ports: { '3000/tcp': [{ HostIp: hostIp, HostPort: '53000' }] } } })
+            NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: hostIp, HostPort: '53000' }] } } })
         expect(() => check(withHostIp('192.0.2.1'))).toThrow()
         expect(() => check(withHostIp('0.0.0.0'))).not.toThrow()
         expect(() => check(withHostIp('::1'), '/checkout', 'http://[::1]:53000')).not.toThrow()

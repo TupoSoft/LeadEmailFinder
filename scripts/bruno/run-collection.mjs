@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
-    'bff-sessions': Object.freeze({ requests: 13, tests: 14, sandbox: 'developer', network: 'host' }),
+    'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 22, sandbox: 'developer', network: 'compose' }),
 })
 
@@ -200,7 +200,8 @@ export async function runCollection(args, checkoutRoot) {
     const [name] = args
     const collection = registeredCollection(name)
     const metadata = await loadDevelopmentStack(checkoutRoot)
-    const api = await inspectDevelopmentService(checkoutRoot, metadata, 'api', '3000/tcp', metadata.apiUrl)
+    const api = await inspectDevelopmentService(checkoutRoot, metadata, 'api')
+    await inspectDevelopmentService(checkoutRoot, metadata, 'web', '8080/tcp', metadata.apiUrl)
     await inspectDevelopmentService(checkoutRoot, metadata, 'keycloak', '8080/tcp', metadata.keycloakUrl)
     const readMetadata = async metadataFile =>
         JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', metadataFile), 'utf8'))

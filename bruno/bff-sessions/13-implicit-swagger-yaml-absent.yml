@@ -13,4 +13,6 @@ runtime:
       code: |-
         test('does not expose an implicit full Swagger YAML endpoint', function() {
           expect(res.status).to.equal(404);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(res.body.statusCode).to.equal(404);
         });

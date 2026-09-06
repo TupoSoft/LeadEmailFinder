@@ -20,7 +20,7 @@ export async function buildApiDocuments(
         .setTitle('Lead Email Finder API')
         .setVersion(version)
         .setContact('Lead Email Finder Support', url, 'contact@leademailfinder.com')
-        .addServer(url, 'API server')
+        .addServer('/', 'API server')
         .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'oidc')
         .addCookieAuth(BFF_SESSION_COOKIE_NAME, { type: 'apiKey' }, BFF_SESSION_COOKIE_NAME)
         .addSecurity('x-csrf-token', {

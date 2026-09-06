@@ -46,8 +46,8 @@ function report() {
 
 test('accepts only an exact registered collection with no extra command arguments', async () => {
     assert.equal(registeredCollection('bff-sessions').network, 'host')
-    assert.equal(registeredCollection('bff-sessions').requests, 13)
-    assert.equal(registeredCollection('bff-sessions').tests, 14)
+    assert.equal(registeredCollection('bff-sessions').requests, 15)
+    assert.equal(registeredCollection('bff-sessions').tests, 16)
     assert.equal(registeredCollection('smtp-dev').network, 'compose')
     for (const name of ['../smtp-dev', '/tmp/collection', 'constructor', '__proto__', 'unknown']) {
         assert.throws(() => registeredCollection(name), /registered/)
@@ -160,14 +160,26 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             response.end(browserContract)
             return
         }
-        if (['/', '/docs-json', '/docs-yaml'].includes(request.url)) {
-            response.writeHead(404, { 'content-type': 'application/json' })
-            response.end(JSON.stringify({ statusCode: 404, message: 'Not Found' }))
-            return
-        }
         if (request.url === '/realms/lead-email-finder/protocol/openid-connect/token') {
             response.writeHead(200, { 'content-type': 'application/json' })
             response.end(JSON.stringify({ access_token: 'synthetic-service-client-token' }))
+            return
+        }
+        if (request.url === '/' || request.url === '/not-real') {
+            response.writeHead(200, {
+                'content-type': 'text/html',
+                'x-content-type-options': 'nosniff',
+                'x-frame-options': 'DENY',
+                'cache-control': 'no-cache',
+                'referrer-policy': 'strict-origin-when-cross-origin',
+                'content-security-policy': "default-src 'self'; frame-ancestors 'none'",
+            })
+            response.end('<!doctype html><div id="root"></div>')
+            return
+        }
+        if (request.url === '/docs-json' || request.url === '/docs-yaml' || request.url.includes('/not-real')) {
+            response.writeHead(404, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ statusCode: 404 }))
             return
         }
         if (request.url === '/v1/auth/login') {
@@ -273,8 +285,8 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             testServiceCredential,
         )
         assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), {
-            requests: 13,
-            tests: 14,
+            requests: 15,
+            tests: 16,
         })
         assert.deepEqual(await readdir(temporaryRoot), [])
         wrongIssuer = true

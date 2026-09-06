@@ -126,7 +126,7 @@ export function loadDevelopmentStack(checkoutRoot) {
     if (!/^[a-z0-9][a-z0-9_-]*$/.test(composeProject)) throw new Error('Invalid development Compose project')
     const ownership = { checkoutRoot, composeProject }
     const services = Object.fromEntries(
-        ['api', 'postgres', 'redis', 'keycloak'].map(service => [
+        ['api', 'web', 'postgres', 'redis', 'keycloak'].map(service => [
             service,
             inspectDevelopmentService(checkoutRoot, ownership, service),
         ]),
@@ -165,7 +165,7 @@ export function loadDevelopmentStack(checkoutRoot) {
     const metadata = validateDevelopmentMetadata(
         {
             ...ownership,
-            apiUrl: publishedEndpoint(services.api.container, '3000/tcp', 'http'),
+            apiUrl: publishedEndpoint(services.web.container, '8080/tcp', 'http'),
             postgresUrl: postgresUrl.toString(),
             redisUrl: publishedEndpoint(services.redis.container, '6379/tcp', 'redis'),
             keycloakUrl: publishedEndpoint(services.keycloak.container, '8080/tcp', 'http'),

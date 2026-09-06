@@ -42,7 +42,9 @@
         "test:docs-lint": "node --test --test-isolation=none scripts/docs/*.test.mjs",
         "test:ui-audit": "node --test scripts/frontend/audit-premium-ui.test.mjs",
         "typecheck": "tsc --noEmit -p tsconfig.json",
-        "prepare": "husky || true"
+        "prepare": "husky || true",
+        "test:gateway": "node --test scripts/frontend/gateway.test.mjs",
+        "test:web-live": "node scripts/testing/web-live.mjs"
     },
     "author": {
         "url": "https://tuposoft.com",
