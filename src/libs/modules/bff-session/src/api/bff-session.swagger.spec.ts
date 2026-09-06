@@ -40,6 +40,7 @@ describe('BFF Swagger contracts', () => {
         await app.init()
         const configuration = new DocumentBuilder()
             .addCookieAuth(BFF_SESSION_COOKIE_NAME, { type: 'apiKey' }, BFF_SESSION_COOKIE_NAME)
+            .addSecurity('x-csrf-token', { type: 'apiKey', in: 'header', name: 'x-csrf-token' })
             .build()
         document = SwaggerModule.createDocument(app, configuration)
     })
@@ -51,6 +52,7 @@ describe('BFF Swagger contracts', () => {
     it('publishes the human-session security and exact success and failure schemas', () => {
         const operation = document.paths['/v1/auth/session']?.get
 
+        expect(operation?.operationId).toBe('getCurrentAccount')
         expect(operation?.security).toEqual([{ [BFF_SESSION_COOKIE_NAME]: [] }])
         expect(operation?.responses['200']).toMatchObject({
             content: {
@@ -91,11 +93,68 @@ describe('BFF Swagger contracts', () => {
             },
         })
         expect(JSON.stringify(permissionsSchema)).not.toContain('platform:admin')
+        expect(Object.keys(accountProperties!)).toEqual([
+            'email',
+            'membership',
+            'organization',
+            'capabilities',
+            'grantableServiceClientPermissions',
+        ])
+        expect(document.components?.schemas?.['AuthenticationRequiredResponseDto']).toMatchObject({
+            required: ['code'],
+            properties: { code: { type: 'string', enum: ['authentication_required'] } },
+        })
+        expect(document.components?.schemas?.['HumanSessionRequiredResponseDto']).toMatchObject({
+            required: ['code'],
+            properties: { code: { type: 'string', enum: ['human_session_required'] } },
+        })
+    })
+
+    it('describes login as a public redirect that issues only a transient login-state cookie', () => {
+        const operation = document.paths['/v1/auth/login']?.get
+
+        expect(operation).toMatchObject({ operationId: 'loginBrowserSession', security: [] })
+        expect(Object.keys(operation!.responses)).toEqual(['302'])
+        expect(operation?.responses['302']).toMatchObject({
+            headers: {
+                Location: { schema: { type: 'string', format: 'uri' } },
+                'Set-Cookie': { description: expect.stringContaining('lef_login_state') },
+            },
+        })
+        expect(operation?.requestBody).toBeUndefined()
+    })
+
+    it('requires both cookie and CSRF credentials on logout and documents its bodyless response', () => {
+        const operation = document.paths['/v1/auth/logout']?.post
+
+        expect(operation).toMatchObject({
+            operationId: 'logoutBrowserSession',
+            security: [{ lef_session: [], 'x-csrf-token': [] }],
+        })
+        expect(operation?.parameters).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ name: 'Origin', in: 'header', required: false }),
+                expect.objectContaining({ name: 'Referer', in: 'header', required: false }),
+            ]),
+        )
+        expect(operation?.parameters).not.toContainEqual(expect.objectContaining({ name: 'x-csrf-token' }))
+        expect(Object.keys(operation!.responses)).toEqual(['204', '401', '403'])
+        expect(operation?.responses['204']).not.toHaveProperty('content')
+        expect(operation?.requestBody).toBeUndefined()
     })
 
     it('publishes the callback query, redirect, privacy-header, and redacted error contract', () => {
         const operation = document.paths['/v1/auth/callback']?.get
 
+        expect(operation).toMatchObject({
+            operationId: 'completeBrowserAuthorization',
+            security: [],
+            'x-callback-error-codes': [
+                'login_state_invalid',
+                'authorization_code_exchange_failed',
+                'active_membership_required',
+            ],
+        })
         expect(operation?.parameters).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({

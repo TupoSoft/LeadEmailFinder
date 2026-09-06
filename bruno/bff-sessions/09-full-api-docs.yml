@@ -1,0 +1,18 @@
+info:
+  name: 09-full-api-docs
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/docs"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('serves the public Swagger UI at its dedicated documentation path', function() {
+          expect(res.status).to.equal(200);
+          expect(res.headers['content-type']).to.include('text/html');
+          expect(res.body).to.include('swagger-ui');
+        });

@@ -6,7 +6,15 @@ import importPlugin from 'eslint-plugin-import'
 
 export default tseslint.config(
     {
-        ignores: ['eslint.config.mjs', 'apps/web/**', 'docker/scripts/**', 'dist/**', 'deploy/**'],
+        ignores: [
+            'eslint.config.mjs',
+            'apps/web/**',
+            'docker/scripts/**',
+            '**/dist/**',
+            'deploy/**',
+            '**/metadata.ts',
+            'packages/api-client/src/schema.d.ts',
+        ],
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,
@@ -69,6 +77,7 @@ export default tseslint.config(
             'scripts/bruno/*.mjs',
             'scripts/testing/*.mjs',
             'scripts/frontend/*.mjs',
+            'scripts/openapi/*.mjs',
         ],
         languageOptions: {
             sourceType: 'module',

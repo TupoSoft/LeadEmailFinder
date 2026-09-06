@@ -11,13 +11,15 @@ the product root, contract drift fails validation, and browser code contains no 
 
 ## Progress
 
-- [ ] (2026-08-31) Make full runtime Swagger and filtered browser export share one annotated source.
-- [ ] (2026-08-31) Move Swagger UI to `/docs` and publish normalized JSON at `/openapi.json`.
-- [ ] (2026-08-31) Document only the initial BFF/current-account and health browser operations.
-- [ ] (2026-08-31) Add the generated `packages/api-client` workspace and reproducible root scripts.
-- [ ] (2026-08-31) Add the web-owned same-origin cookie and CSRF transport with focused tests.
-- [ ] (2026-08-31) Add required contract/client CI and repository documentation.
-- [ ] (2026-08-31) Run generation twice, focused tests, architecture, prose, and repository validation.
+- [x] (2026-09-06) Confirmed all prerequisites, assigned issue #500, and moved its project item to In Progress.
+
+- [x] (2026-09-06) Made full runtime Swagger and filtered browser export share one annotated source.
+- [x] (2026-09-06) Moved Swagger UI to `/docs` and published normalized JSON at `/openapi.json`.
+- [x] (2026-09-06) Documented only the initial BFF/current-account and health browser operations.
+- [x] (2026-09-06) Added the generated `packages/api-client` workspace and reproducible root scripts.
+- [x] (2026-09-06) Added the web-owned same-origin cookie and CSRF transport with focused tests.
+- [x] (2026-09-06) Added required contract/client CI and repository documentation.
+- [x] (2026-09-06) Ran generation twice, focused tests, architecture, prose, and repository validation.
 
 ## Plan dependencies
 
@@ -27,6 +29,10 @@ the product root, contract drift fails validation, and browser code contains no 
 
 ## Surprises & Discoveries
 
+- (2026-09-06) The initial browser routes have the `/v1/auth` prefix. The three prerequisite plans are complete.
+- (2026-09-06) A clean workspace install exposed an undeclared `tsconfig-paths` dependency required by the root
+  TypeScript runner. It is now an explicit development dependency.
+
 - `src/main.ts` currently creates the Swagger document and mounts its UI at `/`, which conflicts with the public
   product route delivered by `frontend/01` once both are served through one origin.
 - `src/lead-email-finder-api/src/generate-metadata.ts`, `nest-cli.json`, and the `Makefile` contain stale generation
@@ -35,6 +41,20 @@ the product root, contract drift fails validation, and browser code contains no 
   the runtime document. A browser snapshot cannot rely on those controllers being excluded.
 
 ## Decision Log
+
+- Decision: Read the shared Swagger plugin options from `nest-cli.json` and load generated metadata in both paths.
+  Use the package manifest as the API version source, including when Node starts the compiled API directly.
+  Rationale: Preview export and the compiled runtime produce the same document without depending on shell metadata.
+  Date/Author: 2026-09-06, implementation.
+- Decision: Model CSRF as the existing header security scheme, combined with cookie authentication, without a
+  redundant required header parameter.
+  Rationale: The browser transport supplies the header; generated callers must not duplicate this responsibility.
+  Date/Author: 2026-09-06, implementation.
+- Decision: Exclude only Nest's generated `src/metadata.ts` aggregate from architecture scanning and hide the
+  already-excluded `ProxyDto.auth` property from the Swagger plugin.
+  Rationale: Generated DTO imports are metadata, while the proxy response intentionally never contains credentials.
+  Other files named `metadata.ts` still undergo the normal architecture checks.
+  Date/Author: 2026-09-06, implementation.
 
 - Decision: Build a full runtime document and an explicitly filtered browser document from one reusable API-host
   function, one metadata builder, and the same annotated route/DTO source.
@@ -80,7 +100,20 @@ the product root, contract drift fails validation, and browser code contains no 
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered the five-operation browser contract, generated client package, same-origin browser transport, and typed
+current-account adapter. Full Swagger documentation remains available at `/docs`; the normalized filtered contract
+is at `/openapi.json`, with no root UI or implicit Swagger JSON/YAML routes. Both generation commands are repeatable;
+the check rejects missing, untracked, and stale artifacts without repairing them. Compiled metadata and offline
+export were compared and produced identical normalized browser documents.
+
+Validation passed: 1,807 repository Jest tests, 15 runner tests, six contract-tooling tests, and 45 web tests. The
+repository suite skipped 65 tests across 11 suites that require separately configured integration environments.
+API, client, and web builds, type checks, lint, and the architecture gate passed. Root lint retains one preexisting
+return-type warning in `load-secrets.spec.ts`. Two successive drift checks passed with identical Git status output.
+
+Bruno coverage now has 13 requests and 14 assertions. The actual pinned CLI passed against the existing synthetic
+runner fixture. Live stack execution remains unverified because this checkout has no development-stack or credential
+metadata under `.dev/keycloak`. No gateway, database, or production deployment change belongs to this plan.
 
 ## Context and Orientation
 
@@ -250,6 +283,23 @@ Build, unit, and type checks create only ignored output. This plan has no persis
 temporary API process is used, stop only that process and retain safe logs on failure.
 
 ## Artifacts and Notes
+
+Implementation artifacts are `packages/api-client/openapi/lead-email-finder.json`,
+`packages/api-client/src/schema.d.ts`, `scripts/openapi/`, and `apps/web/src/api/`. Versions are
+`openapi-typescript@7.13.0` and `openapi-fetch@0.17.0`. The generated TypeScript header names
+`corepack pnpm openapi:generate` as its update command. Stage newly created artifacts before their first drift check.
+
+Additional focused validation:
+
+    node --test scripts/openapi/*.test.mjs
+    corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci
+    corepack pnpm --filter @tuposoft/lead-email-finder-web lint
+    corepack pnpm --filter @tuposoft/lead-email-finder-web build
+
+The filter tests cover every retained local reference and generated sentinel exclusion. Export tests start from an
+empty environment, reject TCP/UDP/DNS access, and exercise the provider-construction canary. HTTP tests verified
+`200 text/html` at `/docs`, `200 application/json` at `/openapi.json`, and `404` at the three removed paths.
+The architecture gate passed after a Nest build with its ignored metadata aggregate present.
 
 Record the initial path/security matrix, normalized snapshot diff, generated-file header, exact package versions,
 focused test counts, and two-run drift result. Never record cookies, CSRF values, authorization codes, tokens, client

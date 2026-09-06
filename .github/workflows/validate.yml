@@ -42,6 +42,7 @@ jobs:
       - name: Install dependencies
         run: >-
           corepack pnpm --filter @tuposoft/lead-email-finder...
+          --filter @tuposoft/lead-email-finder-api-client...
           install --frozen-lockfile
 
       - name: Test documentation linter
@@ -71,6 +72,12 @@ jobs:
 
       - name: Type check
         run: corepack pnpm typecheck
+
+      - name: Check browser API contract drift
+        run: corepack pnpm openapi:check
+
+      - name: Test browser API contract tooling
+        run: node --test scripts/openapi/*.test.mjs
 
       - name: Test
         run: corepack pnpm test:ci
@@ -146,6 +153,9 @@ jobs:
 
       - name: Type check web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
+
+      - name: Build generated API client
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
 
       - name: Test web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci

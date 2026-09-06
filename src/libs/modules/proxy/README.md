@@ -54,6 +54,10 @@ dependency `ProxyAllocatorService` has on `ProxyLeaseService` — but does not e
 | `DELETE` | `v1/proxies/:id`            | Delete                                    |
 | `POST`   | `v1/proxies/:id/blacklists` | Report a blacklist; `204 No Content`      |
 
+The full runtime OpenAPI document preserves these administrative operations. Response metadata explicitly excludes
+proxy credentials, matching response serialization; create and update request metadata still describe credentials.
+These operations remain outside the initial generated browser contract.
+
 ## Persistence
 
 Owns one entity: `Proxy` → `proxy_registry`, behind the private `ProxyRepository` and `ProxyCandidateRepository`
@@ -69,7 +73,7 @@ adapter) — see Configuration below for the values that govern it.
 ## Validation
 
 Focused tests live in `src/`, organized by layer: `api/proxy.controller.spec.ts`,
-`api/proxy-response.mapper.spec.ts`, `application/proxy.service.spec.ts`,
+`api/proxy-response.mapper.spec.ts`, `api/proxy.swagger.spec.ts`, `application/proxy.service.spec.ts`,
 `application/proxy-registry.service.spec.ts`, `application/proxy-allocator.service.spec.ts`,
 `application/proxy-lease.service.spec.ts`, `infrastructure/persistence/typeorm-proxy-repository.spec.ts`,
 `infrastructure/persistence/typeorm-proxy-candidate.repository.spec.ts`,
