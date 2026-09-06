@@ -10,9 +10,10 @@ import { DomainPolicyEntity } from './infrastructure/persistence/typeorm/domain-
 import { EmailEntity } from './infrastructure/persistence/typeorm/email.entity'
 import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
 import { TypeOrmVerificationStore } from './infrastructure/persistence/typeorm-verification.store'
-import { SmtpVerification } from './email-verifier/smtp/smtp-verification.entity'
-import { SmtpVerifier } from './email-verifier/smtp/smtp-verifier'
-import { SmtpVerificationReason } from './email-verifier/smtp/smtp.enums'
+import { SmtpVerificationEntity } from './infrastructure/persistence/typeorm/smtp-verification.entity'
+import { TypeOrmSmtpVerificationStore } from './infrastructure/persistence/typeorm-smtp-verification.store'
+import { SmtpMailboxProbe } from './infrastructure/mailbox/smtp/smtp-mailbox-probe'
+import { SmtpVerificationReason } from './infrastructure/mailbox/smtp/smtp.enums'
 import { EmailVerificationOrchestrator } from './application/email-verification.service'
 import { DomainPolicyService } from './application/domain-policy.service'
 import { EmailAdministrationService } from './application/email-administration.service'
@@ -24,7 +25,7 @@ jest.mock('@aws-sdk/lib-storage')
 const postgresUrl = process.env['TEST_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 const schema = `verification_ownership_${process.pid}`
-const entities = [DomainPolicyEntity, EmailEntity, EmailVerificationEntity, SmtpVerification]
+const entities = [DomainPolicyEntity, EmailEntity, EmailVerificationEntity, SmtpVerificationEntity]
 
 interface UploadParams {
     Body: NodeJS.ReadableStream
@@ -65,7 +66,7 @@ describeWithPostgres('verification organization ownership', () => {
     it('synchronizes the tenant-owned keys and indexes while domains remain shared', async () => {
         const emailMetadata = dataSource.getMetadata(EmailEntity)
         const verificationMetadata = dataSource.getMetadata(EmailVerificationEntity)
-        const smtpMetadata = dataSource.getMetadata(SmtpVerification)
+        const smtpMetadata = dataSource.getMetadata(SmtpVerificationEntity)
         const domainMetadata = dataSource.getMetadata(DomainPolicyEntity)
 
         expect(emailMetadata.primaryColumns.map(column => column.propertyName)).toEqual(['organizationId', 'id'])
@@ -110,7 +111,7 @@ describeWithPostgres('verification organization ownership', () => {
         const address = 'person@example.test'
         const emailRepository = dataSource.getRepository(EmailEntity)
         const verificationRepository = dataSource.getRepository(EmailVerificationEntity)
-        const smtpRepository = dataSource.getRepository(SmtpVerification)
+        const smtpRepository = dataSource.getRepository(SmtpVerificationEntity)
 
         await dataSource.getRepository(DomainPolicyEntity).save({ id: 'example.test' })
         const [emailA, emailB] = await emailRepository.save([
@@ -196,22 +197,25 @@ describeWithPostgres('verification organization ownership', () => {
         await expect(resultReader.findOwned({ organizationId: organizationAId, id: randomUUID() })).resolves.toBeNull()
 
         const dnsService = { resolve: jest.fn() }
-        const smtpVerifier = new SmtpVerifier(
+        const mxResolver = { resolve: jest.fn() }
+        const smtpMailboxProbe = new SmtpMailboxProbe(
             dnsService as never,
+            mxResolver,
             { addToBlacklist: jest.fn() } as never,
             { acquire: jest.fn(), release: jest.fn() } as never,
             { create: jest.fn() } as never,
-            smtpRepository,
+            new TypeOrmSmtpVerificationStore(smtpRepository),
             { onConnectionOutcome: jest.fn() } as never,
         )
 
-        await expect(smtpVerifier.verify(organizationAId, address)).resolves.toEqual(
+        await expect(smtpMailboxProbe.probe(organizationAId, address)).resolves.toEqual(
             expect.objectContaining({ email: address, exists: true }),
         )
-        await expect(smtpVerifier.verify(organizationBId, address)).resolves.toEqual(
+        await expect(smtpMailboxProbe.probe(organizationBId, address)).resolves.toEqual(
             expect.objectContaining({ email: address, exists: false }),
         )
         expect(dnsService.resolve).not.toHaveBeenCalled()
+        expect(mxResolver.resolve).not.toHaveBeenCalled()
 
         const smtpRows = await smtpRepository.findBy({ id: address })
         expect(smtpRows).toHaveLength(2)

@@ -13,11 +13,11 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize mailbox decisions, SMTP protocol, cache provenance, proxy leases, deadlines, and cleanup.
-- [ ] (2026-08-30) Move SMTP client/factory/parser and proxy-backed probing under infrastructure.
-- [ ] (2026-08-30) Bind the organization-aware SMTP store and final `MailboxProbe` implementation.
-- [ ] (2026-08-30) Recompose the core/discovery/mailbox module and remove its remaining baseline keys.
-- [ ] (2026-08-30) Complete focused, fixture, SMTP Bruno, architecture, full, and documentation validation.
+- [x] (2026-08-30) Characterize mailbox decisions, SMTP protocol, cache provenance, proxy leases, deadlines, and cleanup.
+- [x] (2026-09-06) Move SMTP client/factory/parser and proxy-backed probing under infrastructure.
+- [x] (2026-09-06) Bind the organization-aware SMTP store and final `MailboxProbe` implementation.
+- [x] (2026-09-06) Recompose the core/discovery/mailbox module and remove its remaining baseline keys.
+- [x] (2026-09-06) Complete focused, fixture, SMTP Bruno, architecture, full, and documentation validation.
 
 ## Plan dependencies
 
@@ -35,6 +35,43 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
   TypeORM entity/repository access, Nest module, and result mapping.
 - Privacy plan 05 makes cache provenance part of correctness: only a result recorded with `secureTransport: true` may
   bypass a new probe.
+- The 2026-09-06 Decision Log entry references reusing "the internal account-discovery boundary delivered after
+  plan 18 and before plan 13" via `infrastructure/account-discovery/account-discovery.module.ts` and an
+  `ACCOUNT_DISCOVERY_TOKEN`. Neither exists: `gh pr view 545 --json files` (plan 13's merged PR) touched zero
+  `account-discovery` files, and `.agents/plans/account-discovery/{01,02}...md` are planning-only documents (from
+  PR #544), not yet implemented. This plan instead reuses the actual existing mechanism carried over from plan 18 —
+  `CATCH_ALL_VERIFIERS_TOKEN` plus `composeAccountDiscoveryVerifiers`, relocated verbatim (with its `SYSTEM_CLOCK`
+  and `ACCOUNT_DISCOVERY_CLOCK_TOKEN`) out of the deleted `EmailVerifierModule` wrapper into a standalone
+  `infrastructure/account-discovery/configured-account-discovery-verifiers.ts`. No behavior changed; only the
+  Decision Log's own forward reference was stale.
+- Moving the SMTP files into `infrastructure/mailbox/smtp/` (and `configured-account-discovery-verifiers.ts` into
+  `infrastructure/account-discovery/`) gave them a layer classification for the first time, which surfaced a new
+  `layer-dependency` violation: both files imported the unclassified module-root `email-verification-configuration.ts`.
+  Fixed by relocating that file to `domain/email-verification-configuration.ts` (it holds only plain
+  configuration-shape interfaces, which belongs there architecturally) and updating its five consumers' import
+  paths.
+- The live dev stack's `lef-api-1` container was `unhealthy` after this recomposition even though `typecheck`/tests
+  were clean: its baked `dist/main.js` predated the module-tree move and failed at boot with
+  `Cannot find module './metadata'`. A plain `docker compose ... up -d --build api` rebuild resolved it — this was
+  a stale-image artifact, not a code defect.
+- After opening the PR, `origin/master` had moved and PR #550 ("encapsulate account discovery",
+  `account-discovery/01`) merged concurrently. It made the earlier Surprises entry's forward reference true:
+  `ACCOUNT_DISCOVERY_TOKEN`, the `AccountDiscovery` port, `AccountDiscoveryService`, and a renamed
+  `composeAccountDiscovery` (singular, returning one instance instead of a verifier array) now exist for real,
+  superseding this plan's own `CATCH_ALL_VERIFIERS_TOKEN`/`configuredAccountDiscoveryVerifiers` placeholder built
+  before that PR landed. Rebasing required deleting that placeholder and renaming
+  `configured-account-discovery-verifiers.ts`/`.spec.ts` to `configured-account-discovery.ts`/`.spec.ts` (matching
+  the singular name). It also required rewiring `email-verification.module.ts`'s `MailboxVerificationService`
+  factory to inject `ACCOUNT_DISCOVERY_TOKEN` instead. A real-Nest-composition test PR #550 added,
+  `infrastructure/account-discovery/account-discovery-wiring.spec.ts`, was built against the *old*
+  `SmtpVerifier`/`CompatibilityMailboxProbe` composition; it needed rewriting to override the `MAILBOX_PROBE` token
+  directly instead of a since-deleted `SmtpVerifier` class. All 5 of its assertions still hold under the new
+  composition.
+- Rebasing separately surfaced that PR #546 ("serve the web app and API from one origin", already on `master`)
+  added a `web` Compose service that `scripts/bruno/run-collection.mjs`'s `loadDevelopmentStack()` now requires
+  for every collection, including `smtp-dev`. This dev stack had never run that service; live Bruno validation
+  failed opaquely until `docker compose ... up -d --build` (the full stack, not scoped to `api`) started it —
+  unrelated to this plan's own code.
 
 ## Decision Log
 
@@ -69,10 +106,81 @@ plaintext fixtures, a narrowed module tree, and removal of the remaining core/ne
   Rationale: Its separate plans own provider relocation and approval policy; SMTP recomposition must preserve that
   binding and remove only the obsolete SMTP wrapper it still consumes.
   Date/Author: 2026-09-06, Codex planning.
+- Decision (superseded 2026-09-06, see below): no `ACCOUNT_DISCOVERY_TOKEN`/`account-discovery.module.ts` existed
+  yet at implementation time (see Surprises). Reused the then-existing `CATCH_ALL_VERIFIERS_TOKEN` mechanism from
+  plan 18 unchanged, relocated out of the deleted `EmailVerifierModule` into
+  `infrastructure/account-discovery/configured-account-discovery-verifiers.ts`, and inlined its DI wiring directly
+  into `sync-email-verification/email-verification.module.ts`.
+  Rationale: `account-discovery/01`/`02` remained planning-only at the time; implementing against a nonexistent
+  token would have blocked this plan on unrelated work that had not started.
+  Date/Author: 2026-09-06, Codex implementation.
+- Decision: `account-discovery/01` (PR #550) merged to `master` before this branch's PR was itself merged, making
+  the real `ACCOUNT_DISCOVERY_TOKEN`/`AccountDiscovery` port available. Rebased onto it and switched this plan's
+  factory wiring to inject the real token instead of the placeholder above, renaming
+  `configured-account-discovery-verifiers.ts`/`.spec.ts` to `configured-account-discovery.ts`/`.spec.ts` to match
+  the now-singular `configuredAccountDiscovery` function it wraps.
+  Rationale: Two independent placeholders for the same seam should not coexist; once the real port existed, keeping
+  the plan-18-era array-of-verifiers placeholder would have left dead code and a second, divergent account-discovery
+  path.
+  Date/Author: 2026-09-06, Codex implementation.
+- Decision: Drop `DNS_SERVICE_TOKEN` and `SMTP_CLIENT_FACTORY_TOKEN` string-token indirection in favor of direct
+  class injection (`DnsService`, `SmtpClientFactory`).
+  Rationale: Both are single-implementation `@Injectable()` classes with no swap requirement, matching the
+  no-unnecessary-indirection pattern already used for `SmtpVerifier`/`MxResolver`/`DomainSynonymDiscovery` in
+  plans 13 and 18.
+  Date/Author: 2026-09-06, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and validated on branch `module-architecture/14-smtp-mailbox-adapter`.
+
+- `infrastructure/mailbox/smtp/smtp-mailbox-probe.ts` is the real `MailboxProbe` adapter, replacing both the old
+  `SmtpVerifier` and plan 18's `CompatibilityMailboxProbe`. It preserves the exact protocol/cache/proxy-lease
+  behavior of `SmtpVerifier`, substituting only its dependencies. MX resolution now goes through the plan-13
+  `MxResolver` port instead of a raw `dnsService.resolve(domain, 'MX')` call. Persistence now goes through the
+  plan-17 `SmtpVerificationStore` port instead of a raw TypeORM repository find/create/save. The unrelated reverse-DNS
+  pointer lookup for the SMTP client's own hostname still uses `IDnsService` directly — no port covers that, and it
+  is a legitimate infrastructure-level technical dependency, not an architecture violation.
+  `infrastructure/mailbox/smtp/` also holds the relocated client/factory/parser/exception/constants files, moved
+  unchanged from the deleted `email-verifier/smtp/`.
+- `infrastructure/account-discovery/configured-account-discovery.ts` builds the real `AccountDiscovery` instance
+  (the `ACCOUNT_DISCOVERY_TOKEN`/`AccountDiscoveryService` mechanism `account-discovery/01` delivered concurrently
+  — see Surprises and Decision Log) from configuration, the approval manifest, and the provider adapters; the
+  composition previously wrapped by `EmailVerifierModule` (now deleted entirely, along with the rest of
+  `email-verifier/`).
+- `domain/email-verification-configuration.ts` (moved from the module root) holds the plain SMTP/catch-all
+  configuration shapes now consumed by two `infrastructure/` files, fixing the layer-dependency violation that move
+  exposed.
+- `sync-email-verification/email-verification.module.ts` was rewritten to compose everything directly through
+  explicit factory providers — no wrapper module remains between Nest and the plain adapter/service classes. This
+  gives plan 17's previously-unused `TypeOrmSmtpVerificationStore`/`SmtpVerificationEntity` their first real
+  consumer.
+- Validation, in full (rerun after rebasing onto `master`'s concurrent `account-discovery/01` and
+  same-origin-`web` changes — see Surprises):
+  - Focused: `src/libs/modules/email-verification` (whole module) → 43 suites / 294 tests passed, 2 suites / 5
+    tests skipped as expected (real-Postgres gating).
+  - `architecture:baseline` / `architecture:check`: 51 baselined violations, zero new violations (unchanged by the
+    rebase, matching PR #550's own "architecture baseline unchanged" claim).
+  - `typecheck`: clean (only the known, preexisting, environment-only `dist/tsconfig.tsbuildinfo` `EACCES` from a
+    root-owned `dist/`, unrelated to this change).
+  - `lint`: clean repository-wide (the earlier `packages/api-client/src/index.ts:10:12` preexisting error was
+    fixed upstream on `master` before this rebase).
+  - `test:ci`: full suite green (202 suites / 1884 tests, plus the 31 `test:oidc-runners` script tests).
+  - `build`: blocked only by the preexisting root-owned `dist/` permission issue in this dev environment
+    (`EACCES` on `rmdir`), not a code defect.
+  - Real-Postgres: `verification-organization-ownership.integration.spec.ts` against `lef_identity_test` — 3/3
+    passed, including the rewritten `SmtpMailboxProbe` construction/wiring assertions.
+  - Live Bruno (full dev stack rebuilt, including the `web` service — see Surprises):
+    `smtp-dev` — 22 requests / 44 tests, all passing (TLS success, plaintext downgrade rejection before any
+    address-bearing command, deterministic proxy drain/restore, zero default provider dispatch, current and
+    deprecated route parity). `batch-verification` — 3 requests / 8 tests, all passing.
+  - `git diff --check`: clean.
+- `src/libs/modules/email-verification/README.md` updated: Architecture section now names plan 14, describes the
+  real `SmtpMailboxProbe` and `configured-account-discovery.ts` (reconciled against `account-discovery/01`'s real
+  `AccountDiscovery` port), drops the stale compatibility-adapter and `EmailVerifierModule` references;
+  Persistence table's `SmtpVerification` row corrected to `SmtpVerificationEntity`; Validation section's file
+  listings updated to the new `infrastructure/mailbox/smtp/` and `infrastructure/account-discovery/` paths.
+  `bruno/smtp-dev/README.md` had no stale references to update.
 
 ## Context and Orientation
 
@@ -198,4 +306,4 @@ addresses, SMTP transcripts containing them, credentials, private keys, CA conte
 
 ## Plan readiness
 
-Ready to implement
+Implemented and validated. See Outcomes & Retrospective.

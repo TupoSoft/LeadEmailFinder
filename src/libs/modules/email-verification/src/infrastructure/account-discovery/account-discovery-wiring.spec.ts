@@ -9,7 +9,7 @@ import {
     MimecastLogin,
     OfficeApps,
 } from '@tuposoft/lead-email-finder/catch-all'
-import { EmailVerificationReason, ISmtpVerificationResponse, ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
+import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { AccountDiscoveryApproval, loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
 import { CreditGuard, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
@@ -20,15 +20,14 @@ import {
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
 } from '../../application/account-discovery/approved-account-discovery-verifier'
 import { MailboxVerificationService } from '../../application/mailbox-verification.service'
-import { CatchAllProxyConfiguration } from '../../email-verification-configuration'
-import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from '../../email-verifier/email-verifier.constants'
-import { SmtpVerifier } from '../../email-verifier/smtp'
-import { SmtpClientFactory } from '../../email-verifier/smtp/smtp-client.factory'
-import { SmtpVerification } from '../../email-verifier/smtp/smtp-verification.entity'
+import { MAILBOX_PROBE, MailboxProbeResult } from '../../application/ports/mailbox-probe'
+import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
 import { SyncEmailVerificationModule } from '../../sync-email-verification/email-verification.module'
 import { DomainPolicyEntity } from '../persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from '../persistence/typeorm/email-verification.entity'
 import { EmailEntity } from '../persistence/typeorm/email.entity'
+import { SmtpVerificationEntity } from '../persistence/typeorm/smtp-verification.entity'
+import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from './configured-account-discovery'
 
 jest.mock('@tuposoft/lead-email-finder/config', () => ({
     ...jest.requireActual<typeof import('@tuposoft/lead-email-finder/config')>(
@@ -84,10 +83,9 @@ class UnusedBusinessDependenciesModule {}
 
 interface WiringFixture {
     http: Record<'get' | 'post', jest.Mock>
-    smtp: jest.Mocked<ISmtpVerifier>
+    mailboxProbe: { probe: jest.Mock<Promise<MailboxProbeResult>, [string, string]> }
     clock: { now: jest.Mock<Date, []> }
     dns: { resolve: jest.Mock }
-    smtpClientFactory: { create: jest.Mock }
     compile(): Promise<{
         mailbox: MailboxVerificationService
         officeApps: jest.SpyInstance
@@ -113,25 +111,21 @@ describe('Account discovery Nest composition', () => {
                 throw new Error('unexpected_http_post')
             }),
         }
-        const smtp: jest.Mocked<ISmtpVerifier> = {
-            verify: jest.fn((_organizationId: string, submittedEmail: string): Promise<ISmtpVerificationResponse> =>
-                Promise.resolve({
-                    email: submittedEmail,
-                    exists: true,
-                    reason: 'accepted_email',
-                    targetExchange: 'mx.example.test',
-                }),
+        const mailboxProbe = {
+            probe: jest.fn(
+                (_organizationId: string, submittedEmail: string): Promise<MailboxProbeResult> =>
+                    Promise.resolve({
+                        email: submittedEmail,
+                        exists: true,
+                        reason: 'accepted_email',
+                        targetExchange: 'mx.example.test',
+                    }),
             ),
         }
         const clock = { now: jest.fn(() => new Date('2026-09-06T10:30:00.000Z')) }
         const dns = {
             resolve: jest.fn(() => {
                 throw new Error('unexpected_dns_lookup')
-            }),
-        }
-        const smtpClientFactory = {
-            create: jest.fn(() => {
-                throw new Error('unexpected_smtp_connection')
             }),
         }
         jest.mocked(loadAccountDiscoveryApprovals).mockResolvedValue({
@@ -143,8 +137,8 @@ describe('Account discovery Nest composition', () => {
         @Module({ providers: [{ provide: DnsService, useValue: dns }], exports: [DnsService] })
         class FakeDnsModule {}
 
-        // Preserve both composition roots, CatchAllModule, and the SMTP module reexport.
-        // Only outbound adapters and unrelated business capabilities are substituted.
+        // Preserve both composition roots and CatchAllModule. Only outbound adapters and
+        // unrelated business capabilities are substituted.
         const builder = Test.createTestingModule({ imports: [SyncEmailVerificationModule] })
             .overrideModule(DnsModule)
             .useModule(FakeDnsModule)
@@ -158,23 +152,20 @@ describe('Account discovery Nest composition', () => {
             .useValue({ get: (key: keyof CatchAllProxyConfiguration) => configuration[key] })
             .overrideProvider(HttpService)
             .useValue(http)
-            .overrideProvider(SmtpVerifier)
-            .useValue(smtp)
-            .overrideProvider(SmtpClientFactory)
-            .useValue(smtpClientFactory)
+            .overrideProvider(MAILBOX_PROBE)
+            .useValue(mailboxProbe)
             .overrideProvider(ACCOUNT_DISCOVERY_CLOCK_TOKEN)
             .useValue(clock)
 
-        for (const entity of [EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerification]) {
+        for (const entity of [EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerificationEntity]) {
             builder.overrideProvider(getRepositoryToken(entity)).useValue({})
         }
 
         return {
             http,
-            smtp,
+            mailboxProbe,
             clock,
             dns,
-            smtpClientFactory,
             compile: async () => {
                 const module = await builder.compile()
                 modules.push(module)
@@ -211,13 +202,12 @@ describe('Account discovery Nest composition', () => {
         expect(composed.microsoftLogin).not.toHaveBeenCalled()
         expect(composed.microsoftGetCredentialType).not.toHaveBeenCalled()
         expect(composed.mimecastRegion).not.toHaveBeenCalled()
-        expect(dependencies.smtp.verify).toHaveBeenCalledTimes(1)
-        expect(dependencies.smtp.verify).toHaveBeenCalledWith(
+        expect(dependencies.mailboxProbe.probe).toHaveBeenCalledTimes(1)
+        expect(dependencies.mailboxProbe.probe).toHaveBeenCalledWith(
             organizationId,
             'tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak@example.test',
         )
         expect(dependencies.dns.resolve).not.toHaveBeenCalled()
-        expect(dependencies.smtpClientFactory.create).not.toHaveBeenCalled()
     })
 
     it.each([
@@ -236,7 +226,7 @@ describe('Account discovery Nest composition', () => {
         expect(composed.mimecastRegion).not.toHaveBeenCalled()
         expect(dependencies.http.get).not.toHaveBeenCalled()
         expect(dependencies.http.post).not.toHaveBeenCalled()
-        expect(dependencies.smtp.verify).toHaveBeenCalledTimes(1)
+        expect(dependencies.mailboxProbe.probe).toHaveBeenCalledTimes(1)
     })
 
     it('keeps the pre-discovery result without dispatch when approval expires after Nest compilation', async () => {
@@ -253,7 +243,7 @@ describe('Account discovery Nest composition', () => {
         expect(composed.mimecastRegion).not.toHaveBeenCalled()
         expect(dependencies.http.get).not.toHaveBeenCalled()
         expect(dependencies.http.post).not.toHaveBeenCalled()
-        expect(dependencies.smtp.verify).toHaveBeenCalledTimes(1)
+        expect(dependencies.mailboxProbe.probe).toHaveBeenCalledTimes(1)
     })
 
     it('rejects Nest initialization before dispatch when the selected provider has no approval', async () => {
@@ -264,8 +254,7 @@ describe('Account discovery Nest composition', () => {
         expect(loadAccountDiscoveryApprovals).toHaveBeenCalledTimes(1)
         expect(dependencies.http.get).not.toHaveBeenCalled()
         expect(dependencies.http.post).not.toHaveBeenCalled()
-        expect(dependencies.smtp.verify).not.toHaveBeenCalled()
+        expect(dependencies.mailboxProbe.probe).not.toHaveBeenCalled()
         expect(dependencies.dns.resolve).not.toHaveBeenCalled()
-        expect(dependencies.smtpClientFactory.create).not.toHaveBeenCalled()
     })
 })

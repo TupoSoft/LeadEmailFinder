@@ -245,6 +245,8 @@ tsvector
 tsquery
 Prisma
 PostGIS
+PTR
+devDependency
 pooler
 unindexed
 FK

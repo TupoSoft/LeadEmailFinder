@@ -95,7 +95,7 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 
 ## Architecture
 
-The module is layered (`module-architecture/10`, `/13`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+The module is layered (`module-architecture/10`, `/13`, `/14`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
@@ -116,11 +116,7 @@ this boundary only as the stable `dns_mx_resolution_failed` error. `infrastructu
 `HttpDomainSynonymDiscovery`: it retrieves the homepage and relevant links, keeps results from successful pages,
 and inherits the injected HTTP transport's timeout and retry configuration. The default composition adds no
 adapter-specific timeout or retry. `domain/domain-synonym-parser.ts` extracts domains and relevant links from
-supplied text without network access. These discovery ports remain registered for the mailbox refactor in
-`module-architecture/14`; the current SMTP engine retains its existing DNS path.
-
-`infrastructure/compatibility-mailbox-probe.ts` still wraps the SMTP engine. Its replacement and SMTP/proxy
-reorganization belong to `module-architecture/14`.
+supplied text without network access.
 
 `application/ports/account-discovery.ts` defines the private `AccountDiscovery` evidence port and its injection
 token. `MailboxVerificationService` decides when discovery is useful and maps known source names into verification
@@ -128,12 +124,20 @@ results. `AccountDiscoveryService` calls at most one approved provider and retur
 disabled discovery, negative responses, and per-call failures return an empty list without claiming account absence
 or logging provider errors. Invalid selection still rejects initialization, and the approval wrapper checks
 validity again before dispatch. `infrastructure/account-discovery/account-discovery-composition.ts` rejects a
-selection containing more than one provider. `EmailVerifierModule` exports the discovery token and reexports
-`SmtpModule`; the active mailbox factory injects the port. The shared `ICatchAllVerifier` contract and technical
-clients under `src/libs/catch-all/` remain in place until `account-discovery/02`. This later relocation remains a
-prerequisite for completing plan 13. The public barrel still exports only `EmailVerificationModule`.
+selection containing more than one provider. `infrastructure/account-discovery/configured-account-discovery.ts`
+builds the discovery instance from configuration, the approval manifest, and the provider adapters; the
+composition module's factory providers inject the port directly — no wrapper module remains. The shared
+`ICatchAllVerifier` contract and technical clients under `src/libs/catch-all/` remain in place until
+`account-discovery/02`. The public barrel still exports only `EmailVerificationModule`.
 
-`sync-email-verification/email-verification.module.ts` composes the core: it registers the three consumed
+`infrastructure/mailbox/smtp/smtp-mailbox-probe.ts` implements `MailboxProbe`: it resolves MX exchanges through
+the injected `MxResolver` port, leases a proxy through `IProxyService`/`IProxyAllocator`, drives the STARTTLS/SMTP
+protocol exchange through `infrastructure/mailbox/smtp/smtp-client.ts` (built by `SmtpClientFactory`), and persists
+each outcome through the `SmtpVerificationStore` port instead of a raw repository. It still resolves the SMTP
+client's own reverse-DNS hostname directly through the injected `IDnsService`, since no port covers that narrow
+technical need.
+
+`sync-email-verification/email-verification.module.ts` composes the core: it registers the four consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
 (no bare `@Injectable()` on a framework-free class), and binds the shared `EmailVerificationServiceToken` to
 `EmailVerificationOrchestrator`. The other three delivery modes (`old-sync-email-verification`,
@@ -180,7 +184,7 @@ consumed the module's core verification service. The `/emails` administration AP
 | `EmailVerificationEntity`  | `email_verifications` | Required organization; UUID result ID                                                 |
 | `DomainPolicyEntity`       | `domains`             | Shared technical policy; domain name                                                  |
 | `EmailEntity`              | `emails`              | Organization plus normalized address                                                  |
-| `SmtpVerification`         | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
+| `SmtpVerificationEntity`   | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
 
 ## S3 / Storage
 
@@ -242,9 +246,9 @@ Focused tests are grouped by behavior:
 - **DNS and synonym discovery**: specifications below `infrastructure/discovery/dns/` and
   `infrastructure/discovery/http/`, plus `domain/domain-synonym-parser.spec.ts`; deterministic DNS and local HTTP
   fixtures cover success, failures, configured deadlines, and parsing
-- **Mailbox compatibility adapter**: `infrastructure/compatibility-mailbox-probe.spec.ts`
-- **SMTP engine**: `email-verifier/smtp/smtp-client.factory.spec.ts`, `email-verifier/smtp/smtp-client.spec.ts`,
-  `email-verifier/smtp/smtp-verifier.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
+- **Mailbox probe adapter**: `infrastructure/mailbox/smtp/smtp-mailbox-probe.spec.ts`,
+  `infrastructure/mailbox/smtp/smtp-client.factory.spec.ts`, `infrastructure/mailbox/smtp/smtp-client.spec.ts`,
+  `infrastructure/mailbox/smtp/smtp.util.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
   `../../socket/src/tls-connect.spec.ts`
 - **Account discovery**: `application/account-discovery/account-discovery.service.spec.ts`,
   `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
@@ -252,8 +256,8 @@ Focused tests are grouped by behavior:
   `infrastructure/account-discovery/account-discovery-composition.spec.ts`,
   `infrastructure/account-discovery/account-discovery-wiring.spec.ts` (real Nest composition with fake outbound
   dependencies, covering positive evidence, disabled discovery, and approval expiry),
-  `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
-  `scripts/privacy/account-discovery-approvals.spec.ts` and
+  `infrastructure/account-discovery/configured-account-discovery.spec.ts`, the provider adapter specifications
+  under `src/libs/catch-all`, and `scripts/privacy/account-discovery-approvals.spec.ts` and
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`

@@ -4,7 +4,7 @@ import { connect, ConnectionTimeoutError, ConnectOptions, tlsConnectAsync } from
 import { SmtpClient } from './smtp-client'
 import { SmtpClientTimeoutException } from './smtp-client-timeout.exception'
 import { Logger } from '@nestjs/common'
-import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
+import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
 
 type SocketModule = typeof import('@tuposoft/lead-email-finder/socket')
 

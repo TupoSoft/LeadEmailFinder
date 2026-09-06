@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { SmtpConfiguration } from '../../email-verification-configuration'
+import { SmtpConfiguration } from '../../../domain/email-verification-configuration'
 import { SmtpClient } from './smtp-client'
 import { ISmtpClientFactory, SmtpClientFactoryOptions } from './smtp-client-factory.interface'
 import { ISmtpClient } from './smtp-client.interface'
 import { SMTP_PORT } from './smtp.constants'
-import { loadSmtpTlsCa } from '../../infrastructure/smtp/smtp-trust'
+import { loadSmtpTlsCa } from '../../smtp/smtp-trust'
 
 @Injectable()
 export class SmtpClientFactory implements ISmtpClientFactory {

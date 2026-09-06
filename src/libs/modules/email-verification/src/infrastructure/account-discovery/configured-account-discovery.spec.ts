@@ -6,14 +6,14 @@ import {
     OfficeApps,
 } from '@tuposoft/lead-email-finder/catch-all'
 import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
-import { CatchAllProxyConfiguration } from '../email-verification-configuration'
+import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
     AccountDiscoveryApprovalView,
     Clock,
-} from '../application/account-discovery/approved-account-discovery-verifier'
-import { configuredAccountDiscovery } from './email-verifier.module'
+} from '../../application/account-discovery/approved-account-discovery-verifier'
+import { configuredAccountDiscovery } from './configured-account-discovery'
 
 const clock: Clock = { now: () => new Date('2026-09-02T10:30:00Z') }
 

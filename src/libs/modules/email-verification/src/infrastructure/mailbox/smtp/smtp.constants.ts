@@ -8,6 +8,3 @@ export const DEFAULT_STARTTLS_TIMEOUT = parseTimeString('2m')
 export const DEFAULT_MAIL_TIMEOUT = parseTimeString('5m') // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.2
 export const DEFAULT_RCPT_TIMEOUT = parseTimeString('5m') // https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.2.3
 export const SMTP_RESPONSE_REGEX = /^[0-9]{3} (?:.|\s)*$/m
-
-export const DNS_SERVICE_TOKEN = 'DnsService'
-export const SMTP_CLIENT_FACTORY_TOKEN = 'SmtpClientFactory'

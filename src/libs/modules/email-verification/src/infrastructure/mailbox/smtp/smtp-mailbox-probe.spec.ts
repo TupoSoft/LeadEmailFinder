@@ -1,11 +1,13 @@
-import { SmtpVerifier } from './smtp-verifier'
+import { SmtpMailboxProbe } from './smtp-mailbox-probe'
 import { SmtpVerificationReason } from './smtp.enums'
 import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
 import { Logger } from '@nestjs/common'
-import { SmtpSecureTransportUnavailableException } from '../../infrastructure/smtp/smtp-secure-transport-unavailable.exception'
+import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
+import { MxResolver } from '../../../application/ports/mx-resolver'
+import { SmtpVerificationStore } from '../../../application/ports/smtp-verification-store'
 
-interface SmtpVerifierInternals {
+interface SmtpMailboxProbeInternals {
     tryConnect: jest.Mock
     getExchanges: jest.Mock
     getSmtpClient: jest.Mock
@@ -16,30 +18,33 @@ const organizationId = '1d33b587-bc90-49f7-9693-92d72cc5c271'
 const otherOrganizationId = '3dc5deaf-c1f0-4b48-a0dc-caa8504f3a78'
 const email = 'person@example.com'
 
-describe('SmtpVerifier', () => {
-    let verifier: SmtpVerifier
-    let internals: SmtpVerifierInternals
+describe('SmtpMailboxProbe', () => {
+    let probe: SmtpMailboxProbe
+    let internals: SmtpMailboxProbeInternals
+    let mxResolver: jest.Mocked<MxResolver>
     let proxyAllocator: { acquire: jest.Mock; release: jest.Mock }
     let smtpClientFactory: { create: jest.Mock }
-    let smtpVerificationRepo: { findOneBy: jest.Mock; create: jest.Mock; save: jest.Mock }
+    let smtpVerificationStore: jest.Mocked<SmtpVerificationStore>
     let allocationObserver: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
     let loggerErrorSpy: jest.SpiedFunction<Logger['error']>
 
     beforeEach(() => {
         loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation()
+        mxResolver = { resolve: jest.fn() }
         proxyAllocator = { acquire: jest.fn(), release: jest.fn() }
         smtpClientFactory = { create: jest.fn() }
-        smtpVerificationRepo = { findOneBy: jest.fn(), create: jest.fn(), save: jest.fn() }
+        smtpVerificationStore = { findByAddress: jest.fn(), upsert: jest.fn() }
         allocationObserver = { onAllocation: jest.fn(), onConnectionOutcome: jest.fn(), onLeaseRelease: jest.fn() }
-        verifier = new SmtpVerifier(
+        probe = new SmtpMailboxProbe(
             { resolve: jest.fn() } as any,
+            mxResolver,
             { addToBlacklist: jest.fn() } as any,
             proxyAllocator as unknown as IProxyAllocator,
             smtpClientFactory,
-            smtpVerificationRepo as any,
+            smtpVerificationStore,
             allocationObserver as unknown as IAllocationObserver,
         )
-        internals = verifier as unknown as SmtpVerifierInternals
+        internals = probe as unknown as SmtpMailboxProbeInternals
     })
 
     afterEach(() => {
@@ -127,15 +132,15 @@ describe('SmtpVerifier', () => {
 
     it('returns an unknown result when no lease can be allocated', async () => {
         proxyAllocator.acquire.mockResolvedValue(undefined)
-        smtpVerificationRepo.findOneBy.mockResolvedValue(null)
+        smtpVerificationStore.findByAddress.mockResolvedValue(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
         })
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(smtpVerificationStore.findByAddress).toHaveBeenCalledWith(organizationId, email)
     })
 
     it('returns an unknown result without logging a remote allocation error message', async () => {
@@ -143,10 +148,10 @@ describe('SmtpVerifier', () => {
         const remoteError = new Error(`Redis unavailable for ${sentinel}`)
         Object.defineProperty(remoteError, 'constructor', { value: { name: sentinel } })
         proxyAllocator.acquire.mockRejectedValue(remoteError)
-        smtpVerificationRepo.findOneBy.mockResolvedValue(null)
+        smtpVerificationStore.findByAddress.mockResolvedValue(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
@@ -156,42 +161,41 @@ describe('SmtpVerifier', () => {
     })
 
     it('returns a conclusive result only from the requesting organization cache', async () => {
-        smtpVerificationRepo.findOneBy.mockImplementation(({ organizationId: requestedOrganizationId }) => {
-            if (requestedOrganizationId !== organizationId) return null
+        smtpVerificationStore.findByAddress.mockImplementation((requestedOrganizationId: string) => {
+            if (requestedOrganizationId !== organizationId) return Promise.resolve(null)
 
-            return {
+            return Promise.resolve({
                 organizationId,
                 id: email,
                 exists: true,
                 reason: SmtpVerificationReason.AcceptedEmail,
                 targetExchange: 'mx.example.com',
                 secureTransport: true,
-            }
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })
         })
         internals.getExchanges = jest.fn().mockResolvedValue([])
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
             targetExchange: 'mx.example.com',
         })
-        await expect(verifier.verify(otherOrganizationId, email)).resolves.toEqual({
+        await expect(probe.probe(otherOrganizationId, email)).resolves.toEqual({
             email,
             exists: false,
             reason: SmtpVerificationReason.NoMxRecords,
         })
 
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(1, { organizationId, id: email })
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(2, {
-            organizationId: otherOrganizationId,
-            id: email,
-        })
+        expect(smtpVerificationStore.findByAddress).toHaveBeenNthCalledWith(1, organizationId, email)
+        expect(smtpVerificationStore.findByAddress).toHaveBeenNthCalledWith(2, otherOrganizationId, email)
         expect(internals.getExchanges).toHaveBeenCalledTimes(1)
     })
 
     it('reuses temporarily blocked connection hints only from the requesting organization cache', async () => {
-        smtpVerificationRepo.findOneBy.mockResolvedValue({
+        smtpVerificationStore.findByAddress.mockResolvedValue({
             organizationId,
             id: email,
             exists: null,
@@ -199,17 +203,19 @@ describe('SmtpVerifier', () => {
             targetExchange: 'mx.example.com',
             proxyId: 'proxy-id',
             secureTransport: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
         })
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
         internals.getSmtpClient = jest.fn().mockResolvedValue({ attemptedConnection: false })
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
         })
 
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenCalledWith({ organizationId, id: email })
+        expect(smtpVerificationStore.findByAddress).toHaveBeenCalledWith(organizationId, email)
         expect(internals.getExchanges).toHaveBeenCalledWith({
             domain: 'example.com',
             targetExchange: 'mx.example.com',
@@ -228,9 +234,7 @@ describe('SmtpVerifier', () => {
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
         }
-        smtpVerificationRepo.findOneBy.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
-        smtpVerificationRepo.create.mockReturnValue({ organizationId, id: email })
-        smtpVerificationRepo.save.mockResolvedValue(undefined)
+        smtpVerificationStore.findByAddress.mockResolvedValueOnce(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
         internals.getSmtpClient = jest.fn().mockResolvedValue({
             leasedClient: { client, allocation },
@@ -239,33 +243,31 @@ describe('SmtpVerifier', () => {
         internals.tryVerify = jest.fn().mockResolvedValue(result)
         proxyAllocator.release.mockResolvedValue(true)
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(1, { organizationId, id: email })
-        expect(smtpVerificationRepo.findOneBy).toHaveBeenNthCalledWith(2, { organizationId, id: email })
-        expect(smtpVerificationRepo.create).toHaveBeenCalledWith({ organizationId, id: email })
-        expect(smtpVerificationRepo.save).toHaveBeenCalledWith(
-            expect.objectContaining({
-                organizationId,
-                id: email,
-                exists: true,
-                reason: SmtpVerificationReason.AcceptedEmail,
-                secureTransport: true,
-            }),
-        )
+        await expect(probe.probe(organizationId, email)).resolves.toEqual(result)
+        expect(smtpVerificationStore.findByAddress).toHaveBeenCalledWith(organizationId, email)
+        expect(smtpVerificationStore.upsert).toHaveBeenCalledWith(organizationId, email, {
+            reason: SmtpVerificationReason.AcceptedEmail,
+            exists: true,
+            targetExchange: undefined,
+            proxyId: undefined,
+            secureTransport: true,
+        })
         expect(proxyAllocator.release).toHaveBeenCalledWith(allocation)
     })
 
     it('ignores a conclusive cache row that is not proven to use secure transport', async () => {
-        smtpVerificationRepo.findOneBy.mockResolvedValue({
+        smtpVerificationStore.findByAddress.mockResolvedValue({
             organizationId,
             id: email,
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
             secureTransport: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
         })
         internals.getExchanges = jest.fn().mockResolvedValue([])
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual({
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
             exists: false,
             reason: SmtpVerificationReason.NoMxRecords,
@@ -305,6 +307,8 @@ describe('SmtpVerifier', () => {
             exists: null,
             reason: SmtpVerificationReason.SecureTransportUnavailable,
             secureTransport: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
         }
         const result = {
             email,
@@ -312,8 +316,7 @@ describe('SmtpVerifier', () => {
             reason: SmtpVerificationReason.SecureTransportUnavailable,
             targetExchange: 'mx.example.com',
         }
-        smtpVerificationRepo.findOneBy.mockResolvedValue(cachedFailure)
-        smtpVerificationRepo.save.mockResolvedValue(undefined)
+        smtpVerificationStore.findByAddress.mockResolvedValue(cachedFailure)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
         internals.getSmtpClient = jest.fn().mockResolvedValue({
             leasedClient: { client: { secureTransport: false }, allocation },
@@ -322,13 +325,20 @@ describe('SmtpVerifier', () => {
         internals.tryVerify = jest.fn().mockResolvedValue(result)
         proxyAllocator.release.mockResolvedValue(true)
 
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
-        await expect(verifier.verify(organizationId, email)).resolves.toEqual(result)
+        await expect(probe.probe(organizationId, email)).resolves.toEqual(result)
+        await expect(probe.probe(organizationId, email)).resolves.toEqual(result)
 
         expect(internals.getSmtpClient).toHaveBeenCalledTimes(2)
         expect(internals.tryVerify).toHaveBeenCalledTimes(2)
-        expect(smtpVerificationRepo.save).toHaveBeenCalledTimes(2)
+        expect(smtpVerificationStore.upsert).toHaveBeenCalledTimes(2)
         expect(proxyAllocator.release).toHaveBeenCalledTimes(2)
+    })
+
+    it('resolves MX exchanges through the injected MxResolver port', async () => {
+        mxResolver.resolve.mockResolvedValue(['mx.example.com'])
+
+        await expect(internals.getExchanges({ domain: 'example.com' })).resolves.toEqual(['mx.example.com'])
+        expect(mxResolver.resolve).toHaveBeenCalledWith('example.com')
     })
 })
 
