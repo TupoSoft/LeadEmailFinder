@@ -5,8 +5,9 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 ## Purpose / Big Picture
 
 Provide one disposable four-machine Ubuntu 24.04 development lab that a developer operates with ordinary Vagrant
-commands. The same manager, two proxy nodes, verifier, isolated underlay, and three nonpublic test egress identities
-must work on Windows 11 WSL2 with VirtualBox and on native AMD64 Linux with libvirt/KVM.
+commands. This plan validates the manager, two proxy nodes, verifier, isolated underlay, and three nonpublic test
+egress identities on Windows 11 WSL2 with VirtualBox. Native AMD64 Linux with libvirt/KVM has its own acceptance
+matrix in [plan 18](18-validate-vagrant-libvirt-lab.md). Both providers retain the shared lab definition and inventory.
 
 Vagrant is the lifecycle interface. A developer validates, creates, inspects, connects to, reprovisions, halts, resumes,
 and destroys the lab with `vagrant validate`, `up`, `status`, `ssh-config`, `ssh`, `provision`, `halt`, and `destroy`.
@@ -18,8 +19,9 @@ and documentation. It does not add a Node or TypeScript application around Vagra
 - [x] (2026-09-05) Add one `Vagrantfile` backed by the tracked lab inventory.
 - [x] (2026-09-05) Add the guest-only network provisioner and pass its static validation and rejection probes.
 - [x] (2026-09-05) Document the direct Vagrant and Ansible workflow, prerequisites, reduced guarantees, and recovery.
-- [ ] (2026-09-05) Verify idempotent provisioning and owned network state with direct guest probes.
-- [ ] (2026-09-05) Validate the complete create-to-destroy workflow on VirtualBox and libvirt.
+- [x] (2026-09-06) Fix repeated verifier route replacement and preserve unrelated subnet routes, with focused regression tests.
+- [x] (2026-09-06) Verify idempotent provisioning and owned network state with direct VirtualBox guest probes.
+- [ ] (2026-09-06) Validate the complete create-to-destroy workflow on VirtualBox, including halt/resume and clean recreation.
 
 ## Plan dependencies
 
@@ -28,16 +30,34 @@ and documentation. It does not add a Node or TypeScript application around Vagra
 
 ## Surprises & Discoveries
 
-- This implementation host has WSL-native Node 24.19.0 but does not currently have Vagrant, Ruby, Ansible, or
-  ShellCheck on `PATH`. Shell syntax, rejection probes, inventory structure, repository checks, and documentation can
-  be validated here; both provider matrices, direct guest probes, Ruby syntax, Vagrant validation, Ansible CLI checks,
-  and ShellCheck remain unverified until those tools and providers are available.
+- On 2026-09-05, this implementation host had WSL-native Node 24.19.0 but did not have Vagrant, Ruby, Ansible, or
+  ShellCheck on `PATH`. Available validation covered shell syntax, rejection probes, inventory structure, repository
+  checks, and documentation. Both provider matrices, direct guest probes, Ruby syntax, Vagrant validation, Ansible
+  CLI checks, and ShellCheck were still unverified.
 - The current Vagrant Cloud metadata for `bento/ubuntu-24.04` confirms that the pinned `202508.03.0` release remains
   active and has both VirtualBox AMD64 and libvirt AMD64 artifacts. Newer releases do not necessarily carry both
   providers, so the shared pin is intentional.
+- The implementation merged in PR #518, but issue #429 remains open because VirtualBox still lacks complete
+  lifecycle evidence. Native Linux/libvirt validation moved to plan 18 on 2026-09-06. A merge does not complete the
+  remaining VirtualBox acceptance criteria.
+- Ubuntu 24.04 route output includes trailing whitespace. Comparing it literally caused every correct verifier route
+  to be replaced during repeated provisioning. Normalize whitespace before comparison. Stale cleanup also matched
+  subnet routes that this provisioner cannot create; restrict it to host routes.
+- The documented baseline filter treated dots as wildcards and matched `arp_filter` as well as `rp_filter`, producing a
+  false mismatch after adding the dummy interface. Match the exact dotted setting name instead. Exclude the changing
+  timestamp comments from `iptables-save` output so repeated snapshots compare only network facts.
+- Windows Hypervisor Platform and WSL mirrored networking were needed on this host. After enabling both, WSL reached
+  the forwarded SSH ports and all four guests booted. One proxy exceeded the initial 300-second boot timeout and
+  succeeded after a scoped Vagrant halt and retry. Both proxies later exceeded that timeout during halt/resume
+  validation, so reliable guest booting remains unresolved.
 
 ## Decision Log
 
+- Decision: Move native Linux/libvirt validation into plan 18 and retain VirtualBox validation in this plan.
+  Rationale: No native Linux host is available to the operator. The separate plan preserves the full libvirt matrix
+  without making it a completion requirement for this plan. Existing libvirt configuration remains shared; this
+  split does not establish provider parity or resolve the recorded VirtualBox boot failures.
+  Date/Author: 2026-09-06, project owner and Codex planning.
 - Decision: Make the Vagrant CLI the only lab lifecycle interface.
   Rationale: Vagrant already implements machine creation, status, SSH discovery, provisioning, halt, resume, and
   destruction. A repository-specific lifecycle API duplicates those responsibilities for a disposable development
@@ -73,7 +93,11 @@ and documentation. It does not add a Node or TypeScript application around Vagra
 
 The working implementation now consists only of a Vagrant definition, one tracked nonsecret inventory, one POSIX
 guest provisioner, ignored local state, and operator documentation. Static checks completed on this host are recorded
-in `Artifacts and Notes`; completion still requires the direct guest and full lifecycle matrices on both providers.
+in `Artifacts and Notes`. Direct VirtualBox guest probes now establish network ownership and repeated-provision
+idempotency. VirtualBox halt/resume encounters guest boot timeouts; persistence, destruction, and clean recreation
+remain incomplete here. Plan 18 now owns native Linux/libvirt validation and depends on this shared lab plan.
+The follow-up route fixes have focused shell behavior tests in `scripts/testing/proxy-fleet-guest-network.spec.ts`.
+These tests run through the existing Jest suite and add no lab runtime dependency.
 
 ## Context and Orientation
 
@@ -119,6 +143,10 @@ return routes, and one dedicated persistence unit. It must not modify a default 
 reverse-path filtering, or unrelated guest interfaces.
 
 ## Scope and Non-Goals
+
+This plan owns the shared lab implementation and its Windows WSL2/VirtualBox acceptance. Plan 18 owns native
+Linux/libvirt runtime validation in a separate pull request. Completing plan 18 is not required to complete this
+plan; the existing VirtualBox failures must still be resolved and the remaining VirtualBox checks must pass.
 
 This pull request adds the first plan-17 lab implementation to the current base branch. Add only the `Vagrantfile`, the
 tracked lab inventory, the guest network provisioner, ignored state rules, and operator documentation. Do not add
@@ -189,9 +217,9 @@ Document the direct workflow in `deploy/proxy-fleet/vagrant/README.md`:
     vagrant up
     vagrant destroy -f
 
-Only the first `up` needs `--provider`; Vagrant records the provider for later commands. Use `--provider=libvirt` for
-the native-Linux matrix. Run Ansible from `deploy/proxy-fleet/ansible/` with the tracked inventory and captured SSH
-configuration:
+Only the first `up` needs `--provider`; Vagrant records the provider for later commands. Plan 18 supplies the separate
+native Linux/libvirt validation sequence. Run Ansible from `deploy/proxy-fleet/ansible/` with the tracked inventory and
+captured SSH configuration:
 
     ansible-inventory -i inventory/vagrant-lab.yml --list
 
@@ -200,9 +228,9 @@ and the Windows VirtualBox executable path. For native Linux, document the `vagr
 Do not turn those prerequisite checks into another application. Pass `--no-install-provider` to the first `up` so a
 missing provider fails as a prerequisite instead of changing the host implicitly.
 
-Finally, run the full lifecycle twice: once on Windows 11 WSL2 with VirtualBox and once on native AMD64 Linux with
-libvirt/KVM. In each environment, first create with `--no-provision`, capture the unrelated guest-network baseline,
-provision, and prove that baseline is unchanged. Then perform status and SSH inspection, reprovision, halt, resume,
+Finally, run the full lifecycle on Windows 11 WSL2 with VirtualBox. First create with `--no-provision`, capture the
+unrelated guest-network baseline, provision, and prove that baseline is unchanged. Then perform status and SSH
+inspection, reprovision, halt, resume,
 destroy, and clean recreation through direct Vagrant commands. Record sanitized versions, fixed lab facts, and
 pass/fail results; never record provider IDs or SSH private-key paths.
 
@@ -211,7 +239,7 @@ pass/fail results; never record provider IDs or SSH private-key paths.
 The public operator interface is Vagrant itself:
 
 - `vagrant validate`
-- `vagrant up --no-install-provider --provider=<virtualbox|libvirt>`
+- `vagrant up --no-install-provider --provider=virtualbox`
 - `vagrant status [--machine-readable]`
 - `vagrant ssh-config [machine]`
 - `vagrant ssh <machine> [-c <command>]`
@@ -233,8 +261,7 @@ normal creation or cleanup.
 - The pull request contains no `lab.sh`, `proxy-fleet:lab` package script, `topology.json`, generated inventory, or
   Node/TypeScript lab application, provider inspector, ownership transaction, process supervisor, or completion gate.
 - `vagrant validate` accepts the checked-in inventory without creating a VM.
-- `vagrant up --no-install-provider --provider=virtualbox` on supported WSL2 and
-  `vagrant up --no-install-provider --provider=libvirt` on supported native Linux each create exactly the four declared
+- `vagrant up --no-install-provider --provider=virtualbox` on supported WSL2 creates exactly the four declared
   machines with matching names, roles, resources, and underlay addresses.
 - Vagrant chooses provider-specific SSH endpoints without fixed host ports. `vagrant status`, `ssh-config`, and `ssh`
   show all four machines running and reachable after successful creation.
@@ -261,6 +288,7 @@ Run static and repository checks:
     ruby -c deploy/proxy-fleet/vagrant/Vagrantfile
     sh -n deploy/proxy-fleet/vagrant/provision/guest-network.sh
     shellcheck deploy/proxy-fleet/vagrant/provision/guest-network.sh
+    corepack pnpm test -- scripts/testing/proxy-fleet-guest-network.spec.ts --runInBand
     cd deploy/proxy-fleet/vagrant
     vagrant validate
     cd ../ansible
@@ -277,14 +305,17 @@ Run static and repository checks:
     git diff --check
 
 The `ruby -c` command is an optional development syntax check; normal lab operation invokes Ruby only through Vagrant.
+Without a usable provider, `vagrant validate --ignore-provider` checks only the shared configuration. It does not
+replace normal provider validation or the VirtualBox lifecycle matrix.
 The repository checks may use the development toolchain, but the delivered lab must remain operable without Node,
 TypeScript, pnpm, or installed npm dependencies. Inspect the plan-sync dry run and require `proxy-fleet/17` to update
-issue #429 without creating a new issue.
+issue #429 without creating a replacement issue for this plan. The new `proxy-fleet/18` plan should be the only new
+issue proposed for this scope split; inspect any other proposed updates separately.
 
-On each provider, create the machines without running the guest provisioner, then capture the connection handoff:
+On VirtualBox, create the machines without running the guest provisioner, then capture the connection handoff:
 
     cd deploy/proxy-fleet/vagrant
-    provider=virtualbox # Use libvirt on the native-Linux matrix.
+    provider=virtualbox
     vagrant up --no-install-provider --no-provision --provider="$provider"
     install -d -m 0700 .vagrant/proxy-fleet
     (umask 077; vagrant ssh-config > .vagrant/proxy-fleet/ssh-config)
@@ -299,7 +330,7 @@ guest. Then provision, capture the same facts, and require byte-for-byte equalit
     (
       set -eu
       baseline_dir="$(mktemp -d /tmp/lef-vagrant-network.XXXXXX)"
-      network_snapshot='ip -o link show | grep -v " lef-egress0:"; ip -o -4 address show | grep -v " lef-egress0 " | sed -E "s/ valid_lft .*//"; ip -4 route show | grep -Ev "^198\.18\.0\.(21|22|23)(/32)? "; cat /etc/resolv.conf; sysctl -n net.ipv4.ip_forward; sysctl -a 2>/dev/null | grep "^net.ipv4.conf.*.rp_filter" | grep -v "^net.ipv4.conf.lef-egress0.rp_filter"; sudo iptables-save -t nat'
+      network_snapshot='ip -o link show | grep -v " lef-egress0:"; ip -o -4 address show | grep -v " lef-egress0 " | sed -E "s/ valid_lft .*//"; ip -4 route show | grep -Ev "^198\.18\.0\.(21|22|23)(/32)? "; cat /etc/resolv.conf; sysctl -n net.ipv4.ip_forward; sysctl -a 2>/dev/null | grep "^net\.ipv4\.conf\..*\.rp_filter =" | grep -v "^net\.ipv4\.conf\.lef-egress0\.rp_filter ="; nat_snapshot=$(sudo iptables-save -t nat) || exit 1; printf "%s\n" "$nat_snapshot" | sed "/^#/d"'
       for machine in proxy-manager-1 proxy-node-a proxy-node-b verifier-1; do
         vagrant ssh "$machine" -c "$network_snapshot" > "$baseline_dir/$machine.before"
       done
@@ -330,7 +361,7 @@ From `deploy/proxy-fleet/vagrant/`, run these fixed functional probes:
 Run the probes after the first provision. Run `vagrant provision` again and repeat them, then repeat them after
 halt/resume. Select the matrix provider explicitly for clean recreation:
 
-    provider=virtualbox # Use libvirt on the native-Linux matrix.
+    provider=virtualbox
     vagrant destroy -f
     vagrant status --machine-readable
     vagrant up --no-install-provider --provider="$provider"
@@ -338,7 +369,7 @@ halt/resume. Select the matrix provider explicitly for clean recreation:
     vagrant destroy -f
     vagrant status --machine-readable
 
-Repeat the complete sequence on both supported provider matrices.
+Native Linux/libvirt repetition belongs to plan 18. Record only VirtualBox results against this plan's acceptance.
 
 ## Idempotence and Recovery
 
@@ -370,15 +401,101 @@ Current host evidence on 2026-09-05:
 - `sh -n`, `dash -n`, and `bash -n` accepted `guest-network.sh`. Safe rejection probes covered missing intent,
   duplicate addresses and routes, mixed address/route modes, invalid CIDRs, an invalid interface, a route gateway
   outside the underlay, and non-root execution.
-- Both Ruby/Vagrant and Ansible CLI validation are unavailable because their executables are not installed on this
-  host. ShellCheck is also unavailable.
+- Both Ruby/Vagrant and Ansible CLI validation were unavailable because their executables were not installed on this
+  host. ShellCheck was also unavailable.
 - The tracked inventory contract, plaintext-secret scan, Markdown formatting, Harper documentation lint, plan parser
   suites, lint, type checking, all repository tests, and the production build pass. Lint reports one preexisting test
   warning outside this diff.
 - The plan-sync dry run finds no new issue and exactly two expected description updates: `proxy-fleet/16` issue #424
   remains in Backlog, and this plan's issue #429 remains In Progress.
-- Provider creation, guest probes, reprovision, halt/resume, destruction, and clean recreation remain to be run on
-  both supported matrices. The pull request remains a draft until that evidence exists.
+- Provider creation, guest probes, reprovision, halt/resume, destruction, and clean recreation were still unverified
+  on both matrices before the scope split. PR #518 later merged without that evidence; issue #429 remains incomplete.
+
+Follow-up evidence on 2026-09-06:
+
+- The checkout matches the current master revision containing PR #518. Issue #429 is assigned and In Progress.
+- Vagrant 2.4.9 was extracted into a local tool cache from HashiCorp's official package. The downloaded package matches
+  the published SHA-256 checksum. Its bundled Ruby accepts the `Vagrantfile`.
+  `vagrant validate --ignore-provider` passes for all four machines.
+  Plain `vagrant validate` reported no usable provider; at that point, this host had neither Windows VirtualBox nor
+  libvirt/KVM.
+- On Ubuntu 24.04 in an isolated Docker network namespace, the original provisioner unnecessarily replaced all three
+  correct routes and deleted an unrelated RFC 2544 subnet route using protocol `98`. Both defects are corrected.
+  Jest regression cases cover unchanged, missing, incorrect, and stale host routes, subnet preservation, and failure
+  to read the existing route before mutation.
+- The Ansible 2.16.3 inventory read and existing inventory validator pass: twelve tasks succeed, with no changes or
+  failures. The plaintext-secret scan also passes.
+- The final script passes ShellCheck 0.9.0, three shell syntax checks, and 21 network assertions in a disposable
+  Ubuntu 24.04 container with its own network namespace. These cover exact addresses, route reconciliation, repeated
+  apply, unrelated network preservation, and rejection cases. The container was removed after validation.
+- The generated systemd unit passes `systemd-analyze verify`. The installed helper and unit have the required root
+  ownership and modes. Actual service startup cannot complete because systemd is not the container's first process.
+- Repository lint, type checking, and build pass. Lint has one preexisting warning outside this change.
+  `corepack pnpm test:ci` passes 198 Jest suites and 1,770 tests, plus 15 Node runner tests; eleven suites and 65 tests
+  are skipped by the existing integration requirements. All seven focused route tests pass, including the subsequent
+  failed-read regression. The plan-sync dry run creates no issue and updates only issue #429, retaining In Progress.
+- These checks alone do not establish systemd startup, Ansible SSH reachability, or either provider's complete
+  lifecycle. Real guest validation was still pending before the later attempts recorded below.
+
+Guest-access attempt later on 2026-09-06:
+
+- Vagrant 2.4.9 and Windows VirtualBox 7.2.16 are now installed. With Windows access enabled and VirtualBox on `PATH`,
+  normal `vagrant validate` passes. Initial `vagrant status` reports all four machines as not created.
+- `vagrant up proxy-manager-1 --no-install-provider --no-provision --provider=virtualbox` downloads the pinned box,
+  imports the manager, and starts it. It then times out after the default 300 seconds while repeatedly reporting
+  connection refusal at the selected SSH endpoint, `127.0.0.1:2222`.
+- A direct WSL TCP probe confirms connection refusal. A Windows TCP probe reaches the forwarded port but receives no
+  SSH banner before its read timeout. The VM console remains at the early boot message about loading essential
+  drivers. VirtualBox logs report the slower Hyper-V execution mode; these observations do not establish the cause
+  of the incomplete guest boot.
+- `vagrant ssh proxy-manager-1 -c hostname -- -o ConnectTimeout=5` exits with status 255 and returns no hostname.
+  Guest access was therefore unconfirmed, and the guest probe checkbox was still incomplete.
+- During this attempt, WSL was in NAT mode, and the installed Vagrant provider used Windows `127.0.0.1` for SSH
+  forwarding. That connection path needed resolution, but the missing Windows-side SSH banner meant networking
+  alone was not a sufficient explanation for the failed test.
+- The manager was stopped with `vagrant halt proxy-manager-1 --force` after the failed test. Its state and the cached
+  box were preserved for diagnosis; the other three machines had not been created. No guest provisioning ran.
+
+Successful guest validation after Windows configuration changes on 2026-09-06:
+
+- Both Windows Hypervisor Platform and Virtual Machine Platform report enabled, and `wslinfo --networking-mode`
+  reports `mirrored`. The manager's direct Vagrant boot and SSH commands succeed. SSH confirms the correct hostname,
+  the declared underlay address, and a running systemd state.
+- All four guests are created without provisioning and report running. The second proxy initially exceeds the
+  300-second boot timeout. After inspecting `vagrant status`, a scoped `vagrant halt proxy-node-b --force` and direct
+  `up` retry succeed. No CPU, box, or provider configuration changes are made for that retry.
+- The captured Vagrant SSH configuration lets Ansible 2.20.8 reach all four guests: each returns `pong` with
+  `changed: false`. The tracked inventory validator also passes twelve tasks without changes or failures.
+- Before the first provision, none of the guests contains the persistence unit. `vagrant provision` then succeeds,
+  and every guest's unrelated network snapshot matches its baseline exactly: interfaces, default routes, DNS, NAT,
+  IP forwarding, and reverse-path filtering remain unchanged.
+- The proxy guests have exactly the declared two and one RFC 2544 addresses. The verifier has exactly three protocol
+  `98` return routes through the expected underlay gateways and successfully pings all three identities. The manager
+  has neither lab routes nor the dummy interface; the verifier has no dummy interface.
+- All three provisioned guests have active, enabled persistence units and the expected root ownership and file
+  modes. A second `vagrant provision` passes. All functional probes pass again, and the captured network snapshots,
+  installed-file hashes, modes, ownership, and modification times remain identical.
+- A later `vagrant halt` succeeds, but `vagrant up --no-provision` reaches SSH only on the manager before the first
+  proxy exceeds the 300-second boot timeout. Starting the remaining stopped guests also times out on the second
+  proxy. The verifier therefore remains stopped. The first proxy is left in the same boot attempt for more than
+  thirteen minutes; its console remains at loading essential drivers, and another direct SSH probe exits with
+  status 255. Persistence and clean recreation are not verified, and the lifecycle matrix remains incomplete.
+- After the failed persistence test, `vagrant halt --force` succeeds. Final `vagrant status` reports all four guests
+  powered off. Their disks and provider logs remain available for diagnosis; no destruction or clean recreation ran.
+- The direct guest checkbox now records VirtualBox evidence. The native Linux/libvirt matrix remains unverified;
+  this WSL host has no `/dev/kvm` device, and the operator confirms that no separate Linux host is available.
+- The final plan-sync dry run creates no issue and proposes description updates for issue #429 and the unrelated
+  issue #458. Issue #429 retains In Progress. No live synchronization is performed, so the checked progress item is
+  currently recorded only in this local ExecPlan.
+
+Scope split requested later on 2026-09-06:
+
+- Plan 18 now owns the native Linux/libvirt matrix, including direct guest probes, Ansible handoff, repeated
+  provisioning, halt/resume, destruction, and clean recreation. Earlier two-provider requirements above are
+  historical evidence; the current acceptance criteria in this plan cover VirtualBox only.
+- No libvirt result is marked as passed. This plan remains incomplete because the VirtualBox halt/resume test failed
+  and destruction and clean recreation have not run. The provider definition, inventory, and guest provisioner are
+  unchanged by this documentation split.
 
 ## Plan readiness
 

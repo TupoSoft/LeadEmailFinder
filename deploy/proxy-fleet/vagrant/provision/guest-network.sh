@@ -43,26 +43,34 @@ parse_arguments() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --underlay-cidr)
-                [ -z "$UNDERLAY_CIDR" ] && [ "$#" -ge 2 ] || fail 'invalid arguments'
+                if [ -n "$UNDERLAY_CIDR" ] || [ "$#" -lt 2 ]; then
+                    fail 'invalid arguments'
+                fi
                 valid_underlay "$2" || fail 'invalid underlay CIDR'
                 UNDERLAY_CIDR=$2
                 shift 2
                 ;;
             --egress-interface)
-                [ -z "$EGRESS_INTERFACE" ] && [ "$#" -ge 2 ] || fail 'invalid arguments'
+                if [ -n "$EGRESS_INTERFACE" ] || [ "$#" -lt 2 ]; then
+                    fail 'invalid arguments'
+                fi
                 [ "$2" = 'lef-egress0' ] || fail 'invalid egress interface'
                 EGRESS_INTERFACE=$2
                 shift 2
                 ;;
             --egress-address)
-                [ "$#" -ge 2 ] && valid_egress "$2" || fail 'invalid egress address'
+                if [ "$#" -lt 2 ] || ! valid_egress "$2"; then
+                    fail 'invalid egress address'
+                fi
                 contains_line "$EGRESS_ADDRESSES" "$2" && fail 'duplicate egress address'
                 EGRESS_ADDRESSES="${EGRESS_ADDRESSES}${EGRESS_ADDRESSES:+
 }$2"
                 shift 2
                 ;;
             --return-route)
-                [ "$#" -ge 3 ] && valid_egress "$2" && valid_ipv4 "$3" || fail 'invalid return route'
+                if [ "$#" -lt 3 ] || ! valid_egress "$2" || ! valid_ipv4 "$3"; then
+                    fail 'invalid return route'
+                fi
                 contains_line "$RETURN_DESTINATIONS" "$2" && fail 'duplicate return route'
                 RETURN_ROUTES="${RETURN_ROUTES}${RETURN_ROUTES:+
 }$2 $3"
@@ -73,7 +81,9 @@ parse_arguments() {
             *) fail 'invalid arguments' ;;
         esac
     done
-    [ -n "$UNDERLAY_CIDR" ] && [ "$EGRESS_INTERFACE" = 'lef-egress0' ] || fail 'missing arguments'
+    if [ -z "$UNDERLAY_CIDR" ] || [ "$EGRESS_INTERFACE" != 'lef-egress0' ]; then
+        fail 'missing arguments'
+    fi
     [ -n "$EGRESS_ADDRESSES" ] || [ -n "$RETURN_ROUTES" ] || fail 'missing network intent'
     ! { [ -n "$EGRESS_ADDRESSES" ] && [ -n "$RETURN_ROUTES" ]; } || fail 'mixed network intent'
     underlay_prefix=${UNDERLAY_CIDR%.*}
@@ -118,7 +128,7 @@ EOF
 }
 apply_routes() {
     current=$(ip -N -o -4 route show table main proto "$ROUTE_PROTOCOL" | awk '
-        $1 ~ /^198\.(18|19)\./ {
+        $1 ~ /^198\.(18|19)\.[0-9]+\.[0-9]+(\/32)?$/ {
             destination = $1
             if (destination !~ /\//) destination = destination "/32"
             print destination
@@ -136,6 +146,8 @@ EOF
         destination_ip=${destination%/32}
         expected="$destination_ip via $gateway dev $UNDERLAY_INTERFACE proto $ROUTE_PROTOCOL"
         observed=$(ip -N -o -4 route show table main exact "$destination")
+        # Preserve a failed route read above, then normalize iproute2's trailing whitespace.
+        observed=$(printf '%s\n' "$observed" | awk '{$1 = $1; print}')
         [ "$observed" = "$expected" ] ||
             ip -4 route replace "$destination" via "$gateway" dev "$UNDERLAY_INTERFACE" proto "$ROUTE_PROTOCOL"
     done <<EOF
@@ -159,7 +171,9 @@ install_if_changed() {
     source=$1 target=$2 mode=$3
     CHANGED=0
     if [ -e "$target" ] || [ -L "$target" ]; then
-        [ -f "$target" ] && [ ! -L "$target" ] || fail 'managed path is unsafe'
+        if [ ! -f "$target" ] || [ -L "$target" ]; then
+            fail 'managed path is unsafe'
+        fi
         if cmp -s "$source" "$target" && [ "$(stat -c '%u:%g:%a' "$target")" = "0:0:${mode#0}" ]; then
             return 0
         fi
@@ -169,7 +183,9 @@ install_if_changed() {
 }
 ensure_helper_directory() {
     if [ -e /usr/local/libexec ] || [ -L /usr/local/libexec ]; then
-        [ -d /usr/local/libexec ] && [ ! -L /usr/local/libexec ] || fail 'helper directory is unsafe'
+        if [ ! -d /usr/local/libexec ] || [ -L /usr/local/libexec ]; then
+            fail 'helper directory is unsafe'
+        fi
         stat -c '%u:%g:%a' /usr/local/libexec |
             awk -F: '$1 == 0 && $2 == 0 && $3 ~ /^[0-7]*[0-7][0145][0145]$/ { safe = 1 } END { exit !safe }' ||
             fail 'helper directory is unsafe'

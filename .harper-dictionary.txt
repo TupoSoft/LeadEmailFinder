@@ -373,3 +373,6 @@ multicolumn
 sakura
 Contentful
 shuding
+DHCP
+OpenSSH
+QEMU
