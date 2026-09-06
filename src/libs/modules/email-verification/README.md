@@ -98,9 +98,9 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 The module is layered (`module-architecture/10`, `/13`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
-administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
+administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and seven purpose-specific ports
 under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
-`MxResolver`, `DomainSynonymDiscovery`, `AccountDiscovery`, and `MailboxProbe`; `infrastructure/` holds their adapters, and `api/`
+`MxResolver`, `DomainSynonymDiscovery`, and `MailboxProbe`; `infrastructure/` holds their adapters, and `api/`
 holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
 client.
 
@@ -116,18 +116,13 @@ this boundary only as the stable `dns_mx_resolution_failed` error. `infrastructu
 `HttpDomainSynonymDiscovery`: it retrieves the homepage and relevant links, keeps results from successful pages,
 and inherits the injected HTTP transport's timeout and retry configuration. The default composition adds no
 adapter-specific timeout or retry. `domain/domain-synonym-parser.ts` extracts domains and relevant links from
-supplied text without network access. These two discovery ports remain registered for the mailbox refactor in
+supplied text without network access. These discovery ports remain registered for the mailbox refactor in
 `module-architecture/14`; the current SMTP engine retains its existing DNS path.
 
-`infrastructure/discovery/account/account-discovery.module.ts` binds the `AccountDiscovery` application port to one
-approved provider or `undefined`. It owns configuration, fixed-manifest loading, and provider/region composition
-through the technical catch-all library. The pure approval wrapper checks validity immediately before every call
-and replaces unexpected provider exceptions with a stable error. `MailboxVerificationService` consumes this single
-optional port and preserves its SMTP outcome when discovery is disabled, negative, unavailable, or has an unknown
-source. Provider implementations retain their existing request bodies, response mapping, and transport deadlines.
-
 `infrastructure/compatibility-mailbox-probe.ts` still wraps the SMTP engine. Its replacement and SMTP/proxy
-reorganization belong to `module-architecture/14`.
+reorganization belong to `module-architecture/14`. Account discovery retains its existing verifier-array binding
+through `EmailVerifierModule`. The new internal evidence port and provider relocation belong to
+`account-discovery/01` and `account-discovery/02`; their integration remains a prerequisite for completing plan 13.
 
 `sync-email-verification/email-verification.module.ts` composes the core: it registers the three consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
@@ -243,7 +238,8 @@ Focused tests are grouped by behavior:
   `email-verifier/smtp/smtp-verifier.spec.ts`, `infrastructure/smtp/smtp-trust.spec.ts`, and
   `../../socket/src/tls-connect.spec.ts`
 - **Account discovery**: `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
-  the selection, composition, and module specifications under `infrastructure/discovery/account/`, the provider adapter specifications under `src/libs/catch-all`, and
+  `application/account-discovery/select-account-discovery-verifier.spec.ts`,
+  `email-verifier/email-verifier.module.spec.ts`, the provider adapter specifications under `src/libs/catch-all`, and
   `scripts/privacy/account-discovery-approvals.spec.ts` and
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,

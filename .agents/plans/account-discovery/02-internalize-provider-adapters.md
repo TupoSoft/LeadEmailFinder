@@ -1,0 +1,323 @@
+# Internalize Account-Discovery Provider Adapters
+
+This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
+
+## Purpose / Big Picture
+
+Email verification should own both its account-discovery policy and the provider adapters that implement it. After
+this change, all four supported provider clients and their HTTP composition live privately inside
+`src/libs/modules/email-verification/src/infrastructure/account-discovery/`. The retired `src/libs/catch-all/`
+library and its TypeScript and Jest aliases no longer exist. The running verification path continues using the
+internal `AccountDiscovery` boundary established by `account-discovery/01`, with unchanged results and default-deny
+behavior. Developers can observe this through fixture tests, the architecture gate, a static retirement inventory, and
+the existing local SMTP Bruno workflow.
+
+This is one pull request. It follows the delivery cutover from `module-architecture/18` and the internal boundary
+from `account-discovery/01`, then finishes provider ownership before `module-architecture/13` replaces the DNS and
+domain-synonym adapters. It creates no separate business module or public account-discovery API.
+
+## Progress
+
+- [ ] (2026-09-06) Inventory the provider tree, common verifier contract, aliases, consumers, and existing fixtures.
+- [ ] (2026-09-06) Move provider clients and tests into private email-verification infrastructure.
+- [ ] (2026-09-06) Introduce the private provider contract and consolidate HTTP, manifest, and token composition.
+- [ ] (2026-09-06) Retire the old library, aliases, and unused common contract without a compatibility barrel.
+- [ ] (2026-09-06) Add focused boundary and composition regression coverage and update current documentation.
+- [ ] (2026-09-06) Complete focused, architecture, security, full-suite, build, Harper, and available Bruno checks.
+
+## Plan dependencies
+
+- `account-discovery/01`
+
+## Surprises & Discoveries
+
+None yet.
+
+## Decision Log
+
+- Decision: Keep account discovery inside the existing email-verification business module and put provider clients
+  under its current `infrastructure/account-discovery/` directory.
+  Rationale: These adapters currently serve one fixed email-verification purpose. Internal ownership supplies the
+  required boundary without another business module or a second infrastructure directory.
+  Date/Author: 2026-09-06, Codex planning.
+- Decision: Move the complete provider tree in this pull request and remove its aliases and public barrel together.
+  Rationale: A partial move or compatibility reexport would leave two supported locations for private infrastructure.
+  Date/Author: 2026-09-06, Codex planning.
+- Decision: Define `AccountDiscoveryProvider` inside `application/account-discovery/` and retain selection and
+  approval enforcement in application code. Nest, Axios, manifest loading, and provider construction remain in
+  infrastructure.
+  Rationale: The application owns the small interface it consumes; external protocol details must not become its
+  dependencies. Moving transport code must not move business policy outward with it.
+  Date/Author: 2026-09-06, Codex planning.
+- Decision: Keep the retired catch-all prefix in the architecture scanner's technical dependency deny list and the
+  canonical module guide. Verify retirement through static inventory and existing architecture checks.
+  Rationale: Removal of an implementation does not justify permitting future core imports of its former technical
+  namespace or changing unrelated architecture rules.
+  Date/Author: 2026-09-06, Codex planning.
+- Decision: Preserve the fixed approval manifest, configuration names, provider payloads, source literals, request
+  counts, error handling, and regional selection. Use only synthetic fixtures and the existing local SMTP workflow.
+  Rationale: This is an ownership refactor; it neither approves a provider nor changes an outbound disclosure.
+  Date/Author: 2026-09-06, Codex planning.
+
+## Outcomes & Retrospective
+
+Not started.
+
+## Context and Orientation
+
+The implementation baseline follows `module-architecture/18`. Its open implementation pull request is #540, with
+reviewed head `a3552833e08466b34b9b2a96ce7470d42fe73a12` at planning time. The plan waits for that work through
+`account-discovery/01`; it does not add a predecessor to the active cutover pull request. Recheck the merged source
+before implementation because the pull request may change during review.
+
+After that cutover, `email-verifier/email-verifier.module.ts` still imports `CatchAllModule` and four concrete
+provider classes from `@tuposoft/lead-email-finder/catch-all`. Its factory loads the fixed approval manifest and
+composes the selected verifier through `infrastructure/account-discovery/account-discovery-composition.ts`.
+Application policy under `application/account-discovery/` checks provider, purpose, region, effective time, expiry,
+and approval status. The old common interface is at
+`src/libs/common/src/interfaces/catch-all/catch-all-verifier.interface.ts`, with reexports through its sibling
+`index.ts` and `src/libs/common/src/interfaces/index.ts`.
+
+The running consumer is `application/mailbox-verification.service.ts`; the cutover removes the old `EmailVerifier`
+class and its specification. The synchronous composition module at
+`sync-email-verification/email-verification.module.ts` constructs `MailboxVerificationService` with its mailbox
+probe and discovery dependency. The prerequisite replaces that consumer's verifier array with one internal
+`AccountDiscovery` port and updates the synchronous factory and token injection while preserving SMTP availability
+through `EmailVerifierModule`. Its
+`discover(email)` method returns a promise of a read-only array of `{ sourceName: string }` evidence. The application
+service wraps the zero-or-one approved legacy verifier. Invalid startup configuration or approval fails composition;
+approval that becomes unavailable immediately before disclosure and provider failures yield empty evidence, matching
+the existing settled-result behavior. Verification callers still decide when to consult discovery and how recognized
+source evidence affects the verification result. This plan preserves that contract and replaces its legacy provider
+dependency with a module-owned interface.
+
+The technical library currently contains `catch-all.module.ts`, `http-module-options.factory.ts` and its test,
+`index.ts`, and these provider directories, including their local barrels, response types, helpers, and specifications:
+
+- `microsoft-get-credential-type/`
+- `microsoft-login/`
+- `mimecast-login/`
+- `office-apps/`
+
+The Microsoft clients already isolate request bodies between concurrent calls. Mimecast binds one of the existing
+`us` or `uk` regions through `forRegion`. The HTTP options factory declares only `CATCH_ALL_HTTP_PROXY_URL` and does
+not activate a provider merely because a proxy exists. No provider owns persistence or routes.
+
+The fixed runtime manifest is `config/privacy/account-discovery-approvals.yaml`. An absent provider selection
+dispatches no external request; selecting a provider against the current empty approvals list fails initialization.
+Manifest validation and session-material scanning have existing CLI commands and
+focused tests under `scripts/privacy/` and `scripts/security/`. The existing `bruno/smtp-dev` collection exercises
+real local API composition and verifies results without external account-discovery sources.
+
+## Scope and Non-Goals
+
+Move the four provider directories to
+`src/libs/modules/email-verification/src/infrastructure/account-discovery/providers/`, preserving their directory
+names. Move the HTTP factory and its test directly into `infrastructure/account-discovery/`. Replace the retired
+`CatchAllModule` with a private `account-discovery.module.ts` there. Reuse the prerequisite's application service,
+token, selector, approval wrapper, and clock contract, and retain the existing infrastructure composition helper.
+
+Replace the module's remaining legacy provider contract with `AccountDiscoveryProvider`, remove the old common
+interface and reexports once the complete consumer inventory confirms they are unused, and delete both exact and
+wildcard catch-all aliases from `tsconfig.json` and `jest.config.ts`. Remove the old library and its root barrel;
+do not leave a compatibility shim. Update current module and privacy documentation paths.
+
+Do not change provider names, source literals, endpoints, payloads, headers, proxy semantics, regional behavior,
+timeouts, retries, result interpretation, approval requirements, logging behavior, or configuration names. Do not
+change HTTP routes, validation, authentication, authorization, credits, persistence, queues, SMTP probing, DNS,
+domain-synonym discovery, or the completed core cutover. Do not add a migration, reset requirement, public export,
+provider approval, vendor call, or separate business module. Keep historical completed plans unchanged.
+
+## Plan of Work
+
+Read `src/libs/modules/AGENTS.md`, the canonical `src/libs/modules/README.md`, and the email-verification README.
+Inspect the current checkout and the prerequisite's delivered names before editing. Find the synced issue by its
+`<!-- execplan: account-discovery/02 -->` marker, assign it to the implementing user, and set its project-9 Status to
+In Progress using the root workflow. Preserve existing user changes and record the inventory in this plan.
+
+Create `application/account-discovery/account-discovery-provider.ts` with one framework-free
+`AccountDiscoveryProvider` interface: `readonly sourceName: string` and
+`verify(email: string): Promise<boolean>`. Change the existing selector factories and approval wrapper to depend on
+that interface. Preserve every concrete source literal and the application's handling of unrecognized evidence.
+Do not expose provider selection, approval objects, Axios responses, or concrete classes through the higher-level
+`AccountDiscovery` port. Once all clients are inside the module, update their `implements` clauses and the Mimecast
+regional factory return type through ordinary internal imports.
+
+Move each provider directory and its adjacent fixtures as a unit. Keep deterministic response mappings and all
+existing payload, proxy, logging, and concurrency behavior. Move `http-module-options.factory.ts` and its test to the
+existing infrastructure directory. Remove the old top-level `index.ts`; provider-local barrels may remain private if
+they simplify local imports, but none may escape through the business module's public barrel.
+
+Introduce `infrastructure/account-discovery/account-discovery.module.ts` as the sole private Nest composition for
+this feature. It imports `ConfigModule`, configures `HttpModule` through the moved options factory, registers the
+four clients, supplies the clock, loads the fixed manifest, and builds the existing application service using
+explicit factory providers. Export only the prerequisite's `ACCOUNT_DISCOVERY_TOKEN` from this private Nest module.
+Do not export concrete provider classes to consumers or duplicate selection and approval enforcement in Nest
+factories. Inject the narrow configuration shape already used by this feature; do not import the API host's
+aggregate environment DTO.
+
+Update `sync-email-verification/email-verification.module.ts` to import the private `AccountDiscoveryModule` and
+inject the existing `ACCOUNT_DISCOVERY_TOKEN` into the active mailbox service factory. Remove the duplicate discovery
+provider imports, manifest-loading factory, clock registration, and discovery token export from `EmailVerifierModule`
+that the private module supersedes. Keep `EmailVerifierModule` as the existing SMTP import and reexport wrapper for
+this pull request, and retain it in the synchronous module's imports so the mailbox probe still resolves. The later
+SMTP plan owns that wrapper's removal; this plan must not relocate SMTP composition or alter its token availability.
+
+Move the discovery composition fixtures into
+`infrastructure/account-discovery/account-discovery.module.spec.ts`. Add or update
+`sync-email-verification/email-verification.module.spec.ts` to verify that the actual module composition resolves
+both the mailbox probe and discovery dependencies without a duplicate discovery registration. Keep any remaining
+`email-verifier/email-verifier.module.spec.ts` checks limited to the preserved SMTP reexport. Do not recreate the
+deleted `EmailVerifier` class or its tests. The active mailbox service continues consuming the same port; no further
+delivery cutover occurs here. The sole public business-module export remains `EmailVerificationModule`.
+
+Search source, tests, aliases, and active build and test configuration for every old import and contract. Remove the
+unused common verifier interface, its now-empty directory, and relevant barrel export after updating all consumers.
+Delete `src/libs/catch-all/` and the exact and wildcard TypeScript and Jest aliases in the same change. Do not remove
+the retired prefix from `scripts/architecture/module-architecture.ts`, its technical-dependency fixtures, or the
+canonical module guide. Do not broaden any baseline entry to accommodate the move.
+
+Verify retirement with a static inventory of source, configuration, and exports. The old library and alias entries
+must be absent, no source consumer may reference the retired namespace or common verifier contract, and the public
+business-module barrel must remain unchanged. Existing architecture fixtures intentionally retain the prohibited
+technical prefix. Use type checking, build validation, and the architecture gate alongside the inventory; no custom
+source-scanning framework or directory-structure snapshot test is needed.
+
+Update `src/libs/modules/email-verification/README.md` to describe private provider ownership, the token composition,
+and relocated validation paths while preserving its public contract. Update the source references in
+`docs/privacy/email-verification-processing-contract.md`; do not rewrite unrelated processing or provider-approval
+decisions. Keep this plan current. Run the architecture gate, removing only resolved baseline keys when necessary,
+and complete the validation below. Review the final diff for responsibility and dependency-direction violations.
+
+## Interfaces and Dependencies
+
+The existing internal `AccountDiscovery` interface and `ACCOUNT_DISCOVERY_TOKEN` come from `account-discovery/01`.
+`discover(email: string): Promise<readonly { sourceName: string }[]>` remains unchanged. The new private
+`AccountDiscoveryProvider` interface replaces the technical `ICatchAllVerifier` dependency inside application policy
+and provider implementations. No contract is added to `src/index.ts` or shared `common`.
+
+Selection and approval enforcement continue to own the fixed purpose `email_verification.account_discovery`, one
+selected provider at most, and exact approval identity, provider, region, status, and validity matching. Configuration
+remains `CATCH_ALL_PROVIDER`, `CATCH_ALL_PROVIDER_APPROVAL_ID`, `CATCH_ALL_PROVIDER_REGION`, and
+`CATCH_ALL_HTTP_PROXY_URL`. Manifest loading continues through the existing configuration library and cannot be redirected
+by environment configuration. Transport, provider construction, and Nest wiring depend inward on application
+contracts; application and domain code import neither Nest nor infrastructure.
+
+## Acceptance Criteria
+
+- All four provider implementations, helper types, and fixtures reside below
+  `infrastructure/account-discovery/providers/`, and HTTP and private Nest composition reside directly under
+  `infrastructure/account-discovery/`.
+- `src/libs/catch-all/`, its root barrel, both TypeScript aliases, both Jest mappings, and the unused common verifier
+  contract are absent. No consumer imports the retired namespace. Intentional retirement and scanner fixtures remain.
+- The private Nest module supplies `ACCOUNT_DISCOVERY_TOKEN` once and exposes no concrete client. The active
+  synchronous composition resolves it and the existing mailbox probe with mocked provider transports. SMTP remains
+  available through the unchanged import and reexport responsibility of `EmailVerifierModule`.
+- The active mailbox service retains the prerequisite's evidence contract. Recognized positive evidence, negative
+  outcomes, provider failures, and approval expiry preserve their verification-result behavior.
+- An absent provider, including a proxy-only configuration, dispatches no provider request. Invalid, partial,
+  unapproved, suspended, revoked, expired, premature, or mismatched configuration prevents application initialization
+  before any dispatch.
+- With a synthetic approved selection, exactly one provider is invoked. Approval is checked again immediately before
+  disclosure; a now-invalid approval dispatches nothing and returns empty evidence through `discover`. Transport
+  failure also returns empty evidence without replacing startup validation with silent success.
+- Four provider fixture suites preserve positive, negative, malformed/error response, source-name, and request-shape
+  behavior. Overlapping requests cannot share address-bearing state; Mimecast calls only its selected region.
+- Provider and composition errors expose no raw or encoded address, remote body, credential, or external message in
+  logs. The fixed manifest remains empty and the approval validator and working-tree security scan pass.
+- Static inventory finds no old source consumer or resolver alias. The generic architecture deny list and module
+  guide retain the retired prefix, architecture checks pass, and no baseline entry is added or broadened.
+- The business module still publicly exports only `EmailVerificationModule`. Existing HTTP, queue, persistence,
+  configuration, and SMTP contracts remain unchanged. Current documentation points to the owned provider paths.
+- Focused tests, type checking, lint, full tests, build, and Harper pass. The existing local SMTP Bruno collection
+  passes when its disposable dependencies are available; any unavailable runtime validation is explicitly recorded.
+
+## Validation
+
+Run focused provider, policy, composition, consumer, and security fixtures from the repository root:
+
+```shell
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/account-discovery src/libs/modules/email-verification/src/application/account-discovery src/libs/modules/email-verification/src/application/mailbox-verification.service.spec.ts src/libs/modules/email-verification/src/sync-email-verification/email-verification.module.spec.ts src/libs/modules/email-verification/src/email-verifier/email-verifier.module.spec.ts scripts/privacy/account-discovery-approvals.spec.ts scripts/security/scan-linkedin-session-material.spec.ts --runInBand
+```
+
+Use mocked HTTP transports and injected fixture clocks/manifest loaders for approved-provider cases. Exercise every
+provider's existing source and response mapping, concurrent distinct addresses, and both allowed Mimecast regions.
+Exercise the actual private Nest module during application initialization. Resolve its `AccountDiscovery` service
+and call it before and after approval expiry. Do not insert fixture approvals into the runtime manifest or send
+requests to a vendor.
+
+Run the architecture and privacy/security gates:
+
+```shell
+corepack pnpm architecture:check
+corepack pnpm privacy:account-discovery-approvals-check
+corepack pnpm security:scan-linkedin-session-material --scope=working-tree
+```
+
+If the architecture gate reports only stale entries, inspect their ownership, run
+`corepack pnpm architecture:baseline`, and rerun `corepack pnpm architecture:check`. A new violation requires a code
+fix. Retaining a retired technical prefix in the scanner is intentional and must not be mistaken for a leftover
+runtime dependency. Verify the retirement inventory separately:
+
+```shell
+test ! -e src/libs/catch-all
+rg -n 'ICatchAllVerifier|@tuposoft/lead-email-finder/catch-all' src tsconfig.json jest.config.ts
+```
+
+The directory check must exit zero. The search must produce no matches and exit one; scanner fixtures under
+`scripts/architecture/` and historical documentation are deliberately outside that search.
+
+Run repository-wide compatibility and build checks:
+
+```shell
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm typecheck
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm lint
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm build
+corepack pnpm docs:lint -- .agents/plans/account-discovery/02-internalize-provider-adapters.md src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md
+git diff --check
+```
+
+Check the current checkout's disposable development stack and follow `bruno/smtp-dev/README.md` to provision its
+ignored credentials and start the SMTP overlay if required. Rebuild the API with the relocated providers before
+running the supported launcher:
+
+```shell
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
+corepack pnpm bruno:smtp-dev
+```
+
+The launcher verifies that the containers belong to the current worktree and runs the pinned Bruno CLI with `bru run --env local --sandbox
+developer` inside the API container. It fails on missing dependencies, skipped requests, or zero executed tests and
+loads ignored development credentials without printing them. Keep the runtime manifest empty. Confirm the existing
+trusted SMTP success, plaintext rejection, and absent external-source assertions still pass; these are local wiring
+checks, not proof of vendor acceptance.
+
+Bruno coverage is applicable because private Nest composition changes the existing verification workflow's runtime
+wiring. Reuse its current success and rejection assertions. Extend only a missing material assertion in the same
+collection; do not create a new collection or add provider activation to the development environment. In the final
+implementation response, report `Bruno: added/updated and <result>` if assertions change. Otherwise, report
+`Bruno: not applicable — no definition change; existing smtp-dev coverage reused`, followed by the actual launcher
+result. If dependencies are unavailable, report static and unit evidence and state that Bruno execution remains
+unverified. Report the exact Harper command and its result.
+
+## Idempotence and Recovery
+
+This change alters no schema or stored data and requires no reset or reseed. Move files with Git-aware renames where
+available and inspect the diff before deleting obsolete directories. If interrupted, inventory both locations and
+finish the planned move; do not create a second provider registration or restore aliases merely to make tests pass.
+Restore only this task's edits from the known pre-change revision if rollback is necessary, preserving unrelated
+user work. Stop only this checkout's disposable containers if runtime verification fails. Missing runtime
+dependencies do not justify changing provider selection or populating the approval manifest.
+
+## Artifacts and Notes
+
+Record the final move inventory, retired aliases and common exports, private Nest provider graph, baseline removals,
+focused suite counts, security/approval command results, and Bruno evidence. Record any runtime dependency
+that prevents validation and distinguish it from passed static checks. This plan authorizes no outbound vendor test
+and no new approval. Its implementation unlocks `module-architecture/13`; subsequent DNS/synonym and SMTP plans must
+reuse this account-discovery boundary and leave its provider ownership intact.
+
+## Plan readiness
+
+Ready to implement

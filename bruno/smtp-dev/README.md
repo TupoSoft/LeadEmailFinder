@@ -1,6 +1,6 @@
 # Local SMTP Development Bruno Collection
 
-This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The discovery module binds a single optional application port; the SMTP compatibility adapter retains the existing DNS/proxy path until the mailbox refactor. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
+This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
 and restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
 that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
 a successful request. Later requests update the authenticated organization's stored email and prove that an
@@ -16,6 +16,10 @@ Requests 16–19 read an owned result through `GET /verifications/:id`, confirm 
 enqueue asynchronous verification, and poll for a completed result with its own persisted verification UUID.
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
+
+The DNS and domain-synonym adapters are registered under `infrastructure/discovery/dns/` and
+`infrastructure/discovery/http/`. The SMTP compatibility adapter retains the existing DNS/proxy path until the
+mailbox refactor. Account discovery keeps its current default-deny composition and approval checks.
 
 The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
 internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another
@@ -63,9 +67,3 @@ For a stack started with `docker compose -p <project>`, set `COMPOSE_PROJECT_NAM
 the launcher. The launcher records ownership of the working directory in ignored `.dev/keycloak/development-stack.json` metadata.
 The API continues to validate `http://localhost:58080/realms/lead-email-finder` in every overlay, and its browser
 login redirects remain public.
-
-For a local check of outbound account-discovery traffic, configure only `CATCH_ALL_HTTP_PROXY_URL` to point at an
-owned counting HTTP proxy fixture that refuses forwarding. Keep `CATCH_ALL_PROVIDER`, its approval ID, and its
-region unset, and keep the committed approval manifest empty. Record the fixture's HTTP and CONNECT request
-counts before and after the collection; both must remain zero. Response-source assertions alone cannot establish
-an outbound request count. This proxy-only check does not activate a provider or require an approval entry.

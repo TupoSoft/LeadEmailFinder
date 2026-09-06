@@ -1,5 +1,4 @@
 import { ConfigService } from '@nestjs/config'
-import { Test } from '@nestjs/testing'
 import {
     MicrosoftGetCredentialType,
     MicrosoftLogin,
@@ -7,15 +6,14 @@ import {
     OfficeApps,
 } from '@tuposoft/lead-email-finder/catch-all'
 import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
-import { AccountDiscoveryProviderConfiguration } from './select-account-discovery-verifier'
+import { CatchAllProxyConfiguration } from '../email-verification-configuration'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
     AccountDiscoveryApprovalView,
     Clock,
-} from '../../../application/account-discovery/approved-account-discovery-verifier'
-import { ACCOUNT_DISCOVERY, AccountDiscovery } from '../../../application/ports/account-discovery'
-import { AccountDiscoveryModule, configuredAccountDiscovery } from './account-discovery.module'
+} from '../application/account-discovery/approved-account-discovery-verifier'
+import { configuredAccountDiscoveryVerifiers } from './email-verifier.module'
 
 const clock: Clock = { now: () => new Date('2026-09-02T10:30:00Z') }
 
@@ -29,12 +27,10 @@ const approval = (): AccountDiscoveryApprovalView => ({
     expiresAt: '2026-09-02T11:00:00.000Z',
 })
 
-function configService(
-    configuration: AccountDiscoveryProviderConfiguration,
-): ConfigService<AccountDiscoveryProviderConfiguration, true> {
+function configService(configuration: CatchAllProxyConfiguration): ConfigService<CatchAllProxyConfiguration, true> {
     return {
-        get: jest.fn((key: keyof AccountDiscoveryProviderConfiguration) => configuration[key]),
-    } as unknown as ConfigService<AccountDiscoveryProviderConfiguration, true>
+        get: jest.fn((key: keyof CatchAllProxyConfiguration) => configuration[key]),
+    } as unknown as ConfigService<CatchAllProxyConfiguration, true>
 }
 
 function adapters(): {
@@ -66,72 +62,13 @@ function adapters(): {
     }
 }
 
-describe(configuredAccountDiscovery.name, () => {
-    it('exports the absent provider through Nest wiring with the committed empty manifest', async () => {
-        const providerAdapters = adapters()
-        const module = await Test.createTestingModule({
-            imports: [AccountDiscoveryModule],
-            providers: [
-                {
-                    provide: 'account-discovery-consumer',
-                    inject: [ACCOUNT_DISCOVERY],
-                    useFactory: (discovery: AccountDiscovery | undefined) => ({ discovery }),
-                },
-            ],
-        })
-            .overrideProvider(ConfigService)
-            .useValue(configService({}))
-            .overrideProvider(MicrosoftGetCredentialType)
-            .useValue(providerAdapters.microsoftGetCredentialType)
-            .overrideProvider(MicrosoftLogin)
-            .useValue(providerAdapters.microsoftLogin)
-            .overrideProvider(MimecastLogin)
-            .useValue(providerAdapters.mimecastLogin)
-            .overrideProvider(OfficeApps)
-            .useValue(providerAdapters.officeApps)
-            .compile()
-
-        try {
-            expect(module.get<{ discovery: AccountDiscovery | undefined }>('account-discovery-consumer')).toEqual({
-                discovery: undefined,
-            })
-            expect(providerAdapters.microsoftGetCredentialType.verify).not.toHaveBeenCalled()
-            expect(providerAdapters.microsoftLogin.verify).not.toHaveBeenCalled()
-            expect(providerAdapters.mimecastLogin.forRegion).not.toHaveBeenCalled()
-            expect(providerAdapters.officeApps.verify).not.toHaveBeenCalled()
-        } finally {
-            await module.close()
-        }
-    })
-
-    it('redacts manifest loader failures during startup', async () => {
-        const providerAdapters = adapters()
-        const sentinel = 'manifest-sentinel@example.test'
-        const error: unknown = await configuredAccountDiscovery(
-            configService({}),
-            clock,
-            providerAdapters.microsoftGetCredentialType,
-            providerAdapters.microsoftLogin,
-            providerAdapters.mimecastLogin,
-            providerAdapters.officeApps,
-            () => Promise.reject(new Error(`Manifest contains ${sentinel} ${encodeURIComponent(sentinel)}`)),
-        ).catch((error: unknown) => error)
-
-        expect(error).toMatchObject({
-            message: ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
-            code: ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
-        })
-        expect(error).not.toHaveProperty('cause')
-        expect(String(error)).not.toContain(sentinel)
-        expect(String(error)).not.toContain(encodeURIComponent(sentinel))
-    })
-
+describe(configuredAccountDiscoveryVerifiers.name, () => {
     it('loads the repository manifest but selects nothing for a proxy alone', async () => {
         const providerAdapters = adapters()
         const loadManifest = jest.fn().mockResolvedValue({ approvals: [] })
 
         await expect(
-            configuredAccountDiscovery(
+            configuredAccountDiscoveryVerifiers(
                 configService({ CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080' }),
                 clock,
                 providerAdapters.microsoftGetCredentialType,
@@ -140,7 +77,7 @@ describe(configuredAccountDiscovery.name, () => {
                 providerAdapters.officeApps,
                 loadManifest,
             ),
-        ).resolves.toBeUndefined()
+        ).resolves.toEqual([])
         expect(loadManifest).toHaveBeenCalledTimes(1)
     })
 
@@ -148,7 +85,7 @@ describe(configuredAccountDiscovery.name, () => {
         const providerAdapters = adapters()
 
         await expect(
-            configuredAccountDiscovery(
+            configuredAccountDiscoveryVerifiers(
                 configService({
                     CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
                     CATCH_ALL_PROVIDER: 'office_apps',
@@ -168,7 +105,7 @@ describe(configuredAccountDiscovery.name, () => {
     it('selects and wraps one provider for a matching approval fixture', async () => {
         const providerAdapters = adapters()
 
-        const selected = await configuredAccountDiscovery(
+        const selected = await configuredAccountDiscoveryVerifiers(
             configService({
                 CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
                 CATCH_ALL_PROVIDER: 'office_apps',
@@ -183,8 +120,8 @@ describe(configuredAccountDiscovery.name, () => {
             () => Promise.resolve({ approvals: [approval()] }),
         )
 
-        expect(selected).toBeDefined()
-        await expect(selected!.verify('person@example.test')).resolves.toBe(true)
+        expect(selected).toHaveLength(1)
+        await expect(selected[0].verify('person@example.test')).resolves.toBe(true)
         expect(providerAdapters.officeAppsVerifier.verify).toHaveBeenCalledWith('person@example.test')
     })
 })

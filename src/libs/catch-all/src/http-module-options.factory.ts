@@ -8,11 +8,7 @@ export class HttpModuleOptionsFactoryImpl implements HttpModuleOptionsFactory {
 
     constructor(configService: ConfigService<{ CATCH_ALL_HTTP_PROXY_URL?: string }, true>) {
         const proxyUrlString = configService.get<string>('CATCH_ALL_HTTP_PROXY_URL')
-        try {
-            this.catchAllHttpProxyUrl = proxyUrlString ? new URL(proxyUrlString) : undefined
-        } catch {
-            throw new Error('account-discovery-proxy-configuration-invalid')
-        }
+        this.catchAllHttpProxyUrl = proxyUrlString ? new URL(proxyUrlString) : undefined
     }
 
     createHttpOptions(): Promise<HttpModuleOptions> | HttpModuleOptions {

@@ -34,25 +34,30 @@ follows `.agents/PLANS.md` and represents exactly one pull request.
     moves the email-administration API, adds temporary network compatibility adapters, composes the final module,
     and performs the delivery cutover; depends on `module-architecture/10`, `module-architecture/17`, and
     `privacy-compliance/03`.
-13. [Layer Email Domain and Account Discovery Adapters](13-layer-email-discovery-adapters.md) — replaces the DNS
-    and HTTP synonym compatibility adapters from plan 18 (the account-discovery adapter already exists from a
-    prior privacy-compliance plan); depends on `module-architecture/10`, `module-architecture/18`,
+13. [Encapsulate Account Discovery Behind an Internal Application Port](../account-discovery/01-encapsulate-account-discovery.md) —
+    gives the active mailbox service one evidence interface; depends on `module-architecture/18`,
     `privacy-compliance/02`, and `privacy-compliance/03`.
-14. [Layer the SMTP and Proxy Mailbox Adapter](14-layer-smtp-mailbox-adapter.md) — replaces the mailbox
+14. [Internalize Account-Discovery Provider Adapters](../account-discovery/02-internalize-provider-adapters.md) —
+    moves the provider clients into private email-verification infrastructure and retires the catch-all library;
+    depends on `account-discovery/01`.
+15. [Layer Email Domain Discovery Adapters](13-layer-email-discovery-adapters.md) — replaces the DNS and HTTP
+    synonym compatibility adapters from plan 18; depends on `module-architecture/10`, `module-architecture/18`,
+    `account-discovery/02`, `privacy-compliance/02`, and `privacy-compliance/03`.
+16. [Layer the SMTP and Proxy Mailbox Adapter](14-layer-smtp-mailbox-adapter.md) — replaces the mailbox
     compatibility adapter from plan 18 and recomposes core/network wiring; depends on `module-architecture/05`,
     `module-architecture/10`, `module-architecture/13`, `module-architecture/17`, `module-architecture/18`,
     `privacy-compliance/03`, and `privacy-compliance/05`.
-15. After plan 14, these disjoint delivery plans may proceed in parallel:
+17. After plan 14, these disjoint delivery plans may proceed in parallel:
     - [Layer Synchronous Email-Verification Delivery](11-layer-email-verification-delivery-workflows.md) — owns the
       current and deprecated synchronous HTTP/application slice; depends on `module-architecture/03`,
       `module-architecture/04`, and `module-architecture/14`.
     - [Layer Asynchronous Email Verification](15-layer-async-email-verification.md) — owns async enqueue/status and
       the Bull worker; depends on `module-architecture/03`, `module-architecture/04`, and
       `module-architecture/14`.
-16. [Layer Batch Email Verification](16-layer-batch-email-verification.md) — owns batch HTTP, workflow, Bull, CSV,
+18. [Layer Batch Email Verification](16-layer-batch-email-verification.md) — owns batch HTTP, workflow, Bull, CSV,
     and S3 and finishes delivery composition; depends on `module-architecture/11`, `module-architecture/14`,
     `module-architecture/15`, and `privacy-compliance/06`.
-17. [Retire the Module-Architecture Baseline](12-retire-module-architecture-baseline.md) — removes transitional
+19. [Retire the Module-Architecture Baseline](12-retire-module-architecture-baseline.md) — removes transitional
     baseline-maintenance wording from agent guidance and deletes the debt baseline while retaining the strict
     workflow; depends on `module-architecture/05`, `module-architecture/08`, `module-architecture/09`, and
     `module-architecture/16`.
@@ -71,13 +76,14 @@ follows `.agents/PLANS.md` and represents exactly one pull request.
   their transitional baseline-maintenance language when the checker becomes a strict zero-violation command.
 - Refactors preserve routes, DTO validation, authorization, persistence behavior, queue contracts, provider
   compensation, and runtime configuration unless a plan explicitly states otherwise.
-- Plans 10, 17, 18, 13, 14, 11, 15, and 16 form one migration sequence. Plan 10 delivers only the pure core and
-  ports, additive and unwired. Plan 17 delivers the persistence stores, also additive and unwired. Plan 18 moves the
-  email-administration API, adds temporary private network compatibility adapters, composes the module, and performs
-  the one delivery cutover. Plan 13 replaces discovery, and plan 14 replaces SMTP/proxy and recomposes core/network
-  wiring. Plans 11 and 15 independently layer sync and async delivery. Plan 16 alone performs final workflow
-  composition and removes the last email-verification baseline keys.
-- Those eight plans preserve the privacy contracts established by their prerequisites. They must not restore
+- Plans 10, 17, and 18 establish the pure core, persistence stores, and delivery cutover in that order. The
+  [account-discovery plans](../account-discovery/README.md) follow plan 18: their plan 01 introduces the internal
+  evidence port, and their plan 02 internalizes provider adapters and retires the catch-all library. They add no
+  prerequisite to the cutover already under review. Plan 13 then replaces DNS and domain-synonym adapters only;
+  plan 14 replaces SMTP/proxy and recomposes core/network wiring while reusing account discovery unchanged.
+  Plans 11 and 15 independently layer sync and async delivery. Plan 16 alone performs final workflow composition
+  and removes the last email-verification baseline keys.
+- These plans preserve the privacy contracts established by their prerequisites. They must not restore
   cross-tenant state or bypass the fixed approval manifest and exact provider/approval/region selection from privacy
   plan 02. They also must not emit raw-address logs, restore plaintext SMTP probes, weaken production storage
   transport, or replace the shared `CustomerObjectWriteSecurity` token/value from privacy plan 06 with local S3

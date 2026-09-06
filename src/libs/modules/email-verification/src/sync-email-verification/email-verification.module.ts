@@ -3,13 +3,12 @@ import { HttpModule } from '@nestjs/axios'
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
-import { ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
+import { ICatchAllVerifier, ISmtpVerifier } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
 import { EmailVerifierModule } from '../email-verifier'
-import { AccountDiscoveryModule } from '../infrastructure/discovery/account/account-discovery.module'
-import { ACCOUNT_DISCOVERY, AccountDiscovery } from '../application/ports/account-discovery'
+import { CATCH_ALL_VERIFIERS_TOKEN } from '../email-verifier/email-verifier.constants'
 import { SmtpVerifier } from '../email-verifier/smtp'
 import { EmailEntity } from '../infrastructure/persistence/typeorm/email.entity'
 import { DomainPolicyEntity } from '../infrastructure/persistence/typeorm/domain-policy.entity'
@@ -26,11 +25,8 @@ import { MailboxVerificationService } from '../application/mailbox-verification.
 import { EmailVerificationOrchestrator } from '../application/email-verification.service'
 import { MX_RESOLVER } from '../application/ports/mx-resolver'
 import { DOMAIN_SYNONYM_DISCOVERY } from '../application/ports/domain-synonym-discovery'
-import { MAILBOX_PROBE, MailboxProbe } from '../application/ports/mailbox-probe'
-import {
-    VERIFICATION_TRACE_OBSERVER,
-    VerificationTraceObserver,
-} from '../application/verification-trace/verification-trace-observer'
+import { MAILBOX_PROBE } from '../application/ports/mailbox-probe'
+import { VERIFICATION_TRACE_OBSERVER, VerificationTraceObserver } from '../application/verification-trace/verification-trace-observer'
 import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
 import { SyncEmailVerificationController } from './sync-email-verification.controller'
 import { EmailAdministrationController } from '../api/http/email-administration/email-administration.controller'
@@ -40,7 +36,6 @@ import { EmailAdministrationController } from '../api/http/email-administration/
         VerificationTraceModule,
         TypeOrmModule.forFeature([EmailEntity, DomainPolicyEntity, EmailVerificationEntity]),
         EmailVerifierModule,
-        AccountDiscoveryModule,
         DnsModule,
         HttpModule,
         CreditsModule,
@@ -76,9 +71,9 @@ import { EmailAdministrationController } from '../api/http/email-administration/
         },
         {
             provide: MailboxVerificationService,
-            inject: [MAILBOX_PROBE, ACCOUNT_DISCOVERY],
-            useFactory: (mailboxProbe: MailboxProbe, accountDiscovery: AccountDiscovery | undefined) =>
-                new MailboxVerificationService(mailboxProbe, accountDiscovery),
+            inject: [MAILBOX_PROBE, CATCH_ALL_VERIFIERS_TOKEN],
+            useFactory: (mailboxProbe: CompatibilityMailboxProbe, accountDiscoveryVerifiers: ICatchAllVerifier[]) =>
+                new MailboxVerificationService(mailboxProbe, accountDiscoveryVerifiers),
         },
         {
             provide: EmailVerificationOrchestrator,
