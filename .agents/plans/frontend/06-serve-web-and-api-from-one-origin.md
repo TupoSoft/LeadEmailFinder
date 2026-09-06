@@ -11,14 +11,14 @@ through the gateway, while API and web images remain separate and independently 
 
 ## Progress
 
-- [ ] (2026-08-31) Add matching explicit API route maps to the Vite proxy and Nginx gateway.
-- [ ] (2026-08-31) Build the web in Node 24 and serve it from a pinned unprivileged Nginx image.
-- [ ] (2026-08-31) Move host port 53000 from the API container to the web gateway.
-- [ ] (2026-08-31) Update health, reset, and developer workflows for the two-image topology.
-- [ ] (2026-08-31) Add required API/web image, route, and same-origin browser CI coverage.
-- [ ] (2026-08-31) Add route-ownership smoke tests and live same-origin Playwright coverage.
-- [ ] (2026-08-31) Add static security headers and query/secret-safe gateway access logging.
-- [ ] (2026-08-31) Run image, Compose, browser, architecture, prose, and repository validation.
+- [x] (2026-09-06) Add matching explicit API route maps to the Vite proxy and Nginx gateway.
+- [x] (2026-09-06) Build the web in Node 24 and serve it from a pinned unprivileged Nginx image.
+- [x] (2026-09-06) Move host port 53000 from the API container to the web gateway.
+- [x] (2026-09-06) Update health, reset, and developer workflows for the two-image topology.
+- [x] (2026-09-06) Add required API/web image, route, and same-origin browser CI coverage.
+- [x] (2026-09-06) Add route-ownership smoke tests and live same-origin Playwright coverage.
+- [x] (2026-09-06) Add static security headers and query/secret-safe gateway access logging.
+- [x] (2026-09-06) Run image, Compose, browser, architecture, prose, and repository validation; record the local port conflict separately from default-port CI coverage.
 
 ## Plan dependencies
 
@@ -37,6 +37,19 @@ through the gateway, while API and web images remain separate and independently 
   remain intact when `web` is added.
 - `privacy-compliance/03` owns the API's `pino-http` request serializer and proves that address-bearing `/emails/:email`
   paths and request data never enter API logs. This plan consumes that logger and owns the separate Nginx boundary.
+
+- Live validation found that existing test launchers discovered the API's published port. They now discover the
+  owned gateway and retain separate internal API ownership checks.
+- The existing API logger missed invitation tokens, including encoded slash variants. Its existing sanitizer was
+  extended with focused tests; this plan adds no competing logger.
+- Nginx defaults would cap uploads at 1,048,576 bytes and idle API responses at 60 seconds. API locations now leave upload
+  validation to the backend and allow one hour of idle response time for synchronous SMTP verification.
+- Another checkout started a stack on the standard ports during validation. Optional host-port variables preserve
+  the defaults and allow an isolated local stack; CI retains the required default port 53000.
+- Concurrent host and container builds can overwrite the same mounted output directory. Host build validation is
+  completed before container startup; the existing development watcher and source mount remain compatible.
+- Reset inspection found that project labels alone cannot prove ownership of orphaned volumes. Reset now checks
+  current container checkout/configuration labels and refuses existing volumes without that provenance.
 
 ## Decision Log
 
@@ -74,7 +87,21 @@ through the gateway, while API and web images remain separate and independently 
 
 ## Outcomes & Retrospective
 
-Not started.
+The web gateway now owns the default browser port and serves the approved product with strict headers and explicit
+API routing. Vite and Nginx share route ownership, including encoded prefixes. Swagger uses a relative server URL.
+The API and web images build independently; existing API upload validation and long SMTP response times remain
+supported. Gateway access logs use fixed labels, and the existing API sanitizer covers invitation tokens.
+
+The live browser smoke completed real Keycloak login, current-account retrieval, CSRF rejection and logout, Swagger
+Try it out, and both log-privacy boundaries. Bruno completed every gateway/BFF request. The new required CI job
+builds both development images, checks the route matrix, runs the standard reset, and exercises the real browser
+and Bruno workflows. Existing backend, web, contract, and production-image jobs remain intact.
+
+Local runtime evidence uses the isolated `lef501` project on port 53101 because another checkout occupied the
+standard ports during startup. The default reset attempt stopped on a port conflict, and its checkout-owned
+resources were removed. Reset safety has focused passing tests; the standard reset and port 53000 workflow run in
+CI. The existing source watcher shares build output with the host, so host builds must finish before live startup.
+No business module boundary, schema, generated client contract, or visual design changed.
 
 ## Context and Orientation
 
@@ -259,6 +286,31 @@ Record image digests, service/port topology, route status/content-type/cache/sec
 assertions, Swagger server result, required CI results, redacted login network evidence, and Playwright summary.
 Never record cookies, CSRF values, OAuth codes or tokens, client secrets, full environment dumps, or container
 volumes.
+
+Implementation evidence from 2026-09-06:
+
+- `corepack pnpm test:ci`: 197 Jest suites and 1,800 tests passed; 65 dependency-gated tests were skipped. The separate
+  31 Node runner tests passed without skips. Final sanitizer follow-up checks passed 71 tests in two focused suites.
+- Root lint, typecheck, build, architecture, OpenAPI drift, generated client build, web lint/typecheck/build,
+  45 web component tests, design lint, strict UI audit, and `git diff --check` passed. Root lint retains one existing
+  return-type warning in `src/libs/config/src/load-secrets.spec.ts`.
+- Existing Playwright matrix: 26 tests passed, including accessibility and visual baselines at desktop and narrow
+  viewports. The Browser plugin was unavailable; the repository's Playwright workflow was used.
+- `corepack pnpm test:gateway`: four tests passed against the final web image, covering Vite/Nginx parity, headers,
+  forwarding, larger uploads, private failure logs, default/isolated Compose origins, and static health with the backend stopped.
+- `COMPOSE_PROJECT_NAME=lef501 corepack pnpm test:web-live`: three real browser tests and both privacy-log boundaries
+  passed on the final images. Transient member fixtures and credential-bearing reports were removed.
+- `COMPOSE_PROJECT_NAME=lef501 corepack pnpm bruno:bff-sessions`: Bruno 4.1.0 executed all 15 requests and 16 tests
+  successfully with `--env local`.
+- `COMPOSE_PROJECT_NAME=lef501 corepack pnpm test:bff-live`: all four existing live BFF tests passed with zero skips.
+  The launcher and suite now use the confirmed public ports while retaining internal provider routes.
+- Final image digests: API development `sha256:142066623b7c9f8ba07bd63edb8d4208589b7dc7b8d360b147e46ea9088555ed`,
+  API production `sha256:3dc14daa7e814d6e24a22d1147a8019f636ddda7476e25be3a801cfada247aa1`, and web
+  `sha256:9fc1866a0d4fda5cd861f354f196b6c94954fa9b29f29df52f44fe98d1ef5419` built successfully. Packaged API
+  probes confirmed the final invitation sanitizer and absence of web artifacts; production manifest permissions passed.
+- Nginx raw error logging is disabled because it cannot sanitize request targets. Structured access logs retain
+  safe route labels, method, status, and generated IDs. The one-hour upstream idle timeout was configured and reviewed;
+  a live SMTP request of that duration was not run.
 
 The route map, image boundary, security headers, privacy-plan API logger dependency, gateway email/secret path
 sanitization, Compose topology, reset safety, required CI coverage, browser smoke, validation, and one-pull-request

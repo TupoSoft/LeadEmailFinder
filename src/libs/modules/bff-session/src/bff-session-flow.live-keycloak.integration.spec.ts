@@ -52,7 +52,7 @@ const describeWithKeycloakRedisAndPostgres =
         ? describe
         : describe.skip
 
-const appBaseUrl = 'http://localhost:53000'
+const appBaseUrl = process.env['TEST_BFF_APP_BASE_URL'] ?? 'http://localhost:53000'
 const identityEntities = [
     Organization,
     ExternalIdentity,

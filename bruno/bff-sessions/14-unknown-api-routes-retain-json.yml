@@ -1,0 +1,24 @@
+info:
+  name: 14-unknown-api-routes-retain-json
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/not-real"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        await test('keeps unknown API routes out of the product fallback', async function() {
+          expect(res.status).to.equal(404);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(res.body.statusCode).to.equal(404);
+          for (const path of ['/verify/not-real/child', '/verifyAsync/not-real/child', '/verifyBatch/not-real/child', '/emails/not-real/child', '/credits/not-real/child']) {
+            const response = await fetch(`${bru.getEnvVar('baseUrl')}${path}`);
+            expect(response.status).to.equal(404);
+            expect(response.headers.get('content-type')).to.include('application/json');
+            expect((await response.json()).statusCode).to.equal(404);
+          }
+        });

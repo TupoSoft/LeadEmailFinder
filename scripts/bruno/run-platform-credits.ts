@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     }
     phase = 'confirming checkout-owned API, PostgreSQL, and Keycloak containers'
     for (const [service, internalPort, endpoint] of [
-        ['api', '3000/tcp', metadata.apiUrl],
+        ['web', '8080/tcp', metadata.apiUrl],
         ['postgres', '5432/tcp', metadata.postgresUrl],
         ['keycloak', '8080/tcp', metadata.keycloakUrl],
     ]) {

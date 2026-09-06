@@ -24,11 +24,52 @@ test('builds every BFF prerequisite from confirmed metadata and keeps identity s
     assert.equal(REQUIRED_BFF_INPUTS.length, 7)
     for (const key of REQUIRED_BFF_INPUTS) assert.ok(inputs[key])
     assert.equal(inputs.TEST_BFF_ISSUER_URL, credentials.issuer)
+    assert.equal(inputs.TEST_BFF_APP_BASE_URL, metadata.apiUrl)
     assert.equal(inputs.TEST_BFF_BACKCHANNEL_URL, 'http://keycloak:8080/realms/lead-email-finder')
     assert.equal(inputs.TEST_BFF_JWKS_URI, `${inputs.TEST_BFF_BACKCHANNEL_URL}/protocol/openid-connect/certs`)
     assert.equal(new URL(inputs.TEST_BFF_POSTGRES_URL).pathname, '/bff_session_test')
     assert.equal(inputs.TEST_BFF_EXPECT_PUBLIC_UNREACHABLE, 'true')
     assert.equal(new URL(metadata.postgresUrl).pathname, '/lef')
+})
+
+test('uses the confirmed isolated Keycloak port without changing internal provider routing', () => {
+    const isolated = { ...metadata, apiUrl: 'http://localhost:53101', keycloakUrl: 'http://localhost:58101' }
+    const inputs = buildBffInputs(isolated, {
+        ...credentials,
+        issuer: `${isolated.keycloakUrl}/realms/lead-email-finder`,
+    })
+    assert.equal(inputs.TEST_BFF_ISSUER_URL, 'http://localhost:58101/realms/lead-email-finder')
+    assert.equal(inputs.TEST_BFF_APP_BASE_URL, 'http://localhost:53101')
+    assert.equal(inputs.TEST_BFF_BACKCHANNEL_URL, 'http://keycloak:8080/realms/lead-email-finder')
+    assert.throws(() =>
+        validateBffInputs({ ...inputs, TEST_BFF_ISSUER_URL: 'http://localhost:0/realms/lead-email-finder' }),
+    )
+})
+
+test('keeps the legacy application-origin default while rejecting unsafe or non-origin overrides', () => {
+    const inputs = buildBffInputs(metadata, credentials)
+    delete inputs.TEST_BFF_APP_BASE_URL
+    assert.doesNotThrow(() => validateBffInputs(inputs))
+    for (const value of [
+        '',
+        'http://api:3000',
+        'https://localhost:53000',
+        'http://localhost:0',
+        'http://localhost:53000/path',
+        'http://localhost:53000?secret=synthetic-secret',
+        'http://localhost:53000#synthetic-secret',
+        'http://synthetic-secret@localhost:53000',
+        'http://localhost:53000/',
+        'malformed-synthetic-secret',
+    ]) {
+        assert.throws(
+            () => validateBffInputs({ ...inputs, TEST_BFF_APP_BASE_URL: value }),
+            error => {
+                assert.ok(!error.message.includes('synthetic-secret'))
+                return true
+            },
+        )
+    }
 })
 
 test('refuses all seven missing prerequisites before a live suite could silently skip', () => {
@@ -130,12 +171,12 @@ function apiContainer() {
         },
         State: { Running: true },
         Mounts: [{ Type: 'bind', Source: metadata.checkoutRoot, Destination: '/app' }],
-        NetworkSettings: { Ports: { '3000/tcp': [{ HostIp: '0.0.0.0', HostPort: '53000' }] } },
+        NetworkSettings: { Ports: { '3000/tcp': null } },
     }
 }
 
-test('validates project, checkout, config files, running state, API mount and endpoint binding', () => {
-    const check = container => assertOwnedDevelopmentContainer(container, metadata, 'api', '3000/tcp', metadata.apiUrl)
+test('validates project, checkout, config files, running state and the internal API mount', () => {
+    const check = container => assertOwnedDevelopmentContainer(container, metadata, 'api')
     check(apiContainer())
     for (const key of Object.keys(apiContainer().Config.Labels)) {
         const container = apiContainer()
@@ -152,12 +193,6 @@ test('validates project, checkout, config files, running state, API mount and en
         container => {
             container.Mounts[0].Source = '/another/checkout'
         },
-        container => {
-            container.NetworkSettings.Ports['3000/tcp'][0].HostPort = '53001'
-        },
-        container => {
-            container.NetworkSettings.Ports['3000/tcp'][0].HostIp = '192.0.2.1'
-        },
     ]) {
         const container = apiContainer()
         mutate(container)
@@ -172,4 +207,18 @@ test('accepts the current checkout SMTP overlay but refuses unrelated Compose fi
     assert.doesNotThrow(() => assertOwnedDevelopmentContainer(container, metadata, 'api'))
     container.Config.Labels['com.docker.compose.project.config_files'] += ',/synthetic/checkout/docker/production.yaml'
     assert.throws(() => assertOwnedDevelopmentContainer(container, metadata, 'api'))
+})
+
+test('validates the public endpoint against the owned gateway instead of the internal API', () => {
+    const container = apiContainer()
+    container.Config.Labels['com.docker.compose.service'] = 'web'
+    container.Mounts = []
+    container.NetworkSettings.Ports = { '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '53000' }] }
+    const check = () => assertOwnedDevelopmentContainer(container, metadata, 'web', '8080/tcp', metadata.apiUrl)
+    assert.doesNotThrow(check)
+    container.NetworkSettings.Ports['8080/tcp'][0].HostPort = '53001'
+    assert.throws(check)
+    container.NetworkSettings.Ports['8080/tcp'][0] = { HostIp: '192.0.2.1', HostPort: '53000' }
+    assert.throws(check)
+    assert.throws(() => assertOwnedDevelopmentContainer(apiContainer(), metadata, 'web', '8080/tcp', metadata.apiUrl))
 })

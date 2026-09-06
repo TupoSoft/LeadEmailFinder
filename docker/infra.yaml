@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: lef
     ports:
-      - '55432:5432'
+      - '${POSTGRES_PORT:-55432}:5432'
     secrets:
       - postgres_password
     volumes:
@@ -23,7 +23,7 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
     ports:
-      - '56379:6379'
+      - '${REDIS_PORT:-56379}:6379'
     healthcheck:
       test: "[ `redis-cli ping` = 'PONG' ]"
       interval: 10s
@@ -41,7 +41,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - '54000:3000'
+      - '${BULLBOARD_PORT:-54000}:3000'
 
   garage:
     build:
@@ -55,7 +55,7 @@ services:
       retries: 3
       start_period: 10s
     ports:
-      - '59000:3900'
+      - '${GARAGE_PORT:-59000}:3900'
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
     secrets:
@@ -95,7 +95,7 @@ services:
       start_period: 15s
     environment:
       KC_DB: postgres
-      KC_HOSTNAME: http://localhost:58080
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-58080}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: true
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -106,7 +106,7 @@ services:
       keycloak-postgres:
         condition: service_healthy
     ports:
-      - '58080:8080'
+      - '${KEYCLOAK_PORT:-58080}:8080'
 
 secrets:
   postgres_password:

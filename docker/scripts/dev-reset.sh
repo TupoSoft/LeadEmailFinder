@@ -19,7 +19,7 @@ PROJECT_NAME="LEF"
 COMPOSE_PROJECT_ID="lef"
 COMPOSE="docker compose -p ${COMPOSE_PROJECT_ID} -f ${COMPOSE_FILE}"
 
-CONTAINERS="lef-postgres-1 lef-redis-1 lef-garage-1 lef-keycloak-postgres-1 lef-keycloak-1 lef-api-1 lef-bullboard-1"
+CONTAINERS="lef-postgres-1 lef-redis-1 lef-garage-1 lef-keycloak-postgres-1 lef-keycloak-1 lef-api-1 lef-web-1 lef-bullboard-1"
 VOLUME_PATTERN="^lef_(postgres-data|redis-data|keycloak-postgres-data)\$"
 EXPECTED_VOLUME_COUNT=3
 
@@ -60,6 +60,24 @@ require_confirmation() {
     fi
 }
 
+verify_checkout_ownership() {
+    container_ids="$(docker ps -aq --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_ID}")"
+    for container_id in ${container_ids}; do
+        if ! inspected_container="$(docker inspect "${container_id}")" ||
+            ! printf '%s' "${inspected_container}" | jq -e \
+            --arg root "${REPO_ROOT}" --arg project "${COMPOSE_PROJECT_ID}" '
+            length == 1 and all(.[]; .Config.Labels as $labels |
+                $labels["com.docker.compose.project"] == $project and
+                ($labels["com.docker.compose.project.working_dir"] == $root or
+                 $labels["com.docker.compose.project.working_dir"] == ($root + "/docker")) and
+                $labels["com.docker.compose.project.config_files"] == ($root + "/docker/compose.yaml"))
+            ' > /dev/null; then
+            printf 'Refusing to reset containers owned by another checkout or Compose configuration.\n' >&2
+            exit 1
+        fi
+    done
+}
+
 verify_and_delete_volumes() {
     found_volumes="$(docker volume ls -q --filter "name=${VOLUME_PATTERN}")"
     found_count="$(printf '%s\n' "${found_volumes}" | grep -c . || true)"
@@ -76,6 +94,19 @@ verify_and_delete_volumes() {
             "${EXPECTED_VOLUME_COUNT}" "${VOLUME_PATTERN}" "${found_count}" "${found_volumes}" >&2
         exit 1
     fi
+    if [ -z "${container_ids}" ]; then
+        printf 'Refusing to delete existing volumes without checkout-owned containers proving their provenance.\n' >&2
+        exit 1
+    fi
+
+    for volume in ${found_volumes}; do
+        if ! inspected_volume="$(docker volume inspect "${volume}")" ||
+            ! printf '%s' "${inspected_volume}" | jq -e --arg project "${COMPOSE_PROJECT_ID}" \
+            'length == 1 and all(.[]; .Labels["com.docker.compose.project"] == $project)' > /dev/null; then
+            printf 'Refusing to delete a volume without the expected Compose project label.\n' >&2
+            exit 1
+        fi
+    done
 
     ${COMPOSE} down
     # shellcheck disable=SC2086 -- pre-verified names from the allowlisted filter above, never an unresolved expansion.
@@ -142,9 +173,19 @@ if [ "${resolved_name}" != "${COMPOSE_PROJECT_ID}" ]; then
         "${resolved_name}" "${COMPOSE_PROJECT_ID}" >&2
     exit 1
 fi
+if ! printf '%s' "${resolved_config}" | jq -e '
+    . as $config | all([
+        ["web", 8080, "53000"], ["keycloak", 8080, "58080"], ["postgres", 5432, "55432"]
+    ][]; . as $port | any($config.services[$port[0]].ports[];
+        .target == $port[1] and (.published | tostring) == $port[2]))
+    ' > /dev/null; then
+    printf 'Refusing to reset a stack with alternate public ports; provision that isolated project explicitly.\n' >&2
+    exit 1
+fi
 
 print_targets
 require_confirmation "$@"
+verify_checkout_ownership
 verify_and_delete_volumes
 
 ${COMPOSE} up -d --build
@@ -159,6 +200,8 @@ export KEYCLOAK_URL="http://localhost:58080"
 pnpm keycloak:provision
 
 wait_healthy lef-api-1
+wait_healthy lef-web-1
+curl --fail --silent --show-error http://localhost:53000/ > /dev/null
 
 postgres_password="$(cat docker/secrets/postgres_password.txt)"
 export POSTGRES_URL="postgresql://postgres:${postgres_password}@localhost:55432/lef"

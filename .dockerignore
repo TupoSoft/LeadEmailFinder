@@ -41,3 +41,5 @@ docker/proxy-fleet/*
 Makefile
 eslint.config.mjs
 swarm.yml
+!docker/web/
+!docker/web/**
