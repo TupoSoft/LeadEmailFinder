@@ -1,15 +1,17 @@
-import { extractDomains, findRelevantLinks } from './domain.util'
-import { IDomainSynonymFinder, safeErrorType } from '@tuposoft/lead-email-finder/common'
+import { extractDomains, findRelevantLinks } from './domain-synonym-discovery.util'
+import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { isNativeError } from 'node:util/types'
+import { DomainSynonymDiscovery } from '../application/ports/domain-synonym-discovery'
 
+/** Wraps the existing HTML-scraping synonym lookup unchanged; module-architecture/13 replaces this with a real adapter. */
 @Injectable()
-export class HTMLDomainSynonymFinder implements IDomainSynonymFinder {
+export class CompatibilityDomainSynonymDiscovery implements DomainSynonymDiscovery {
     @Inject(Logger)
     @Optional()
-    private readonly logger = new Logger(HTMLDomainSynonymFinder.name)
+    private readonly logger = new Logger(CompatibilityDomainSynonymDiscovery.name)
 
     constructor(private readonly httpService: HttpService) {}
 

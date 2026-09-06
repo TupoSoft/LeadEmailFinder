@@ -16,7 +16,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { getQueueToken } from '@nestjs/bullmq'
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { getS3ConnectionToken } from 'nestjs-s3'
-import { DataSource, Repository } from 'typeorm'
+import { DataSource } from 'typeorm'
 import { Job, Queue, WaitingChildrenError } from 'bullmq'
 import { Readable } from 'node:stream'
 import { Upload } from '@aws-sdk/lib-storage'
@@ -24,11 +24,14 @@ import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { BatchEmailVerificationJobData } from './batch-email-verification-job-data.interface'
 import { BatchEmailVerificationJobStep } from './batch-email-verification-job-step.enum'
-import { EmailVerification, EmailVerificationService } from '../sync-email-verification'
+import { EmailVerificationOrchestrator } from '../application/email-verification.service'
+import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/email-verification.entity'
+import { DomainPolicyService } from '../application/domain-policy.service'
+import { EmailAdministrationService } from '../application/email-administration.service'
+import { MailboxVerificationService } from '../application/mailbox-verification.service'
+import { VerificationStore } from '../application/ports/verification-store'
 import {
     EmailVerificationReason,
-    IDomainService,
-    IEmailService,
     IEmailVerificationResponseDto,
     CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN,
     CustomerObjectWriteSecurity,
@@ -164,7 +167,7 @@ describe('BatchEmailVerificationProcessor', () => {
                 { provide: CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, useValue: objectWriteSecurity },
                 { provide: getQueueToken('async-email-verification'), useValue: asyncEmailVerificationQueue },
                 {
-                    provide: getRepositoryToken(EmailVerification),
+                    provide: getRepositoryToken(EmailVerificationEntity),
                     useValue: { createQueryBuilder: jest.fn().mockReturnValue(queryBuilder) },
                 },
                 {
@@ -518,7 +521,7 @@ describe('BatchEmailVerificationProcessor', () => {
             expect(children).toHaveLength(1)
             expect(captured.filter(event => event.event === 'verification_failed')).toHaveLength(0)
 
-            const verificationService = new EmailVerificationService(
+            const verificationService = new EmailVerificationOrchestrator(
                 {
                     verify: jest.fn().mockResolvedValue({
                         email,
@@ -530,14 +533,13 @@ describe('BatchEmailVerificationProcessor', () => {
                         reason: EmailVerificationReason.AcceptedEmail,
                         sources: [],
                     }),
-                },
+                } as unknown as MailboxVerificationService,
                 {
-                    create: (record: Partial<EmailVerification>) => record,
-                    save: (record: EmailVerification) =>
-                        Promise.resolve({ ...record, id: verificationId, createdAt: new Date() }),
-                } as unknown as Repository<EmailVerification>,
-                { upsertEmail: () => Promise.resolve(undefined) } as unknown as IEmailService,
-                { isVerificationAllowed: () => Promise.resolve(true) } as unknown as IDomainService,
+                    create: (organizationId: string, record: unknown) =>
+                        Promise.resolve({ ...(record as object), organizationId, id: verificationId, createdAt: new Date() }),
+                } as unknown as VerificationStore,
+                { upsertEmail: () => Promise.resolve(undefined) } as unknown as EmailAdministrationService,
+                { isVerificationAllowed: () => Promise.resolve(true) } as unknown as DomainPolicyService,
                 observer,
             )
             const childProcessor = new AsyncEmailVerificationProcessor(verificationService)

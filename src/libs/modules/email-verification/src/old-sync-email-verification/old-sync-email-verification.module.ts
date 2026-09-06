@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 import { OldSyncEmailVerificationController } from './old-sync-email-verification.controller'
-import { EmailVerificationService, SyncEmailVerificationModule } from '../sync-email-verification'
+import { EmailVerificationOrchestrator, SyncEmailVerificationModule } from '../sync-email-verification'
 import { OldSyncEmailVerificationProfile } from './old-sync-email-verification.profile'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
@@ -11,7 +11,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
     providers: [
         {
             provide: 'EmailVerificationServiceToken',
-            useExisting: EmailVerificationService,
+            useExisting: EmailVerificationOrchestrator,
         },
         OldSyncEmailVerificationProfile,
         RolePermissionPolicy,

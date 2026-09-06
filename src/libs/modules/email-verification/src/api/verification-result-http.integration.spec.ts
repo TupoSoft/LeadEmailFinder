@@ -8,7 +8,7 @@ import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tupos
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { VERIFICATION_RESULT_READER, VerificationResultLookup } from '../application/verification-result-reader'
 import { TypeOrmVerificationResultReader } from '../infrastructure/typeorm-verification-result-reader'
-import { EmailVerification } from '../sync-email-verification/email-verification.entity'
+import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/email-verification.entity'
 import { VerificationResultsController } from './verification-results.controller'
 
 const organizationId = '00000000-0000-4000-8000-000000000010'
@@ -17,7 +17,7 @@ const ownedId = '00000000-0000-4000-8000-000000000001'
 const foreignId = '00000000-0000-4000-8000-000000000002'
 const missingId = '00000000-0000-4000-8000-000000000003'
 const createdAt = new Date('2026-01-01T00:00:00.000Z')
-const records: EmailVerification[] = [
+const records: EmailVerificationEntity[] = [
     {
         id: ownedId,
         organizationId,

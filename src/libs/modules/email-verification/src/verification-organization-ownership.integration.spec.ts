@@ -6,13 +6,17 @@ import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead
 import { BatchEmailVerificationJobData } from './batch-email-verification/batch-email-verification-job-data.interface'
 import { BatchEmailVerificationJobStep } from './batch-email-verification/batch-email-verification-job-step.enum'
 import { BatchEmailVerificationProcessor } from './batch-email-verification/batch-email-verification.processor'
-import { Domain } from './domain/domain.entity'
-import { Email } from './email/email.entity'
+import { DomainPolicyEntity } from './infrastructure/persistence/typeorm/domain-policy.entity'
+import { EmailEntity } from './infrastructure/persistence/typeorm/email.entity'
+import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
+import { TypeOrmVerificationStore } from './infrastructure/persistence/typeorm-verification.store'
 import { SmtpVerification } from './email-verifier/smtp/smtp-verification.entity'
 import { SmtpVerifier } from './email-verifier/smtp/smtp-verifier'
 import { SmtpVerificationReason } from './email-verifier/smtp/smtp.enums'
-import { EmailVerification } from './sync-email-verification/email-verification.entity'
-import { EmailVerificationService } from './sync-email-verification/email-verification.service'
+import { EmailVerificationOrchestrator } from './application/email-verification.service'
+import { DomainPolicyService } from './application/domain-policy.service'
+import { EmailAdministrationService } from './application/email-administration.service'
+import { MailboxVerificationService } from './application/mailbox-verification.service'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 
 jest.mock('@aws-sdk/lib-storage')
@@ -20,7 +24,7 @@ jest.mock('@aws-sdk/lib-storage')
 const postgresUrl = process.env['TEST_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 const schema = `verification_ownership_${process.pid}`
-const entities = [Domain, Email, EmailVerification, SmtpVerification]
+const entities = [DomainPolicyEntity, EmailEntity, EmailVerificationEntity, SmtpVerification]
 
 interface UploadParams {
     Body: NodeJS.ReadableStream
@@ -59,10 +63,10 @@ describeWithPostgres('verification organization ownership', () => {
     })
 
     it('synchronizes the tenant-owned keys and indexes while domains remain shared', async () => {
-        const emailMetadata = dataSource.getMetadata(Email)
-        const verificationMetadata = dataSource.getMetadata(EmailVerification)
+        const emailMetadata = dataSource.getMetadata(EmailEntity)
+        const verificationMetadata = dataSource.getMetadata(EmailVerificationEntity)
         const smtpMetadata = dataSource.getMetadata(SmtpVerification)
-        const domainMetadata = dataSource.getMetadata(Domain)
+        const domainMetadata = dataSource.getMetadata(DomainPolicyEntity)
 
         expect(emailMetadata.primaryColumns.map(column => column.propertyName)).toEqual(['organizationId', 'id'])
         expect(smtpMetadata.primaryColumns.map(column => column.propertyName)).toEqual(['organizationId', 'id'])
@@ -104,11 +108,11 @@ describeWithPostgres('verification organization ownership', () => {
         const organizationAId = randomUUID()
         const organizationBId = randomUUID()
         const address = 'person@example.test'
-        const emailRepository = dataSource.getRepository(Email)
-        const verificationRepository = dataSource.getRepository(EmailVerification)
+        const emailRepository = dataSource.getRepository(EmailEntity)
+        const verificationRepository = dataSource.getRepository(EmailVerificationEntity)
         const smtpRepository = dataSource.getRepository(SmtpVerification)
 
-        await dataSource.getRepository(Domain).save({ id: 'example.test' })
+        await dataSource.getRepository(DomainPolicyEntity).save({ id: 'example.test' })
         const [emailA, emailB] = await emailRepository.save([
             emailRepository.create({
                 organizationId: organizationAId,
@@ -218,7 +222,7 @@ describeWithPostgres('verification organization ownership', () => {
         const organizationAId = randomUUID()
         const organizationBId = randomUUID()
         const batchId = randomUUID()
-        const verificationRepository = dataSource.getRepository(EmailVerification)
+        const verificationRepository = dataSource.getRepository(EmailVerificationEntity)
 
         const [ownedBatchVerification] = await verificationRepository.save([
             verificationRepository.create({
@@ -245,7 +249,7 @@ describeWithPostgres('verification organization ownership', () => {
             }),
         ])
 
-        const laterVerification = new EmailVerificationService(
+        const laterVerification = new EmailVerificationOrchestrator(
             {
                 verify: jest.fn().mockResolvedValue({
                     email: 'owned@example.test',
@@ -256,8 +260,8 @@ describeWithPostgres('verification organization ownership', () => {
                     reason: EmailVerificationReason.RejectedEmail,
                     sources: [EmailVerificationSource.MX],
                 }),
-            },
-            verificationRepository,
+            } as unknown as MailboxVerificationService,
+            new TypeOrmVerificationStore(verificationRepository),
             {
                 upsertEmail: jest
                     .fn()
@@ -278,8 +282,8 @@ describeWithPostgres('verification organization ownership', () => {
                         createdAt: ownedBatchVerification.createdAt,
                         updatedAt: ownedBatchVerification.createdAt,
                     }),
-            } as never,
-            { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as never,
+            } as unknown as EmailAdministrationService,
+            { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as unknown as DomainPolicyService,
         )
 
         await laterVerification.verify({ organizationId: organizationAId, email: 'owned@example.test' })
