@@ -16,6 +16,14 @@
 - Before editing a business module under `src/libs/modules/` or importing one from elsewhere, read `src/libs/modules/AGENTS.md`, the canonical `src/libs/modules/README.md`, and the affected module's `README.md`.
 - Follow the scoped workflow and validate the result with the module architecture gate before finishing.
 
+# Repository Skills
+
+- Use the relevant repository skills listed in `.agents/skills/README.md`. Read their `SKILL.md` instructions and only the supporting references needed for the task. Prefer these project adaptations when the same skill is also installed globally.
+- User instructions, the current ExecPlan, and repository contracts take precedence over generic examples in copied skills. Skills do not authorize additional features, provider changes, external actions, or new approval requirements.
+- Before frontend work, read root `DESIGN.md` and `UX-CONTRACT.md`. Use the local `frontend-design` and `frontend-design-premium` skills; add the React and frontend testing skills when applicable. Reuse the approved design for routine changes.
+- When an authorized change alters shared visual decisions, update `DESIGN.md`, the runtime styles, and `premium-ui.json` together. Update `UX-CONTRACT.md` when shared interface behavior changes. Use the repository's `design:lint` and `ui:audit` commands to check the contracts.
+- Apply PostgreSQL and Paddle skills within the existing module and provider boundaries. The skill catalog describes which upstream framework examples apply to this repository.
+
 # Bruno Test Policy
 
 - For every implementation change, determine whether it changes externally observable HTTP API behavior.
