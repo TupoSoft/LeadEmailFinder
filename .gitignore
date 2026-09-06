@@ -23,6 +23,12 @@ lib-cov
 coverage
 *.lcov
 
+# Browser test output
+playwright-report/
+test-results/
+blob-report/
+premium-audit.json
+
 # nyc test coverage
 .nyc_output
 

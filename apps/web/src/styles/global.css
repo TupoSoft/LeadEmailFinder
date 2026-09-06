@@ -1,0 +1,112 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    min-width: 20rem;
+    background: var(--color-page-background);
+    scroll-behavior: smooth;
+    scrollbar-color: var(--color-evergreen) var(--color-sage);
+    scrollbar-width: thin;
+}
+
+body {
+    min-width: 20rem;
+    min-height: 100vh;
+    margin: 0;
+    color: var(--color-ink);
+    background: var(--color-page-background);
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+a {
+    color: inherit;
+}
+
+a:active {
+    color: var(--color-evergreen);
+    text-decoration-thickness: 0.125rem;
+}
+
+img,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+p {
+    margin-block-start: 0;
+}
+
+:focus-visible {
+    outline: var(--focus-outline-width) solid var(--color-focus);
+    outline-offset: var(--focus-outline-offset);
+}
+
+main:focus {
+    outline: none;
+}
+
+*::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--color-sage);
+}
+
+*::-webkit-scrollbar-thumb {
+    border: 0.1875rem solid var(--color-sage);
+    background: var(--color-evergreen);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: var(--color-accent-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    /* The override must win over every component transition so the user preference is unconditional. */
+    *,
+    *::before,
+    *::after {
+        animation-duration: calc(var(--motion-reduced-milliseconds) * 1ms) !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: calc(var(--motion-reduced-milliseconds) * 1ms) !important;
+    }
+}
+
+@media (forced-colors: active) {
+    html {
+        scrollbar-color: auto;
+    }
+
+    :focus-visible {
+        outline-color: Highlight;
+    }
+}

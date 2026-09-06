@@ -1,0 +1,48 @@
+.footer {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 1.3fr);
+    align-items: center;
+    gap: var(--space-page-gutter-wide);
+    min-height: 8.5rem;
+    padding: var(--space-content-gap) var(--space-page-gutter-wide);
+    border-top: var(--rule-width) solid var(--color-rule);
+    background: var(--color-sage);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+}
+
+.glyph {
+    width: 2.5rem;
+    color: var(--color-evergreen);
+}
+
+.footer p {
+    max-width: 22rem;
+    margin: 0;
+    padding-left: var(--space-content-gap);
+    border-left: var(--rule-width) solid var(--color-rule-soft);
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
+
+@media (max-width: 48rem) {
+    .footer {
+        grid-template-columns: 1fr;
+        gap: var(--space-control-gap);
+        min-height: auto;
+        padding: var(--space-content-gap) 1rem 2rem;
+    }
+
+    .footer p {
+        max-width: 17rem;
+        padding-left: 0;
+        border-left: 0;
+        font-size: var(--font-size-compact);
+    }
+}

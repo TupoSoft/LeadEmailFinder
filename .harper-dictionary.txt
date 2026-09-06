@@ -55,6 +55,7 @@ Nginx
 Node.js
 OCI
 OIDC
+OFL
 OpenCollection
 OS
 OTP
@@ -181,6 +182,8 @@ BFCache
 Base32
 CSP
 Callback
+Do's
+Don'ts
 Grantable
 HMR
 JOSE

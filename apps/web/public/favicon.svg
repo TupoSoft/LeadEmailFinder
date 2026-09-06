@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lead Email Finder">
+  <rect width="64" height="64" fill="#132a2e" />
+  <path d="M13 18h38v28H13z" fill="#f4f0e8" />
+  <path d="m13 18 19 16 19-16" fill="none" stroke="#1f5a4a" stroke-width="4" stroke-linejoin="round" />
+  <path d="M13 46l14-14m24 14L37 32" fill="none" stroke="#f0643b" stroke-width="4" />
+</svg>

@@ -1,0 +1,204 @@
+.signalMap {
+    position: relative;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 25rem;
+    padding-top: 10rem;
+}
+
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.circuit {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 96%;
+    color: var(--color-circuit);
+}
+
+.sequence {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    align-items: start;
+}
+
+.sequence::before {
+    position: absolute;
+    z-index: -1;
+    top: 2rem;
+    right: 0.5rem;
+    left: 2.25rem;
+    border-top: 0.125rem dotted var(--color-ink);
+    content: '';
+}
+
+.sequence::after {
+    position: absolute;
+    top: 1.55rem;
+    right: 0;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-top: 0.125rem solid var(--color-ink);
+    border-right: 0.125rem solid var(--color-ink);
+    content: '';
+    transform: rotate(45deg);
+}
+
+.origin,
+.iconWrap {
+    display: grid;
+    place-items: center;
+    border: var(--rule-width) solid var(--color-ink);
+    border-radius: var(--radius-circle);
+    color: var(--color-canvas);
+    box-shadow: 0 var(--shadow-signal-y) var(--shadow-signal-blur) var(--color-shadow);
+}
+
+.origin {
+    width: var(--signal-node-size);
+    height: var(--signal-node-size);
+    background: var(--color-ink);
+    font-size: 2.2rem;
+    font-weight: 700;
+}
+
+.stages {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.stage {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.iconWrap {
+    width: var(--signal-node-size);
+    height: var(--signal-node-size);
+    background: var(--color-evergreen);
+}
+
+.icon {
+    width: 2.15rem;
+}
+
+.stageCopy {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 1rem;
+}
+
+.stageCopy strong {
+    font-family: var(--font-display);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+}
+
+.stageCopy span {
+    max-width: 10.5rem;
+    font-size: var(--font-size-utility);
+    line-height: var(--line-height-utility);
+}
+
+@media (max-width: 66rem) {
+    .signalMap {
+        padding-top: 8rem;
+    }
+}
+
+@media (max-width: 56rem) {
+    .signalMap {
+        min-height: auto;
+        padding: 1rem 0 0;
+    }
+
+    .circuit {
+        display: none;
+    }
+
+    .sequence {
+        display: block;
+        padding-bottom: 0.5rem;
+    }
+
+    .sequence::before {
+        top: 1.8rem;
+        right: auto;
+        bottom: 0;
+        left: 1.65rem;
+        border-top: 0;
+        border-left: 0.125rem dotted var(--color-ink);
+    }
+
+    .sequence::after {
+        top: auto;
+        right: auto;
+        bottom: 0;
+        left: 1.3rem;
+        transform: rotate(135deg);
+    }
+
+    .origin {
+        width: 3.4rem;
+        height: 3.4rem;
+        font-size: 1.8rem;
+    }
+
+    .stages {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+        margin-top: 0.8rem;
+        padding-left: 0.2rem;
+    }
+
+    .stage {
+        display: grid;
+        grid-template-columns: 3rem minmax(0, 1fr);
+        gap: 1rem;
+        align-items: center;
+        text-align: left;
+    }
+
+    .iconWrap {
+        width: 3rem;
+        height: 3rem;
+    }
+
+    .icon {
+        width: 1.6rem;
+    }
+
+    .stageCopy {
+        gap: 0.15rem;
+        margin-top: 0;
+    }
+
+    .stageCopy strong {
+        font-size: var(--font-size-compact);
+    }
+
+    .stageCopy span {
+        max-width: 16rem;
+        font-size: var(--font-size-utility);
+    }
+}

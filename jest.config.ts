@@ -3,6 +3,8 @@ import type { Config } from 'jest'
 const config: Config = {
     moduleFileExtensions: ['js', 'json', 'ts'],
     testRegex: '.*\\.spec\\.ts$',
+    testPathIgnorePatterns: ['<rootDir>/apps/web/'],
+    coveragePathIgnorePatterns: ['<rootDir>/apps/web/'],
     transform: {
         '^.+\\.(t|j)s$': '@swc/jest',
     },
