@@ -8,12 +8,50 @@ The lab contains one Swarm manager, two proxy nodes, and one verifier. Its track
 and supplies Ansible's host and proxy-listener data. Vagrant's generated state and captured SSH configuration stay
 under the ignored `.vagrant/` directory.
 
+Validation is tracked separately: [plan 17](../../../.agents/plans/proxy-fleet/17-provision-vagrant-native-development-lab.md)
+owns Windows WSL2/VirtualBox checks, and [plan 18](../../../.agents/plans/proxy-fleet/18-validate-vagrant-libvirt-lab.md)
+owns native Linux/libvirt checks. The shared libvirt configuration is present, but its live validation remains pending.
+
+Each VirtualBox guest uses one CPU; each libvirt guest uses two CPUs. Both providers allocate 2,048 megabytes per
+guest. The inventory declares the VirtualBox override at `all.vars.vagrant_lab.virtualbox.cpus`. One CPU avoids the
+reproduced early boot stall in the pinned guest's RAID6 initialization when Windows Hyper-V is active. Keep the declared
+allocation when reproducing this lab's validation; increasing it requires new boot and lifecycle checks.
+
 ## Prerequisites
 
 Use Vagrant 2.4.9 or later on an AMD64 host. The `Vagrantfile` pins `bento/ubuntu-24.04` version `202508.03.0`, so the
 first creation downloads that provider-specific box unless it is already installed.
 
-For Windows 11 with WSL2 and VirtualBox:
+For Windows 11 version `22H2` or later with WSL2 and VirtualBox, enable Virtual Machine Platform for WSL2 and
+Windows Hypervisor Platform for VirtualBox. Oracle documents the latter requirement for
+[Hyper-V coexistence](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/AdvancedTopics.html).
+Run this command in Administrator PowerShell:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform,HypervisorPlatform -All -NoRestart
+```
+
+Restart Windows after enabling the features, then verify that both report `Enabled`:
+
+```powershell
+Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+Get-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform
+```
+
+In `%UserProfile%\.wslconfig`, add or update the following setting in the existing `[wsl2]` section, preserving other
+settings. Create the file and section if they do not exist:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+[Mirrored networking](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking) lets WSL reach
+VirtualBox's forwarded SSH ports on Windows at `127.0.0.1`. Save work in running WSL distributions, then run
+`wsl --shutdown` from PowerShell and reopen WSL to
+[apply the configuration](https://learn.microsoft.com/en-us/windows/wsl/wsl-config#the-8-second-rule-for-configuration-changes).
+
+Then configure Vagrant in WSL:
 
 1. Install Vagrant inside the WSL distribution. Do not invoke Windows `vagrant.exe` from WSL.
 2. If Vagrant is also installed on Windows, keep its version identical to the WSL version.
@@ -21,6 +59,7 @@ For Windows 11 with WSL2 and VirtualBox:
 4. Enable Vagrant's Windows-provider access in the shell that runs the lab.
 
 ```sh
+wslinfo --networking-mode # Must report mirrored.
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1
 export PATH="$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
 ```
@@ -42,6 +81,10 @@ vagrant plugin install vagrant-libvirt
 The normal `up` command uses `--no-install-provider`, so a missing provider fails as a prerequisite instead of changing
 the host automatically.
 
+On a host without a usable provider, `vagrant validate --ignore-provider` checks the shared configuration. This skips
+provider-specific validation; the ordinary `vagrant validate` command and complete lifecycle checks still require the
+selected provider.
+
 ## Lifecycle
 
 Run every lifecycle command from this directory. Select the provider only when creating a fresh environment; Vagrant
@@ -62,7 +105,13 @@ vagrant up
 
 Vagrant configures the provider management adapter and an isolated, non-forwarded `192.168.250.0/24` underlay. The
 proxy guests own their declared RFC 2544 addresses on `lef-egress0`; the verifier owns three exact return routes. A
-systemd `oneshot` restores only that guest state after reboot.
+systemd `oneshot` restores that guest state after reboot. The verifier also declares its exact protocol-98 routes in
+`/etc/systemd/network/10-netplan-<underlay-interface>.network.d/50-proxy-fleet-lab-routes.conf`. This dedicated file lets
+networkd retain the routes when Vagrant reapplies Netplan after startup. Provisioning changes only the owned fragment
+and does not reload networkd or alter global network policy.
+
+Repeated provisioning preserves already correct verifier routes. Stale route cleanup removes only RFC 2544 host
+routes carrying the lab's reserved protocol `98`, preserving subnet routes that this provisioner cannot create.
 
 Capture current provider-specific SSH facts after creation or recreation:
 
@@ -98,6 +147,13 @@ After an interrupted command, wait for its Vagrant process to exit, run `vagrant
 command. Preserve `.vagrant/` if Vagrant reports a machine it cannot operate, and diagnose that environment before
 changing raw VirtualBox or libvirt resources. If `.vagrant/` is lost while provider resources remain, this lab does not
 claim automatic ownership recovery.
+
+With the pinned box, Guest Additions can log an RCU nesting warning during initialization. The warning was observed
+separately from the reproduced boot stall and is consistent with
+[VirtualBox issue 359](https://github.com/VirtualBox/virtualbox/issues/359). Its broader impact remains unverified;
+this lab's acceptance covers the documented development lifecycle and guest networking, not general kernel stability
+or production workloads. Preserve guest and provider logs when diagnosing a new failure. Debugger register and stack
+probes can wake a stalled virtual CPU, so avoid them during an undisturbed boot validation.
 
 This is development tooling. It does not discover unrelated provider resources, allocate public IP addresses, prove
 Internet egress, or provide transactional rollback, concurrent lifecycle safety, production deployment, or production

@@ -68,12 +68,11 @@ behavior, repeat the workflow without drift, reset application and guest state, 
   Rationale: This meets the plan-13 topology and uniqueness rules while proving source binding and return routing. It
   does not claim public Internet egress, provider IP ownership, or SMTP reputation.
   Date/Author: 2026-08-28, project owner and Codex planning.
-- Decision: Rely on plan 17 to prove WSL2/VirtualBox and Linux/libvirt parity, then run this plan's expensive complete
-  fleet workflow on either one of those proven providers.
-  Rationale: The fleet behavior is provider-neutral once plan 17 has established identical guests, routes, inventory,
-  and cleanup. Repeating every application scenario on both providers would test Vagrant twice rather than provide
-  new proxy-fleet evidence.
-  Date/Author: 2026-08-28, Codex planning.
+- Decision: Run the complete fleet workflow on VirtualBox after plan 17 passes its acceptance criteria. Native
+  Linux/libvirt is an alternative only after plan 18 passes its separate provider matrix.
+  Rationale: One proven provider is sufficient for the application scenarios. This plan's VirtualBox path therefore
+  depends on plan 17 without waiting for plan 18; validation of both providers remains separate from fleet behavior.
+  Date/Author: 2026-09-06, project owner and Codex planning.
 - Decision: Use direct Vagrant commands for VM lifecycle, the tracked inventory for topology, and captured
   `vagrant ssh-config` output for Ansible and remote Docker access.
   Rationale: Vagrant and SSH already provide machine and command access. No command may fall back to the controller's

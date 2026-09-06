@@ -2,7 +2,9 @@
 
 This road map scales SMTP verification by treating every 3proxy listener and egress IP as one independently limited proxy-registry member. Application allocation, capacity enforcement, local SMTP verification, and drain observability are already merged. New implementation starts with the fleet image and proceeds through disposable host provisioning to a Swarm reference deployment.
 
-Implement the remaining plans in order. Each plan follows `.agents/PLANS.md` and represents exactly one pull request with its own acceptance criteria and validation.
+Implement the remaining plans according to their declared dependencies and readiness. Plans 16 and 18 can proceed
+independently after plan 17. Each plan follows `.agents/PLANS.md` and represents exactly one pull request with its own
+acceptance criteria and validation.
 
 Completed pull requests:
 
@@ -28,13 +30,19 @@ Dev-workflow fix discovered during a 2026-08-22 full E2E pass, independently del
 
 15. [Reset the DNS cache when bringing up the SMTP development overlay](15-reset-dns-cache-for-smtp-dev-overlay.md) — completed by PR #417
 
-Vagrant-native development lab for local validation:
+Vagrant-native development lab with Windows WSL2/VirtualBox validation:
 
-17. [Provision a Vagrant-native proxy-fleet development lab](17-provision-vagrant-native-development-lab.md)
+17. [Provision a Vagrant-native proxy-fleet development lab](17-provision-vagrant-native-development-lab.md) — initial
+    implementation merged in PR #518; VirtualBox validation completed in follow-up PR #549
+
+Native Linux provider validation, independently deliverable after plan 17:
+
+18. [Validate the Vagrant lab on native Linux with libvirt](18-validate-vagrant-libvirt-lab.md) — depends on plan 17
 
 Live-validation follow-up, dependent on the development lab from plan 17:
 
-16. [Validate the disposable proxy fleet end to end](16-validate-disposable-multi-node-fleet.md) — depends on plan 17
+16. [Validate the disposable proxy fleet end to end](16-validate-disposable-multi-node-fleet.md) — depends on plan 17;
+    its VirtualBox path does not wait for plan 18
 
 Shared decisions:
 
@@ -56,12 +64,16 @@ Shared decisions:
 - One `Vagrantfile` consumes the tracked lab inventory so guest roles, fixed addresses, and provisioning stay
   provider-neutral while thin provider blocks handle VirtualBox and libvirt differences. Vagrant-generated state and
   captured SSH facts remain ignored and replaceable; secret material follows the existing plan-12 Vault workflow.
-- The supported development paths are Windows 11 WSL2 with Windows VirtualBox and native AMD64 Linux with
-  libvirt/KVM. Hyper-V, VMware, macOS, ARM, cloud hosting, and production operations remain outside the lab contract.
+- VirtualBox guests use one CPU to avoid the reproduced Windows Hyper-V boot stall; libvirt guests retain two CPUs.
+  Both providers allocate 2,048 megabytes per guest. The tracked inventory declares these resources.
+- The lab targets Windows 11 WSL2 with Windows VirtualBox and native AMD64 Linux with libvirt/KVM. Plan 17 owns
+  VirtualBox validation; plan 18 owns the native Linux/libvirt matrix. Provider parity requires complete evidence
+  from both plans. The Vagrant Hyper-V provider, VMware, macOS, ARM, cloud hosting, and production operations remain
+  outside the lab contract.
 - Plan 16 accepts lab-routed egress as proof of listener source binding, routing, and reconciliation. Cloud VM
   creation, public-IP allocation, Internet routing, SMTP reputation, and provider-address lifecycle remain outside
   this repository and unverified by the disposable lab.
-- Plans 16 and 17 provide disposable development and validation infrastructure only. They do not add database
+- Plans 16 through 18 provide disposable development and validation infrastructure only. They do not add database
   migrations, production rollout, high availability, backups, or production recovery.
 - The current registry stores proxy authentication in PostgreSQL JSONB. That is accepted only for disposable development data in this road map; encryption or an external credential resolver is a prerequisite for any later production plan.
 - The initial capacity target remains approximately 100 verifications per minute, but inventory limits remain the source of configured capacity.
