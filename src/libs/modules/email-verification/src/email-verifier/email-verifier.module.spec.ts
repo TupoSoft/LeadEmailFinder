@@ -13,7 +13,7 @@ import {
     AccountDiscoveryApprovalView,
     Clock,
 } from '../application/account-discovery/approved-account-discovery-verifier'
-import { configuredAccountDiscoveryVerifiers } from './email-verifier.module'
+import { configuredAccountDiscovery } from './email-verifier.module'
 
 const clock: Clock = { now: () => new Date('2026-09-02T10:30:00Z') }
 
@@ -62,30 +62,34 @@ function adapters(): {
     }
 }
 
-describe(configuredAccountDiscoveryVerifiers.name, () => {
+describe(configuredAccountDiscovery.name, () => {
     it('loads the repository manifest but selects nothing for a proxy alone', async () => {
         const providerAdapters = adapters()
         const loadManifest = jest.fn().mockResolvedValue({ approvals: [] })
 
-        await expect(
-            configuredAccountDiscoveryVerifiers(
-                configService({ CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080' }),
-                clock,
-                providerAdapters.microsoftGetCredentialType,
-                providerAdapters.microsoftLogin,
-                providerAdapters.mimecastLogin,
-                providerAdapters.officeApps,
-                loadManifest,
-            ),
-        ).resolves.toEqual([])
+        const discovery = await configuredAccountDiscovery(
+            configService({ CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080' }),
+            clock,
+            providerAdapters.microsoftGetCredentialType,
+            providerAdapters.microsoftLogin,
+            providerAdapters.mimecastLogin,
+            providerAdapters.officeApps,
+            loadManifest,
+        )
+
+        await expect(discovery.discover('person@example.test')).resolves.toEqual([])
         expect(loadManifest).toHaveBeenCalledTimes(1)
+        expect(providerAdapters.officeAppsVerifier.verify).not.toHaveBeenCalled()
+        expect(providerAdapters.microsoftGetCredentialType.verify).not.toHaveBeenCalled()
+        expect(providerAdapters.microsoftLogin.verify).not.toHaveBeenCalled()
+        expect(providerAdapters.mimecastLogin.forRegion).not.toHaveBeenCalled()
     })
 
     it('rejects provider environment configuration when the manifest is empty', async () => {
         const providerAdapters = adapters()
 
         await expect(
-            configuredAccountDiscoveryVerifiers(
+            configuredAccountDiscovery(
                 configService({
                     CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
                     CATCH_ALL_PROVIDER: 'office_apps',
@@ -105,7 +109,7 @@ describe(configuredAccountDiscoveryVerifiers.name, () => {
     it('selects and wraps one provider for a matching approval fixture', async () => {
         const providerAdapters = adapters()
 
-        const selected = await configuredAccountDiscoveryVerifiers(
+        const discovery = await configuredAccountDiscovery(
             configService({
                 CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080',
                 CATCH_ALL_PROVIDER: 'office_apps',
@@ -120,8 +124,8 @@ describe(configuredAccountDiscoveryVerifiers.name, () => {
             () => Promise.resolve({ approvals: [approval()] }),
         )
 
-        expect(selected).toHaveLength(1)
-        await expect(selected[0].verify('person@example.test')).resolves.toBe(true)
+        await expect(discovery.discover('person@example.test')).resolves.toEqual([{ sourceName: 'microsoft_2' }])
+        expect(providerAdapters.officeAppsVerifier.verify).toHaveBeenCalledTimes(1)
         expect(providerAdapters.officeAppsVerifier.verify).toHaveBeenCalledWith('person@example.test')
     })
 })

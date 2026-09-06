@@ -2,13 +2,13 @@ import {
     EmailPatternEnum,
     EmailVerificationReason,
     EmailVerificationSource,
-    ICatchAllVerifier,
     fromStringToEnum,
 } from '@tuposoft/lead-email-finder/common'
 import { ok } from 'node:assert'
 import { NewEmailVerification } from '../domain/email-verification'
 import { deriveMxDomain } from '../domain/mx-domain'
 import { MailboxProbe, MailboxProbeResult } from './ports/mailbox-probe'
+import { AccountDiscovery } from './ports/account-discovery'
 
 function isKnownSource(value: string): value is EmailVerificationSource {
     return Object.values(EmailVerificationSource as object).includes(value)
@@ -23,7 +23,7 @@ export class MailboxVerificationService {
 
     constructor(
         private readonly mailboxProbe: MailboxProbe,
-        private readonly accountDiscoveryVerifiers: ICatchAllVerifier[],
+        private readonly accountDiscovery: AccountDiscovery,
     ) {}
 
     async verify(organizationId: string, email: string, format?: EmailPatternEnum): Promise<NewEmailVerification> {
@@ -87,16 +87,9 @@ export class MailboxVerificationService {
     }
 
     private async discoverAccount(email: string): Promise<EmailVerificationSource[]> {
-        const settled = await Promise.allSettled(
-            this.accountDiscoveryVerifiers.map(async verifier => await verifier.verify(email)),
-        )
+        const evidence = await this.accountDiscovery.discover(email)
 
-        return settled.flatMap((outcome, index) => {
-            if (outcome.status !== 'fulfilled' || !outcome.value) {
-                return []
-            }
-
-            const { sourceName } = this.accountDiscoveryVerifiers[index]
+        return evidence.flatMap(({ sourceName }) => {
             return isKnownSource(sourceName) ? [sourceName] : []
         })
     }

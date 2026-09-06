@@ -11,11 +11,11 @@ requests. This plan delivers one pull request; provider relocation belongs to `a
 
 ## Progress
 
-- [ ] (2026-09-06) Characterize discovery eligibility, evidence mapping, initialization rejection, and per-call failure behavior.
-- [ ] (2026-09-06) Introduce the private application port, evidence type, token, and discovery service.
-- [ ] (2026-09-06) Wire the active mailbox service and its Nest factory to use that port.
-- [ ] (2026-09-06) Verify policy, caller compatibility, and real Nest composition with fake outbound providers.
-- [ ] (2026-09-06) Update module documentation and record focused, architecture, and runtime validation.
+- [x] (2026-09-06) Characterize discovery eligibility, evidence mapping, initialization rejection, and per-call failure behavior.
+- [x] (2026-09-06) Introduce the private application port, evidence type, token, and discovery service.
+- [x] (2026-09-06) Wire the active mailbox service and its Nest factory to use that port.
+- [x] (2026-09-06) Verify policy, caller compatibility, and real Nest composition with fake outbound providers.
+- [x] (2026-09-06) Update module documentation and record focused, architecture, and runtime validation.
 
 ## Plan dependencies
 
@@ -35,6 +35,10 @@ requests. This plan delivers one pull request; provider relocation belongs to `a
   active mailbox service after its injected dependency changes.
 - Mailbox tests inject two fake providers even though configuration activates zero or one. Those tests describe
   evidence aggregation, not authorization to dispatch to several providers.
+- Implementation confirmed that PR #540 merged at `67b806464463b6d8de670aaa2af27e952752760f`, and all three
+  prerequisite plans are complete in this checkout. The initial caller and approval regression run passed 37 tests.
+- The old blacklisted caller test also set `catchAll` to true, so it did not independently prove eligibility by
+  reason. The port tests now cover an inconclusive blacklisted synthetic probe and a blacklisted real probe.
 
 ## Decision Log
 
@@ -54,10 +58,20 @@ requests. This plan delivers one pull request; provider relocation belongs to `a
 - Decision: Keep verification eligibility and source interpretation in `MailboxVerificationService`.
   Rationale: Discovery returns provider evidence; verification owns SMTP catch-all detection and final result policy.
   Date/Author: 2026-09-06, Codex planning.
+- Decision: Reuse the existing SMTP Bruno assertions without adding a duplicate request.
+  Rationale: This change alters internal Nest wiring without changing an HTTP path. The collection already covers
+  successful verification, the default empty discovery sources, authentication, validation, and credit rejection.
+  Provider dispatch counts and approval expiry are verified below HTTP with fake outbound dependencies.
+  Date/Author: 2026-09-06, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The active mailbox service now consumes one private evidence port. Discovery owns one-provider dispatch and
+normalizes per-call failures to empty evidence; email verification retains eligibility and source interpretation.
+Approval selection still rejects invalid initialization, and expired approval blocks dispatch without changing the
+pre-discovery verification result. All focused checks and the live SMTP collection passed. The architecture
+baseline and public barrel are unchanged. Provider relocation and the shared provider contract remain scoped to
+`account-discovery/02`; no real provider approval or live vendor validation was needed.
 
 ## Context and Orientation
 
@@ -213,9 +227,23 @@ No database reset, migration, or reseed is required by this refactor.
 
 ## Artifacts and Notes
 
-Record the caller path, final composition paths, policy tests, and dispatch test totals, any removed baseline keys,
-and actual validation commands and results. Implementation has not started; planning inspection is not test evidence.
-Record only synthetic fixture identifiers and stable outcomes, never addresses, credentials, or provider payloads.
+- `MailboxVerificationService` now consumes `application/ports/account-discovery.ts`. The real Nest factory in
+  `sync-email-verification/email-verification.module.ts` receives `ACCOUNT_DISCOVERY_TOKEN` from
+  `email-verifier/email-verifier.module.ts`, which retains its SMTP reexport. The obsolete provider-array token is
+  removed. Composition and service files remain in the layers specified above; the public barrel is unchanged.
+- The first focused command under Validation passed 12 suites and 82 tests. This includes five real Nest composition
+  cases with fake outbound dependencies: positive evidence, no configuration, proxy-only configuration, expiry after
+  initialization, and rejected initialization without approval. Counters prove exactly one dispatch for the approved
+  positive case and zero provider or HTTP dispatches for disabled and expired selections.
+- The second focused command passed two suites and 106 tests. The manifest check passed with zero approvals; the
+  working-tree session-material scan returned no findings.
+- Architecture validation passed with the existing 69 baseline entries unchanged. Type checking and the Nest build
+  passed. Repository ESLint passed with one existing return-type warning in `src/libs/config/src/load-secrets.spec.ts`.
+- `corepack pnpm bruno:smtp-dev` passed against the owned disposable Docker fixture stack: 22 requests and 44 tests,
+  with no skipped requests. The base stack also passed Keycloak and authenticated API smoke tests. The first proxy
+  bootstrap encountered a transient API connection refusal; retrying that idempotent fixture service after API
+  health returned `200` succeeded. No real account-discovery provider was configured.
+- The exact documentation command under Validation passed both Markdown files. `git diff --check` passed.
 
 ## Plan readiness
 
