@@ -1,0 +1,28 @@
+info:
+  name: 10-browser-openapi-contract
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/openapi.json"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('publishes only the initial browser operations and their authentication contract', function() {
+          expect(res.status).to.equal(200);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(Object.keys(res.body.paths).sort()).to.deep.equal([
+            '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session'
+          ]);
+          expect(res.body.paths['/v1/auth/session'].get.operationId).to.equal('getCurrentAccount');
+          expect(res.body.paths['/v1/auth/logout'].post.security).to.deep.equal([
+            { lef_session: [], 'x-csrf-token': [] }
+          ]);
+          expect(res.body.components.schemas.CurrentAccountContextDto.properties.email.nullable).to.equal(true);
+          expect(res.body.paths['/v1/auth/callback'].get['x-callback-error-codes']).to.deep.equal([
+            'login_state_invalid', 'authorization_code_exchange_failed', 'active_membership_required'
+          ]);
+        });

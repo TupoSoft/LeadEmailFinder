@@ -1,0 +1,21 @@
+{
+    "name": "@tuposoft/lead-email-finder-api-client",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "import": "./src/index.ts"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json && node --input-type=module -e \"import { copyFileSync } from 'node:fs'; copyFileSync('src/schema.d.ts', 'dist/schema.d.ts')\""
+    },
+    "dependencies": {
+        "openapi-fetch": "0.17.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.9.2"
+    }
+}

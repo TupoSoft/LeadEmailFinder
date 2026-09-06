@@ -10,6 +10,11 @@ same state with no authorization code is then consumed and redirects to `authori
 replay redirects to `login_state_invalid`. All four redirects clear the transient cookie, disable caching and referrer
 forwarding, and contain no submitted code or state value.
 
+The collection also checks that `/docs` serves Swagger UI and `/openapi.json` publishes exactly the initial browser
+operations, including nullable account email, cookie and CSRF security, and stable callback error codes. The direct
+API root, `/docs-json`, and `/docs-yaml` return `404`. Run these checks against the API origin; a gateway may own the
+product root separately.
+
 Run the repository command from the checkout root after provisioning the development stack:
 
 ```shell
@@ -23,7 +28,7 @@ the local stack; set `COMPOSE_PROJECT_NAME` when using a project other than `lef
 from that metadata, so no credential exports or global CLI installation are needed.
 
 The launcher reads the checkout-owned service-client fixture, obtains a short-lived token without logging its client
-secret or bearer value, and sends the token only for the human-session boundary check. It requires all eight requests
+secret or bearer value, and sends the token only for the human-session boundary check. It requires all thirteen requests
 and their tests to execute successfully. Missing prerequisites, a skipped request, zero executed tests, and mismatched
 report counts fail the command. It captures raw CLI output, omits headers and bodies from temporary reports, and
 removes those reports after execution to keep credentials and cookies out of logs and retained artifacts.
@@ -40,3 +45,7 @@ the hosted login form and seeds the organization membership required for a succe
 current-account success shape, nullable email, inactive membership, and post-guard unavailable account state. The
 guard-wiring integration test separately covers global Origin and CSRF enforcement for unsafe requests authenticated
 by the `lef_session` cookie. Service-client bearer requests and public routes retain their existing behavior.
+
+The launcher integration test executes the complete collection against a synthetic HTTP fixture to validate request
+counts, assertion execution, and report cleanup. This is separate from running Bruno against a provisioned development
+stack. The API documentation integration test exercises the shared runtime registration helper and its real routes.

@@ -7,6 +7,9 @@ export const BASELINE_SCHEMA_VERSION = 1 as const
 
 const DEFAULT_MODULES_DIRECTORY = 'src/libs/modules'
 const DEFAULT_TSCONFIG_PATH = 'tsconfig.json'
+// Nest generates this aggregate during builds; its DTO imports describe Swagger metadata,
+// not application dependencies. Other files named metadata.ts remain architecture inputs.
+const GENERATED_SWAGGER_METADATA_PATH = 'src/metadata.ts'
 const BUSINESS_MODULE_ALIAS_PREFIX = '@tuposoft/lead-email-finder/modules/'
 const ALLOWED_LAYERS = ['api', 'application', 'domain', 'infrastructure'] as const
 const REQUIRED_README_SECTIONS = [
@@ -615,7 +618,8 @@ function parseSources(
     const fileNames = new Set(
         [...compiler.fileNames, ...walkTypeScriptFiles(modulesDir)]
             .filter(fileName => fileName.endsWith('.ts'))
-            .map(fileName => resolve(fileName)),
+            .map(fileName => resolve(fileName))
+            .filter(fileName => repositoryPath(rootDir, fileName) !== GENERATED_SWAGGER_METADATA_PATH),
     )
 
     return [...fileNames].sort(compareText).map(absolutePath => {

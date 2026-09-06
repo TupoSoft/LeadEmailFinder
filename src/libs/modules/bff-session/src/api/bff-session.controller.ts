@@ -14,7 +14,10 @@ import {
 } from '@nestjs/common'
 import {
     ApiCookieAuth,
+    ApiExtension,
     ApiForbiddenResponse,
+    ApiHeader,
+    ApiNoContentResponse,
     ApiQuery,
     ApiOkResponse,
     ApiOperation,
@@ -37,7 +40,7 @@ import {
 } from '../application/current-account.service'
 import { SingleActiveMembershipRequiredError } from '../application/human-membership-resolver.service'
 import { IdTokenVerificationFailedError } from '../application/id-token-verifier'
-import { BFF_CSRF_COOKIE_NAME, BFF_LOGIN_STATE_COOKIE_NAME } from './bff-cookie-names'
+import { BFF_CSRF_COOKIE_NAME, BFF_CSRF_HEADER_NAME, BFF_LOGIN_STATE_COOKIE_NAME } from './bff-cookie-names'
 import {
     AuthenticationRequiredResponseDto,
     CurrentAccountContextDto,
@@ -114,6 +117,22 @@ export class BffSessionController {
 
     @Public()
     @Get('login')
+    @ApiOperation({
+        operationId: 'loginBrowserSession',
+        summary: 'Start browser authorization',
+        security: [],
+    })
+    @ApiResponse({
+        status: HttpStatus.FOUND,
+        description: 'Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge.',
+        headers: {
+            Location: { description: 'Provider authorization URL.', schema: { type: 'string', format: 'uri' } },
+            'Set-Cookie': {
+                description: 'Sets the transient HttpOnly lef_login_state cookie.',
+                schema: { type: 'string' },
+            },
+        },
+    })
     async login(@Res() res: Response): Promise<void> {
         const { authorizationUrl, state } = await this.bffSessionFlow.login()
 
@@ -123,8 +142,11 @@ export class BffSessionController {
 
     @Public()
     @Get('callback')
+    @ApiExtension('x-callback-error-codes', Object.values(CALLBACK_ERROR_CODES))
     @ApiOperation({
+        operationId: 'completeBrowserAuthorization',
         summary: 'Complete browser authorization',
+        security: [],
         description:
             'Consumes one pending Authorization Code with PKCE response. Success returns to the application; recoverable failures return to the same-origin error route with a stable safe code.',
     })
@@ -215,6 +237,7 @@ export class BffSessionController {
     @Get('session')
     @ApiCookieAuth(BFF_SESSION_COOKIE_NAME)
     @ApiOperation({
+        operationId: 'getCurrentAccount',
         summary: 'Read the current browser account',
         description:
             'Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.',
@@ -244,6 +267,50 @@ export class BffSessionController {
     }
 
     @Post('logout')
+    @ApiOperation({
+        operationId: 'logoutBrowserSession',
+        summary: 'End the browser session',
+        description:
+            'Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.',
+        security: [{ [BFF_SESSION_COOKIE_NAME]: [], [BFF_CSRF_HEADER_NAME]: [] }],
+    })
+    @ApiHeader({
+        name: 'Origin',
+        required: false,
+        description: 'Must match the application origin. A same-origin Referer is accepted when Origin is absent.',
+        schema: { type: 'string', format: 'uri' },
+    })
+    @ApiHeader({
+        name: 'Referer',
+        required: false,
+        description: 'Fallback URL for checking the application origin when Origin is absent.',
+        schema: { type: 'string', format: 'uri' },
+    })
+    @ApiNoContentResponse({
+        description: 'The session is revoked; the lef_session and lef_csrf_token cookies are cleared.',
+        headers: {
+            'Set-Cookie': { description: 'Expires the session and CSRF cookies.', schema: { type: 'string' } },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        type: AuthenticationRequiredResponseDto,
+        description: 'Authentication is missing, invalid, or expired.',
+    })
+    @ApiForbiddenResponse({
+        description: 'The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token.',
+        schema: {
+            type: 'object',
+            required: ['statusCode', 'message', 'error'],
+            properties: {
+                statusCode: { type: 'integer', enum: [403] },
+                message: {
+                    type: 'string',
+                    enum: ['Request origin is not allowed', 'CSRF token is missing or invalid'],
+                },
+                error: { type: 'string', enum: ['Forbidden'] },
+            },
+        },
+    })
     async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
         const cookies = parseCookieHeader(firstHeaderValue(req.headers['cookie']))
 

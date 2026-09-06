@@ -1,0 +1,667 @@
+{
+  "components": {
+    "schemas": {
+      "AuthenticationRequiredResponseDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "authentication_required"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "CurrentAccountContextDto": {
+        "properties": {
+          "capabilities": {
+            "description": "Presentation-only browser capabilities.",
+            "items": {
+              "enum": [
+                "verification.run",
+                "verification.read",
+                "team.manage",
+                "service_clients.manage",
+                "billing.read",
+                "billing.manage",
+                "platform.organizations.manage",
+                "platform.credits.manage",
+                "platform.proxies.manage"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "email": {
+            "description": "Current external-identity email, or null when the provider has no email.",
+            "example": "owner@example.test",
+            "format": "email",
+            "nullable": true,
+            "type": "string"
+          },
+          "grantableServiceClientPermissions": {
+            "description": "Ordered permissions this human account may grant to a service client.",
+            "items": {
+              "enum": [
+                "verification:run",
+                "verification:read",
+                "members:manage",
+                "credentials:manage",
+                "billing:read",
+                "billing:manage"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/CurrentAccountMembershipDto"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/CurrentAccountOrganizationDto"
+          }
+        },
+        "required": [
+          "email",
+          "membership",
+          "organization",
+          "capabilities",
+          "grantableServiceClientPermissions"
+        ],
+        "type": "object"
+      },
+      "CurrentAccountMembershipDto": {
+        "properties": {
+          "id": {
+            "description": "Active organization membership identifier.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the active organization membership.",
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role"
+        ],
+        "type": "object"
+      },
+      "CurrentAccountOrganizationDto": {
+        "properties": {
+          "id": {
+            "description": "Active organization identifier.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name of the active organization.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "HumanSessionRequiredResponseDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "human_session_required"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "lef_session": {
+        "in": "cookie",
+        "name": "lef_session",
+        "type": "apiKey"
+      },
+      "x-csrf-token": {
+        "description": "The decoded lef_csrf_token cookie value, supplied by the browser transport on unsafe methods.",
+        "in": "header",
+        "name": "x-csrf-token",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {
+      "email": "contact@leademailfinder.com",
+      "name": "Lead Email Finder Support",
+      "url": "/"
+    },
+    "description": "",
+    "title": "Lead Email Finder API",
+    "version": "0.10.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "postgres"
+                      ],
+                      "type": "object"
+                    },
+                    "error": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "info": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "error",
+                        "shutting_down"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "details"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The API and its PostgreSQL dependency are healthy."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "postgres"
+                      ],
+                      "type": "object"
+                    },
+                    "error": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "info": {
+                      "properties": {
+                        "postgres": {
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "up",
+                                "down"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "error",
+                        "shutting_down"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "details"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "PostgreSQL is unavailable or the API is shutting down."
+          }
+        },
+        "security": [],
+        "summary": "Read API and PostgreSQL health",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/v1/auth/callback": {
+      "get": {
+        "description": "Consumes one pending Authorization Code with PKCE response. Success returns to the application; recoverable failures return to the same-origin error route with a stable safe code.",
+        "operationId": "completeBrowserAuthorization",
+        "parameters": [
+          {
+            "description": "One-time login state. Missing, blank, repeated, expired, or mismatched values fail safely.",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider authorization code. Missing, blank, or repeated values follow the safe redirect policy.",
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects to the application after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of the authorization response.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "Same-origin application or stable callback-error URL.",
+                "schema": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents callback parameters from being sent as referrer data.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected provider, infrastructure, or application failure occurred without exposing detail.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of the authorization response.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents callback parameters from being sent as referrer data.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The provider ID token failed integrity or claim validation. The response contains no provider detail.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of the authorization response.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents callback parameters from being sent as referrer data.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "Complete browser authorization",
+        "tags": [
+          "BffSession"
+        ],
+        "x-callback-error-codes": [
+          "login_state_invalid",
+          "authorization_code_exchange_failed",
+          "active_membership_required"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "get": {
+        "operationId": "loginBrowserSession",
+        "parameters": [],
+        "responses": {
+          "302": {
+            "description": "Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge.",
+            "headers": {
+              "Location": {
+                "description": "Provider authorization URL.",
+                "schema": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Sets the transient HttpOnly lef_login_state cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "Start browser authorization",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.",
+        "operationId": "logoutBrowserSession",
+        "parameters": [
+          {
+            "description": "Fallback URL for checking the application origin when Origin is absent.",
+            "in": "header",
+            "name": "Referer",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must match the application origin. A same-origin Referer is accepted when Origin is absent.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The session is revoked; the lef_session and lef_csrf_token cookies are cleared.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Expires the session and CSRF cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationRequiredResponseDto"
+                }
+              }
+            },
+            "description": "Authentication is missing, invalid, or expired."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "Forbidden"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "enum": [
+                        "Request origin is not allowed",
+                        "CSRF token is missing or invalid"
+                      ],
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        403
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "End the browser session",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/session": {
+      "get": {
+        "description": "Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.",
+        "operationId": "getCurrentAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentAccountContextDto"
+                }
+              }
+            },
+            "description": "Current browser account context."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationRequiredResponseDto"
+                }
+              }
+            },
+            "description": "Authentication is missing, invalid, expired, or no longer maps to a usable account."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanSessionRequiredResponseDto"
+                }
+              }
+            },
+            "description": "The authenticated credential is a service client rather than a human session."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          }
+        ],
+        "summary": "Read the current browser account",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": []
+}

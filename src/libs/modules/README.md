@@ -126,6 +126,10 @@ not exceptions to this contract. Exact equality is required:
 - A current violation without a matching baseline entry fails the check as `new debt`.
 - A baseline entry without a matching current violation fails the check as `stale debt` and must be removed.
 
+The ignored host file `src/metadata.ts` is Nest's generated Swagger aggregate. The gate excludes this exact build
+artifact because its DTO imports describe documentation metadata. Handwritten host files and every other file named
+`metadata.ts` remain subject to the public import boundaries.
+
 Violation identities are stable, sorted, unique keys that exclude absolute paths and source positions. Diagnostics
 report current line and column information separately. The baseline has a schema version and a `violations` array
 sorted in lexicographical order; malformed, duplicate, or incorrectly ordered entries cause the check to fail.

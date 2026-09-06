@@ -21,6 +21,7 @@
     },
     "dependencies": {
         "@fontsource-variable/inter": "5.3.0",
+        "@tuposoft/lead-email-finder-api-client": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.0.0"

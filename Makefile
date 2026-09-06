@@ -35,4 +35,4 @@ refresh-deps:
 	$(COMPOSE_FILE_$(env)) --profile $(profile) up $(COMPOSE_OPTIONS_UP) -V
 
 swagger:
-	ts-node apps/lead-email-finder/src/generate-metadata.ts
+	corepack pnpm exec ts-node src/lead-email-finder-api/src/generate-metadata.ts
