@@ -46,3 +46,10 @@ export class FinalOwnerConflictError extends Error {
         this.name = FinalOwnerConflictError.name
     }
 }
+
+export class InvitationConsumedError extends Error {
+    constructor() {
+        super('Invitation has already been accepted')
+        this.name = InvitationConsumedError.name
+    }
+}

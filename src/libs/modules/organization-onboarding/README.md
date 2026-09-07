@@ -8,7 +8,7 @@ change must stay consistent.
 ## Responsibility
 
 - Creating a new organization together with its first owner's invitation (`platform:admin` only).
-- Issuing invitations into an existing organization, and accepting an invitation (public, bearer-token
+- Issuing invitations into an existing organization, previewing pending invitations, and accepting an invitation (public, bearer-token
   authenticated by the invitation itself) to create or reuse a Keycloak user.
 - Listing members, changing a member's role, and removing a member, all under a final-owner protection that
   never allows an organization to be left without an active owner, even under concurrent requests.
@@ -32,13 +32,13 @@ port/adapter, and every DTO are internal.
 ## Architecture
 
 Layered per `module-architecture/06`. `api/` holds the controller, DTOs, and HTTP integration test — the only
-layer that may import Nest/`class-validator`/Swagger. `application/` holds the six use-case services and the
+layer that may import Nest/`class-validator`/Swagger. `application/` holds the seven use-case services and the
 private `KeycloakOrganizationAdmin` port; both are framework-free, constructed through explicit factories in
 `organization-onboarding.module.ts`. `domain/` holds invitation token generation/hashing/TTL, and the typed
 errors `NotInOrganizationError`/`InsufficientPermissionError`/`MembershipNotFoundError`/`InvitationNotFoundError`/
-`InvitationExpiredError`/`ConflictingMembershipError`/`FinalOwnerConflictError`. `infrastructure/` holds the
+`InvitationExpiredError`/`InvitationConsumedError`/`ConflictingMembershipError`/`FinalOwnerConflictError`. `infrastructure/` holds the
 `KeycloakOrganizationAdminClient` adapter. The controller's private `handleErrors()` maps each domain error to
-the unchanged `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException` HTTP behavior.
+the `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException` HTTP behavior.
 
 Every use case that must call Keycloak while a lock is held — `InvitationAcceptanceService`,
 `MembershipRoleChangeService`, `MembershipRemovalService` — does so through one of identity's two session-shaped
@@ -49,8 +49,8 @@ single-transaction correctness this module had before the split.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthRole`, and the five persistence ports
-  `OrganizationRegistrationStore`, `InvitationStore`, `InvitationAcceptanceStore`, `MembershipDirectory`,
+- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthRole`, and the six persistence ports
+  `OrganizationRegistrationStore`, `InvitationStore`, `InvitationPreviewReader`, `InvitationAcceptanceStore`, `MembershipDirectory`,
   `MembershipMutationStore` (plus their record types and tokens). This module no longer imports any identity
   TypeORM entity or `DataSource`/`EntityManager`.
 - [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `Public`,
@@ -63,10 +63,12 @@ single-transaction correctness this module had before the split.
 
 ## HTTP Surface
 
-`OrganizationsController` at `v1/organizations`, excluded from Swagger:
+`OrganizationsController` at `v1/organizations`. Team and invitation operations appear in the browser OpenAPI
+allow list; platform organization creation stays excluded from Swagger:
 
 | Method   | Path                                                     | Access                                                |
 | -------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| `GET`    | `v1/organizations/invitations/:token`                    | Public — authenticated by the invitation token itself |
 | `POST`   | `v1/organizations/invitations/:token/accept`             | Public — authenticated by the invitation token itself |
 | `POST`   | `v1/organizations`                                       | `platform:admin`                                      |
 | `POST`   | `v1/organizations/:organizationId/invitations`           | `members:manage`                                      |
@@ -74,9 +76,24 @@ single-transaction correctness this module had before the split.
 | `PATCH`  | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`                                      |
 | `DELETE` | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`; `204 No Content`                    |
 
+Member listing preserves active and disabled rows, nullable email, and deterministic `createdAt ASC, id ASC`
+ordering. Role and removal operations retain server hierarchy and final-owner protection.
+
+Preview hashes the supplied token and uses identity's narrow `InvitationPreviewReader`. Only pending, unexpired
+invitations expose organization name, invited email, role, expiry, and pending status. Unknown tokens return `404`;
+expired or consumed tokens return `410` with `invitation_expired` or `invitation_consumed` and no invitation details.
+A replayed acceptance returns only `{ "status": "accepted" }`, including a concurrent replay that loses the
+conditional acceptance update. First acceptance retains organization ID, email, and role. Password validation keeps
+its 12-character minimum.
+
+Invitation responses, including platform creation and authentication or validation failures, receive
+`Cache-Control: no-store` and `Referrer-Policy: no-referrer` from API-host middleware before body parsing, guards, and pipes run. Issued
+raw tokens are returned once; this module provides no token recovery or email delivery. Cookie-authenticated
+mutations retain the application Origin and CSRF-header requirements owned by authentication.
+
 ## Persistence
 
-None owned. This module operates entirely through the five persistence ports owned by `identity`, which read and
+None owned. This module operates entirely through the six persistence ports owned by `identity`, which read and
 write the `Organization`, `OrganizationMembership`, `OrganizationInvitation`, `ExternalIdentity`, and
 `AuditLogEntry` tables `identity` owns.
 
@@ -91,6 +108,7 @@ write the `Organization`, `OrganizationMembership`, `OrganizationInvitation`, `E
 
 Focused tests live in `src/`: `application/organization-creation.service.spec.ts`,
 `application/invitation-issuance.service.spec.ts`, `application/invitation-acceptance.service.spec.ts`,
+`application/invitation-preview.service.spec.ts`,
 `application/membership-listing.service.spec.ts`, `application/membership-role-change.service.spec.ts`,
 `application/membership-removal.service.spec.ts`,
 `application/membership-mutation-concurrency.integration.spec.ts` (real-Postgres concurrent-mutation coverage for
@@ -101,7 +119,7 @@ wiring), and the live-Keycloak-gated
 `infrastructure/keycloak-organization-admin.live-keycloak.integration.spec.ts`.
 
 [`bruno/organization-onboarding`](../../../../bruno/organization-onboarding/README.md) proves organization
-creation with a pending owner invitation, no-session invitation acceptance, idempotent duplicate acceptance,
+creation with a pending owner invitation, no-session invitation acceptance, generic duplicate acceptance, pending/unknown/expired/consumed preview responses and cache headers,
 `409` on a duplicate owner invitation, cross-organization invitation rejection, and unknown-token rejection.
 Role-hierarchy enforcement, final-owner protection, and Keycloak MFA-role assignment on promotion require a
 genuine human session and are instead covered by `organization-onboarding-http.integration.spec.ts` and the

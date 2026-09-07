@@ -7,6 +7,11 @@ request:
   scripts:
     - type: before-request
       code: |-
+        if (!bru.getVar('acceptancePassword')) {
+          const crypto = require('node:crypto');
+          bru.setVar('acceptancePassword', crypto.randomBytes(24).toString('base64url'));
+          bru.setVar('unknownInvitationToken', crypto.randomBytes(32).toString('base64url'));
+        }
         if (!bru.getVar('serviceClientToken')) {
           const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
             method: 'POST',

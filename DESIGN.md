@@ -80,6 +80,11 @@ components:
         textColor: '{colors.canvas}'
         rounded: '{rounded.control}'
         size: '{spacing.control-height}'
+    form-control:
+        backgroundColor: '{colors.canvas}'
+        textColor: '{colors.ink}'
+        rounded: '{rounded.control}'
+        size: '{spacing.control-height}'
     application-background:
         backgroundColor: '{colors.page-background}'
         textColor: '{colors.ink}'
@@ -288,6 +293,19 @@ feedback region. Billing places balance, credit packs, and purchase history in d
 the shared primary and secondary treatments. The return notice uses sage with an evergreen rule; its text states
 the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
 changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
+
+### Team Forms and Invitations
+
+Team management and public invitation acceptance reuse the product heading, canvas, fine rules, and existing
+action treatments. Shared fields in `Form.module.css` use the control height and radius, ink text, and canvas
+background. Labels remain visible; validation text uses the contrast-safe accent text. Native role selects retain
+the operating system's popup behavior. Member tables become labeled rows at narrow widths without duplicating data.
+
+Team confirmation dialogs use the native modal layer with application-owned content, canvas, a fine rule, and a
+bounded scrolling body. They place initial focus on Cancel for permission changes and disabling access, trap
+keyboard focus, and return it to the trigger. One-time invitation results use that dialog with a copy action and
+immediate secret cleanup. The public invitation page uses a single readable column and the existing brand link;
+loading and recovery reserve the shared state height. This feature adds no palette, typography, or motion tokens.
 
 ### Signal Path
 

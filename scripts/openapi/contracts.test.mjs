@@ -83,6 +83,11 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/billing/credit-packs',
         '/v1/billing/summary',
         '/v1/credit-purchases',
+        '/v1/organizations/invitations/{token}',
+        '/v1/organizations/invitations/{token}/accept',
+        '/v1/organizations/{organizationId}/invitations',
+        '/v1/organizations/{organizationId}/members',
+        '/v1/organizations/{organizationId}/members/{membershipId}',
     ])
     assert.deepEqual(browser.servers, [{ url: '/' }])
     for (const fragment of ['verify', 'proxies']) {
@@ -226,5 +231,38 @@ test('rejects missing or stale JSON and TypeScript without repairing either file
         await writeFile(path, original + '\n')
         await assert.rejects(checkArtifacts(directory, snapshot, schema), /OpenAPI drift/)
         assert.equal(await readFile(path, 'utf8'), original + '\n')
+    }
+})
+
+
+test('team and invitation operations publish reviewed safe browser contracts', () => {
+    const schemas = browser.components.schemas
+    assert.equal(Object.hasOwn(runtime.paths, '/v1/organizations'), false)
+    assert.equal(schemas.MembershipResponseDto.properties.email.nullable, true)
+    assert.deepEqual(schemas.MembershipResponseDto.properties.status.enum, ['active', 'disabled'])
+    assert.equal(schemas.AcceptInvitationDto.properties.password.minLength, 12)
+    assert.equal(schemas.AcceptInvitationDto.properties.password.writeOnly, true)
+    assert.deepEqual(Object.keys(schemas.InvitationAcceptedResponseDto.properties), ['status'])
+    assert.deepEqual(schemas.InvitationAcceptedResponseDto.properties.status.enum, ['accepted'])
+    assert.deepEqual(Object.keys(schemas.InvitationPreviewResponseDto.properties), ['email', 'expiresAt', 'organizationName', 'role', 'status'])
+    for (const [path, method] of [
+        ['/v1/organizations/invitations/{token}', 'get'],
+        ['/v1/organizations/invitations/{token}/accept', 'post'],
+        ['/v1/organizations/{organizationId}/invitations', 'post'],
+    ]) {
+        const operation = browser.paths[path][method]
+        for (const response of Object.values(operation.responses)) {
+            assert.deepEqual(response.headers['Cache-Control'].schema.enum, ['no-store'])
+            assert.deepEqual(response.headers['Referrer-Policy'].schema.enum, ['no-referrer'])
+        }
+        if (path.includes('/invitations/{token}')) assert.deepEqual(operation.security, [])
+    }
+    const preview = browser.paths['/v1/organizations/invitations/{token}'].get
+    for (const status of ['200', '404', '410']) assert.ok(preview.responses[status])
+    assert.deepEqual(schemas.InvitationGoneResponseDto.properties.code.enum, ['invitation_expired', 'invitation_consumed'])
+    for (const method of ['patch', 'delete']) {
+        const operation = browser.paths['/v1/organizations/{organizationId}/members/{membershipId}'][method]
+        assert.deepEqual(operation.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+        for (const status of ['401', '403', '404', '409']) assert.ok(operation.responses[status])
     }
 })

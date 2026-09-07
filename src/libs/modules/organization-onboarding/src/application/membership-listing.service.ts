@@ -8,7 +8,7 @@ import { InsufficientPermissionError, NotInOrganizationError } from '../domain/o
 export class MembershipListingService {
     constructor(private readonly directory: MembershipDirectory) {}
 
-    async listActive(actor: AuthPrincipal, organizationId: string): Promise<readonly OrganizationMembershipDetailRecord[]> {
+    async listForOrganization(actor: AuthPrincipal, organizationId: string): Promise<readonly OrganizationMembershipDetailRecord[]> {
         if (actor.organizationId !== organizationId) {
             throw new NotInOrganizationError()
         }

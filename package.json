@@ -19,6 +19,7 @@
         "bruno:bff-sessions": "node scripts/bruno/run-collection.mjs bff-sessions",
         "bruno:smtp-dev": "node scripts/bruno/run-collection.mjs smtp-dev",
         "bruno:credit-purchases": "node scripts/bruno/run-collection.mjs credit-purchases",
+        "bruno:organization-onboarding": "node scripts/bruno/run-collection.mjs organization-onboarding",
         "test:credits-postgres": "ts-node scripts/testing/credits-postgres.ts",
         "bruno:platform-credits": "ts-node scripts/bruno/run-platform-credits.ts",
         "architecture:check": "ts-node scripts/architecture/check-module-architecture.ts",

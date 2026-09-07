@@ -26,6 +26,14 @@ export function isApiRequest(target: string): boolean {
     }
 }
 
+export function isInvitationDocument(target: string): boolean {
+    try {
+        return /^\/accept-invitation(?:\/|$)/.test(decodeURIComponent(target.split('?')[0]))
+    } catch {
+        return false
+    }
+}
+
 export const STATIC_SECURITY_HEADERS = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',

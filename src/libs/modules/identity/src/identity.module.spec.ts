@@ -6,6 +6,8 @@ import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
 import { CURRENT_ACCOUNT_READER } from './application/ports/current-account-reader'
 import { EXTERNAL_IDENTITY_STORE } from './application/ports/external-identity-store'
 import { INVITATION_ACCEPTANCE_STORE } from './application/ports/invitation-acceptance-store'
+import { INVITATION_PREVIEW_READER } from './application/ports/invitation-preview-reader'
+import { TypeOrmInvitationPreviewReader } from './infrastructure/persistence/typeorm-invitation-preview-reader'
 import { INVITATION_STORE } from './application/ports/invitation-store'
 import { MEMBERSHIP_DIRECTORY } from './application/ports/membership-directory'
 import { MEMBERSHIP_MUTATION_STORE } from './application/ports/membership-mutation-store'
@@ -57,6 +59,7 @@ describe('IdentityModule', () => {
                     provide: ORGANIZATION_REGISTRATION_STORE,
                     useExisting: TypeOrmOrganizationRegistrationStore,
                 }),
+                expect.objectContaining({ provide: INVITATION_PREVIEW_READER, useExisting: TypeOrmInvitationPreviewReader }),
                 expect.objectContaining({ provide: INVITATION_STORE, useExisting: TypeOrmInvitationStore }),
                 expect.objectContaining({
                     provide: INVITATION_ACCEPTANCE_STORE,
@@ -92,6 +95,7 @@ describe('IdentityModule', () => {
                 CURRENT_ACCOUNT_READER,
                 ORGANIZATION_REGISTRATION_STORE,
                 INVITATION_STORE,
+                INVITATION_PREVIEW_READER,
                 INVITATION_ACCEPTANCE_STORE,
                 MEMBERSHIP_DIRECTORY,
                 MEMBERSHIP_MUTATION_STORE,

@@ -12,6 +12,7 @@ export class TypeOrmMembershipDirectory implements MembershipDirectory {
         const memberships = await this.dataSource.manager.find(OrganizationMembership, {
             where: { organizationId },
             relations: ['externalIdentity'],
+            order: { createdAt: 'ASC', id: 'ASC' },
         })
 
         return memberships.map(toRecord)

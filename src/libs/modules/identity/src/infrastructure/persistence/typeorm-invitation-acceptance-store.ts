@@ -63,7 +63,7 @@ export class TypeOrmInvitationAcceptanceStore implements InvitationAcceptanceSto
             if (freshInvitation.status === 'accepted') {
                 await queryRunner.commitTransaction()
                 await queryRunner.release()
-                return { kind: 'already-accepted', result: toAcceptanceResult(freshInvitation) }
+                return { kind: 'already-accepted', result: { status: 'accepted' } }
             }
 
             const activeMembershipCount = await manager.count(OrganizationMembership, {
@@ -116,9 +116,9 @@ class TypeOrmInvitationAcceptanceSession implements InvitationAcceptanceSession 
                 { status: 'accepted', acceptedAt: new Date(), acceptedByExternalIdentityId: this.externalIdentityId },
             )
             if (updateResult.affected === 0) {
-                const winning = await manager.findOneByOrFail(OrganizationInvitation, { id: this.invitation.id })
+                await manager.findOneByOrFail(OrganizationInvitation, { id: this.invitation.id })
                 await this.queryRunner.commitTransaction()
-                return toAcceptanceResult(winning)
+                return { status: 'accepted' }
             }
 
             const membership = await manager.save(
@@ -163,10 +163,8 @@ class TypeOrmInvitationAcceptanceSession implements InvitationAcceptanceSession 
     }
 }
 
-function toAcceptanceResult(invitation: OrganizationInvitation): InvitationAcceptanceResult {
-    return { organizationId: invitation.organizationId, role: invitation.role, email: invitation.email }
-}
-
 function isUniqueViolation(error: unknown): boolean {
-    return typeof error === 'object' && error !== null && (error as { code?: string }).code === POSTGRES_UNIQUE_VIOLATION
+    return (
+        typeof error === 'object' && error !== null && (error as { code?: string }).code === POSTGRES_UNIQUE_VIOLATION
+    )
 }
