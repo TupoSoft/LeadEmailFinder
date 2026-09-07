@@ -1,8 +1,7 @@
 import {
     EnqueueBatchResponse,
-    GetBatchStatusRequestParams,
     GetBatchStatusResponse,
-} from './batch-email-verification-service.interface'
+} from '../../../application/delivery/batch/batch-email-verification.service'
 import { Expose } from 'class-transformer'
 import { ApiProperty } from '@nestjs/swagger'
 import { IsUUID } from 'class-validator'
@@ -18,7 +17,7 @@ export class UploadFileRequestDto {
     file: string
 }
 
-export class GetBatchStatusRequestParamsDto implements GetBatchStatusRequestParams {
+export class GetBatchStatusRequestParamsDto {
     @IsUUID()
     id: string
 }

@@ -17,17 +17,20 @@ import {
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { Express, Request } from 'express'
-import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
+import { ApiBody, ApiConsumes } from '@nestjs/swagger'
+import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
+import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN,
+    BatchEmailVerificationService,
+} from '../../../application/delivery/batch/batch-email-verification.service'
+import { BatchEmailVerificationJobNotFoundException } from '../../../application/delivery/batch/job-not-found.exception'
 import {
     GetBatchStatusRequestParamsDto,
     GetBatchStatusResponseDto,
     UploadFileRequestDto,
     UploadFileResponseDto,
 } from './batch-email-verification.dto'
-import { ApiBody, ApiConsumes } from '@nestjs/swagger'
-import { JobNotFoundException } from './job-not-found.exception'
-import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 
 @UseGuards(PermissionsGuard)
 @Controller('verifyBatch')
@@ -35,8 +38,11 @@ export class BatchEmailVerificationController {
     private static readonly MAX_FILE_SIZE = 104857600
 
     constructor(
-        @Inject('BatchEmailVerificationServiceToken')
-        private readonly batchEmailVerificationService: BatchEmailVerificationService,
+        @Inject(BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN)
+        private readonly batchEmailVerificationService: Pick<
+            BatchEmailVerificationService,
+            'uploadFile' | 'getBatchStatus' | 'getBatchResults'
+        >,
     ) {}
 
     @Post('csv')
@@ -67,8 +73,12 @@ export class BatchEmailVerificationController {
         @Req() request: Request,
     ): Promise<UploadFileResponseDto> {
         return await this.batchEmailVerificationService.uploadFile(
-            file,
-            principal,
+            {
+                bucket: file.bucket,
+                key: file.key,
+                organizationId: principal.organizationId,
+                credentialId: principal.credentialId,
+            },
             typeof request.id === 'string' ? request.id : undefined,
         )
     }
@@ -81,9 +91,9 @@ export class BatchEmailVerificationController {
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<GetBatchStatusResponseDto> {
         try {
-            return await this.batchEmailVerificationService.getBatchStatus(id, principal)
+            return await this.batchEmailVerificationService.getBatchStatus(id, principal.organizationId)
         } catch (error) {
-            if (error instanceof JobNotFoundException) {
+            if (error instanceof BatchEmailVerificationJobNotFoundException) {
                 throw new NotFoundException(error.message)
             }
 
@@ -98,10 +108,10 @@ export class BatchEmailVerificationController {
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<StreamableFile> {
         try {
-            const readable = await this.batchEmailVerificationService.getBatchResults(id, principal)
+            const readable = await this.batchEmailVerificationService.getBatchResults(id, principal.organizationId)
             return new StreamableFile(readable, { type: 'text/csv' })
         } catch (error) {
-            if (error instanceof JobNotFoundException) {
+            if (error instanceof BatchEmailVerificationJobNotFoundException) {
                 throw new NotFoundException(error.message)
             }
 

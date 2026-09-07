@@ -6,7 +6,8 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { EmailVerificationCoreModule } from './infrastructure/email-verification-core.module'
 import { AsyncEmailVerificationModule } from './infrastructure/queues/async-verification/async-email-verification.module'
 import { AsyncEmailVerificationController } from './api/http/asynchronous-verification/async-email-verification.controller'
-import { BatchEmailVerificationModule } from './batch-email-verification'
+import { BatchEmailVerificationModule } from './infrastructure/queues/batch-verification/batch-email-verification.module'
+import { BatchEmailVerificationController } from './api/http/batch-verification/batch-email-verification.controller'
 import { SyncEmailVerificationController } from './api/http/synchronous-verification/current/sync-email-verification.controller'
 import { EmailAdministrationController } from './api/http/email-administration/email-administration.controller'
 import { EmailVerificationOrchestrator } from './application/email-verification.service'
@@ -24,6 +25,7 @@ import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/em
     imports: [EmailVerificationCoreModule, AsyncEmailVerificationModule, BatchEmailVerificationModule, CreditsModule],
     controllers: [
         AsyncEmailVerificationController,
+        BatchEmailVerificationController,
         SyncEmailVerificationController,
         EmailAdministrationController,
         VerificationResultsController,

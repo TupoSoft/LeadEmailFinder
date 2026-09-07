@@ -153,6 +153,7 @@ HttpOnly
 IdP
 JTI
 LeadEmailFinder's
+BullMQ's
 lifecycles
 nonterminal
 overbroad
@@ -214,6 +215,7 @@ unversioned
 additively
 cutover
 cutovers
+relocations
 unrun
 unsplit
 unwired
