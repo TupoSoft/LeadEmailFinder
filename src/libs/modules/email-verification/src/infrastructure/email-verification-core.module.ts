@@ -1,16 +1,10 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule, ConfigService } from '@nestjs/config'
+import { ConfigModule } from '@nestjs/config'
 import { HttpModule } from '@nestjs/axios'
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
-import {
-    CatchAllModule,
-    MicrosoftGetCredentialType,
-    MicrosoftLogin,
-    MimecastLogin,
-    OfficeApps,
-} from '@tuposoft/lead-email-finder/catch-all'
+import { AccountDiscoveryModule } from './account-discovery/account-discovery.module'
 import {
     ALLOCATION_OBSERVER_TOKEN,
     IAllocationObserver,
@@ -23,11 +17,6 @@ import {
 import { IDnsService } from '@tuposoft/lead-email-finder/common'
 import { VerificationTraceModule } from './verification-trace/verification-trace.module'
 import { AccountDiscovery, ACCOUNT_DISCOVERY_TOKEN } from '../application/ports/account-discovery'
-import {
-    ACCOUNT_DISCOVERY_CLOCK_TOKEN,
-    SYSTEM_CLOCK,
-    configuredAccountDiscovery,
-} from './account-discovery/configured-account-discovery'
 import { EmailEntity } from './persistence/typeorm/email.entity'
 import { DomainPolicyEntity } from './persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from './persistence/typeorm/email-verification.entity'
@@ -60,7 +49,7 @@ import {
         DnsModule,
         HttpModule,
         ProxyModule,
-        CatchAllModule,
+        AccountDiscoveryModule,
     ],
     providers: [
         {
@@ -86,22 +75,6 @@ import {
             useExisting: HttpDomainSynonymDiscovery,
         },
         SmtpClientFactory,
-        {
-            provide: ACCOUNT_DISCOVERY_CLOCK_TOKEN,
-            useValue: SYSTEM_CLOCK,
-        },
-        {
-            provide: ACCOUNT_DISCOVERY_TOKEN,
-            useFactory: configuredAccountDiscovery,
-            inject: [
-                ConfigService,
-                ACCOUNT_DISCOVERY_CLOCK_TOKEN,
-                MicrosoftGetCredentialType,
-                MicrosoftLogin,
-                MimecastLogin,
-                OfficeApps,
-            ],
-        },
         {
             provide: MAILBOX_PROBE,
             inject: [

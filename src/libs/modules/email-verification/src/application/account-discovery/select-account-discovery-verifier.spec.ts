@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
@@ -24,9 +24,9 @@ const approval = (overrides: Partial<AccountDiscoveryApprovalView> = {}): Accoun
 
 function verifierFactories(): {
     factories: AccountDiscoveryVerifierFactories
-    verifiers: Record<AccountDiscoveryProviderName, ICatchAllVerifier>
+    verifiers: Record<AccountDiscoveryProviderName, AccountDiscoveryProvider>
 } {
-    const verifiers: Record<AccountDiscoveryProviderName, ICatchAllVerifier> = {
+    const verifiers: Record<AccountDiscoveryProviderName, AccountDiscoveryProvider> = {
         microsoft_get_credential_type: { sourceName: 'microsoft_4', verify: jest.fn() },
         microsoft_login: { sourceName: 'microsoft_1', verify: jest.fn() },
         mimecast: { sourceName: 'mimecast', verify: jest.fn() },

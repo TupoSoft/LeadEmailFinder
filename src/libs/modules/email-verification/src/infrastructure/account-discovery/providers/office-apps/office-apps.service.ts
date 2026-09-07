@@ -1,11 +1,11 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import type { AccountDiscoveryProvider } from '../../../../application/account-discovery/account-discovery-provider'
 import { HttpService } from '@nestjs/axios'
 import { Injectable, Logger, Optional } from '@nestjs/common'
 import { firstValueFrom } from 'rxjs'
 import { isNativeError } from 'node:util/types'
 
 @Injectable()
-export class OfficeApps implements ICatchAllVerifier {
+export class OfficeApps implements AccountDiscoveryProvider {
     private static readonly URL = 'https://odc.officeapps.live.com/odc/emailhrd/getidp?hm=0&emailAddress='
 
     private static readonly INVALID_RESPONSES = ['OrgId,Placeholder', 'Neither', 'Error', 'Throttled']

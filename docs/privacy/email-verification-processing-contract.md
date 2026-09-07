@@ -331,7 +331,8 @@ The inventory was checked against these repository areas:
 
 - HTTP, persistence, queue, batch, S3, and SMTP behavior under
   `src/libs/modules/email-verification/src/`;
-- External account-discovery adapters under `src/libs/catch-all/src/`;
+- Private account-discovery composition and provider adapters under
+  `src/libs/modules/email-verification/src/infrastructure/account-discovery/`;
 - DNS cache behavior under `src/libs/dns/src/dns.service.ts`;
 - Authentication and credit references under `src/libs/modules/identity/src/` and `src/libs/modules/credits/src/`;
 - API composition and logging under `src/main.ts` and `src/lead-email-finder-api/src/`;

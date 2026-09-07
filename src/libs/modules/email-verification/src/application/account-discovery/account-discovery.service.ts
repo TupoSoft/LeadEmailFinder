@@ -1,8 +1,8 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 import { AccountDiscovery, AccountDiscoveryEvidence } from '../ports/account-discovery'
 
 export class AccountDiscoveryService implements AccountDiscovery {
-    constructor(private readonly verifier?: ICatchAllVerifier) {}
+    constructor(private readonly verifier?: AccountDiscoveryProvider) {}
 
     async discover(email: string): Promise<readonly AccountDiscoveryEvidence[]> {
         if (!this.verifier) {

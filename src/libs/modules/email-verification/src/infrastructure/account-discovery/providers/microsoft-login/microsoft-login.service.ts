@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import type { AccountDiscoveryProvider } from '../../../../application/account-discovery/account-discovery-provider'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { Injectable } from '@nestjs/common'
@@ -6,7 +6,7 @@ import { MicrosoftLoginErrorCode } from './microsoft-login-error-code.enum'
 import { isMicrosoftError } from './microsoft-error.type-guard'
 
 @Injectable()
-export class MicrosoftLogin implements ICatchAllVerifier {
+export class MicrosoftLogin implements AccountDiscoveryProvider {
     private static readonly URL = 'https://login.microsoft.com/common/oauth2/token'
 
     private static readonly HEADERS = {

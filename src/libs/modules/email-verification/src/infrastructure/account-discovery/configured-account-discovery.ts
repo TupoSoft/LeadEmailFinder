@@ -1,14 +1,15 @@
 import { ConfigService } from '@nestjs/config'
-import {
-    MicrosoftGetCredentialType,
-    MicrosoftLogin,
-    MimecastLogin,
-    OfficeApps,
-} from '@tuposoft/lead-email-finder/catch-all'
+import { MicrosoftGetCredentialType } from './providers/microsoft-get-credential-type'
+import { MicrosoftLogin } from './providers/microsoft-login'
+import { MimecastLogin } from './providers/mimecast-login'
+import { OfficeApps } from './providers/office-apps'
 import { loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
-import { AccountDiscovery, ACCOUNT_DISCOVERY_TOKEN } from '../../application/ports/account-discovery'
+import { AccountDiscovery } from '../../application/ports/account-discovery'
 import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
-import { AccountDiscoveryApprovalView, Clock } from '../../application/account-discovery/approved-account-discovery-verifier'
+import {
+    AccountDiscoveryApprovalView,
+    Clock,
+} from '../../application/account-discovery/approved-account-discovery-verifier'
 import { composeAccountDiscovery } from './account-discovery-composition'
 
 export const ACCOUNT_DISCOVERY_CLOCK_TOKEN = 'AccountDiscoveryClockToken'
@@ -40,5 +41,3 @@ export async function configuredAccountDiscovery(
         clock,
     )
 }
-
-export { ACCOUNT_DISCOVERY_TOKEN }

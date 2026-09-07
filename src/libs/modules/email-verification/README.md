@@ -125,9 +125,13 @@ or logging provider errors. Invalid selection still rejects initialization, and 
 validity again before dispatch. `infrastructure/account-discovery/account-discovery-composition.ts` rejects a
 selection containing more than one provider. `infrastructure/account-discovery/configured-account-discovery.ts`
 builds the discovery instance from configuration, the approval manifest, and the provider adapters; the
-composition module's factory providers inject the port directly — no wrapper module remains. The shared
-`ICatchAllVerifier` contract and technical clients under `src/libs/catch-all/` remain in place until
-`account-discovery/02`. The public barrel still exports only `EmailVerificationModule`.
+private `infrastructure/account-discovery/account-discovery.module.ts` owns HTTP configuration, provider
+registration, the clock, manifest loading, and the discovery factory. It exports only `ACCOUNT_DISCOVERY_TOKEN`
+to `EmailVerificationCoreModule`. The four provider clients and their helpers live under
+`infrastructure/account-discovery/providers/` and implement the framework-free `AccountDiscoveryProvider`
+contract in `application/account-discovery/account-discovery-provider.ts`. Selection and approval policy depend
+on that private contract. The retired shared provider library, aliases, and common verifier contract are removed;
+the public barrel still exports only `EmailVerificationModule`.
 
 `infrastructure/mailbox/smtp/smtp-mailbox-probe.ts` implements `MailboxProbe`: it resolves MX exchanges through
 the injected `MxResolver` port, leases a proxy through `IProxyService`/`IProxyAllocator`, drives the STARTTLS/SMTP
@@ -285,10 +289,12 @@ Focused tests are grouped by behavior:
   `application/account-discovery/approved-account-discovery-verifier.spec.ts`,
   `application/account-discovery/select-account-discovery-verifier.spec.ts`,
   `infrastructure/account-discovery/account-discovery-composition.spec.ts`,
+  `infrastructure/account-discovery/account-discovery.module.spec.ts`,
   `infrastructure/account-discovery/account-discovery-wiring.spec.ts` (real Nest composition with fake outbound
   dependencies, covering positive evidence, disabled discovery, and approval expiry),
-  `infrastructure/account-discovery/configured-account-discovery.spec.ts`, the provider adapter specifications
-  under `src/libs/catch-all`, and `scripts/privacy/account-discovery-approvals.spec.ts` and
+  `infrastructure/account-discovery/configured-account-discovery.spec.ts`,
+  `infrastructure/account-discovery/http-module-options.factory.spec.ts`, the provider adapter specifications
+  under `infrastructure/account-discovery/providers/`, and `scripts/privacy/account-discovery-approvals.spec.ts` and
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`

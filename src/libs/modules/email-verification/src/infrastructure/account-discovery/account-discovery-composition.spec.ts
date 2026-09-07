@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from '../../application/account-discovery/account-discovery-provider'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
@@ -36,10 +36,10 @@ const approval: AccountDiscoveryApprovalView = {
 }
 
 interface FakeProviders {
-    microsoftGetCredentialType: jest.Mocked<ICatchAllVerifier>
-    microsoftLogin: jest.Mocked<ICatchAllVerifier>
+    microsoftGetCredentialType: jest.Mocked<AccountDiscoveryProvider>
+    microsoftLogin: jest.Mocked<AccountDiscoveryProvider>
     mimecastLogin: { forRegion: jest.Mock }
-    officeApps: jest.Mocked<ICatchAllVerifier>
+    officeApps: jest.Mocked<AccountDiscoveryProvider>
 }
 
 function adapters(): { providers: FakeProviders; providerAdapters: AccountDiscoveryProviderAdapters } {

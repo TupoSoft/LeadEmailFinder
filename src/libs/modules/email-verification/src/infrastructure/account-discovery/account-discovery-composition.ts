@@ -1,9 +1,7 @@
-import {
-    MicrosoftGetCredentialType,
-    MicrosoftLogin,
-    MimecastLogin,
-    OfficeApps,
-} from '@tuposoft/lead-email-finder/catch-all'
+import { MicrosoftGetCredentialType } from './providers/microsoft-get-credential-type'
+import { MicrosoftLogin } from './providers/microsoft-login'
+import { MimecastLogin } from './providers/mimecast-login'
+import { OfficeApps } from './providers/office-apps'
 import {
     AccountDiscoveryApprovalView,
     AccountDiscoveryProviderUnavailableError,
