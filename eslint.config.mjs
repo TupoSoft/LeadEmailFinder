@@ -73,6 +73,7 @@ export default tseslint.config(
     {
         name: 'repository-tooling',
         files: [
+            'scripts/ci/*.mjs',
             'scripts/docs/*.mjs',
             'scripts/bruno/*.mjs',
             'scripts/testing/*.mjs',

@@ -11,10 +11,10 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Progress
 
-- [ ] (2026-08-31) Add a repository-owned changed-path classifier with deterministic fixtures.
-- [ ] (2026-08-31) Separate backend, web, contract, image, browser, and repository-policy validation consumers.
-- [ ] (2026-08-31) Preserve the existing required validation conclusion through one fail-closed summary job.
-- [ ] (2026-08-31) Make unchanged consumer jobs succeed explicitly instead of being skipped.
+- [x] (2026-09-07) Add a repository-owned changed-path classifier with 52 deterministic fixtures and real Git event tests.
+- [x] (2026-09-07) Separate backend, web, contract, image, browser, and repository-policy validation consumers.
+- [x] (2026-09-07) Preserve the existing required validation conclusion through one fail-closed summary job.
+- [x] (2026-09-07) Make unchanged consumer jobs succeed explicitly instead of being skipped.
 - [ ] (2026-08-31) Document the trigger matrix and validate pull-request, push, and manual-run behavior.
 - [ ] (2026-08-31) Run workflow, fixture, prose, and repository checks and record evidence.
 
@@ -26,6 +26,15 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Surprises & Discoveries
 
+- (2026-09-07) All three prerequisites are complete on base commit `24804d8`. Issue #502 is assigned to the
+  requesting user and its Project 9 status is In Progress. The current workflow also includes Vagrant, privacy,
+  security, and four PostgreSQL integration checks; all remain part of the selected validation.
+- (2026-09-07) The local Docker daemon already hosts a development stack for another checkout. Live stack checks
+  must use isolated resources or GitHub-hosted runners to preserve that running environment.
+- (2026-09-07) Route tests need the tagged web image on the same runner. The browser consumer therefore builds
+  its own gateway image before those tests; it cannot reuse the image consumer's local Docker state.
+- (2026-09-07) Docker scripts and Compose configuration are also inputs to backend runner tests. Docker changes
+  select backend validation as well as image and browser validation.
 - The original Validate workflow is one backend-oriented job with PostgreSQL and an API image build on every change.
 - The frontend foundation adds web and contract checks, and the same-origin plan adds a second image plus browser
   coverage. Those checks have different expensive inputs but share the lockfile and workspace configuration.
@@ -34,6 +43,15 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Decision Log
 
+- Decision: Run repository policy for every trustworthy comparison, including an empty diff. Reject missing or
+  malformed discovery flags before any consumer can report a successful no-op.
+  Rationale: Documentation, security, and architecture ratchets remain enforced, and discovery failures cannot
+  silently disable checks.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Keep backend PostgreSQL services conditional through an empty image when backend validation is
+  unselected. Move built-web browser checks and the live gateway workflow into the browser consumer.
+  Rationale: Consumer jobs still start and report explicit results while unselected runs avoid service startup.
+  Date/Author: 2026-09-07, implementation.
 - Decision: Put path classification in a tested repository script instead of duplicating glob logic throughout YAML.
   Rationale: One deterministic function can be exercised with synthetic path lists and reviewed like application
   code; the workflow remains orchestration rather than an untestable policy source.
@@ -56,7 +74,9 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Outcomes & Retrospective
 
-Not started.
+The implementation is complete and local validation has passed. Hosted workflow fixtures and the complete pull-request
+workflow remain in progress. The classifier, event discovery, fixture runner, workflow structure tests, and strict
+summary are repository-owned. Every original validation command and its environment settings remain present.
 
 ## Context and Orientation
 
@@ -197,6 +217,21 @@ unchanged. No Docker cleanup, persistent data reset, schema migration, productio
 introduced.
 
 ## Artifacts and Notes
+
+Implementation files are `scripts/ci/select-validation.mjs`, `scripts/ci/select-validation.spec.ts`,
+`scripts/ci/validation-fixtures.json`, `scripts/ci/validation-summary.mjs`, and `scripts/ci/validate-workflow.spec.ts`.
+The README documents the consumer matrix and local commands. No application module or HTTP contract changed;
+Bruno additions are not applicable, and the existing BFF collection remains in browser validation.
+
+Local evidence on 2026-09-07: the full backend command passed 208 Jest suites with 2,079 tests and the existing 32
+Node runner tests. The default run skipped 13 environment-dependent suites with 72 tests; this does not replace
+the four explicit PostgreSQL commands. Later focused CI tests cover the completed classifier and workflow changes.
+OpenAPI drift and six tooling tests passed. Web audits, design lint, UI audit, web lint, types, unit tests, build, and
+all four gateway tests passed. Root lint passed with one existing return-type warning in `load-secrets.spec.ts`;
+typecheck, build, docs-tooling tests, architecture, privacy approval checks, and the security scan passed.
+
+The exact prose command `corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md`
+passed both files before this evidence update. The final evidence update will receive the same check.
 
 Record the path-to-consumer fixture matrix, redacted change-discovery output, each job conclusion, and the aggregate
 check name/result. Never record repository tokens, event payload secrets, environment dumps, cookies, user data, or
