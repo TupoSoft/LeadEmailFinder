@@ -362,6 +362,9 @@ jobs:
       - name: Verify invitation browser artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitation-artifacts
         if: needs.changes.outputs.browser == 'true'
+      - name: Verify verification browser artifact suppression
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts
+        if: needs.changes.outputs.browser == 'true'
       - name: Test invitation browser behavior and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitations
         if: needs.changes.outputs.browser == 'true'
@@ -389,12 +392,27 @@ jobs:
       - name: Test live team management and invitation acceptance
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live
         if: needs.changes.outputs.browser == 'true'
+      - name: Attach disposable SMTP and DNS verification fixtures
+        run: |
+          docker compose -f docker/compose.yaml down
+          docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d
+          verification_bootstrap=$(docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml ps -aq smtp-dev-proxy-bootstrap)
+          test -n "$verification_bootstrap"
+          verification_bootstrap_exit=$(timeout 120s docker wait "$verification_bootstrap")
+          test "$verification_bootstrap_exit" = 0
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test async verification HTTP contracts with Bruno
+        run: corepack pnpm bruno:async-verification
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live single-email verification and route recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-live
+        if: needs.changes.outputs.browser == 'true'
       - name: Report service health
         if: always() && needs.changes.outputs.browser == 'true'
         run: docker compose -f docker/compose.yaml ps
       - name: Stop this runner's disposable stack
         if: always() && needs.changes.outputs.browser == 'true'
-        run: docker compose -f docker/compose.yaml down --volumes
+        run: docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans
   validate:
     name: validate
     if: always()

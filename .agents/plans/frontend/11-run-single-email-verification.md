@@ -13,11 +13,11 @@ status and result after reload.
 
 ## Progress
 
-- [ ] (2026-08-31) Normalize the public async-job status and sanitized terminal-failure contract in `OpenAPI`.
-- [ ] (2026-08-31) Regenerate the client and add the single-verification form and job route that can be bookmarked.
-- [ ] (2026-08-31) Implement honest polling, one-credit, result, permission, and recovery states.
-- [ ] (2026-08-31) Add focused API/browser tests and a distinct async-verification Bruno workflow.
-- [ ] (2026-08-31) Run repository, design-contract, generated-client, SMTP-runtime, and premium UX validation.
+- [x] (2026-09-07) Normalize the public async-job status and sanitized terminal-failure contract in `OpenAPI`.
+- [x] (2026-09-07) Regenerate the client and add the single-verification form and job route that can be bookmarked.
+- [x] (2026-09-07) Implement honest polling, one-credit, result, permission, and recovery states.
+- [x] (2026-09-07) Add focused API/browser tests and a distinct async-verification Bruno workflow.
+- [x] (2026-09-07) Run repository, design-contract, generated-client, SMTP-runtime, and premium UX validation.
 
 ## Plan dependencies
 
@@ -28,11 +28,29 @@ status and result after reload.
 
 ## Surprises & Discoveries
 
+- (2026-09-07) The checkout includes all prerequisites at commit `bd2a0d2`. The actual async API and application
+  directories are inside `src/libs/modules/email-verification/`; the paths below describe their module-relative
+  boundaries. The existing credit guard may charge a credit before server validation; that ordering is preserved.
+- (2026-09-07) The shared Docker project belongs to another worktree. Live validation uses an isolated project,
+  `lef-issue506-81ab`, with separate published ports and disposable volumes. No shared reset is performed.
+- (2026-09-07) No Browser plugin is available. The repository Playwright suite provides rendered validation.
+- (2026-09-07) Result sources include `linkedin` for historical read compatibility. The browser labels this as a
+  legacy result without introducing any new discovery request.
+
 - `module-architecture/15` will relocate async verification into API, application, and Bull infrastructure layers
   while preserving its external routes and queue protocol. This plan extends the resulting public DTO and
   application mapper instead of editing the legacy mixed folder.
 
 ## Decision Log
+
+- Decision: Keep a session-scoped submission coordinator and extract browser availability into a shared hook.
+  Rationale: In-app navigation cannot discard a pending or uncertain request lock. Billing and verification share
+  visibility and connectivity behavior. Authentication boundaries clear the coordinator and cached job data.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Poll active jobs every five seconds for at most sixty checks; a read failure requires manual recovery.
+  Rationale: Bounded reads preserve the last confirmed result and avoid endless background work. Terminal states
+  stop automatic checks and all manual recovery remains read-only.
+  Date/Author: 2026-09-07, implementation.
 
 - Decision: The browser uses only the existing asynchronous create and status endpoints; it does not call the
   synchronous `/verify` endpoint.
@@ -72,7 +90,27 @@ status and result after reload.
 
 ## Outcomes & Retrospective
 
-Not started.
+The public async contract, generated client, single-email form, recoverable job route, reviewed signal labels,
+and distinct Bruno workflow are implemented. The form preserves uncertainty and pending work across in-app
+navigation. Polling preserves confirmed data and stops on terminal states or read failure. Sixty focused component
+tests cover submission, recovery, malformed responses, permissions, cache boundaries, polling, and focus.
+
+Local validation passed: 2,510 backend tests, 60 runner tests, 394 web tests, 90 browser regression tests, seven
+Redis queue integration tests, and nine gateway tests. The full backend suite leaves 80 unrelated optional integration
+tests skipped. The distinct live Bruno workflow passed all fifteen requests and tests; hosted MFA and the real SMTP
+browser flow passed submission, hard reload, completed evidence, credit rejection, narrow keyboard accessibility,
+and session expiry. The fixture restored and verified its original credit balance.
+
+The architecture gate, API export/generation/freshness checks, both type checks and linters, web/client builds, design
+lint, strict UI audit, and Harper passed. Root ESLint retains one preexisting return-type warning in
+`src/libs/config/src/load-secrets.spec.ts`. Independent review found and fixed malformed-response rendering,
+inherited property names in label maps, and authenticated failure-artifact capture. The five existing privileged,
+eight invitation/team, and one verification artifact tests all passed. No database schema, queue policy, credit
+timing, or history feature was added. There are no material SOLID trade-offs.
+
+The CI workflow now verifies the same HTTP and browser flow after preserving seeded volumes and recreating the
+SMTP network. It waits for successful proxy fixture setup and includes artifact-privacy validation and overlay
+cleanup. Remote CI will run on the single pull request; these results describe local validation.
 
 ## Context and Orientation
 
@@ -245,7 +283,7 @@ focus, and accessibility web tests. Then run:
     corepack pnpm openapi:check
     corepack pnpm --filter ./apps/web typecheck
     corepack pnpm --filter ./apps/web lint
-    corepack pnpm --filter ./apps/web test
+    corepack pnpm --filter ./apps/web test:ci
     corepack pnpm typecheck
     corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
@@ -258,7 +296,7 @@ After confirming Compose ownership, start the worktree-owned same-origin runtime
     docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
     corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
     corepack pnpm bruno:async-verification
-    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/single-verification.spec.ts --project=chromium
+    corepack pnpm --filter ./apps/web test:verification-live
 
 The Bruno run must enqueue only synthetic fixture addresses, observe the public state sequence, and assert the
 completed safe result, validation, authentication, credit, and tenant-concealment cases. The Playwright run must use
@@ -287,6 +325,40 @@ do not add a migration or retry non-idempotent verification work from queue inte
 an honest `404`; the UI does not promise indefinite retention.
 
 ## Artifacts and Notes
+
+Verified implementation evidence on 2026-09-07:
+
+| Queue snapshot | Public state |
+| --- | --- |
+| Waiting, delayed, prioritized, waiting children, or paused | `queued` |
+| Active | `running` |
+| Completed with a valid sanitized result | `completed` |
+| Failed | `failed` with `verification_failed` only |
+| Unknown state or invalid completion | `unavailable` |
+
+Generated operations are `AsyncEmailVerificationController_verifyAsync` and
+`AsyncEmailVerificationController_getAsyncVerificationState`. The latter returns a five-way discriminated union;
+`AsyncVerificationResultDto` owns the evidence fields. Nullable optional database fields are omitted, while nullable
+existence and catch-all values are retained. Empty source arrays are valid, including accepted Mailpit catch-all
+results.
+
+The local runtime is `lef-issue506-81ab` at `http://localhost:53106`; its SMTP overlay and hosted Keycloak fixture
+were used for acceptance. Browser plugin tools were unavailable, so Playwright ran Chromium at 1440 by 900 and
+320 by 720, including reduced motion. Safe synthetic screenshots are `/tmp/issue506-verification-desktop.png` and
+`/tmp/issue506-verification-narrow.png`. Both show fully wrapping evidence fields without horizontal overflow.
+The real authenticated browser suite suppresses captures, assertion values, and page snapshots.
+
+Exact additional focused commands:
+
+    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts --workers=2 --output=/tmp/issue506-e2e-final
+    TEST_REDIS_URL=redis://127.0.0.1:56106 corepack pnpm test --runInBand src/libs/modules/email-verification/src/infrastructure/queues/async-verification/async-email-verification-queue.integration.spec.ts src/libs/modules/email-verification/src/infrastructure/queues/async-verification/async-email-verification-composition.integration.spec.ts
+    WEB_GATEWAY_IMAGE=lead-email-finder-web:issue506-gateway corepack pnpm test:gateway
+    COMPOSE_PROJECT_NAME=lef-issue506-81ab corepack pnpm bruno:async-verification
+    COMPOSE_PROJECT_NAME=lef-issue506-81ab corepack pnpm --filter ./apps/web test:verification-live
+    corepack pnpm --filter ./apps/web test:privileged-artifacts
+    corepack pnpm --filter ./apps/web test:invitation-artifacts
+    corepack pnpm --filter ./apps/web test:verification-artifacts
+
 
 Record the raw-to-public state mapping table, final generated operation/type names, focused test and Bruno counts,
 redacted job-state timing, premium-audit result, and desktop/narrow screenshots. Use synthetic `lef.test` addresses

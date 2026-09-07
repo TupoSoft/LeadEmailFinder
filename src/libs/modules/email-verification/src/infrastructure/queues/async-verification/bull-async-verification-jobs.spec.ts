@@ -66,15 +66,28 @@ describe('BullAsyncVerificationJobs', () => {
         expect(getJob).toHaveBeenCalledWith('missing')
     })
 
-    it.each(['active', 'delayed', 'failed', 'waiting', 'waiting-children', 'unknown'])(
+    it.each([
+        ['active', 'running'],
+        ['delayed', 'queued'],
+        ['failed', 'failed'],
+        ['waiting', 'queued'],
+        ['waiting-children', 'queued'],
+        ['prioritized', 'queued'],
+        ['paused', 'queued'],
+        ['unknown', 'unavailable'],
+        ['unexpected-private-diagnostics', 'unavailable'],
+    ])(
         'defers state access until the application authorizes the lookup and omits results for %s',
-        async state => {
+        async (state, expected) => {
             const { jobs, getJob } = setup()
             const getState = jest.fn().mockResolvedValue(state)
             const readResult = jest.fn(() => result)
             getJob.mockResolvedValue({
                 data: { organizationId: 'org-1', email: 'person@example.test', credentialId: 'credential-1' },
                 getState,
+                get failedReason() {
+                    throw new Error('failure diagnostics must not be read')
+                },
                 get returnvalue() {
                     return readResult()
                 },
@@ -84,7 +97,7 @@ describe('BullAsyncVerificationJobs', () => {
             expect(job?.organizationId).toBe('org-1')
             expect(getState).not.toHaveBeenCalled()
             expect(readResult).not.toHaveBeenCalled()
-            await expect(job!.readStatus()).resolves.toEqual({ state })
+            await expect(job!.readStatus()).resolves.toEqual({ state: expected })
             expect(getState).toHaveBeenCalledTimes(1)
             expect(readResult).not.toHaveBeenCalled()
         },

@@ -11,6 +11,8 @@ export const BROWSER_OPERATIONS = [
     { path: '/v1/billing/credit-packs', method: 'get' },
     { path: '/v1/credit-purchases', method: 'get' },
     { path: '/v1/credit-purchases', method: 'post' },
+    { path: '/verifyAsync', method: 'post' },
+    { path: '/verifyAsync/{id}', method: 'get' },
     { path: '/v1/organizations/{organizationId}/members', method: 'get' },
     { path: '/v1/organizations/{organizationId}/invitations', method: 'post' },
     { path: '/v1/organizations/invitations/{token}', method: 'get' },

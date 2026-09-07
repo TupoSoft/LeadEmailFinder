@@ -54,10 +54,11 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
 | Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
-| Form | `Form.module.css` | This contract | Invitation email, role, and password fields | Field validation and browser tests |
+| Form | `Form.module.css` | This contract | Invitation and verification email, role, and password fields | Field validation and browser tests |
 | Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
 | Dialog | `TeamDialog` | This contract | Owner-role confirmation, disable confirmation, one-time invitation | Focus, dismissal, and restoration tests |
 | Team | `TeamPage` | `frontend/13` | Active and disabled memberships | Component, API, Bruno, and browser tests |
+| Verification | `VerificationPage`, `VerificationJobPage`, and `SignalDetails` | `frontend/11` | Single submission, bounded job reads, and evidence fields | API, component, Bruno, and browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
@@ -227,8 +228,8 @@ a suppressed tab therefore remains conservative and offers a fresh sign-in as we
 channel cannot block local cleanup. Page hide clears protected content so a cached page snapshot does
 not contain the previous account; a persisted page show always checks the session again.
 
-The shell registers Home, capability-gated Billing, and capability-gated Team. Later plans add their working destinations and required capabilities to the shared
-navigation registry. This avoids presenting unfinished service-client or verification screens as
+The shell registers Home, Verify an email, Billing, and Team with their effective capabilities. Later plans add their working destinations and required capabilities to the shared
+navigation registry. This avoids presenting unfinished service-client screens as
 available tools. Component tests exercise each capability independently of role and of route authorization.
 The shared transport turns an operation-level 403 into access denied without signing out. No frontend capability
 check predicts whether the backend will permit a deep link.
@@ -337,3 +338,37 @@ Browser validation uses a dedicated configuration with trace, screenshots, video
 output disabled throughout invitation operations. Safe team-list screenshots are captured in a separate suite that
 issues no invitations. Test fixtures generate authority at runtime; committed fixtures and validation artifacts
 contain no real invitation token or password.
+
+
+## Single Email Verification
+
+The source contract is `.agents/plans/frontend/11-run-single-email-verification.md`. The form at
+`/app/verifications/new` requires `verification.run`; the job route `/app/verifications/:id` requires
+`verification.read`. Both use the generated same-origin client and the shared authentication boundary. The server
+remains the permission and organization-ownership authority. Navigation registers only the working form destination.
+
+The form states before submission that a request may use one credit. It uses a labeled native email field,
+application-owned validation, first-invalid focus, and a stable submit button. A session-scoped coordinator preserves
+pending and uncertain submission states across in-app navigation. The address is never placed in the URL, storage,
+or logs. A confirmed identifier opens its job route; a late success after leaving the form offers that same job link
+on return. Authentication boundaries clear the coordinator and fence late responses.
+
+| Operation | Pending | Confirmed response | Failure and recovery |
+| --- | --- | --- | --- |
+| Verify email | One request; prevent duplicate activation | Navigate using the returned job UUID | Preserve the address; associate validation errors with the field |
+| Insufficient credits | Keep entered values | No verification is claimed | Billing link only with `billing.read`; otherwise contact an organization owner |
+| Uncertain submission | Never repeat the POST automatically | No invented identifier or history entry | Explain possible charging; require explicit acknowledgment before a new request |
+| Read job status | Retain the last confirmed response | Show queued, running, completed, failed, or unavailable | Mark retained data stale and offer Refresh status; never submit again |
+| Monitor active job | One read every five seconds, at most sixty checks | Stop for completed, failed, and unavailable | Pause while hidden or offline; after a read error require a manual refresh |
+| Open or refresh job URL | Validate UUID shape, then read that job | Restore the same organization-scoped status | Missing and cross-organization jobs share Verification not found |
+
+Each state has an explicit heading and document title without email or account data. Hidden or offline pauses keep
+confirmed data visible. Status announcements change only when the state or recovery instruction changes, rather
+than on every successful poll. Completion focuses the result heading once. Status refresh retains that focus choice.
+No job-retention guarantee, recent-history list, cancellation, automatic resubmission, or credit adjustment is implied.
+
+`SignalDetails` renders email, local part, domain, nullable existence and catch-all signals, reviewed reason and source
+labels, and optional pattern and mail-exchange fields. True, false, and null remain Yes, No, and Unknown. Completion
+uses neutral evidence styling and never claims guaranteed delivery. Unexpected server fields never enter the job
+cache or markup. The shared `useBrowserAvailability` hook owns visibility and connectivity subscriptions for billing
+and verification. Desktop, narrow, keyboard, reduced-motion, stale, error, and accessibility checks cover the routes.

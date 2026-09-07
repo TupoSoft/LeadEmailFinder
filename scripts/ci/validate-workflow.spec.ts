@@ -187,8 +187,11 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm dev:reset -- --confirm-project=LEF',
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts',
+        'corepack pnpm bruno:async-verification',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-live',
         'docker compose -f docker/compose.yaml ps',
-        'docker compose -f docker/compose.yaml down --volumes',
+        'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans',
     ],
 }
 
@@ -328,7 +331,7 @@ describe('Validate workflow syntax and structure', () => {
     })
 
     it('keeps browser cleanup active after a selected check fails', () => {
-        for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml down --volumes']) {
+        for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans']) {
             expect(condition(workflow.jobs.browser.steps.find((step) => command(step.run) === run)?.if)).toBe(
                 "always() && needs.changes.outputs.browser == 'true'",
             )

@@ -311,6 +311,14 @@ keyboard focus, and return it to the trigger. One-time invitation results use th
 immediate secret cleanup. The public invitation page uses a single readable column and the existing brand link;
 loading and recovery reserve the shared state height. This feature adds no palette, typography, or motion tokens.
 
+### Verification Evidence
+
+Single-email verification reuses the product headings, shared form controls, flat panels, and existing action
+states. The shared `SignalDetails` description list pairs bold labels with fully wrapping values and fine rules.
+At widths of 48rem or below, each value follows its label in one column. The pending job region reserves the
+existing state height. Completed results use neutral text: completion is a finished check, not a positive delivery
+verdict. Status changes use restrained text announcements and add no animation or new visual tokens.
+
 ### Signal Path
 
 The signal path is explanatory content, not a progress control. Its four nodes use ink and evergreen circles on the

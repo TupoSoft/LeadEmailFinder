@@ -1,0 +1,24 @@
+info:
+    name: reject-insufficient-credit
+    type: http
+    seq: 13
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email": "person@lef.test"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reject-insufficient-credit', function() {
+                expect(res.status).to.equal(402);
+
+              });

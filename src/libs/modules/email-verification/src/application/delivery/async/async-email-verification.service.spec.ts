@@ -1,4 +1,4 @@
-import { IEmailVerificationResponseDto, JobState } from '@tuposoft/lead-email-finder/common'
+import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { VerificationTraceObserver } from '../../verification-trace/verification-trace-observer'
 import { AsyncEmailVerificationService } from './async-email-verification.service'
 import { AsyncVerificationJobs } from './async-verification-jobs'
@@ -10,7 +10,16 @@ describe('AsyncEmailVerificationService', () => {
     let jobs: jest.Mocked<AsyncVerificationJobs>
 
     const command = { email: 'person@lef.test', organizationId: 'org-1', credentialId: 'cred-1' }
-    const result = { id: 'verification-id', email: command.email } as IEmailVerificationResponseDto
+    const result = {
+        id: '00000000-0000-4000-8000-000000000005',
+        email: command.email,
+        localPart: 'person',
+        domain: 'lef.test',
+        exists: true,
+        catchAll: null,
+        reason: EmailVerificationReason.AcceptedEmail,
+        sources: [],
+    }
 
     beforeEach(() => {
         traceObserver = {
@@ -124,21 +133,18 @@ describe('AsyncEmailVerificationService', () => {
         expect(readStatus).not.toHaveBeenCalled()
     })
 
-    it.each(Object.values(JobState).filter(state => state !== JobState.COMPLETED))(
-        'returns only the state for an owned %s job',
-        async state => {
-            jobs.find.mockResolvedValue({
-                organizationId: command.organizationId,
-                readStatus: jest.fn().mockResolvedValue({ state, result }),
-            })
+    it.each(['queued', 'running', 'unavailable'])('returns only the state for an owned %s job', async state => {
+        jobs.find.mockResolvedValue({
+            organizationId: command.organizationId,
+            readStatus: jest.fn().mockResolvedValue({ state, result }),
+        })
 
-            await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
-                state,
-            })
-            expect(jobs.find).toHaveBeenCalledWith('job-id')
-            expect(jobs.enqueue).not.toHaveBeenCalled()
-        },
-    )
+        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
+            state,
+        })
+        expect(jobs.find).toHaveBeenCalledWith('job-id')
+        expect(jobs.enqueue).not.toHaveBeenCalled()
+    })
 
     it('returns the unchanged completed result on repeated status reads without enqueuing', async () => {
         const readStatus = jest.fn().mockResolvedValue({ state: 'completed', result })
@@ -156,15 +162,14 @@ describe('AsyncEmailVerificationService', () => {
         expect(traceObserver.enqueued).not.toHaveBeenCalled()
     })
 
-    it('rejects an unsupported state without copying it into the assertion', async () => {
+    it('reports an unsupported state as unavailable without copying diagnostics', async () => {
         jobs.find.mockResolvedValue({
             organizationId: command.organizationId,
             readStatus: jest.fn().mockResolvedValue({ state: 'unexpected-sentinel@private.example' }),
         })
 
-        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).rejects.toMatchObject({
-            name: 'AssertionError',
-            message: 'async_email_verification_state_unknown',
+        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
+            state: 'unavailable',
         })
     })
 

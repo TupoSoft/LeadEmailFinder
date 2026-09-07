@@ -1,0 +1,47 @@
+info:
+    name: poll-safe-completion
+    type: http
+    seq: 8
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyAsync/{{asyncJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const statusUrl = `${bru.getEnvVar('baseUrl')}/verifyAsync/${bru.getVar('asyncJobId')}`;
+              for (let attempt = 0; attempt < 60; attempt++) {
+                const response = await fetch(statusUrl, { headers: { Authorization: `Bearer ${bru.getVar('customerToken')}` } });
+                if (!response.ok) throw new Error('Async status read failed');
+                const payload = await response.json();
+                if (!['queued', 'running', 'completed', 'failed', 'unavailable'].includes(payload.state)) throw new Error('Unexpected public state');
+                const allowedKeys = payload.state === 'completed' ? ['result', 'state'] : payload.state === 'failed' ? ['failureCode', 'state'] : ['state'];
+                if (JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(allowedKeys)) throw new Error('Unsafe public status fields');
+                if (payload.state === 'failed' && payload.failureCode !== 'verification_failed') throw new Error('Unsafe failure code');
+                if (payload.state === 'completed') break;
+                if (['failed', 'unavailable'].includes(payload.state) || attempt === 59) throw new Error('Fixture job did not complete');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+        - type: tests
+          code: |-
+              test('poll-safe-completion', function() {
+                expect(res.status).to.equal(200);
+                expect(Object.keys(res.body).sort()).to.deep.equal(['result', 'state']);
+                expect(res.body.state).to.equal('completed');
+                const result = res.body.result;
+                const allowed = ['id', 'email', 'localPart', 'domain', 'format', 'exists', 'catchAll', 'reason', 'sources', 'mxDomain', 'targetExchange'];
+                expect(Object.keys(result).every(key => allowed.includes(key))).to.equal(true);
+                expect(result.email).to.equal('person@lef.test');
+                expect(result.domain).to.equal('lef.test');
+                expect(result.localPart).to.equal('person');
+                expect(result.reason).to.equal('accepted_email');
+                expect([true, false, null]).to.include(result.exists);
+                expect([true, false, null]).to.include(result.catchAll);
+                expect(result.sources).to.be.an('array');
+                expect(result.sources.every(source => ['mx', 'microsoft_1', 'microsoft_2', 'microsoft_4', 'mimecast', 'linkedin'].includes(source))).to.equal(true);
+                expect(result.id).to.match(/^[0-9a-f-]{36}$/i);
+                bru.setVar('completedResult', result);
+              });

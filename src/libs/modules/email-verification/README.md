@@ -158,12 +158,18 @@ Async HTTP controllers and DTOs live under `api/http/asynchronous-verification/`
 `AsyncEmailVerificationService` under `application/delivery/async/` accepts scalar organization and credential
 identity, dispatches through `AsyncVerificationJobs`, and checks ownership before reading job state. Missing and
 foreign jobs produce the same application error, which the controller maps to the existing `404`. The application
-maps the existing state enum and includes a result only for completed jobs; status reads perform no credit debit
-or queue submission.
+maps the transport-neutral snapshot to `queued`, `running`, `completed`, `failed`, or `unavailable`. Completed
+jobs expose only validated public result fields; nullable database values for optional pattern/MX fields are omitted.
+Failed jobs expose only `failureCode: verification_failed`. Unknown queue states or invalid completed results are
+`unavailable`, which makes no claim about success, failure, or credit adjustment. Status reads perform no credit
+debit or queue submission. The API documents five discriminated response variants and includes only the async
+create/status operations in the generated browser contract.
 
 `infrastructure/queues/async-verification/` owns `BullAsyncVerificationJobs`, the serialized job contract,
 queue defaults, custom backoff, and `AsyncEmailVerificationProcessor`. Its private composition module exports the
 application service token to the root and binds `EmailVerificationServiceToken` to the existing orchestrator.
+The adapter maps waiting, delayed, prioritized, waiting-children, and paused work to `queued`, and active work to
+`running`; queue state names and raw failure diagnostics never cross the application boundary.
 The worker maps one existing payload to one organization-scoped verification command per attempt, excluding the
 credential ID, and preserves the greylist exception and trace context. There is one async worker. The legacy batch
 module retains its independent producer registration and its existing child-job options until plan 16.
@@ -248,12 +254,15 @@ Focused tests are grouped by behavior:
 - **Synchronous POST behavior and retired GET rejection**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
 - **Current synchronous controller**: `api/http/synchronous-verification/current/sync-email-verification.controller.spec.ts`
 - **Async application and HTTP**: `application/delivery/async/async-email-verification.service.spec.ts`,
-  `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`, and
-  `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`
+  `application/delivery/async/async-verification-status.spec.ts`,
+  `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`,
+  `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`, and
+  `api/http/asynchronous-verification/async-verification.openapi.spec.ts`
 - **Async queues and composition**: `infrastructure/queues/async-verification/` contains producer, worker, backoff,
   Redis compatibility, and production Nest composition specifications. Set `TEST_REDIS_URL` to a disposable Redis
   instance to run the Redis suites; each suite uses its own queue prefix.
-- **Async runtime workflow**: `bruno/smtp-dev` covers submission, completed and repeated polling, one-credit debit,
+- **Async runtime workflow**: `bruno/async-verification` covers the browser-facing async workflow and sanitized
+  result contract. The existing `bruno/smtp-dev` collection covers submission, completed and repeated polling, one-credit debit,
   missing jobs, malformed IDs, authentication, and insufficient credits. Its launcher requires an SMTP stack owned
   by the current checkout.
 - **Batch**: `batch-email-verification/batch-email-verification.controller.spec.ts`,
