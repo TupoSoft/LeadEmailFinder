@@ -8,8 +8,3 @@ onlyBuiltDependencies:
   - '@swc/core'
   - msgpackr-extract
   - unrs-resolver
-
-overrides:
-  '@automapper/classes>reflect-metadata': $reflect-metadata
-  '@automapper/nestjs>@nestjs/common': $@nestjs/common
-  '@automapper/nestjs>@nestjs/core': $@nestjs/core

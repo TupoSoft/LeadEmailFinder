@@ -7,7 +7,7 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 const ERROR_TYPE = /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/u
-const MODES = new Set(['sync', 'deprecated_sync', 'async', 'batch', 'batch_child'])
+const MODES = new Set(['sync', 'async', 'batch', 'batch_child'])
 const REASONS = new Set<string>(Object.values(EmailVerificationReason))
 const STAGES = new Set<VerificationFailureStage>([
     'domain_policy',

@@ -1,7 +1,7 @@
 info:
-  name: 22-read-completed-async-verification
+  name: 24-read-completed-async-verification
   type: http
-  seq: 22
+  seq: 24
 
 http:
   method: GET

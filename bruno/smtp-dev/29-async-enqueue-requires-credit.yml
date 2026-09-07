@@ -1,7 +1,7 @@
 info:
-  name: 27-async-enqueue-requires-credit
+  name: 29-async-enqueue-requires-credit
   type: http
-  seq: 27
+  seq: 29
 
 http:
   method: POST

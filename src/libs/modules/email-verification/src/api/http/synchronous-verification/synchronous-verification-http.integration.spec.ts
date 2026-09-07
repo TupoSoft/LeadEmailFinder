@@ -1,5 +1,3 @@
-import { classes } from '@automapper/classes'
-import { AutomapperModule } from '@automapper/nestjs'
 import { ClassSerializerInterceptor, INestApplication, ValidationPipe } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
@@ -18,9 +16,6 @@ import {
 import { OwnedEmailVerification } from '../../../domain/email-verification'
 import { DomainVerificationForbiddenError } from '../../../domain/errors'
 import { SyncEmailVerificationController } from './current/sync-email-verification.controller'
-import { OldSyncEmailVerificationController } from './deprecated/old-sync-email-verification.controller'
-import { OldSyncEmailVerificationProfile } from './deprecated/old-sync-email-verification.profile'
-import { CatchAllStatus, DeliveryStatus } from './deprecated/old-email-verification.enums'
 
 const organizationId = '00000000-0000-4000-8000-000000000001'
 const otherOrganizationId = '00000000-0000-4000-8000-000000000002'
@@ -58,26 +53,22 @@ function successfulVerification(): OwnedEmailVerification {
     }
 }
 
-const routes = [
-    { method: 'post', mode: 'sync', successStatus: 201 },
-    { method: 'get', mode: 'deprecated_sync', successStatus: 200 },
-] as const
-
 describe('synchronous verification HTTP contracts', () => {
     let app: INestApplication
     let principal: AuthPrincipal | undefined
     let requestId: string | undefined
+    let execute: jest.SpyInstance
 
     beforeAll(async () => {
+        const command = new RunSynchronousVerification(core)
+        execute = jest.spyOn(command, 'execute')
         const moduleRef = await Test.createTestingModule({
-            imports: [AutomapperModule.forRoot({ strategyInitializer: classes() })],
-            controllers: [SyncEmailVerificationController, OldSyncEmailVerificationController],
+            controllers: [SyncEmailVerificationController],
             providers: [
                 RolePermissionPolicy,
                 PermissionsGuard,
                 CreditGuard,
-                OldSyncEmailVerificationProfile,
-                { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: new RunSynchronousVerification(core) },
+                { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: command },
                 { provide: CreditsService, useValue: credits },
             ],
         }).compile()
@@ -99,6 +90,7 @@ describe('synchronous verification HTTP contracts', () => {
     })
 
     beforeEach(() => {
+        execute.mockClear()
         principal = runPrincipal
         requestId = undefined
         core.verify.mockReset().mockResolvedValue(successfulVerification())
@@ -109,10 +101,9 @@ describe('synchronous verification HTTP contracts', () => {
         await app.close()
     })
 
-    describe.each(routes)('$method /verify', ({ method, mode, successStatus }) => {
+    describe('POST /verify', () => {
         function verify(input: Record<string, unknown> = { email }): request.Test {
-            const pending = request(app.getHttpServer())[method]('/verify')
-            return method === 'post' ? pending.send(input) : pending.query(input)
+            return request(app.getHttpServer()).post('/verify').send(input)
         }
 
         function expectOneDebit(owner = organizationId): void {
@@ -172,19 +163,19 @@ describe('synchronous verification HTTP contracts', () => {
                 email: 'TEST@EXAMPLE.COM',
                 organizationId: 'untrusted-organization',
                 trace: { operationId: 'untrusted-operation', mode: 'batch' },
-            }).expect(successStatus)
+            }).expect(201)
 
             expectOneDebit(otherOrganizationId)
             expect(core.verify).toHaveBeenCalledTimes(1)
             expect(core.verify).toHaveBeenCalledWith({
                 organizationId: otherOrganizationId,
                 email,
-                trace: { operationId, mode },
+                trace: { operationId, mode: 'sync' },
             })
         })
 
         it('debits exactly once and retains its response schema without a request trace', async () => {
-            const response = await verify().expect(successStatus)
+            const response = await verify().expect(201)
 
             expectOneDebit()
             expect(core.verify).toHaveBeenCalledTimes(1)
@@ -198,44 +189,30 @@ describe('synchronous verification HTTP contracts', () => {
                 mxDomain: 'mx.example.com',
                 targetExchange: 'mail.example.com',
             }
-            expect(response.body).toEqual(
-                method === 'post'
-                    ? {
-                          ...commonFields,
-                          id: verificationId,
-                          exists: true,
-                          catchAll: false,
-                          sources: [EmailVerificationSource.MX, 'linkedin'],
-                      }
-                    : {
-                          ...commonFields,
-                          deliveryStatus: DeliveryStatus.Accepted,
-                          catchAll: CatchAllStatus.Disabled,
-                          verifiedAt: createdAt.toISOString(),
-                      },
-            )
+            expect(execute).toHaveBeenCalledTimes(1)
+            expect(response.body).toEqual({
+                ...commonFields,
+                id: verificationId,
+                exists: true,
+                catchAll: false,
+                sources: [EmailVerificationSource.MX, 'linkedin'],
+            })
         })
 
         it.each([
             {
                 exists: true,
                 catchAll: true,
-                deliveryStatus: DeliveryStatus.Accepted,
-                legacyCatchAll: CatchAllStatus.Enabled,
                 reason: EmailVerificationReason.AcceptedEmail,
             },
             {
                 exists: false,
                 catchAll: false,
-                deliveryStatus: DeliveryStatus.Rejected,
-                legacyCatchAll: CatchAllStatus.Disabled,
                 reason: EmailVerificationReason.RejectedEmail,
             },
             {
                 exists: null,
                 catchAll: null,
-                deliveryStatus: DeliveryStatus.NotProcessed,
-                legacyCatchAll: CatchAllStatus.Unknown,
                 reason: EmailVerificationReason.SecureTransportUnavailable,
             },
         ])('preserves exists=$exists and catchAll=$catchAll outcomes', async outcome => {
@@ -246,20 +223,15 @@ describe('synchronous verification HTTP contracts', () => {
                 reason: outcome.reason,
             })
 
-            const response = await verify().expect(successStatus)
+            const response = await verify().expect(201)
 
             expectOneDebit()
             expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(response.body).toMatchObject(
-                method === 'post'
-                    ? { exists: outcome.exists, catchAll: outcome.catchAll, reason: outcome.reason }
-                    : {
-                          deliveryStatus: outcome.deliveryStatus,
-                          catchAll: outcome.legacyCatchAll,
-                          reason: outcome.reason,
-                          verifiedAt: createdAt.toISOString(),
-                      },
-            )
+            expect(response.body).toMatchObject({
+                exists: outcome.exists,
+                catchAll: outcome.catchAll,
+                reason: outcome.reason,
+            })
         })
 
         it.each([
@@ -286,13 +258,24 @@ describe('synchronous verification HTTP contracts', () => {
         })
     })
 
-    it('keeps only GET /verify deprecated in Swagger and preserves the success statuses', () => {
+    it.each([1, 0])('returns 404 for authenticated GET /verify with %i credits and performs no work', async balance => {
+        if (balance === 0) credits.debit.mockRejectedValue(new InsufficientCreditsException(organizationId))
+
+        const response = await request(app.getHttpServer()).get('/verify').query({ email }).expect(404)
+
+        expect(response.body).toMatchObject({ statusCode: 404, error: 'Not Found' })
+        expect(execute).not.toHaveBeenCalled()
+        expect(core.verify).not.toHaveBeenCalled()
+        expect(credits.debit).not.toHaveBeenCalled()
+    })
+
+    it('omits GET /verify from Swagger and preserves the current POST success metadata', () => {
         const document = SwaggerModule.createDocument(app, new DocumentBuilder().build())
         const route = document.paths['/verify']
 
-        expect(route.get?.deprecated).toBe(true)
+        expect(route).not.toHaveProperty('get')
+        expect(route).toHaveProperty('post')
         expect(route.post?.deprecated).not.toBe(true)
-        expect(route.get?.responses).toHaveProperty('200')
         expect(route.post?.responses).toHaveProperty('201')
     })
 })

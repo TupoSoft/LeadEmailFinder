@@ -6,7 +6,7 @@ export const RUN_SYNCHRONOUS_VERIFICATION = Symbol('RUN_SYNCHRONOUS_VERIFICATION
 export interface SynchronousVerificationCommand {
     organizationId: string
     email: string
-    trace?: VerificationTraceContext & { mode: 'sync' | 'deprecated_sync' }
+    trace?: VerificationTraceContext & { mode: 'sync' }
 }
 
 export interface SynchronousVerificationCore {

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { parse as parseYaml } from 'yaml'
 import {
     assertExecutedReport,
     cliArguments,
@@ -58,8 +59,15 @@ test('accepts only an exact registered collection with no extra command argument
 
 test('SMTP report validation requires every checked-in request', async () => {
     const files = await readdir(resolve(checkoutRoot, 'bruno/smtp-dev'))
-    const requests = files.filter(file => /^\d{2}-.+\.yml$/.test(file))
+    const requests = files.filter(file => /^\d{2}-.+\.yml$/.test(file)).sort()
     assert.equal(registeredCollection('smtp-dev').requests, requests.length)
+    const sequence = await Promise.all(
+        requests.map(async file => {
+            const request = parseYaml(await readFile(resolve(checkoutRoot, 'bruno/smtp-dev', file), 'utf8'))
+            return request.info.seq
+        }),
+    )
+    assert.deepEqual(sequence, Array.from({ length: requests.length }, (_, index) => index + 1))
 })
 
 test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {

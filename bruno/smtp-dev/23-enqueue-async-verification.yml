@@ -1,7 +1,7 @@
 info:
-  name: 21-enqueue-async-verification
+  name: 23-enqueue-async-verification
   type: http
-  seq: 21
+  seq: 23
 
 http:
   method: POST

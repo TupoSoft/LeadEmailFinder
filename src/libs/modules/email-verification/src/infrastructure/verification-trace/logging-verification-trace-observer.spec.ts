@@ -124,6 +124,26 @@ describe('LoggingVerificationTraceObserver allowlist', () => {
         expect(warn).not.toHaveBeenCalled()
     })
 
+    it('drops completed and failed events using the retired synchronous mode', () => {
+        observer.completed({
+            operationId: id,
+            mode: 'deprecated_sync' as never,
+            verificationId: resultId,
+            reason: EmailVerificationReason.AcceptedEmail,
+            durationMs: 1,
+        })
+        observer.failed({
+            operationId: id,
+            mode: 'deprecated_sync' as never,
+            stage: 'verification_probe',
+            errorType: 'Error',
+            durationMs: 1,
+        })
+
+        expect(log).not.toHaveBeenCalled()
+        expect(warn).not.toHaveBeenCalled()
+    })
+
     it('contains a broken logger behind the observer boundary', () => {
         log.mockImplementation(() => {
             throw new Error(privateText)

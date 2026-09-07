@@ -1,4 +1,4 @@
-export type VerificationExecutionMode = 'sync' | 'deprecated_sync' | 'async' | 'batch' | 'batch_child'
+export type VerificationExecutionMode = 'sync' | 'async' | 'batch' | 'batch_child'
 
 export interface VerificationTraceContext {
     operationId: string

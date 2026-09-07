@@ -1,5 +1,5 @@
 info:
-  name: 10-add-credit-for-legacy-verify
+  name: 10-add-credit-for-post-verify
   type: http
   seq: 10
 
@@ -8,7 +8,7 @@ http:
   url: "{{baseUrl}}/credits/{{organizationId}}"
   headers:
     - name: Idempotency-Key
-      value: "{{smtpLegacyCreditKey}}"
+      value: "{{smtpPostCreditKey}}"
     - name: Content-Type
       value: application/json
     - name: Authorization
@@ -25,12 +25,12 @@ runtime:
     - type: before-request
       code: |-
         // One UUID belongs to this logical add; any explicit retry must reuse it.
-        if (!bru.getVar('smtpLegacyCreditKey')) {
-          bru.setVar('smtpLegacyCreditKey', require('node:crypto').randomUUID());
+        if (!bru.getVar('smtpPostCreditKey')) {
+          bru.setVar('smtpPostCreditKey', require('node:crypto').randomUUID());
         }
     - type: tests
       code: |-
-        test('adds one credit for the legacy verification request', function() {
+        test('adds one credit for the POST verification request', function() {
           expect(res.status).to.equal(201);
           expect(res.body.balance).to.equal(1);
         });
