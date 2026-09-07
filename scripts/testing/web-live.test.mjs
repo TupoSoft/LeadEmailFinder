@@ -4,10 +4,10 @@ import { test } from 'node:test'
 import { assertFixtureTarget, assertPassedBrowserReport, browserFailureLocations } from './web-live.mjs'
 import { assertPrivateTopologyLogs, privacyCases } from './web-log-privacy.mjs'
 
-test('requires three successful live browser tests and rejects empty, skipped, flaky, or failed execution', () => {
-    const report = { stats: { expected: 3, unexpected: 0, flaky: 0, skipped: 0 }, errors: [] }
-    assert.equal(assertPassedBrowserReport(report), 3)
-    for (const change of [{ expected: 0 }, { expected: 2 }, { unexpected: 1 }, { flaky: 1 }, { skipped: 1 }]) {
+test('requires six successful live browser tests and rejects empty, skipped, flaky, or failed execution', () => {
+    const report = { stats: { expected: 6, unexpected: 0, flaky: 0, skipped: 0 }, errors: [] }
+    assert.equal(assertPassedBrowserReport(report), 6)
+    for (const change of [{ expected: 0 }, { expected: 5 }, { unexpected: 1 }, { flaky: 1 }, { skipped: 1 }]) {
         assert.throws(() => assertPassedBrowserReport({ ...report, stats: { ...report.stats, ...change } }))
     }
     assert.throws(() => assertPassedBrowserReport({ ...report, errors: [{}] }))
@@ -52,11 +52,17 @@ test('reports browser failure locations without printing assertion values or aut
                                 },
                             ],
                         },
+                        {
+                            ok: false,
+                            file: 'auth-shell.spec.ts',
+                            line: 42,
+                            tests: [{ results: [{ errors: [{ message: 'private-token' }] }] }],
+                        },
                     ],
                 },
             ],
         }),
-        ['same-origin.spec.ts:128'],
+        ['same-origin.spec.ts:128', 'auth-shell.spec.ts:42'],
     )
 })
 

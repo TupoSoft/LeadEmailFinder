@@ -1,4 +1,4 @@
-import { firstHeaderValue, parseCookieHeader } from './parse-cookie-header'
+import { firstHeaderValue, parseCookieHeader, readPresentedCookie } from './parse-cookie-header'
 
 describe('parseCookieHeader', () => {
     it('returns an empty object for an undefined header', () => {
@@ -42,5 +42,20 @@ describe('firstHeaderValue', () => {
 
     it('returns undefined unchanged', () => {
         expect(firstHeaderValue(undefined)).toBeUndefined()
+    })
+})
+
+describe('readPresentedCookie', () => {
+    it.each([undefined, '', 'unrelated=value'])('distinguishes an absent session cookie (%p)', header => {
+        expect(readPresentedCookie(header, 'lef_session')).toBeUndefined()
+    })
+    it.each(['lef_session=%', 'lef_session=', 'lef_session', 'lef_session=one; lef_session=two'])(
+        'preserves an unusable cookie as present (%p)',
+        header => {
+            expect(readPresentedCookie(header, 'lef_session')).toBe('')
+        },
+    )
+    it('retains a valid decoded cookie', () => {
+        expect(readPresentedCookie('junk=%; lef_session=valid%2Dsession', 'lef_session')).toBe('valid-session')
     })
 })

@@ -3,7 +3,7 @@ import { CredentialRejectedError } from '@tuposoft/lead-email-finder/modules/aut
 import { SessionRecord } from '../domain/session-record'
 import { BffSessionCredentialAuthenticator } from './bff-session-credential-authenticator'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
-import { SessionStore } from './session-store'
+import { SessionMissingError, SessionStore } from './session-store'
 import { SessionRefreshFailedError, SessionTokenRefresher } from './session-token-refresher.service'
 
 function sampleRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
@@ -30,13 +30,26 @@ describe('BffSessionCredentialAuthenticator', () => {
     let authenticator: BffSessionCredentialAuthenticator
 
     beforeEach(() => {
-        sessionStore = { create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn() }
+        sessionStore = { replace: jest.fn(), create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn() }
         sessionTokenRefresher = { refreshIfNeeded: jest.fn() }
         humanMembershipResolver = { resolveActive: jest.fn() }
         authenticator = new BffSessionCredentialAuthenticator(
             sessionStore,
             sessionTokenRefresher as unknown as SessionTokenRefresher,
             humanMembershipResolver as unknown as HumanMembershipResolver,
+        )
+    })
+
+    it('rejects a request whose session was replaced while it was authenticating', async () => {
+        sessionStore.get.mockResolvedValue({ organizationId: 'org-1', externalIdentityId: 'identity-1' } as never)
+        sessionTokenRefresher.refreshIfNeeded.mockResolvedValue({
+            organizationId: 'org-1',
+            externalIdentityId: 'identity-1',
+        } as never)
+        humanMembershipResolver.resolveActive.mockResolvedValue({ role: 'member' } as never)
+        sessionStore.save.mockRejectedValue(new SessionMissingError())
+        await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'old-session' })).rejects.toThrow(
+            CredentialRejectedError,
         )
     })
 
@@ -54,9 +67,9 @@ describe('BffSessionCredentialAuthenticator', () => {
         it('throws CredentialRejectedError when no session record is found', async () => {
             sessionStore.get.mockResolvedValue(undefined)
 
-            await expect(
-                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
-            ).rejects.toThrow(CredentialRejectedError)
+            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
+                CredentialRejectedError,
+            )
         })
 
         it('deletes the session and rejects with CredentialRejectedError when the refresh token is dead', async () => {
@@ -64,9 +77,9 @@ describe('BffSessionCredentialAuthenticator', () => {
             sessionStore.get.mockResolvedValue(record)
             sessionTokenRefresher.refreshIfNeeded.mockRejectedValue(new SessionRefreshFailedError())
 
-            await expect(
-                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
-            ).rejects.toThrow(CredentialRejectedError)
+            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
+                CredentialRejectedError,
+            )
             expect(sessionStore.delete).toHaveBeenCalledWith('session-id')
         })
 
@@ -76,9 +89,9 @@ describe('BffSessionCredentialAuthenticator', () => {
             sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(record)
             humanMembershipResolver.resolveActive.mockRejectedValue(new CredentialRejectedError('disabled'))
 
-            await expect(
-                authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' }),
-            ).rejects.toThrow(CredentialRejectedError)
+            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
+                CredentialRejectedError,
+            )
         })
 
         it('builds an AuthPrincipal from the refreshed record and resolved membership, and persists the refreshed record', async () => {

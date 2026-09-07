@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { publicEntryCopy } from '../content/public-entry'
+import { authCopy } from '../content/auth-shell'
+import { signInHref } from '../features/auth/destination'
 import styles from './SiteHeader.module.css'
 
 export function SiteHeader() {
@@ -18,6 +20,9 @@ export function SiteHeader() {
                             <a href={`${destinationPrefix}#${item.target}`}>{item.label}</a>
                         </li>
                     ))}
+                    <li>
+                        <a href={signInHref('/app')}>{authCopy.signIn}</a>
+                    </li>
                 </ul>
             </nav>
         </header>

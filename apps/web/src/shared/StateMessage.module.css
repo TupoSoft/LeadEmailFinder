@@ -1,0 +1,25 @@
+.message {
+    min-height: var(--state-min-height);
+    padding-block: var(--space-content-gap);
+}
+.eyebrow {
+    color: var(--color-evergreen);
+    font-size: var(--font-size-utility);
+    font-weight: 700;
+}
+.message h1 {
+    max-width: 20ch;
+    font-size: var(--font-size-product-heading);
+    line-height: var(--line-height-product-heading);
+    letter-spacing: -0.035em;
+}
+.message p {
+    max-width: 60ch;
+}
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-content-gap);
+    margin-block-start: var(--space-content-gap);
+}

@@ -7,6 +7,8 @@ function sampleState(): PendingLoginState {
         nonce: 'nonce-1',
         codeVerifier: 'verifier-1',
         redirectUri: 'http://localhost:53000/v1/auth/callback',
+        destination: '/app',
+        sessionLineage: { kind: 'fresh' },
         createdAt: Date.now(),
     }
 }

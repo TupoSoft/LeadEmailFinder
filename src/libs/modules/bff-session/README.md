@@ -57,7 +57,7 @@ This module depends only on the public barrel `auth` exposes — `CredentialAuth
 
 | Method | Path               | Access                                                                                                                                        |
 | ------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `v1/auth/login`    | Public — redirects to Keycloak with a PKCE S256 challenge                                                                                     |
+| `GET`  | `v1/auth/login`    | Public — accepts an optional safe `destination` query and redirects to Keycloak with a PKCE S256 challenge                                                                                     |
 | `GET`  | `v1/auth/callback` | Public — consumes pending state, exchanges the authorization code, and sets the session/CSRF cookies                                          |
 | `GET`  | `v1/auth/session`  | Human session — returns browser-safe email, membership, organization, capabilities, and grantable service-client permissions                  |
 | `POST` | `v1/auth/logout`   | Authenticated; unsafe method, so `BrowserSessionMutationGuard` also requires a matching Origin and CSRF token for a `human_session` principal |
@@ -99,15 +99,39 @@ BFF client, any additional audience without an explicit trust policy, and a pres
 not equal the BFF client. The callback looks up an existing external identity and resolves its active membership
 before synchronizing email, so `active_membership_required` does not create or update an identity. Every callback
 response clears the transient login-state cookie and sets `Cache-Control: no-store` and
-`Referrer-Policy: no-referrer`; successful handling still redirects to `APP_BASE_URL` and issues the session and CSRF
+`Referrer-Policy: no-referrer`; successful handling redirects to the validated pending application destination and issues the session and CSRF
 cookies.
+
+Login accepts only a canonical relative destination under `/app`, including its query and fragment. It rejects
+absolute and protocol-relative URLs, encoded path components, malformed values, public routes, and authentication
+recovery routes. Every rejected destination falls back to `/app`. The one-time pending state owns the normalized
+destination; query input on the callback route cannot change it. Successful callbacks redirect to that destination.
+
+Login also records a session lineage in pending state. A valid existing cookie records the exact session expected
+for replacement. Missing cookies record a fresh lineage. Stale, expired, malformed, duplicate, and forged cookies
+record a fresh lineage and clear both session and CSRF cookies before the provider redirect, with the original
+scope and security attributes. A callback for a fresh lineage rejects any newly presented session cookie. A
+replacement callback requires the original cookie and rejects a missing expected session as `login_state_invalid`.
+Concurrent login attempts from the same old session permit exactly one replacement.
 
 ## Persistence
 
 None owned. Session and pending-login state live in Redis, behind this module's own `SessionStore` and
-`PendingLoginStateStore` application ports (`RedisSessionStore`, `RedisPendingLoginStateStore` are their only
-adapters), not Postgres. Pending login state is consumed with one atomic Redis `GETDEL`, so concurrent callback
+`PendingLoginStateStore` application ports, not Postgres. Production composition uses `RedisSessionStore` and
+`RedisPendingLoginStateStore`. `InMemorySessionStore` is a disposable adapter for contract and HTTP tests. Pending login state is consumed with one atomic Redis `GETDEL`, so concurrent callback
 requests cannot both obtain the same verifier and nonce.
+
+`SessionStore.replace` creates the new encrypted session and removes the expected old key in one Redis Lua
+operation, only while that expected key exists and the new key is absent. Encryption happens before the operation.
+Both Redis and the in-memory adapter enforce the same replacement contract. Ordinary session saves update existing
+records only, so an earlier authentication request cannot recreate an old session after replacement. Redis expiry
+uses millisecond precision and remains bounded by the idle and absolute deadlines. If response construction fails
+before headers are sent, the controller discards the new session and removes its cookie headers.
+
+The pending-state schema now requires a destination and tagged session lineage. Pending logins created before this
+change fail safely and must restart. Development data remains disposable; use the checkout-owned reset and reseed
+procedure documented in the frontend runtime guide when a full development reset is needed. No database migration
+is required.
 
 ## Configuration
 
@@ -133,6 +157,12 @@ URLs without credentials, whitespace, query parameters, or fragments. Invalid va
 that identify the variable without repeating its value.
 
 ## Validation
+
+`session-store.contract.spec.ts` runs the same fresh, replacement, expiry, conflict, race, and stale-save cases against
+memory and, when `TEST_BFF_REDIS_URL` is set, Redis. The Redis cases also inject script and serialization failures.
+`bff-session-replacement.integration.spec.ts` exercises real application orchestration and HTTP authentication with a
+disposable session store and stub provider. It verifies two browser contexts, distinct-state races, unusable-cookie
+recovery, replay, failure redaction, and response-construction cleanup. These tests do not prove live provider login.
 
 Focused application tests include `application/bff-session-flow.service.spec.ts`,
 `application/human-membership-resolver.service.spec.ts`, `application/session-token-refresher.service.spec.ts`,

@@ -75,11 +75,14 @@ corepack pnpm bruno:bff-sessions
 
 The gateway test uses its own temporary Docker network and fixture containers to compare Vite and Nginx routing,
 request forwarding, caching, headers, and sanitized logs. Build the tagged web image above before running it.
-The live browser launcher verifies current checkout ownership, creates a transient ordinary Keycloak member and
-application membership, completes real login, reads the session, checks CSRF rejection and logout, and verifies
-both log streams with synthetic markers. It cleans up its own fixture. Browser traces and credential-bearing
-artifacts are disabled. The Bruno launcher executes `bru run --env local` with the repository-pinned CLI and requires
-all requests and tests to run.
+The live browser launcher verifies current checkout ownership and creates two transient Keycloak members in one
+application organization. Its six tests cover real login, safe destination recovery, session expiry, account
+replacement, competing callbacks, browser history restoration, keyboard navigation, and signing out across tabs with
+CSRF protection.
+It checks both log streams with synthetic markers and removes its own member fixtures. Only the current test's
+session key is expired; no shared Redis or database reset is used. Browser traces and artifacts that contain
+credentials are disabled. The Bruno launcher executes `bru run --env local` with the repository-pinned CLI and
+requires all requests and tests to run.
 
 For a separately named stack, set `COMPOSE_PROJECT_NAME` when invoking the live launchers. The optional Compose
 variables `WEB_PORT`, `KEYCLOAK_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, and `BULLBOARD_PORT` retain their

@@ -1,16 +1,26 @@
 import { ExternalIdentityResolver } from '@tuposoft/lead-email-finder/modules/identity'
+import { SessionLineage } from '../domain/pending-login-state'
+import { normalizeLoginDestination } from './login-destination'
 import { SessionRecord } from '../domain/session-record'
 import { BffSessionConfiguration } from './bff-session-configuration'
 import { HumanMembershipResolver, SingleActiveMembershipRequiredError } from './human-membership-resolver.service'
 import { IdTokenVerifier } from './id-token-verifier'
 import { AuthorizationCodeGrantRejectedError, OAuthProviderClient } from './oauth-provider-client'
 import { PendingLoginStateStore } from './pending-login-state-store'
-import { computeCodeChallengeS256, generateCodeVerifier, generateCsrfToken, generateNonce, generateState } from './pkce'
+import {
+    computeCodeChallengeS256,
+    generateCodeVerifier,
+    generateCsrfToken,
+    generateNonce,
+    generateSessionId,
+    generateState,
+} from './pkce'
 import { SessionStore } from './session-store'
 
 export interface LoginStart {
     readonly authorizationUrl: string
     readonly state: string
+    readonly clearSessionCookies: boolean
 }
 
 export interface CallbackInput {
@@ -23,6 +33,7 @@ export interface CallbackInput {
 export interface CallbackResult {
     readonly sessionId: string
     readonly csrfToken: string
+    readonly destination: string
 }
 
 export class LoginStateInvalidError extends Error {
@@ -50,14 +61,25 @@ export class BffSessionFlowService {
         private readonly humanMembershipResolver: HumanMembershipResolver,
     ) {}
 
-    async login(): Promise<LoginStart> {
+    async login(destination?: unknown, existingSessionId?: string): Promise<LoginStart> {
+        const existingSession = existingSessionId ? await this.sessionStore.get(existingSessionId) : undefined
+        const sessionLineage: SessionLineage =
+            existingSession && existingSessionId ? { kind: 'replace', sessionId: existingSessionId } : { kind: 'fresh' }
+        const clearSessionCookies = existingSessionId !== undefined && !existingSession
         const state = generateState()
         const nonce = generateNonce()
         const codeVerifier = generateCodeVerifier()
         const codeChallenge = computeCodeChallengeS256(codeVerifier)
         const redirectUri = `${this.configuration.appBaseUrl}/v1/auth/callback`
 
-        await this.pendingLoginStateStore.create(state, { nonce, codeVerifier, redirectUri, createdAt: Date.now() })
+        await this.pendingLoginStateStore.create(state, {
+            nonce,
+            codeVerifier,
+            redirectUri,
+            createdAt: Date.now(),
+            sessionLineage,
+            destination: normalizeLoginDestination(destination, this.configuration.appBaseUrl),
+        })
 
         const authorizationUrl = this.oauthProviderClient.buildAuthorizationUrl({
             redirectUri,
@@ -66,7 +88,7 @@ export class BffSessionFlowService {
             codeChallenge,
         })
 
-        return { authorizationUrl, state }
+        return { authorizationUrl, state, clearSessionCookies }
     }
 
     async handleCallback(input: CallbackInput): Promise<CallbackResult> {
@@ -78,6 +100,16 @@ export class BffSessionFlowService {
 
         if (!pending) {
             throw new LoginStateInvalidError('Login state is invalid, expired, or was already used')
+        }
+
+        const lineage = pending.sessionLineage
+        if (
+            !lineage ||
+            (lineage.kind === 'fresh' && input.existingSessionId !== undefined) ||
+            (lineage.kind === 'replace' && lineage.sessionId !== input.existingSessionId) ||
+            (lineage.kind !== 'fresh' && lineage.kind !== 'replace')
+        ) {
+            throw new LoginStateInvalidError('Session lineage no longer matches the login attempt')
         }
 
         if (typeof input.code !== 'string' || input.code.trim().length === 0) {
@@ -132,13 +164,25 @@ export class BffSessionFlowService {
             createdAt: now,
         }
 
-        if (input.existingSessionId) {
-            await this.sessionStore.delete(input.existingSessionId).catch(() => undefined)
+        let sessionId: string
+        if (lineage.kind === 'replace') {
+            sessionId = generateSessionId()
+            if (!(await this.sessionStore.replace(lineage.sessionId, sessionId, record))) {
+                throw new LoginStateInvalidError('The expected session is no longer available')
+            }
+        } else {
+            sessionId = await this.sessionStore.create(record)
         }
 
-        const sessionId = await this.sessionStore.create(record)
+        return {
+            sessionId,
+            csrfToken: record.csrfToken,
+            destination: normalizeLoginDestination(pending.destination, this.configuration.appBaseUrl),
+        }
+    }
 
-        return { sessionId, csrfToken: record.csrfToken }
+    async discardSession(sessionId: string): Promise<void> {
+        await this.sessionStore.delete(sessionId)
     }
 
     async logout(sessionId: string | undefined): Promise<void> {

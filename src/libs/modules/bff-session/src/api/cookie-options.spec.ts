@@ -1,6 +1,8 @@
 import { BffSessionConfiguration } from '../application/bff-session-configuration'
 import {
     buildCsrfCookieOptions,
+    buildCsrfClearCookieOptions,
+    buildSessionClearCookieOptions,
     buildLoginStateClearCookieOptions,
     buildLoginStateCookieOptions,
     buildSessionCookieOptions,
@@ -45,6 +47,20 @@ describe('cookie-options', () => {
         expect(options).toEqual({ httpOnly: true, sameSite: 'lax', path: '/v1/auth', secure: false })
         expect(options).not.toHaveProperty('maxAge')
         expect(options).not.toHaveProperty('expires')
+    })
+
+    it.each([false, true])('clears session and CSRF cookies with matching scope for secure=%s', secure => {
+        const configuration = configWith(secure)
+        for (const [write, clear] of [
+            [buildSessionCookieOptions(configuration), buildSessionClearCookieOptions(configuration)],
+            [buildCsrfCookieOptions(configuration), buildCsrfClearCookieOptions(configuration)],
+        ]) {
+            const scope = { ...write }
+            delete scope.maxAge
+            expect(clear).toEqual(scope)
+            expect(clear).not.toHaveProperty('maxAge')
+            expect(clear).not.toHaveProperty('expires')
+        }
     })
 
     it('marks cookies secure when the app base URL is https', () => {

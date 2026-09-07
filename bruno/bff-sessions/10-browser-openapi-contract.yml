@@ -17,6 +17,12 @@ runtime:
           expect(Object.keys(res.body.paths).sort()).to.deep.equal([
             '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session'
           ]);
+          var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
+            return parameter.name === 'destination';
+          });
+          expect(destination.in).to.equal('query');
+          expect(destination.required).to.equal(false);
+          expect(destination.schema.type).to.equal('string');
           expect(res.body.paths['/v1/auth/session'].get.operationId).to.equal('getCurrentAccount');
           expect(res.body.paths['/v1/auth/logout'].post.security).to.deep.equal([
             { lef_session: [], 'x-csrf-token': [] }

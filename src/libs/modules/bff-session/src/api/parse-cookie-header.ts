@@ -24,3 +24,11 @@ export function parseCookieHeader(header: string | undefined): Record<string, st
 export function firstHeaderValue(header: string | string[] | undefined): string | undefined {
     return Array.isArray(header) ? header[0] : header
 }
+
+/** Preserve presence even when a cookie value is malformed, empty, or duplicated. */
+export function readPresentedCookie(header: string | undefined, name: string): string | undefined {
+    const fragments = header?.split(';').filter(part => part.split('=', 1)[0].trim() === name) ?? []
+    if (fragments.length === 0) return undefined
+    if (fragments.length !== 1) return ''
+    return parseCookieHeader(fragments[0])[name] ?? ''
+}

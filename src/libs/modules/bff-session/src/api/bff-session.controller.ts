@@ -45,14 +45,17 @@ import {
     AuthenticationRequiredResponseDto,
     CurrentAccountContextDto,
     HumanSessionRequiredResponseDto,
+    LoginDestinationQueryDto,
 } from './bff-session.dto'
 import {
     buildCsrfCookieOptions,
+    buildCsrfClearCookieOptions,
+    buildSessionClearCookieOptions,
     buildLoginStateClearCookieOptions,
     buildLoginStateCookieOptions,
     buildSessionCookieOptions,
 } from './cookie-options'
-import { firstHeaderValue, parseCookieHeader } from './parse-cookie-header'
+import { firstHeaderValue, parseCookieHeader, readPresentedCookie } from './parse-cookie-header'
 
 const CALLBACK_ERROR_CODES = {
     invalidLoginState: 'login_state_invalid',
@@ -128,13 +131,25 @@ export class BffSessionController {
         headers: {
             Location: { description: 'Provider authorization URL.', schema: { type: 'string', format: 'uri' } },
             'Set-Cookie': {
-                description: 'Sets the transient HttpOnly lef_login_state cookie.',
+                description:
+                    'Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies.',
                 schema: { type: 'string' },
             },
         },
     })
-    async login(@Res() res: Response): Promise<void> {
-        const { authorizationUrl, state } = await this.bffSessionFlow.login()
+    @ApiQuery({ type: LoginDestinationQueryDto })
+    async login(@Query() query: Record<string, unknown>, @Req() req: Request, @Res() res: Response): Promise<void> {
+        const sessionId = readPresentedCookie(firstHeaderValue(req.headers['cookie']), BFF_SESSION_COOKIE_NAME)
+        const { authorizationUrl, state, clearSessionCookies } = await this.bffSessionFlow.login(
+            query['destination'],
+            sessionId,
+        )
+
+        res.set(CALLBACK_RESPONSE_HEADERS)
+        if (clearSessionCookies) {
+            res.clearCookie(BFF_SESSION_COOKIE_NAME, buildSessionClearCookieOptions(this.configuration))
+            res.clearCookie(BFF_CSRF_COOKIE_NAME, buildCsrfClearCookieOptions(this.configuration))
+        }
 
         res.cookie(BFF_LOGIN_STATE_COOKIE_NAME, state, buildLoginStateCookieOptions(this.configuration))
         res.redirect(HttpStatus.FOUND, authorizationUrl)
@@ -148,7 +163,7 @@ export class BffSessionController {
         summary: 'Complete browser authorization',
         security: [],
         description:
-            'Consumes one pending Authorization Code with PKCE response. Success returns to the application; recoverable failures return to the same-origin error route with a stable safe code.',
+            'Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.',
     })
     @ApiQuery({
         name: 'code',
@@ -165,7 +180,7 @@ export class BffSessionController {
     @ApiResponse({
         status: HttpStatus.FOUND,
         description:
-            'Redirects to the application after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.',
+            'Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.',
         headers: {
             ...CALLBACK_SWAGGER_RESPONSE_HEADERS,
             Location: {
@@ -203,12 +218,16 @@ export class BffSessionController {
 
         let sessionId: string
         let csrfToken: string
+        let destination: string
         try {
-            ;({ sessionId, csrfToken } = await this.bffSessionFlow.handleCallback({
+            ;({ sessionId, csrfToken, destination } = await this.bffSessionFlow.handleCallback({
                 code: query.code,
                 state: query.state,
                 cookieState: cookies[BFF_LOGIN_STATE_COOKIE_NAME],
-                existingSessionId: cookies[BFF_SESSION_COOKIE_NAME],
+                existingSessionId: readPresentedCookie(
+                    firstHeaderValue(req.headers['cookie']),
+                    BFF_SESSION_COOKIE_NAME,
+                ),
             }))
         } catch (error) {
             if (error instanceof LoginStateInvalidError) {
@@ -229,9 +248,16 @@ export class BffSessionController {
             throw error
         }
 
-        res.cookie(BFF_SESSION_COOKIE_NAME, sessionId, buildSessionCookieOptions(this.configuration))
-        res.cookie(BFF_CSRF_COOKIE_NAME, csrfToken, buildCsrfCookieOptions(this.configuration))
-        res.redirect(HttpStatus.FOUND, this.configuration.appBaseUrl)
+        try {
+            res.cookie(BFF_SESSION_COOKIE_NAME, sessionId, buildSessionCookieOptions(this.configuration))
+            res.cookie(BFF_CSRF_COOKIE_NAME, csrfToken, buildCsrfCookieOptions(this.configuration))
+            res.redirect(HttpStatus.FOUND, new URL(destination, this.configuration.appBaseUrl).toString())
+        } catch (error) {
+            res.removeHeader('Set-Cookie')
+            res.clearCookie(BFF_LOGIN_STATE_COOKIE_NAME, buildLoginStateClearCookieOptions(this.configuration))
+            await this.bffSessionFlow.discardSession(sessionId)
+            throw error
+        }
     }
 
     @Get('session')
@@ -316,8 +342,8 @@ export class BffSessionController {
 
         await this.bffSessionFlow.logout(cookies[BFF_SESSION_COOKIE_NAME])
 
-        res.clearCookie(BFF_SESSION_COOKIE_NAME, buildSessionCookieOptions(this.configuration))
-        res.clearCookie(BFF_CSRF_COOKIE_NAME, buildCsrfCookieOptions(this.configuration))
+        res.clearCookie(BFF_SESSION_COOKIE_NAME, buildSessionClearCookieOptions(this.configuration))
+        res.clearCookie(BFF_CSRF_COOKIE_NAME, buildCsrfClearCookieOptions(this.configuration))
         res.status(HttpStatus.NO_CONTENT).send()
     }
 

@@ -23,15 +23,18 @@ function sampleRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe('RedisSessionStore', () => {
-    let redis: jest.Mocked<Pick<Redis, 'get' | 'set' | 'del'>>
+    let redis: jest.Mocked<Pick<Redis, 'get' | 'set' | 'del' | 'eval'>>
     let encryptor: jest.Mocked<SessionEncryptor>
     let configuration: BffSessionConfiguration
     let store: RedisSessionStore
 
     beforeEach(() => {
-        redis = { get: jest.fn(), set: jest.fn(), del: jest.fn() } as unknown as jest.Mocked<
-            Pick<Redis, 'get' | 'set' | 'del'>
-        >
+        redis = {
+            get: jest.fn(),
+            set: jest.fn().mockResolvedValue('OK'),
+            del: jest.fn(),
+            eval: jest.fn(),
+        } as unknown as jest.Mocked<Pick<Redis, 'get' | 'set' | 'del' | 'eval'>>
         encryptor = { encrypt: jest.fn(), decrypt: jest.fn() } as unknown as jest.Mocked<SessionEncryptor>
         configuration = {
             appBaseUrl: 'http://localhost:53000',
@@ -55,8 +58,8 @@ describe('RedisSessionStore', () => {
             await store.save('session-1', record)
 
             const [, , ex, ttl] = redis.set.mock.calls[0]
-            expect(ex).toBe('EX')
-            expect(ttl).toBeLessThanOrEqual(Math.ceil(configuration.sessionIdleTimeoutMs / 1000))
+            expect(ex).toBe('PX')
+            expect(ttl).toBeLessThanOrEqual(configuration.sessionIdleTimeoutMs)
         })
 
         it('sets a TTL bounded by the remaining absolute lifetime when it is shorter than the idle timeout', async () => {
@@ -66,7 +69,7 @@ describe('RedisSessionStore', () => {
             await store.save('session-1', record)
 
             const [, , , ttl] = redis.set.mock.calls[0]
-            expect(ttl).toBeLessThanOrEqual(5)
+            expect(ttl).toBeLessThanOrEqual(5000)
         })
     })
 
@@ -114,7 +117,65 @@ describe('RedisSessionStore', () => {
 
             expect(typeof sessionId).toBe('string')
             expect(sessionId.length).toBeGreaterThan(16)
-            expect(redis.set).toHaveBeenCalledWith(expect.stringContaining(sessionId), 'ciphertext', 'EX', expect.any(Number))
+            expect(redis.set).toHaveBeenCalledWith(
+                expect.stringContaining(sessionId),
+                'ciphertext',
+                'PX',
+                expect.any(Number),
+                'NX',
+            )
+        })
+    })
+
+    describe('replace', () => {
+        it('uses one atomic script with expected and new keys after encryption', async () => {
+            encryptor.encrypt.mockResolvedValue('encrypted-session')
+            redis.eval.mockResolvedValue(1)
+            await expect(store.replace('old', 'new', sampleRecord())).resolves.toBe(true)
+            expect(redis.eval).toHaveBeenCalledWith(
+                expect.stringContaining("redis.call('EXISTS', KEYS[1])"),
+                2,
+                'bff-session:old',
+                'bff-session:new',
+                'encrypted-session',
+                expect.any(Number),
+            )
+            expect(redis.set).not.toHaveBeenCalled()
+            expect(redis.del).not.toHaveBeenCalled()
+        })
+
+        it('reports an absent expected session as a conflict', async () => {
+            encryptor.encrypt.mockResolvedValue('encrypted-session')
+            redis.eval.mockResolvedValue(0)
+            await expect(store.replace('missing', 'new', sampleRecord())).resolves.toBe(false)
+            expect(redis.set).not.toHaveBeenCalled()
+        })
+
+        it('does not invoke Redis when serialization fails', async () => {
+            encryptor.encrypt.mockRejectedValue(new Error('serialization failed'))
+            await expect(store.replace('old', 'new', sampleRecord())).rejects.toThrow('serialization failed')
+            expect(redis.eval).not.toHaveBeenCalled()
+        })
+
+        it('propagates an injected script failure without independent writes', async () => {
+            encryptor.encrypt.mockResolvedValue('encrypted-session')
+            redis.eval.mockRejectedValue(new Error('injected script failure'))
+            await expect(store.replace('old', 'new', sampleRecord())).rejects.toThrow('injected script failure')
+            expect(redis.set).not.toHaveBeenCalled()
+            expect(redis.del).not.toHaveBeenCalled()
+        })
+
+        it('does not resurrect a deleted session during an in-flight authentication save', async () => {
+            encryptor.encrypt.mockResolvedValue('encrypted-session')
+            redis.set.mockResolvedValue(null)
+            await expect(store.save('old', sampleRecord())).rejects.toThrow('Session is no longer available')
+            expect(redis.set).toHaveBeenCalledWith(
+                'bff-session:old',
+                'encrypted-session',
+                'PX',
+                expect.any(Number),
+                'XX',
+            )
         })
     })
 

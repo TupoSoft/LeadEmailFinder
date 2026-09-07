@@ -5,7 +5,10 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/v1/auth/login"
+  url: "{{baseUrl}}/v1/auth/login?destination=%2Fapp%2Fverification"
+  headers:
+    - name: Cookie
+      value: "lef_session=unusable-bruno-session; lef_csrf_token=old-bruno-csrf"
 
 settings:
   followRedirects: false
@@ -35,6 +38,9 @@ runtime:
           expect(location).to.include('code_challenge=');
           expect(location).to.include('state=');
           expect(location).to.include('nonce=');
+          expect(authorizationUrl.searchParams.has('destination')).to.equal(false);
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
         });
 
         test('sets an HttpOnly login-state cookie', function() {
@@ -48,4 +54,12 @@ runtime:
           var loginStateCookiePair = loginStateCookie.split(';')[0];
           expect(loginStateCookiePair).to.equal('lef_login_state=' + bru.getVar('callbackState'));
           bru.setVar('loginStateCookie', loginStateCookiePair);
+          ['lef_session', 'lef_csrf_token'].forEach(function(name) {
+            var cleared = setCookie.find(function(cookie) { return cookie.indexOf(name + '=;') === 0; });
+            expect(cleared).to.be.a('string');
+            expect(cleared).to.include('Path=/');
+            expect(cleared).to.include('SameSite=Lax');
+            expect(cleared).to.include('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+            expect(cleared).not.to.include('Max-Age');
+          });
         });

@@ -1,5 +1,5 @@
 import { Expose, Type } from 'class-transformer'
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { AUTH_ROLES, AuthRole } from '@tuposoft/lead-email-finder/modules/identity'
 import {
     SERVICE_CLIENT_GRANTABLE_PERMISSIONS,
@@ -71,4 +71,14 @@ export class HumanSessionRequiredResponseDto {
     @ApiProperty({ enum: ['human_session_required'] })
     @Expose()
     code: 'human_session_required'
+}
+
+export class LoginDestinationQueryDto {
+    @ApiPropertyOptional({
+        type: String,
+        example: '/app/verification?view=recent',
+        description:
+            'Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app.',
+    })
+    destination?: string
 }

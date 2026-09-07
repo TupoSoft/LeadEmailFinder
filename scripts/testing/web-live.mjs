@@ -16,13 +16,13 @@ export function assertPassedBrowserReport(report) {
     const stats = report?.stats
     if (
         !stats ||
-        stats.expected !== 3 ||
+        stats.expected !== 6 ||
         stats.unexpected !== 0 ||
         stats.flaky !== 0 ||
         stats.skipped !== 0 ||
         report.errors?.length
     ) {
-        throw new Error('Gateway browser smoke requires exactly three passing tests with zero skipped or flaky tests')
+        throw new Error('Gateway browser smoke requires exactly six passing tests with zero skipped or flaky tests')
     }
     return stats.expected
 }
@@ -34,9 +34,14 @@ export function browserFailureLocations(report) {
         .map(spec => {
             const errors = spec.tests?.flatMap(test => test.results?.flatMap(result => result.errors ?? []) ?? []) ?? []
             const location = errors
-                .map(error => (error.stack ?? error.message)?.match(/same-origin\.spec\.ts:(\d+):\d+/)?.[1])
+                .map(
+                    error =>
+                        (error.stack ?? error.message)?.match(/((?:same-origin|auth-shell)\.spec\.ts:\d+):\d+/)?.[1],
+                )
                 .find(Boolean)
-            return `same-origin.spec.ts:${location ?? spec.line}`
+            const file =
+                spec.file?.split('/').at(-1) === 'auth-shell.spec.ts' ? 'auth-shell.spec.ts' : 'same-origin.spec.ts'
+            return location ?? `${file}:${Number.isInteger(spec.line) ? spec.line : 0}`
         })
 }
 
@@ -80,7 +85,7 @@ async function authenticateKeycloakAdmin(metadata) {
     return token
 }
 
-async function createMemberFixture(root, metadata) {
+async function createMemberFixture(root, metadata, organizationId) {
     assertFixtureTarget(metadata)
     inspectDevelopmentService(root, metadata, 'keycloak', '8080/tcp', metadata.keycloakUrl)
     inspectDevelopmentService(root, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
@@ -88,7 +93,7 @@ async function createMemberFixture(root, metadata) {
     const fixture = {
         username: `web-smoke-${randomUUID()}@example.test`,
         password: randomBytes(24).toString('base64url'),
-        organizationId: randomUUID(),
+        organizationId: organizationId ?? randomUUID(),
         externalIdentityId: randomUUID(),
     }
     const created = await keycloakRequest(metadata, '/admin/realms/lead-email-finder/users', {
@@ -114,7 +119,11 @@ async function createMemberFixture(root, metadata) {
             if (connected) {
                 inspectDevelopmentService(root, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
                 await client.query('BEGIN')
-                await client.query('DELETE FROM organizations WHERE id = $1', [fixture.organizationId])
+                await client.query('DELETE FROM organization_memberships WHERE "externalIdentityId" = $1', [
+                    fixture.externalIdentityId,
+                ])
+                if (!organizationId)
+                    await client.query('DELETE FROM organizations WHERE id = $1', [fixture.organizationId])
                 await client.query('DELETE FROM external_identities WHERE id = $1', [fixture.externalIdentityId])
                 await client.query('COMMIT')
             }
@@ -131,10 +140,12 @@ async function createMemberFixture(root, metadata) {
         await client.connect()
         connected = true
         await client.query('BEGIN')
-        await client.query('INSERT INTO organizations (id, name) VALUES ($1, $2)', [
-            fixture.organizationId,
-            'Gateway browser smoke',
-        ])
+        if (!organizationId) {
+            await client.query('INSERT INTO organizations (id, name) VALUES ($1, $2)', [
+                fixture.organizationId,
+                'Gateway browser smoke',
+            ])
+        }
         await client.query('INSERT INTO external_identities (id, issuer, subject, email) VALUES ($1, $2, $3, $4)', [
             fixture.externalIdentityId,
             `${metadata.keycloakUrl}/realms/lead-email-finder`,
@@ -187,13 +198,25 @@ export async function runWebLive() {
     }
     const directory = mkdtempSync(resolve(tmpdir(), 'lef-web-live-'))
     let member
+    let replacement
     try {
         member = await createMemberFixture(root, metadata)
+        replacement = await createMemberFixture(root, metadata, member.fixture.organizationId)
         const fixturePath = resolve(directory, 'fixture.json')
         const clientBundle = resolve(directory, 'browser-client.js')
         const reportPath = resolve(directory, 'report.json')
         await bundleBrowserClient(root, clientBundle)
-        writeFileSync(fixturePath, JSON.stringify({ ...member.fixture, clientBundle }), { mode: 0o600 })
+        inspectDevelopmentService(root, metadata, 'redis', '6379/tcp', metadata.redisUrl)
+        writeFileSync(
+            fixturePath,
+            JSON.stringify({
+                ...member.fixture,
+                replacement: replacement.fixture,
+                clientBundle,
+                redisUrl: metadata.redisUrl,
+            }),
+            { mode: 0o600 },
+        )
         const since = new Date().toISOString()
         const probes = await sendPrivacyProbes(origin)
         const result = spawnSync(
@@ -218,7 +241,7 @@ export async function runWebLive() {
                     WEB_LIVE_OUTPUT: resolve(directory, 'results'),
                 },
                 encoding: 'utf8',
-                timeout: 300_000,
+                timeout: 420_000,
                 maxBuffer: 20 * 1024 * 1024,
             },
         )
@@ -253,7 +276,11 @@ export async function runWebLive() {
         )
     } finally {
         try {
-            await member?.cleanup()
+            try {
+                await replacement?.cleanup()
+            } finally {
+                await member?.cleanup()
+            }
         } finally {
             rmSync(directory, { recursive: true, force: true })
         }

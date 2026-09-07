@@ -1,0 +1,160 @@
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CurrentAccount } from '../api/current-account'
+import { AuthProvider } from '../features/auth/AuthProvider'
+import { AuthSession } from '../features/auth/auth-session'
+import { appRoutes } from './routes'
+
+const NativeRequest = globalThis.Request
+class BrowserRequest extends NativeRequest {
+    constructor(input: RequestInfo | URL, init?: RequestInit) {
+        super(typeof input === 'string' ? new URL(input, document.baseURI) : input, init)
+    }
+}
+beforeEach(() => vi.stubGlobal('Request', BrowserRequest))
+afterEach(() => vi.unstubAllGlobals())
+
+const account: CurrentAccount = {
+    email: 'member@example.test',
+    membership: { id: 'member-a', role: 'member' },
+    organization: { id: 'organization-a', name: 'Example workspace' },
+    capabilities: ['verification.run'],
+    grantableServiceClientPermissions: [],
+}
+
+function renderRoute(
+    path = '/app',
+    respond: (request: Request) => Promise<Response> = () => Promise.resolve(Response.json(account)),
+) {
+    const fetch = vi.fn(respond)
+    const session = new AuthSession({
+        fetch,
+        channelFactory: () => null,
+        readCookies: () => 'lef_csrf_token=csrf-fixture',
+    })
+    const router = createMemoryRouter(
+        [
+            {
+                element: (
+                    <AuthProvider session={session}>
+                        <Outlet />
+                    </AuthProvider>
+                ),
+                children: appRoutes[0].children,
+            },
+        ],
+        { initialEntries: [path] },
+    )
+    render(<RouterProvider router={router} />)
+    return { fetch, session, router }
+}
+
+// API responses below exercise the real provider, generation boundary and route composition.
+describe('application routes', () => {
+    it('shows account context, capabilities and a working sign-out after bootstrap', async () => {
+        const user = userEvent.setup()
+        const { fetch } = renderRoute('/app', request =>
+            Promise.resolve(request.method === 'POST' ? new Response(null, { status: 204 }) : Response.json(account)),
+        )
+        expect(await screen.findByRole('heading', { name: 'Your workspace' })).toBeInTheDocument()
+        expect(screen.getAllByText(account.email!)).toHaveLength(2)
+        expect(screen.getByText('Run verifications')).toBeInTheDocument()
+        expect(screen.queryByText('Manage team members')).not.toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: 'Sign out' }))
+        expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
+        expect(screen.queryByText(account.email!)).not.toBeInTheDocument()
+        const request = fetch.mock.calls.find(([request]) => request.method === 'POST')?.[0]
+        expect(request?.credentials).toBe('same-origin')
+        expect(request?.headers.get('x-csrf-token')).toBe('csrf-fixture')
+    })
+
+    it('renders the nullable email fallback without displaying membership IDs', async () => {
+        renderRoute('/app', () => Promise.resolve(Response.json({ ...account, email: null })))
+        expect(await screen.findAllByText('Email unavailable')).toHaveLength(2)
+        expect(screen.queryByText(account.membership.id)).not.toBeInTheDocument()
+    })
+
+    it('preserves a safe destination on expired recovery and hides account data', async () => {
+        let expired = false
+        const { session, router } = renderRoute('/app?view=activity', () =>
+            Promise.resolve(
+                expired ? Response.json({ code: 'authentication_required' }, { status: 401 }) : Response.json(account),
+            ),
+        )
+        await screen.findByRole('heading', { name: 'Your workspace' })
+        expired = true
+        await act(() => session.bootstrap())
+        expect(await screen.findByRole('heading', { name: 'Your session has expired' })).toBeInTheDocument()
+        expect(router.state.location.pathname).toBe('/app/session-expired')
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+            'href',
+            '/v1/auth/login?destination=%2Fapp%3Fview%3Dactivity',
+        )
+        expect(screen.queryByText(account.email!)).not.toBeInTheDocument()
+    })
+
+    it('distinguishes unusable account context from a feature permission denial', async () => {
+        const { router } = renderRoute('/app', () =>
+            Promise.resolve(Response.json({ code: 'human_session_required' }, { status: 403 })),
+        )
+        expect(await screen.findByRole('heading', { name: 'Account unavailable' })).toBeInTheDocument()
+        expect(router.state.location.pathname).toBe('/app/account-unavailable')
+        expect(screen.queryByRole('heading', { name: 'Access denied' })).not.toBeInTheDocument()
+    })
+
+    it('offers an explicit retry after an ambiguous sign-out and does not retain account data', async () => {
+        const user = userEvent.setup()
+        let posts = 0
+        renderRoute('/app', request => {
+            if (request.method === 'GET') return Promise.resolve(Response.json(account))
+            posts += 1
+            return posts === 1
+                ? Promise.reject(new Error('network unavailable'))
+                : Promise.resolve(new Response(null, { status: 204 }))
+        })
+        await screen.findByRole('heading', { name: 'Your workspace' })
+        await user.click(screen.getByRole('button', { name: 'Sign out' }))
+        expect(await screen.findByRole('heading', { name: 'Sign-out could not be confirmed' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+            'href',
+            '/v1/auth/login?destination=%2Fapp',
+        )
+        expect(screen.queryByText(account.email!)).not.toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: 'Retry sign-out' }))
+        expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
+        expect(posts).toBe(2)
+    })
+
+    it('keeps forbidden recovery in the authenticated shell', async () => {
+        renderRoute('/app/forbidden')
+        expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Back to workspace' })).toHaveAttribute('href', '/app')
+    })
+
+    it('handles unknown protected paths with one main landmark and a working recovery', async () => {
+        renderRoute('/app/does-not-exist')
+        expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+        expect(screen.getAllByRole('main')).toHaveLength(1)
+        expect(screen.getByRole('link', { name: 'Back to workspace' })).toHaveAttribute('href', '/app')
+    })
+
+    it.each([
+        'login_state_invalid',
+        'authorization_code_exchange_failed',
+        'active_membership_required',
+        'raw-secret-provider-error',
+    ])('renders sanitized callback code %s without an API request', async code => {
+        const { fetch } = renderRoute(`/auth/error?code=${code}&error_description=private-provider-message`)
+        expect(screen.getByRole('heading', { name: 'Sign-in did not complete' })).toBeInTheDocument()
+        expect(screen.queryByText('private-provider-message')).not.toBeInTheDocument()
+        expect(screen.queryByText('raw-secret-provider-error')).not.toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+            'href',
+            '/v1/auth/login?destination=%2Fapp',
+        )
+        await waitFor(() => expect(fetch).not.toHaveBeenCalled())
+    })
+})

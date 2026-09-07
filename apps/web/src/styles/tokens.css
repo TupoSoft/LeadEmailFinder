@@ -18,6 +18,12 @@
     --line-height-display: 0.94;
     --font-size-display-large: 6.5rem;
     --line-height-display-large: 0.92;
+    --font-size-product-heading: 2.25rem;
+    --line-height-product-heading: 1.1;
+    --shell-header-height: 6rem;
+    --shell-sidebar-width: 14rem;
+    --state-min-height: 15rem;
+    --control-height: 2.75rem;
     --font-size-body: 1rem;
     --line-height-body: 1.45;
     --font-size-compact: 0.875rem;

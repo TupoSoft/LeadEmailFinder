@@ -39,6 +39,7 @@ test.describe('public entry', () => {
             'How it works',
             'Signals',
             'Principles',
+            'Sign in',
             'Continue to the principles',
         ]) {
             await expectNextTabStop(page, accessibleName)

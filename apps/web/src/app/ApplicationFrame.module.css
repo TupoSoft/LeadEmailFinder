@@ -1,0 +1,99 @@
+.frame {
+    max-width: var(--page-max);
+    min-height: 100vh;
+    margin-inline: auto;
+    padding-inline: var(--space-page-gutter-wide);
+    color: var(--color-ink);
+    background: var(--color-canvas);
+}
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-content-gap);
+    min-height: var(--shell-header-height);
+    border-bottom: var(--rule-width) solid var(--color-rule);
+}
+.brand {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    text-decoration: none;
+}
+.brand:hover {
+    color: var(--color-evergreen);
+}
+.footer a {
+    color: var(--color-evergreen);
+    font-size: var(--font-size-compact);
+    text-underline-offset: var(--space-unit);
+}
+.footer a:hover {
+    text-decoration-thickness: var(--rule-width);
+    color: var(--color-ink);
+}
+.layout {
+    display: grid;
+    grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr);
+    min-height: calc(100vh - var(--shell-header-height) - 5rem);
+}
+.sidebar {
+    padding: var(--space-page-gutter-wide) var(--space-content-gap) var(--space-content-gap) 0;
+    border-right: var(--rule-width) solid var(--color-rule-soft);
+}
+.contextLabel {
+    color: var(--color-evergreen);
+    font-size: var(--font-size-utility);
+    font-weight: 700;
+}
+.account {
+    margin-block-start: var(--space-page-gutter-wide);
+    overflow-wrap: anywhere;
+    font-size: var(--font-size-compact);
+}
+.account p {
+    margin-block-end: var(--space-control-gap);
+}
+.account .contextLabel:not(:first-child) {
+    margin-block-start: var(--space-content-gap);
+}
+.main {
+    min-width: 0;
+    padding: var(--space-page-gutter-wide);
+    overflow-wrap: anywhere;
+}
+.footer {
+    min-height: 5rem;
+    padding-block: var(--space-content-gap);
+    border-top: var(--rule-width) solid var(--color-rule-soft);
+}
+
+@media (max-width: 48rem) {
+    .frame {
+        padding-inline: var(--space-page-gutter);
+    }
+    .header {
+        flex-wrap: wrap;
+        gap: var(--space-control-gap);
+        padding-block: var(--space-content-gap);
+    }
+    .brand {
+        font-size: 1.1rem;
+    }
+    .layout {
+        grid-template-columns: minmax(0, 1fr);
+        align-content: start;
+    }
+    .sidebar {
+        border: 0;
+        padding: var(--space-content-gap) 0 0;
+    }
+    .sidebar > .contextLabel,
+    .account {
+        display: none;
+    }
+    .main {
+        padding: var(--space-content-gap) 0 var(--space-page-gutter-wide);
+    }
+}
