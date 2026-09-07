@@ -30,6 +30,10 @@ is forcibly terminated, inspect the owned fixture balance before removing `.dev/
 The launcher never deletes jobs or claims a retention guarantee. Every request and test must execute and pass;
 missing, skipped, or empty reports fail the command.
 
+Failures report only a fixed stage (`fixture_bootstrap`, `collection`, `report`, or `balance_restore`) and any
+available numeric request position, HTTP status, and execution counts. The request position follows collection
+execution order. Raw child output, credentials, URLs, headers, bodies, and assertion values remain suppressed.
+
 Run the browser workflow through its dedicated configuration so hosted MFA pages are never captured:
 
 ```shell

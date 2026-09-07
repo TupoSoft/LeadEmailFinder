@@ -19,6 +19,8 @@ status and result after reload.
 - [x] (2026-09-07) Add focused API/browser tests and a distinct async-verification Bruno workflow.
 - [x] (2026-09-07) Run repository, design-contract, generated-client, SMTP-runtime, and premium UX validation.
 - [x] (2026-09-07) Correct completed-result spacing and verify desktop, narrow, focus, and recovery behavior.
+- [x] (2026-09-07) Update stale browser-contract checks and fix the hosted MFA form readiness race.
+- [x] (2026-09-08) Add bounded, private Bruno failure diagnostics and verify runner regression coverage.
 
 ## Plan dependencies
 
@@ -43,6 +45,15 @@ status and result after reload.
   application mapper instead of editing the legacy mixed folder.
 
 ## Decision Log
+
+- Decision: Keep an exact browser route allowlist and add explicit async security, result, and generated-type checks.
+  Rationale: The earlier export test excluded every verification route, including the two routes this feature needs.
+  Synchronous verification, stored-result reads, batch verification, and proxy routes remain excluded.
+  Date/Author: 2026-09-07, CI follow-up.
+- Decision: Wait for a visible hosted MFA form before choosing enrollment or challenge handling.
+  Rationale: A browser click can finish when navigation commits, before the new document contains its form.
+  The existing timeout, trusted origin and form checks, account assertions, and capture suppression still apply.
+  Date/Author: 2026-09-07, CI follow-up.
 
 - Decision: Separate the completed result divider from its actions with the existing content gap of 24 pixels. Remove
   reserved status spacing only for an online completed result without a read error.
@@ -146,6 +157,41 @@ Exact focused commands:
 The Browser plugin remains unavailable. Playwright's initial local URL probe stalled before starting its preview
 server in this environment. Starting the preview explicitly and running against it outside the command sandbox
 allowed validation to complete. Screenshots use synthetic fixtures only and retain the existing paths listed below.
+
+### CI Follow-Up
+
+The contract tooling now accepts exactly the async create and status operations while preserving the remaining
+browser exclusions. Focused assertions cover authentication, error responses, UUIDs, five discriminated states,
+nullable evidence, safe result fields, and generated TypeScript types.
+
+A synthetic Chromium reproduction confirmed that an immediate enrollment-form count can return zero after
+navigation commits. Waiting for visibility finds the form. The hosted helper now waits before classifying it,
+and a delayed-form regression covers this case. The earlier CI output deliberately hid authentication details,
+so its exact failure stage cannot be established retrospectively. A later run of the previous commit passed MFA
+setup, confirming that the observed CI failure was intermittent.
+
+The later CI run failed in the async-verification Bruno collection. Its sanitized output did not identify the
+failing request. The runner now reports only a fixed failure stage and validated numeric request positions, HTTP
+statuses, and execution counts. Raw child output, report strings, credentials, and request content remain hidden.
+Focused regressions verify privacy, propagation through Compose, and credit restoration. Errors from browser tests
+retain their original details within the existing private browser runner boundary.
+
+Local validation passed: all 12 contract tooling tests, generated-artifact freshness, all 395 web tests, all 66
+runner tests with none skipped, web type checking and lint, and five privileged authentication artifact tests.
+Fresh isolated MFA enrollment also passed for both seeded identities. No product API, provider policy, or authentication requirement changed. There are no
+material architectural trade-offs. Remote CI owns acceptance of the full live workflow for this follow-up.
+
+Exact focused commands:
+
+    node --test scripts/openapi/*.test.mjs
+    corepack pnpm openapi:check
+    corepack pnpm exec eslint scripts/openapi/contracts.test.mjs
+    corepack pnpm --filter ./apps/web test:ci
+    corepack pnpm --filter ./apps/web typecheck
+    corepack pnpm --filter ./apps/web lint
+    corepack pnpm --filter ./apps/web test:privileged-artifacts
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:oidc-runners
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md bruno/async-verification/README.md
 
 ## Context and Orientation
 

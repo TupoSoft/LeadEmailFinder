@@ -2,6 +2,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
+import { brunoFailure } from './failure-diagnostic.mjs'
 
 const customerSchema = z.object({
     issuer: z.string().url(),
@@ -25,7 +26,13 @@ export function validateCustomerFixture(value, issuer, platformOrganizationId) {
 }
 
 async function jsonResponse(response) {
-    if (!response.ok) throw new Error('Async verification fixture request failed')
+    if (!response.ok) {
+        const status = response.status
+        throw brunoFailure({
+            stage: 'fixture_bootstrap',
+            ...(Number.isInteger(status) && status >= 100 && status <= 599 ? { status } : {}),
+        })
+    }
     return response.json()
 }
 
@@ -66,9 +73,13 @@ export async function withRestoredBalance(creditRequest, execute) {
     const { balance } = await creditRequest('GET')
     if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('Fixture balance must be a nonnegative integer')
     const restore = async () => {
-        const restored = await creditRequest('PUT', balance)
-        if (restored.balance !== balance || (await creditRequest('GET')).balance !== balance) {
-            throw new Error('Async verification fixture balance restoration was not confirmed')
+        try {
+            const restored = await creditRequest('PUT', balance)
+            if (restored.balance !== balance || (await creditRequest('GET')).balance !== balance) {
+                throw brunoFailure({ stage: 'balance_restore' })
+            }
+        } catch {
+            throw brunoFailure({ stage: 'balance_restore' })
         }
     }
     try {

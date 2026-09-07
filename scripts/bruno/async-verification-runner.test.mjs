@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { cliArguments, executeCollection, registeredCollection } from './run-collection.mjs'
 import { customerClientSecret, validateCustomerFixture, withRestoredBalance } from './async-verification-fixture.mjs'
+import { failureDiagnostic } from './failure-diagnostic.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 const organizationId = randomUUID()
@@ -52,8 +53,11 @@ test('customer bootstrap only reads the exact seeded client secret', async () =>
     assert.match(calls[1].url, /clients\?clientId=lef-svc-dev-fixture$/)
     assert.match(calls[2].url, /clients\/client-id\/client-secret$/)
     await assert.rejects(
-        customerClientSecret({}, customer.keycloakClientId, async () => ({ ok: false })),
-        /fixture request failed/,
+        customerClientSecret({}, customer.keycloakClientId, async () => ({ ok: false, status: 403 })),
+        error => {
+            assert.deepEqual(failureDiagnostic(error), { stage: 'fixture_bootstrap', status: 403 })
+            return true
+        },
     )
 })
 
@@ -114,6 +118,30 @@ test('async collection registry requires every ordered request, developer sandbo
         assert.throws(
             () => cliArguments('async-verification', { ...environment, [field]: '' }, '/tmp/report.json'),
             /prerequisites/,
+        )
+    }
+})
+
+test('balance restoration failures retain only the approved diagnostic stage', async () => {
+    for (const failure of ['write', 'confirmation']) {
+        let reads = 0
+        await assert.rejects(
+            withRestoredBalance(
+                async method => {
+                    if (method === 'PUT' && failure === 'write') throw new Error('synthetic-private-provider-body')
+                    if (method === 'GET') reads++
+                    return { balance: failure === 'confirmation' && reads > 1 ? 0 : 27 }
+                },
+                async () => {
+                    throw new Error('synthetic-private-collection-output')
+                },
+            ),
+            error => {
+                assert.deepEqual(failureDiagnostic(error), { stage: 'balance_restore' })
+                assert.doesNotMatch(JSON.stringify(error), /synthetic-private/)
+                assert.doesNotMatch(error.message, /synthetic-private/)
+                return true
+            },
         )
     }
 })
@@ -189,7 +217,15 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         assert.equal(balance, 0)
         assert.ok(reads >= 4)
         rawQueueState = true
-        await assert.rejects(executeCollection('async-verification', environment, root), /raw output is withheld/)
+        await assert.rejects(executeCollection('async-verification', environment, root), error => {
+            const diagnostic = failureDiagnostic(error)
+            assert.equal(diagnostic.stage, 'collection')
+            assert.equal(diagnostic.request, 8)
+            assert.equal(diagnostic.requests, 15)
+            assert.match(error.message, /raw output is withheld/)
+            assert.doesNotMatch(JSON.stringify(error), /private exception|synthetic-customer-secret|person@lef.test/)
+            return true
+        })
     } finally {
         server.closeAllConnections()
         await new Promise(done => server.close(done))

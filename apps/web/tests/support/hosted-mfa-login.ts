@@ -81,6 +81,8 @@ export async function hostedMfaLogin(options: LoginOptions): Promise<string> {
         await page.getByRole('button', { name: 'Sign In', exact: true }).click()
         assertHostedPage(page, seed.issuer) // Password alone must never complete privileged login.
 
+        // A click can finish at navigation commit before the hosted form has been parsed.
+        await page.locator('#kc-totp-settings-form, #kc-otp-login-form').waitFor({ state: 'visible' })
         const enrollment = (await page.locator('#kc-totp-settings-form').count()) === 1
         let secret = options.secret
         if (enrollment) {

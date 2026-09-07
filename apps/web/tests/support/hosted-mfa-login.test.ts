@@ -25,6 +25,7 @@ const seed: BrowserSeedMetadata = {
 
 interface HostedPageScenario {
     enrollment?: boolean
+    delayedMfaForm?: boolean
     signInHref?: string | null
     loginUrl?: string
     passwordResultUrl?: string
@@ -47,6 +48,11 @@ function hostedPage(scenario: HostedPageScenario = {}) {
     const filled: Array<{ field: string; value: string }> = []
     const otpCodes: string[] = []
     let attempts = 0
+    let mfaFormReady = !scenario.delayedMfaForm
+    const waitForMfaForm = vi.fn(() => {
+        mfaFormReady = true
+        return Promise.resolve()
+    })
     const signInClick = vi.fn(() => {
         currentUrl = scenario.loginUrl ?? `${issuer}/protocol/openid-connect/auth?session_code=synthetic`
         return Promise.resolve()
@@ -110,8 +116,13 @@ function hostedPage(scenario: HostedPageScenario = {}) {
                 if (field === 'One-time code') otpCodes.push(value)
                 return Promise.resolve()
             }),
-            waitFor: vi.fn(() => Promise.resolve()),
-            count: vi.fn(() => Promise.resolve(selector === '#kc-totp-settings-form' && scenario.enrollment ? 1 : 0)),
+            waitFor:
+                selector === '#kc-totp-settings-form, #kc-otp-login-form'
+                    ? waitForMfaForm
+                    : vi.fn(() => Promise.resolve()),
+            count: vi.fn(() =>
+                Promise.resolve(selector === '#kc-totp-settings-form' && scenario.enrollment && mfaFormReady ? 1 : 0),
+            ),
             getAttribute: vi.fn(() =>
                 Promise.resolve(
                     selector === '#kc-form-login'
@@ -171,6 +182,7 @@ function hostedPage(scenario: HostedPageScenario = {}) {
         otpSubmit,
         manualKeyClick,
         signOutClick,
+        waitForMfaForm,
     }
 }
 
@@ -186,6 +198,18 @@ describe('hosted MFA login', () => {
         expect(fixture.signInClick).toHaveBeenCalledOnce()
         expect(fixture.manualKeyClick).toHaveBeenCalledOnce()
         expect(fixture.otpCodes).toEqual([generateTotp(publicTestKey, 59_000)])
+        expect(fixture.evaluate).toHaveBeenCalledWith(expect.any(Function), seed.users.owner)
+    })
+
+    it('waits for the hosted MFA form before classifying a fresh enrollment after navigation commit', async () => {
+        const fixture = hostedPage({ enrollment: true, delayedMfaForm: true })
+        expect(await fixture.page.locator('#kc-totp-settings-form').count()).toBe(0)
+        await expect(
+            hostedMfaLogin({ page: fixture.page, identity: 'owner', origin, seed, now: () => 59_000 }),
+        ).resolves.toBe(publicTestKey)
+        expect(fixture.waitForMfaForm).toHaveBeenCalledExactlyOnceWith({ state: 'visible' })
+        expect(fixture.manualKeyClick).toHaveBeenCalledOnce()
+        expect(fixture.otpSubmit).toHaveBeenCalledOnce()
         expect(fixture.evaluate).toHaveBeenCalledWith(expect.any(Function), seed.users.owner)
     })
 
