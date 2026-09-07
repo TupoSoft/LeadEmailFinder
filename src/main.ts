@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { configurePiiSafeRequestLogging } from './lead-email-finder-api/src/configure-pii-safe-request-logging'
+import { configureInvitationResponseHeaders } from './lead-email-finder-api/src/configure-invitation-response-headers'
 import { configureApiSerialization } from './lead-email-finder-api/src/configure-api-serialization'
 import {
     buildApiDocuments,
@@ -15,6 +16,7 @@ import {
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
+    configureInvitationResponseHeaders(app)
     configurePiiSafeRequestLogging(app)
     app.disable('x-powered-by')
     app.enable('trust proxy')

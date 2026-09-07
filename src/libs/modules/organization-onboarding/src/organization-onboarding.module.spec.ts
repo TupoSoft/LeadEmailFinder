@@ -2,10 +2,12 @@ import { MODULE_METADATA } from '@nestjs/common/constants'
 import {
     INVITATION_ACCEPTANCE_STORE,
     INVITATION_STORE,
+    INVITATION_PREVIEW_READER,
     MEMBERSHIP_DIRECTORY,
     MEMBERSHIP_MUTATION_STORE,
     ORGANIZATION_REGISTRATION_STORE,
 } from '@tuposoft/lead-email-finder/modules/identity'
+import { InvitationPreviewService } from './application/invitation-preview.service'
 import { InvitationAcceptanceService } from './application/invitation-acceptance.service'
 import { InvitationIssuanceService } from './application/invitation-issuance.service'
 import { MembershipListingService } from './application/membership-listing.service'
@@ -26,6 +28,7 @@ describe('OrganizationOnboardingModule', () => {
         expect(providers).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ provide: OrganizationCreationService, inject: [ORGANIZATION_REGISTRATION_STORE] }),
+                expect.objectContaining({ provide: InvitationPreviewService, inject: [INVITATION_PREVIEW_READER] }),
                 expect.objectContaining({ provide: InvitationIssuanceService, inject: [INVITATION_STORE] }),
                 expect.objectContaining({ provide: MembershipListingService, inject: [MEMBERSHIP_DIRECTORY] }),
                 expect.objectContaining({ provide: MembershipRemovalService, inject: [MEMBERSHIP_MUTATION_STORE] }),

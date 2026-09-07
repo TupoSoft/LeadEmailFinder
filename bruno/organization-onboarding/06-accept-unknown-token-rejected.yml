@@ -1,11 +1,11 @@
 info:
   name: 06-accept-unknown-token-rejected
   type: http
-  seq: 8
+  seq: 11
 
 http:
   method: POST
-  url: "{{baseUrl}}/v1/organizations/invitations/this-token-does-not-exist/accept"
+  url: "{{baseUrl}}/v1/organizations/invitations/{{unknownInvitationToken}}/accept"
   headers:
     - name: Content-Type
       value: application/json
@@ -13,7 +13,7 @@ http:
     type: json
     data: |-
       {
-        "password": "bruno-test-password-123"
+        "password": "{{acceptancePassword}}"
       }
 
 runtime:
@@ -21,5 +21,7 @@ runtime:
     - type: tests
       code: |-
         test('rejects an unknown invitation token', function() {
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
           expect(res.status).to.equal(404);
         });

@@ -1,7 +1,7 @@
 info:
   name: 04-accept-invitation-duplicate-is-idempotent
   type: http
-  seq: 4
+  seq: 6
 
 http:
   method: POST
@@ -13,14 +13,16 @@ http:
     type: json
     data: |-
       {
-        "password": "a-different-password-123"
+        "password": "{{acceptancePassword}}"
       }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('resubmitting the same token is a no-op that returns the original result', function() {
+        test('resubmitting the token is a no-op with only a generic status', function() {
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
           expect(res.status).to.equal(201);
-          expect(JSON.stringify(res.body)).to.equal(bru.getVar('firstAcceptResponse'));
+          expect(res.body).to.deep.equal({ status: 'accepted' });
         });

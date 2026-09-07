@@ -343,6 +343,22 @@ describe('PII-safe request logging', () => {
         },
     )
 
+    it('conceals acceptance tokens, passwords, and referrers on rejected submissions', async () => {
+        const token = randomUUID()
+        const password = randomUUID()
+        await request(app.getHttpServer())
+            .post(`/v1/organizations/invitations/${token}/accept`)
+            .set('Referer', `http://browser/accept-invitation/${token}`)
+            .send({ password })
+            .expect(404)
+
+        const output = JSON.stringify(capturedLines)
+        for (const marker of [token, password]) expect(output.includes(marker)).toBe(false)
+        expect(capturedLines.some(line =>
+            (line.req as { path?: string } | undefined)?.path === '/v1/organizations/invitations/:sensitive/accept',
+        )).toBe(true)
+    })
+
     it.each([
         ['/v1/organizations/invitations%2F', '/v1/organizations/:sensitive'],
         ['/v1/organizations%252Finvitations/', '/v1/organizations%252Finvitations/:sensitive'],

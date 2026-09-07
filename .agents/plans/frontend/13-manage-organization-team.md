@@ -12,11 +12,13 @@ the documented HTTP contract, and focused API and browser tests.
 
 ## Progress
 
-- [ ] (2026-08-31) Expose truthful member-list and no-store invitation-preview contracts.
-- [ ] (2026-08-31) Implement the responsive team-management and public invitation-acceptance routes.
-- [ ] (2026-08-31) Cover hierarchy, final-owner, permission, one-time-token, loading, empty, error, and recovery states.
-- [ ] (2026-08-31) Update `OpenAPI`, the generated browser client, Bruno, module documentation, and design context.
-- [ ] (2026-08-31) Run focused, browser, architecture, prose, and repository-wide validation and record the evidence.
+- [x] (2026-09-07) Expose truthful member-list and no-store invitation-preview contracts.
+- [x] (2026-09-07) Implement the responsive team-management and public invitation-acceptance routes.
+- [x] (2026-09-07) Cover hierarchy, final-owner, permission, one-time-token, loading, empty, error, and recovery states.
+- [x] (2026-09-07) Update `OpenAPI`, the generated browser client, Bruno, module documentation, and design context.
+- [x] (2026-09-07) Run focused, browser, architecture, prose, and repository-wide validation and record the evidence.
+- [x] (2026-09-07) Validate the approved member-header layout follow-up: align Refresh members with the heading on
+  desktop, place it below the description on mobile, and consolidate the separator and feedback spacing.
 
 ## Plan dependencies
 
@@ -28,11 +30,44 @@ the documented HTTP contract, and focused API and browser tests.
 
 ## Surprises & Discoveries
 
+- Playwright's no-copy-prompt option suppresses page snapshots but can still write assertion text to an error-context
+  file. Invitation tests convert errors to safe scalar failures before recording. Eight deliberately failing browser
+  subprocesses prove that tokens, passwords, DOM content, and late output never reach logs or artifacts.
+
+- The existing API and gateway already use fixed labels for sensitive paths. This change extends their tested
+  invitation cache and referrer contracts rather than introducing a parallel logging mechanism.
+- Route middleware runs after Nest body parsing. Sensitive response headers therefore belong in a host helper
+  registered before parsing, so malformed JSON and guard failures remain protected from caching.
+- The authenticated client redirected every operation-level forbidden response. Team mutation rejections now remain
+  local; member-list authorization still uses the shared forbidden route.
+- Playwright waits for a load event during its default Back navigation even when Chromium restores a cached page.
+  Browser-history actions followed by observable-state assertions verify that restoration without that false timeout.
+
 - `module-architecture/06` moved the controller into `api/`, made onboarding application services framework-free,
   and placed membership and invitation persistence behind identity-owned ports. This plan must extend those ports
   and adapters without importing TypeORM into onboarding.
 
 ## Decision Log
+
+- Decision: Place Refresh members in an optional `ProductPanel` header action and share its reserved feedback region
+  with the mounted team operation feedback.
+  Rationale: The action belongs to the member list. A single separator and feedback region remove the detached
+  button and excess space while preserving announcements, focus, and stable loading geometry.
+  Date/Author: 2026-09-07, approved visual follow-up.
+- Decision: Use direct generated-client operations for invitation secrets, with feature-local abort and generation
+  guards, and keep every invitation operation outside the shared query and mutation caches.
+  Rationale: Avoiding secret-bearing cache entries removes the need for mutation retention and reset timing. Team
+  issuance still uses the authenticated transport fence; public operations omit credentials and invalidate on shared
+  session boundaries. This preserves the acceptance criteria with less state to erase.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Register one-time-route cleanup in layout effects and exclude only invitation-entry documents from
+  development-only synthetic `StrictMode` remounts.
+  Rationale: Cleanup is synchronous before paint, and a synthetic remount cannot reconstruct one-time authority.
+  Ordinary routes retain `StrictMode` diagnostics. Full-page history and delayed-settlement tests exercise real cleanup.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Validate against an isolated `lef-issue508` Compose project with dedicated ports.
+  Rationale: The existing stack belongs to another checkout. No shared reset is required for this implementation.
+  Date/Author: 2026-09-07, implementation.
 
 - Decision: Keep team management and public invitation acceptance in one vertical pull request.
   Rationale: An issued invitation is not a complete user outcome until the recipient can inspect and accept it, and
@@ -76,7 +111,16 @@ the documented HTTP contract, and focused API and browser tests.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered the responsive team route, generated member and invitation contracts, public preview and acceptance,
+and complete one-time-secret cleanup. The live owner flow issued and copied an invitation; a new recipient
+previewed and accepted it; the owner changed the role and disabled access. Browser history restoration revealed no
+previous token, preview, password, or issued-link dialog. Existing public visual baselines remain unchanged.
+
+No schema change or migration was needed. The default backend suite still gates 80 environment-dependent tests;
+the three focused PostgreSQL tests were run separately and passed against a dedicated test database, which was then
+removed. These skips do not represent additional provider validation. The initial review used an isolated development
+stack. The later review of the member header uses this checkout's default `lef` stack at port 53000; only its web container
+was rebuilt and recreated. No merge was performed.
 
 ## Context and Orientation
 
@@ -236,6 +280,9 @@ layer, CSRF-aware client, form primitives, and design context established by `fr
 - The team page displays active and disabled memberships with their email, role, and status; null email uses the
   explicit fallback. Rows use `createdAt ASC, id ASC`; disabled rows are not presented as active and offer no
   unsupported reactivation action.
+- Refresh members appears to the right of Organization members on desktop and below its description at widths of
+  48rem or below. The member panel owns the separator and reserved operation feedback; refreshing retains the list
+  and preserves the existing disabled and feedback focus behavior.
 - An administrator cannot grant, modify, or remove an owner. A final-owner demotion or removal returns a clear
   recoverable conflict, leaves the member active, and refreshes the authoritative list.
 - Removing an allowed member requires confirmation, returns only after server success, and leaves the row visible as
@@ -322,6 +369,53 @@ operator decision; disposable development state can be reset with the repository
 workflow. No migration, backfill, or production recovery step is introduced.
 
 ## Artifacts and Notes
+
+Validation of the updated member header on 2026-09-07:
+
+- `corepack pnpm --filter ./apps/web test:ci`: all 334 tests passed, including feedback focus and live-region checks.
+- Web lint and build passed; the build includes TypeScript checking. Design lint and the UI audit reported no errors
+  or warnings, and the diff passed whitespace validation.
+- From `apps/web`, `node node_modules/@playwright/test/cli.js test tests/e2e/team-ui.spec.ts --workers=2` passed all
+  ten checks. Desktop and narrow checks at widths of 1440 and 320 pixels verify header placement, separator spacing, keyboard refresh,
+  retained membership data, accessible controls, and no horizontal overflow. All 16 billing browser checks passed.
+- The same installed Playwright CLI ran `tests/e2e/accessibility.spec.ts tests/e2e/visual.spec.ts --workers=2`:
+  all eight checks passed. The package runner was slow to start, so these runs invoked the pinned CLI directly
+  against a Vite preview of the build. No browser configuration or dependency changed.
+- Safe screenshots in `/tmp/refresh-members-ui/` confirm the approved desktop and mobile composition.
+- `corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/13-manage-organization-team.md`
+  passed all three Markdown files. Bruno is not applicable to this layout-only follow-up; HTTP behavior is unchanged.
+
+Final validation on 2026-09-07:
+
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 219 Jest suites and 2,461 tests passed;
+  13 suites and 80 environment-gated tests skipped. All 55 runner tests passed with no skips.
+- `TEST_POSTGRES_URL` selected a private, dedicated `lef_issue508_test` database for
+  `membership-mutation-concurrency.integration.spec.ts` and `identity-schema.integration.spec.ts`: two suites and
+  three tests passed. Both removal and demotion races preserved one active owner. The test database was removed.
+- `corepack pnpm --filter ./apps/web test:ci`: all 334 tests passed. The focused invitation suite passed all
+  33 tests, including the encoded route prefix regression.
+- Web `typecheck`, `lint`, and `build`, root `typecheck`, `lint`, and `build`, `openapi:export`,
+  `openapi:generate`, and `openapi:check` passed. The architecture gate passed with its 20 existing baseline entries.
+- `corepack pnpm --filter ./apps/web test:e2e`: 70 tests passed across desktop 1440 by 900 and narrow 320 by 720.
+  `test:a11y` and `test:visual` each passed four tests. The focused team suite passed all ten browser tests.
+- `corepack pnpm --filter ./apps/web test:invitations`: 16 browser tests passed, including actual cached-page
+  restoration, full-page Back/Forward navigation, and issued-dialog cleanup at both supported widths.
+- `COMPOSE_PROJECT_NAME=lef-issue508 corepack pnpm --filter ./apps/web test:team-live`: one complete live flow passed,
+  including MFA-aware owner sign-in and recipient acceptance at 390 by 844. No invitation artifacts were recorded.
+- `COMPOSE_PROJECT_NAME=lef-issue508 corepack pnpm bruno:organization-onboarding`: Bruno 4.1.0 ran 12 requests and
+  12 assertions successfully, with no skips. `node --test scripts/bruno/*.test.mjs` passed all 16 runner tests.
+- `corepack pnpm --filter ./apps/web test:invitation-artifacts`: eight subprocess cases passed; only the safe
+  last-run metadata file existed. Existing `test:privileged-artifacts` passed all five cases.
+- `WEB_GATEWAY_IMAGE=lef-issue508-web:latest node --test scripts/frontend/gateway.test.mjs`: all four tests passed.
+  API logging tests passed all 73 cases; live API and gateway log checks found neither runtime secret marker.
+- `corepack pnpm design:lint` reported zero errors or warnings; `corepack pnpm ui:audit` reported zero findings.
+  `corepack pnpm docs:lint -- $(git diff --name-only origin/master -- '*.md')` passed all seven changed Markdown
+  files. `git diff --check` passed.
+
+Browser plugin tools were unavailable, so validation used the repository's installed Playwright runtime. Local
+commands supplied its cache path and system-library path. The isolated Compose project used web port 53208,
+Keycloak port 58208, and PostgreSQL port 55408. Other checkouts' resources were not modified. Safe screenshots under
+`/tmp/lef-team-ui/` contain only synthetic membership data; invitation test segments never capture screenshots.
 
 Record only redacted organization and membership IDs, HTTP statuses, test counts, browser widths, and pass/fail
 evidence. Never record invitation URLs, raw tokens, passwords, cookies, or screenshots containing them.

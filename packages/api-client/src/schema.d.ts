@@ -147,10 +147,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview a pending invitation
+         * @description Returns display details only while the link retains acceptance authority. Responses are never cacheable.
+         */
+        get: operations["OrganizationsController_previewInvitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a pending invitation
+         * @description Creates or reuses an invited identity. Repeated acceptance has no additional effect and returns only generic accepted status.
+         */
+        post: operations["OrganizationsController_acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue an organization invitation
+         * @description Requires members:manage. Only owners can invite another owner. The token is returned once; there is no email delivery or token recovery. Cookie sessions require a valid Origin and CSRF header.
+         */
+        post: operations["OrganizationsController_issueInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active and disabled organization members
+         * @description Requires members:manage. Results retain actual membership status and nullable email, ordered by createdAt ASC, id ASC.
+         */
+        get: operations["OrganizationsController_listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/members/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disable an organization membership
+         * @description Requires members:manage. Administrators cannot remove owners. Already disabled memberships are an idempotent no-op. Cookie sessions require a valid Origin and CSRF header.
+         */
+        delete: operations["OrganizationsController_removeMember"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an active member role
+         * @description Requires members:manage. Administrators cannot grant or modify owner roles. Cookie sessions require a valid Origin and CSRF header.
+         */
+        patch: operations["OrganizationsController_changeRole"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AcceptInvitationDto: {
+            /** @description New-account password; minimum 12 characters. */
+            password: string;
+        };
+        AcceptInvitationResponseDto: {
+            /** Format: email */
+            email: string;
+            organizationId: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+        };
         AuthenticationRequiredResponseDto: {
             /** @enum {string} */
             code: "authentication_required";
@@ -164,6 +279,10 @@ export interface components {
             currency: string;
             /** @description Server-defined credit pack identifier */
             id: string;
+        };
+        ChangeMembershipRoleDto: {
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
         };
         CreateCreditPurchaseDto: {
             /** @description Identifier from the current credit pack catalog */
@@ -237,6 +356,57 @@ export interface components {
         HumanSessionRequiredResponseDto: {
             /** @enum {string} */
             code: "human_session_required";
+        };
+        InvitationAcceptedResponseDto: {
+            /** @enum {string} */
+            status: "accepted";
+        };
+        InvitationGoneResponseDto: {
+            /** @enum {string} */
+            code: "invitation_expired" | "invitation_consumed";
+            /** @description Generic reason without invitation or membership details. */
+            message: string;
+            /** @enum {number} */
+            statusCode: 410;
+        };
+        InvitationPreviewResponseDto: {
+            /** Format: email */
+            email: string;
+            /** Format: date-time */
+            expiresAt: string;
+            organizationName: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** @enum {string} */
+            status: "pending";
+        };
+        InvitationResponseDto: {
+            /** Format: email */
+            email: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** @description One-time secret. Keep only in ephemeral memory; never log or persist it. */
+            token: string;
+        };
+        IssueInvitationDto: {
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+        };
+        MembershipResponseDto: {
+            /** Format: email */
+            email: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** @enum {string} */
+            status: "active" | "disabled";
         };
     };
     responses: never;
@@ -648,6 +818,354 @@ export interface operations {
             };
             /** @description Checkout could not be created safely */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_previewInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One-time secret. Keep only in ephemeral memory; never log or persist it. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreviewResponseDto"];
+                };
+            };
+            /** @description Invitation not found. No invitation details are returned. */
+            404: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation has expired or was consumed; no invitation details are returned. */
+            410: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationGoneResponseDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One-time secret. Keep only in ephemeral memory; never log or persist it. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationDto"];
+            };
+        };
+        responses: {
+            /** @description First acceptance returns account details; replay returns only accepted status. */
+            201: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponseDto"] | components["schemas"]["InvitationAcceptedResponseDto"];
+                };
+            };
+            /** @description Password must contain at least 12 characters. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation not found. No invitation details are returned. */
+            404: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The identity already has an active membership. */
+            409: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation has expired. */
+            410: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationGoneResponseDto"];
+                };
+            };
+        };
+    };
+    OrganizationsController_issueInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueInvitationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationResponseDto"];
+                };
+            };
+            /** @description Invalid organization ID, email, or membership role. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization, permission, role hierarchy, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_listMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponseDto"][];
+                };
+            };
+            /** @description Invalid organization ID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Principal lacks members:manage or belongs to another organization. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The membership is disabled; it remains visible in the member list. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid organization or membership ID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization, permission, owner hierarchy, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Membership not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The final active owner cannot be removed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_changeRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMembershipRoleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipResponseDto"];
+                };
+            };
+            /** @description Invalid ID or membership role. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization, permission, owner hierarchy, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Membership not found or disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The final active owner cannot be demoted. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

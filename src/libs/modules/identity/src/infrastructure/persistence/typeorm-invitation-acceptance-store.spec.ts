@@ -120,7 +120,7 @@ describe('TypeOrmInvitationAcceptanceStore', () => {
 
             expect(outcome).toEqual({
                 kind: 'already-accepted',
-                result: { organizationId: 'org-1', role: 'admin', email: 'invitee@example.test' },
+                result: { status: 'accepted' },
             })
             expect(queryRunnerMock.commitTransaction).toHaveBeenCalled()
             expect(queryRunnerMock.release).toHaveBeenCalled()
@@ -184,7 +184,7 @@ describe('TypeOrmInvitationAcceptanceStore', () => {
             expect(managerMock.save).not.toHaveBeenCalled()
             expect(managerMock.insert).not.toHaveBeenCalled()
             expect(queryRunnerMock.commitTransaction).toHaveBeenCalled()
-            expect(result).toEqual({ organizationId: 'org-1', role: 'member', email: 'invitee@example.test' })
+            expect(result).toEqual({ status: 'accepted' })
         })
 
         it('abort() rolls back and releases without writing', async () => {

@@ -56,6 +56,8 @@ geolocation, payment, and USB. The Content Security Policy permits same-origin s
 fonts; images may also use data URLs. It disables objects and framing and restricts base URLs to the same origin.
 The Nginx policy has no `unsafe-inline` or `unsafe-eval`. HTML uses `Cache-Control: no-cache`; hashed assets use
 immutable caching. Proxied API responses preserve their own headers, including callback `no-store` and `no-referrer`.
+Public invitation documents, including the sanitized `/accept-invitation` route, use `Cache-Control: no-store`
+and `Referrer-Policy: no-referrer` in both Vite and Nginx. The policy survives the internal SPA document redirect.
 
 Gateway access logs contain only a fixed method label, a fixed path label, status, and a generated request ID.
 Unknown paths also receive fixed labels. OAuth, invitation, email, cookie, authorization, query, and request-body

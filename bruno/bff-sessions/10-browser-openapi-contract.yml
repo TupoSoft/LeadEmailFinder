@@ -11,13 +11,18 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('publishes only the initial browser operations and their authentication contract', function() {
+        test('publishes only the reviewed browser operations and their authentication contract', function() {
           expect(res.status).to.equal(200);
           expect(res.headers['content-type']).to.include('application/json');
           expect(Object.keys(res.body.paths).sort()).to.deep.equal([
             '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
-            '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases'
+            '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases',
+            '/v1/organizations/invitations/{token}', '/v1/organizations/invitations/{token}/accept',
+            '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
+            '/v1/organizations/{organizationId}/members/{membershipId}'
           ]);
+          expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
+          expect(res.body.paths['/v1/organizations/invitations/{token}'].get.security).to.deep.equal([]);
           expect(Object.keys(res.body.paths['/v1/credit-purchases']).sort()).to.deep.equal(['get', 'post']);
           expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);
           expect(Object.keys(res.body.paths['/v1/billing/credit-packs'])).to.deep.equal(['get']);

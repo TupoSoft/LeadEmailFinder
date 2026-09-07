@@ -13,6 +13,7 @@ export interface ApplicationDestination {
 export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app', label: authCopy.home },
     { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
+    { path: '/app/team', label: 'Team', capability: 'team.manage' },
 ]
 
 export function visibleDestinations(

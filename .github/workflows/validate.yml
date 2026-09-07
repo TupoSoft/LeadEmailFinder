@@ -359,6 +359,12 @@ jobs:
       - name: Verify privileged authentication artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
         if: needs.changes.outputs.browser == 'true'
+      - name: Verify invitation browser artifact suppression
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitation-artifacts
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test invitation browser behavior and recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitations
+        if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
         if: needs.changes.outputs.browser == 'true'
@@ -373,6 +379,15 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test BFF and gateway HTTP contracts with Bruno
         run: corepack pnpm bruno:bff-sessions
+        if: needs.changes.outputs.browser == 'true'
+      - name: Bootstrap MFA-aware browser identities
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web browser-fixtures:bootstrap
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test organization onboarding HTTP contracts with Bruno
+        run: corepack pnpm bruno:organization-onboarding
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live team management and invitation acceptance
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live
         if: needs.changes.outputs.browser == 'true'
       - name: Report service health
         if: always() && needs.changes.outputs.browser == 'true'

@@ -1,3 +1,4 @@
+import { isInvitationEntry } from './features/invitations/invitation-bootstrap'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/inter/wght.css'
@@ -11,8 +12,14 @@ if (!rootElement) {
     throw new Error('The application root element is missing.')
 }
 
+// A one-time invitation cannot survive a synthetic development remount. All
+// ordinary application routes retain StrictMode's development diagnostics.
 createRoot(rootElement).render(
-    <StrictMode>
+    isInvitationEntry ? (
         <App />
-    </StrictMode>,
+    ) : (
+        <StrictMode>
+            <App />
+        </StrictMode>
+    ),
 )

@@ -1,7 +1,7 @@
 info:
   name: 05-create-conflicting-invitation-for-existing-owner
   type: http
-  seq: 5
+  seq: 7
 
 http:
   method: POST
@@ -24,6 +24,8 @@ runtime:
     - type: tests
       code: |-
         test('creates a second pending invitation for the existing owner email', function() {
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
           expect(res.status).to.equal(201);
           expect(res.body.invitation.email).to.equal(bru.getVar('ownerEmail'));
           bru.setVar('conflictingInvitationToken', res.body.invitation.token);

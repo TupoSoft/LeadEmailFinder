@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, GoneException, NotFoundException
 import { Test } from '@nestjs/testing'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
+import { InvitationPreviewService } from '../application/invitation-preview.service'
 import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
 import { InvitationIssuanceService } from '../application/invitation-issuance.service'
 import { MembershipListingService } from '../application/membership-listing.service'
@@ -36,7 +37,7 @@ describe('OrganizationsController', () => {
     let invitationAcceptance: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>>
     let membershipRoleChange: jest.Mocked<Pick<MembershipRoleChangeService, 'changeRole'>>
     let membershipRemoval: jest.Mocked<Pick<MembershipRemovalService, 'remove'>>
-    let membershipListing: jest.Mocked<Pick<MembershipListingService, 'listActive'>>
+    let membershipListing: jest.Mocked<Pick<MembershipListingService, 'listForOrganization'>>
 
     beforeEach(async () => {
         organizationCreation = { createWithFirstOwner: jest.fn() }
@@ -44,13 +45,14 @@ describe('OrganizationsController', () => {
         invitationAcceptance = { accept: jest.fn() }
         membershipRoleChange = { changeRole: jest.fn() }
         membershipRemoval = { remove: jest.fn() }
-        membershipListing = { listActive: jest.fn() }
+        membershipListing = { listForOrganization: jest.fn() }
 
         const moduleRef = await Test.createTestingModule({
             controllers: [OrganizationsController],
             providers: [
                 { provide: OrganizationCreationService, useValue: organizationCreation },
                 { provide: InvitationIssuanceService, useValue: invitationIssuance },
+                { provide: InvitationPreviewService, useValue: { preview: jest.fn() } },
                 { provide: InvitationAcceptanceService, useValue: invitationAcceptance },
                 { provide: MembershipRoleChangeService, useValue: membershipRoleChange },
                 { provide: MembershipRemovalService, useValue: membershipRemoval },
@@ -126,7 +128,7 @@ describe('OrganizationsController', () => {
     })
 
     it('lists members mapped to the response shape', async () => {
-        membershipListing.listActive.mockResolvedValue([
+        membershipListing.listForOrganization.mockResolvedValue([
             {
                 id: 'membership-1',
                 organizationId: 'org-1',
@@ -140,7 +142,7 @@ describe('OrganizationsController', () => {
 
         const result = await controller.listMembers({ organizationId: 'org-1' }, principal)
 
-        expect(membershipListing.listActive).toHaveBeenCalledWith(principal, 'org-1')
+        expect(membershipListing.listForOrganization).toHaveBeenCalledWith(principal, 'org-1')
         expect(result).toEqual([
             { id: 'membership-1', email: 'member@example.test', role: 'member', status: 'active' },
         ])
@@ -175,7 +177,7 @@ describe('OrganizationsController', () => {
 
     describe('error mapping', () => {
         it('translates NotInOrganizationError into a 403', async () => {
-            membershipListing.listActive.mockRejectedValue(new NotInOrganizationError())
+            membershipListing.listForOrganization.mockRejectedValue(new NotInOrganizationError())
 
             await expect(controller.listMembers({ organizationId: 'org-1' }, principal)).rejects.toThrow(
                 ForbiddenException,
@@ -183,7 +185,7 @@ describe('OrganizationsController', () => {
         })
 
         it('translates InsufficientPermissionError into a 403', async () => {
-            membershipListing.listActive.mockRejectedValue(new InsufficientPermissionError('nope'))
+            membershipListing.listForOrganization.mockRejectedValue(new InsufficientPermissionError('nope'))
 
             await expect(controller.listMembers({ organizationId: 'org-1' }, principal)).rejects.toThrow(
                 ForbiddenException,

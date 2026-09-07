@@ -3,7 +3,9 @@ import { OrganizationInvitationRecord } from '../../domain/organization-invitati
 
 export const INVITATION_ACCEPTANCE_STORE = Symbol('INVITATION_ACCEPTANCE_STORE')
 
-export interface InvitationAcceptanceResult {
+export type InvitationAcceptanceResult = InvitationAcceptanceCreatedResult | { readonly status: 'accepted' }
+
+export interface InvitationAcceptanceCreatedResult {
     readonly organizationId: string
     readonly role: AuthRole
     readonly email: string
@@ -15,7 +17,7 @@ export interface InvitationAcceptanceResult {
  */
 export interface InvitationAcceptanceSession {
     /**
-     * Marks the invitation accepted (or, if a concurrent acceptance already won, returns that racer's result
+     * Marks the invitation accepted (or, if a concurrent acceptance already won, returns only generic accepted status
      * without writing again), creates the membership, writes the success audit row, and commits.
      */
     complete(): Promise<InvitationAcceptanceResult>
@@ -25,7 +27,7 @@ export interface InvitationAcceptanceSession {
 }
 
 export type InvitationAcceptanceBeginOutcome =
-    | { readonly kind: 'already-accepted'; readonly result: InvitationAcceptanceResult }
+    | { readonly kind: 'already-accepted'; readonly result: { readonly status: 'accepted' } }
     | { readonly kind: 'conflicting-membership' }
     | { readonly kind: 'ready'; readonly session: InvitationAcceptanceSession }
 

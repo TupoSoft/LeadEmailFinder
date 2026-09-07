@@ -27,16 +27,16 @@ describe('MembershipListingService', () => {
     it('rejects an actor outside the target organization', async () => {
         const actor = principalFixture({ organizationId: 'other-org' })
 
-        await expect(service.listActive(actor, 'org-1')).rejects.toThrow(NotInOrganizationError)
+        await expect(service.listForOrganization(actor, 'org-1')).rejects.toThrow(NotInOrganizationError)
     })
 
     it('rejects a member from listing members', async () => {
         const actor = principalFixture({ membershipRole: 'member' })
 
-        await expect(service.listActive(actor, 'org-1')).rejects.toThrow(InsufficientPermissionError)
+        await expect(service.listForOrganization(actor, 'org-1')).rejects.toThrow(InsufficientPermissionError)
     })
 
-    it('returns memberships for an owner or admin', async () => {
+    it('returns active and disabled memberships for an owner or admin', async () => {
         const memberships: OrganizationMembershipDetailRecord[] = [
             {
                 id: 'membership-1',
@@ -47,10 +47,14 @@ describe('MembershipListingService', () => {
                 role: 'member',
                 status: 'active',
             },
+            {
+                id: 'membership-2', organizationId: 'org-1', externalIdentityId: 'ext-2',
+                externalIdentitySubject: 'kc-subject-2', email: null, role: 'member', status: 'disabled',
+            },
         ]
         directoryMock.listForOrganization.mockResolvedValue(memberships)
 
-        const result = await service.listActive(principalFixture(), 'org-1')
+        const result = await service.listForOrganization(principalFixture(), 'org-1')
 
         expect(result).toBe(memberships)
         expect(directoryMock.listForOrganization).toHaveBeenCalledWith('org-1')

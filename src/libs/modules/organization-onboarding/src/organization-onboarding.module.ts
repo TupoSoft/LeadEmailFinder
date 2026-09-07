@@ -5,6 +5,8 @@ import {
     IdentityModule,
     INVITATION_ACCEPTANCE_STORE,
     INVITATION_STORE,
+    INVITATION_PREVIEW_READER,
+    InvitationPreviewReader,
     InvitationAcceptanceStore,
     InvitationStore,
     MEMBERSHIP_DIRECTORY,
@@ -15,6 +17,7 @@ import {
     OrganizationRegistrationStore,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { InvitationPreviewService } from './application/invitation-preview.service'
 import { OrganizationsController } from './api/organizations.controller'
 import { InvitationAcceptanceService } from './application/invitation-acceptance.service'
 import { InvitationIssuanceService } from './application/invitation-issuance.service'
@@ -41,6 +44,11 @@ import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organ
             provide: InvitationIssuanceService,
             inject: [INVITATION_STORE],
             useFactory: (store: InvitationStore) => new InvitationIssuanceService(store),
+        },
+        {
+            provide: InvitationPreviewService,
+            inject: [INVITATION_PREVIEW_READER],
+            useFactory: (reader: InvitationPreviewReader) => new InvitationPreviewService(reader),
         },
         {
             provide: InvitationAcceptanceService,

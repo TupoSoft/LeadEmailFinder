@@ -48,6 +48,48 @@ beforeEach(() => vi.stubGlobal('Request', BrowserRequest))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('authenticated cache boundary', () => {
+    it('preserves explicit no-referrer and no-store policy when adding the session abort signal', async () => {
+        const fetch = vi.fn<(request: Request) => Promise<Response>>(() => Promise.resolve(Response.json(account())))
+        const session = createSession(fetch)
+        await session.api.GET('/v1/auth/session', { referrerPolicy: 'no-referrer', cache: 'no-store' })
+        expect(fetch.mock.calls[0][0].referrerPolicy).toBe('no-referrer')
+        expect(fetch.mock.calls[0][0].cache).toBe('no-store')
+    })
+
+    it('keeps team mutation denials local while a denied member list still triggers shared recovery', async () => {
+        const session = createSession(request =>
+            Promise.resolve(
+                new URL(request.url).pathname === '/v1/auth/session'
+                    ? Response.json(account())
+                    : Response.json({ message: 'Forbidden' }, { status: 403 }),
+            ),
+        )
+        await session.bootstrap()
+        const params = { path: { organizationId: 'organization', membershipId: 'membership' } }
+        await expect(
+            session.api.PATCH('/v1/organizations/{organizationId}/members/{membershipId}', {
+                params,
+                body: { role: 'member' },
+            }),
+        ).rejects.toMatchObject({ status: 403 })
+        await expect(
+            session.api.DELETE('/v1/organizations/{organizationId}/members/{membershipId}', { params }),
+        ).rejects.toMatchObject({ status: 403 })
+        await expect(
+            session.api.POST('/v1/organizations/{organizationId}/invitations', {
+                params: { path: { organizationId: 'organization' } },
+                body: { email: 'member@example.test', role: 'member' },
+            }),
+        ).rejects.toMatchObject({ status: 403 })
+        expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', accessDenied: false })
+        await expect(
+            session.api.GET('/v1/organizations/{organizationId}/members', {
+                params: { path: { organizationId: 'organization' } },
+            }),
+        ).rejects.toMatchObject({ status: 403 })
+        expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', accessDenied: true })
+    })
+
     it('bootstraps once while a request is pending and uses only same-origin cookie and CSRF transport', async () => {
         const fetch = vi.fn<(request: Request) => Promise<Response>>(() => Promise.resolve(Response.json(account())))
         const session = createSession(fetch)
