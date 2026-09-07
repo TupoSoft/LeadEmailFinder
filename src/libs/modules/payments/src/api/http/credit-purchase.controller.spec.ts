@@ -68,11 +68,16 @@ describe('CreditPurchaseController', () => {
     })
 
     it('lists purchases using only the principal organization', async () => {
-        const organizationPurchases = [{ id: 'purchase-1' }] as PurchaseRecord[]
+        const organizationPurchases = [
+            { id: 'purchase-1', provider: 'stub', providerReference: 'private' },
+        ] as PurchaseRecord[]
         purchases.listForOrganization.mockResolvedValue(organizationPurchases)
         const principal = principalWith()
 
-        await expect(controller.list(principal)).resolves.toBe(organizationPurchases)
+        const result = await controller.list(principal)
+        expect(result[0]).toEqual(expect.objectContaining({ id: 'purchase-1' }))
+        expect(result[0]).not.toHaveProperty('provider')
+        expect(result[0]).not.toHaveProperty('providerReference')
         expect(purchases.listForOrganization).toHaveBeenCalledWith(principal.organizationId)
     })
 })

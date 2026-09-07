@@ -26,10 +26,34 @@ describe('CreditPackCatalog', () => {
         expect(Object.isFrozen(pack)).toBe(true)
     })
 
-    it('rejects an unknown pack id', () => {
+    it.each(['missing', '__proto__', 'toString'])('rejects unconfigured pack %s', packId => {
         const catalog = new CreditPackCatalog(configuredPacks)
 
-        expect(() => catalog.get('missing')).toThrow(new CreditPackNotFoundError('missing'))
+        expect(() => catalog.get(packId)).toThrow(new CreditPackNotFoundError(packId))
+    })
+
+    it('returns an immutable defensive customer projection ordered by credits then ID', () => {
+        const internalPack = { credits: 100, amountMinor: 500, currency: 'USD', providerPriceId: 'private-price' }
+        const catalog = new CreditPackCatalog(
+            JSON.stringify({
+                large: { ...internalPack, credits: 1000 },
+                z: internalPack,
+                a: internalPack,
+            }),
+        )
+        const projection = catalog.listForCustomer()
+        expect(projection).toEqual([
+            { id: 'a', credits: 100, amountMinor: 500, currency: 'USD' },
+            { id: 'z', credits: 100, amountMinor: 500, currency: 'USD' },
+            { id: 'large', credits: 1000, amountMinor: 500, currency: 'USD' },
+        ])
+        expect(Object.isFrozen(projection)).toBe(true)
+        expect(projection.every(Object.isFrozen)).toBe(true)
+        expect(projection[0]).not.toBe(catalog.get('a'))
+        expect(() => {
+            ;(projection[0] as { credits: number }).credits = 1
+        }).toThrow(TypeError)
+        expect(catalog.get('a').credits).toBe(100)
     })
 
     it.each([

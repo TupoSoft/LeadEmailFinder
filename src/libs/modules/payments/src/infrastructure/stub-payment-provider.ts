@@ -8,8 +8,8 @@ export class StubPaymentProvider implements PaymentProvider {
     createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
         const providerReference = `stub_${input.purchaseId}`
         const redirectUrl = new URL(input.returnUrl)
+        redirectUrl.search = ''
         redirectUrl.searchParams.set('purchaseId', input.purchaseId)
-        redirectUrl.searchParams.set('providerReference', providerReference)
 
         return Promise.resolve({ providerReference, redirectUrl: redirectUrl.toString() })
     }
@@ -23,10 +23,7 @@ export class StubPaymentProvider implements PaymentProvider {
                 throw new Error('Invalid stub payment event')
             }
 
-            if (
-                payload['kind'] === 'purchase_adjustment_debit' ||
-                payload['kind'] === 'purchase_adjustment_restore'
-            ) {
+            if (payload['kind'] === 'purchase_adjustment_debit' || payload['kind'] === 'purchase_adjustment_restore') {
                 return this.parseAdjustment(payload)
             }
 

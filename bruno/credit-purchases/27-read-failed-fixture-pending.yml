@@ -1,0 +1,18 @@
+info:
+    name: 27-read-failed-fixture-pending
+    type: http
+    seq: 27
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/credit-purchases'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('the separate purchase remains pending before its signed failure event', function() {
+                expect(res.status).to.equal(200);
+                const purchase = res.body.find(row => row.id === bru.getVar('failedPurchaseId'));
+                expect(purchase.status).to.equal('pending');
+              });

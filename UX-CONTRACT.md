@@ -52,6 +52,8 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Session | `AuthProvider` and `AuthSession` | `frontend/08` | Bootstrap, expiry, account failure, sign-out | Generation, cache, and browser tests |
 | Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
+| Data panel | `ProductPanel` | This contract | Independent loading, retained data, and read retry | Billing component and browser tests |
+| Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
 
 ## Route and Copy Ownership
 
@@ -221,7 +223,7 @@ a suppressed tab therefore remains conservative and offers a fresh sign-in as we
 channel cannot block local cleanup. Page hide clears protected content so a cached page snapshot does
 not contain the previous account; a persisted page show always checks the session again.
 
-The first shell registers Home. Later plans add their working destinations and required capabilities to the shared
+The shell registers Home and capability-gated Billing. Later plans add their working destinations and required capabilities to the shared
 navigation registry. This avoids presenting unfinished billing, team, service-client, or verification screens as
 available tools. Component tests exercise each capability independently of role and of route authorization.
 The shared transport turns an operation-level 403 into access denied without signing out. No frontend capability
@@ -230,3 +232,42 @@ check predicts whether the backend will permit a deep link.
 Focused evidence lives in `apps/web/src/app/AuthRoutes.test.tsx`, `apps/web/src/shared/ResponsiveNavigation.test.tsx`,
 `apps/web/src/features/auth`, `apps/web/tests/e2e/auth-shell.spec.ts`, and `apps/web/tests/gateway`. Browser checks cover
 the desktop and narrow baselines, keyboard navigation, recovery, reduced motion, and automated accessibility.
+
+## Credit Purchases and Payment Return
+
+The source contract is `.agents/plans/frontend/10-purchase-and-monitor-credits.md`. The credits module owns the
+current-organization balance and the payments module owns the catalog and purchase history. Both UI routes reuse
+the authenticated shell and generated-client transport. `/app/billing` uses the heading and title prefix `Billing`;
+`/billing/complete` keeps the Billing title and adds a payment return notice. Billing navigation and reads require `billing.read`; purchase actions
+additionally require `billing.manage`. The server enforces the corresponding permissions on every request.
+
+Summary, catalog, and history load independently with organization-scoped cache keys. `ProductPanel` owns section
+headings, stable loading feedback, retained safe data, and a read retry when a panel fails. The document owns scrolling.
+History uses a semantic table that becomes labeled rows at narrow widths. Ten rows appear per page, with explicit
+previous and next actions. Pagination is local to the complete server response; no server pagination is implied.
+The `page` query parameter preserves history navigation and is clamped to the available rows.
+Dates use English formatting with an explicit UTC timezone. Money uses the server currency code and its
+`Intl.NumberFormat` fraction digits, including zero-decimal currencies. Status always appears as text.
+
+| Operation | Pending | Confirmed response | Failure and recovery |
+| --- | --- | --- | --- |
+| Start checkout | Keep the selected action busy and prevent a second POST | Save only a temporary purchase hint, then navigate to the validated URL | An unavailable pack reloads the catalog; a provider failure reloads history; an uncertain result reloads history and balance before a deliberate retry |
+| Return from payment | Refresh history and summary | Render the status from history and the balance from summary | A missing or unknown hint shows a generic notice and history; failed and expired purchases offer a return to billing |
+| Monitor pending payment | Read every five seconds, at most twelve times | Stop on a terminal status | Pause while hidden or offline; offer manual refresh after the bounded checks |
+
+The checkout request sends only `packId` and never retries automatically. A redirect, query parameter, or local hint cannot mark
+a purchase paid or increment the balance. URL validation uses the same pure origin policy in the API and browser;
+the browser receives only the normalized nonsecret origin array. Customer history and browser caches exclude
+provider names, provider references, price identifiers, event identifiers, and raw payloads.
+
+An organization-scoped record in the session QueryClient preserves the checkout lock and uncertain-result recovery
+across in-app navigation. Session boundaries clear that record with the other authenticated data. A response that
+arrives after leaving Billing cannot navigate from another screen. Reopening Billing offers `Continue to checkout`
+for that confirmed response and does not create another purchase. History must refresh successfully before an
+uncertain request permits another deliberate purchase action.
+
+The optional same-tab hint expires after thirty minutes and contains the purchase UUID and expiry only.
+It never supplies ownership authority or payment state. The return route accepts only a UUID hint
+from the URL and finds it within the current organization's history. Terminal states clear the local hint. Initial
+return navigation focuses the notice once; polling preserves the user's focus. Offline notices and partial errors
+remain readable alongside previously loaded data.

@@ -3,6 +3,7 @@ import { CreditPack, CreditPackNotFoundError } from '../domain/credit-pack'
 import { PurchaseRecord } from '../domain/purchase-record'
 import { CreditPackCatalog } from './credit-pack-catalog'
 import { CreditPurchaseService, PaymentCheckoutError } from './credit-purchase.service'
+import { CheckoutRedirectPolicy } from './ports/checkout-redirect-policy'
 import { PaymentProvider } from './ports/payment-provider'
 import { PaymentPurchaseStore } from './ports/payment-purchase-store'
 
@@ -47,6 +48,7 @@ describe('CreditPurchaseService', () => {
     let store: jest.Mocked<PaymentPurchaseStore>
     let catalog: jest.Mocked<Pick<CreditPackCatalog, 'get'>>
     let paymentProvider: jest.Mocked<Pick<PaymentProvider, 'createCheckout' | 'parseEvent'>>
+    let redirectPolicy: jest.Mocked<CheckoutRedirectPolicy>
     let service: CreditPurchaseService
 
     beforeEach(() => {
@@ -61,6 +63,7 @@ describe('CreditPurchaseService', () => {
         }
         catalog = { get: jest.fn() }
         paymentProvider = { createCheckout: jest.fn(), parseEvent: jest.fn() }
+        redirectPolicy = { assertAllowed: jest.fn(url => url) }
 
         service = new CreditPurchaseService(
             store,
@@ -68,6 +71,7 @@ describe('CreditPurchaseService', () => {
             paymentProvider,
             'stub' as never,
             'http://localhost:3000/payment-return',
+            redirectPolicy,
         )
     })
 
@@ -125,6 +129,39 @@ describe('CreditPurchaseService', () => {
         await expect(service.start(principal, 'starter')).rejects.toThrow(PaymentCheckoutError)
         expect(store.markFailed).toHaveBeenCalledWith(purchase.id)
         expect(store.bindProviderReference).not.toHaveBeenCalled()
+    })
+
+    it('fails a purchase whose provider URL violates the redirect policy before binding correlation', async () => {
+        const purchase = purchaseFixture()
+        catalog.get.mockReturnValue(pack)
+        store.create.mockResolvedValue(purchase)
+        paymentProvider.createCheckout.mockResolvedValue({
+            providerReference: 'private',
+            redirectUrl: 'https://rejected.test',
+        })
+        redirectPolicy.assertAllowed.mockImplementation(() => {
+            throw new Error('Checkout destination is unavailable')
+        })
+
+        await expect(service.start(principal, 'starter')).rejects.toThrow(PaymentCheckoutError)
+        expect(redirectPolicy.assertAllowed).toHaveBeenCalledWith('https://rejected.test')
+        expect(store.markFailed).toHaveBeenCalledWith(purchase.id)
+        expect(store.bindProviderReference).not.toHaveBeenCalled()
+        expect(paymentProvider.createCheckout).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns the normalized URL supplied by the policy', async () => {
+        catalog.get.mockReturnValue(pack)
+        store.create.mockResolvedValue(purchaseFixture())
+        store.bindProviderReference.mockResolvedValue(purchaseFixture())
+        paymentProvider.createCheckout.mockResolvedValue({
+            providerReference: 'private',
+            redirectUrl: 'HTTPS://CHECKOUT.TEST:443/pay',
+        })
+        redirectPolicy.assertAllowed.mockReturnValue('https://checkout.test/pay')
+
+        const result = await service.start(principal, 'starter')
+        expect(result.redirectUrl).toBe('https://checkout.test/pay')
     })
 
     it('lists only the requested organization', async () => {

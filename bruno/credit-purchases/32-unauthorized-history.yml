@@ -1,0 +1,16 @@
+info:
+    name: 32-unauthorized-history
+    type: http
+    seq: 32
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/credit-purchases'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('requires authentication for customer billing reads', function() {
+                expect(res.status).to.equal(401);
+              });

@@ -1,0 +1,18 @@
+info:
+    name: 29-read-failed-history
+    type: http
+    seq: 29
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/credit-purchases'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('history confirms the signed failed event independently of the paid purchase', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.find(row => row.id === bru.getVar('failedPurchaseId')).status).to.equal('failed');
+                expect(res.body.find(row => row.id === bru.getVar('purchaseId')).status).to.equal('paid');
+              });

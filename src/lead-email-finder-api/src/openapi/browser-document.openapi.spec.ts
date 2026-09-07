@@ -6,14 +6,11 @@ function fixture(): OpenAPIObject {
     return {
         openapi: '3.0.0',
         info: { title: 'Browser filter fixture', version: '1' },
-        paths: Object.fromEntries(
-            BROWSER_OPERATIONS.map(({ path, method }) => [
-                path,
-                {
-                    [method]: { responses: { '200': { description: 'Success' } } },
-                },
-            ]),
-        ),
+        paths: BROWSER_OPERATIONS.reduce<OpenAPIObject['paths']>((paths, { path, method }) => {
+            paths[path] ??= {}
+            paths[path][method] = { responses: { '200': { description: 'Success' } } }
+            return paths
+        }, {}),
     }
 }
 

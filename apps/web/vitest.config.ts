@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc'
 
 export default defineConfig({
     plugins: [react()],
+    define: { __PAYMENTS_CHECKOUT_ALLOWED_ORIGINS__: JSON.stringify(['http://localhost:53000']) },
     test: {
         projects: [
             {

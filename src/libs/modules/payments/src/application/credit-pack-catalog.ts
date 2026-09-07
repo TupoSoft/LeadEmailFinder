@@ -1,5 +1,7 @@
 import { CreditPack, CreditPackNotFoundError } from '../domain/credit-pack'
 
+export type CustomerCreditPack = Readonly<Pick<CreditPack, 'id' | 'credits' | 'amountMinor' | 'currency'>>
+
 export class CreditPackCatalog {
     private readonly packs: Readonly<Record<string, CreditPack>>
 
@@ -7,10 +9,21 @@ export class CreditPackCatalog {
         this.packs = parseCreditPacks(rawCreditPacks)
     }
 
+    listForCustomer(): readonly CustomerCreditPack[] {
+        return Object.freeze(
+            Object.values(this.packs)
+                .map(({ id, credits, amountMinor, currency }) => Object.freeze({ id, credits, amountMinor, currency }))
+                .sort(
+                    (left, right) =>
+                        left.credits - right.credits || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+                ),
+        )
+    }
+
     get(packId: string): CreditPack {
         const pack = this.packs[packId]
 
-        if (!pack) {
+        if (!Object.hasOwn(this.packs, packId)) {
             throw new CreditPackNotFoundError(packId)
         }
 

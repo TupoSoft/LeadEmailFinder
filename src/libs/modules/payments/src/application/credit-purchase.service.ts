@@ -2,6 +2,7 @@ import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PaymentsProviderName } from '../domain/payment-configuration'
 import { PurchaseRecord } from '../domain/purchase-record'
 import { CreditPackCatalog } from './credit-pack-catalog'
+import { CheckoutRedirectPolicy } from './ports/checkout-redirect-policy'
 import { PaymentProvider } from './ports/payment-provider'
 import { PaymentPurchaseStore } from './ports/payment-purchase-store'
 
@@ -24,6 +25,7 @@ export class CreditPurchaseService {
         private readonly paymentProvider: PaymentProvider,
         private readonly providerName: PaymentsProviderName,
         private readonly checkoutUrl: string,
+        private readonly redirectPolicy: CheckoutRedirectPolicy,
     ) {}
 
     async start(principal: AuthPrincipal, packId: string): Promise<StartedCreditPurchase> {
@@ -44,9 +46,10 @@ export class CreditPurchaseService {
                 pack,
                 returnUrl: this.checkoutUrl,
             })
+            const redirectUrl = this.redirectPolicy.assertAllowed(checkout.redirectUrl)
             const savedPurchase = await this.store.bindProviderReference(purchase.id, checkout.providerReference)
 
-            return { purchase: savedPurchase, redirectUrl: checkout.redirectUrl }
+            return { purchase: savedPurchase, redirectUrl }
         } catch (error) {
             await this.store.markFailed(purchase.id)
             throw new PaymentCheckoutError(error)

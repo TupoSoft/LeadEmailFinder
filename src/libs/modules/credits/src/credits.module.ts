@@ -3,6 +3,7 @@ import { CREDIT_LEDGER_STORE, CreditLedgerStore, IdentityModule } from '@tuposof
 import { CreditsService } from './application/credits.service'
 import { CreditGuard } from './api/credits.guard'
 import { CreditsController } from './api/credits.controller'
+import { BillingSummaryController } from './api/billing-summary.controller'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 
 @Module({
@@ -17,7 +18,7 @@ import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-fin
         },
         CreditGuard,
     ],
-    controllers: [CreditsController],
+    controllers: [CreditsController, BillingSummaryController],
     exports: [CreditGuard, CreditsService],
 })
 export class CreditsModule {}

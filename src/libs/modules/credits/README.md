@@ -6,7 +6,7 @@ billing workflows.
 
 ## Responsibility
 
-- Reading an organization's current credit balance.
+- Reading an organization's current credit balance, including the authenticated billing summary.
 - Administrative balance mutation (`addPlatformCredits`, `setBalance`) for platform operators. Additions use a
   caller-owned operation key, return the current balance for equivalent retries, and reject conflicting amounts.
 - `CreditGuard` — an HTTP guard that debits one credit from the caller's organization before a request proceeds,
@@ -30,7 +30,7 @@ billing workflows.
 
 [`src/index.ts`](src/index.ts) exports `CreditsModule`, `CreditGuard`, `CreditsService`,
 `InsufficientCreditsException`, and `CreditIdempotencyConflict`. The controller and its DTOs are internal — they back
-the admin HTTP surface below but are not part of the intentional public API other modules should import.
+the admin and customer HTTP surfaces below but are not part of the intentional public API other modules should import.
 
 `CreditsService` is a framework-free `application/` class built from an explicit factory in `credits.module.ts`;
 it has no `infrastructure/` layer of its own since its one adapter (`TypeOrmCreditLedgerStore`) lives in identity.
@@ -43,6 +43,13 @@ it has no `infrastructure/` layer of its own since its one adapter (`TypeOrmCred
   `getAuthPrincipal`.
 
 ## HTTP Surface
+
+`BillingSummaryController` exposes `GET /v1/billing/summary` with the `billing:read` permission. The response contains
+only `{ "balance": <current balance> }`. The controller derives the organization from the authenticated principal;
+it accepts no organization parameter and never invokes the platform administration surface. Missing or invalid
+authentication returns `401`, and an authenticated caller without billing read permission receives `403`. Explicit
+serialization and Swagger metadata expose the balance contract to the generated browser client.
+
 
 `CreditsController` at `/credits`, restricted to the `platform:admin` permission and excluded from Swagger:
 
@@ -91,6 +98,8 @@ None. This module reads no environment variables.
 
 Focused tests live in `src/`:
 
+- `api/billing-summary-http.integration.spec.ts` covers authenticated organization scoping, read permissions,
+  safe serialization, and Swagger response metadata.
 - `api/credits.controller.spec.ts` and `api/credits.guard.spec.ts` cover transport orchestration and spending.
 - `api/credit-idempotency-key.spec.ts` covers canonical parsing and duplicate-header rejection.
 - `api/credits-http.integration.spec.ts` covers real Nest authentication and permission guards, validation, status
@@ -118,8 +127,8 @@ Rerunning the test command recreates the same isolated stack and schema.
 [`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) exercises additive success, replay, conflict,
 header validation, authentication, authorization, and concurrent retries. Run it with
 `corepack pnpm bruno:platform-credits` against the developer sandbox.
-[`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the resulting balance back
-through the admin API above after a webhook grant. Both
+[`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the customer billing summary and
+verifies the resulting balance after a webhook grant. Both
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) and
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) exercise the one-credit debit and
 `402` rejection as a side effect of driving email verification end to end.

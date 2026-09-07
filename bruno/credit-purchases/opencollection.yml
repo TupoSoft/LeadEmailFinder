@@ -28,7 +28,7 @@ request:
                 bru.setVar('serviceClientToken', payload.access_token);
               }
               if (
-                req.getName() !== '01-unauthorized-purchase' &&
+                !req.getName().includes('unauthorized') &&
                 !req.getUrl().includes('/v1/payments/webhook')
               ) {
                 req.setHeader('Authorization', `Bearer ${bru.getVar('serviceClientToken')}`);

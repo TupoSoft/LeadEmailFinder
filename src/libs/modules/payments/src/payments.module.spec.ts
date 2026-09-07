@@ -16,6 +16,7 @@ import {
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { CHECKOUT_REDIRECT_POLICY, CheckoutRedirectPolicy } from './application/ports/checkout-redirect-policy'
 import { CreditPackCatalog } from './application/credit-pack-catalog'
 import { CreditPurchaseService } from './application/credit-purchase.service'
 import { PaymentAdjustmentHandler } from './application/payment-adjustment.handler'
@@ -66,7 +67,7 @@ async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string
     const config = new Map([...baseConfig, ...configOverrides])
     return Test.createTestingModule({ imports: [PaymentsModule, TestDataSourceModule] })
         .overrideProvider(ConfigService)
-        .useValue({ getOrThrow: (key: string) => config.get(key) })
+        .useValue({ getOrThrow: (key: string) => config.get(key), get: (key: string) => config.get(key) })
         .overrideProvider(getRepositoryToken(CreditPurchase))
         .useValue({})
         .overrideProvider(getRepositoryToken(CreditPurchaseAdjustment))
@@ -115,9 +116,7 @@ describe('PaymentsModule', () => {
         ).toBe(true)
         expect(
             imports.some(module =>
-                module.providers?.some(
-                    provider => provider.provide === getRepositoryToken(CreditPurchaseAdjustment),
-                ),
+                module.providers?.some(provider => provider.provide === getRepositoryToken(CreditPurchaseAdjustment)),
             ),
         ).toBe(true)
     })
@@ -133,7 +132,13 @@ describe('PaymentsModule', () => {
                 expect.objectContaining({ provide: CreditPackCatalog, inject: [ConfigService] }),
                 expect.objectContaining({
                     provide: CreditPurchaseService,
-                    inject: [PAYMENT_PURCHASE_STORE, CreditPackCatalog, PAYMENT_PROVIDER, ConfigService],
+                    inject: [
+                        PAYMENT_PURCHASE_STORE,
+                        CreditPackCatalog,
+                        PAYMENT_PROVIDER,
+                        ConfigService,
+                        CHECKOUT_REDIRECT_POLICY,
+                    ],
                 }),
                 expect.objectContaining({
                     provide: PaymentAdjustmentHandler,
@@ -159,13 +164,32 @@ describe('PaymentsModule', () => {
         const provider = moduleRef.get<PaymentProvider>(PAYMENT_PROVIDER)
 
         expect(provider).toBeInstanceOf(StubPaymentProvider)
+        const policy = moduleRef.get<CheckoutRedirectPolicy>(CHECKOUT_REDIRECT_POLICY)
+        expect(policy.assertAllowed('http://localhost:3000/payment-return')).toBe(
+            'http://localhost:3000/payment-return',
+        )
+        expect(() => policy.assertAllowed('https://unconfigured.test')).toThrow()
         await moduleRef.close()
+    })
+
+    it('refuses Paddle startup without explicit checkout origins', async () => {
+        await expect(
+            compilePaymentsModule(
+                new Map([
+                    ['PAYMENTS_PROVIDER', 'paddle'],
+                    ['PADDLE_API_KEY', 'test-key'],
+                    ['PADDLE_WEBHOOK_SECRET', 'test-secret'],
+                    ['PADDLE_ENVIRONMENT', 'sandbox'],
+                ]),
+            ),
+        ).rejects.toThrow()
     })
 
     it('resolves Paddle through the payment provider port', async () => {
         const moduleRef = await compilePaymentsModule(
             new Map([
                 ['PAYMENTS_PROVIDER', 'paddle'],
+                ['PAYMENTS_CHECKOUT_ALLOWED_ORIGINS', 'https://sandbox-checkout.paddle.com'],
                 ['PADDLE_API_KEY', 'paddle-module-test-key'],
                 ['PADDLE_WEBHOOK_SECRET', 'paddle-module-test-secret'],
                 ['PADDLE_ENVIRONMENT', 'sandbox'],

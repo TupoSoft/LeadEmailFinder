@@ -7,6 +7,10 @@ export const BROWSER_OPERATIONS = [
     { path: '/v1/auth/callback', method: 'get' },
     { path: '/v1/auth/logout', method: 'post' },
     { path: '/v1/auth/session', method: 'get' },
+    { path: '/v1/billing/summary', method: 'get' },
+    { path: '/v1/billing/credit-packs', method: 'get' },
+    { path: '/v1/credit-purchases', method: 'get' },
+    { path: '/v1/credit-purchases', method: 'post' },
     { path: '/health', method: 'get' },
 ] as const
 

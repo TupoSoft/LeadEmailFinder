@@ -36,7 +36,9 @@ export function ProtectedApplication() {
     const destination = safeDestination(
         recoveryPaths.has(location.pathname)
             ? new URLSearchParams(location.search).get('destination')
-            : `${location.pathname}${location.search}${location.hash}`,
+            : location.pathname === '/billing/complete'
+              ? '/app/billing'
+              : `${location.pathname}${location.search}${location.hash}`,
     )
 
     useEffect(() => {

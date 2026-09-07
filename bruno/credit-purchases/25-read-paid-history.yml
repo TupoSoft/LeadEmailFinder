@@ -1,0 +1,21 @@
+info:
+    name: 25-read-paid-history
+    type: http
+    seq: 25
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/credit-purchases'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('history confirms the signed paid event without leaking provider correlation', function() {
+                expect(res.status).to.equal(200);
+                const purchase = res.body.find(row => row.id === bru.getVar('purchaseId'));
+                expect(purchase.status).to.equal('paid');
+                for (const row of res.body) {
+                  expect(Object.keys(row).sort()).to.deep.equal(['amountMinor', 'createdAt', 'credits', 'currency', 'id', 'packId', 'status', 'updatedAt']);
+                }
+              });

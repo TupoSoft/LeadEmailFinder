@@ -5,7 +5,7 @@ info:
 
 http:
     method: GET
-    url: '{{baseUrl}}/credits/{{organizationId}}'
+    url: '{{baseUrl}}/v1/billing/summary'
     headers:
         - name: Authorization
           value: 'Bearer {{serviceClientToken}}'

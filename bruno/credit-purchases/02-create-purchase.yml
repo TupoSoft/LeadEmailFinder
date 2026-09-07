@@ -30,7 +30,9 @@ runtime:
                 expect(res.body.status).to.equal('pending');
                 expect(res.body.redirectUrl).to.be.a('string');
                 bru.setVar('purchaseId', res.body.id);
-                var providerReference = res.body.redirectUrl.match(/[?&]providerReference=([^&]+)/);
-                expect(providerReference).not.to.equal(null);
-                bru.setVar('providerReference', decodeURIComponent(providerReference[1]));
+                const redirect = new URL(res.body.redirectUrl);
+                expect(redirect.pathname).to.equal('/billing/complete');
+                expect(Array.from(redirect.searchParams.keys())).to.deep.equal(['purchaseId']);
+                expect(redirect.searchParams.get('purchaseId')).to.equal(res.body.id);
+                bru.setVar('providerReference', `stub_${res.body.id}`);
               });

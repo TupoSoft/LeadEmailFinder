@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHmac, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,6 +14,7 @@ import {
     executeCollection,
     registeredCollection,
     runCollection,
+    stubPaymentEnvironment,
 } from './run-collection.mjs'
 
 const checkoutRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -60,6 +62,145 @@ test('SMTP report validation requires every checked-in request', async () => {
     const files = await readdir(resolve(checkoutRoot, 'bruno/smtp-dev'))
     const requests = files.filter(file => /^\d{2}-.+\.yml$/.test(file))
     assert.equal(registeredCollection('smtp-dev').requests, requests.length)
+})
+
+test('credit-purchase report validation requires every checked-in request', async () => {
+    const files = await readdir(resolve(checkoutRoot, 'bruno/credit-purchases'))
+    const requests = files.filter(file => /^\d{2}-.+\.yml$/.test(file))
+    assert.equal(registeredCollection('credit-purchases').requests, requests.length)
+    assert.equal(registeredCollection('credit-purchases').sandbox, 'developer')
+})
+
+test('credit-purchase signing secret stays in the environment and the runner rejects incomplete prerequisites', () => {
+    const environment = {
+        ...collectionEnvironment('credit-purchases', metadata, serviceClient, serviceCredential),
+        PAYMENTS_STUB_WEBHOOK_SECRET: 'synthetic-webhook-key',
+    }
+    assert.equal(environment.PLATFORM_ORGANIZATION_ID, serviceCredential.organizationId)
+    const args = cliArguments('credit-purchases', environment, '/tmp/report.json')
+    assert.deepEqual(args.slice(0, 5), ['run', '--env', 'local', '--sandbox', 'developer'])
+    assert.ok(!JSON.stringify(args).includes(environment.PAYMENTS_STUB_WEBHOOK_SECRET))
+    for (const key of ['PAYMENTS_STUB_WEBHOOK_SECRET', 'PLATFORM_ORGANIZATION_ID']) {
+        assert.throws(
+            () => cliArguments('credit-purchases', { ...environment, [key]: '' }, '/tmp/report'),
+            /prerequisites/,
+        )
+    }
+})
+
+test('stub configuration must match the confirmed browser origin and provide its configured secret', async () => {
+    const config = overrides => ({
+        Config: {
+            Env: Object.entries({
+                PAYMENTS_PROVIDER: 'stub',
+                PAYMENTS_CHECKOUT_URL: `${metadata.apiUrl}/billing/complete`,
+                PAYMENTS_STUB_WEBHOOK_SECRET: 'synthetic-key',
+                ...overrides,
+            }).map(([key, value]) => `${key}=${value}`),
+        },
+    })
+    assert.deepEqual(await stubPaymentEnvironment(config({}), checkoutRoot, metadata.apiUrl), {
+        PAYMENTS_STUB_WEBHOOK_SECRET: 'synthetic-key',
+    })
+    for (const values of [
+        { PAYMENTS_PROVIDER: 'paddle' },
+        { PAYMENTS_CHECKOUT_URL: 'https://unrelated.example/billing/complete' },
+        { PAYMENTS_CHECKOUT_URL: `${metadata.apiUrl}/other` },
+        { PAYMENTS_CHECKOUT_URL: 'invalid' },
+        { PAYMENTS_STUB_WEBHOOK_SECRET: '' },
+        { PAYMENTS_STUB_WEBHOOK_SECRET_FILE: '/unmounted-secret' },
+    ]) {
+        await assert.rejects(stubPaymentEnvironment(config(values), checkoutRoot, metadata.apiUrl))
+    }
+})
+
+test('pinned CLI executes all billing scripts, signatures, and rejection assertions against a synthetic server', async () => {
+    let balance = 17
+    let baseUrl
+    const purchases = []
+    const events = new Set()
+    const secret = 'synthetic-collection-signing-key'
+    const pack = { id: 'starter', credits: 100, amountMinor: 500, currency: 'USD' }
+    const server = createServer(async (request, response) => {
+        const reply = (status, body) => {
+            response.writeHead(status, { 'content-type': 'application/json' })
+            response.end(JSON.stringify(body))
+        }
+        const pathname = new URL(request.url, baseUrl).pathname
+        if (pathname.endsWith('/protocol/openid-connect/token')) return reply(200, { access_token: 'synthetic-token' })
+        let raw = ''
+        for await (const chunk of request) raw += chunk
+        if (pathname === '/v1/payments/webhook') {
+            if (request.headers['paddle-signature'] !== createHmac('sha256', secret).update(raw).digest('hex'))
+                return reply(400, {})
+            const event = JSON.parse(raw)
+            if (
+                (event.kind === 'purchase_paid' && !event.providerTotalMinor) ||
+                (event.kind.startsWith('purchase_adjustment') && typeof event.isFull !== 'boolean')
+            )
+                return reply(500, {})
+            const purchase = purchases.find(row => `stub_${row.id}` === event.providerReference)
+            if (!purchase) return reply(400, {})
+            if (!events.has(event.providerEventId)) {
+                events.add(event.providerEventId)
+                if (event.kind === 'purchase_paid') {
+                    balance += 100
+                    purchase.status = 'paid'
+                }
+                if (event.kind === 'purchase_failed') purchase.status = 'failed'
+                if (event.kind === 'purchase_adjustment_debit') balance -= 100
+                if (event.kind === 'purchase_adjustment_restore') balance += 100
+            }
+            return reply(200, { received: true })
+        }
+        if (!request.headers.authorization) return reply(401, {})
+        if (pathname === '/v1/billing/summary') return reply(200, { balance })
+        if (pathname === '/v1/billing/credit-packs') return reply(200, [pack])
+        if (pathname === '/v1/credit-purchases' && request.method === 'GET') return reply(200, [...purchases].reverse())
+        if (pathname === '/v1/credit-purchases' && request.method === 'POST') {
+            const input = JSON.parse(raw)
+            if (input.packId !== 'starter') return reply(400, {})
+            const id = randomUUID()
+            const now = new Date().toISOString()
+            purchases.push({
+                id,
+                packId: pack.id,
+                credits: pack.credits,
+                amountMinor: pack.amountMinor,
+                currency: pack.currency,
+                status: 'pending',
+                createdAt: now,
+                updatedAt: now,
+            })
+            return reply(201, { id, status: 'pending', redirectUrl: `${baseUrl}/billing/complete?purchaseId=${id}` })
+        }
+        return reply(404, {})
+    })
+    await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
+    baseUrl = `http://127.0.0.1:${server.address().port}`
+    try {
+        const counts = await executeCollection(
+            'credit-purchases',
+            {
+                BRUNO_API_URL: baseUrl,
+                OIDC_ISSUER_URL: baseUrl,
+                KEYCLOAK_SERVICE_CLIENT_ID: 'synthetic-client',
+                KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-client-key',
+                PLATFORM_ORGANIZATION_ID: serviceCredential.organizationId,
+                PAYMENTS_STUB_WEBHOOK_SECRET: secret,
+            },
+            checkoutRoot,
+        )
+        assert.deepEqual(counts, { requests: 33, tests: 33 })
+        assert.equal(balance, 117)
+        assert.deepEqual(
+            purchases.map(row => row.status),
+            ['paid', 'failed'],
+        )
+    } finally {
+        server.closeAllConnections()
+        await new Promise(resolveClosed => server.close(resolveClosed))
+    }
 })
 
 test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {

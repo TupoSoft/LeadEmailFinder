@@ -18,6 +18,7 @@
         "test:oidc-runners": "node --test scripts/testing/*.test.mjs scripts/bruno/*.test.mjs",
         "bruno:bff-sessions": "node scripts/bruno/run-collection.mjs bff-sessions",
         "bruno:smtp-dev": "node scripts/bruno/run-collection.mjs smtp-dev",
+        "bruno:credit-purchases": "node scripts/bruno/run-collection.mjs credit-purchases",
         "test:credits-postgres": "ts-node scripts/testing/credits-postgres.ts",
         "bruno:platform-credits": "ts-node scripts/bruno/run-platform-credits.ts",
         "architecture:check": "ts-node scripts/architecture/check-module-architecture.ts",
@@ -44,7 +45,7 @@
         "test:ui-audit": "node --test scripts/frontend/audit-premium-ui.test.mjs",
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true",
-        "test:gateway": "node --test scripts/frontend/gateway.test.mjs",
+        "test:gateway": "node --test scripts/frontend/gateway.test.mjs scripts/frontend/checkout-config.test.mjs",
         "test:web-live": "node scripts/testing/web-live.mjs"
     },
     "author": {

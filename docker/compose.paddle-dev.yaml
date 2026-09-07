@@ -1,9 +1,16 @@
 services:
+  web:
+    build:
+      args:
+        PAYMENTS_PROVIDER: paddle
+        PAYMENTS_CHECKOUT_URL: ${PADDLE_CHECKOUT_URL:-http://localhost:57000/checkout.html}
+        PAYMENTS_CHECKOUT_ALLOWED_ORIGINS: ${PAYMENTS_CHECKOUT_ALLOWED_ORIGINS:?Set PAYMENTS_CHECKOUT_ALLOWED_ORIGINS to exact checkout origins}
   api:
     environment:
       PAYMENTS_PROVIDER: paddle
       PAYMENTS_CREDIT_PACKS: '{"starter":{"credits":100,"amountMinor":500,"currency":"USD","providerPriceId":"${PADDLE_STARTER_PRICE_ID:?Set PADDLE_STARTER_PRICE_ID to the sandbox pri_ identifier}"}}'
       PAYMENTS_CHECKOUT_URL: ${PADDLE_CHECKOUT_URL:-http://localhost:57000/checkout.html}
+      PAYMENTS_CHECKOUT_ALLOWED_ORIGINS: ${PAYMENTS_CHECKOUT_ALLOWED_ORIGINS:?Set PAYMENTS_CHECKOUT_ALLOWED_ORIGINS to exact checkout origins}
       PADDLE_API_KEY_FILE: /run/secrets/paddle_api_key
       PADDLE_WEBHOOK_SECRET_FILE: /run/secrets/paddle_webhook_secret
       PADDLE_ENVIRONMENT: sandbox

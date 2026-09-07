@@ -34,12 +34,11 @@ describe('StubPaymentProvider', () => {
                 purchaseId: 'purchase-id',
                 organizationId: 'organization-id',
                 pack,
-                returnUrl: 'http://localhost:53000/billing/complete',
+                returnUrl: 'http://localhost:53000/billing/complete?providerReference=legacy&status=paid',
             }),
         ).resolves.toEqual({
             providerReference: 'stub_purchase-id',
-            redirectUrl:
-                'http://localhost:53000/billing/complete?purchaseId=purchase-id&providerReference=stub_purchase-id',
+            redirectUrl: 'http://localhost:53000/billing/complete?purchaseId=purchase-id',
         })
     })
 
@@ -79,8 +78,6 @@ describe('StubPaymentProvider', () => {
             }),
         )
 
-        await expect(createProvider().parseEvent(payload, sign(payload))).rejects.toThrow(
-            'Invalid stub paid event',
-        )
+        await expect(createProvider().parseEvent(payload, sign(payload))).rejects.toThrow('Invalid stub paid event')
     })
 })

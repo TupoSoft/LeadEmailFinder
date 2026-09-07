@@ -499,6 +499,22 @@ describe('EnvironmentVariablesDto', (): void => {
         expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
     })
 
+    it('accepts the nonsecret checkout origin list as a string', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_CHECKOUT_ALLOWED_ORIGINS: 'https://checkout.example.test,https://sandbox-checkout.paddle.com',
+        })
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it('rejects a nonstring checkout origin input', (): void => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            PAYMENTS_CHECKOUT_ALLOWED_ORIGINS: ['https://checkout.example.test'],
+        })
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            'PAYMENTS_CHECKOUT_ALLOWED_ORIGINS',
+        )
+    })
+
     it('requires the stub webhook secret only for the stub provider', (): void => {
         const stubEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'stub' })
         const paddleEnvironment = plainToInstance(EnvironmentVariablesDto, { PAYMENTS_PROVIDER: 'paddle' })

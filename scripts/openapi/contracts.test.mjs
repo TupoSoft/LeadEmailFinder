@@ -80,9 +80,12 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/auth/login',
         '/v1/auth/logout',
         '/v1/auth/session',
+        '/v1/billing/credit-packs',
+        '/v1/billing/summary',
+        '/v1/credit-purchases',
     ])
     assert.deepEqual(browser.servers, [{ url: '/' }])
-    for (const fragment of ['credit-purchases', 'verify', 'proxies']) {
+    for (const fragment of ['verify', 'proxies']) {
         assert.ok(
             Object.keys(runtime.paths).some(path => path.includes(fragment)),
             `Full runtime docs retain ${fragment}`,
@@ -96,6 +99,58 @@ test('exports the real app from an empty environment without provider constructi
     }
     assert.deepEqual(browser.paths['/v1/auth/session'].get.security, [{ lef_session: [] }])
     for (const code of ['200', '401', '403']) assert.ok(browser.paths['/v1/auth/session'].get.responses[code])
+})
+
+test('billing exposes exactly the consumed methods and safe customer fields through generated types', async () => {
+    const billing = Object.entries(browser.paths)
+        .filter(([path]) => path.includes('/billing/') || path.includes('credit-purchases'))
+        .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
+        .sort()
+    assert.deepEqual(billing, [
+        'GET /v1/billing/credit-packs',
+        'GET /v1/billing/summary',
+        'GET /v1/credit-purchases',
+        'POST /v1/credit-purchases',
+    ])
+    const schemas = browser.components.schemas
+    assert.deepEqual(Object.keys(schemas.BillingCreditPackResponseDto.properties).sort(), [
+        'amountMinor',
+        'credits',
+        'currency',
+        'id',
+    ])
+    assert.deepEqual(Object.keys(schemas.CreditPurchaseResponseDto.properties).sort(), [
+        'amountMinor',
+        'createdAt',
+        'credits',
+        'currency',
+        'id',
+        'packId',
+        'status',
+        'updatedAt',
+    ])
+    assert.deepEqual(Object.keys(schemas.CreateCreditPurchaseDto.properties), ['packId'])
+    assert.deepEqual(Object.keys(schemas.CreditResponseDto.properties), ['balance'])
+    const generated = await readFile(schemaPath, 'utf8')
+    for (const field of ['providerPriceId', 'providerReference', 'provider:', 'webhookId', 'eventId', 'rawPayload']) {
+        assert.equal(JSON.stringify(browser).includes(`"${field.replace(':', '')}"`), false, field)
+        assert.equal(generated.includes(field), false, field)
+    }
+    for (const [path, method] of [
+        ['/v1/billing/summary', 'get'],
+        ['/v1/billing/credit-packs', 'get'],
+        ['/v1/credit-purchases', 'get'],
+        ['/v1/credit-purchases', 'post'],
+    ]) {
+        assert.match(generated, new RegExp(browser.paths[path][method].operationId))
+        assert.deepEqual(
+            browser.paths[path][method].security,
+            method === 'post'
+                ? [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]
+                : [{ lef_session: [] }, { oidc: [] }],
+        )
+        for (const code of ['401', '403']) assert.ok(browser.paths[path][method].responses[code])
+    }
 })
 
 test('ambient configuration and secret-file settings cannot change the export', async () => {

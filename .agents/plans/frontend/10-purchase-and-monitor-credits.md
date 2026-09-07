@@ -13,11 +13,11 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 
 ## Progress
 
-- [ ] (2026-08-31) Add current-organization billing summary and customer-safe credit-pack endpoints with `OpenAPI` coverage.
-- [ ] (2026-08-31) Regenerate the API client and implement the capability-gated billing and checkout routes.
-- [ ] (2026-08-31) Render authoritative return, history, balance, and recovery states for every purchase status.
-- [ ] (2026-08-31) Extend focused API, Bruno, component, accessibility, and stub-runtime browser coverage.
-- [ ] (2026-08-31) Run repository, design-contract, generated-client, and premium UX validation and record results.
+- [x] (2026-09-07) Add current-organization billing summary and customer-safe credit-pack endpoints with `OpenAPI` coverage.
+- [x] (2026-09-07) Regenerate the API client and implement the capability-gated billing and checkout routes.
+- [x] (2026-09-07) Render authoritative return, history, balance, and recovery states for every purchase status.
+- [x] (2026-09-07) Extend focused API, Bruno, component, accessibility, and stub-runtime browser coverage.
+- [x] (2026-09-07) Run repository, design-contract, generated-client, and premium UX validation and record results.
 
 ## Plan dependencies
 
@@ -31,11 +31,34 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 
 ## Surprises & Discoveries
 
-- `module-architecture/09` will move payment controllers, use cases, catalog policy, and adapters into their final
-  layers without changing financial behavior. This plan must extend those layered boundaries rather than recreate
-  the current flat source layout.
+- The checkout starts from the completed layered payments module and MFA-aware browser fixtures. The generated
+  browser contract previously contained only authentication and health routes. Adding GET and POST on the same
+  purchase path also required merging methods in the synthetic OpenAPI test fixture.
+- The Browser plugin is unavailable. Browser validation uses the existing Playwright runtime and an isolated
+  `lef-issue505` Compose project; no shared development reset is needed.
+
+- The layered payments prerequisite is complete. This implementation extends those boundaries without changing
+  persistence or webhook accounting.
+- Review found that a component-local checkout lock could disappear during route navigation. The final lock and
+  recovery state live in the organization-scoped session cache; late navigation and superseded recovery callbacks
+  are fenced. Focused tests cover leaving and reopening Billing and overlapping recovery reads.
+- Screenshot review found a narrow table caption wrapping one character per line. The caption now occupies the
+  full row width, and browser tests check its width and height as well as accessibility and document overflow.
+- Browser startup on the loopback address was delayed by host proxy settings. Setting `NO_PROXY` and `no_proxy` to
+  `127.0.0.1,localhost` restored normal startup. Browser suites run sequentially so one suite cannot stop a shared
+  preview server while another suite still uses it.
 
 ## Decision Log
+
+- Decision: Share the pure checkout URL parser in `src/libs/common/src/checkout-redirect.ts` across the payment
+  infrastructure adapter, Vite configuration, and browser navigation adapter.
+  Rationale: One implementation makes normalization and URL rejection behavior identical without importing
+  payment infrastructure into the browser or coupling the application port to configuration.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Display purchase history in pages of ten from the complete server response, preserve the page in
+  the URL, format dates explicitly in UTC, and poll pending returns at most twelve times at five-second intervals.
+  Rationale: These bounded presentation choices preserve the existing read contract and document scroll owner.
+  Date/Author: 2026-09-07, implementation.
 
 - Decision: Add `GET /v1/billing/summary` for the caller's organization and
   `GET /v1/billing/credit-packs` for a customer-safe pack projection; neither request accepts an organization identifier.
@@ -91,7 +114,32 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered the billing screen and payment return route, current-organization balance and safe catalog APIs,
+customer-safe history, generated client, shared redirect policy, and matched API/web build configuration.
+The checkout flow remains pessimistic and requires an explicit action after uncertain completion. The browser never
+grants credits or infers payment from a redirect. The session-owned coordinator prevents duplicates across route
+changes, and return polling is bounded and pauses while offline or hidden.
+
+Validation passed: the complete backend run had 219 passing suites and 2,459 passing tests, with 80 tests skipped
+behind optional runtime gates; the 40 affected credit/payment PostgreSQL tests subsequently passed without skips
+against a separate disposable database. All 51 launcher tests, 278 web tests, 7 OpenAPI contract tests, 7 gateway
+and checkout build tests, and the final 44 focused billing tests passed. Type checks, lint, module architecture,
+design lint, the strict premium audit, and the diff whitespace check passed. Repository lint retains one existing
+warning in `load-secrets.spec.ts`; there are no lint errors or new architecture baseline entries.
+
+The isolated `lef-issue505` stack passed all 33 Bruno requests and assertions. The real browser scenario used
+MFA-aware owner login, keyboard checkout, an actual top-level stub redirect, signed paid/failed events, and a
+replayed paid event. It proved that only the paid event grants credits and replay grants nothing further.
+Sixteen desktop/narrow billing browser cases and 44 existing public, not-found, and shell cases passed. Browser
+checks covered page identity, meaningful content, console health, framework overlays, keyboard interaction,
+return focus, all four statuses, read-only access, lost responses, offline recovery, caption geometry, and
+accessibility. Controlled screenshots were inspected at 1440 and 320 CSS pixels.
+
+Paddle sandbox confirmation was not run; it remains optional. Live stub/MFA checks are explicit local acceptance
+commands, while mocked billing browser cases and the pinned launcher tests run in the existing CI commands.
+The complete history endpoint retains its existing response contract and the UI displays ten rows per page.
+The narrow redirect-policy port and pure shared parser preserve module responsibilities; there are no material
+SOLID trade-offs. The implementation belongs to one pull request closing issue #505.
 
 ## Context and Orientation
 
@@ -291,21 +339,31 @@ tests. Then run:
     corepack pnpm openapi:check
     corepack pnpm --filter ./apps/web typecheck
     corepack pnpm --filter ./apps/web lint
-    corepack pnpm --filter ./apps/web test
+    corepack pnpm --filter ./apps/web test:ci
     corepack pnpm typecheck
     corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm architecture:check
     git diff --check
 
-After confirming Compose ownership, start the `checkout` fixture with `PAYMENTS_PROVIDER=stub`. Bootstrap
-the MFA-aware owner fixture from `frontend/09`, then run the expanded collection from its collection root and the
-focused browser scenario:
+Follow the isolated-stack instructions in `docker/README.md` to start checkout-owned services with the stub
+provider. This implementation used the fresh project `lef-issue505`, leaving shared resources untouched.
+Bootstrap the MFA-aware owner fixture from `frontend/09`, then run the registered launcher and the dedicated
+browser configuration. The default browser configuration intentionally excludes live authentication tests.
 
-    PAYMENTS_PROVIDER=stub corepack pnpm dev:reset -- --confirm-project=LEF
-    corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
-    corepack pnpm bruno:credit-purchases
-    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/billing.spec.ts --project=chromium
+    COMPOSE_PROJECT_NAME=lef-issue505 corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
+    COMPOSE_PROJECT_NAME=lef-issue505 corepack pnpm bruno:credit-purchases
+    NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost COMPOSE_PROJECT_NAME=lef-issue505 corepack pnpm --filter ./apps/web exec playwright test --config playwright.billing.config.ts --project=chromium
+
+Run the mocked billing scenarios and the ordinary browser regression suite sequentially against the built app:
+
+    NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost corepack pnpm --filter ./apps/web exec playwright test tests/e2e/billing-ui.spec.ts
+    NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost corepack pnpm --filter ./apps/web test:e2e
+
+The checkout build and gateway checks use the built worktree image:
+
+    WEB_GATEWAY_IMAGE=lef-issue505-web corepack pnpm test:gateway
+    node --test scripts/openapi/contracts.test.mjs
 
 The live stub scenario must capture the initial balance, catalog, one `checkout` creation and return, pending history,
 a valid signed paid event, paid history, and the server-confirmed new balance. Exercise a signed failed event in a
@@ -336,13 +394,34 @@ owned by this worktree. Never tear down shared Docker or Paddle resources withou
 
 ## Artifacts and Notes
 
-Record the final safe pack schema, generated operation names, a redacted status-transition table, focused test and
-Bruno counts, premium-audit result, and desktop/narrow screenshots for catalog, return, history, and errors. Do not
-record cookies, access tokens, service-client secrets, webhook secrets, Paddle keys, provider payloads, real purchase
-identifiers, or customer data.
+The catalog contains exactly `id`, `credits`, `amountMinor`, and `currency`, ordered by credits and then ID.
+Customer history contains exactly `id`, `packId`, `credits`, `amountMinor`, `currency`, `status`, `createdAt`, and
+`updatedAt`. Generated operations are `BillingSummaryController_getSummary`, `BillingCreditPacksController_list`,
+`CreditPurchaseController_create`, and `CreditPurchaseController_list`. OpenAPI declares cookie or bearer
+authentication for reads and cookie-plus-CSRF or bearer authentication for checkout.
 
-The current-organization API boundary, customer-safe pack projection, `checkout` uncertainty policy, return-state behavior,
-financial consistency rules, UI state matrix, validation, and one-pull-request scope are decision-complete.
+| Observed transition | Authoritative balance change |
+| --- | --- |
+| Purchase creation and pending return | Zero |
+| Signed paid event | The selected pack's credits |
+| Replayed paid event | Zero additional credits |
+| Separate purchase with a signed failed event | Zero |
+
+Local synthetic screenshots are under `/tmp/lef-issue505-screenshots/`, including `billing-paid-1440.png` and
+`billing-partial-error-320.png`. They contain controlled fixture data and are not committed. Authentication
+screenshots, traces, and videos remain disabled in the dedicated live configuration. The PostgreSQL acceptance
+database was created separately from runtime data and removed after its 40 tests passed.
+
+Harper passed all seven changed Markdown files with this command:
+
+    corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md docker/paddle-dev/README.md .agents/plans/frontend/10-purchase-and-monitor-credits.md bruno/credit-purchases/README.md src/libs/modules/credits/README.md src/libs/modules/payments/README.md
+
+The final plan edit was checked again with:
+
+    corepack pnpm docs:lint -- .agents/plans/frontend/10-purchase-and-monitor-credits.md
+
+Paddle confirmation is optional and unverified. Unrelated runtime-gated suites in the broad backend command
+remain skipped; the affected credit/payment database tests and the stub HTTP/browser workflow passed separately.
 
 ## Plan readiness
 
