@@ -4,26 +4,19 @@ import {
     EmailVerificationReason,
     IEmailVerificationResponseDto,
     IEmailVerificationService,
-    parseTimeString,
 } from '@tuposoft/lead-email-finder/common'
 import { Inject } from '@nestjs/common'
 import { AsyncEmailVerificationJobData } from './async-email-verification-job-data.interface'
-import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
+import {
+    ASYNC_EMAIL_VERIFICATION_QUEUE_NAME,
+    EMAIL_VERIFICATION_SERVICE_TOKEN,
+    asyncEmailVerificationBackoff,
+} from './async-email-verification-queue.config'
 import { GreylistedException } from './greylisted.exception'
 
-@Processor('async-email-verification', {
+@Processor(ASYNC_EMAIL_VERIFICATION_QUEUE_NAME, {
     settings: {
-        backoffStrategy: (attemptsMade, type, err) => {
-            if (type === 'async-email-verification') {
-                if (err instanceof GreylistedException) {
-                    return attemptsMade * parseTimeString('1m')
-                }
-
-                return parseTimeString('10s')
-            }
-
-            throw new Error(`Unknown type: ${type}`)
-        },
+        backoffStrategy: asyncEmailVerificationBackoff,
     },
 })
 export class AsyncEmailVerificationProcessor extends WorkerHost {

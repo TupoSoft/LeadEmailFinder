@@ -86,7 +86,7 @@ return the same `404`; the endpoint accepts no organization override and provide
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes `EmailVerificationCoreModule`,
-`AsyncEmailVerificationModule`, and `BatchEmailVerificationModule`. The root registers both synchronous controllers,
+`AsyncEmailVerificationModule`, and `BatchEmailVerificationModule`. The root registers the async controller, both synchronous controllers,
 their shared application command, the email-administration controller, and the internal result reader and its controller.
 Internal modules and contracts are not exported again by `src/index.ts`: the only public surface is
 `EmailVerificationModule` itself and the HTTP/queue behavior below. The shared result DTO lives in `src/api/`; the trace port
@@ -94,7 +94,7 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 
 ## Architecture
 
-The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/15`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
@@ -151,6 +151,20 @@ remain on both routes; the command performs no credit operations. Validation sti
 authorized invalid request consumes one credit. Domain-policy rejection and unexpected adapter failures retain
 their generic `500` response. The `/emails` administration API remains at `api/http/email-administration/`, wired
 by the root to `EmailAdministrationService`.
+
+Async HTTP controllers and DTOs live under `api/http/asynchronous-verification/`. The framework-independent
+`AsyncEmailVerificationService` under `application/delivery/async/` accepts scalar organization and credential
+identity, dispatches through `AsyncVerificationJobs`, and checks ownership before reading job state. Missing and
+foreign jobs produce the same application error, which the controller maps to the existing `404`. The application
+maps the existing state enum and includes a result only for completed jobs; status reads perform no credit debit
+or queue submission.
+
+`infrastructure/queues/async-verification/` owns `BullAsyncVerificationJobs`, the serialized job contract,
+queue defaults, custom backoff, and `AsyncEmailVerificationProcessor`. Its private composition module exports the
+application service token to the root and binds `EmailVerificationServiceToken` to the existing orchestrator.
+The worker maps one existing payload to one organization-scoped verification command per attempt, excluding the
+credential ID, and preserves the greylist exception and trace context. There is one async worker. The legacy batch
+module retains its independent producer registration and its existing child-job options until plan 16.
 
 ## Dependencies
 
@@ -235,8 +249,15 @@ Focused tests are grouped by behavior:
 - **Deprecated synchronous controller and HTTP compatibility**:
   `api/http/synchronous-verification/deprecated/old-sync-email-verification.controller.spec.ts`,
   `api/http/synchronous-verification/deprecated/old-sync-email-verification-http.integration.spec.ts`
-- **Async**: `async-email-verification/async-email-verification.controller.spec.ts`,
-  `async-email-verification/async-email-verification.service.spec.ts`
+- **Async application and HTTP**: `application/delivery/async/async-email-verification.service.spec.ts`,
+  `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`, and
+  `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`
+- **Async queues and composition**: `infrastructure/queues/async-verification/` contains producer, worker, backoff,
+  Redis compatibility, and production Nest composition specifications. Set `TEST_REDIS_URL` to a disposable Redis
+  instance to run the Redis suites; each suite uses its own queue prefix.
+- **Async runtime workflow**: `bruno/smtp-dev` covers submission, completed and repeated polling, one-credit debit,
+  missing jobs, malformed IDs, authentication, and insufficient credits. Its launcher requires an SMTP stack owned
+  by the current checkout.
 - **Batch**: `batch-email-verification/batch-email-verification.controller.spec.ts`,
   `batch-email-verification/batch-email-verification.processor.spec.ts`,
   `batch-email-verification/batch-email-verification.service.spec.ts`,

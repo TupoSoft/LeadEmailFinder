@@ -24,6 +24,7 @@ runtime:
           }
           const payload = await response.json();
           if (payload.state === 'completed') {
+            bru.setVar('completedAsyncResult', payload.result);
             break;
           }
           if (payload.state === 'failed' || attempt === 29) {
@@ -40,6 +41,10 @@ runtime:
           expect(res.body.result.id).not.to.equal(bru.getVar('asyncJobId'));
           expect(res.body.result.email).to.equal('person@lef.test');
           expect(res.body.result.reason).to.equal('accepted_email');
+        });
+
+        test('repeated status reads preserve the completed result', function() {
+          expect(res.body.result).to.deep.equal(bru.getVar('completedAsyncResult'));
         });
 
         test('returns a server-generated request UUID', function() {

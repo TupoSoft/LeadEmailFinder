@@ -30,7 +30,7 @@ runtime:
       code: |-
         test('adds a credit for asynchronous verification', function() {
           expect(res.status).to.equal(201);
-          expect(res.body.balance).to.be.at.least(1);
+          expect(res.body.balance).to.equal(1);
         });
 
         test('returns a server-generated request UUID', function() {

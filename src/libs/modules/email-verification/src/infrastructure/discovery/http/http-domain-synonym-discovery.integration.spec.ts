@@ -64,7 +64,9 @@ describe('HttpDomainSynonymDiscovery HTTP contract', () => {
     it('retains successful pages when child status/deadline failures occur, with no retries', async () => {
         await expect(finder.findSynonymDomains(`${baseUrl}/home`)).resolves.toEqual(['example.com', 'example.org'])
 
-        expect(requests).toEqual(['/home', '/contact', '/failure', '/slow'])
+        expect(requests[0]).toBe('/home')
+        // Child pages are fetched concurrently, so only their exact counts have a stable contract.
+        expect(requests.slice(1).sort()).toEqual(['/contact', '/failure', '/slow'])
         expect(logger.error).not.toHaveBeenCalled()
     })
 

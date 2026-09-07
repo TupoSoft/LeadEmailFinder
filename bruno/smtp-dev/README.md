@@ -14,10 +14,18 @@ The synchronous results expose persisted verification UUIDs; the deprecated resp
 Requests 16–19 read an owned result through `GET /verifications/:id`, confirm that a random missing UUID returns
 `404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 20–22 add one credit,
 enqueue asynchronous verification, and poll for a completed result with its own persisted verification UUID.
+The next completed-status read must return the same result. Requests 23–28 confirm that enqueue debits exactly
+one credit, conceal a missing job with `404`, reject a malformed job UUID with `400`, require authentication for
+status with `401`, and reject enqueue at zero balance with `402`. The final balance stays at zero after polling,
+repeat status reads, and rejected requests. Permission rejection and foreign-job concealment use isolated
+principals in the async HTTP integration suite; this collection uses the provisioned platform credential.
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
-Within the email-verification module, `api/http/synchronous-verification/current/` and
+Within the email-verification module, `api/http/asynchronous-verification/` adapts enqueue and status requests to
+commands in `application/delivery/async/`. The queue producer, status lookup, and worker live under
+`infrastructure/queues/async-verification/` and preserve the existing queue protocol and organization ownership.
+`api/http/synchronous-verification/current/` and
 `api/http/synchronous-verification/deprecated/` adapt both routes to the shared
 `RunSynchronousVerification` command in `application/delivery/synchronous/`. The command uses the core composed
 by `infrastructure/email-verification-core.module.ts`. DNS and domain-synonym adapters live under

@@ -11,11 +11,11 @@ composition, and prove that a foreign organization still sees the job as not fou
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize async HTTP, credit, queue data/options, ownership, status, retry, and worker behavior.
-- [ ] (2026-08-30) Move enqueue/status controllers and DTOs to API and orchestration to application.
-- [ ] (2026-08-30) Implement the async job port and thin BullMQ producer/status/worker adapters.
-- [ ] (2026-08-30) Recompose the async slice and shrink only its architecture-baseline keys.
-- [ ] (2026-08-30) Complete focused, Redis/Bull, HTTP, architecture, full, and documentation validation.
+- [x] (2026-09-07) Characterize async HTTP, credit, queue data/options, ownership, status, retry, and worker behavior.
+- [x] (2026-09-07) Move enqueue/status controllers and DTOs to API and orchestration to application.
+- [x] (2026-09-07) Implement the async job port and thin BullMQ producer/status/worker adapters.
+- [x] (2026-09-07) Recompose the async slice and shrink only its architecture-baseline keys.
+- [x] (2026-09-07) Complete focused, Redis/Bull, HTTP, architecture, full, documentation, and live SMTP fixture validation.
 
 ## Plan dependencies
 
@@ -25,12 +25,56 @@ composition, and prove that a foreign organization still sees the job as not fou
 
 ## Surprises & Discoveries
 
+- Two full-suite attempts exposed a preexisting assertion that required concurrent child HTTP requests to reach
+  the domain-synonym fixture in a fixed order. The adapter uses `Promise.allSettled`; the test now requires the
+  homepage first, then one request per child, while allowing concurrent arrival order. Production code
+  is unchanged by this validation repair.
+
+- The starting revision `72a5a259100eb78894b49a6731841257e041e2ce` includes completed prerequisites and
+  synchronous delivery from plan 11. Issue #460 was already assigned and In Progress.
+- The legacy batch module separately registers the async queue without retry defaults. Direct async submissions
+  inherit five attempts and custom backoff; changing the batch registration would change existing child retries.
+- `bruno/smtp-dev` already covers async submission and completion. The relocated integration wiring warrants
+  extending that collection with credit and rejection assertions.
+- Another checkout owns the running SMTP fixture, including its fixed subnet. Validation uses a new disposable
+  Redis instance initially. Live SMTP validation later used an isolated Compose project with temporary subnet
+  remapping, then restored the fixture configuration.
+
 - `async-email-verification/` currently mixes controller/DTOs, a job-data contract, service interface and
   implementation, queue constants, Bull worker, Nest module, and HTTP exceptions.
 - Batch verification creates children on the same `async-email-verification` queue, so its serialized job contract
   is an integration boundary even before plan 16 layers the batch parent.
 
 ## Decision Log
+
+- Decision: Merge master commit `1d3e827` and retain both the completed async composition decisions and the new
+  `legacy-retirement/01` ownership rule.
+  Rationale: The conflict concerns plan wording only. Independent batch retry defaults remain preserved, and future
+  deprecated-route retirement must not be reversed by this plan. Existing implementation and SMTP evidence remain
+  unchanged.
+  Date/Author: 2026-09-07, Codex conflict resolution.
+
+- Decision: Validate SMTP in the separate `lef460a1ee` Compose project, with temporary network remapping from
+  `172.28.0.0/24` to `172.29.46.0/24` in the overlay, DNS zone, and proxy configuration.
+  Rationale: Another checkout owns the default subnet and ports. A separate project with matching DNS and proxy
+  addresses preserves the fixture protocol while allowing the standard ownership-checked Bruno launcher to run.
+  The temporary configuration is restored after the test stack is removed.
+  Date/Author: 2026-09-07, Codex validation.
+
+- Decision: Include a focused correction to the domain-synonym HTTP integration test's ordering assertion.
+  Rationale: It blocked the required full-suite gate twice by treating concurrent request order as a contract.
+  The revised assertion retains exact request counts and the homepage prerequisite without changing behavior.
+  Date/Author: 2026-09-07, Codex implementation.
+
+- Decision: Keep the independent legacy batch producer registration and one producer and worker in the async
+  slice. Register the async controller in the root; export its application token from infrastructure composition.
+  Rationale: Infrastructure cannot import API code, and consolidating producers would change batch retry defaults.
+  Final batch composition remains in plan 16.
+  Date/Author: 2026-09-07, Codex implementation.
+- Decision: Return organization identity and a deferred status reader for one captured job from the queue port.
+  Rationale: The application checks ownership before requesting state or results without exposing Bull types or
+  performing another lookup that could observe a different job.
+  Date/Author: 2026-09-07, Codex implementation.
 
 - Decision: Put enqueue and owned-status commands under `src/application/delivery/async/` behind a narrow
   `AsyncVerificationJobs` port.
@@ -61,7 +105,49 @@ composition, and prove that a foreign organization still sees the job as not fou
 
 ## Outcomes & Retrospective
 
-Not started.
+The API, application, queue adapter, worker, and composition are implemented. All 13 async architecture-baseline
+entries are removed; the remaining 20 entries are unchanged. The public module barrel and queue/HTTP contracts
+remain unchanged. The legacy batch producer registration remains separate to preserve its existing defaults.
+
+Focused API/application tests passed: 3 suites and 52 tests. Bull adapter and worker tests passed: 4 suites and
+30 tests, including six real Redis/Bull cases. The production Nest composition test also passed, proving one
+registered worker completion and one debit across enqueue and repeated polling. The captured trace integration
+passed all four checks. Final validation passed:
+
+- `TEST_REDIS_URL=redis://127.0.0.1:32770 TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 209 Jest
+  suites and 1,990 tests passed; 11 suites and 65 tests requiring other external fixtures were skipped. The
+  subsequent OIDC/Bruno runner stage passed 32 tests.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck`: passed.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint`: passed with one existing return-type warning in
+  `src/libs/config/src/load-secrets.spec.ts`.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build`: passed; 608 files compiled.
+- `corepack pnpm architecture:baseline` and `corepack pnpm architecture:check`: passed; only 13 async keys removed.
+- `corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/15-layer-async-email-verification.md bruno/smtp-dev/README.md`: Harper passed after correcting prose findings.
+- `git diff --check`: passed.
+
+The Redis suites used version-1 serialized direct and batch-child fixtures, tested both organization lookup
+orders, and proved completion, delay, exhaustion, stable job identity, and no repeated enqueue. Tests check exact
+production backoff values separately; only the integration test delay is accelerated. The production composition
+suite uses the real Nest Bull module, queue adapter, and worker, with the verification core and credit storage
+stubbed. It is queue/composition evidence rather than a live SMTP or database acceptance claim.
+
+Bruno coverage is extended to 28 requests. The installed Bruno parser accepted all 28 request files and their
+35 scripts compiled; the launcher suite passed 8 tests. Live SMTP validation subsequently passed on 2026-09-07:
+`COMPOSE_PROJECT_NAME=lef460a1ee corepack pnpm bruno:smtp-dev` executed all 28 requests and 57 tests with no skips.
+The launcher confirmed ownership of every required container and ran Bruno 4.1.0 inside this checkout's API.
+
+Before Bruno populated the SMTP cache, two fresh async jobs proved the complete worker and SMTP path. The trusted
+fixture produced `accepted_email` with new `secureTransport=true` evidence. Its command sequence was
+`ehlo`, `starttls`, `ehlo`, `mail_from`, `rcpt_to`, `quit`. The plaintext fixture produced
+`secure_transport_unavailable` with `secureTransport=false` and only `ehlo`; no envelope command was sent. Each job
+completed once on attempt 1, created one owned result, debited one credit, and returned the same result on repeated
+polling. Both the submitted address cache and the fixed catch-all probe cache were absent before their phase.
+The generated address and probe address, plus the service secret, were absent from captured API logs.
+
+Mailpit accepts the catch-all probe, so the trusted result retains the existing `catchAll=true`, `exists=null`
+semantics. A fresh local part alone would not force another SMTP connection after the shared probe was cached.
+The proof ran before the collection to establish fresh transport evidence without deleting cache rows.
+These are deterministic local SMTP fixture results, not live-provider deliverability claims.
 
 ## Context and Orientation
 
@@ -101,10 +187,11 @@ validation, response mapping, `202`, and `404` there. Move Bull registration, qu
 custom backoff, and the worker to infrastructure. The worker invokes the plan-14 verification application port and
 contains no verification, credit, or authorization policy.
 
-Recompose the async module with one queue registration and one worker. Preserve the compatibility token used by the
-still-legacy batch parent until plan 16 replaces it. Update source references and shrink only async baseline entries;
-current synchronous and batch entries remain untouched. Deprecated-route code, if still present, belongs to
-`legacy-retirement/01`; this plan must not restore retired code or baseline entries.
+Recompose the async slice with one producer registration and one worker. Preserve the independent legacy batch
+producer registration and internal verification compatibility token until plan 16 finishes delivery composition.
+Update source references and shrink only async baseline entries; current synchronous and batch entries remain
+untouched. Deprecated-route code, if still present, belongs to `legacy-retirement/01`; this plan must not restore
+retired code or baseline entries.
 
 ## Interfaces and Dependencies
 
@@ -155,13 +242,14 @@ Finish with:
     corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/15-layer-async-email-verification.md
     git diff --check
 
-Bruno: no collection change is required because the HTTP and queue contracts are unchanged; the existing batch collection in plan 16
-collection will exercise the relocated async worker as a child-job integration.
+Bruno: extend `bruno/smtp-dev` with credit, repeated polling, missing-job, validation, authentication, and
+insufficient-credit checks. Run `corepack pnpm bruno:smtp-dev` against a stack owned by this checkout. If unavailable,
+record static validation separately from live SMTP execution.
 
 ## Idempotence and Recovery
 
-Add the queue port and compatibility tests before moving the producer/worker. Maintain one queue registration and one
-worker at every runnable checkpoint. If interrupted, complete one adapter move rather than registering both versions
+Add the queue port and compatibility tests before moving the producer/worker. Maintain one async producer registration and one
+worker at every runnable checkpoint, plus the unchanged legacy batch producer registration. If interrupted, complete one adapter move rather than registering both versions
 or changing the queue name. Baseline shrink is repeatable and must never rename a key.
 
 Use an isolated test queue prefix or an owned disposable local stack. After confirming Compose ownership, clear only
@@ -170,9 +258,36 @@ queue migration exists. Preserve unrelated changes.
 
 ## Artifacts and Notes
 
-Record the HTTP and queue contract table, serialized compatibility fixture version, focused and Redis/Bull totals,
-ownership/retry observations, removed baseline keys, and full validation. Do not record tokens, credentials, raw
-addresses, raw job payloads, SMTP transcripts, or provider results.
+The compatibility contract is:
+
+| Surface | Preserved behavior |
+| --- | --- |
+| Enqueue | `POST /verifyAsync`, `verification:run`, one debit, `202` with `{ id }` |
+| Status | `GET /verifyAsync/:id`, `verification:read`, UUID validation, identical missing and foreign `404` |
+| Direct payload | `email`, `organizationId`, `credentialId` |
+| Batch payload | Existing direct fields plus `batchId` and optional `format` |
+| Queue and job name | `async-email-verification` |
+| Direct options | UUID `jobId`, five attempts, custom backoff |
+| Batch options | Existing UUID and parent association, no added attempt or backoff defaults |
+| Backoff | Greylist: attempt number times 60 seconds; other errors: 10 seconds |
+| Status body | Existing state enum, result only when completed, no progress field |
+| Worker | One organization-scoped command per attempt, without credential identity |
+
+The live fixture used application commit `7d297f79b650ffd9c86f5706c3b0fd5fff6bbd44`, Node 24.20.0, and Bruno
+4.1.0. Its public ports were web `53160`, Keycloak `58060`, PostgreSQL `55460`, Redis `56360`, and Garage `59060`.
+Only the standard Keycloak provisioning and platform credential bootstrap were needed; TypeORM synchronized the
+new disposable database. The existing stack belonging to another checkout remained running.
+
+Sanitized fresh-job evidence from 2026-09-07, 10:11:31–10:11:32 UTC:
+
+| Phase | Job ID | Verification ID | Duration |
+| --- | --- | --- | --- |
+| Trusted TLS | `cdc89f38-0b42-4166-b610-55a4487504f0` | `ed20921c-86b6-479f-85c4-17caea992484` | 379 milliseconds |
+| Plaintext rejection | `5894d20b-e138-43dd-b468-2c75aef1fa98` | `8d1a7836-8853-4ceb-a6ed-1dc53339fcc3` | 332 milliseconds |
+
+The temporary proof runner queried only the owned rows, sent credentials through process memory, and emitted
+counts, booleans, stable reason codes, timestamps, and opaque identifiers. Full addresses, raw queue data, tokens,
+credentials, and SMTP transcripts are intentionally absent from this plan.
 
 ## Plan readiness
 
