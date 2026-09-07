@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
-    'smtp-dev': Object.freeze({ requests: 28, sandbox: 'developer', network: 'compose' }),
+    'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
 })
 

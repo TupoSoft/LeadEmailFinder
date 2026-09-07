@@ -1,28 +1,20 @@
 info:
-  name: 08-zero-balance-for-legacy-verify
+  name: 14-post-verify-leaves-zero-balance
   type: http
-  seq: 8
+  seq: 14
 
 http:
-  method: PUT
+  method: GET
   url: "{{baseUrl}}/credits/{{organizationId}}"
   headers:
-    - name: Content-Type
-      value: application/json
     - name: Authorization
       value: "Bearer {{serviceClientToken}}"
-  body:
-    type: json
-    data: |-
-      {
-        "amount": 0
-      }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('resets the balance to zero so the legacy 402 check is deterministic', function() {
+        test('confirms the POST request debited exactly the one credit added for it', function() {
           expect(res.status).to.equal(200);
           expect(res.body.balance).to.equal(0);
         });

@@ -108,30 +108,27 @@ function fixture(): Fixture {
 }
 
 describe('RunSynchronousVerification', () => {
-    it.each(['sync', 'deprecated_sync'] as const)(
-        'normalizes the email and preserves the core result and %s trace',
-        async mode => {
-            const result: OwnedEmailVerification = {
-                id: '20000000-0000-4000-8000-000000000001',
-                email,
-                domain: 'example.test',
-                localPart: 'person',
-                exists: true,
-                catchAll: false,
-                reason: EmailVerificationReason.AcceptedEmail,
-                sources: [EmailVerificationSource.MX],
-                createdAt: date,
-            }
-            const core: jest.Mocked<SynchronousVerificationCore> = { verify: jest.fn().mockResolvedValue(result) }
-            const command = new RunSynchronousVerification(core)
-            const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode }
+    it('normalizes the email and preserves the core result and sync trace', async () => {
+        const result: OwnedEmailVerification = {
+            id: '20000000-0000-4000-8000-000000000001',
+            email,
+            domain: 'example.test',
+            localPart: 'person',
+            exists: true,
+            catchAll: false,
+            reason: EmailVerificationReason.AcceptedEmail,
+            sources: [EmailVerificationSource.MX],
+            createdAt: date,
+        }
+        const core: jest.Mocked<SynchronousVerificationCore> = { verify: jest.fn().mockResolvedValue(result) }
+        const command = new RunSynchronousVerification(core)
+        const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode: 'sync' as const }
 
-            await expect(command.execute({ organizationId, email: 'Person@Example.Test', trace })).resolves.toBe(result)
+        await expect(command.execute({ organizationId, email: 'Person@Example.Test', trace })).resolves.toBe(result)
 
-            expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(core.verify).toHaveBeenCalledWith({ organizationId, email, trace })
-        },
-    )
+        expect(core.verify).toHaveBeenCalledTimes(1)
+        expect(core.verify).toHaveBeenCalledWith({ organizationId, email, trace })
+    })
 
     it('returns a successful owned result through the real core and finalizes its email cache', async () => {
         const { command, domainStore, emailStore, verificationStore, mailboxProbe, accountDiscovery, observer } =
@@ -210,10 +207,10 @@ describe('RunSynchronousVerification', () => {
         })
     })
 
-    it('propagates the original adapter failure and reports the supplied deprecated trace', async () => {
+    it('propagates the original adapter failure and reports the supplied sync trace', async () => {
         const { command, mailboxProbe, verificationStore, emailStore, observer } = fixture()
         const error = new Error('mailbox_adapter_failed')
-        const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode: 'deprecated_sync' as const }
+        const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode: 'sync' as const }
         mailboxProbe.probe.mockRejectedValue(error)
 
         await expect(command.execute({ organizationId, email, trace })).rejects.toBe(error)

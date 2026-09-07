@@ -1,8 +1,6 @@
 import { ClassSerializerInterceptor, INestApplication, ValidationPipe } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
-import { AutomapperModule } from '@automapper/nestjs'
-import { classes } from '@automapper/classes'
 import { randomUUID } from 'node:crypto'
 import type { DestinationStream } from 'pino'
 import { Logger, LoggerModule } from 'pino-nestjs'
@@ -26,15 +24,16 @@ import { MailboxVerificationService } from '../../application/mailbox-verificati
 import { VerificationStore } from '../../application/ports/verification-store'
 import { EmailVerification } from '../../domain/email-verification'
 import { SyncEmailVerificationController } from '../../api/http/synchronous-verification/current/sync-email-verification.controller'
-import { OldSyncEmailVerificationController } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.controller'
-import { OldSyncEmailVerificationProfile } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.profile'
 import { AsyncEmailVerificationController } from '../../api/http/asynchronous-verification/async-email-verification.controller'
 import { AsyncEmailVerificationService } from '../../application/delivery/async/async-email-verification.service'
 import { BullAsyncVerificationJobs } from '../queues/async-verification/bull-async-verification-jobs'
 import { AsyncEmailVerificationProcessor } from '../queues/async-verification/async-email-verification.processor'
 import { AsyncEmailVerificationJobData } from '../queues/async-verification/async-email-verification-job-data.interface'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../application/delivery/async/async-email-verification.service'
-import { RUN_SYNCHRONOUS_VERIFICATION, RunSynchronousVerification } from '../../application/delivery/synchronous/run-synchronous-verification'
+import {
+    RUN_SYNCHRONOUS_VERIFICATION,
+    RunSynchronousVerification,
+} from '../../application/delivery/synchronous/run-synchronous-verification'
 import { LoggingVerificationTraceObserver } from './logging-verification-trace-observer'
 
 const principal: AuthPrincipal = {
@@ -96,7 +95,12 @@ describe('captured verification trace chain', () => {
         const observer = new LoggingVerificationTraceObserver()
         const store: Pick<VerificationStore, 'create'> = {
             create: (organizationId: string, record: unknown): Promise<EmailVerification> => {
-                const saved = { ...(record as object), organizationId, id: randomUUID(), createdAt: new Date() } as EmailVerification
+                const saved = {
+                    ...(record as object),
+                    organizationId,
+                    id: randomUUID(),
+                    createdAt: new Date(),
+                } as EmailVerification
                 persisted.push(saved)
                 return Promise.resolve(saved)
             },
@@ -122,18 +126,12 @@ describe('captured verification trace chain', () => {
         const moduleRef = await Test.createTestingModule({
             imports: [
                 LoggerModule.forRoot({ useExisting: true, pinoHttp: [createPiiSafePinoHttpOptions(), destination] }),
-                AutomapperModule.forRoot({ strategyInitializer: classes() }),
             ],
-            controllers: [
-                SyncEmailVerificationController,
-                OldSyncEmailVerificationController,
-                AsyncEmailVerificationController,
-            ],
+            controllers: [SyncEmailVerificationController, AsyncEmailVerificationController],
             providers: [
                 RolePermissionPolicy,
                 PermissionsGuard,
                 CreditGuard,
-                OldSyncEmailVerificationProfile,
                 { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: new RunSynchronousVerification(service) },
                 { provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN, useValue: asyncService },
                 { provide: CreditsService, useValue: { debit } },
@@ -183,47 +181,37 @@ describe('captured verification trace chain', () => {
             expect(output).not.toContain(secret)
     }
 
-    it.each(['sync', 'deprecated_sync'])(
-        'links the %s response header to its saved result without logging input',
-        async mode => {
-            const pending =
-                mode === 'sync'
-                    ? request(app.getHttpServer()).post('/verify').send({ email, ignoredSecret: remoteText })
-                    : request(app.getHttpServer()).get('/verify').query({ email })
-            const response = await pending
-                .set('X-Request-ID', attackerId)
-                .set('Authorization', 'Bearer credential-secret')
-                .set('Cookie', 'cookie-secret')
-                .set('X-Forwarded-For', '198.51.100.55')
-                .expect(mode === 'sync' ? 201 : 200)
-            const body = response.body as Record<string, unknown>
-            const id = response.headers['x-request-id']
-            expect(captured).toContainEqual(
-                expect.objectContaining({
-                    event: 'verification_completed',
-                    operationId: id,
-                    mode,
-                    verificationId: persisted[0].id,
-                    reason: 'accepted_email',
-                }),
-            )
-            expect(captured).toContainEqual(
-                expect.objectContaining({
-                    req: { id, method: mode === 'sync' ? 'POST' : 'GET', path: '/verify' },
-                    responseTime: expect.any(Number),
-                }),
-            )
-            if (mode === 'sync') expect(body.id).toBe(persisted[0].id)
-            else {
-                expect(response.body).not.toHaveProperty('id')
-                expect(body.email).toBe(email)
-                expect(body.verifiedAt).toBe(persisted[0].createdAt.toISOString())
-            }
-            expect(persisted[0]).not.toHaveProperty('trace')
-            expect(debit).toHaveBeenCalledTimes(1)
-            assertPrivate()
-        },
-    )
+    it('links the sync response header to its saved result without logging input', async () => {
+        const response = await request(app.getHttpServer())
+            .post('/verify')
+            .send({ email, ignoredSecret: remoteText })
+            .set('X-Request-ID', attackerId)
+            .set('Authorization', 'Bearer credential-secret')
+            .set('Cookie', 'cookie-secret')
+            .set('X-Forwarded-For', '198.51.100.55')
+            .expect(201)
+        const body = response.body as Record<string, unknown>
+        const id = response.headers['x-request-id']
+        expect(captured).toContainEqual(
+            expect.objectContaining({
+                event: 'verification_completed',
+                operationId: id,
+                mode: 'sync',
+                verificationId: persisted[0].id,
+                reason: 'accepted_email',
+            }),
+        )
+        expect(captured).toContainEqual(
+            expect.objectContaining({
+                req: { id, method: 'POST', path: '/verify' },
+                responseTime: expect.any(Number),
+            }),
+        )
+        expect(body.id).toBe(persisted[0].id)
+        expect(persisted[0]).not.toHaveProperty('trace')
+        expect(debit).toHaveBeenCalledTimes(1)
+        assertPrivate()
+    })
 
     it('keeps expected rejection separate from unexpected provider failure without copying diagnostics', async () => {
         verifier.verify.mockResolvedValueOnce({

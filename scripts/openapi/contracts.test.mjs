@@ -153,6 +153,33 @@ test('billing exposes exactly the consumed methods and safe customer fields thro
     }
 })
 
+test('runtime verification docs retain the current POST contract and omit the retired GET contract', () => {
+    const verification = runtime.paths['/verify']
+    assert.ok(verification.post)
+    assert.equal(Object.hasOwn(verification, 'get'), false)
+    assert.notEqual(verification.post.deprecated, true)
+    assert.deepEqual(verification.post.requestBody.content['application/json'].schema, {
+        $ref: '#/components/schemas/EmailVerificationRequestDto',
+    })
+    assert.deepEqual(verification.post.responses['201'].content['application/json'].schema, {
+        $ref: '#/components/schemas/EmailVerificationResponseDto',
+    })
+    assert.equal(Object.hasOwn(verification.post.responses, '200'), false)
+
+    const schemas = runtime.components.schemas
+    assert.equal(Object.hasOwn(schemas, 'OldSyncEmailVerificationRequestQueryDto'), false)
+    assert.equal(Object.hasOwn(schemas, 'OldSyncEmailVerificationResponseDto'), false)
+    assert.equal(schemas.EmailVerificationRequestDto.properties.email.type, 'string')
+    const response = schemas.EmailVerificationResponseDto
+    assert.deepEqual(Object.keys(response.properties).sort(), [
+        'catchAll', 'createdAt', 'domain', 'email', 'exists', 'format', 'id', 'localPart', 'mxDomain',
+        'reason', 'sources', 'targetExchange',
+    ])
+    assert.equal(response.properties.id.type, 'string')
+    assert.equal(response.properties.email.type, 'string')
+    assert.equal(response.properties.sources.type, 'array')
+})
+
 test('ambient configuration and secret-file settings cannot change the export', async () => {
     const second = await mkdtemp(resolve(tmpdir(), 'lef-contract-ambient-'))
     try {

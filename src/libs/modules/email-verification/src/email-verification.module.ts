@@ -8,8 +8,6 @@ import { AsyncEmailVerificationModule } from './infrastructure/queues/async-veri
 import { AsyncEmailVerificationController } from './api/http/asynchronous-verification/async-email-verification.controller'
 import { BatchEmailVerificationModule } from './batch-email-verification'
 import { SyncEmailVerificationController } from './api/http/synchronous-verification/current/sync-email-verification.controller'
-import { OldSyncEmailVerificationController } from './api/http/synchronous-verification/deprecated/old-sync-email-verification.controller'
-import { OldSyncEmailVerificationProfile } from './api/http/synchronous-verification/deprecated/old-sync-email-verification.profile'
 import { EmailAdministrationController } from './api/http/email-administration/email-administration.controller'
 import { EmailVerificationOrchestrator } from './application/email-verification.service'
 import {
@@ -27,14 +25,12 @@ import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/em
     controllers: [
         AsyncEmailVerificationController,
         SyncEmailVerificationController,
-        OldSyncEmailVerificationController,
         EmailAdministrationController,
         VerificationResultsController,
     ],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,
-        OldSyncEmailVerificationProfile,
         {
             provide: RUN_SYNCHRONOUS_VERIFICATION,
             inject: [EmailVerificationOrchestrator],

@@ -2,13 +2,12 @@
 
 Verifies whether an email address can plausibly receive mail — synchronously, asynchronously as a background
 job, or in CSV batches — by resolving its domain's MX records and, where safe, connecting to them over SMTP
-through a leased proxy. It also owns the email/domain persistence those checks cache, and a deprecated
-compatibility route kept billing- and permission-equivalent to its replacement.
+through a leased proxy. It also owns the email/domain persistence those checks cache.
+Synchronous verification uses `POST /verify`; the retired `GET /verify` returns `404` without verification or credit debit.
 
 ## Responsibility
 
-- Current synchronous verification (`POST /verify`) and its deprecated predecessor (`GET /verify`), billed and
-  authorized identically.
+- Synchronous verification (`POST /verify`), with permission checks and a one-credit debit.
 - Asynchronous, job-based verification (`POST /verifyAsync` / `GET /verifyAsync/:id`).
 - CSV batch verification (`POST /verifyBatch/csv`, status polling, and durable result download), including a
   BullMQ parent/child job fan-out per row and an S3-backed result file.
@@ -67,8 +66,8 @@ commands and replies, provider payloads and remote error messages, and exception
 input. Error records use a stable operation code and validated error class; they omit message text and stacks.
 
 Request IDs identify HTTP exchanges. Job and batch IDs identify queued work, and verification IDs identify persisted
-results. Current synchronous and completed async responses expose the verification `id`; the deprecated response body
-is unchanged. Batch CSV files retain their existing verification `id` column.
+results. Synchronous and completed async responses expose the verification `id`.
+Batch CSV files retain their existing verification `id` column.
 
 A narrow `VerificationTraceObserver` application port receives lifecycle events. Its logging adapter emits
 `verification_enqueued`, `verification_completed`, `verification_failed`, and `verification_batch_completed`.
@@ -86,8 +85,8 @@ return the same `404`; the endpoint accepts no organization override and provide
 ## Public API
 
 [`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes `EmailVerificationCoreModule`,
-`AsyncEmailVerificationModule`, and `BatchEmailVerificationModule`. The root registers the async controller, both synchronous controllers,
-their shared application command, the email-administration controller, and the internal result reader and its controller.
+`AsyncEmailVerificationModule`, and `BatchEmailVerificationModule`. The root registers the async controller, the synchronous controller,
+its application command, the email-administration controller, and the internal result reader and its controller.
 Internal modules and contracts are not exported again by `src/index.ts`: the only public surface is
 `EmailVerificationModule` itself and the HTTP/queue behavior below. The shared result DTO lives in `src/api/`; the trace port
 lives in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
@@ -146,12 +145,11 @@ persistence entities with TypeORM, builds every application service and port thr
 The async module retains its `EmailVerificationServiceToken` binding to that orchestrator; the batch module
 continues to consume the same core composition.
 
-Both synchronous controllers live under `api/http/synchronous-verification/`, with `current/` body DTOs and
-`deprecated/` query DTOs, legacy response types, and the Automapper profile. They invoke the same
-`RUN_SYNCHRONOUS_VERIFICATION` token. Its framework-free `RunSynchronousVerification` implementation under
+The synchronous controller and body DTO live under `api/http/synchronous-verification/current/`.
+The controller invokes the private `RUN_SYNCHRONOUS_VERIFICATION` token. Its framework-free `RunSynchronousVerification` implementation under
 `application/delivery/synchronous/` normalizes the address and passes the organization and optional trace to a
 narrow verification port. The root binds that port to the existing orchestrator. HTTP permission and credit guards
-remain on both routes; the command performs no credit operations. Validation still follows the credit guard, so an
+remain on POST; the command performs no credit operations. Validation still follows the credit guard, so an
 authorized invalid request consumes one credit. Domain-policy rejection and unexpected adapter failures retain
 their generic `500` response. The `/emails` administration API remains at `api/http/email-administration/`, wired
 by the root to `EmailAdministrationService`.
@@ -186,7 +184,6 @@ module retains its independent producer registration and its existing child-job 
 | Method                     | Path                        | Access                          | Notes                                                                          |
 | -------------------------- | --------------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
 | `POST`                     | `/verify`                   | `verification:run` + one credit | Current synchronous verification                                               |
-| `GET`                      | `/verify`                   | `verification:run` + one credit | **Deprecated** — same authorization and billing as `POST /verify`              |
 | `GET`                      | `/verifications/:id`       | `verification:read`             | Owned persisted result; `404` for missing or foreign IDs, `400` for invalid UUIDs |
 | `POST`                     | `/verifyAsync`              | `verification:run` + one credit | `202 Accepted`; enqueues an async job                                          |
 | `GET`                      | `/verifyAsync/:id`          | `verification:read`             | `404` if the job doesn't exist or isn't owned by the caller                    |
@@ -248,11 +245,8 @@ Focused tests are grouped by behavior:
   `infrastructure/typeorm-verification-result-reader.spec.ts`, and the PostgreSQL ownership integration test
 
 - **Synchronous application command**: `application/delivery/synchronous/run-synchronous-verification.spec.ts`
-- **Both synchronous HTTP routes**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
+- **Synchronous POST behavior and retired GET rejection**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
 - **Current synchronous controller**: `api/http/synchronous-verification/current/sync-email-verification.controller.spec.ts`
-- **Deprecated synchronous controller and HTTP compatibility**:
-  `api/http/synchronous-verification/deprecated/old-sync-email-verification.controller.spec.ts`,
-  `api/http/synchronous-verification/deprecated/old-sync-email-verification-http.integration.spec.ts`
 - **Async application and HTTP**: `application/delivery/async/async-email-verification.service.spec.ts`,
   `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`, and
   `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`
@@ -300,8 +294,10 @@ Focused tests are grouped by behavior:
   `verification-organization-ownership.integration.spec.ts`
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
-drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves the deprecated
-`GET /verify` route costs the same one credit as `POST /verify`, including the `402` rejection at zero balance.
+drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that
+`POST /verify` consumes one credit and rejects a zero balance with `402`. The retired `GET /verify` returns `404`
+while one credit is available, leaves that balance unchanged, and returns a server request UUID. The collection
+retains the asynchronous checks and requires all 30 requests to execute.
 Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the
 authenticated organization's cache.
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) uploads a fixture CSV, polls to

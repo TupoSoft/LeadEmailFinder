@@ -18,6 +18,7 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 - [x] (2026-09-07) Render authoritative return, history, balance, and recovery states for every purchase status.
 - [x] (2026-09-07) Extend focused API, Bruno, component, accessibility, and stub-runtime browser coverage.
 - [x] (2026-09-07) Run repository, design-contract, generated-client, and premium UX validation and record results.
+- [x] (2026-09-07) Merge master at `1c7fcf1`, preserve both shared validation contracts, and pass focused checks.
 
 ## Plan dependencies
 
@@ -31,6 +32,10 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 
 ## Surprises & Discoveries
 
+- Merging master conflicted in the Bruno registry and OpenAPI tests. The resolution preserves the 30-request
+  SMTP workflow and its sequence assertion alongside the 33-request billing workflow and both API contract tests.
+  The isolated API watcher initially restored stale generated metadata for deleted verification files. Stopping
+  that container and regenerating the ignored metadata cleared the check failures; the container was then restarted.
 - The checkout starts from the completed layered payments module and MFA-aware browser fixtures. The generated
   browser contract previously contained only authentication and health routes. Adding GET and POST on the same
   purchase path also required merging methods in the synthetic OpenAPI test fixture.
@@ -140,6 +145,12 @@ commands, while mocked billing browser cases and the pinned launcher tests run i
 The complete history endpoint retains its existing response contract and the UI displays ten rows per page.
 The narrow redirect-policy port and pure shared parser preserve module responsibilities; there are no material
 SOLID trade-offs. The implementation belongs to one pull request closing issue #505.
+
+After merging master at `1c7fcf1`, focused validation passed again: 4 API suites with 75 tests, 12 Bruno launcher
+tests, and 8 OpenAPI contract tests. Type checking, generated-client freshness, focused lint, and the module
+architecture gate passed. The conflict resolution changes no business responsibility or adapter boundary.
+The live Bruno and browser scenarios above were not repeated for this merge; the launcher tests executed all
+33 billing requests and assertions against a synthetic server.
 
 ## Context and Orientation
 
@@ -329,6 +340,16 @@ module that owns that business rule. Runtime acceptance uses `PAYMENTS_PROVIDER=
   provider-event correlation, or unrelated repository behavior beyond the explicit checkout URL boundary.
 
 ## Validation
+
+Focused merge validation on 2026-09-07 used these commands:
+
+    corepack pnpm exec jest --runInBand billing-http.integration.spec.ts billing-summary-http.integration.spec.ts synchronous-verification-http.integration.spec.ts pii-safe-request-logging.integration.spec.ts
+    node --test scripts/bruno/run-collection.test.mjs scripts/openapi/contracts.test.mjs
+    corepack pnpm openapi:check
+    corepack pnpm typecheck
+    corepack pnpm architecture:check
+    corepack pnpm exec eslint scripts/bruno/run-collection.mjs scripts/bruno/run-collection.test.mjs scripts/openapi/contracts.test.mjs
+    corepack pnpm docs:lint -- .agents/plans/frontend/10-purchase-and-monitor-credits.md
 
 Run focused payments/credits query service, controller, DTO serialization, permission, and Swagger tests. Run web
 billing queries, currency formatting, pack selection, return-state, history, capability, error, and accessibility
