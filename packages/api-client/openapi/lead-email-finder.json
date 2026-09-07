@@ -15,6 +15,141 @@
         ],
         "type": "object"
       },
+      "BillingCreditPackResponseDto": {
+        "properties": {
+          "amountMinor": {
+            "description": "Price in the currency minor unit",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "credits": {
+            "description": "Credits granted after confirmed payment",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "currency": {
+            "description": "ISO 4217 currency code",
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Server-defined credit pack identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "credits",
+          "amountMinor",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "CreateCreditPurchaseDto": {
+        "properties": {
+          "packId": {
+            "description": "Identifier from the current credit pack catalog",
+            "type": "string"
+          }
+        },
+        "required": [
+          "packId"
+        ],
+        "type": "object"
+      },
+      "CreateCreditPurchaseResponseDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "redirectUrl": {
+            "description": "Validated hosted checkout URL",
+            "format": "uri",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "paid",
+              "failed",
+              "expired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "redirectUrl"
+        ],
+        "type": "object"
+      },
+      "CreditPurchaseResponseDto": {
+        "properties": {
+          "amountMinor": {
+            "description": "Price in the currency minor unit",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credits": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "packId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "paid",
+              "failed",
+              "expired"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "packId",
+          "credits",
+          "amountMinor",
+          "currency",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "CreditResponseDto": {
+        "properties": {
+          "balance": {
+            "description": "Current authoritative organization credit balance",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "balance"
+        ],
+        "type": "object"
+      },
       "CurrentAccountContextDto": {
         "properties": {
           "capabilities": {
@@ -135,6 +270,11 @@
         "in": "cookie",
         "name": "lef_session",
         "type": "apiKey"
+      },
+      "oidc": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
       },
       "x-csrf-token": {
         "description": "The decoded lef_csrf_token cookie value, supplied by the browser transport on unsafe methods.",
@@ -665,6 +805,193 @@
         "summary": "Read the current browser account",
         "tags": [
           "BffSession"
+        ]
+      }
+    },
+    "/v1/billing/credit-packs": {
+      "get": {
+        "operationId": "BillingCreditPacksController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillingCreditPackResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Authentication is required"
+          },
+          "403": {
+            "description": "Billing read permission is required"
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/billing/summary": {
+      "get": {
+        "operationId": "BillingSummaryController_getSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Authentication is required"
+          },
+          "403": {
+            "description": "Billing read permission is required"
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/credit-purchases": {
+      "get": {
+        "operationId": "CreditPurchaseController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CreditPurchaseResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Authentication is required"
+          },
+          "403": {
+            "description": "The required billing permission is missing"
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Billing"
+        ]
+      },
+      "post": {
+        "description": "Starts a purchase for the authenticated organization. Browser sessions require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie in x-csrf-token. OIDC bearer credentials are also supported.",
+        "operationId": "CreditPurchaseController_create",
+        "parameters": [
+          {
+            "description": "Fallback URL for checking the application origin on cookie-authenticated requests.",
+            "in": "header",
+            "name": "Referer",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cookie-authenticated requests must match the application origin. A same-origin Referer is accepted when Origin is absent.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCreditPurchaseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCreditPurchaseResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "The selected credit pack is unavailable or the request is invalid"
+          },
+          "401": {
+            "description": "Authentication is required"
+          },
+          "403": {
+            "description": "The required billing permission is missing"
+          },
+          "502": {
+            "description": "Checkout could not be created safely"
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Billing"
         ]
       }
     }

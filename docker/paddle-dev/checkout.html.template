@@ -53,6 +53,7 @@
                             displayMode: 'overlay',
                             theme: 'light',
                             locale: 'en',
+                            successUrl: '${PADDLE_CHECKOUT_SUCCESS_URL}',
                         },
                     },
                 })

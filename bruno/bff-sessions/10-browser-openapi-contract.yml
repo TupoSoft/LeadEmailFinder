@@ -15,8 +15,12 @@ runtime:
           expect(res.status).to.equal(200);
           expect(res.headers['content-type']).to.include('application/json');
           expect(Object.keys(res.body.paths).sort()).to.deep.equal([
-            '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session'
+            '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
+            '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases'
           ]);
+          expect(Object.keys(res.body.paths['/v1/credit-purchases']).sort()).to.deep.equal(['get', 'post']);
+          expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);
+          expect(Object.keys(res.body.paths['/v1/billing/credit-packs'])).to.deep.equal(['get']);
           var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
             return parameter.name === 'destination';
           });

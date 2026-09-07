@@ -98,6 +98,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/credit-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["BillingCreditPacksController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["BillingSummaryController_getSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/credit-purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CreditPurchaseController_list"];
+        put?: never;
+        /** @description Starts a purchase for the authenticated organization. Browser sessions require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie in x-csrf-token. OIDC bearer credentials are also supported. */
+        post: operations["CreditPurchaseController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -105,6 +154,50 @@ export interface components {
         AuthenticationRequiredResponseDto: {
             /** @enum {string} */
             code: "authentication_required";
+        };
+        BillingCreditPackResponseDto: {
+            /** @description Price in the currency minor unit */
+            amountMinor: number;
+            /** @description Credits granted after confirmed payment */
+            credits: number;
+            /** @description ISO 4217 currency code */
+            currency: string;
+            /** @description Server-defined credit pack identifier */
+            id: string;
+        };
+        CreateCreditPurchaseDto: {
+            /** @description Identifier from the current credit pack catalog */
+            packId: string;
+        };
+        CreateCreditPurchaseResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uri
+             * @description Validated hosted checkout URL
+             */
+            redirectUrl: string;
+            /** @enum {string} */
+            status: "pending" | "paid" | "failed" | "expired";
+        };
+        CreditPurchaseResponseDto: {
+            /** @description Price in the currency minor unit */
+            amountMinor: number;
+            /** Format: date-time */
+            createdAt: string;
+            credits: number;
+            currency: string;
+            /** Format: uuid */
+            id: string;
+            packId: string;
+            /** @enum {string} */
+            status: "pending" | "paid" | "failed" | "expired";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreditResponseDto: {
+            /** @description Current authoritative organization credit balance */
+            balance: number;
         };
         CurrentAccountContextDto: {
             /** @description Presentation-only browser capabilities. */
@@ -404,6 +497,161 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HumanSessionRequiredResponseDto"];
                 };
+            };
+        };
+    };
+    BillingCreditPacksController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCreditPackResponseDto"][];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Billing read permission is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    BillingSummaryController_getSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditResponseDto"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Billing read permission is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CreditPurchaseController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPurchaseResponseDto"][];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The required billing permission is missing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CreditPurchaseController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Fallback URL for checking the application origin on cookie-authenticated requests. */
+                Referer?: string;
+                /** @description Cookie-authenticated requests must match the application origin. A same-origin Referer is accepted when Origin is absent. */
+                Origin?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCreditPurchaseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCreditPurchaseResponseDto"];
+                };
+            };
+            /** @description The selected credit pack is unavailable or the request is invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The required billing permission is missing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Checkout could not be created safely */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

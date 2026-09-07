@@ -281,6 +281,14 @@ canvas text, the control radius, and a 2.75rem minimum height; secondary actions
 Hover and active states use ink or sage. Disabled actions retain their dimensions and use sage with ink text.
 Pending state is expressed through readable status text and busy semantics, without continuous decorative motion.
 
+### Product Data Panels and Billing
+
+`ProductPanel` extends the shell's flat composition with fine rules, existing content spacing, and a reserved
+feedback region. Billing places balance, credit packs, and purchase history in document order. Pack actions reuse
+the shared primary and secondary treatments. The return notice uses sage with an evergreen rule; its text states
+the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
+changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
+
 ### Signal Path
 
 The signal path is explanatory content, not a progress control. Its four nodes use ink and evergreen circles on the

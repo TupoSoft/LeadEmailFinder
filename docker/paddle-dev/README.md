@@ -95,6 +95,7 @@ Start the tunnel and its checkout dependency before the rest of the stack:
 
 ```shell
 export LEF_PADDLE_COMPOSE_PROJECT="lef-paddle-dev-$(printf '%s' "$PWD" | sha256sum | cut -c1-8)"
+export PAYMENTS_CHECKOUT_ALLOWED_ORIGINS=http://localhost:57000
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
   up -d paddle-webhook-tunnel
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
@@ -110,6 +111,7 @@ Keep it in the same shell that will start the full overlay:
 ```shell
 export PADDLE_PUBLIC_URL=https://replace-with-the-quick-tunnel.trycloudflare.com
 export PADDLE_CHECKOUT_URL="$PADDLE_PUBLIC_URL/checkout.html"
+export PAYMENTS_CHECKOUT_ALLOWED_ORIGINS="$PADDLE_PUBLIC_URL"
 ```
 
 In the Paddle sandbox dashboard, add the tunnel's fully qualified domain under **Checkout > Website approval**.
@@ -149,14 +151,14 @@ chmod 600 .dev/paddle/notification-setting-id.txt .dev/paddle/webhook-secret.txt
 ```
 
 If the tunnel restarts, update the approved website, default payment link, notification destination URL, and
-both shell variables before testing again. Update only the destination whose ID is recorded locally. A destination
+the three URL and origin variables before testing again. Update only the destination whose ID is recorded locally. A destination
 secret belongs to that destination and must not be replaced with an API key or a secret from another environment.
 
 ## 4. Start and Inspect the Fixture
 
 Start the full overlay after the three runtime secret files (`api-key.txt`, `client-token.txt`, and
 `webhook-secret.txt`) and two resource-ID files (`client-token-id.txt` and `notification-setting-id.txt`) exist, and
-after both `PADDLE_STARTER_PRICE_ID` and `PADDLE_CHECKOUT_URL` are exported:
+after `PADDLE_STARTER_PRICE_ID`, `PADDLE_CHECKOUT_URL`, and `PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` are exported:
 
 ```shell
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet
@@ -165,6 +167,12 @@ curl --fail --silent --show-error http://localhost:57000/health
 curl --fail --silent --show-error "$PADDLE_PUBLIC_URL/health"
 curl --fail --silent --show-error http://localhost:53000/health | jq -e '.status == "ok"'
 ```
+
+`PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` is a comma-separated list of exact HTTP(S) origins. Both the API and web build
+normalize this same input. HTTP is accepted only for explicit loopback development. Do not use paths, credentials,
+fragments, wildcard hosts, or a provider-wide domain suffix. A changed tunnel origin requires rebuilding the web
+image and restarting the API. Only the normalized origin list enters the browser bundle; payment secrets stay on
+the server. The stub provider derives its sole allowed origin from its loopback return URL.
 
 The checkout container reads its client-side token from `/run/secrets`, renders the page once, and never logs the
 token. Verify the runtime page without printing it:
@@ -219,6 +227,12 @@ export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/keycloak/service-crede
 ```
 
 ## 6. Complete One Purchase
+
+For a browser purchase, sign in as the customer owner and open `/app/billing` on the local web origin. After a
+successful payment, the checkout fixture returns to `http://localhost:53000/billing/complete` in the same tab.
+The return port follows `WEB_PORT` when it is set. The return page reads purchase status and balance from the API;
+only the signed webhook can confirm payment and grant credits. A checkout page opened before this configuration
+was applied needs a manual return to `/billing/complete`; do not create another purchase just to return to the app.
 
 Capture the balance and create a purchase. These commands keep the response in shell variables and assert that
 the server, not the request, selected the 100-credit pack:
@@ -423,7 +437,7 @@ unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
 unset LEF_PURCHASE_ID LEF_CHECKOUT_URL LEF_PURCHASE_RESPONSE LEF_PAID_PURCHASE LEF_REPLAYED_PURCHASE
 unset LEF_TRANSACTION_ID LEF_REFUND_RESPONSE LEF_REFUND_ADJUSTMENT_ID LEF_REFUNDED_BALANCE
 unset LEF_REFUND_REPLAY_BALANCE
-unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL
+unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL PAYMENTS_CHECKOUT_ALLOWED_ORIGINS
 rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt \
   .dev/paddle/client-token-id.txt .dev/paddle/notification-setting-id.txt
 if test -f .dev/keycloak/.paddle-fixture-owned; then

@@ -308,6 +308,10 @@ export class EnvironmentVariablesDto {
     @IsUrl({ require_protocol: true, require_tld: false })
     PAYMENTS_CHECKOUT_RETURN_URL?: string
 
+    @IsOptional()
+    @IsString()
+    PAYMENTS_CHECKOUT_ALLOWED_ORIGINS?: string
+
     @IsFileVar(environment => environment['PAYMENTS_PROVIDER'] === PaymentsProviderName.STUB)
     @IsString()
     PAYMENTS_STUB_WEBHOOK_SECRET?: string

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -14,11 +14,12 @@ export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
+    'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
 })
 
 export function registeredCollection(name) {
     if (!Object.hasOwn(registry, name)) {
-        throw new Error('Choose one registered Bruno collection: bff-sessions or smtp-dev')
+        throw new Error('Choose one registered Bruno collection: bff-sessions, smtp-dev, or credit-purchases')
     }
     return registry[name]
 }
@@ -102,6 +103,7 @@ export function collectionEnvironment(name, metadata, serviceClient, serviceCred
             OIDC_ISSUER_URL: publicIssuer,
             KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
             KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
+            ...(name === 'credit-purchases' ? { PLATFORM_ORGANIZATION_ID: credential.data.organizationId } : {}),
         }
     }
     return {
@@ -121,6 +123,8 @@ export function cliArguments(name, environment, reportFile) {
         !environment.OIDC_ISSUER_URL ||
         !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
         !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
+        (name === 'credit-purchases' &&
+            (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
         (collection.network === 'compose' &&
             (!environment.OIDC_BACKCHANNEL_URL || !environment.PLATFORM_ORGANIZATION_ID))
     ) {
@@ -193,6 +197,62 @@ try {
 }
 `
 
+// The caller must confirm container ownership before reading its development-only configuration.
+// Never infer the webhook signing key from a browser response or publish it in CLI arguments.
+export async function stubPaymentEnvironment(container, checkoutRoot, apiUrl) {
+    const environment = Object.fromEntries(
+        (container.Config?.Env ?? []).map(value => [
+            value.slice(0, value.indexOf('=')),
+            value.slice(value.indexOf('=') + 1),
+        ]),
+    )
+    if (environment.PAYMENTS_PROVIDER !== 'stub') throw new Error('Credit purchase fixtures require the stub provider')
+    let returnUrl
+    try {
+        returnUrl = new URL(environment.PAYMENTS_CHECKOUT_URL)
+    } catch {
+        throw new Error('Credit purchase fixtures require a same-origin return URL')
+    }
+    if (returnUrl.origin !== new URL(apiUrl).origin || returnUrl.pathname !== '/billing/complete') {
+        throw new Error('Credit purchase fixtures require a same-origin return URL')
+    }
+    let secret = environment.PAYMENTS_STUB_WEBHOOK_SECRET
+    if (environment.PAYMENTS_STUB_WEBHOOK_SECRET_FILE) {
+        const mount = container.Mounts?.find(
+            candidate =>
+                candidate.Type === 'bind' && candidate.Destination === environment.PAYMENTS_STUB_WEBHOOK_SECRET_FILE,
+        )
+        const expected = resolve(checkoutRoot, 'docker/secrets/payments_stub_webhook_secret.txt')
+        if (!mount || (await realpath(mount.Source)) !== expected) {
+            throw new Error('Stub webhook secret must belong to this checkout')
+        }
+        secret = (await readFile(expected, 'utf8')).trim()
+    }
+    if (!secret?.trim()) throw new Error('The configured stub webhook secret is missing')
+    return { PAYMENTS_STUB_WEBHOOK_SECRET: secret }
+}
+
+async function bootstrapCreditPurchaseCredential(checkoutRoot, metadata) {
+    await execFileAsync(
+        process.execPath,
+        [require.resolve('ts-node/dist/bin.js'), 'scripts/keycloak/bootstrap-credential.ts'],
+        {
+            cwd: checkoutRoot,
+            env: {
+                ...process.env,
+                KEYCLOAK_URL: metadata.keycloakUrl,
+                KEYCLOAK_ADMIN_USERNAME: metadata.keycloakAdminUsername,
+                KEYCLOAK_ADMIN_PASSWORD: metadata.keycloakAdminPassword,
+                POSTGRES_URL: metadata.postgresUrl,
+                KEYCLOAK_DEV_SECRETS_FILE: resolve(checkoutRoot, '.dev/keycloak/service-client.json'),
+                KEYCLOAK_DEV_BOOTSTRAP_FILE: resolve(checkoutRoot, '.dev/keycloak/service-credential.json'),
+            },
+            timeout: 120_000,
+            maxBuffer: 1024 * 1024,
+        },
+    )
+}
+
 export async function runCollection(args, checkoutRoot) {
     if (args.length !== 1) {
         throw new Error('Provide exactly one registered Bruno collection name')
@@ -203,6 +263,9 @@ export async function runCollection(args, checkoutRoot) {
     const api = await inspectDevelopmentService(checkoutRoot, metadata, 'api')
     await inspectDevelopmentService(checkoutRoot, metadata, 'web', '8080/tcp', metadata.apiUrl)
     await inspectDevelopmentService(checkoutRoot, metadata, 'keycloak', '8080/tcp', metadata.keycloakUrl)
+    const paymentEnvironment =
+        name === 'credit-purchases' ? await stubPaymentEnvironment(api.container, checkoutRoot, metadata.apiUrl) : {}
+    if (name === 'credit-purchases') await bootstrapCreditPurchaseCredential(checkoutRoot, metadata)
     const readMetadata = async metadataFile =>
         JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', metadataFile), 'utf8'))
     const environment = collectionEnvironment(
@@ -211,6 +274,7 @@ export async function runCollection(args, checkoutRoot) {
         await readMetadata('service-client.json'),
         await readMetadata('service-credential.json'),
     )
+    Object.assign(environment, paymentEnvironment)
     if (collection.network === 'compose') {
         for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
             await inspectDevelopmentService(checkoutRoot, metadata, service)

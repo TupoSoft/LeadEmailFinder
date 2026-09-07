@@ -2,6 +2,7 @@ import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { isApiRequest, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
+import { resolveCheckoutAllowedOrigins } from '../../src/libs/common/src/checkout-redirect.ts'
 
 // Vite's style injection and React refresh need a nonce; this fixed value is for
 // local development only and is never included in the built Nginx document.
@@ -34,6 +35,11 @@ export default defineConfig(({ command, isPreview, mode }) => {
     const development = command === 'serve' && !isPreview
     const environment = loadEnv(mode, process.cwd(), '')
     const target = environment.WEB_API_PROXY_TARGET || 'http://localhost:53000'
+    const checkoutOrigins = resolveCheckoutAllowedOrigins({
+        provider: environment.PAYMENTS_PROVIDER || 'stub',
+        checkoutUrl: environment.PAYMENTS_CHECKOUT_URL || 'http://localhost:53000/billing/complete',
+        allowedOrigins: environment.PAYMENTS_CHECKOUT_ALLOWED_ORIGINS,
+    })
     const logger = createLogger()
     const originalError = logger.error.bind(logger)
     logger.error = (message, options) => {
@@ -48,12 +54,13 @@ export default defineConfig(({ command, isPreview, mode }) => {
             changeOrigin: false,
             xfwd: true,
             bypass(request) {
-                return isApiRequest(request.url ?? '/') ? undefined : request.url ?? '/'
+                return isApiRequest(request.url ?? '/') ? undefined : (request.url ?? '/')
             },
         },
     } satisfies Record<string, ProxyOptions>
     return {
         plugins: [react(), staticHeaders(development)],
+        define: { __PAYMENTS_CHECKOUT_ALLOWED_ORIGINS__: JSON.stringify(checkoutOrigins) },
         customLogger: logger,
         html: development ? { cspNonce: DEVELOPMENT_NONCE } : undefined,
         server: { proxy },

@@ -20,7 +20,9 @@
         "notFound": "apps/web/tests/e2e/not-found.spec.ts",
         "accessibility": "apps/web/tests/e2e/accessibility.spec.ts",
         "visualRegression": "apps/web/tests/e2e/visual.spec.ts",
-        "authentication": "apps/web/tests/e2e/auth-shell.spec.ts"
+        "authentication": "apps/web/tests/e2e/auth-shell.spec.ts",
+        "billing": "apps/web/tests/e2e/billing-ui.spec.ts",
+        "billingRuntime": "apps/web/tests/e2e/billing.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",

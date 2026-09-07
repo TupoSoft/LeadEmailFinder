@@ -1,5 +1,6 @@
 import type { CurrentAccount } from '../api/current-account'
 import { authCopy } from '../content/auth-shell'
+import { billingCopy } from '../content/billing'
 
 export interface ApplicationDestination {
     path: string
@@ -9,7 +10,10 @@ export interface ApplicationDestination {
 
 // Register a destination when its working route ships. Visibility is advisory;
 // feature routes still call their API and handle its authoritative response.
-export const applicationDestinations: readonly ApplicationDestination[] = [{ path: '/app', label: authCopy.home }]
+export const applicationDestinations: readonly ApplicationDestination[] = [
+    { path: '/app', label: authCopy.home },
+    { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
+]
 
 export function visibleDestinations(
     capabilities: CurrentAccount['capabilities'],

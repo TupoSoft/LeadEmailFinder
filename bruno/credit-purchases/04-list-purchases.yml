@@ -27,4 +27,7 @@ runtime:
                 expect(purchase.currency).to.equal(bru.getEnvVar('expectedCurrency'));
                 expect(purchase.status).to.equal('pending');
                 expect(purchase).not.to.have.property('organizationId');
+                for (const field of ['provider', 'providerReference', 'providerPriceId', 'providerEventId', 'rawPayload']) {
+                  expect(purchase).not.to.have.property(field);
+                }
               });

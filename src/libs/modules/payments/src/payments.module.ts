@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
+import { resolveCheckoutAllowedOrigins } from '@tuposoft/lead-email-finder/common/checkout-redirect'
 import { CreditsModule, CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { CHECKOUT_REDIRECT_POLICY, CheckoutRedirectPolicy } from './application/ports/checkout-redirect-policy'
+import { BillingCreditPacksController } from './api/http/billing-credit-packs.controller'
+import { ConfiguredCheckoutRedirectPolicy } from './infrastructure/configured-checkout-redirect-policy'
 import { CreditPackCatalog } from './application/credit-pack-catalog'
 import { CreditPurchaseService } from './application/credit-purchase.service'
 import { PaymentAdjustmentHandler } from './application/payment-adjustment.handler'
@@ -25,7 +29,7 @@ import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([CreditPurchase, CreditPurchaseAdjustment]), CreditsModule],
-    controllers: [CreditPurchaseController, PaymentWebhookController],
+    controllers: [CreditPurchaseController, PaymentWebhookController, BillingCreditPacksController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,
@@ -42,13 +46,32 @@ import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
                 new CreditPackCatalog(configService.getOrThrow('PAYMENTS_CREDIT_PACKS')),
         },
         {
+            provide: CHECKOUT_REDIRECT_POLICY,
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService<PaymentConfiguration, true>) =>
+                new ConfiguredCheckoutRedirectPolicy(
+                    resolveCheckoutAllowedOrigins({
+                        provider: configService.getOrThrow('PAYMENTS_PROVIDER'),
+                        checkoutUrl: configService.getOrThrow('PAYMENTS_CHECKOUT_URL'),
+                        allowedOrigins: configService.get('PAYMENTS_CHECKOUT_ALLOWED_ORIGINS'),
+                    }),
+                ),
+        },
+        {
             provide: CreditPurchaseService,
-            inject: [PAYMENT_PURCHASE_STORE, CreditPackCatalog, PAYMENT_PROVIDER, ConfigService],
+            inject: [
+                PAYMENT_PURCHASE_STORE,
+                CreditPackCatalog,
+                PAYMENT_PROVIDER,
+                ConfigService,
+                CHECKOUT_REDIRECT_POLICY,
+            ],
             useFactory: (
                 store: PaymentPurchaseStore,
                 catalog: CreditPackCatalog,
                 provider: PaymentProvider,
                 configService: ConfigService<PaymentConfiguration, true>,
+                redirectPolicy: CheckoutRedirectPolicy,
             ) =>
                 new CreditPurchaseService(
                     store,
@@ -56,6 +79,7 @@ import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
                     provider,
                     configService.getOrThrow('PAYMENTS_PROVIDER'),
                     configService.getOrThrow('PAYMENTS_CHECKOUT_URL'),
+                    redirectPolicy,
                 ),
         },
         {

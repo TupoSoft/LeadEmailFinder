@@ -1,0 +1,26 @@
+.panel {
+    min-width: 0;
+    padding-block: var(--space-content-gap);
+    border-top: var(--rule-width) solid var(--color-rule);
+}
+.panel h2 {
+    margin: 0;
+    font-size: var(--font-size-body);
+}
+.panel p {
+    max-width: 65ch;
+}
+.feedback {
+    min-height: var(--control-height);
+    padding-block: var(--space-control-gap);
+}
+.feedback p {
+    margin: 0;
+    font-size: var(--font-size-compact);
+}
+.content {
+    min-height: var(--control-height);
+}
+.reserved {
+    min-height: var(--state-min-height);
+}
