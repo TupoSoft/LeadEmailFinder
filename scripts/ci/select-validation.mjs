@@ -23,6 +23,11 @@ function isRepositoryPath(path) {
 }
 
 const webInputs = new Set(['DESIGN.md', 'UX-CONTRACT.md', 'premium-ui.json'])
+// These application policies export the enum values embedded in browser DTO schemas.
+const schemaPolicyInputs = new Set([
+    'src/libs/modules/bff-session/src/application/browser-capability-policy.ts',
+    'src/libs/modules/auth/src/application/service-client-grant-policy.ts',
+])
 const backendPrefixes = ['src/', 'config/', 'deploy/', 'bruno/', '__mocks__/', 'scripts/testing/', 'scripts/bruno/']
 
 function consumersForPath(path) {
@@ -31,11 +36,12 @@ function consumersForPath(path) {
     // Documentation has no runtime consumers, including module README and plan files.
     if (/\.md$/i.test(path) || path === '.harper-dictionary.txt' || path.startsWith('.agents/')) return []
     if (path.startsWith('packages/api-client/') || path.startsWith('scripts/openapi/')) return consumers
-    // HTTP schemas can depend on shared enums, interfaces, module registration, and serialization.
+    // HTTP schemas consume domain models and constants as well as DTO annotations.
     if (path.startsWith('src/lead-email-finder-api/')
         || path.startsWith('src/libs/common/')
-        || (path.startsWith('src/') && (/\/(api|openapi|dto|dtos|enums|interfaces)\//.test(path)
-            || /(?:[.-](?:dto|controller|module|enum|interface|decorator)|\/index)\.[cm]?ts$/.test(path)
+        || schemaPolicyInputs.has(path)
+        || (path.startsWith('src/') && (/\/(api|openapi|domain|dto|dtos|enums|interfaces|types|constants)\//.test(path)
+            || /(?:[.-](?:dto|controller|module|enum|interface|decorator|types?|constants?)|\/index)\.[cm]?ts$/.test(path)
             || /(?:^|\/)(?:main|generate-metadata|configure-api-serialization)\.ts$/.test(path)))) return consumers
     if (backendPrefixes.some(prefix => path.startsWith(prefix))) return ['backend', 'images', 'browser']
     if (path.startsWith('docker/') || path === 'Dockerfile' || path === '.dockerignore') return ['backend', 'images', 'browser']

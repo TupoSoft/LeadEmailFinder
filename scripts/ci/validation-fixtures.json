@@ -240,6 +240,231 @@
     }
   },
   {
+    "name": "proxy-protocol-schema-input",
+    "paths": [
+      "src/libs/modules/proxy/src/domain/proxy-protocol.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "proxy-lifecycle-schema-input",
+    "paths": [
+      "src/libs/modules/proxy/src/domain/proxy-lifecycle.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "identity-role-schema-input",
+    "paths": [
+      "src/libs/modules/identity/src/domain/auth-principal.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "identity-service-credential-schema-input",
+    "paths": [
+      "src/libs/modules/identity/src/domain/service-credential-status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "payment-purchase-status-schema-input",
+    "paths": [
+      "src/libs/modules/payments/src/domain/purchase-status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "email-domain-schema-input",
+    "paths": [
+      "src/libs/modules/email-verification/src/domain/email.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "browser-capability-schema-policy",
+    "paths": [
+      "src/libs/modules/bff-session/src/application/browser-capability-policy.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "service-client-grant-schema-policy",
+    "paths": [
+      "src/libs/modules/auth/src/application/service-client-grant-policy.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "future-domain-schema-input",
+    "paths": [
+      "src/libs/modules/credits/src/domain/balance-kind.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-types-directory",
+    "paths": [
+      "src/libs/schema/src/types/status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constants-directory",
+    "paths": [
+      "src/libs/schema/src/constants/status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-type-suffix",
+    "paths": [
+      "src/libs/schema/src/status.type.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-types-suffix",
+    "paths": [
+      "src/libs/schema/src/status.types.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constant-suffix",
+    "paths": [
+      "src/libs/schema/src/status.constant.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constants-suffix",
+    "paths": [
+      "src/libs/schema/src/status.constants.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
     "name": "generated-client",
     "paths": [
       "packages/api-client/src/schema.d.ts"

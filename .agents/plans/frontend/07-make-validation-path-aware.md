@@ -11,11 +11,11 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Progress
 
-- [x] (2026-09-07) Add a repository-owned changed-path classifier with 52 deterministic fixtures and real Git event tests.
+- [x] (2026-09-07) Add a repository-owned changed-path classifier with 67 deterministic fixtures and real Git event tests.
 - [x] (2026-09-07) Separate backend, web, contract, image, browser, and repository-policy validation consumers.
 - [x] (2026-09-07) Preserve the existing required validation conclusion through one fail-closed summary job.
 - [x] (2026-09-07) Make unchanged consumer jobs succeed explicitly instead of being skipped.
-- [ ] (2026-08-31) Document the trigger matrix and validate pull-request, push, and manual-run behavior.
+- [x] (2026-09-07) Document the trigger matrix; validate Git pull-request/push comparisons and seven hosted orchestration fixtures.
 - [ ] (2026-08-31) Run workflow, fixture, prose, and repository checks and record evidence.
 
 ## Plan dependencies
@@ -35,6 +35,13 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
   its own gateway image before those tests; it cannot reuse the image consumer's local Docker state.
 - (2026-09-07) Docker scripts and Compose configuration are also inputs to backend runner tests. Docker changes
   select backend validation as well as image and browser validation.
+- (2026-09-07) Git hooks export repository and index variables. Temporary Git fixtures now clear inherited
+  `GIT_*` variables for both Git and Node children. A regression proves that an enclosing repository's HEAD,
+  configuration, index, and branch reference remain unchanged. The normal pre-commit hook passes.
+- (2026-09-07) API annotations consume domain enums and application policy constants. These transitive inputs
+  must select contract and web validation even when their filenames do not end in `dto` or `enum`.
+- (2026-09-07) The existing ExecPlan repository test reads the real plan files and validates dependencies and
+  readiness. It runs in repository policy so plan-only edits retain this ratchet without selecting backend work.
 - The original Validate workflow is one backend-oriented job with PostgreSQL and an API image build on every change.
 - The frontend foundation adds web and contract checks, and the same-origin plan adds a second image plus browser
   coverage. Those checks have different expensive inputs but share the lockfile and workspace configuration.
@@ -74,8 +81,8 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Outcomes & Retrospective
 
-The implementation is complete and local validation has passed. Hosted workflow fixtures and the complete pull-request
-workflow remain in progress. The classifier, event discovery, fixture runner, workflow structure tests, and strict
+The implementation, local validation, and hosted workflow fixtures are complete. The complete pull-request
+workflow remains in progress. The classifier, event discovery, fixture runner, workflow structure tests, and strict
 summary are repository-owned. Every original validation command and its environment settings remain present.
 
 ## Context and Orientation
@@ -229,6 +236,37 @@ the four explicit PostgreSQL commands. Later focused CI tests cover the complete
 OpenAPI drift and six tooling tests passed. Web audits, design lint, UI audit, web lint, types, unit tests, build, and
 all four gateway tests passed. Root lint passed with one existing return-type warning in `load-secrets.spec.ts`;
 typecheck, build, docs-tooling tests, architecture, privacy approval checks, and the security scan passed.
+
+The initial focused suite and normal pre-commit hook passed 183 tests. Review added transitive schema fixtures and
+the plan-only ratchet check; their focused suites passed 199 tests. The four PostgreSQL commands passed 43 tests
+against one isolated PostgreSQL 18 container, which was removed afterward. Browser workflows passed 18 tests,
+accessibility passed four, and visual baselines passed four.
+
+Seven temporary hosted workflows preserved the actual discovery outputs, job identifiers, dependencies, conditions,
+guards, no-op steps, PostgreSQL service expression, and summary. Selected application commands and setup actions
+were replaced by marker steps; these runs prove orchestration only. The selected marker count includes substituted
+setup actions, and no marker is counted as an application test. Each run emitted all eight jobs. Five successful
+scenarios concluded success in every job. Selected failure failed backend and summary; discovery failure failed
+discovery, all six guards, and summary. All seven temporary branches were deleted and their absence verified.
+
+| Hosted fixture | Selected consumers | Marker steps | Successful no-ops | Summary | PostgreSQL started |
+| --- | --- | --- | --- | --- | --- |
+| [Backend](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112315342) | Policy, backend, images, browser | 46 | 2 | Success | Yes |
+| [Web](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112321609) | Policy, web, images, browser | 44 | 2 | Success | No |
+| [Shared](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112327582) | All | 65 | 0 | Success | Yes |
+| [Unchanged](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112333767) | Policy | 11 | 5 | Success | No |
+| [Manual dispatch](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112339900) | All | 65 | 0 | Success | Yes |
+| [Selected failure](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112346177) | Policy, backend, images, browser | 39 | 2 | Failure | Yes |
+| [Discovery failure](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112351936) | Policy flag; discovery failed | 0 | 0 | Failure | No |
+
+Manual dispatch used the real event classifier. Other hosted fixtures supplied synthetic path lists. Pull-request
+merge-base and push comparisons were exercised against real temporary Git histories locally. Cancellation and
+unexpected skipped/missing results are covered by local summary tests rather than live cancellation. No required
+check settings changed. The external aggregate remains `Validate / validate`.
+
+The first complete pull-request run passed backend, web, contract, and repository policy. Its browser route test
+received HTTP 504 instead of the existing expected HTTP 502 after removing a fixture container; the same unchanged
+test passed locally. The refined implementation will run the complete hosted workflow again before completion.
 
 The exact prose command `corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md`
 passed both files before this evidence update. The final evidence update will receive the same check.

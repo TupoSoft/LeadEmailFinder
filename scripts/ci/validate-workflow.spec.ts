@@ -131,7 +131,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree',
         'corepack pnpm docs:lint:changed',
         'corepack pnpm architecture:check',
-        'corepack pnpm test -- select-validation validate-workflow --runInBand',
+        'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',
         'corepack pnpm test:ci-paths',
     ],
     backend: [
@@ -272,6 +272,28 @@ describe('Validate workflow syntax and structure', () => {
                 '${{ github.event.pull_request.base.sha || github.event.before }}',
             )
         }
+    })
+
+    it('keeps the real ExecPlan fixture mandatory when plan-only changes select repository policy', () => {
+        const selection = spawnSync(process.execPath, [
+            resolve(root, 'scripts/ci/select-validation.mjs'),
+            '--paths-json',
+            JSON.stringify(['.agents/plans/frontend/07-make-validation-path-aware.md']),
+        ], { cwd: root, encoding: 'utf8', timeout: 5000, env: { ...process.env, GITHUB_OUTPUT: undefined } })
+        expect(selection.error).toBeUndefined()
+        expect(selection.status).toBe(0)
+        expect(JSON.parse(selection.stdout)).toEqual({
+            repositoryPolicy: true,
+            backend: false,
+            web: false,
+            contract: false,
+            images: false,
+            browser: false,
+        })
+        const fixture = workflow.jobs['repository-policy'].steps.find((step) => step.run?.includes('execplan-repository-fixture'))
+        expect(fixture).toBeDefined()
+        expect(condition(fixture?.if)).toBe("needs.changes.outputs.repositoryPolicy == 'true'")
+        expect(fixture?.['continue-on-error']).not.toBe(true)
     })
 
     it('retains Node 24 and frozen workspace installs for Node validation consumers', () => {

@@ -57,14 +57,14 @@ Each consumer starts even when unselected and explicitly reports that its checks
 skipped, or missing dependency fails the summary. Branch protection continues to use the same required check.
 
 Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
-account-discovery approval validation, the session-material scanner, the module architecture ratchet, and CI selection
-tests. Harper's existing advisory CI setting is preserved. The remaining consumers follow this matrix; multiple
+account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
+repository test, and CI selection tests. Harper's existing advisory CI setting is preserved. The remaining consumers follow this matrix; multiple
 changed paths select the union of their consumers:
 
 | Changed paths | Additional consumers |
 | --- | --- |
 | Backend services, workers, tests, deployment files, configuration, and backend scripts | Backend, images, browser |
-| API controllers, DTOs, module wiring, bootstrap code, and shared contract types | Backend, web, contract, images, browser |
+| API controllers, DTOs, module wiring, bootstrap code, domain sources, and shared contract types or policies | Backend, web, contract, images, browser |
 | `packages/api-client/**`, `scripts/openapi/**` | Backend, web, contract, images, browser |
 | `apps/web/**`, `scripts/frontend/**`, `DESIGN.md`, `UX-CONTRACT.md`, `premium-ui.json` | Web, images, browser |
 | `docker/**`, `Dockerfile`, `.dockerignore` | Backend, images, browser |
