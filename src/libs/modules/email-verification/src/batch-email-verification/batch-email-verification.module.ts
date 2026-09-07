@@ -6,7 +6,7 @@ import { BatchEmailVerificationServiceImpl } from './batch-email-verification-se
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { MulterModule } from '@nestjs/platform-express'
 import { MulterOptionsFactoryImpl } from './multer-options-factory-impl.service'
-import { SyncEmailVerificationModule } from '../sync-email-verification'
+import { EmailVerificationCoreModule } from '../infrastructure/email-verification-core.module'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification.constants'
 import { ConfigModule } from '@nestjs/config'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
@@ -21,7 +21,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
             imports: [ConfigModule],
             useClass: MulterOptionsFactoryImpl,
         }),
-        SyncEmailVerificationModule,
+        EmailVerificationCoreModule,
         CreditsModule,
     ],
     controllers: [BatchEmailVerificationController],

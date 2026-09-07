@@ -22,7 +22,7 @@ import {
 import { MailboxVerificationService } from '../../application/mailbox-verification.service'
 import { MAILBOX_PROBE, MailboxProbeResult } from '../../application/ports/mailbox-probe'
 import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
-import { SyncEmailVerificationModule } from '../../sync-email-verification/email-verification.module'
+import { EmailVerificationCoreModule } from '../email-verification-core.module'
 import { DomainPolicyEntity } from '../persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from '../persistence/typeorm/email-verification.entity'
 import { EmailEntity } from '../persistence/typeorm/email.entity'
@@ -139,7 +139,7 @@ describe('Account discovery Nest composition', () => {
 
         // Preserve both composition roots and CatchAllModule. Only outbound adapters and
         // unrelated business capabilities are substituted.
-        const builder = Test.createTestingModule({ imports: [SyncEmailVerificationModule] })
+        const builder = Test.createTestingModule({ imports: [EmailVerificationCoreModule] })
             .overrideModule(DnsModule)
             .useModule(FakeDnsModule)
             .overrideModule(ProxyModule)

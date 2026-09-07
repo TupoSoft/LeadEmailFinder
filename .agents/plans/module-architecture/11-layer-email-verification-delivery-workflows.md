@@ -12,11 +12,11 @@ and the existing SMTP Bruno workflow.
 
 ## Progress
 
-- [ ] (2026-08-30) Characterize both synchronous routes, authorization, billing, mapping, and failures.
-- [ ] (2026-08-30) Move sync and deprecated-sync transport code into one HTTP API slice.
-- [ ] (2026-08-30) Add one transport-neutral synchronous delivery command over the plan-14 mailbox composition.
-- [ ] (2026-08-30) Remove only sync/deprecated-sync baseline keys and update documentation.
-- [ ] (2026-08-30) Complete focused, HTTP, billing, SMTP Bruno, architecture, and full validation.
+- [x] (2026-09-07) Characterize both synchronous routes, authorization, billing, mapping, and failures.
+- [x] (2026-09-07) Move sync and deprecated-sync transport code into one HTTP API slice.
+- [x] (2026-09-07) Add one transport-neutral synchronous delivery command over the plan-14 mailbox composition.
+- [x] (2026-09-07) Remove only sync/deprecated-sync baseline keys and update documentation.
+- [x] (2026-09-07) Complete focused, HTTP, billing, SMTP Bruno, architecture, and full validation.
 
 ## Plan dependencies
 
@@ -30,6 +30,11 @@ and the existing SMTP Bruno workflow.
   Automapper profile form a separate Nest module and legacy response shape.
 - Credit enforcement is an inbound-route concern supplied by the credits module; it must not be copied into the
   verification core or performed again by a delivery command.
+- Nest guards debit before validation pipes run: an authorized malformed input still consumes one credit, while
+  missing authentication and missing permission fail before any debit. Domain-policy rejection and unexpected
+  adapter errors currently produce a generic `500`. These behaviors remain unchanged in this relocation.
+- The old synchronous composition also supplied the core to async and batch delivery and registered email administration.
+  Removing that directory requires updating those imports and moving email-administration registration to the root.
 
 ## Decision Log
 
@@ -53,10 +58,34 @@ and the existing SMTP Bruno workflow.
 - Decision: Add no migration, queue change, provider change, or configuration change.
   Rationale: This is a behavior-preserving HTTP/application relocation.
   Date/Author: 2026-08-30, Codex planning.
+- Decision: Move the existing core factory composition to `infrastructure/email-verification-core.module.ts` and
+  register synchronous controllers, the legacy profile, the command, and email administration at the root module.
+  Rationale: The canonical layer matrix permits infrastructure to wire application ports but forbids infrastructure
+  imports of API controllers. A separate HTTP Nest module would need a forbidden API-to-infrastructure import.
+  The root can compose both, and async/batch can retain the same core through import-only changes.
+  Date/Author: 2026-09-07, Codex implementation.
+- Decision: Move the shared validation decorator implementation into the synchronous API slice and retain its old
+  root path as a compatibility export for async and batch DTOs.
+  Rationale: Layered API files cannot import module-root files. This keeps one validator implementation while
+  preserving out-of-scope callers and their existing baseline entries for plans 15 and 16.
+  Date/Author: 2026-09-07, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented both synchronous routes as one API slice over the private `RunSynchronousVerification` command.
+The core composition moved into infrastructure without changing its application, persistence, discovery, or mailbox
+providers. Both routes preserve permissions, organization context, one-credit charging, validation order, status
+codes, trace modes, and response mapping. Async and batch retain their existing behavior through updated imports.
+
+The real-Nest HTTP matrix passes all 33 cases; seven framework-free command tests pass. Full validation passes with
+1,924 Jest tests and 31 runner tests. Eleven environment-gated suites containing 65 tests remain skipped in the
+default full-suite invocation. The owned SMTP fixture separately passes all 22 Bruno requests and 44 assertions,
+including secure transport, downgrade rejection, proxy recovery, deprecated billing, and async result compatibility.
+Type checking, lint, build, OpenAPI, architecture, Harper, and diff checks pass. Lint reports one existing warning
+in `src/libs/config/src/load-secrets.spec.ts`.
+
+The architectural review found no new dependency violations. The shared validation decorator retains a root
+compatibility export for async and batch callers; removing that existing debt belongs to their delivery plans.
 
 ## Context and Orientation
 
@@ -167,9 +196,46 @@ unrelated edits and another checkout's services.
 
 ## Artifacts and Notes
 
-Record the route contract table, shared-command proof, focused and HTTP totals, debit observations, removed baseline
-keys, SMTP Bruno totals, and full validation. Do not record tokens, service-client secrets, raw customer addresses,
-SMTP transcripts, or provider payloads.
+The preserved route contract is:
+
+| Contract | `POST /verify` | Deprecated `GET /verify` |
+| --- | --- | --- |
+| Input | JSON body `email`, existing `IsVerifiableEmail` validator | Query `email`, same validator |
+| Permission and organization | `verification:run`, authenticated principal's organization | Identical |
+| Billing | One debit before validation; zero balance returns `402` | Identical |
+| Authentication / authorization | `401` / `403`, no debit or verification | Identical |
+| Invalid input | `400` after one debit, no verification | Identical |
+| Success | `201`, current exposed DTO with verification ID and sources | `200`, legacy Automapper DTO with delivery/catch-all enums and `verifiedAt` |
+| Domain prohibition / adapter failure | Generic `500` after one debit | Identical |
+| Trace | Request ID with `sync` mode | Request ID with `deprecated_sync` mode |
+| Swagger | Existing current route metadata | Operation remains deprecated |
+
+Implementation uses `api/http/synchronous-verification/current/` and `deprecated/`, plus the private
+`RUN_SYNCHRONOUS_VERIFICATION` command token. The public barrel still exports only `EmailVerificationModule`.
+Issue #445 is assigned to the requesting user and its project-9 item is In Progress. The owned Docker fixture uses
+project `lef445e9b9`; initial inspection found no containers and preserved unrelated orphan volumes.
+
+The shrink-only architecture update removed exactly 18 entries from the old synchronous directories: five API
+placement entries and thirteen source placement entries. No other key changed; 33 existing violations remain.
+
+Validation evidence collected on 2026-09-07:
+
+- The focused command/controller/legacy HTTP/trace/discovery run passed six suites and 25 tests; the new combined
+  HTTP suite separately passed 33 tests. The final full-suite run includes all seven focused suites.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci` passed 204 Jest suites and 1,924 tests, with 11 suites and
+  65 environment-gated tests skipped, followed by 31 passing OIDC/Bruno runner tests.
+- `COMPOSE_PROJECT_NAME=lef445e9b9 corepack pnpm bruno:smtp-dev` passed all 22 requests and 44 tests with pinned
+  Bruno 4.1.0. The runner validated fixture ownership and used container-network API and identity endpoints.
+- Correlated privacy-safe fixture logs show secure SMTP using `ehlo,starttls,ehlo,mail_from,rcpt_to,quit`, while
+  plaintext rejection used only `ehlo`, with zero envelope or DATA commands. Completion reason codes include
+  `accepted_email` and `secure_transport_unavailable`; proxy restore and deprecated zero-balance/debit checks passed.
+- `corepack pnpm architecture:baseline` and `corepack pnpm architecture:check` passed; a set comparison confirmed
+  zero added baseline keys and removals confined to the two old synchronous directories.
+- The exact typecheck, lint, build, and Harper commands under Validation passed. `corepack pnpm openapi:check`
+  passed, confirming unchanged generated API contracts. `git diff --check` passed.
+
+The owned fixture remains available for local review. No database schema, migration, provider, queue protocol, or
+configuration behavior changed, and unrelated Docker volumes were preserved.
 
 ## Plan readiness
 

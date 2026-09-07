@@ -1,9 +1,11 @@
 import type { Request } from 'express'
-import { IEmailVerificationService } from '@tuposoft/lead-email-finder/common'
+import {
+    RUN_SYNCHRONOUS_VERIFICATION,
+    RunSynchronousVerification,
+} from '../../../../application/delivery/synchronous/run-synchronous-verification'
 import { Body, Controller, Req, Inject, Post, SerializeOptions, UseGuards } from '@nestjs/common'
 import { EmailVerificationRequestDto } from './email-verification-request.dto'
-import { EmailVerificationResponseDto } from '../api/email-verification-response.dto'
-import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
+import { EmailVerificationResponseDto } from '../../../email-verification-response.dto'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
@@ -13,7 +15,8 @@ import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 @Controller('verify')
 export class SyncEmailVerificationController {
     constructor(
-        @Inject(EMAIL_VERIFICATION_SERVICE_TOKEN) private readonly emailVerificationService: IEmailVerificationService,
+        @Inject(RUN_SYNCHRONOUS_VERIFICATION)
+        private readonly synchronousVerification: Pick<RunSynchronousVerification, 'execute'>,
     ) {}
 
     @Post()
@@ -24,7 +27,7 @@ export class SyncEmailVerificationController {
         @CurrentPrincipal() principal: AuthPrincipal,
         @Req() request?: Request,
     ): Promise<EmailVerificationResponseDto> {
-        return await this.emailVerificationService.verify({
+        return await this.synchronousVerification.execute({
             organizationId: principal.organizationId,
             ...(typeof request?.id === 'string' ? { trace: { operationId: request.id, mode: 'sync' } } : {}),
             email: emailVerificationRequest.email,

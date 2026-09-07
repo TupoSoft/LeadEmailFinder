@@ -25,14 +25,15 @@ import { EmailAdministrationService } from '../../application/email-administrati
 import { MailboxVerificationService } from '../../application/mailbox-verification.service'
 import { VerificationStore } from '../../application/ports/verification-store'
 import { EmailVerification } from '../../domain/email-verification'
-import { SyncEmailVerificationController } from '../../sync-email-verification/sync-email-verification.controller'
-import { OldSyncEmailVerificationController } from '../../old-sync-email-verification/old-sync-email-verification.controller'
-import { OldSyncEmailVerificationProfile } from '../../old-sync-email-verification/old-sync-email-verification.profile'
+import { SyncEmailVerificationController } from '../../api/http/synchronous-verification/current/sync-email-verification.controller'
+import { OldSyncEmailVerificationController } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.controller'
+import { OldSyncEmailVerificationProfile } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.profile'
 import { AsyncEmailVerificationController } from '../../async-email-verification/async-email-verification.controller'
 import { AsyncEmailVerificationServiceImpl } from '../../async-email-verification/async-email-verification-service-impl.service'
 import { AsyncEmailVerificationProcessor } from '../../async-email-verification/async-email-verification.processor'
 import { AsyncEmailVerificationJobData } from '../../async-email-verification/async-email-verification-job-data.interface'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../async-email-verification/async-email-verification.constants'
+import { RUN_SYNCHRONOUS_VERIFICATION, RunSynchronousVerification } from '../../application/delivery/synchronous/run-synchronous-verification'
 import { LoggingVerificationTraceObserver } from './logging-verification-trace-observer'
 
 const principal: AuthPrincipal = {
@@ -130,7 +131,7 @@ describe('captured verification trace chain', () => {
                 PermissionsGuard,
                 CreditGuard,
                 OldSyncEmailVerificationProfile,
-                { provide: 'EmailVerificationServiceToken', useValue: service },
+                { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: new RunSynchronousVerification(service) },
                 { provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN, useValue: asyncService },
                 { provide: CreditsService, useValue: { debit } },
             ],

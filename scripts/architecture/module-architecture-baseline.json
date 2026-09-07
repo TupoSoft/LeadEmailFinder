@@ -6,11 +6,6 @@
         "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-csv-row.dto.ts|batch-email-verification/batch-email-verification-csv-row.dto.ts",
         "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.controller.ts|batch-email-verification/batch-email-verification.controller.ts",
         "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.dto.ts|batch-email-verification/batch-email-verification.dto.ts",
-        "api-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-request-query.dto.ts|old-sync-email-verification/old-sync-email-verification-request-query.dto.ts",
-        "api-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-response.dto.ts|old-sync-email-verification/old-sync-email-verification-response.dto.ts",
-        "api-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification.controller.ts|old-sync-email-verification/old-sync-email-verification.controller.ts",
-        "api-placement|src/libs/modules/email-verification/src/sync-email-verification/email-verification-request.dto.ts|sync-email-verification/email-verification-request.dto.ts",
-        "api-placement|src/libs/modules/email-verification/src/sync-email-verification/sync-email-verification.controller.ts|sync-email-verification/sync-email-verification.controller.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-job-data.interface.ts|async-email-verification/async-email-verification-job-data.interface.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-service-impl.service.ts|async-email-verification/async-email-verification-service-impl.service.ts",
         "source-placement|src/libs/modules/email-verification/src/async-email-verification/async-email-verification-service.interface.ts|async-email-verification/async-email-verification-service.interface.ts",
@@ -38,19 +33,6 @@
         "source-placement|src/libs/modules/email-verification/src/batch-email-verification/job-not-found.exception.ts|batch-email-verification/job-not-found.exception.ts",
         "source-placement|src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.ts|batch-email-verification/multer-options-factory-impl.service.ts",
         "source-placement|src/libs/modules/email-verification/src/batch-email-verification/parse-s3-result-location.ts|batch-email-verification/parse-s3-result-location.ts",
-        "source-placement|src/libs/modules/email-verification/src/is-verifiable-email.decorator.ts|is-verifiable-email.decorator.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/index.ts|old-sync-email-verification/index.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-email-verification.enums.ts|old-sync-email-verification/old-email-verification.enums.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-request-query.dto.ts|old-sync-email-verification/old-sync-email-verification-request-query.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-response.dto.ts|old-sync-email-verification/old-sync-email-verification-response.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification-response.interface.ts|old-sync-email-verification/old-sync-email-verification-response.interface.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification.controller.ts|old-sync-email-verification/old-sync-email-verification.controller.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification.module.ts|old-sync-email-verification/old-sync-email-verification.module.ts",
-        "source-placement|src/libs/modules/email-verification/src/old-sync-email-verification/old-sync-email-verification.profile.ts|old-sync-email-verification/old-sync-email-verification.profile.ts",
-        "source-placement|src/libs/modules/email-verification/src/sync-email-verification/email-verification-request.dto.ts|sync-email-verification/email-verification-request.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/sync-email-verification/email-verification.constants.ts|sync-email-verification/email-verification.constants.ts",
-        "source-placement|src/libs/modules/email-verification/src/sync-email-verification/email-verification.module.ts|sync-email-verification/email-verification.module.ts",
-        "source-placement|src/libs/modules/email-verification/src/sync-email-verification/index.ts|sync-email-verification/index.ts",
-        "source-placement|src/libs/modules/email-verification/src/sync-email-verification/sync-email-verification.controller.ts|sync-email-verification/sync-email-verification.controller.ts"
+        "source-placement|src/libs/modules/email-verification/src/is-verifiable-email.decorator.ts|is-verifiable-email.decorator.ts"
     ]
 }

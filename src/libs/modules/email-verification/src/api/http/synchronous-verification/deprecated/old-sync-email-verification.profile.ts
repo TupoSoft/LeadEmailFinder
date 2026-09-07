@@ -10,7 +10,7 @@ import {
     MappingProfile,
 } from '@automapper/core'
 import { AutomapperProfile, InjectMapper } from '@automapper/nestjs'
-import { EmailVerificationResponseDto } from '../sync-email-verification'
+import { EmailVerificationResponseDto } from '../../../email-verification-response.dto'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 import { CatchAllStatus, DeliveryStatus } from './old-email-verification.enums'
 

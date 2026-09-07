@@ -21,27 +21,25 @@ import {
     ProxyModule,
 } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IDnsService } from '@tuposoft/lead-email-finder/common'
-import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
-import { VerificationTraceModule } from '../infrastructure/verification-trace/verification-trace.module'
+import { VerificationTraceModule } from './verification-trace/verification-trace.module'
 import { AccountDiscovery, ACCOUNT_DISCOVERY_TOKEN } from '../application/ports/account-discovery'
 import {
     ACCOUNT_DISCOVERY_CLOCK_TOKEN,
     SYSTEM_CLOCK,
     configuredAccountDiscovery,
-} from '../infrastructure/account-discovery/configured-account-discovery'
-import { EmailEntity } from '../infrastructure/persistence/typeorm/email.entity'
-import { DomainPolicyEntity } from '../infrastructure/persistence/typeorm/domain-policy.entity'
-import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/email-verification.entity'
-import { SmtpVerificationEntity } from '../infrastructure/persistence/typeorm/smtp-verification.entity'
-import { TypeOrmEmailStore } from '../infrastructure/persistence/typeorm-email.store'
-import { TypeOrmDomainStore } from '../infrastructure/persistence/typeorm-domain.store'
-import { TypeOrmVerificationStore } from '../infrastructure/persistence/typeorm-verification.store'
-import { TypeOrmSmtpVerificationStore } from '../infrastructure/persistence/typeorm-smtp-verification.store'
-import { DnsMxResolver } from '../infrastructure/discovery/dns/dns-mx-resolver'
-import { HttpDomainSynonymDiscovery } from '../infrastructure/discovery/http/http-domain-synonym-discovery'
-import { SmtpClientFactory } from '../infrastructure/mailbox/smtp/smtp-client.factory'
-import { SmtpMailboxProbe } from '../infrastructure/mailbox/smtp/smtp-mailbox-probe'
+} from './account-discovery/configured-account-discovery'
+import { EmailEntity } from './persistence/typeorm/email.entity'
+import { DomainPolicyEntity } from './persistence/typeorm/domain-policy.entity'
+import { EmailVerificationEntity } from './persistence/typeorm/email-verification.entity'
+import { SmtpVerificationEntity } from './persistence/typeorm/smtp-verification.entity'
+import { TypeOrmEmailStore } from './persistence/typeorm-email.store'
+import { TypeOrmDomainStore } from './persistence/typeorm-domain.store'
+import { TypeOrmVerificationStore } from './persistence/typeorm-verification.store'
+import { TypeOrmSmtpVerificationStore } from './persistence/typeorm-smtp-verification.store'
+import { DnsMxResolver } from './discovery/dns/dns-mx-resolver'
+import { HttpDomainSynonymDiscovery } from './discovery/http/http-domain-synonym-discovery'
+import { SmtpClientFactory } from './mailbox/smtp/smtp-client.factory'
+import { SmtpMailboxProbe } from './mailbox/smtp/smtp-mailbox-probe'
 import { EmailAdministrationService } from '../application/email-administration.service'
 import { DomainPolicyService } from '../application/domain-policy.service'
 import { MailboxVerificationService } from '../application/mailbox-verification.service'
@@ -49,10 +47,10 @@ import { EmailVerificationOrchestrator } from '../application/email-verification
 import { MX_RESOLVER, MxResolver } from '../application/ports/mx-resolver'
 import { DOMAIN_SYNONYM_DISCOVERY } from '../application/ports/domain-synonym-discovery'
 import { MAILBOX_PROBE } from '../application/ports/mailbox-probe'
-import { VERIFICATION_TRACE_OBSERVER, VerificationTraceObserver } from '../application/verification-trace/verification-trace-observer'
-import { EMAIL_VERIFICATION_SERVICE_TOKEN } from './email-verification.constants'
-import { SyncEmailVerificationController } from './sync-email-verification.controller'
-import { EmailAdministrationController } from '../api/http/email-administration/email-administration.controller'
+import {
+    VERIFICATION_TRACE_OBSERVER,
+    VerificationTraceObserver,
+} from '../application/verification-trace/verification-trace-observer'
 
 @Module({
     imports: [
@@ -63,9 +61,7 @@ import { EmailAdministrationController } from '../api/http/email-administration/
         HttpModule,
         ProxyModule,
         CatchAllModule,
-        CreditsModule,
     ],
-    controllers: [SyncEmailVerificationController, EmailAdministrationController],
     providers: [
         {
             provide: EmailAdministrationService,
@@ -166,13 +162,7 @@ import { EmailAdministrationController } from '../api/http/email-administration/
                     traceObserver,
                 ),
         },
-        {
-            provide: EMAIL_VERIFICATION_SERVICE_TOKEN,
-            useExisting: EmailVerificationOrchestrator,
-        },
-        RolePermissionPolicy,
-        PermissionsGuard,
     ],
     exports: [EmailVerificationOrchestrator, EmailAdministrationService, DomainPolicyService, TypeOrmModule],
 })
-export class SyncEmailVerificationModule {}
+export class EmailVerificationCoreModule {}

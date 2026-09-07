@@ -1,4 +1,10 @@
-import { ClassSerializerInterceptor, INestApplication, MiddlewareConsumer, Module, ValidationPipe } from '@nestjs/common'
+import {
+    ClassSerializerInterceptor,
+    INestApplication,
+    MiddlewareConsumer,
+    Module,
+    ValidationPipe,
+} from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
@@ -11,7 +17,10 @@ import { CreditGuard, CreditsService, InsufficientCreditsException } from '@tupo
 import { OldSyncEmailVerificationController } from './old-sync-email-verification.controller'
 import { OldSyncEmailVerificationResponseDto } from './old-sync-email-verification-response.dto'
 
-const emailVerificationServiceToken = 'EmailVerificationServiceToken'
+import {
+    RUN_SYNCHRONOUS_VERIFICATION,
+    RunSynchronousVerification,
+} from '../../../../application/delivery/synchronous/run-synchronous-verification'
 
 const emailVerificationServiceMock: jest.Mocked<Pick<IEmailVerificationService, 'verify'>> = {
     verify: jest.fn(),
@@ -54,7 +63,10 @@ const runPrincipal: AuthPrincipal = {
         RolePermissionPolicy,
         PermissionsGuard,
         CreditGuard,
-        { provide: emailVerificationServiceToken, useValue: emailVerificationServiceMock },
+        {
+            provide: RUN_SYNCHRONOUS_VERIFICATION,
+            useValue: new RunSynchronousVerification(emailVerificationServiceMock),
+        },
         { provide: CreditsService, useValue: creditsServiceMock },
         { provide: getMapperToken(), useValue: mapperMock },
     ],
@@ -76,7 +88,10 @@ describe('deprecated GET /verify HTTP boundary', () => {
         app = moduleRef.createNestApplication()
         app.useGlobalPipes(new ValidationPipe())
         app.useGlobalInterceptors(
-            new ClassSerializerInterceptor(app.get(Reflector), { strategy: 'excludeAll', enableImplicitConversion: true }),
+            new ClassSerializerInterceptor(app.get(Reflector), {
+                strategy: 'excludeAll',
+                enableImplicitConversion: true,
+            }),
         )
         await app.init()
     })
