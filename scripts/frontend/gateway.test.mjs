@@ -169,6 +169,7 @@ test('Vite forwards the route matrix and browser request/response contract', asy
 test('Nginx image preserves routing, static security, caching, health, and private logs', { timeout: 120_000 }, async (context) => {
     const unique = `lef-gateway-${process.pid}-${Date.now()}`
     const network = unique
+    const networkOwnerName = `${unique}-network`
     const backendName = `${unique}-api`
     const gatewayName = `${unique}-web`
     const temporary = await mkdtemp(join(tmpdir(), 'lef-gateway-'))
@@ -180,7 +181,11 @@ test('Nginx image preserves routing, static security, caching, health, and priva
     })
     await docker('network', 'create', network)
     await writeFile(join(temporary, 'fixture.mjs'), `import { createServer } from 'node:http';\ncreateServer(${fixture.toString()}).listen(3000, '0.0.0.0');\n`)
-    await docker('run', '--detach', '--name', backendName, '--network', network, '--network-alias', 'api', '--mount', `type=bind,src=${temporary},dst=/fixture,readonly`, 'node:24-alpine', 'node', '/fixture/fixture.mjs')
+    // Keep the network endpoint alive after the API stops so the failed request
+    // gets a refused connection rather than timing out against a removed endpoint.
+    await docker('run', '--detach', '--name', networkOwnerName, '--network', network, '--network-alias', 'api', 'node:24-alpine', 'node', '-e', 'setInterval(() => {}, 1_000)')
+    created.push(networkOwnerName)
+    await docker('run', '--detach', '--name', backendName, '--network', `container:${networkOwnerName}`, '--mount', `type=bind,src=${temporary},dst=/fixture,readonly`, 'node:24-alpine', 'node', '/fixture/fixture.mjs')
     created.push(backendName)
     await docker('run', '--detach', '--name', gatewayName, '--network', network, '--publish', '127.0.0.1::8080', image)
     created.push(gatewayName)

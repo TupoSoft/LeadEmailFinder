@@ -42,6 +42,10 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
   must select contract and web validation even when their filenames do not end in `dto` or `enum`.
 - (2026-09-07) The existing ExecPlan repository test reads the real plan files and validates dependencies and
   readiness. It runs in repository policy so plan-only edits retain this ratchet without selecting backend work.
+- (2026-09-07) The gateway outage fixture also fails on base commit `24804d8` and its predecessor: after the API
+  container stops, Docker can retain an unreachable address long enough to produce HTTP 504 rather than HTTP 502.
+  The fixture now keeps its network namespace alive independently of the API process, so stopping the API leaves
+  a reachable address with a closed port. Every existing assertion and its ordering remain intact.
 - The original Validate workflow is one backend-oriented job with PostgreSQL and an API image build on every change.
 - The frontend foundation adds web and contract checks, and the same-origin plan adds a second image plus browser
   coverage. Those checks have different expensive inputs but share the lockfile and workspace configuration.
@@ -107,6 +111,10 @@ or any product validation established by prerequisite plans.
 This pull request adds the changed-path classifier and fixtures, restructures the Validate workflow into explicit
 consumer jobs plus the stable summary, adds successful no-op behavior, and documents the trigger matrix. It may add a
 narrow local command that prints consumer flags for a supplied base/head or fixture path list.
+
+Hosted validation also requires a narrow setup correction in `scripts/frontend/gateway.test.mjs`: one fixture-owned
+container retains the fake API's network namespace after the API container stops. This removes a confirmed baseline
+Docker timing dependency while preserving the existing HTTP, availability, and privacy assertions.
 
 It does not change application source, API behavior, generated artifacts, test assertions, image contents, required
 check policy in GitHub, CI provider, release/deployment workflows, production environments, or secrets. It does not
@@ -264,9 +272,12 @@ merge-base and push comparisons were exercised against real temporary Git histor
 unexpected skipped/missing results are covered by local summary tests rather than live cancellation. No required
 check settings changed. The external aggregate remains `Validate / validate`.
 
-The first complete pull-request run passed backend, web, contract, and repository policy. Its browser route test
-received HTTP 504 instead of the existing expected HTTP 502 after removing a fixture container; the same unchanged
-test passed locally. The refined implementation will run the complete hosted workflow again before completion.
+The first complete pull-request run passed backend, web, contract, images, and repository policy. Its browser route
+test received HTTP 504 instead of the existing expected HTTP 502 after stopping a fixture container; the same test
+passed locally. The identical failure also occurred in master runs
+[34111374087](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34111374087) and
+[34109666518](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34109666518). The refined implementation and
+deterministic fixture will run the complete hosted workflow again before completion.
 
 The exact prose command `corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md`
 passed both files before this evidence update. The final evidence update will receive the same check.
