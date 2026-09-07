@@ -1,11 +1,9 @@
 import { ConfigService } from '@nestjs/config'
-import {
-    MicrosoftGetCredentialType,
-    MicrosoftLogin,
-    MimecastLogin,
-    OfficeApps,
-} from '@tuposoft/lead-email-finder/catch-all'
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { MicrosoftGetCredentialType } from './providers/microsoft-get-credential-type'
+import { MicrosoftLogin } from './providers/microsoft-login'
+import { MimecastLogin } from './providers/mimecast-login'
+import { OfficeApps } from './providers/office-apps'
+import { AccountDiscoveryProvider } from '../../application/account-discovery/account-discovery-provider'
 import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
@@ -38,12 +36,12 @@ function adapters(): {
     microsoftLogin: MicrosoftLogin
     mimecastLogin: MimecastLogin
     officeApps: OfficeApps
-    officeAppsVerifier: jest.Mocked<ICatchAllVerifier>
+    officeAppsVerifier: jest.Mocked<AccountDiscoveryProvider>
 } {
     const officeAppsVerifier = {
         sourceName: 'microsoft_2',
         verify: jest.fn().mockResolvedValue(true),
-    } satisfies jest.Mocked<ICatchAllVerifier>
+    } satisfies jest.Mocked<AccountDiscoveryProvider>
 
     return {
         microsoftGetCredentialType: {

@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import type { AccountDiscoveryProvider } from '../../../../application/account-discovery/account-discovery-provider'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { Injectable, Logger, Optional } from '@nestjs/common'
@@ -15,7 +15,7 @@ interface MicrosoftGetCredsResponseData {
 }
 
 @Injectable()
-export class MicrosoftGetCredentialType implements ICatchAllVerifier {
+export class MicrosoftGetCredentialType implements AccountDiscoveryProvider {
     private static readonly URL = 'https://login.microsoftonline.com/common/GetCredentialType'
 
     private static readonly HEADERS = {

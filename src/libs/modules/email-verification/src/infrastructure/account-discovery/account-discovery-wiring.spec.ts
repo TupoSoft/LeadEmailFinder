@@ -1,38 +1,44 @@
 import { HttpService } from '@nestjs/axios'
 import { Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { ModulesContainer } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
-import {
-    MicrosoftGetCredentialType,
-    MicrosoftLogin,
-    MimecastLogin,
-    OfficeApps,
-} from '@tuposoft/lead-email-finder/catch-all'
 import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { AccountDiscoveryApproval, loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
 import { CreditGuard, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
-import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
+import {
+    ALLOCATION_OBSERVER_TOKEN,
+    PROXY_ALLOCATOR_TOKEN,
+    PROXY_SERVICE_TOKEN,
+    ProxyModule,
+} from '@tuposoft/lead-email-finder/modules/proxy'
 import { of } from 'rxjs'
 import {
     ACCOUNT_DISCOVERY_PURPOSE,
     ACCOUNT_DISCOVERY_UNAVAILABLE_REASON,
 } from '../../application/account-discovery/approved-account-discovery-verifier'
 import { MailboxVerificationService } from '../../application/mailbox-verification.service'
+import { AccountDiscovery, ACCOUNT_DISCOVERY_TOKEN } from '../../application/ports/account-discovery'
 import { MAILBOX_PROBE, MailboxProbeResult } from '../../application/ports/mailbox-probe'
 import { CatchAllProxyConfiguration } from '../../domain/email-verification-configuration'
 import { EmailVerificationCoreModule } from '../email-verification-core.module'
+import { SmtpClientFactory } from '../mailbox/smtp/smtp-client.factory'
+import { SmtpMailboxProbe } from '../mailbox/smtp/smtp-mailbox-probe'
 import { DomainPolicyEntity } from '../persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from '../persistence/typeorm/email-verification.entity'
 import { EmailEntity } from '../persistence/typeorm/email.entity'
 import { SmtpVerificationEntity } from '../persistence/typeorm/smtp-verification.entity'
 import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from './configured-account-discovery'
+import { AccountDiscoveryModule } from './account-discovery.module'
+import { MicrosoftGetCredentialType } from './providers/microsoft-get-credential-type'
+import { MicrosoftLogin } from './providers/microsoft-login'
+import { MimecastLogin } from './providers/mimecast-login'
+import { OfficeApps } from './providers/office-apps'
 
 jest.mock('@tuposoft/lead-email-finder/config', () => ({
-    ...jest.requireActual<typeof import('@tuposoft/lead-email-finder/config')>(
-        '@tuposoft/lead-email-finder/config',
-    ),
+    ...jest.requireActual<typeof import('@tuposoft/lead-email-finder/config')>('@tuposoft/lead-email-finder/config'),
     loadAccountDiscoveryApprovals: jest.fn(),
 }))
 
@@ -137,7 +143,7 @@ describe('Account discovery Nest composition', () => {
         @Module({ providers: [{ provide: DnsService, useValue: dns }], exports: [DnsService] })
         class FakeDnsModule {}
 
-        // Preserve both composition roots and CatchAllModule. Only outbound adapters and
+        // Preserve the core composition root and AccountDiscoveryModule. Only outbound adapters and
         // unrelated business capabilities are substituted.
         const builder = Test.createTestingModule({ imports: [EmailVerificationCoreModule] })
             .overrideModule(DnsModule)
@@ -169,6 +175,16 @@ describe('Account discovery Nest composition', () => {
             compile: async () => {
                 const module = await builder.compile()
                 modules.push(module)
+                await module.init()
+                const discoveryRegistrations = [...module.get(ModulesContainer).values()].filter(nestModule =>
+                    nestModule.providers.has(ACCOUNT_DISCOVERY_TOKEN),
+                )
+                expect(discoveryRegistrations).toHaveLength(1)
+                expect(discoveryRegistrations[0].metatype).toBe(AccountDiscoveryModule)
+                expect([...discoveryRegistrations[0].exports]).toEqual([ACCOUNT_DISCOVERY_TOKEN])
+                expect(module.select(EmailVerificationCoreModule).get(MAILBOX_PROBE, { strict: true })).toBe(
+                    mailboxProbe,
+                )
                 return {
                     mailbox: module.get(MailboxVerificationService),
                     officeApps: jest.spyOn(module.get(OfficeApps), 'verify'),
@@ -179,6 +195,82 @@ describe('Account discovery Nest composition', () => {
             },
         }
     }
+
+    it('resolves the real SMTP probe and discovery factories without outbound or persistence calls', async () => {
+        const dns = { resolve: jest.fn() }
+        const proxyService = { addToBlacklist: jest.fn() }
+        const proxyAllocator = { acquire: jest.fn(), release: jest.fn() }
+        const allocationObserver = { onConnectionOutcome: jest.fn() }
+        const http = { get: jest.fn(), post: jest.fn() }
+        const repository = { findOneBy: jest.fn(), upsert: jest.fn() }
+        const createSmtpClient = jest.spyOn(SmtpClientFactory.prototype, 'create')
+        jest.mocked(loadAccountDiscoveryApprovals).mockResolvedValue({
+            schemaVersion: 1,
+            revision: 'smtp-composition-fixture',
+            approvals: [],
+        })
+
+        @Module({ providers: [{ provide: DnsService, useValue: dns }], exports: [DnsService] })
+        class FakeDnsModule {}
+
+        @Module({
+            providers: [
+                { provide: PROXY_SERVICE_TOKEN, useValue: proxyService },
+                { provide: PROXY_ALLOCATOR_TOKEN, useValue: proxyAllocator },
+                { provide: ALLOCATION_OBSERVER_TOKEN, useValue: allocationObserver },
+            ],
+            exports: [PROXY_SERVICE_TOKEN, PROXY_ALLOCATOR_TOKEN, ALLOCATION_OBSERVER_TOKEN],
+        })
+        class FakeProxyModule {}
+
+        const builder = Test.createTestingModule({ imports: [EmailVerificationCoreModule] })
+            .overrideModule(DnsModule)
+            .useModule(FakeDnsModule)
+            .overrideModule(ProxyModule)
+            .useModule(FakeProxyModule)
+            .overrideProvider(ConfigService)
+            .useValue({ get: jest.fn() })
+            .overrideProvider(HttpService)
+            .useValue(http)
+
+        for (const entity of [EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerificationEntity]) {
+            builder.overrideProvider(getRepositoryToken(entity)).useValue(repository)
+        }
+
+        const module = await builder.compile()
+        modules.push(module)
+        await module.init()
+
+        expect(module.select(EmailVerificationCoreModule).get(MAILBOX_PROBE, { strict: true })).toBeInstanceOf(
+            SmtpMailboxProbe,
+        )
+        expect(module.get(MailboxVerificationService)).toBeInstanceOf(MailboxVerificationService)
+        const discovery = module.select(AccountDiscoveryModule).get<AccountDiscovery>(ACCOUNT_DISCOVERY_TOKEN, {
+            strict: true,
+        })
+        await expect(discovery.discover(email)).resolves.toEqual([])
+        expect(loadAccountDiscoveryApprovals).toHaveBeenCalledTimes(1)
+        expect(
+            [...module.get(ModulesContainer).values()].filter(nestModule =>
+                nestModule.providers.has(ACCOUNT_DISCOVERY_TOKEN),
+            ),
+        ).toHaveLength(1)
+
+        for (const operation of [
+            dns.resolve,
+            proxyService.addToBlacklist,
+            proxyAllocator.acquire,
+            proxyAllocator.release,
+            allocationObserver.onConnectionOutcome,
+            http.get,
+            http.post,
+            repository.findOneBy,
+            repository.upsert,
+            createSmtpClient,
+        ]) {
+            expect(operation).not.toHaveBeenCalled()
+        }
+    })
 
     it('resolves the real mailbox factory and dispatches once through the approved provider', async () => {
         const dependencies = fixture(enabledConfiguration, [approval()])

@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 
 export const ACCOUNT_DISCOVERY_PURPOSE = 'email_verification.account_discovery' as const
 export const ACCOUNT_DISCOVERY_UNAVAILABLE_REASON = 'account-discovery-provider-unavailable' as const
@@ -56,11 +56,11 @@ export function isAccountDiscoveryApprovalAvailable(
     )
 }
 
-export class ApprovedAccountDiscoveryVerifier implements ICatchAllVerifier {
-    readonly sourceName: ICatchAllVerifier['sourceName']
+export class ApprovedAccountDiscoveryVerifier implements AccountDiscoveryProvider {
+    readonly sourceName: AccountDiscoveryProvider['sourceName']
 
     constructor(
-        private readonly verifier: ICatchAllVerifier,
+        private readonly verifier: AccountDiscoveryProvider,
         private readonly approval: AccountDiscoveryApprovalView,
         private readonly selection: AccountDiscoverySelection,
         private readonly clock: Clock,

@@ -1,5 +1,5 @@
 import type { AxiosRequestConfig } from 'axios'
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import type { AccountDiscoveryProvider } from '../../../../application/account-discovery/account-discovery-provider'
 import { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 import { Injectable, Logger, Optional } from '@nestjs/common'
@@ -40,7 +40,7 @@ export class MimecastLogin {
         private readonly httpService: HttpService,
     ) {}
 
-    forRegion(region: MimecastRegion): ICatchAllVerifier {
+    forRegion(region: MimecastRegion): AccountDiscoveryProvider {
         const url = MimecastLogin.urlForRegion(region)
 
         return Object.freeze({

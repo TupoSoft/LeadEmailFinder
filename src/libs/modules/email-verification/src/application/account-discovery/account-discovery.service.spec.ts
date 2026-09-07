@@ -1,8 +1,8 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 import { AccountDiscoveryService } from './account-discovery.service'
 import { AccountDiscoveryProviderUnavailableError } from './approved-account-discovery-verifier'
 
-function verifier(): jest.Mocked<ICatchAllVerifier> {
+function verifier(): jest.Mocked<AccountDiscoveryProvider> {
     return { sourceName: 'microsoft_2', verify: jest.fn() }
 }
 

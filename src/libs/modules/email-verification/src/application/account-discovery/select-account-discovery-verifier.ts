@@ -1,4 +1,4 @@
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 import {
     AccountDiscoveryApprovalView,
     AccountDiscoveryProviderName,
@@ -25,7 +25,7 @@ export interface AccountDiscoveryProviderConfiguration {
 
 export type AccountDiscoveryVerifierFactories = Record<
     AccountDiscoveryProviderName,
-    (region: string) => ICatchAllVerifier
+    (region: string) => AccountDiscoveryProvider
 >
 
 function selectedConfiguration(
@@ -64,7 +64,7 @@ export function selectAccountDiscoveryVerifier(
     approvals: readonly AccountDiscoveryApprovalView[],
     verifierFactories: AccountDiscoveryVerifierFactories,
     clock: Clock,
-): ICatchAllVerifier[] {
+): AccountDiscoveryProvider[] {
     const selection = selectedConfiguration(configuration)
 
     if (!selection) {

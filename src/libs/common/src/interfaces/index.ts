@@ -1,6 +1,5 @@
 export * from './dns'
 export * from './smtp'
-export * from './catch-all'
 export * from './email-verification'
 export * from './email'
 export * from './domain'

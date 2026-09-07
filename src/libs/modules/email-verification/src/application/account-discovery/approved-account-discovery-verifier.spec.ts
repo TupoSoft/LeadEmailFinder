@@ -7,7 +7,7 @@ import {
     Clock,
     isAccountDiscoveryApprovalAvailable,
 } from './approved-account-discovery-verifier'
-import { ICatchAllVerifier } from '@tuposoft/lead-email-finder/common'
+import { AccountDiscoveryProvider } from './account-discovery-provider'
 
 const selection: AccountDiscoverySelection = {
     approvalId: 'approval-fixture-1',
@@ -55,7 +55,7 @@ describe('ApprovedAccountDiscoveryVerifier', () => {
         const verifier = {
             sourceName: 'microsoft_2',
             verify: jest.fn().mockResolvedValue(true),
-        } satisfies ICatchAllVerifier
+        } satisfies AccountDiscoveryProvider
         const clock: Clock = { now: () => new Date('2026-09-02T10:30:00Z') }
         const approvedVerifier = new ApprovedAccountDiscoveryVerifier(verifier, approval(), selection, clock)
 
@@ -67,7 +67,7 @@ describe('ApprovedAccountDiscoveryVerifier', () => {
         const verifier = {
             sourceName: 'microsoft_2',
             verify: jest.fn().mockResolvedValue(true),
-        } satisfies ICatchAllVerifier
+        } satisfies AccountDiscoveryProvider
         let now = new Date('2026-09-02T10:30:00Z')
         const clock: Clock = { now: () => now }
         const approvedVerifier = new ApprovedAccountDiscoveryVerifier(verifier, approval(), selection, clock)

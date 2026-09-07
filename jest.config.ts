@@ -21,7 +21,6 @@ const config: Config = {
         '@tuposoft/lead-email-finder/keycloak-admin-http/(.*)': '<rootDir>/src/libs/keycloak-admin-http/src/$1',
         '@tuposoft/lead-email-finder/socket/(.*)': '<rootDir>/src/libs/socket/src/$1',
         '@tuposoft/lead-email-finder/dns/(.*)': '<rootDir>/src/libs/dns/src/$1',
-        '@tuposoft/lead-email-finder/catch-all/(.*)': '<rootDir>/src/libs/catch-all/src/$1',
         '@tuposoft/lead-email-finder/common/(.*)': '<rootDir>/src/libs/common/src/$1',
         '@tuposoft/lead-email-finder/modules/credits/(.*)': '<rootDir>/src/libs/modules/credits/src/$1',
         '@tuposoft/lead-email-finder/modules/email-verification/(.*)':
@@ -41,7 +40,6 @@ const config: Config = {
         '@tuposoft/lead-email-finder/key': '<rootDir>/src/libs/key/src',
         '@tuposoft/lead-email-finder/socket': '<rootDir>/src/libs/socket/src',
         '@tuposoft/lead-email-finder/dns': '<rootDir>/src/libs/dns/src',
-        '@tuposoft/lead-email-finder/catch-all': '<rootDir>/src/libs/catch-all/src',
         '@tuposoft/lead-email-finder/common': '<rootDir>/src/libs/common/src',
         '@tuposoft/lead-email-finder/modules/auth': '<rootDir>/src/libs/modules/auth/src',
         '@tuposoft/lead-email-finder/modules/bff-session': '<rootDir>/src/libs/modules/bff-session/src',

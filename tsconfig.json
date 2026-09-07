@@ -7,8 +7,6 @@
     "compilerOptions": {
         "baseUrl": "./",
         "paths": {
-            "@tuposoft/lead-email-finder/catch-all": ["src/libs/catch-all/src"],
-            "@tuposoft/lead-email-finder/catch-all/*": ["src/libs/catch-all/src/*"],
             "@tuposoft/lead-email-finder/common": ["src/libs/common/src"],
             "@tuposoft/lead-email-finder/common/*": ["src/libs/common/src/*"],
             "@tuposoft/lead-email-finder/config": ["src/libs/config/src"],
