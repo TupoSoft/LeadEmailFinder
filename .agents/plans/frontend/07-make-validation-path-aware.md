@@ -16,7 +16,7 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 - [x] (2026-09-07) Preserve the existing required validation conclusion through one fail-closed summary job.
 - [x] (2026-09-07) Make unchanged consumer jobs succeed explicitly instead of being skipped.
 - [x] (2026-09-07) Document the trigger matrix; validate Git pull-request/push comparisons and seven hosted orchestration fixtures.
-- [ ] (2026-08-31) Run workflow, fixture, prose, and repository checks and record evidence.
+- [x] (2026-09-07) Run workflow, fixture, prose, repository, image, and live browser checks and record passing evidence.
 
 ## Plan dependencies
 
@@ -85,9 +85,13 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Outcomes & Retrospective
 
-The implementation, local validation, and hosted workflow fixtures are complete. The complete pull-request
-workflow remains in progress. The classifier, event discovery, fixture runner, workflow structure tests, and strict
-summary are repository-owned. Every original validation command and its environment settings remain present.
+The implementation, local validation, seven hosted fixtures, and complete pull-request workflow are complete.
+The classifier, event discovery, fixture runner, workflow tests, and strict summary are repository-owned. Every
+original validation command and its environment settings remain present. Unselected consumers succeed explicitly,
+uncertain comparisons select every consumer, and the stable aggregate rejects unsuccessful dependencies.
+
+All eight hosted jobs passed, including images, PostgreSQL, real browser sessions, and Bruno. No application behavior
+changed. No material application architecture trade-off remains; isolated runners build their own gateway images.
 
 ## Context and Orientation
 
@@ -246,7 +250,8 @@ all four gateway tests passed. Root lint passed with one existing return-type wa
 typecheck, build, docs-tooling tests, architecture, privacy approval checks, and the security scan passed.
 
 The initial focused suite and normal pre-commit hook passed 183 tests. Review added transitive schema fixtures and
-the plan-only ratchet check; their focused suites passed 199 tests. The four PostgreSQL commands passed 43 tests
+the plan-only ratchet check; the final focused command passed 200 tests including the real ExecPlan fixture.
+The four PostgreSQL commands passed 43 tests
 against one isolated PostgreSQL 18 container, which was removed afterward. Browser workflows passed 18 tests,
 accessibility passed four, and visual baselines passed four.
 
@@ -276,11 +281,24 @@ The first complete pull-request run passed backend, web, contract, images, and r
 test received HTTP 504 instead of the existing expected HTTP 502 after stopping a fixture container; the same test
 passed locally. The identical failure also occurred in master runs
 [34111374087](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34111374087) and
-[34109666518](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34109666518). The refined implementation and
-deterministic fixture will run the complete hosted workflow again before completion.
+[34109666518](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34109666518).
+
+The complete [passing run 34113629796](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34113629796) validates
+implementation commit `d13d349`. Discovery, all six consumers, and `validate` succeeded. All 53 selected command steps
+passed: repository policy 9, backend 11, web 10, contract 5, images 5, and browser 13. Every consumer was selected because
+this pull request changes shared CI inputs. These are command-step counts, not test counts.
+
+Hosted backend validation passed 209 Jest suites with 2,182 tests, 32 Node runner tests, and 43 explicit PostgreSQL tests.
+The default Jest run retained 13 environment-dependent skipped suites with 72 tests. Vagrant passed two tests with 34
+assertions. Web passed 45 unit tests and 12 audit-tool tests. Browser validation passed four gateway tests, 18 browser
+workflow tests, four accessibility tests, four visual tests, and three genuine same-origin session tests. Bruno passed
+15 requests and 16 tests with no skips. All three image builds, manifest checks, Compose validation, and cleanup passed.
+
+The final evidence update changes this Markdown file only. The passing implementation run above is the full runtime
+evidence; Harper and the plan ratchet validate this documentation update.
 
 The exact prose command `corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md`
-passed both files before this evidence update. The final evidence update will receive the same check.
+passes both files, including this final evidence update.
 
 Record the path-to-consumer fixture matrix, redacted change-discovery output, each job conclusion, and the aggregate
 check name/result. Never record repository tokens, event payload secrets, environment dumps, cookies, user data, or
