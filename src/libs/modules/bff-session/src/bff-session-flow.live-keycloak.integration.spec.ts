@@ -389,7 +389,7 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
             .set('cookie', loginStateCookie)
             .redirects(0)
         expect(callbackResponse.status).toBe(302)
-        expect(callbackResponse.headers.location).toBe(appBaseUrl)
+        expect(callbackResponse.headers.location).toBe(`${appBaseUrl}/app`)
         expect(callbackResponse.headers['cache-control']).toBe('no-store')
         expect(callbackResponse.headers['referrer-policy']).toBe('no-referrer')
 

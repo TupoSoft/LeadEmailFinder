@@ -29,6 +29,10 @@ typography:
         fontFamily: "'Inter Variable', Arial, Helvetica, sans-serif"
         fontSize: '1rem'
         lineHeight: '1.45'
+    product-heading:
+        fontFamily: "'Inter Variable', Arial, Helvetica, sans-serif"
+        fontSize: '2.25rem'
+        lineHeight: '1.1'
     compact:
         fontFamily: "'Inter Variable', Arial, Helvetica, sans-serif"
         fontSize: '0.875rem'
@@ -43,6 +47,10 @@ rounded:
     panel: '0rem'
     circle: '999px'
 spacing:
+    shell-header-height: '6rem'
+    shell-sidebar-width: '14rem'
+    state-min-height: '15rem'
+    control-height: '2.75rem'
     unit: '0.25rem'
     control-gap: '0.75rem'
     content-gap: '1.5rem'
@@ -63,6 +71,15 @@ spacing:
     motion-fast-milliseconds: 140
     motion-reduced-milliseconds: 0.01
 components:
+    application-shell:
+        backgroundColor: '{colors.canvas}'
+        textColor: '{colors.ink}'
+        size: '{spacing.shell-header-height}'
+    action:
+        backgroundColor: '{colors.primary}'
+        textColor: '{colors.canvas}'
+        rounded: '{rounded.control}'
+        size: '{spacing.control-height}'
     application-background:
         backgroundColor: '{colors.page-background}'
         textColor: '{colors.ink}'
@@ -247,9 +264,22 @@ layout need and must match final geometry. Buttons and links never change size w
 
 ### Public Header and Section Links
 
-The public header contains the product name and real in-page links only. A fine rule anchors it to the content grid.
+The public header contains the product name, real in-page links, and a working sign-in link. A fine rule anchors it to the content grid.
 Section links use evergreen text and a thin underline that remains visible on focus. The same labels name their target
-sections. No sign-in, pricing, account, API, or placeholder action appears until its workflow exists.
+sections. Pricing, account settings, API tools, and placeholder actions stay absent until their workflows exist.
+
+### Application Shell and Recovery States
+
+The authenticated shell preserves the canvas, evergreen navigation, fine rules, and Inter typography. Its desktop
+header reserves 6rem and its sidebar reserves 14rem. At widths of 48rem or below, navigation becomes an inline
+disclosure above content. Opening it intentionally expands the document; it does not cover account information or
+require a second navigation tree. The document remains the scroll owner.
+
+Product headings use 2.25rem with a 1.1 line height. Shared state messages reserve at least 15rem for bootstrap,
+recovery, and sign-out feedback. Account information wraps in full. The shared action treatment uses evergreen with
+canvas text, the control radius, and a 2.75rem minimum height; secondary actions use canvas with evergreen text.
+Hover and active states use ink or sage. Disabled actions retain their dimensions and use sage with ink text.
+Pending state is expressed through readable status text and busy semantics, without continuous decorative motion.
 
 ### Signal Path
 

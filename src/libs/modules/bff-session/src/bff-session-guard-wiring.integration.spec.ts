@@ -173,6 +173,7 @@ describe('BFF session guard wiring', () => {
     it('maps an expired session record to the exact 401 through the real cookie authentication chain', async () => {
         const sessionStore: jest.Mocked<SessionStore> = {
             create: jest.fn(),
+            replace: jest.fn(),
             get: jest.fn().mockResolvedValue(undefined),
             save: jest.fn(),
             delete: jest.fn(),

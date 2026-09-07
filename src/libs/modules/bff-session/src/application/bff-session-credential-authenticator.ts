@@ -1,7 +1,11 @@
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { CredentialAuthenticator, CredentialRejectedError, ExtractedCredential } from '@tuposoft/lead-email-finder/modules/auth'
+import {
+    CredentialAuthenticator,
+    CredentialRejectedError,
+    ExtractedCredential,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import { HumanMembershipResolver } from './human-membership-resolver.service'
-import { SessionStore } from './session-store'
+import { SessionMissingError, SessionStore } from './session-store'
 import { SessionRefreshFailedError, SessionTokenRefresher } from './session-token-refresher.service'
 
 export class BffSessionCredentialAuthenticator implements CredentialAuthenticator {
@@ -39,7 +43,14 @@ export class BffSessionCredentialAuthenticator implements CredentialAuthenticato
             refreshedRecord.externalIdentityId,
         )
 
-        await this.sessionStore.save(sessionId, refreshedRecord)
+        try {
+            await this.sessionStore.save(sessionId, refreshedRecord)
+        } catch (error) {
+            if (error instanceof SessionMissingError) {
+                throw new CredentialRejectedError('Session was replaced or expired')
+            }
+            throw error
+        }
 
         return {
             credentialKind: 'human_session',

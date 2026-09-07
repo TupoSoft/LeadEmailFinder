@@ -150,8 +150,10 @@ describe('BffSessionController current account', () => {
 })
 
 describe('BffSessionController callback HTTP boundary', () => {
-    const bffSessionFlow: jest.Mocked<Pick<BffSessionFlowService, 'handleCallback'>> = {
+    const bffSessionFlow: jest.Mocked<Pick<BffSessionFlowService, 'handleCallback' | 'login' | 'discardSession'>> = {
         handleCallback: jest.fn(),
+        login: jest.fn(),
+        discardSession: jest.fn(),
     }
     const currentAccountService: jest.Mocked<Pick<CurrentAccountService, 'get'>> = { get: jest.fn() }
     let app: INestApplication
@@ -181,6 +183,32 @@ describe('BffSessionController callback HTTP boundary', () => {
 
     const stateSecret = 'state-secret-5d96b69d'
     const codeSecret = 'code-secret-746d4fd3'
+
+    it.each(['lef_session=stale-session', 'lef_session=%', 'lef_session=', 'lef_session=a; lef_session=b'])(
+        'clears session and CSRF cookies before redirect for an unusable presented cookie: %s',
+        async cookie => {
+            bffSessionFlow.login.mockResolvedValue({
+                state: 'safe-state',
+                authorizationUrl: 'https://issuer/auth',
+                clearSessionCookies: true,
+            })
+            const response = await request(app.getHttpServer())
+                .get('/v1/auth/login?destination=%2Fapp%2Fverification')
+                .set('cookie', cookie)
+                .redirects(0)
+                .expect(302)
+            expect(bffSessionFlow.login).toHaveBeenCalledWith('/app/verification', expect.any(String))
+            for (const name of ['lef_session', BFF_CSRF_COOKIE_NAME]) {
+                const cleared = setCookieHeaders(response).find(value => value.startsWith(`${name}=`))!
+                expect(cleared).toContain('Path=/')
+                expect(cleared).toContain('SameSite=Lax')
+                expect(cleared).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT')
+                expect(cleared).not.toContain('Max-Age')
+            }
+            expect(headersOf(response).location).toBe('https://issuer/auth')
+            expectCallbackPrivacyHeaders(response)
+        },
+    )
 
     it.each([
         ['missing', `/v1/auth/callback?code=${codeSecret}`],
@@ -298,7 +326,11 @@ describe('BffSessionController callback HTTP boundary', () => {
     })
 
     it('clears transient state, issues the session cookies, and preserves the success redirect', async () => {
-        bffSessionFlow.handleCallback.mockResolvedValue({ sessionId: 'new-session-id', csrfToken: 'new-csrf-token' })
+        bffSessionFlow.handleCallback.mockResolvedValue({
+            sessionId: 'new-session-id',
+            csrfToken: 'new-csrf-token',
+            destination: '/app/verification?view=recent',
+        })
 
         const response = await request(app.getHttpServer())
             .get(`/v1/auth/callback?state=${stateSecret}&code=${codeSecret}`)
@@ -312,7 +344,7 @@ describe('BffSessionController callback HTTP boundary', () => {
             cookieState: stateSecret,
             existingSessionId: 'existing-session-id',
         })
-        expect(headersOf(response).location).toBe(configuration.appBaseUrl)
+        expect(headersOf(response).location).toBe(`${configuration.appBaseUrl}/app/verification?view=recent`)
         expectCallbackPrivacyHeaders(response)
         expectLoginStateCookieCleared(response)
 

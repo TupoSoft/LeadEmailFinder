@@ -1,0 +1,41 @@
+.account {
+    padding-block: var(--space-content-gap);
+    border-top: var(--rule-width) solid var(--color-rule);
+    border-bottom: var(--rule-width) solid var(--color-rule-soft);
+}
+.account dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-content-gap);
+    margin: 0;
+}
+.account dt {
+    margin-block-end: var(--space-control-gap);
+    color: var(--color-evergreen);
+    font-size: var(--font-size-utility);
+    font-weight: 700;
+}
+.account dd {
+    margin: 0;
+}
+.access {
+    padding-block: var(--space-page-gutter-wide);
+}
+.access h2 {
+    font-size: 1.25rem;
+}
+.access p {
+    max-width: 60ch;
+}
+.access ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-control-gap);
+    padding-inline-start: var(--space-content-gap);
+}
+@media (max-width: 48rem) {
+    .account dl,
+    .access ul {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

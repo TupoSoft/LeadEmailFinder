@@ -351,7 +351,7 @@
     },
     "/v1/auth/callback": {
       "get": {
-        "description": "Consumes one pending Authorization Code with PKCE response. Success returns to the application; recoverable failures return to the same-origin error route with a stable safe code.",
+        "description": "Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.",
         "operationId": "completeBrowserAuthorization",
         "parameters": [
           {
@@ -375,7 +375,7 @@
         ],
         "responses": {
           "302": {
-            "description": "Redirects to the application after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.",
+            "description": "Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.",
             "headers": {
               "Cache-Control": {
                 "description": "Prevents storage of the authorization response.",
@@ -484,7 +484,18 @@
     "/v1/auth/login": {
       "get": {
         "operationId": "loginBrowserSession",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app.",
+            "in": "query",
+            "name": "destination",
+            "required": false,
+            "schema": {
+              "example": "/app/verification?view=recent",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "302": {
             "description": "Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge.",
@@ -497,7 +508,7 @@
                 }
               },
               "Set-Cookie": {
-                "description": "Sets the transient HttpOnly lef_login_state cookie.",
+                "description": "Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies.",
                 "schema": {
                   "type": "string"
                 }

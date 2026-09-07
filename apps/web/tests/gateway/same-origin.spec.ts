@@ -127,10 +127,11 @@ test('real Keycloak login reads an opaque cookie session and logs out using the 
     await page.locator('#kc-login').click()
     const callback = await callbackResponse
     expect(callback.status()).toBe(302)
-    expect(callback.headers().location).toBe(origin)
+    expect(callback.headers().location).toBe(`${origin}/app`)
     expect(callback.headers()['cache-control']).toBe('no-store')
     expect(callback.headers()['referrer-policy']).toBe('no-referrer')
-    await expect(page).toHaveURL(`${origin}/`)
+    await expect(page).toHaveURL(`${origin}/app`)
+    await expect(page.getByRole('heading', { name: 'Your workspace', exact: true })).toBeVisible()
     const cookies = await context.cookies(origin)
     const session = cookies.find(cookie => cookie.name === 'lef_session')
     expect(Boolean(session?.value)).toBe(true)

@@ -121,6 +121,16 @@ describe('BFF Swagger contracts', () => {
                 'Set-Cookie': { description: expect.stringContaining('lef_login_state') },
             },
         })
+        expect(operation?.parameters).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'destination',
+                    in: 'query',
+                    required: false,
+                    schema: expect.objectContaining({ type: 'string' }),
+                }),
+            ]),
+        )
         expect(operation?.requestBody).toBeUndefined()
     })
 

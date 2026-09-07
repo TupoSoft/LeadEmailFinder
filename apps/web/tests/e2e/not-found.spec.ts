@@ -14,6 +14,7 @@ test.describe('not-found experience', () => {
             'How it works',
             'Signals',
             'Principles',
+            'Sign in',
             'Back to home',
         ]) {
             await expectNextTabStop(page, accessibleName)

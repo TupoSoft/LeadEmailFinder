@@ -13,13 +13,13 @@ sessions lead to distinct, recoverable screens.
 
 ## Progress
 
-- [ ] (2026-08-31) Add a safe post-login destination to the existing callback-error contract.
-- [ ] (2026-08-31) Add session bootstrap and authentication routes using the shared generated-client transport.
-- [ ] (2026-08-31) Install and configure the shared TanStack Query provider and explicit retry defaults.
-- [ ] (2026-08-31) Clear every authenticated query and mutation at identity/session boundaries.
-- [ ] (2026-08-31) Build the responsive, capability-aware application shell and its recovery states.
-- [ ] (2026-08-31) Add focused API, component, accessibility, and live-Keycloak Playwright coverage.
-- [ ] (2026-08-31) Run repository, design-contract, generated-client, and browser validation and record the outcome.
+- [x] (2026-09-07) Add a safe post-login destination to the existing callback-error contract.
+- [x] (2026-09-07) Add session bootstrap and authentication routes using the shared generated-client transport.
+- [x] (2026-09-07) Install and configure the shared TanStack Query provider and explicit retry defaults.
+- [x] (2026-09-07) Clear every authenticated query and mutation at identity/session boundaries.
+- [x] (2026-09-07) Build the responsive, capability-aware application shell and its recovery states.
+- [x] (2026-09-07) Add focused API, component, accessibility, and live-Keycloak Playwright coverage.
+- [x] (2026-09-07) Run repository, design-contract, generated-client, and browser validation and record the outcome.
 
 ## Plan dependencies
 
@@ -27,7 +27,19 @@ sessions lead to distinct, recoverable screens.
 
 ## Surprises & Discoveries
 
-None yet.
+- The healthy preexisting Docker project belongs to another checkout. Validation uses isolated project `lef503`
+  with alternate ports, including web 53103 and Keycloak 58103; shared containers and volumes remain intact.
+- A refresh saving a session after replacement could recreate the deleted Redis key. Session saves must update an
+  existing key only, so concurrent authentication cannot resurrect the captured old cookie.
+- OIDC navigation destroys the originating document. Its first account installation notifies existing tabs without
+  persisting identity data. A notification cannot cancel that document's pending first-account announcement: a
+  regression test proves that an older tab's delayed response cannot leave a stale principal installed. Later
+  responses to notifications do not rebroadcast.
+- Browser plugin tools are unavailable. The repository Playwright workflow supplies browser evidence. Actual
+  back/forward restoration uses a dedicated Chromium instance with that cache enabled and asserts a persisted
+  pageshow event plus a cleared account snapshot before rebootstrap.
+- Playwright does not intercept later requests in a redirect chain. The live race test acquires two provider codes
+  by pausing the form POST responses, then submits their distinct callbacks concurrently against the same old cookie.
 
 ## Decision Log
 
@@ -87,9 +99,34 @@ None yet.
   reuse consistently.
   Date/Author: 2026-08-31, project planning.
 
+- Decision: Register navigation entries only when their working feature routes ship. This slice registers Home and
+  tests capability filtering with registered team, billing, and service-client destinations. The homepage displays
+  current account capabilities as text. Rationale: Content routes belong to later plans, and the existing design
+  contract forbids placeholder controls. Date/Author: 2026-09-07, implementation.
+- Decision: Use a shared inline navigation disclosure on narrow screens. Opening it focuses the first link; Escape
+  and route selection restore the trigger. Rationale: The document expands without obscuring content or adding a
+  modal layer. Date/Author: 2026-09-07, implementation.
+- Decision: Withhold a successful bootstrap response after another tab starts sign-out. Rationale: That read can race
+  server logout and expose the account again before confirmation. The receiving tab offers an explicit sign-out
+  retry and fresh sign-in. A reason-only notification cannot prove that the same membership has a new server
+  session, so recovery remains conservative until an explicit action. Date/Author: 2026-09-07, implementation.
+
 ## Outcomes & Retrospective
 
-Not started.
+The public sign-in action and protected shell now use the existing BFF and preserve safe destinations. Shared
+authentication state owns bootstrap, sanitized recovery states, sign-out, capability-driven navigation, and the
+query/mutation generation boundary. Two memberships in one organization remain isolated in the browser and server
+stores. The responsive shell reuses the approved design and registers Home; later feature plans supply additional
+working destinations. Focused, repository, design, and live validation have passed. The implementation and updated
+contracts form one pull request for issue #503, with no remaining implementation work in this slice.
+
+The architecture gate reports no new baseline violations. Session replacement remains behind the existing store
+port, and provider transport, session application rules, and UI state retain separate responsibilities. Atomic Redis
+replacement guarantees that the old and new keys are never both valid after the operation. The injected failure
+evidence covers serialization and script failures before mutation, plus callback response-construction cleanup.
+A lost Redis acknowledgment after a committed operation is not covered by those tests: the new key can remain until
+expiry even when no cookie reaches the browser. Durable reconciliation of ambiguous infrastructure outcomes is
+outside this disposable development slice; this plan does not claim that distributed acknowledgment guarantee.
 
 ## Context and Orientation
 
@@ -157,7 +194,9 @@ Replace the callback flow's best-effort `delete(existingSessionId).catch(...)` w
 and record, then uses one Lua operation that creates the new entry and deletes the old entry only when the expected
 old key still exists. The in-memory adapter implements the same all-or-nothing behavior. A missing or expired
 expected key is a replacement conflict, not permission to create a new session; any conflict,
-Redis/serialization failure, or controller failure creates no new record and sets no new cookie. A genuinely fresh
+pre-commit Redis/serialization failure creates no new record and sets no new cookie. A controller failure while
+constructing the response removes pending cookie headers and discards its newly created record. Lost acknowledgments
+after a committed Redis operation have the limitation recorded in Outcomes & Retrospective. A genuinely fresh
 lineage uses the ordinary create path only while the callback still has no session cookie. On success, a captured old
 cookie receives `401` in another browser context before the new cookie is installed in UI state. Add application,
 Redis integration, and two-context HTTP tests for successful replacement, fresh creation, expected-old absence,
@@ -274,7 +313,7 @@ unknown paths. These browser URLs and behaviors are part of this plan's contract
   work, clears authenticated caches, and reboots account context in every other open tab through a secret-free
   session-boundary event.
 - A successful login over an existing session atomically installs one new server session and invalidates the
-  captured old cookie, including in another tab. An injected session-store failure installs no new cookie/session and
+  captured old cookie, including in another tab. An injected pre-commit store failure installs no new cookie/session and
   never leaves both old and new sessions valid. Two distinct callbacks racing from the same expected old session
   produce exactly one replacement; the losing callback is rejected and leaves no orphan session.
 - Starting login with a stale, expired, malformed, or forged session cookie clears both session and CSRF cookies with
@@ -301,18 +340,26 @@ tests. Then run:
     corepack pnpm openapi:check
     corepack pnpm --filter ./apps/web typecheck
     corepack pnpm --filter ./apps/web lint
-    corepack pnpm --filter ./apps/web test
+    corepack pnpm --filter ./apps/web test:ci
     corepack pnpm typecheck
     corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm architecture:check
+    corepack pnpm test:gateway
+    corepack pnpm test:ci-paths
+    corepack pnpm design:lint
     git diff --check
 
-After confirming the disposable Compose project belongs to this checkout, start the exact same-origin
-web/API/Keycloak runtime and run the focused live browser scenario in Chromium and at least one narrow viewport:
+The owned `lef503` Compose runtime serves the built web app and API at `http://localhost:53103`, with live Keycloak
+at `http://localhost:58103`. Its metadata belongs to this checkout. This host uses rootless Docker and a disposable
+Docker configuration directory. Run the desktop/narrow browser matrix and the separate live suite with:
 
-    corepack pnpm dev:reset -- --confirm-project=LEF
-    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/auth-shell.spec.ts --project=chromium
+    corepack pnpm --filter ./apps/web verify:ui
+    DOCKER_HOST=unix:///run/user/1000/docker.sock DOCKER_CONFIG=/tmp/lef503-docker COMPOSE_PROJECT_NAME=lef503 corepack pnpm test:web-live
+    DOCKER_HOST=unix:///run/user/1000/docker.sock DOCKER_CONFIG=/tmp/lef503-docker COMPOSE_PROJECT_NAME=lef503 corepack pnpm bruno:bff-sessions
+
+The live launcher validates ownership before creating two temporary memberships, cleans its fixtures, and requires
+all six browser tests to pass. It never resets another checkout or deletes unrelated sessions.
 
 The scenario creates disposable unprivileged human fixtures. It records live login, atomic two-context session
 replacement, and a race between two callbacks for the same old session. It also records destination preservation,
@@ -325,8 +372,8 @@ record a narrow, evidence-backed exception in this plan:
 
 Inspect desktop and narrow screenshots for stable layout, focus, overflow, long/error copy, reduced motion, and all
 loading and recovery states. If implementation materially changes root `DESIGN.md` or `UX-CONTRACT.md`, run
-`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md` and record
-the result. Do not claim the live Keycloak scenario passed from mocked component tests.
+`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/08-sign-in-and-navigate-application-shell.md src/libs/modules/bff-session/README.md bruno/bff-sessions/README.md docker/README.md`
+and record the result. Do not claim the live Keycloak scenario passed from mocked component tests.
 
 ## Idempotence and Recovery
 
@@ -345,10 +392,43 @@ first confirming ownership.
 
 ## Artifacts and Notes
 
-Record the final stable callback codes, the destination-normalization test table, generated `OpenAPI` operation names,
-focused test counts, session-replacement and authentication-generation race evidence, premium-audit result, and redacted Playwright evidence
-for desktop and narrow views. Do not record login credentials, cookies, CSRF values, OAuth parameters, tokens, or
-real user/account data.
+Validation recorded on 2026-09-07:
+
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 212 Jest suites and 2,274 tests passed; 13 suites and
+  80 runtime-gated tests skipped. All 32 launcher tests passed. Separate live validation supplies runtime evidence.
+- `TEST_BFF_REDIS_URL=redis://localhost:56103 corepack pnpm exec jest src/libs/modules/bff-session --runInBand`:
+  28 suites and 371 tests passed, including eight actual Redis contract cases; four live-Keycloak tests skipped.
+- Web `test:ci`: all 119 tests across 10 files passed. Root and web type checking and lint passed; root lint retains
+  one existing return-type warning in `load-secrets.spec.ts`.
+- Generated OpenAPI export, generation, and freshness checks passed. Operation names remain `loginBrowserSession`,
+  `completeBrowserAuthorization`, `getCurrentAccount`, and `logoutBrowserSession`.
+- Destination tables cover valid application paths with query/fragment values and rejection of absolute, network,
+  malformed, encoded path, double-slash, dot-segment, public, and recovery/authentication-loop destinations.
+- `architecture:check` passed for nine modules with 20 unchanged baseline violations. `test:gateway` passed all four
+  routing checks, and `test:ci-paths` fixtures passed.
+- `ui:audit` returned zero findings; `design:lint` returned zero errors and zero warnings. The regular Playwright
+  matrix passed all 52 desktop/narrow tests, and the final authentication matrix passed all 26 tests after the last
+  auth/header changes. Checks include keyboard focus, landmarks, reduced motion, 320-pixel overflow, nullable email,
+  every recovery state, accessibility, and stable header geometry across pending, failed, and successful bootstrap.
+- Bruno's existing BFF collection passed all 15 requests and 16 assertions against the owned live runtime. Updated
+  coverage verifies destination metadata, forged-cookie recovery, and cookie-clearing/privacy headers.
+- Cross-tab and generation regressions cover stale successes, stale failures, delayed parsing, mutation callbacks,
+  initial-document announcement races, and sign-out uncertainty. Temporary visual evidence uses synthetic display
+  data at `/tmp/lef503-evidence/workspace-desktop.png`, `/tmp/lef503-evidence/workspace-narrow.png`, and
+  `/tmp/lef503-evidence/session-expired.png`.
+
+- The final `test:web-live` run passed all six browser tests with zero skips or flaky results. Gateway and API
+  privacy log checks passed. Real Keycloak evidence covers destination preservation, hard refresh, persisted
+  back/forward restoration, expiry and reauthentication, authoritative forbidden API responses, mobile keyboard
+  navigation, cross-tab sign-out, and replacement by another membership in the same organization. Two distinct
+  valid callbacks raced against one old cookie: exactly one succeeded, the loser received `login_state_invalid`,
+  the old cookie received `401`, and Redis contained exactly one new session, removed by winner sign-out.
+- The six-file Harper command in Validation passed with no findings. The final live-launcher regression run passed
+  all five tests, including accurate redacted failure locations for both browser spec files.
+
+Stable callback codes remain
+`login_state_invalid`, `authorization_code_exchange_failed`, and `active_membership_required`. No provider exception
+text, credentials, cookies, OAuth parameters, or real account data are included in the evidence.
 
 The authentication boundary, redirect safety policy, atomic session replacement, session/error behavior, response-generation fence, UI states,
 design constraints, test matrix, and one-pull-request boundary are decision-complete. Later feature routes can

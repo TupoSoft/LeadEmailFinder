@@ -19,7 +19,8 @@
         "publicRoot": "apps/web/tests/e2e/public-entry.spec.ts",
         "notFound": "apps/web/tests/e2e/not-found.spec.ts",
         "accessibility": "apps/web/tests/e2e/accessibility.spec.ts",
-        "visualRegression": "apps/web/tests/e2e/visual.spec.ts"
+        "visualRegression": "apps/web/tests/e2e/visual.spec.ts",
+        "authentication": "apps/web/tests/e2e/auth-shell.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",
@@ -75,7 +76,14 @@
             "spacing.editorial-accent-height": "--editorial-accent-height",
             "spacing.editorial-accent-width": "--editorial-accent-width",
             "spacing.motion-fast-milliseconds": "--motion-fast-milliseconds",
-            "spacing.motion-reduced-milliseconds": "--motion-reduced-milliseconds"
+            "spacing.motion-reduced-milliseconds": "--motion-reduced-milliseconds",
+            "typography.product-heading.fontFamily": "--font-body",
+            "typography.product-heading.fontSize": "--font-size-product-heading",
+            "typography.product-heading.lineHeight": "--line-height-product-heading",
+            "spacing.shell-header-height": "--shell-header-height",
+            "spacing.shell-sidebar-width": "--shell-sidebar-width",
+            "spacing.state-min-height": "--state-min-height",
+            "spacing.control-height": "--control-height"
         }
     },
     "componentMapping": {
@@ -121,11 +129,17 @@
         },
         "components.elevation-shadow.backgroundColor": {
             "reference": "colors.shadow",
-            "consumers": ["apps/web/src/routes/PublicEntryPage.module.css","apps/web/src/routes/NotFoundPage.module.css"]
+            "consumers": [
+                "apps/web/src/routes/PublicEntryPage.module.css",
+                "apps/web/src/routes/NotFoundPage.module.css"
+            ]
         },
         "components.elevation-shadow.size": {
             "reference": "spacing.page-shadow-blur",
-            "consumers": ["apps/web/src/routes/PublicEntryPage.module.css","apps/web/src/routes/NotFoundPage.module.css"]
+            "consumers": [
+                "apps/web/src/routes/PublicEntryPage.module.css",
+                "apps/web/src/routes/NotFoundPage.module.css"
+            ]
         },
         "components.public-header.size": {
             "reference": "spacing.rule-width",
@@ -161,15 +175,24 @@
         },
         "components.editorial-accent.backgroundColor": {
             "reference": "colors.accent",
-            "consumers": ["apps/web/src/routes/PublicEntryPage.module.css","apps/web/src/components/Principles.module.css"]
+            "consumers": [
+                "apps/web/src/routes/PublicEntryPage.module.css",
+                "apps/web/src/components/Principles.module.css"
+            ]
         },
         "components.editorial-accent.height": {
             "reference": "spacing.editorial-accent-height",
-            "consumers": ["apps/web/src/routes/PublicEntryPage.module.css","apps/web/src/components/Principles.module.css"]
+            "consumers": [
+                "apps/web/src/routes/PublicEntryPage.module.css",
+                "apps/web/src/components/Principles.module.css"
+            ]
         },
         "components.editorial-accent.width": {
             "reference": "spacing.editorial-accent-width",
-            "consumers": ["apps/web/src/routes/PublicEntryPage.module.css","apps/web/src/components/Principles.module.css"]
+            "consumers": [
+                "apps/web/src/routes/PublicEntryPage.module.css",
+                "apps/web/src/components/Principles.module.css"
+            ]
         },
         "components.public-footer.backgroundColor": {
             "reference": "colors.sage",
@@ -194,6 +217,34 @@
         "components.not-found.padding": {
             "reference": "spacing.section-gap",
             "consumers": ["apps/web/src/routes/NotFoundPage.module.css"]
+        },
+        "components.application-shell.backgroundColor": {
+            "reference": "colors.canvas",
+            "consumers": ["apps/web/src/app/ApplicationFrame.module.css"]
+        },
+        "components.application-shell.textColor": {
+            "reference": "colors.ink",
+            "consumers": ["apps/web/src/app/ApplicationFrame.module.css"]
+        },
+        "components.application-shell.size": {
+            "reference": "spacing.shell-header-height",
+            "consumers": ["apps/web/src/app/ApplicationFrame.module.css"]
+        },
+        "components.action.backgroundColor": {
+            "reference": "colors.primary",
+            "consumers": ["apps/web/src/shared/Action.module.css"]
+        },
+        "components.action.textColor": {
+            "reference": "colors.canvas",
+            "consumers": ["apps/web/src/shared/Action.module.css"]
+        },
+        "components.action.rounded": {
+            "reference": "rounded.control",
+            "consumers": ["apps/web/src/shared/Action.module.css"]
+        },
+        "components.action.size": {
+            "reference": "spacing.control-height",
+            "consumers": ["apps/web/src/shared/Action.module.css"]
         }
     }
 }

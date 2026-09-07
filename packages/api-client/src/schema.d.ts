@@ -30,7 +30,7 @@ export interface paths {
         };
         /**
          * Complete browser authorization
-         * @description Consumes one pending Authorization Code with PKCE response. Success returns to the application; recoverable failures return to the same-origin error route with a stable safe code.
+         * @description Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.
          */
         get: operations["completeBrowserAuthorization"];
         put?: never;
@@ -251,7 +251,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirects to the application after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required. */
+            /** @description Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required. */
             302: {
                 headers: {
                     /** @description Prevents storage of the authorization response. */
@@ -296,7 +296,10 @@ export interface operations {
     };
     loginBrowserSession: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app. */
+                destination?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -308,7 +311,7 @@ export interface operations {
                 headers: {
                     /** @description Provider authorization URL. */
                     Location?: string;
-                    /** @description Sets the transient HttpOnly lef_login_state cookie. */
+                    /** @description Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };

@@ -42,3 +42,15 @@ export function buildLoginStateCookieOptions(configuration: BffSessionConfigurat
 export function buildLoginStateClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
     return buildLoginStateCookieScope(configuration)
 }
+
+export function buildSessionClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+    const scope = buildSessionCookieOptions(configuration)
+    delete scope.maxAge
+    return scope
+}
+
+export function buildCsrfClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+    const scope = buildCsrfCookieOptions(configuration)
+    delete scope.maxAge
+    return scope
+}

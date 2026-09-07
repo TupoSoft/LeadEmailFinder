@@ -8,7 +8,7 @@ in its maintained source and is referenced here rather than repeated. Visual int
 
 - **Audience:** People assessing email-address deliverability signals before deciding whether to send.
 - **Primary jobs:** Understand what the product checks, follow the technical signal path, understand the limits of the
-  result, and recover from an unknown public URL.
+  result, sign in to an organization workspace, and recover from an unknown URL.
 - **Target markets:** No country-specific market is established for this release.
 - **Active locales:** `en` only.
 - **Language and content register:** English-first, concise, factual, and respectful. Copy is centralized by product
@@ -42,12 +42,16 @@ authentication, or email-verification business decision.
 
 ## Canonical UI Map
 
-Only capabilities used by the current public routes are resolved. A later feature must add its applicable capability
-before implementation rather than infer an owner from this limited foundation.
+The shared owners below apply to public and authenticated routes. Later features register their own working routes
+and reuse these primitives; navigation visibility follows effective capabilities returned by the API.
 
 | Capability | Canonical owner               | Source of truth | Allowed variants                             | Verification                      |
 | ---------- | ----------------------------- | --------------- | -------------------------------------------- | --------------------------------- |
 | Scrollbar  | Global application stylesheet | `DESIGN.md`     | Document baseline; named geometry exceptions | Computed style and browser review |
+| Navigation | `ResponsiveNavigation` | This contract | Desktop navigation; inline narrow disclosure | Component focus tests and Playwright |
+| Session | `AuthProvider` and `AuthSession` | `frontend/08` | Bootstrap, expiry, account failure, sign-out | Generation, cache, and browser tests |
+| Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
+| Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
 
 ## Route and Copy Ownership
 
@@ -87,8 +91,9 @@ state. A later API-backed plan must define those states before adding the corres
 
 ## Navigation and Responsive Behavior
 
-- React Router owns `/` and the catch-all UI route. API path spaces remain reserved by the frontend road map.
-- The public header exposes only `How it works`, `Signals`, and `Principles`, each with a real matching target.
+- React Router owns `/`, `/auth/error`, `/app/**`, and the catch-all UI route. API path spaces remain reserved by the frontend road map.
+- The public header exposes `How it works`, `Signals`, and `Principles`, each with a real matching target, plus
+  `Sign in`, which starts the existing browser sign-in flow with `/app` as its destination.
 - The hero closes with `Continue to the principles` and a down cue targeting `#principles`. The principles section
   closes with `Back to how it works` and an up cue targeting `#how-it-works`; directional cues match the scroll result.
 - Document titles are route-specific and set when route content changes; the static HTML title is only a startup
@@ -106,8 +111,9 @@ state. A later API-backed plan must define those states before adding the corres
 
 ## Overlays and Feedback
 
-The current routes have no dialog, drawer, toast, alert banner, tooltip, destructive confirmation, or unsaved state.
-They must not imitate one. Later plans resolve and record those canonical owners before use.
+The narrow application navigation is an inline, non-modal disclosure. It has no focus trap or obscured background.
+Opening it focuses the first link; Escape and route selection close it and return focus to its trigger. The public
+routes have no overlays. Later plans resolve shared dialog and notification owners before adding those behaviors.
 
 ## Async and Resilience
 
@@ -123,8 +129,10 @@ prevention, and recovery before implementation.
 
 ## Permission and Clipboard
 
-There is no permission-gated action, clipboard action, or secret value on these routes. Authentication, account,
-pricing, API, and verification actions remain absent until their owning plans implement working behavior.
+The public header provides sign-in. Authenticated routes display account context and effective capabilities.
+Navigation filters only registered destinations by their required capability; the API remains the authorization
+authority. Billing, team, service-client, and verification tools gain navigation entries when their working routes
+ship. These screens expose no clipboard action or secret value.
 
 ## Accessibility and Motion
 
@@ -164,6 +172,61 @@ React Router navigation and its global not-found experience. The gateway reserve
 `/health`, `/openapi.json`, `/docs-json`, and `/docs-yaml`. Unknown API paths retain backend JSON errors.
 
 The gateway preserves API cookies, redirect locations, CSRF headers, and restrictive callback cache and referrer
-headers. The serving topology introduces no authentication controls or feature screens. Its source contract is
+headers. The gateway itself introduces no authentication controls; the application owns the sign-in link and shell. Its source contract is
 `.agents/plans/frontend/06-serve-web-and-api-from-one-origin.md`; browser verification is owned by
 `apps/web/tests/gateway` and the `corepack pnpm test:web-live` launcher.
+
+
+## Authentication and Application Navigation
+
+The source contract is `.agents/plans/frontend/08-sign-in-and-navigate-application-shell.md`. The browser uses the
+existing generated API client and BFF cookies. It never handles OAuth tokens. The current-account response owns
+identity and effective capabilities; roles are not interpreted as frontend permissions. Missing email uses the exact
+copy `Email unavailable`. Organization and account information wrap in full and appear in the main content on phones.
+
+| Route | Heading and document title prefix | Recovery |
+| --- | --- | --- |
+| `/app` | `Your workspace` | Refresh account or sign out |
+| `/app/session-expired` | `Your session has expired` | Sign in to the preserved safe destination |
+| `/app/account-unavailable` | `Account unavailable` | Start a fresh sign-in attempt |
+| `/app/forbidden` | `Access denied` | Back to workspace; keep the authenticated context |
+| `/auth/error` | `Sign-in did not complete` | Start a fresh sign-in attempt |
+| Unknown `/app/**` | `Page not found` | Back to workspace |
+
+Every title ends with ` | Lead Email Finder` and contains no account information. Pending, unavailable, signing-out,
+signed-out, and uncertain sign-out states use their own heading as the title prefix. The callback-error page uses only the
+three public error codes to select stable copy; unknown codes receive generic recovery copy. They never render provider
+messages or replay callback parameters. Public and callback-error routes do not request the session on mount.
+
+| Operation | Pending | Success | Failure and recovery |
+| --- | --- | --- | --- |
+| Open a protected route | Stable session-check region | Account and shell | Initial unauthenticated state starts sign-in; transient failure offers Try again |
+| Refresh account | Stable session-check region | Fresh current-account value | Session loss leads to session expired; unusable context leads to account unavailable |
+| Sign out | Account and caches disappear immediately | A confirmed 204 renders You are signed out | Uncertain completion keeps data hidden and offers Retry sign-out or a fresh sign-in |
+| Restore a cached page | Protected content is hidden before restoration | Fresh account bootstrap | Normal session recovery; no restored account snapshot |
+| Receive another tab's boundary | Clear caches, abort old work, and hide account context | Fresh bootstrap after principal replacement | During sign-out, a still-valid old session is withheld and sign-out retry remains available |
+
+The single application QueryClient defaults to no retries. Session bootstrap explicitly permits one retry for a
+transient read failure; authentication and authorization failures are never retried. Mutation retries stay disabled.
+An incrementing authentication generation and abort controller fence generated-client responses, including late
+success, failure, and body parsing. Every session-loss, unusable-account, principal-replacement, and sign-out boundary
+clears queries and mutations before installing a new account. Feature mutations use `useAuth().mutationOptions()` so late mutation callbacks also respect the authentication
+generation. No cache is persisted to browser storage.
+
+Same-origin tabs exchange only a boundary reason through `BroadcastChannel`. Each document announces its first
+account installation once, because OIDC navigation replaces the originating document. An earlier incoming event does not cancel that pending announcement; later bootstrap responses to received
+events do not announce again. A tab receiving sign-out never installs the old account from a bootstrap that races the server.
+A reason-only event cannot distinguish a fresh session for the same membership from an old session during sign-out;
+a suppressed tab therefore remains conservative and offers a fresh sign-in as well as sign-out retry. An unavailable
+channel cannot block local cleanup. Page hide clears protected content so a cached page snapshot does
+not contain the previous account; a persisted page show always checks the session again.
+
+The first shell registers Home. Later plans add their working destinations and required capabilities to the shared
+navigation registry. This avoids presenting unfinished billing, team, service-client, or verification screens as
+available tools. Component tests exercise each capability independently of role and of route authorization.
+The shared transport turns an operation-level 403 into access denied without signing out. No frontend capability
+check predicts whether the backend will permit a deep link.
+
+Focused evidence lives in `apps/web/src/app/AuthRoutes.test.tsx`, `apps/web/src/shared/ResponsiveNavigation.test.tsx`,
+`apps/web/src/features/auth`, `apps/web/tests/e2e/auth-shell.spec.ts`, and `apps/web/tests/gateway`. Browser checks cover
+the desktop and narrow baselines, keyboard navigation, recovery, reduced motion, and automated accessibility.

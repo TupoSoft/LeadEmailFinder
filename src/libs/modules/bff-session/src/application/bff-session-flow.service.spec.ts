@@ -47,6 +47,7 @@ describe('BffSessionFlowService', () => {
         pendingLoginStateStore = { create: jest.fn(), consume: jest.fn() }
         sessionStore = {
             create: jest.fn(),
+            replace: jest.fn(),
             get: jest.fn(),
             save: jest.fn(),
             delete: jest.fn().mockResolvedValue(undefined),
@@ -80,11 +81,40 @@ describe('BffSessionFlowService', () => {
                 }),
             )
             expect(result.authorizationUrl).toBe('https://issuer/protocol/openid-connect/auth?...')
+            expect(result.clearSessionCookies).toBe(false)
         })
+    })
+
+    it.each(['stale-session', 'forged-session', ''])(
+        'clears unusable presented cookies and records a fresh lineage (%p)',
+        async sessionId => {
+            sessionStore.get.mockResolvedValue(undefined)
+            const result = await service.login('/app/verification', sessionId)
+            expect(result.clearSessionCookies).toBe(true)
+            expect(pendingLoginStateStore.create).toHaveBeenCalledWith(
+                result.state,
+                expect.objectContaining({ destination: '/app/verification', sessionLineage: { kind: 'fresh' } }),
+            )
+        },
+    )
+
+    it('records the exact valid session expected at callback time', async () => {
+        sessionStore.get.mockResolvedValue({ absoluteExpiresAt: Date.now() + 10_000 } as never)
+        const result = await service.login('//evil.test', 'existing-session')
+        expect(result.clearSessionCookies).toBe(false)
+        expect(pendingLoginStateStore.create).toHaveBeenCalledWith(
+            result.state,
+            expect.objectContaining({
+                destination: '/app',
+                sessionLineage: { kind: 'replace', sessionId: 'existing-session' },
+            }),
+        )
     })
 
     describe('handleCallback', () => {
         const pendingState = {
+            destination: '/app/verification?view=recent',
+            sessionLineage: { kind: 'fresh' as const },
             nonce: 'nonce-1',
             codeVerifier: 'verifier-1',
             redirectUri: 'http://localhost:53000/v1/auth/callback',
@@ -213,17 +243,83 @@ describe('BffSessionFlowService', () => {
             expect(sessionStore.create).not.toHaveBeenCalled()
         })
 
-        it('creates a session and deletes the prior one when rotating', async () => {
+        it('atomically replaces the prior session and returns the stored destination', async () => {
             arrangeSuccessfulCallback()
+
+            pendingLoginStateStore.consume.mockResolvedValue({
+                ...pendingState,
+                sessionLineage: { kind: 'replace', sessionId: 'old-session-id' },
+            })
+            sessionStore.replace.mockResolvedValue(true)
 
             const result = await service.handleCallback(validCallbackInput({ existingSessionId: 'old-session-id' }))
 
-            expect(sessionStore.delete).toHaveBeenCalledWith('old-session-id')
-            expect(sessionStore.create).toHaveBeenCalledWith(
+            expect(sessionStore.delete).not.toHaveBeenCalled()
+            expect(sessionStore.create).not.toHaveBeenCalled()
+            expect(sessionStore.replace).toHaveBeenCalledWith(
+                'old-session-id',
+                result.sessionId,
                 expect.objectContaining({ organizationId: 'org-1', externalIdentityId: 'identity-1' }),
             )
-            expect(result.sessionId).toBe('new-session-id')
+            expect(result.destination).toBe('/app/verification?view=recent')
             expect(typeof result.csrfToken).toBe('string')
+        })
+
+        it.each([undefined, 'wrong-session', ''])(
+            'rejects a replacement lineage with a changed cookie (%p)',
+            async existingSessionId => {
+                arrangeSuccessfulCallback()
+                pendingLoginStateStore.consume.mockResolvedValue({
+                    ...pendingState,
+                    sessionLineage: { kind: 'replace', sessionId: 'old-session-id' },
+                })
+                await expect(service.handleCallback(validCallbackInput({ existingSessionId }))).rejects.toThrow(
+                    LoginStateInvalidError,
+                )
+                expect(oauthProviderClient.exchangeAuthorizationCode).not.toHaveBeenCalled()
+                expect(sessionStore.replace).not.toHaveBeenCalled()
+            },
+        )
+
+        it.each(['appeared-session', ''])(
+            'rejects a fresh lineage when any cookie appeared (%p)',
+            async existingSessionId => {
+                arrangeSuccessfulCallback()
+                await expect(service.handleCallback(validCallbackInput({ existingSessionId }))).rejects.toThrow(
+                    LoginStateInvalidError,
+                )
+                expect(oauthProviderClient.exchangeAuthorizationCode).not.toHaveBeenCalled()
+                expect(sessionStore.create).not.toHaveBeenCalled()
+            },
+        )
+
+        it('maps a replacement conflict to invalid state without falling back to create', async () => {
+            arrangeSuccessfulCallback()
+            pendingLoginStateStore.consume.mockResolvedValue({
+                ...pendingState,
+                sessionLineage: { kind: 'replace', sessionId: 'old-session-id' },
+            })
+            sessionStore.replace.mockResolvedValue(false)
+            await expect(
+                service.handleCallback(validCallbackInput({ existingSessionId: 'old-session-id' })),
+            ).rejects.toThrow(LoginStateInvalidError)
+            expect(sessionStore.create).not.toHaveBeenCalled()
+            expect(sessionStore.delete).not.toHaveBeenCalled()
+        })
+
+        it('preserves an atomic store failure without falling back to create or deleting the old session', async () => {
+            arrangeSuccessfulCallback()
+            pendingLoginStateStore.consume.mockResolvedValue({
+                ...pendingState,
+                sessionLineage: { kind: 'replace', sessionId: 'old-session-id' },
+            })
+            const failure = new Error('injected store failure')
+            sessionStore.replace.mockRejectedValue(failure)
+            await expect(
+                service.handleCallback(validCallbackInput({ existingSessionId: 'old-session-id' })),
+            ).rejects.toBe(failure)
+            expect(sessionStore.create).not.toHaveBeenCalled()
+            expect(sessionStore.delete).not.toHaveBeenCalled()
         })
 
         it('does not attempt to delete a prior session when none exists', async () => {

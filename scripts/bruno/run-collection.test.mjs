@@ -188,7 +188,7 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             response.end(JSON.stringify({ statusCode: 404 }))
             return
         }
-        if (request.url === '/v1/auth/login') {
+        if (new URL(request.url, baseUrl).pathname === '/v1/auth/login') {
             pendingStateAvailable = true
             const url = new URL(
                 `${
@@ -209,7 +209,13 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
                 url.searchParams.set(key, value)
             response.writeHead(302, {
                 location: url.toString(),
-                'set-cookie': 'lef_login_state=test-state; Max-Age=600; Path=/v1/auth; HttpOnly; SameSite=Lax',
+                'set-cookie': [
+                    'lef_login_state=test-state; Max-Age=600; Path=/v1/auth; HttpOnly; SameSite=Lax',
+                    'lef_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
+                    'lef_csrf_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax',
+                ],
+                'cache-control': 'no-store',
+                'referrer-policy': 'no-referrer',
             })
             response.end('{}')
             return
