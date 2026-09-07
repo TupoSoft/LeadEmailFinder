@@ -33,6 +33,7 @@
     cursor: pointer;
 }
 .result {
+    margin-block-start: var(--space-content-gap);
     padding-block: var(--space-content-gap);
     border-top: var(--rule-width) solid var(--color-rule);
 }

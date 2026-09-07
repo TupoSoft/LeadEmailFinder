@@ -47,7 +47,11 @@ function JobContent({ organizationId, id }: { organizationId: string; id: string
                     {data && title !== stateCopy.title ? <p>Last confirmed status: {stateCopy.title}</p> : null}
                     <p>{stateCopy.description}</p>
                 </header>
-                <div className={styles.status} aria-live="polite" aria-atomic="true">
+                <div
+                    className={data?.state === 'completed' && online && !query.isError ? undefined : styles.status}
+                    aria-live="polite"
+                    aria-atomic="true"
+                >
                     {!online ? (
                         <p>{copy.offline}</p>
                     ) : query.isError && data ? (

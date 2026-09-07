@@ -18,6 +18,7 @@ status and result after reload.
 - [x] (2026-09-07) Implement honest polling, one-credit, result, permission, and recovery states.
 - [x] (2026-09-07) Add focused API/browser tests and a distinct async-verification Bruno workflow.
 - [x] (2026-09-07) Run repository, design-contract, generated-client, SMTP-runtime, and premium UX validation.
+- [x] (2026-09-07) Correct completed-result spacing and verify desktop, narrow, focus, and recovery behavior.
 
 ## Plan dependencies
 
@@ -42,6 +43,12 @@ status and result after reload.
   application mapper instead of editing the legacy mixed folder.
 
 ## Decision Log
+
+- Decision: Separate the completed result divider from its actions with the existing content gap of 24 pixels. Remove
+  reserved status spacing only for an online completed result without a read error.
+  Rationale: The previous buttons touched the divider while an empty status region left excessive space above them.
+  Keep the live announcement region mounted and preserve visible offline and stale recovery messages.
+  Date/Author: 2026-09-07, visual review follow-up.
 
 - Decision: Keep a session-scoped submission coordinator and extract browser availability into a shared hook.
   Rationale: In-app navigation cannot discard a pending or uncertain request lock. Billing and verification share
@@ -111,6 +118,34 @@ timing, or history feature was added. There are no material SOLID trade-offs.
 The CI workflow now verifies the same HTTP and browser flow after preserving seeded volumes and recreating the
 SMTP network. It waits for successful proxy fixture setup and includes artifact-privacy validation and overlay
 cleanup. Remote CI will run on the single pull request; these results describe local validation.
+
+### Completed-Result Spacing Follow-Up
+
+The completed result now has a gap of 24 pixels between its action buttons and divider. An empty successful status region
+no longer reserves space above the buttons. Initial result focus, its visible outline, and the mounted live
+announcement region remain intact. Offline and stale messages still appear alongside retained evidence.
+
+Observable acceptance passed at 1440 by 900 and 320 by 720. The divider is at least 24 pixels below the lowest action.
+The gap from description to actions stays between 24 and 48 pixels. Evidence wraps without horizontal overflow, and
+manual recovery does not refocus the result heading. The refreshed screenshots were visually inspected. The focused
+browser suite passed all 22 cases, including completed-result offline, stale, and successful manual recovery.
+All 60 verification component tests, the web build and type check, web lint, design lint, strict UI audit, formatting,
+and whitespace checks passed. Review found no material architectural trade-offs. Bruno is not applicable to this
+follow-up because it changes only browser layout; the live SMTP workflow was not rerun.
+
+Exact focused commands:
+
+    corepack pnpm --filter ./apps/web exec vitest run src/features/verification/VerificationPage.test.tsx
+    corepack pnpm --filter ./apps/web build
+    corepack pnpm --filter ./apps/web lint
+    corepack pnpm design:lint
+    corepack pnpm ui:audit
+    TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm --filter ./apps/web exec playwright test tests/e2e/verification-ui.spec.ts --workers=2 --output=/tmp/issue506-spacing-e2e
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md
+
+The Browser plugin remains unavailable. Playwright's initial local URL probe stalled before starting its preview
+server in this environment. Starting the preview explicitly and running against it outside the command sandbox
+allowed validation to complete. Screenshots use synthetic fixtures only and retain the existing paths listed below.
 
 ## Context and Orientation
 

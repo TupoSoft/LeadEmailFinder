@@ -73,6 +73,33 @@ for (const state of ['queued', 'running', 'completed', 'failed', 'unavailable'])
             await expect(details).toContainText('The check timed out before a reliable answer was available.')
             await expect(details.getByText('Address pattern', { exact: true })).toHaveCount(0)
             await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).toBeFocused()
+            await expect(page.locator('main [aria-live="polite"][aria-atomic="true"]')).toContainText(
+                'Verification completed',
+            )
+            const [detailsBounds, refreshBounds, anotherBounds, descriptionBounds] = await Promise.all([
+                details.boundingBox(),
+                page.getByRole('button', { name: 'Refresh status', exact: true }).boundingBox(),
+                page.getByRole('link', { name: 'Verify another email', exact: true }).boundingBox(),
+                page
+                    .getByText('The verification finished. Review the individual signals and their limits below.', {
+                        exact: true,
+                    })
+                    .boundingBox(),
+            ])
+            expect(detailsBounds).not.toBeNull()
+            expect(refreshBounds).not.toBeNull()
+            expect(anotherBounds).not.toBeNull()
+            expect(descriptionBounds).not.toBeNull()
+            // Check the lowest button on narrow layouts, where the actions can wrap onto separate rows.
+            const actionsBottom = Math.max(
+                refreshBounds!.y + refreshBounds!.height,
+                anotherBounds!.y + anotherBounds!.height,
+            )
+            expect(detailsBounds!.y - actionsBottom).toBeGreaterThanOrEqual(24)
+            const descriptionToActions =
+                Math.min(refreshBounds!.y, anotherBounds!.y) - (descriptionBounds!.y + descriptionBounds!.height)
+            expect(descriptionToActions).toBeGreaterThanOrEqual(24)
+            expect(descriptionToActions).toBeLessThanOrEqual(48)
             await page.screenshot({
                 path: `/tmp/issue506-verification-${page.viewportSize()!.width > 500 ? 'desktop' : 'narrow'}.png`,
                 fullPage: true,
@@ -85,11 +112,59 @@ for (const state of ['queued', 'running', 'completed', 'failed', 'unavailable'])
             const before = reads
             await page.clock.fastForward(20_000)
             expect(reads).toBe(before)
-            await page.getByRole('button', { name: 'Refresh status', exact: true }).click()
+            const refresh = page.getByRole('button', { name: 'Refresh status', exact: true })
+            await refresh.click()
             await expect.poll(() => reads).toBe(before + 1)
+            await expect(refresh).toBeEnabled()
+            if (state === 'completed')
+                await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).not.toBeFocused()
         }
     })
 }
+
+test('completed evidence keeps visible offline and stale recovery messages without refocusing the result', async ({
+    page,
+    context,
+}) => {
+    await mockAccount(context)
+    let failed = false
+    await context.route(`**/verifyAsync/${id}`, route =>
+        route.fulfill({ status: failed ? 503 : 200, json: failed ? {} : { state: 'completed', result } }),
+    )
+    await page.goto(`/app/verifications/${id}`)
+    const details = page.getByRole('region', { name: 'Verification result', exact: true })
+    const refresh = page.getByRole('button', { name: 'Refresh status', exact: true })
+    await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).toBeFocused()
+
+    await context.setOffline(true)
+    await expect(page.getByRole('heading', { name: 'Verification offline', exact: true })).toBeVisible()
+    await expect(page.getByText(/^You are offline\./)).toBeVisible()
+    await expect(page.getByText('Last confirmed status: Verification completed', { exact: true })).toBeVisible()
+    await expect(details).toContainText(result.email)
+    await expect(refresh).toBeDisabled()
+    await expect(page.getByRole('link', { name: 'Verify another email', exact: true })).toBeVisible()
+
+    await context.setOffline(false)
+    await expect(page.getByRole('heading', { name: 'Verification completed', exact: true })).toBeVisible()
+    await expect(refresh).toBeEnabled()
+    failed = true
+    await refresh.click()
+    await expect(page.getByRole('heading', { name: 'Verification status out of date', exact: true })).toBeVisible()
+    await expect(page.getByText('The latest read failed.', { exact: false })).toBeVisible()
+    await expect(details).toContainText(result.email)
+    await expect(refresh).toBeEnabled()
+    await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).not.toBeFocused()
+    await accessible(page)
+
+    failed = false
+    await refresh.click()
+    await expect(page.getByRole('heading', { name: 'Verification completed', exact: true })).toBeVisible()
+    await expect(page.getByText('The latest read failed.', { exact: false })).toHaveCount(0)
+    await expect(page.getByText(/^You are offline\./)).toHaveCount(0)
+    await expect(details).toContainText(result.email)
+    await expect(refresh).toBeEnabled()
+    await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).not.toBeFocused()
+})
 
 test('keyboard form validation and uncertain submission prevent duplicate work until deliberate acknowledgment', async ({
     page,
