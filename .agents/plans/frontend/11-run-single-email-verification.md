@@ -21,6 +21,7 @@ status and result after reload.
 - [x] (2026-09-07) Correct completed-result spacing and verify desktop, narrow, focus, and recovery behavior.
 - [x] (2026-09-07) Update stale browser-contract checks and fix the hosted MFA form readiness race.
 - [x] (2026-09-08) Add bounded, private Bruno failure diagnostics and verify runner regression coverage.
+- [x] (2026-09-08) Configure CI to complete API compilation before serving live verification requests.
 
 ## Plan dependencies
 
@@ -170,14 +171,18 @@ and a delayed-form regression covers this case. The earlier CI output deliberate
 so its exact failure stage cannot be established retrospectively. A later run of the previous commit passed MFA
 setup, confirming that the observed CI failure was intermittent.
 
-The later CI run failed in the async-verification Bruno collection. Its sanitized output did not identify the
-failing request. The runner now reports only a fixed failure stage and validated numeric request positions, HTTP
-statuses, and execution counts. Raw child output, report strings, credentials, and request content remain hidden.
-The next run passed the contract check and MFA setup but reported a balance restoration failure. Diagnostics now
-retain the fixed restoration operation, any validated HTTP status, and one sanitized prior failure when both the
-collection and cleanup fail. A successful restoration still preserves the original test error.
-Focused regressions verify privacy, propagation through Compose, and credit restoration. Errors from browser tests
-retain their original details within the existing private browser runner boundary.
+The Bruno runner reports only fixed failure stages, validated numeric request positions, HTTP statuses, and
+execution counts. Restoration errors retain the write or confirmation operation and one sanitized prior failure.
+Raw child output, credentials, request content, and report strings remain hidden. Successful restoration preserves
+the original test error. Focused regressions verify privacy, propagation through Compose, and credit restoration.
+
+The resulting CI report listed fifteen requests with zero executed tests, followed by HTTP 502 during restoration.
+The installed Nest CLI starts the watched API before background type checking finishes. Its Swagger metadata write
+then restarts the API child after the first successful health check. Both observed failures occurred about 22 seconds
+after container startup, consistent with that restart window. The CI browser job now sets `API_START_COMMAND` to
+`pnpm exec nest start`; without watch mode, Nest awaits type checking and metadata before compiling and starting the
+API. Both base-stack provisioning and SMTP attachment inherit this setting. Ordinary development still defaults to
+`pnpm start` with watch mode. No fixed delay or test retry substitutes for readiness.
 
 Local validation passed: all 12 contract tooling tests, generated-artifact freshness, all 395 web tests, all 66
 runner tests with none skipped, web type checking and lint, and five privileged authentication artifact tests.
@@ -194,7 +199,8 @@ Exact focused commands:
     corepack pnpm --filter ./apps/web lint
     corepack pnpm --filter ./apps/web test:privileged-artifacts
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:oidc-runners
-    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md bruno/async-verification/README.md
+    corepack pnpm test -- scripts/ci/validate-workflow.spec.ts --runInBand
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md bruno/async-verification/README.md docker/README.md
 
 ## Context and Orientation
 

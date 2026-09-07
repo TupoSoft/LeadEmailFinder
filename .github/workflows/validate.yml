@@ -319,6 +319,7 @@ jobs:
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
+      API_START_COMMAND: pnpm exec nest start
     steps:
       - name: Validate discovery result
         run: |
