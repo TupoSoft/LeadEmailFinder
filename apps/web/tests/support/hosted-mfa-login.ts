@@ -64,70 +64,55 @@ export async function hostedMfaLogin(options: LoginOptions): Promise<string> {
     const { page, identity, origin, seed } = options
     const now = options.now ?? Date.now
     const wait = options.wait ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
-    let step = 'start'
     try {
-        step = 'goto'
         await page.goto(`${origin}/`)
-        step = 'signIn href'
         const signIn = page.getByRole('link', { name: 'Sign in', exact: true })
         const href = await signIn.getAttribute('href')
         if (!href || new URL(href, origin).origin !== origin || new URL(href, origin).pathname !== '/v1/auth/login') {
             throw browserFixtureError()
         }
-        step = 'signIn click'
         await signIn.click()
-        step = 'username waitFor'
         await page.locator('#username').waitFor()
-        step = 'assertForm kc-form-login'
         await assertForm(page, '#kc-form-login', seed.issuer)
-        step = 'fill username'
         await page.getByRole('textbox', { name: /username|email/i }).fill(seed.users[identity].email)
-        step = 'fill password'
         await page
             .getByLabel('Password', { exact: true })
             .fill(identity === 'owner' ? CUSTOMER_OWNER_PASSWORD : PLATFORM_OPERATOR_PASSWORD)
-        step = 'click sign in'
         await page.getByRole('button', { name: 'Sign In', exact: true }).click()
-        step = 'assertHostedPage after password'
         assertHostedPage(page, seed.issuer) // Password alone must never complete privileged login.
 
-        step = 'detect enrollment'
+        // The URL can already reflect the required-action redirect before the form itself has
+        // rendered; check the count only after one of the two possible forms has actually mounted.
+        await Promise.race([
+            page.locator('#kc-totp-settings-form').waitFor(),
+            page.locator('#kc-otp-login-form').waitFor(),
+        ])
         const enrollment = (await page.locator('#kc-totp-settings-form').count()) === 1
         let secret = options.secret
         if (enrollment) {
             if (secret) throw browserFixtureError()
-            step = 'assertForm kc-totp-settings-form (before unable-to-scan)'
             await assertForm(page, '#kc-totp-settings-form', seed.issuer)
-            step = 'click unable to scan'
             await page.getByRole('link', { name: /unable to scan/i }).click()
-            step = 'assertForm kc-totp-settings-form (after unable-to-scan)'
             await assertForm(page, '#kc-totp-settings-form', seed.issuer)
             // Keycloak groups the displayed uppercase key with spaces for human transcription.
-            step = 'read displayed secret'
             const displayed = await page.locator('#kc-totp-secret-key').innerText()
             if (!/^[A-Z2-7 ]+$/.test(displayed)) throw browserFixtureError()
             secret = displayed.replace(/ /g, '')
             assertTotpSecret(secret)
-            step = 'fill userLabel'
             await page.locator('#userLabel').fill('Development browser fixture')
         } else {
             if (!secret) throw browserFixtureError()
-            step = 'assertForm kc-otp-login-form'
             await assertForm(page, '#kc-otp-login-form', seed.issuer)
         }
         assertTotpSecret(secret)
         for (let attempt = 0; attempt < 2; attempt++) {
             const time = now()
-            step = `fill totp/otp attempt ${attempt}`
             await page.locator(enrollment ? '#totp' : '#otp').fill(generateTotp(secret, time))
-            step = `click submit attempt ${attempt}`
             await page.getByRole('button', { name: enrollment ? 'Submit' : 'Sign In', exact: true }).click()
             if (new URL(page.url()).origin === origin) {
-                step = 'assertAccount'
                 await assertAccount(page, origin, seed, identity)
                 return secret
             }
-            step = `assertForm after rejection, attempt ${attempt}`
             await assertForm(page, enrollment ? '#kc-totp-settings-form' : '#kc-otp-login-form', seed.issuer)
             const rejection = enrollment ? '#input-error-totp, #input-error-otp-code' : '#input-error-otp'
             if (attempt === 1 || !(await page.locator(rejection).isVisible())) throw browserFixtureError()
@@ -135,11 +120,7 @@ export async function hostedMfaLogin(options: LoginOptions): Promise<string> {
             await wait(30_000 - (time % 30_000) + 100)
         }
         throw browserFixtureError()
-    } catch (debugError) {
-        console.error(
-            `DEBUG hostedMfaLogin[${identity}] failed at step "${step}". url=${page.url()}. error=`,
-            debugError,
-        )
+    } catch {
         throw browserFixtureError()
     }
 }
