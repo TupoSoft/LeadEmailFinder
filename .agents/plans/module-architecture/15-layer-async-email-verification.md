@@ -15,7 +15,7 @@ composition, and prove that a foreign organization still sees the job as not fou
 - [x] (2026-09-07) Move enqueue/status controllers and DTOs to API and orchestration to application.
 - [x] (2026-09-07) Implement the async job port and thin BullMQ producer/status/worker adapters.
 - [x] (2026-09-07) Recompose the async slice and shrink only its architecture-baseline keys.
-- [x] (2026-09-07) Complete focused, Redis/Bull, HTTP, architecture, full, and documentation validation; record the unavailable live SMTP fixture separately.
+- [x] (2026-09-07) Complete focused, Redis/Bull, HTTP, architecture, full, documentation, and live SMTP fixture validation.
 
 ## Plan dependencies
 
@@ -37,7 +37,8 @@ composition, and prove that a foreign organization still sees the job as not fou
 - `bruno/smtp-dev` already covers async submission and completion. The relocated integration wiring warrants
   extending that collection with credit and rejection assertions.
 - Another checkout owns the running SMTP fixture, including its fixed subnet. Validation uses a new disposable
-  Redis instance; the SMTP launcher cannot run without a stack owned by this checkout.
+  Redis instance initially. Live SMTP validation later used an isolated Compose project with temporary subnet
+  remapping, then restored the fixture configuration.
 
 - `async-email-verification/` currently mixes controller/DTOs, a job-data contract, service interface and
   implementation, queue constants, Bull worker, Nest module, and HTTP exceptions.
@@ -45,6 +46,13 @@ composition, and prove that a foreign organization still sees the job as not fou
   is an integration boundary even before plan 16 layers the batch parent.
 
 ## Decision Log
+
+- Decision: Validate SMTP in the separate `lef460a1ee` Compose project, with temporary network remapping from
+  `172.28.0.0/24` to `172.29.46.0/24` in the overlay, DNS zone, and proxy configuration.
+  Rationale: Another checkout owns the default subnet and ports. A separate project with matching DNS and proxy
+  addresses preserves the fixture protocol while allowing the standard ownership-checked Bruno launcher to run.
+  The temporary configuration is restored after the test stack is removed.
+  Date/Author: 2026-09-07, Codex validation.
 
 - Decision: Include a focused correction to the domain-synonym HTTP integration test's ordering assertion.
   Rationale: It blocked the required full-suite gate twice by treating concurrent request order as a contract.
@@ -117,9 +125,22 @@ suite uses the real Nest Bull module, queue adapter, and worker, with the verifi
 stubbed. It is queue/composition evidence rather than a live SMTP or database acceptance claim.
 
 Bruno coverage is extended to 28 requests. The installed Bruno parser accepted all 28 request files and their
-35 scripts compiled; the launcher suite passed 8 tests. Live SMTP execution remains unverified: this checkout
-has no owned fixture stack, and another checkout occupies the fixture's fixed subnet and ports. The launcher
-was attempted and correctly refused to run without its prerequisites.
+35 scripts compiled; the launcher suite passed 8 tests. Live SMTP validation subsequently passed on 2026-09-07:
+`COMPOSE_PROJECT_NAME=lef460a1ee corepack pnpm bruno:smtp-dev` executed all 28 requests and 57 tests with no skips.
+The launcher confirmed ownership of every required container and ran Bruno 4.1.0 inside this checkout's API.
+
+Before Bruno populated the SMTP cache, two fresh async jobs proved the complete worker and SMTP path. The trusted
+fixture produced `accepted_email` with new `secureTransport=true` evidence. Its command sequence was
+`ehlo`, `starttls`, `ehlo`, `mail_from`, `rcpt_to`, `quit`. The plaintext fixture produced
+`secure_transport_unavailable` with `secureTransport=false` and only `ehlo`; no envelope command was sent. Each job
+completed once on attempt 1, created one owned result, debited one credit, and returned the same result on repeated
+polling. Both the submitted address cache and the fixed catch-all probe cache were absent before their phase.
+The generated address and probe address, plus the service secret, were absent from captured API logs.
+
+Mailpit accepts the catch-all probe, so the trusted result retains the existing `catchAll=true`, `exists=null`
+semantics. A fresh local part alone would not force another SMTP connection after the shared probe was cached.
+The proof ran before the collection to establish fresh transport evidence without deleting cache rows.
+These are deterministic local SMTP fixture results, not live-provider deliverability claims.
 
 ## Context and Orientation
 
@@ -242,9 +263,21 @@ The compatibility contract is:
 | Status body | Existing state enum, result only when completed, no progress field |
 | Worker | One organization-scoped command per attempt, without credential identity |
 
-Record fixture compatibility, focused and Redis/Bull totals, ownership/retry observations, removed baseline keys,
-and full validation. Do not record tokens, credentials, raw
-addresses, raw job payloads, SMTP transcripts, or provider results.
+The live fixture used application commit `7d297f79b650ffd9c86f5706c3b0fd5fff6bbd44`, Node 24.20.0, and Bruno
+4.1.0. Its public ports were web `53160`, Keycloak `58060`, PostgreSQL `55460`, Redis `56360`, and Garage `59060`.
+Only the standard Keycloak provisioning and platform credential bootstrap were needed; TypeORM synchronized the
+new disposable database. The existing stack belonging to another checkout remained running.
+
+Sanitized fresh-job evidence from 2026-09-07, 10:11:31–10:11:32 UTC:
+
+| Phase | Job ID | Verification ID | Duration |
+| --- | --- | --- | --- |
+| Trusted TLS | `cdc89f38-0b42-4166-b610-55a4487504f0` | `ed20921c-86b6-479f-85c4-17caea992484` | 379 milliseconds |
+| Plaintext rejection | `5894d20b-e138-43dd-b468-2c75aef1fa98` | `8d1a7836-8853-4ceb-a6ed-1dc53339fcc3` | 332 milliseconds |
+
+The temporary proof runner queried only the owned rows, sent credentials through process memory, and emitted
+counts, booleans, stable reason codes, timestamps, and opaque identifiers. Full addresses, raw queue data, tokens,
+credentials, and SMTP transcripts are intentionally absent from this plan.
 
 ## Plan readiness
 
