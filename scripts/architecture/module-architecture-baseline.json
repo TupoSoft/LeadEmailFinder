@@ -1,25 +1,4 @@
 {
     "schemaVersion": 1,
-    "violations": [
-        "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-csv-row.dto.ts|batch-email-verification/batch-email-verification-csv-row.dto.ts",
-        "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.controller.ts|batch-email-verification/batch-email-verification.controller.ts",
-        "api-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.dto.ts|batch-email-verification/batch-email-verification.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-csv-row.dto.ts|batch-email-verification/batch-email-verification-csv-row.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-file.interface.ts|batch-email-verification/batch-email-verification-file.interface.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-job-data.interface.ts|batch-email-verification/batch-email-verification-job-data.interface.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-job-step.enum.ts|batch-email-verification/batch-email-verification-job-step.enum.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-service-impl.service.ts|batch-email-verification/batch-email-verification-service-impl.service.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification-service.interface.ts|batch-email-verification/batch-email-verification-service.interface.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.constants.ts|batch-email-verification/batch-email-verification.constants.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.controller.ts|batch-email-verification/batch-email-verification.controller.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.dto.ts|batch-email-verification/batch-email-verification.dto.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.module.ts|batch-email-verification/batch-email-verification.module.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/batch-email-verification.processor.ts|batch-email-verification/batch-email-verification.processor.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/derive-results-key.ts|batch-email-verification/derive-results-key.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/index.ts|batch-email-verification/index.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/job-not-found.exception.ts|batch-email-verification/job-not-found.exception.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/multer-options-factory-impl.service.ts|batch-email-verification/multer-options-factory-impl.service.ts",
-        "source-placement|src/libs/modules/email-verification/src/batch-email-verification/parse-s3-result-location.ts|batch-email-verification/parse-s3-result-location.ts",
-        "source-placement|src/libs/modules/email-verification/src/is-verifiable-email.decorator.ts|is-verifiable-email.decorator.ts"
-    ]
+    "violations": []
 }
