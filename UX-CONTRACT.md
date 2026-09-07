@@ -52,7 +52,7 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Session | `AuthProvider` and `AuthSession` | `frontend/08` | Bootstrap, expiry, account failure, sign-out | Generation, cache, and browser tests |
 | Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
-| Data panel | `ProductPanel` | This contract | Independent loading, retained data, and read retry | Billing component and browser tests |
+| Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
 | Form | `Form.module.css` | This contract | Invitation email, role, and password fields | Field validation and browser tests |
 | Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
@@ -246,7 +246,8 @@ the authenticated shell and generated-client transport. `/app/billing` uses the 
 additionally require `billing.manage`. The server enforces the corresponding permissions on every request.
 
 Summary, catalog, and history load independently with organization-scoped cache keys. `ProductPanel` owns section
-headings, stable loading feedback, retained safe data, and a read retry when a panel fails. The document owns scrolling.
+headings, optional header actions, stable loading feedback, retained safe data, and a read retry when a panel fails.
+Header actions follow the description in reading order and retain their native button semantics. The document owns scrolling.
 History uses a semantic table that becomes labeled rows at narrow widths. Ten rows appear per page, with explicit
 previous and next actions. Pagination is local to the complete server response; no server pagination is implied.
 The `page` query parameter preserves history navigation and is clamped to the available rows.
@@ -302,6 +303,11 @@ the `page` query parameter preserves navigation and the visible page is clamped 
 renders `Email unavailable`. Disabled memberships retain text status and expose no reactivation control. Role and
 disable actions wait for the server and reload the list after success or rejection. A lost issuance response is
 uncertain; a second invitation requires an explicit operator action and is never retried automatically.
+
+Refresh members belongs to the Organization members panel header and stays disabled while a team operation or
+member read is pending, or the browser is offline. It reloads authoritative membership data while retaining the
+current list. Team operation feedback stays mounted within the panel's reserved live region; confirmed role changes
+and disabled access retain their existing feedback focus behavior.
 
 | Operation | Pending | Confirmed result | Failure and recovery |
 | --- | --- | --- | --- |

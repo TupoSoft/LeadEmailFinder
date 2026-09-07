@@ -13,6 +13,7 @@ export function ProductPanel({
     children,
     reserveContent = false,
     feedback,
+    headerAction,
 }: {
     title: string
     description: string
@@ -23,12 +24,25 @@ export function ProductPanel({
     children: ReactNode
     reserveContent?: boolean
     feedback?: ReactNode
+    headerAction?: ReactNode
 }) {
     const heading = useId()
-    return (
-        <section className={styles.panel} aria-labelledby={heading} aria-busy={refreshing}>
+    const headingContent = (
+        <>
             <h2 id={heading}>{title}</h2>
             <p>{description}</p>
+        </>
+    )
+    return (
+        <section className={styles.panel} aria-labelledby={heading} aria-busy={refreshing}>
+            {headerAction ? (
+                <header className={styles.headerWithAction}>
+                    {headingContent}
+                    <div className={styles.headerAction}>{headerAction}</div>
+                </header>
+            ) : (
+                headingContent
+            )}
             <div className={styles.feedback} aria-live="polite">
                 {failed ? (
                     <>

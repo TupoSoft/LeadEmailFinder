@@ -226,7 +226,9 @@ describe('team management', () => {
             delayed.resolve(Response.json({ ...activeMember, role: 'admin' }))
             await delayed.promise
         })
-        expect(await screen.findByText(teamCopy.roleSaved)).toBeInTheDocument()
+        const notice = await screen.findByText(teamCopy.roleSaved)
+        expect(notice).toHaveFocus()
+        expect(notice.closest('[aria-live="polite"]')).not.toBeNull()
         await waitFor(() =>
             expect(
                 session.queryClient.getQueryData<TeamMember[]>(teamQueryKey(account.organization.id))?.[0].role,
@@ -254,7 +256,9 @@ describe('team management', () => {
         expect(requestsFor(fetch, `${membersPath}/member-a`, 'DELETE')).toHaveLength(0)
         await userEvent.click(remove)
         await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Disable access' }))
-        expect(await screen.findByText(teamCopy.removed)).toBeInTheDocument()
+        const notice = await screen.findByText(teamCopy.removed)
+        expect(notice).toHaveFocus()
+        expect(notice.closest('[aria-live="polite"]')).not.toBeNull()
         await waitFor(() =>
             expect(
                 screen.queryByRole('button', { name: 'Disable access for member@example.test' }),

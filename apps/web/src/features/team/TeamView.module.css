@@ -12,7 +12,7 @@
 }
 .invitation {
     padding-block: var(--space-content-gap);
-    border-block: var(--rule-width) solid var(--color-rule-soft);
+    border-top: var(--rule-width) solid var(--color-rule-soft);
 }
 .invitation h2 {
     font-size: var(--font-size-body);
@@ -29,6 +29,9 @@
 .feedback {
     min-height: var(--control-height);
     margin-block: var(--space-content-gap);
+    overflow-wrap: anywhere;
+}
+.operationFeedback {
     overflow-wrap: anywhere;
 }
 .table {

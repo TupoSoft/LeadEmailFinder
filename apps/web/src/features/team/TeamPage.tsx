@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import type { CurrentAccount } from '../../api/current-account'
@@ -217,12 +217,14 @@ function MemberList({
     owner,
     canManage,
     busy,
+    feedback,
     requestConfirmation,
 }: {
     team: ReturnType<typeof useTeam>
     owner: boolean
     canManage: boolean
     busy: boolean
+    feedback: ReactNode
     requestConfirmation: (value: Confirmation) => void
 }) {
     const [params, setParams] = useSearchParams()
@@ -246,6 +248,17 @@ function MemberList({
             failed={team.members.isError}
             retry={() => void team.members.refetch()}
             reserveContent
+            headerAction={
+                <button
+                    type="button"
+                    className={`${action.action} ${action.secondary}`}
+                    disabled={busy}
+                    onClick={() => void team.members.refetch()}
+                >
+                    {teamCopy.refresh}
+                </button>
+            }
+            feedback={feedback}
         >
             {team.members.data?.length === 0 ? <p>{teamCopy.empty}</p> : null}
             {members.length ? (
@@ -399,26 +412,20 @@ function TeamContent({ account }: { account: CurrentAccount }) {
             ) : (
                 <p>{teamCopy.readOnly}</p>
             )}
-            <div ref={feedback} tabIndex={-1} role="status" aria-live="polite" className={styles.feedback}>
-                {team.operation.pending === 'invitation'
-                    ? teamCopy.issuing
-                    : team.operation.pending === 'member'
-                      ? teamCopy.working
-                      : team.operation.notice}
-            </div>
-            <button
-                type="button"
-                className={`${action.action} ${action.secondary}`}
-                disabled={busy || team.members.isFetching}
-                onClick={() => void team.members.refetch()}
-            >
-                {teamCopy.refresh}
-            </button>
             <MemberList
                 team={team}
                 owner={owner}
                 canManage={canManage}
                 busy={busy || team.members.isFetching}
+                feedback={
+                    <div ref={feedback} tabIndex={-1} className={styles.operationFeedback}>
+                        {team.operation.pending === 'invitation'
+                            ? teamCopy.issuing
+                            : team.operation.pending === 'member'
+                              ? teamCopy.working
+                              : team.operation.notice}
+                    </div>
+                }
                 requestConfirmation={setConfirmation}
             />
             {confirmation ? (

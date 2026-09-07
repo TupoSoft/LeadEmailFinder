@@ -289,7 +289,9 @@ Pending state is expressed through readable status text and busy semantics, with
 ### Product Data Panels and Billing
 
 `ProductPanel` extends the shell's flat composition with fine rules, existing content spacing, and a reserved
-feedback region. Billing places balance, credit packs, and purchase history in document order. Pack actions reuse
+feedback region. An optional header action aligns right of the heading on desktop, with the description below.
+At widths of 48rem or below, the action follows the description and aligns left. Billing places balance, credit
+packs, and purchase history in document order. Pack actions reuse
 the shared primary and secondary treatments. The return notice uses sage with an evergreen rule; its text states
 the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
 changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
@@ -300,6 +302,8 @@ Team management and public invitation acceptance reuse the product heading, canv
 action treatments. Shared fields in `Form.module.css` use the control height and radius, ink text, and canvas
 background. Labels remain visible; validation text uses the contrast-safe accent text. Native role selects retain
 the operating system's popup behavior. Member tables become labeled rows at narrow widths without duplicating data.
+The member panel owns the separator after the invitation form and places Refresh members in its header. Team
+operation feedback shares the panel's reserved feedback region, avoiding a second empty region above the member list.
 
 Team confirmation dialogs use the native modal layer with application-owned content, canvas, a fine rule, and a
 bounded scrolling body. They place initial focus on Cancel for permission changes and disabling access, trap

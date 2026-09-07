@@ -17,6 +17,8 @@ the documented HTTP contract, and focused API and browser tests.
 - [x] (2026-09-07) Cover hierarchy, final-owner, permission, one-time-token, loading, empty, error, and recovery states.
 - [x] (2026-09-07) Update `OpenAPI`, the generated browser client, Bruno, module documentation, and design context.
 - [x] (2026-09-07) Run focused, browser, architecture, prose, and repository-wide validation and record the evidence.
+- [x] (2026-09-07) Validate the approved member-header layout follow-up: align Refresh members with the heading on
+  desktop, place it below the description on mobile, and consolidate the separator and feedback spacing.
 
 ## Plan dependencies
 
@@ -47,6 +49,11 @@ the documented HTTP contract, and focused API and browser tests.
 
 ## Decision Log
 
+- Decision: Place Refresh members in an optional `ProductPanel` header action and share its reserved feedback region
+  with the mounted team operation feedback.
+  Rationale: The action belongs to the member list. A single separator and feedback region remove the detached
+  button and excess space while preserving announcements, focus, and stable loading geometry.
+  Date/Author: 2026-09-07, approved visual follow-up.
 - Decision: Use direct generated-client operations for invitation secrets, with feature-local abort and generation
   guards, and keep every invitation operation outside the shared query and mutation caches.
   Rationale: Avoiding secret-bearing cache entries removes the need for mutation retention and reset timing. Team
@@ -111,8 +118,9 @@ previous token, preview, password, or issued-link dialog. Existing public visual
 
 No schema change or migration was needed. The default backend suite still gates 80 environment-dependent tests;
 the three focused PostgreSQL tests were run separately and passed against a dedicated test database, which was then
-removed. These skips do not represent additional provider validation. The isolated development stack is available
-for local review; no deployment or merge was performed.
+removed. These skips do not represent additional provider validation. The initial review used an isolated development
+stack. The later review of the member header uses this checkout's default `lef` stack at port 53000; only its web container
+was rebuilt and recreated. No merge was performed.
 
 ## Context and Orientation
 
@@ -272,6 +280,9 @@ layer, CSRF-aware client, form primitives, and design context established by `fr
 - The team page displays active and disabled memberships with their email, role, and status; null email uses the
   explicit fallback. Rows use `createdAt ASC, id ASC`; disabled rows are not presented as active and offer no
   unsupported reactivation action.
+- Refresh members appears to the right of Organization members on desktop and below its description at widths of
+  48rem or below. The member panel owns the separator and reserved operation feedback; refreshing retains the list
+  and preserves the existing disabled and feedback focus behavior.
 - An administrator cannot grant, modify, or remove an owner. A final-owner demotion or removal returns a clear
   recoverable conflict, leaves the member active, and refreshes the authoritative list.
 - Removing an allowed member requires confirmation, returns only after server success, and leaves the row visible as
@@ -358,6 +369,21 @@ operator decision; disposable development state can be reset with the repository
 workflow. No migration, backfill, or production recovery step is introduced.
 
 ## Artifacts and Notes
+
+Validation of the updated member header on 2026-09-07:
+
+- `corepack pnpm --filter ./apps/web test:ci`: all 334 tests passed, including feedback focus and live-region checks.
+- Web lint and build passed; the build includes TypeScript checking. Design lint and the UI audit reported no errors
+  or warnings, and the diff passed whitespace validation.
+- From `apps/web`, `node node_modules/@playwright/test/cli.js test tests/e2e/team-ui.spec.ts --workers=2` passed all
+  ten checks. Desktop and narrow checks at widths of 1440 and 320 pixels verify header placement, separator spacing, keyboard refresh,
+  retained membership data, accessible controls, and no horizontal overflow. All 16 billing browser checks passed.
+- The same installed Playwright CLI ran `tests/e2e/accessibility.spec.ts tests/e2e/visual.spec.ts --workers=2`:
+  all eight checks passed. The package runner was slow to start, so these runs invoked the pinned CLI directly
+  against a Vite preview of the build. No browser configuration or dependency changed.
+- Safe screenshots in `/tmp/refresh-members-ui/` confirm the approved desktop and mobile composition.
+- `corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/13-manage-organization-team.md`
+  passed all three Markdown files. Bruno is not applicable to this layout-only follow-up; HTTP behavior is unchanged.
 
 Final validation on 2026-09-07:
 

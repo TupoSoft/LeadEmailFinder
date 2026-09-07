@@ -112,6 +112,37 @@ test('team renders truthful states with responsive layout, usable native role se
     await expect(page).toHaveTitle('Team | Lead Email Finder')
     await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible()
     await expect(page.getByText('Members 1–3 of 3')).toBeVisible()
+    const panel = page.getByRole('region', { name: teamCopy.members, exact: true })
+    const refresh = panel.getByRole('button', { name: teamCopy.refresh, exact: true })
+    await expect(refresh).toBeEnabled()
+    const headingBox = (await panel.getByRole('heading', { name: teamCopy.members }).boundingBox())!
+    const descriptionBox = (await panel.getByText(teamCopy.membersDescription).boundingBox())!
+    const refreshBox = (await refresh.boundingBox())!
+    const panelBox = (await panel.boundingBox())!
+    const invitationBox = (await page.getByRole('region', { name: teamCopy.invite, exact: true }).boundingBox())!
+    expect(panelBox.y - (invitationBox.y + invitationBox.height)).toBeGreaterThanOrEqual(0)
+    expect(panelBox.y - (invitationBox.y + invitationBox.height)).toBeLessThanOrEqual(1)
+    if (page.viewportSize()!.width > 768) {
+        expect(refreshBox.x).toBeGreaterThan(headingBox.x)
+        expect(Math.abs(refreshBox.x + refreshBox.width - (panelBox.x + panelBox.width))).toBeLessThanOrEqual(1)
+        expect(
+            Math.abs(refreshBox.y + refreshBox.height / 2 - (headingBox.y + headingBox.height / 2)),
+        ).toBeLessThanOrEqual(1)
+    } else {
+        expect(refreshBox.y).toBeGreaterThanOrEqual(descriptionBox.y + descriptionBox.height)
+        expect(Math.abs(refreshBox.x - headingBox.x)).toBeLessThanOrEqual(1)
+    }
+    const refreshed = page.waitForResponse(
+        response =>
+            response.request().method() === 'GET' &&
+            new URL(response.url()).pathname === '/v1/organizations/organization-a/members',
+    )
+    await refresh.focus()
+    await expect(refresh).toBeFocused()
+    await page.keyboard.press('Enter')
+    expect((await refreshed).status()).toBe(200)
+    await expect(refresh).toBeEnabled()
+    await expect(page.getByText('Members 1–3 of 3')).toBeVisible()
     const disabled = page.getByRole('row').filter({ hasText: 'Email unavailable' })
     await expect(disabled).toContainText('Disabled')
     await expect(disabled.getByRole('button')).toHaveCount(0)

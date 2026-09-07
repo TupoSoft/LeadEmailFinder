@@ -8,6 +8,7 @@
     "approvedConcept": "apps/web/design/concepts/public-entry-approved.png",
     "requiredCapabilities": ["Scrollbar"],
     "ownership": {
+        "Data panel": "ProductPanel",
         "Form": "Form.module.css",
         "Select/Listbox": "native",
         "Dialog": "TeamDialog"
