@@ -228,6 +228,12 @@ export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/keycloak/service-crede
 
 ## 6. Complete One Purchase
 
+For a browser purchase, sign in as the customer owner and open `/app/billing` on the local web origin. After a
+successful payment, the checkout fixture returns to `http://localhost:53000/billing/complete` in the same tab.
+The return port follows `WEB_PORT` when it is set. The return page reads purchase status and balance from the API;
+only the signed webhook can confirm payment and grant credits. A checkout page opened before this configuration
+was applied needs a manual return to `/billing/complete`; do not create another purchase just to return to the app.
+
 Capture the balance and create a purchase. These commands keep the response in shell variables and assert that
 the server, not the request, selected the 100-credit pack:
 

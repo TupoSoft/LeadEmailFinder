@@ -20,6 +20,8 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 - [x] (2026-09-07) Run repository, design-contract, generated-client, and premium UX validation and record results.
 - [x] (2026-09-07) Merge master at `1c7fcf1`, preserve both shared validation contracts, and pass focused checks.
 
+- [x] (2026-09-07) Configure the Paddle fixture return URL and verify the same-tab confirmation flow.
+
 ## Plan dependencies
 
 - `frontend/08`
@@ -31,6 +33,10 @@ optional account-bound confirmation, not a prerequisite for accepting the pull r
 - `payments/08`
 
 ## Surprises & Discoveries
+
+- Sandbox testing showed that the Paddle checkout fixture did not configure `successUrl`. Payment could succeed while the
+  browser stayed on Paddle. The fixture now derives the existing `/billing/complete` route from the local `WEB_PORT`,
+  validates the port before rendering, and leaves purchase confirmation and credit grants to the signed webhook.
 
 - Merging master conflicted in the Bruno registry and OpenAPI tests. The resolution preserves the 30-request
   SMTP workflow and its sequence assertion alongside the 33-request billing workflow and both API contract tests.
@@ -140,7 +146,7 @@ checks covered page identity, meaningful content, console health, framework over
 return focus, all four statuses, read-only access, lost responses, offline recovery, caption geometry, and
 accessibility. Controlled screenshots were inspected at 1440 and 320 CSS pixels.
 
-Paddle sandbox confirmation was not run; it remains optional. Live stub/MFA checks are explicit local acceptance
+Initial acceptance did not include Paddle sandbox confirmation; it remains optional. Live stub/MFA checks are explicit local acceptance
 commands, while mocked billing browser cases and the pinned launcher tests run in the existing CI commands.
 The complete history endpoint retains its existing response contract and the UI displays ten rows per page.
 The narrow redirect-policy port and pure shared parser preserve module responsibilities; there are no material
@@ -151,6 +157,20 @@ tests, and 8 OpenAPI contract tests. Type checking, generated-client freshness, 
 architecture gate passed. The conflict resolution changes no business responsibility or adapter boundary.
 The live Bruno and browser scenarios above were not repeated for this merge; the launcher tests executed all
 33 billing requests and assertions against a synthetic server.
+
+The sandbox follow-up verified real checkout creation and a signed cancellation webhook with an unchanged balance.
+The user then reported a successful sandbox payment without a browser return. The fixture return fix passes all five
+checkout configuration tests, focused lint, shell syntax validation, design lint, and the strict premium audit.
+The public checkout serves the configured return URL. Controlled Playwright checks at 1440 and 320 CSS pixels passed:
+application checkout, same-tab return, retained pending hint, authoritative pending-to-paid rendering, hint cleanup,
+and partial summary recovery. Each viewport created exactly one mocked purchase. No serious or critical accessibility
+violations, page errors, or horizontal overflow occurred. The summary recovery case produced one expected HTTP 503
+console message per viewport. Paddle completion and API data were simulated; no additional card payment was made.
+Focused commands: `node --test scripts/frontend/checkout-config.test.mjs` (five passing tests),
+`corepack pnpm exec eslint scripts/frontend/checkout-config.test.mjs`, `sh -n docker/paddle-dev/render-checkout.sh`,
+`corepack pnpm design:lint`, and `corepack pnpm ui:audit`. The temporary browser verification command was
+`node /tmp/lef-issue505-paddle-return-simulated.mjs`; its synthetic screenshots remain outside the repository.
+No API behavior or business-module boundary changed, so this fix requires no additional Bruno coverage.
 
 ## Context and Orientation
 

@@ -24,6 +24,8 @@ services:
   paddle-checkout:
     image: nginx:1.29.1-alpine
     restart: unless-stopped
+    environment:
+      WEB_PORT: ${WEB_PORT:-53000}
     ports:
       - '57000:80'
     volumes:
