@@ -3,7 +3,8 @@ import { Module } from '@nestjs/common'
 import { BullModule } from '@nestjs/bullmq'
 import { AsyncEmailVerificationServiceImpl } from './async-email-verification-service-impl.service'
 import { AsyncEmailVerificationProcessor } from './async-email-verification.processor'
-import { EmailVerificationOrchestrator, SyncEmailVerificationModule } from '../sync-email-verification'
+import { EmailVerificationOrchestrator } from '../application/email-verification.service'
+import { EmailVerificationCoreModule } from '../infrastructure/email-verification-core.module'
 import {
     ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
     EMAIL_VERIFICATION_SERVICE_TOKEN,
@@ -15,7 +16,7 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 @Module({
     imports: [
         VerificationTraceModule,
-        SyncEmailVerificationModule,
+        EmailVerificationCoreModule,
         BullModule.registerQueue({
             name: 'async-email-verification',
             defaultJobOptions: {

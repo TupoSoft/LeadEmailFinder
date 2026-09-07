@@ -85,17 +85,16 @@ return the same `404`; the endpoint accepts no organization override and provide
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes four top-level Nest
-submodules — `SyncEmailVerificationModule`, `AsyncEmailVerificationModule`, `BatchEmailVerificationModule`, and
-`OldSyncEmailVerificationModule` (the deprecated route). Several of these submodules have their own internal
-barrels, but none of that is exported again by the top-level `src/index.ts`: from outside this module, the only
-public surface is `EmailVerificationModule` itself and the HTTP/queue behavior below. The top-level module also
-wires the internal result reader and its controller. The shared result DTO lives in `src/api/`; the trace port
+[`src/index.ts`](src/index.ts) exports only `EmailVerificationModule`, which composes `EmailVerificationCoreModule`,
+`AsyncEmailVerificationModule`, and `BatchEmailVerificationModule`. The root registers both synchronous controllers,
+their shared application command, the email-administration controller, and the internal result reader and its controller.
+Internal modules and contracts are not exported again by `src/index.ts`: the only public surface is
+`EmailVerificationModule` itself and the HTTP/queue behavior below. The shared result DTO lives in `src/api/`; the trace port
 lives in `src/application/verification-trace/`, with Nest logging wiring in `src/infrastructure/verification-trace/`.
 
 ## Architecture
 
-The module is layered (`module-architecture/10`, `/13`, `/14`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
@@ -137,13 +136,21 @@ each outcome through the `SmtpVerificationStore` port instead of a raw repositor
 client's own reverse-DNS hostname directly through the injected `IDnsService`, since no port covers that narrow
 technical need.
 
-`sync-email-verification/email-verification.module.ts` composes the core: it registers the four consumed
+`infrastructure/email-verification-core.module.ts` composes the core: it registers the four consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
-(no bare `@Injectable()` on a framework-free class), and binds the shared `EmailVerificationServiceToken` to
-`EmailVerificationOrchestrator`. The other three delivery modes (`old-sync-email-verification`,
-`async-email-verification`, `batch-email-verification`) consume that same token, unchanged from how they always
-consumed the module's core verification service. The `/emails` administration API lives at
-`api/http/email-administration/`, wired to `EmailAdministrationService`.
+(no bare `@Injectable()` on a framework-free class), and exports `EmailVerificationOrchestrator` internally.
+The async module retains its `EmailVerificationServiceToken` binding to that orchestrator; the batch module
+continues to consume the same core composition.
+
+Both synchronous controllers live under `api/http/synchronous-verification/`, with `current/` body DTOs and
+`deprecated/` query DTOs, legacy response types, and the Automapper profile. They invoke the same
+`RUN_SYNCHRONOUS_VERIFICATION` token. Its framework-free `RunSynchronousVerification` implementation under
+`application/delivery/synchronous/` normalizes the address and passes the organization and optional trace to a
+narrow verification port. The root binds that port to the existing orchestrator. HTTP permission and credit guards
+remain on both routes; the command performs no credit operations. Validation still follows the credit guard, so an
+authorized invalid request consumes one credit. Domain-policy rejection and unexpected adapter failures retain
+their generic `500` response. The `/emails` administration API remains at `api/http/email-administration/`, wired
+by the root to `EmailAdministrationService`.
 
 ## Dependencies
 
@@ -222,9 +229,12 @@ Focused tests are grouped by behavior:
 - **Result lookup**: `api/verification-result-http.integration.spec.ts`,
   `infrastructure/typeorm-verification-result-reader.spec.ts`, and the PostgreSQL ownership integration test
 
-- **Synchronous**: `sync-email-verification/sync-email-verification.controller.spec.ts`
-- **Deprecated synchronous**: `old-sync-email-verification/old-sync-email-verification.controller.spec.ts`,
-  `old-sync-email-verification/old-sync-email-verification-http.integration.spec.ts`
+- **Synchronous application command**: `application/delivery/synchronous/run-synchronous-verification.spec.ts`
+- **Both synchronous HTTP routes**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
+- **Current synchronous controller**: `api/http/synchronous-verification/current/sync-email-verification.controller.spec.ts`
+- **Deprecated synchronous controller and HTTP compatibility**:
+  `api/http/synchronous-verification/deprecated/old-sync-email-verification.controller.spec.ts`,
+  `api/http/synchronous-verification/deprecated/old-sync-email-verification-http.integration.spec.ts`
 - **Async**: `async-email-verification/async-email-verification.controller.spec.ts`,
   `async-email-verification/async-email-verification.service.spec.ts`
 - **Batch**: `batch-email-verification/batch-email-verification.controller.spec.ts`,

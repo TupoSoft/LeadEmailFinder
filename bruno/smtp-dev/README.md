@@ -17,14 +17,19 @@ enqueue asynchronous verification, and poll for a completed result with its own 
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
-The DNS and domain-synonym adapters are registered under `infrastructure/discovery/dns/` and
-`infrastructure/discovery/http/`. The SMTP compatibility adapter retains the existing DNS/proxy path until the
-mailbox refactor. Account discovery keeps its current default-deny composition and approval checks.
+Within the email-verification module, `api/http/synchronous-verification/current/` and
+`api/http/synchronous-verification/deprecated/` adapt both routes to the shared
+`RunSynchronousVerification` command in `application/delivery/synchronous/`. The command uses the core composed
+by `infrastructure/email-verification-core.module.ts`. DNS and domain-synonym adapters live under
+`infrastructure/discovery/dns/` and `infrastructure/discovery/http/`; `SmtpMailboxProbe` lives under
+`infrastructure/mailbox/smtp/` and uses the same DNS, proxy, STARTTLS, and persistence contracts. Account discovery
+keeps its current default-deny composition and approval checks.
 
-The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpVerifier` caches its
-internal catch-all probe per domain, so a second `/verify` call for the same domain does not allocate another
-proxy. `/v1/proxies/healthy` runs the same `state = active` eligibility query as the allocator without that
-cache in the way.
+The draining check calls `GET /v1/proxies/healthy` rather than `POST /verify` again. `SmtpMailboxProbe` reuses
+persisted SMTP outcomes for an organization and address, including the catch-all probe address. A second
+`/verify` call for the same organization's fixture domain can therefore avoid allocating another proxy.
+`/v1/proxies/healthy` runs the same `state = active` eligibility query as the allocator without that cache in the
+way.
 
 Start the fixture from the repository root:
 
