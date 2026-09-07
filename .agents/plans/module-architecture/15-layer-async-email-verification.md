@@ -47,6 +47,13 @@ composition, and prove that a foreign organization still sees the job as not fou
 
 ## Decision Log
 
+- Decision: Merge master commit `1d3e827` and retain both the completed async composition decisions and the new
+  `legacy-retirement/01` ownership rule.
+  Rationale: The conflict concerns plan wording only. Independent batch retry defaults remain preserved, and future
+  deprecated-route retirement must not be reversed by this plan. Existing implementation and SMTP evidence remain
+  unchanged.
+  Date/Author: 2026-09-07, Codex conflict resolution.
+
 - Decision: Validate SMTP in the separate `lef460a1ee` Compose project, with temporary network remapping from
   `172.28.0.0/24` to `172.29.46.0/24` in the overlay, DNS zone, and proxy configuration.
   Rationale: Another checkout owns the default subnet and ports. A separate project with matching DNS and proxy
@@ -181,8 +188,10 @@ custom backoff, and the worker to infrastructure. The worker invokes the plan-14
 contains no verification, credit, or authorization policy.
 
 Recompose the async slice with one producer registration and one worker. Preserve the independent legacy batch
-producer registration and internal verification compatibility token until plan 16 finishes delivery composition. Update source references and shrink only async baseline entries;
-sync/deprecated and batch entries remain untouched.
+producer registration and internal verification compatibility token until plan 16 finishes delivery composition.
+Update source references and shrink only async baseline entries; current synchronous and batch entries remain
+untouched. Deprecated-route code, if still present, belongs to `legacy-retirement/01`; this plan must not restore
+retired code or baseline entries.
 
 ## Interfaces and Dependencies
 
@@ -207,7 +216,8 @@ plans 03 and 04. No public TypeScript, database, provider, SMTP, or S3 contract 
   semantics and do not alter job identity.
 - Logs and errors contain no address, raw job payload, credential, SMTP/provider payload, or external message.
 - No async application/domain file imports Nest, BullMQ, Redis, HTTP DTOs, guards, or queue implementations.
-- Sync/deprecated and batch code remains behaviorally unchanged; only async baseline keys disappear.
+- Current synchronous and batch code remains behaviorally unchanged; only async baseline keys disappear. This plan
+  does not restore deprecated-route code or baseline entries removed by `legacy-retirement/01`.
 - Focused, real Redis/Bull, HTTP, architecture, full-suite, build, docs, and diff checks pass.
 
 ## Validation
