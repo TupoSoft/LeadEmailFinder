@@ -1,10 +1,5 @@
 @url={{ services.api.host }}:{{ services.api.port }}
 
-### Verify (Old Response)
-# temporarily_blocked lindsay.loftusx(at)anheuser-busch.com
-GET {{url}}/verify?email=kyrylo.kupin@gmail.com
-Authorization: Bearer {{token}}
-
 ### Verify
 POST {{url}}/verify
 Content-Type: application/json

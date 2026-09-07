@@ -1,0 +1,28 @@
+info:
+  name: 11-retired-get-verify-returns-not-found
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/verify?email=person@lef.test"
+  headers:
+    - name: X-Request-ID
+      value: caller-controlled-correlation
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('returns the normal API 404 for retired GET verification despite available credit', function() {
+          expect(res.status).to.equal(404);
+          expect(res.body.statusCode).to.equal(404);
+          expect(res.body.error).to.equal('Not Found');
+        });
+
+        test('returns a server-generated request UUID', function() {
+          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
+        });

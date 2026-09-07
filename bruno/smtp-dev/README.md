@@ -1,20 +1,22 @@
 # Local SMTP Development Bruno Collection
 
 This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
-and restores it without restarting the fixture. Finally, the deprecated `GET /verify` compatibility route proves
-that it requires the same credit as `POST /verify`. It returns `402` at zero balance and debits one credit after
-a successful request. Later requests update the authenticated organization's stored email and prove that an
-address outside that organization's cache is concealed as `404 Not Found` rather than created implicitly. Another
-request proves that creating a duplicate cache entry returns `409 Conflict`. Both rejection bodies use generic
+and restores it without restarting the fixture. Requests 08–14 prove that `POST /verify` returns `402` at zero
+balance and debits one credit after a successful `201` request. Between adding that credit and sending the POST request,
+an authenticated request to the retired `GET /verify` route returns the API's normal `404`, and an immediate
+balance read confirms that the credit remains available. Later requests update the authenticated organization's
+stored email and prove that an address outside that organization's cache is concealed as `404 Not Found` rather
+than created implicitly. Another request proves that creating a duplicate cache entry returns `409 Conflict`.
+Both rejection bodies use generic
 messages and do not echo the submitted address.
 
 Every response must include a server-generated UUID in `X-Request-ID`, including rejected requests. Synchronous,
-legacy, and asynchronous requests submit a caller-controlled header and verify that the server replaces it.
-The synchronous results expose persisted verification UUIDs; the deprecated response body continues to omit `id`.
-Requests 16–19 read an owned result through `GET /verifications/:id`, confirm that a random missing UUID returns
-`404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 20–22 add one credit,
+retired GET, and asynchronous requests submit a caller-controlled header and verify that the server replaces it.
+The synchronous results expose persisted verification UUIDs. The retired route returns no verification result.
+Requests 18–21 read an owned result through `GET /verifications/:id`, confirm that a random missing UUID returns
+`404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 22–24 add one credit,
 enqueue asynchronous verification, and poll for a completed result with its own persisted verification UUID.
-The next completed-status read must return the same result. Requests 23–28 confirm that enqueue debits exactly
+The next completed-status read must return the same result. Requests 25–30 confirm that enqueue debits exactly
 one credit, conceal a missing job with `404`, reject a malformed job UUID with `400`, require authentication for
 status with `401`, and reject enqueue at zero balance with `402`. The final balance stays at zero after polling,
 repeat status reads, and rejected requests. Permission rejection and foreign-job concealment use isolated
@@ -25,8 +27,7 @@ identifies the saved result. A result lookup requires `verification:read` and us
 Within the email-verification module, `api/http/asynchronous-verification/` adapts enqueue and status requests to
 commands in `application/delivery/async/`. The queue producer, status lookup, and worker live under
 `infrastructure/queues/async-verification/` and preserve the existing queue protocol and organization ownership.
-`api/http/synchronous-verification/current/` and
-`api/http/synchronous-verification/deprecated/` adapt both routes to the shared
+`api/http/synchronous-verification/current/` adapts POST requests to the
 `RunSynchronousVerification` command in `application/delivery/synchronous/`. The command uses the core composed
 by `infrastructure/email-verification-core.module.ts`. DNS and domain-synonym adapters live under
 `infrastructure/discovery/dns/` and `infrastructure/discovery/http/`; `SmtpMailboxProbe` lives under
@@ -73,8 +74,8 @@ corepack pnpm bruno:smtp-dev
 The launcher confirms that this checkout owns the API and SMTP fixture containers, then runs the installed Bruno
 CLI inside the API container with `bru run --env local --sandbox developer`. It loads ignored development
 credentials without printing them, selects `http://api:3000` and the internal Keycloak protocol endpoint explicitly,
-and fails on missing prerequisites, skipped requests, failed assertions, or zero executed tests. The developer
-sandbox supplies the `fetch` function needed by the token-minting script.
+and requires all 30 requests to execute. It fails on missing prerequisites, skipped requests, failed assertions,
+or zero executed tests. The developer sandbox supplies the `fetch` function needed by the token-minting script.
 
 For a stack started with `docker compose -p <project>`, set `COMPOSE_PROJECT_NAME` to the same project when running
 the launcher. The launcher records ownership of the working directory in ignored `.dev/keycloak/development-stack.json` metadata.

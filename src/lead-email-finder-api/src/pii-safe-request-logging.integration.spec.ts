@@ -47,9 +47,9 @@ class ForbiddenTestGuard implements CanActivate {
 class PiiSafeRequestLoggingTestController {
     constructor(private readonly logger: Logger) {}
 
-    @Get('verify')
-    verify(@Req() incoming: IncomingMessage): { ok: true; requestId: IncomingMessage['id'] } {
-        this.logger.log('verification_test_handler')
+    @Get('query-logging')
+    queryLogging(@Req() incoming: IncomingMessage): { ok: true; requestId: IncomingMessage['id'] } {
+        this.logger.log('query_logging_test_handler')
         return { ok: true, requestId: incoming.id }
     }
 
@@ -132,7 +132,7 @@ describe('PII-safe request logging', () => {
         const attackerRequestId = 'attacker-request-' + randomUUID()
 
         const success = await request(app.getHttpServer())
-            .get('/verify?email=' + encodedSentinel)
+            .get('/query-logging?email=' + encodedSentinel)
             .set('Authorization', authorization)
             .set('Cookie', cookie)
             .set('User-Agent', userAgent)
@@ -157,7 +157,7 @@ describe('PII-safe request logging', () => {
         expect(automaticLogs).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    req: expect.objectContaining({ method: 'GET', path: '/verify' }),
+                    req: expect.objectContaining({ method: 'GET', path: '/query-logging' }),
                     res: { statusCode: 200 },
                     responseTime: expect.any(Number),
                 }),
@@ -201,7 +201,7 @@ describe('PII-safe request logging', () => {
     })
 
     it.each([
-        ['/verify', 200],
+        ['/query-logging', 200],
         ['/validation/not-a-uuid', 400],
         ['/unauthenticated', 401],
         ['/forbidden', 403],
@@ -226,9 +226,9 @@ describe('PII-safe request logging', () => {
             req: { id: responseId, method: 'GET', path },
             res: { statusCode: status },
         }))
-        if (path === '/verify') {
+        if (path === '/query-logging') {
             expect((response.body as { requestId: string }).requestId).toBe(responseId)
-            expect(capturedLines.find(line => line.msg === 'verification_test_handler')).toEqual(
+            expect(capturedLines.find(line => line.msg === 'query_logging_test_handler')).toEqual(
                 expect.objectContaining({ req: { id: responseId, method: 'GET', path } }),
             )
         }
@@ -237,6 +237,36 @@ describe('PII-safe request logging', () => {
         expect(completeOutput).not.toContain(preexistingRequestId)
         expect(completeOutput).not.toContain(attackerHeader)
         expect(completeOutput).not.toContain('Private provider response')
+    })
+
+    it('keeps a server UUID and conceals the retired GET verification query on its 404 response', async () => {
+        const sentinel = 'retired-verification-' + randomUUID() + '@example.test'
+        const encodedSentinel = encodeURIComponent(sentinel)
+        const attackerRequestId = 'attacker-request-' + randomUUID()
+        preexistingRequestId = 'middleware-request-' + randomUUID()
+
+        const response = await request(app.getHttpServer())
+            .get('/verify?email=' + encodedSentinel)
+            .set('X-Request-ID', attackerRequestId)
+            .expect(404)
+        await new Promise<void>(resolve => setImmediate(resolve))
+
+        const responseId: unknown = response.headers['x-request-id']
+        expect(responseId).toEqual(expect.stringMatching(UUID_PATTERN))
+        expect(responseId).not.toBe(attackerRequestId)
+        expect(responseId).not.toBe(preexistingRequestId)
+        const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
+        expect(automaticLogs).toHaveLength(1)
+        expect(automaticLogs[0]).toEqual(expect.objectContaining({
+            req: { id: responseId, method: 'GET', path: '/verify' },
+            res: { statusCode: 404 },
+        }))
+
+        const completeOutput = JSON.stringify(capturedLines)
+        expect(completeOutput).not.toContain(sentinel)
+        expect(completeOutput.toLowerCase()).not.toContain(encodedSentinel.toLowerCase())
+        expect(completeOutput).not.toContain(attackerRequestId)
+        expect(completeOutput).not.toContain(preexistingRequestId)
     })
 
     it('returns a request UUID when JSON parsing rejects the body', async () => {

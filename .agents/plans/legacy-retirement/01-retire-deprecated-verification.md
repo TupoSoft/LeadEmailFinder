@@ -12,11 +12,11 @@ last mapper also removes Automapper from the runtime and dependency graph.
 
 ## Progress
 
-- [ ] (2026-09-07) Confirm the prerequisite is merged, verify the retirement inventory, and start the synced issue.
-- [ ] (2026-09-07) Remove the deprecated route, its response adapter, trace mode, and exclusive Automapper dependencies.
-- [ ] (2026-09-07) Add HTTP retirement coverage and preserve POST, tracing, serialization, and runtime Swagger contracts.
-- [ ] (2026-09-07) Update SMTP Bruno coverage and documentation, and verify the architecture baseline is unchanged.
-- [ ] (2026-09-07) Complete focused and repository validation, record runtime evidence, and open the single pull request.
+- [x] (2026-09-07) Confirm the prerequisite is merged, verify the retirement inventory, and start the synced issue.
+- [x] (2026-09-07) Remove the deprecated route, its response adapter, trace mode, and exclusive Automapper dependencies.
+- [x] (2026-09-07) Add HTTP retirement coverage and preserve POST, tracing, serialization, and runtime Swagger contracts.
+- [x] (2026-09-07) Update SMTP Bruno coverage and documentation, and verify the architecture baseline is unchanged.
+- [x] (2026-09-07) Complete focused and repository validation, record runtime evidence, and open the single pull request.
 
 ## Plan dependencies
 
@@ -38,6 +38,10 @@ associated with the deprecated directory. This retirement therefore expects no b
 `CreditGuard` debits before the global validation pipe runs. Preserving POST therefore means preserving its current
 guard order, including the existing debit behavior when an authorized request reaches body validation and fails.
 This retirement does not introduce a new charging policy for `400` responses.
+
+The implementation checkout at `1635409` also contains newer async delivery work. Its SMTP collection already has
+28 requests, including async rejection and final-balance checks. Preserving those requests and adding two retirement
+checks requires 30 executed requests. Its async controller test is now under `api/http/asynchronous-verification/`.
 
 The browser OpenAPI document currently includes only BFF and health operations. The full runtime Swagger document
 includes verification. Checking only the generated browser snapshot would not prove that deprecated GET was removed.
@@ -61,7 +65,15 @@ includes verification. Checking only the generated browser snapshot would not pr
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented on `kk/retire-deprecated-verification` from `1635409`, which contains merged PR #553. Authenticated GET
+returns the normal `404` without verification or debit. POST retains its existing serialization, authorization,
+organization, validation, credit, and tracing contracts. All eight deprecated adapter files and the exclusive
+Automapper dependencies are removed. Async and batch delivery, the public module barrel, the browser contract, and
+the architecture baseline remain unchanged. No material architectural trade-offs were introduced.
+
+Local checks and the full SMTP runtime collection passed. Issue #556 is assigned to the requesting user and its
+Project 9 Status is In Progress. [PR #564](https://github.com/TupoSoft/LeadEmailFinder/pull/564) is assigned to the
+requesting user and closes #556 on merge. Implementation and local acceptance are complete.
 
 ## Context and Orientation
 
@@ -107,8 +119,8 @@ are declared in `package.json`, with overrides in `pnpm-workspace.yaml` and entr
 Swagger comes from `src/lead-email-finder-api/src/openapi/api-document.ts`. The network-denied real-application export
 fixture in `scripts/openapi/contracts.test.mjs` already reads both `runtime.json` and `browser.json`.
 
-The ordered `bruno/smtp-dev/08-*` through `12-*` requests establish zero credits, check legacy `402`, add one credit,
-verify through GET, and check the final zero balance. `scripts/bruno/run-collection.mjs` currently requires 22 requests
+At implementation start, the ordered `bruno/smtp-dev/08-*` through `12-*` requests establish zero credits, check legacy `402`, add one credit,
+verify through GET, and check the final zero balance. `scripts/bruno/run-collection.mjs` initially requires 28 requests
 for this collection. Remaining requests exercise SMTP, proxy operations, email administration, persisted-result
 lookup, and asynchronous verification.
 
@@ -186,7 +198,7 @@ and `smtpLegacyCreditKey` consistently. Keep zero-balance setup, `402`, an idemp
 and SMTP exchange instead of its old strings. Insert an authenticated `GET` request while that one credit is available
 and a balance read immediately after it: GET returns `404`, the balance stays one, and the subsequent POST consumes
 exactly that credit. Preserve sequential execution and existing SMTP/request-ID checks. Update the launcher from
-22 to 24 expected requests and update its focused test if it asserts the registered count. Do not weaken checks for
+28 to 30 expected requests and update its focused test if it asserts the registered count. Do not weaken checks for
 missing, skipped, or failed requests.
 
 Preserve general query redaction. The API-host test
@@ -227,7 +239,7 @@ delivery work; it neither reimplements that refactor nor changes the prerequisit
   absent. The module's supported sync, async, batch, and result-reader composition still resolves.
 - The real runtime OpenAPI export retains POST, omits GET and its old DTO schemas, and leaves both committed browser
   artifacts unchanged. The gateway continues forwarding `/verify` to the API.
-- The 24-request SMTP collection executes every request successfully, including unchanged secure SMTP and plaintext
+- The 30-request SMTP collection executes every request successfully, including unchanged secure SMTP and plaintext
   rejection, POST billing, GET retirement with an unchanged balance, and existing supported workflows. Unavailable
   dependencies are recorded as unverified runtime acceptance, not a passed collection.
 - The architecture baseline is unchanged unless newly verified retirement-owned stale debt requires a documented,
@@ -241,7 +253,7 @@ delivery work; it neither reimplements that refactor nor changes the prerequisit
 Run the focused HTTP, trace, serializer, and privacy suites from the repository root:
 
 ```shell
-TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/api/http/synchronous-verification src/libs/modules/email-verification/src/application/delivery/synchronous src/libs/modules/email-verification/src/api/verification-result-http.integration.spec.ts src/libs/modules/email-verification/src/infrastructure/verification-trace src/libs/modules/email-verification/src/async-email-verification/async-email-verification.controller.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts --runInBand
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- src/libs/modules/email-verification/src/api/http/synchronous-verification src/libs/modules/email-verification/src/application/delivery/synchronous src/libs/modules/email-verification/src/api/verification-result-http.integration.spec.ts src/libs/modules/email-verification/src/infrastructure/verification-trace src/libs/modules/email-verification/src/api/http/asynchronous-verification/async-email-verification.controller.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts --runInBand
 node --test scripts/openapi/contracts.test.mjs scripts/bruno/run-collection.test.mjs
 corepack pnpm openapi:check
 corepack pnpm architecture:check
@@ -288,7 +300,7 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --bu
 corepack pnpm bruno:smtp-dev
 ```
 
-Record all 24 executed requests and the actual passing test count. This proves local HTTP, credit, and SMTP fixture
+Record all 30 executed requests and the actual passing test count. This proves local HTTP, credit, and SMTP fixture
 wiring, not real-world provider acceptance. If dependencies are unavailable, record the cause and leave Bruno
 execution explicitly unverified. The implementation's final response must state `Bruno: added/updated and <result>`
 and give the exact Harper command and its result. Planning-time prose validation does not count as these future
@@ -307,11 +319,44 @@ rebuild only containers whose ownership matches this checkout.
 
 Record the prerequisite's merged revision, eight removed files, unchanged baseline or justified exact removals,
 final dependency inventory, counts from HTTP and runtime OpenAPI tests,
-unchanged browser artifacts, 24-request Bruno report, and exact Harper result. The observable outcome fits one PR:
+unchanged browser artifacts, 30-request Bruno report, and exact Harper result. The observable outcome fits one PR:
 retired GET behavior and the removal of its exclusive support. No additional product choice is required, and all
 automated contract checks can run without provider activation. The required structural work belongs to the merged
 prerequisite and is retained. Inspection of merged PR #553 supplied planning evidence only; its reported test results are
 not validation of this retirement, and no retirement runtime check has been run while drafting this plan.
+
+### Implementation Evidence (2026-09-07)
+
+- The prerequisite is merged as `72a5a259100eb78894b49a6731841257e041e2ce` and is an ancestor of this checkout.
+  Issue #556 has assignee `KyryloKupin` and the directly verified Project 9 Status `In Progress`.
+- Deleted all eight files under `api/http/synchronous-verification/deprecated/`: the enums, query DTO, response DTO,
+  response interface, controller, controller specification, HTTP integration specification, and mapper profile.
+  The production/configuration retirement search in Validation returned no matches (exit 1); both removed-directory
+  checks passed. Remaining retired-mode references are negative test assertions.
+- `corepack pnpm install --no-frozen-lockfile --store-dir /home/kyrylo/.cache/codex/pnpm-store` succeeded with pinned
+  pnpm 10.33.0. The regenerated lockfile removes only Automapper entries and overrides. Shared transformation,
+  validation, and reflection packages remain. The existing Bruno dependency has a peer-version warning.
+- The exact focused Jest command in Validation passed 9 suites and 119 tests. The synchronous HTTP suite retains
+  all 16 POST cases and adds two retired GET cases plus the Swagger assertion. The retirement cases observe zero calls to the real command,
+  core verifier, or credit debit. Request logging tests preserve the server UUID and conceal raw and encoded queries.
+- `node --test scripts/openapi/contracts.test.mjs scripts/bruno/run-collection.test.mjs` passed 15 tests.
+  The real runtime export contains POST and its current DTO metadata, with no GET operation or old DTO schemas.
+  `corepack pnpm openapi:check` passed. Both tracked browser artifacts and the gateway file are unchanged.
+- `corepack pnpm architecture:check` passed for 9 modules and 20 existing baseline entries; the baseline has no diff.
+  Type checking and build passed; build compiled 604 files. Lint passed with one existing missing-return-type warning
+  in `src/libs/config/src/load-secrets.spec.ts`. The SOLID and dependency-direction review found no material trade-off.
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci` passed 213 Jest suites and 2343 tests; 13 suites and 80 tests
+  requiring optional runtime inputs were skipped. Its separate runner tests passed all 47 cases.
+- Docker initially had no containers or volumes. The supported development reset provisioned this checkout's stack
+  and passed its authenticated smoke test. The Docker build needed writable `BUILDX_CONFIG=/tmp/issue-556-buildx` on this host.
+  After rebuilding the SMTP overlay, the first proxy bootstrap received connection refusal from the starting API.
+  The first Bruno attempt failed; retrying the existing idempotent bootstrap after API health succeeded.
+- `corepack pnpm bruno:smtp-dev` then passed all 30 requests and 61 tests with no skipped requests. The collection
+  proves POST billing, retired GET with an unchanged available credit, STARTTLS success, plaintext rejection,
+  proxy restoration, result lookup, and preserved async behavior. API log inspection found no raw or encoded fixture
+  addresses; the plaintext-rejection request had no envelope-command log. This is local fixture evidence only.
+- `corepack pnpm docs:lint -- .agents/plans/legacy-retirement/01-retire-deprecated-verification.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md`
+  passed all four files. `git diff --check` passed. An independent review found no actionable issues.
 
 ## Plan readiness
 

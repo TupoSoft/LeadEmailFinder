@@ -1,21 +1,20 @@
 info:
-  name: 19-require-authentication-for-verification
+  name: 28-require-authentication-for-async-status
   type: http
-  seq: 19
+  seq: 28
 
 http:
   method: GET
-  url: '{{baseUrl}}/verifications/{{verificationId}}'
+  url: '{{baseUrl}}/verifyAsync/{{asyncJobId}}'
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('requires authentication to read a verification result', function() {
+        test('requires authentication to read an asynchronous job', function() {
           expect(res.status).to.equal(401);
         });
 
         test('returns a server-generated request UUID', function() {
           expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
         });

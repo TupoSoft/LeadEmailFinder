@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { AutomapperModule } from '@automapper/nestjs'
-import { classes } from '@automapper/classes'
 import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from '@tuposoft/lead-email-finder/modules/email-verification'
 import { BullModule } from '@nestjs/bullmq'
@@ -32,9 +30,6 @@ import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
             useClass: PostgresModuleOptionsFactoryImpl,
-        }),
-        AutomapperModule.forRoot({
-            strategyInitializer: classes(),
         }),
         LoggerModule.forRoot({ useExisting: true, pinoHttp: createPiiSafePinoHttpOptions() }),
         BullModule.forRootAsync({
