@@ -49,6 +49,56 @@ privacy notice.
 
 ## Development
 
+### Path-Aware Validation
+
+The `Validate` workflow always runs on pull requests, pushes to `master`, and manual dispatch. Its `changes` job
+selects six consumers. The final `Validate / validate` check succeeds only when discovery and every consumer succeed.
+Each consumer starts even when unselected and explicitly reports that its checks were not run. A failed, canceled,
+skipped, or missing dependency fails the summary. Branch protection continues to use the same required check.
+
+Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
+account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
+repository test, and CI selection tests. Harper's existing advisory CI setting is preserved. The remaining consumers follow this matrix; multiple
+changed paths select the union of their consumers:
+
+| Changed paths | Additional consumers |
+| --- | --- |
+| Backend services, workers, tests, deployment files, configuration, and backend scripts | Backend, images, browser |
+| API controllers, DTOs, module wiring, bootstrap code, domain sources, and shared contract types or policies | Backend, web, contract, images, browser |
+| `packages/api-client/**`, `scripts/openapi/**` | Backend, web, contract, images, browser |
+| `apps/web/**`, `scripts/frontend/**`, `DESIGN.md`, `UX-CONTRACT.md`, `premium-ui.json` | Web, images, browser |
+| `docker/**`, `Dockerfile`, `.dockerignore` | Backend, images, browser |
+| Root package, lockfile, workspace, TypeScript, ESLint, Jest, Nest, and SWC configuration | Backend, web, contract, images, browser |
+| `.github/workflows/**`, `scripts/ci/**`, unknown source or configuration paths | Backend, web, contract, images, browser |
+| Other Markdown, documentation, ExecPlans, and repository guidance | None |
+| A trustworthy empty comparison | None |
+
+The [classifier](scripts/ci/select-validation.mjs) and its [fixtures](scripts/ci/validation-fixtures.json) define the
+exact path rules, including precedence for design contracts and web-local documentation. Backend owns lint, types,
+unit tests, Vagrant checks, four PostgreSQL integration suites, and application compilation. Web owns design audits,
+lint, types, unit tests, and the static build. Contract owns OpenAPI drift, exporter tests, and client compilation.
+Images owns all three image builds, the packaged approval manifest check, and Compose configuration. Browser owns
+route ownership, browser workflows, accessibility, visual baselines, and the disposable same-origin stack with Bruno.
+The browser job builds its own gateway image because each consumer has an isolated runner. An unselected backend
+job starts no PostgreSQL service. A successful no-op is selection evidence only.
+
+Pull requests compare their head with its merge base against the event's base SHA. Pushes compare the event's
+`before` and head commit IDs directly. Git supplies paths separated by null bytes with rename detection disabled, so deletions and
+both sides of a rename remain visible. Filenames are never evaluated as shell code. Manual dispatch, invalid input,
+an unsupported event, an all-zero revision, or unavailable comparison history selects every consumer.
+
+Run these commands to inspect selection and validate the workflow without starting application services:
+
+```sh
+node scripts/ci/select-validation.mjs --paths-json '["apps/web/src/App.tsx"]'
+corepack pnpm test:ci-paths
+TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- select-validation validate-workflow --runInBand
+```
+
+The first command prints all six boolean flags. The fixture command verifies the matrix and prints stable JSON.
+The Jest checks parse workflow YAML, preserve command ownership, and exercise discovery, no-op guards, and summary
+failure handling. Live Actions runs remain separate evidence for GitHub's job and expression semantics.
+
 ### Browser API Contracts
 
 The API serves its full Swagger UI at `/docs` and a normalized browser contract at `/openapi.json`.
@@ -70,7 +120,8 @@ The first command writes only `packages/api-client/openapi/lead-email-finder.jso
 `packages/api-client/src/schema.d.ts` from that snapshot. Commit both artifacts with the source change; never edit
 them by hand. Stage newly created artifacts before their first check; untracked files also fail validation.
 The check command exports and generates in a temporary directory, compares both files byte for byte,
-and fails on missing or stale output without changing either file. CI runs this check unconditionally.
+and fails on missing or stale output without changing either file. CI runs this check whenever contract inputs change,
+or when change discovery selects every consumer.
 
 Export uses the real application module and the same Swagger plugin options, annotations, serialization setup,
 and document builder as the runtime. A dedicated child process installs a fixed configuration fixture, ignores

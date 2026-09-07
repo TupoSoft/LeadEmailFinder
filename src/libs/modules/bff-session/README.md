@@ -144,6 +144,9 @@ Provider, configuration, and storage contracts use `infrastructure/config/bff-se
 and the two `infrastructure/redis/redis-*-store.spec.ts` files. The JOSE integration spec uses real signatures and an
 independent JWKS address, including rejection of the internal issuer.
 
+`infrastructure/crypto/session-encryptor.spec.ts` verifies session encryption and rejects modified ciphertext, wrong
+keys, and malformed input. Its tampering fixture flips one decoded byte so every generated sample is actually changed.
+
 The API boundary uses `api/bff-session.controller.spec.ts`, `api/bff-session.swagger.spec.ts`,
 `api/parse-cookie-header.spec.ts`, and the Origin, CSRF, and browser-session-mutation guard specs. Module composition
 is covered by `bff-session.module.spec.ts` and `bff-session-guard-wiring.integration.spec.ts`.

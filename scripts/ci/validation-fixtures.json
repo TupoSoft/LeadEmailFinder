@@ -1,0 +1,1008 @@
+[
+  {
+    "name": "backend-service",
+    "paths": [
+      "src/libs/modules/credits/src/application/credits.service.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "backend-worker",
+    "paths": [
+      "src/async-email-verification-worker/src/worker.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "backend-test-runner",
+    "paths": [
+      "scripts/testing/credits-postgres.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "bruno-runner",
+    "paths": [
+      "scripts/bruno/run-collection.mjs"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "bruno-collection",
+    "paths": [
+      "bruno/bff-sessions/bruno.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "backend-mock",
+    "paths": [
+      "__mocks__/provider.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-source",
+    "paths": [
+      "apps/web/src/routes/PublicEntryPage.tsx"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-documentation",
+    "paths": [
+      "apps/web/README.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-design-contract",
+    "paths": [
+      "DESIGN.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-ux-contract",
+    "paths": [
+      "UX-CONTRACT.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-premium-contract",
+    "paths": [
+      "premium-ui.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-controller",
+    "paths": [
+      "src/libs/modules/bff-session/src/api/bff-session.controller.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-dto",
+    "paths": [
+      "src/libs/modules/credits/src/api/credits.dto.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-module",
+    "paths": [
+      "src/libs/modules/credits/src/credits.module.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-shared-enum",
+    "paths": [
+      "src/libs/common/src/enums/job-state.enum.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-serialization",
+    "paths": [
+      "src/lead-email-finder-api/src/configure-api-serialization.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "proxy-protocol-schema-input",
+    "paths": [
+      "src/libs/modules/proxy/src/domain/proxy-protocol.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "proxy-lifecycle-schema-input",
+    "paths": [
+      "src/libs/modules/proxy/src/domain/proxy-lifecycle.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "identity-role-schema-input",
+    "paths": [
+      "src/libs/modules/identity/src/domain/auth-principal.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "identity-service-credential-schema-input",
+    "paths": [
+      "src/libs/modules/identity/src/domain/service-credential-status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "payment-purchase-status-schema-input",
+    "paths": [
+      "src/libs/modules/payments/src/domain/purchase-status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "email-domain-schema-input",
+    "paths": [
+      "src/libs/modules/email-verification/src/domain/email.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "browser-capability-schema-policy",
+    "paths": [
+      "src/libs/modules/bff-session/src/application/browser-capability-policy.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "service-client-grant-schema-policy",
+    "paths": [
+      "src/libs/modules/auth/src/application/service-client-grant-policy.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "future-domain-schema-input",
+    "paths": [
+      "src/libs/modules/credits/src/domain/balance-kind.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-types-directory",
+    "paths": [
+      "src/libs/schema/src/types/status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constants-directory",
+    "paths": [
+      "src/libs/schema/src/constants/status.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-type-suffix",
+    "paths": [
+      "src/libs/schema/src/status.type.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-types-suffix",
+    "paths": [
+      "src/libs/schema/src/status.types.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constant-suffix",
+    "paths": [
+      "src/libs/schema/src/status.constant.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-constants-suffix",
+    "paths": [
+      "src/libs/schema/src/status.constants.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "generated-client",
+    "paths": [
+      "packages/api-client/src/schema.d.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "openapi-snapshot",
+    "paths": [
+      "packages/api-client/openapi/lead-email-finder.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "openapi-tooling",
+    "paths": [
+      "scripts/openapi/contracts.mjs"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "gateway-config",
+    "paths": [
+      "docker/web/default.conf"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "gateway-test",
+    "paths": [
+      "scripts/frontend/gateway.test.mjs"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-production-dockerfile",
+    "paths": [
+      "Dockerfile"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "api-development-dockerfile",
+    "paths": [
+      "docker/Dockerfile"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "web-dockerfile",
+    "paths": [
+      "docker/web.Dockerfile"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "dockerignore",
+    "paths": [
+      ".dockerignore"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "compose",
+    "paths": [
+      "docker/compose.yaml"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "lockfile",
+    "paths": [
+      "pnpm-lock.yaml"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "workspace",
+    "paths": [
+      "pnpm-workspace.yaml"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "root-package",
+    "paths": [
+      "package.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-typescript",
+    "paths": [
+      "tsconfig.base.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-eslint",
+    "paths": [
+      "eslint.config.mjs"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-jest",
+    "paths": [
+      "jest.config.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "shared-build",
+    "paths": [
+      "nest-cli.json",
+      ".swcrc"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "workflow",
+    "paths": [
+      ".github/workflows/validate.yml"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "classifier",
+    "paths": [
+      "scripts/ci/select-validation.mjs"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "documentation",
+    "paths": [
+      "README.md",
+      "docs/ci.md",
+      "src/libs/modules/credits/README.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": false,
+      "contract": false,
+      "images": false,
+      "browser": false
+    }
+  },
+  {
+    "name": "plan",
+    "paths": [
+      ".agents/plans/frontend/07-make-validation-path-aware.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": false,
+      "contract": false,
+      "images": false,
+      "browser": false
+    }
+  },
+  {
+    "name": "agent-metadata",
+    "paths": [
+      ".agents/skills/sources.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": false,
+      "contract": false,
+      "images": false,
+      "browser": false
+    }
+  },
+  {
+    "name": "unknown-source",
+    "paths": [
+      "experimental/new.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "unknown-config",
+    "paths": [
+      "new-config.json"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "trusted-empty",
+    "paths": [],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": false,
+      "contract": false,
+      "images": false,
+      "browser": false
+    }
+  },
+  {
+    "name": "untrusted-empty",
+    "paths": [],
+    "comparisonTrusted": false,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "untrusted-nonempty",
+    "paths": [
+      "README.md"
+    ],
+    "comparisonTrusted": false,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "mixed",
+    "paths": [
+      "apps/web/src/main.tsx",
+      "src/libs/socket/src/socket.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "mixed-contract",
+    "paths": [
+      "apps/web/src/main.tsx",
+      "src/libs/modules/credits/src/api/credits.dto.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "absolute-path",
+    "paths": [
+      "/etc/passwd"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "windows-absolute-path",
+    "paths": [
+      "C:/workspace/file.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "parent-traversal",
+    "paths": [
+      "src/../README.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "non-normalized-path",
+    "paths": [
+      "./README.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "backslash-path",
+    "paths": [
+      "src\\worker.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "unsafe-control-character",
+    "paths": [
+      "docs/unsafe\nname.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": true,
+      "contract": true,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "space-in-path",
+    "paths": [
+      "docs/operator guide.md"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": false,
+      "web": false,
+      "contract": false,
+      "images": false,
+      "browser": false
+    }
+  }
+]

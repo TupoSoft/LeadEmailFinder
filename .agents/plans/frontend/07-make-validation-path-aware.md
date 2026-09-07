@@ -11,12 +11,12 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Progress
 
-- [ ] (2026-08-31) Add a repository-owned changed-path classifier with deterministic fixtures.
-- [ ] (2026-08-31) Separate backend, web, contract, image, browser, and repository-policy validation consumers.
-- [ ] (2026-08-31) Preserve the existing required validation conclusion through one fail-closed summary job.
-- [ ] (2026-08-31) Make unchanged consumer jobs succeed explicitly instead of being skipped.
-- [ ] (2026-08-31) Document the trigger matrix and validate pull-request, push, and manual-run behavior.
-- [ ] (2026-08-31) Run workflow, fixture, prose, and repository checks and record evidence.
+- [x] (2026-09-07) Add a repository-owned changed-path classifier with 67 deterministic fixtures and real Git event tests.
+- [x] (2026-09-07) Separate backend, web, contract, image, browser, and repository-policy validation consumers.
+- [x] (2026-09-07) Preserve the existing required validation conclusion through one fail-closed summary job.
+- [x] (2026-09-07) Make unchanged consumer jobs succeed explicitly instead of being skipped.
+- [x] (2026-09-07) Document the trigger matrix; validate Git pull-request/push comparisons and seven hosted orchestration fixtures.
+- [x] (2026-09-07) Run workflow, fixture, prose, repository, image, and live browser checks and record passing evidence.
 
 ## Plan dependencies
 
@@ -26,6 +26,29 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Surprises & Discoveries
 
+- (2026-09-07) All three prerequisites are complete on base commit `24804d8`. Issue #502 is assigned to the
+  requesting user and its Project 9 status is In Progress. The current workflow also includes Vagrant, privacy,
+  security, and four PostgreSQL integration checks; all remain part of the selected validation.
+- (2026-09-07) The local Docker daemon already hosts a development stack for another checkout. Live stack checks
+  must use isolated resources or GitHub-hosted runners to preserve that running environment.
+- (2026-09-07) Route tests need the tagged web image on the same runner. The browser consumer therefore builds
+  its own gateway image before those tests; it cannot reuse the image consumer's local Docker state.
+- (2026-09-07) Docker scripts and Compose configuration are also inputs to backend runner tests. Docker changes
+  select backend validation as well as image and browser validation.
+- (2026-09-07) Git hooks export repository and index variables. Temporary Git fixtures now clear inherited
+  `GIT_*` variables for both Git and Node children. A regression proves that an enclosing repository's HEAD,
+  configuration, index, and branch reference remain unchanged. The normal pre-commit hook passes.
+- (2026-09-07) API annotations consume domain enums and application policy constants. These transitive inputs
+  must select contract and web validation even when their filenames do not end in `dto` or `enum`.
+- (2026-09-07) The existing ExecPlan repository test reads the real plan files and validates dependencies and
+  readiness. It runs in repository policy so plan-only edits retain this ratchet without selecting backend work.
+- (2026-09-07) The gateway outage fixture also fails on base commit `24804d8` and its predecessor: after the API
+  container stops, Docker can retain an unreachable address long enough to produce HTTP 504 rather than HTTP 502.
+  The fixture now keeps its network namespace alive independently of the API process, so stopping the API leaves
+  a reachable address with a closed port. Every existing assertion and its ordering remain intact.
+- (2026-09-07) The documentation-update run exposed another existing test defect in `session-encryptor.spec.ts`.
+  Replacing the encrypted payload's first character with `x` makes no change when that character is already `x`.
+  The fixture now flips one decoded byte and verifies that the resulting token differs before asserting rejection.
 - The original Validate workflow is one backend-oriented job with PostgreSQL and an API image build on every change.
 - The frontend foundation adds web and contract checks, and the same-origin plan adds a second image plus browser
   coverage. Those checks have different expensive inputs but share the lockfile and workspace configuration.
@@ -34,6 +57,15 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Decision Log
 
+- Decision: Run repository policy for every trustworthy comparison, including an empty diff. Reject missing or
+  malformed discovery flags before any consumer can report a successful no-op.
+  Rationale: Documentation, security, and architecture ratchets remain enforced, and discovery failures cannot
+  silently disable checks.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Keep backend PostgreSQL services conditional through an empty image when backend validation is
+  unselected. Move built-web browser checks and the live gateway workflow into the browser consumer.
+  Rationale: Consumer jobs still start and report explicit results while unselected runs avoid service startup.
+  Date/Author: 2026-09-07, implementation.
 - Decision: Put path classification in a tested repository script instead of duplicating glob logic throughout YAML.
   Rationale: One deterministic function can be exercised with synthetic path lists and reviewed like application
   code; the workflow remains orchestration rather than an untestable policy source.
@@ -56,7 +88,13 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
 
 ## Outcomes & Retrospective
 
-Not started.
+The implementation, local validation, seven hosted fixtures, and complete pull-request workflow are complete.
+The classifier, event discovery, fixture runner, workflow tests, and strict summary are repository-owned. Every
+original validation command and its environment settings remain present. Unselected consumers succeed explicitly,
+uncertain comparisons select every consumer, and the stable aggregate rejects unsuccessful dependencies.
+
+All eight hosted jobs passed, including images, PostgreSQL, real browser sessions, and Bruno. No application behavior
+changed. No material application architecture trade-off remains; isolated runners build their own gateway images.
 
 ## Context and Orientation
 
@@ -81,7 +119,15 @@ This pull request adds the changed-path classifier and fixtures, restructures th
 consumer jobs plus the stable summary, adds successful no-op behavior, and documents the trigger matrix. It may add a
 narrow local command that prints consumer flags for a supplied base/head or fixture path list.
 
-It does not change application source, API behavior, generated artifacts, test assertions, image contents, required
+Hosted validation also requires a narrow setup correction in `scripts/frontend/gateway.test.mjs`: one fixture-owned
+container retains the fake API's network namespace after the API container stops. This removes a confirmed baseline
+Docker timing dependency while preserving the existing HTTP, availability, and privacy assertions.
+
+The follow-up also corrects the encrypted-session test fixture under
+`src/libs/modules/bff-session/src/infrastructure/crypto/session-encryptor.spec.ts`. It always changes the payload
+bytes before checking the existing decryption-rejection expectation. The encryption implementation is unchanged.
+
+It does not change application source, API behavior, generated artifacts, existing rejection expectations, image contents, required
 check policy in GitHub, CI provider, release/deployment workflows, production environments, or secrets. It does not
 remove an existing validation command merely because it is expensive.
 
@@ -197,6 +243,75 @@ unchanged. No Docker cleanup, persistent data reset, schema migration, productio
 introduced.
 
 ## Artifacts and Notes
+
+Implementation files are `scripts/ci/select-validation.mjs`, `scripts/ci/select-validation.spec.ts`,
+`scripts/ci/validation-fixtures.json`, `scripts/ci/validation-summary.mjs`, and `scripts/ci/validate-workflow.spec.ts`.
+The README documents the consumer matrix and local commands. No application runtime or HTTP contract changed;
+Bruno additions are not applicable, and the existing BFF collection remains in browser validation.
+
+Local evidence on 2026-09-07: the full backend command passed 208 Jest suites with 2,079 tests and the existing 32
+Node runner tests. The default run skipped 13 environment-dependent suites with 72 tests; this does not replace
+the four explicit PostgreSQL commands. Later focused CI tests cover the completed classifier and workflow changes.
+OpenAPI drift and six tooling tests passed. Web audits, design lint, UI audit, web lint, types, unit tests, build, and
+all four gateway tests passed. Root lint passed with one existing return-type warning in `load-secrets.spec.ts`;
+typecheck, build, docs-tooling tests, architecture, privacy approval checks, and the security scan passed.
+
+The initial focused suite and normal pre-commit hook passed 183 tests. Review added transitive schema fixtures and
+the plan-only ratchet check; the final focused command passed 200 tests including the real ExecPlan fixture.
+The four PostgreSQL commands passed 43 tests
+against one isolated PostgreSQL 18 container, which was removed afterward. Browser workflows passed 18 tests,
+accessibility passed four, and visual baselines passed four.
+
+Seven temporary hosted workflows preserved the actual discovery outputs, job identifiers, dependencies, conditions,
+guards, no-op steps, PostgreSQL service expression, and summary. Selected application commands and setup actions
+were replaced by marker steps; these runs prove orchestration only. The selected marker count includes substituted
+setup actions, and no marker is counted as an application test. Each run emitted all eight jobs. Five successful
+scenarios concluded success in every job. Selected failure failed backend and summary; discovery failure failed
+discovery, all six guards, and summary. All seven temporary branches were deleted and their absence verified.
+
+| Hosted fixture | Selected consumers | Marker steps | Successful no-ops | Summary | PostgreSQL started |
+| --- | --- | --- | --- | --- | --- |
+| [Backend](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112315342) | Policy, backend, images, browser | 46 | 2 | Success | Yes |
+| [Web](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112321609) | Policy, web, images, browser | 44 | 2 | Success | No |
+| [Shared](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112327582) | All | 65 | 0 | Success | Yes |
+| [Unchanged](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112333767) | Policy | 11 | 5 | Success | No |
+| [Manual dispatch](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112339900) | All | 65 | 0 | Success | Yes |
+| [Selected failure](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112346177) | Policy, backend, images, browser | 39 | 2 | Failure | Yes |
+| [Discovery failure](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34112351936) | Policy flag; discovery failed | 0 | 0 | Failure | No |
+
+Manual dispatch used the real event classifier. Other hosted fixtures supplied synthetic path lists. Pull-request
+merge-base and push comparisons were exercised against real temporary Git histories locally. Cancellation and
+unexpected skipped/missing results are covered by local summary tests rather than live cancellation. No required
+check settings changed. The external aggregate remains `Validate / validate`.
+
+The first complete pull-request run passed backend, web, contract, images, and repository policy. Its browser route
+test received HTTP 504 instead of the existing expected HTTP 502 after stopping a fixture container; the same test
+passed locally. The identical failure also occurred in master runs
+[34111374087](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34111374087) and
+[34109666518](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34109666518).
+
+The complete [passing run 34113629796](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34113629796) validates
+implementation commit `d13d349`. Discovery, all six consumers, and `validate` succeeded. All 53 selected command steps
+passed: repository policy 9, backend 11, web 10, contract 5, images 5, and browser 13. Every consumer was selected because
+this pull request changes shared CI inputs. These are command-step counts, not test counts.
+
+Hosted backend validation passed 209 Jest suites with 2,182 tests, 32 Node runner tests, and 43 explicit PostgreSQL tests.
+The default Jest run retained 13 environment-dependent skipped suites with 72 tests. Vagrant passed two tests with 34
+assertions. Web passed 45 unit tests and 12 audit-tool tests. Browser validation passed four gateway tests, 18 browser
+workflow tests, four accessibility tests, four visual tests, and three genuine same-origin session tests. Bruno passed
+15 requests and 16 tests with no skips. All three image builds, manifest checks, Compose validation, and cleanup passed.
+
+Commit `56c139f` updated only this Markdown file. The passing implementation run above records the initial full
+runtime evidence; the subsequent hosted run exposed the session-test issue described below.
+
+The later [run 34114706751](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34114706751) passed all consumers
+except backend, where the unchanged session tampering fixture sometimes submitted the original token. The aggregate
+correctly failed. Its fixture correction has focused encryption, complete backend, architecture, type, and prose
+validation; the final revision's hosted run is recorded in PR #560 after it finishes.
+
+The original prose command checked the root README and this plan. The follow-up command
+`corepack pnpm docs:lint -- .agents/plans/frontend/07-make-validation-path-aware.md src/libs/modules/bff-session/README.md`
+passes both edited files.
 
 Record the path-to-consumer fixture matrix, redacted change-discovery output, each job conclusion, and the aggregate
 check name/result. Never record repository tokens, event payload secrets, environment dumps, cookies, user data, or

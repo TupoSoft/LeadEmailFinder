@@ -1,235 +1,402 @@
 name: Validate
-
 on:
-  pull_request:
+  pull_request: null
   push:
     branches:
       - master
-  workflow_dispatch:
-
+  workflow_dispatch: null
 permissions:
   contents: read
-
 jobs:
-  validate:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
+      backend: ${{ steps.select.outputs.backend }}
+      web: ${{ steps.select.outputs.web }}
+      contract: ${{ steps.select.outputs.contract }}
+      images: ${{ steps.select.outputs.images }}
+      browser: ${{ steps.select.outputs.browser }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Select affected validation
+        id: select
+        run: node scripts/ci/select-validation.mjs --event
+  repository-policy:
+    needs:
+      - changes
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
+    steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.repositoryPolicy == 'false'
+        run: 'echo "repository-policy: selected=$VALIDATION_SELECTED; checks were not run."'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Enable Corepack
+        run: corepack enable
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Install dependencies
+        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Test documentation linter
+        run: corepack pnpm test:docs-lint
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Validate account-discovery approvals
+        env:
+          ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm privacy:account-discovery-approvals-check
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Scan for LinkedIn session material
+        run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Lint changed documentation with Harper
+        continue-on-error: true
+        env:
+          HARPER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm docs:lint:changed
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Check module architecture
+        env:
+          ARCHITECTURE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: corepack pnpm architecture:check
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Test validation selection and workflow
+        run: corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Check validation fixtures
+        run: corepack pnpm test:ci-paths
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+  backend:
+    needs:
+      - changes
+    if: always()
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18-alpine
+        image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
         env:
           POSTGRES_DB: lef_identity_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d lef_identity_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+        options: --health-cmd "pg_isready -U postgres -d lef_identity_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.backend }}
     steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.backend == 'false'
+        run: 'echo "backend: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+        if: needs.changes.outputs.backend == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-
+        if: needs.changes.outputs.backend == 'true'
+      - name: Enable Corepack
+        run: corepack enable
+        if: needs.changes.outputs.backend == 'true'
+      - name: Install dependencies
+        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
+        if: needs.changes.outputs.backend == 'true'
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3'
-
+          ruby-version: "3.3"
+        if: needs.changes.outputs.backend == 'true'
       - name: Test Vagrant provider configuration
         run: |
           ruby -c deploy/proxy-fleet/vagrant/Vagrantfile
           ruby scripts/testing/proxy-fleet-vagrant-config.test.rb
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Install dependencies
-        run: >-
-          corepack pnpm --filter @tuposoft/lead-email-finder...
-          --filter @tuposoft/lead-email-finder-api-client...
-          install --frozen-lockfile
-
-      - name: Test documentation linter
-        run: corepack pnpm test:docs-lint
-
-      - name: Validate account-discovery approvals
-        env:
-          ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: corepack pnpm privacy:account-discovery-approvals-check
-
-      - name: Scan for LinkedIn session material
-        run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
-
-      - name: Lint changed documentation with Harper
-        continue-on-error: true
-        env:
-          HARPER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: corepack pnpm docs:lint:changed
-
-      - name: Check module architecture
-        env:
-          ARCHITECTURE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: corepack pnpm architecture:check
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Lint
         run: corepack pnpm lint
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Type check
         run: corepack pnpm typecheck
-
-      - name: Check browser API contract drift
-        run: corepack pnpm openapi:check
-
-      - name: Test browser API contract tooling
-        run: node --test scripts/openapi/*.test.mjs
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Test
         run: corepack pnpm test:ci
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Test empty-database synchronization
         env:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Test credit account debits against a real database
         env:
           TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Test payment adjustments against a real database
         env:
           TEST_PAYMENT_WEBHOOK_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Test email-verification persistence stores against a real database
         env:
           TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- typeorm-stores-organization-isolation.integration.spec.ts --runInBand
-
+        if: needs.changes.outputs.backend == 'true'
       - name: Build application
         run: corepack pnpm build
-
-      - name: Build production image
-        run: docker build --tag lead-email-finder:ci .
-
-      - name: Test packaged account-discovery manifest
-        run: >-
-          docker run --rm --entrypoint node lead-email-finder:ci
-          -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs');
-          const { parse } = require('yaml');
-          const path = '/app/config/privacy/account-discovery-approvals.yaml';
-          const manifest = parse(readFileSync(path, 'utf8'));
-          if (manifest.schemaVersion !== 1 || manifest.revision !== 'initial-empty' || manifest.approvals.length !== 0)
-          process.exit(1);
-          const stat = statSync(path);
-          if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1);
-          try { accessSync(path, constants.W_OK); process.exit(1); }
-          catch (error) { if (error.code !== 'EACCES') throw error; }"
-
+        if: needs.changes.outputs.backend == 'true'
   web:
+    needs:
+      - changes
+    if: always()
     runs-on: ubuntu-latest
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
     steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.web == 'false'
+        run: 'echo "web: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.web == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-
+        if: needs.changes.outputs.web == 'true'
       - name: Enable Corepack
         run: corepack enable
-
+        if: needs.changes.outputs.web == 'true'
       - name: Install dependencies
-        run: >-
-          corepack pnpm --filter @tuposoft/lead-email-finder-web...
-          install --frozen-lockfile
-
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
+        if: needs.changes.outputs.web == 'true'
       - name: Test premium UI audit
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ui-audit
-
+        if: needs.changes.outputs.web == 'true'
       - name: Lint design contract
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web design:lint
-
+        if: needs.changes.outputs.web == 'true'
       - name: Audit premium UI contracts
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web ui:audit
-
+        if: needs.changes.outputs.web == 'true'
       - name: Lint web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web lint
-
+        if: needs.changes.outputs.web == 'true'
       - name: Type check web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
-
+        if: needs.changes.outputs.web == 'true'
       - name: Build generated API client
         run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
-
+        if: needs.changes.outputs.web == 'true'
       - name: Test web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci
-
+        if: needs.changes.outputs.web == 'true'
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
-
-      - name: Install Chromium
-        run: >-
-          corepack pnpm --filter @tuposoft/lead-email-finder-web
-          exec playwright install --with-deps chromium
-
-      - name: Test web browser workflows
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e
-
-      - name: Test web accessibility
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
-
-      - name: Test web visual baselines
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual
-
-  gateway:
+        if: needs.changes.outputs.web == 'true'
+  contract:
+    needs:
+      - changes
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
     steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.contract == 'false'
+        run: 'echo "contract: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.contract == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-
+        if: needs.changes.outputs.contract == 'true'
       - name: Enable Corepack
         run: corepack enable
-
-      - name: Install workspace dependencies
-        run: corepack pnpm install --frozen-lockfile
-
+        if: needs.changes.outputs.contract == 'true'
+      - name: Install dependencies
+        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
+        if: needs.changes.outputs.contract == 'true'
+      - name: Check browser API contract drift
+        run: corepack pnpm openapi:check
+        if: needs.changes.outputs.contract == 'true'
+      - name: Test browser API contract tooling
+        run: node --test scripts/openapi/*.test.mjs
+        if: needs.changes.outputs.contract == 'true'
+      - name: Build generated API client
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
+        if: needs.changes.outputs.contract == 'true'
+  images:
+    needs:
+      - changes
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.images }}
+    steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.images == 'false'
+        run: 'echo "images: selected=$VALIDATION_SELECTED; checks were not run."'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.images == 'true'
+      - name: Build production image
+        run: docker build --tag lead-email-finder:ci .
+        if: needs.changes.outputs.images == 'true'
+      - name: Test packaged account-discovery manifest
+        run: docker run --rm --entrypoint node lead-email-finder:ci -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs'); const { parse } = require('yaml'); const path = '/app/config/privacy/account-discovery-approvals.yaml'; const manifest = parse(readFileSync(path, 'utf8')); if (manifest.schemaVersion !== 1 || manifest.revision !== 'initial-empty' || manifest.approvals.length !== 0) process.exit(1); const stat = statSync(path); if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1); try { accessSync(path, constants.W_OK); process.exit(1); } catch (error) { if (error.code !== 'EACCES') throw error; }"
+        if: needs.changes.outputs.images == 'true'
       - name: Build independent development API image
         run: docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .
-
+        if: needs.changes.outputs.images == 'true'
       - name: Build independent static web image
         run: docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .
-
+        if: needs.changes.outputs.images == 'true'
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
-
+        if: needs.changes.outputs.images == 'true'
+  browser:
+    needs:
+      - changes
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
+    steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: No validation needed
+        if: needs.changes.outputs.browser == 'false'
+        run: 'echo "browser: selected=$VALIDATION_SELECTED; checks were not run."'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.browser == 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+        if: needs.changes.outputs.browser == 'true'
+      - name: Enable Corepack
+        run: corepack enable
+        if: needs.changes.outputs.browser == 'true'
+      - name: Install workspace dependencies
+        run: corepack pnpm install --frozen-lockfile
+        if: needs.changes.outputs.browser == 'true'
+      - name: Build independent static web image
+        run: docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .
+        if: needs.changes.outputs.browser == 'true'
       - name: Test Vite and Nginx route ownership and privacy
         run: corepack pnpm test:gateway
-
+        if: needs.changes.outputs.browser == 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test web browser workflows
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test web accessibility
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test web visual baselines
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual
+        if: needs.changes.outputs.browser == 'true'
       - name: Reset, provision, and check disposable development stack
         run: corepack pnpm dev:reset -- --confirm-project=LEF
-
+        if: needs.changes.outputs.browser == 'true'
       - name: Test genuine same-origin browser session and log privacy
         run: corepack pnpm test:web-live
-
+        if: needs.changes.outputs.browser == 'true'
       - name: Test BFF and gateway HTTP contracts with Bruno
         run: corepack pnpm bruno:bff-sessions
-
+        if: needs.changes.outputs.browser == 'true'
       - name: Report service health
-        if: always()
+        if: always() && needs.changes.outputs.browser == 'true'
         run: docker compose -f docker/compose.yaml ps
-
       - name: Stop this runner's disposable stack
-        if: always()
+        if: always() && needs.changes.outputs.browser == 'true'
         run: docker compose -f docker/compose.yaml down --volumes
+  validate:
+    name: validate
+    if: always()
+    needs:
+      - changes
+      - repository-policy
+      - backend
+      - web
+      - contract
+      - images
+      - browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require every validation consumer to succeed
+        env:
+          VALIDATION_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/validation-summary.mjs

@@ -32,10 +32,13 @@ describe('SessionEncryptor', () => {
     it('returns undefined when the ciphertext is tampered with', async () => {
         const encryptor = new SessionEncryptor(randomBytes(32).toString('base64url'))
         const ciphertext = await encryptor.encrypt(sampleRecord())
-        const [header, encryptedKey, iv, tamperedCiphertext, tag] = ciphertext.split('.')
+        const [header, encryptedKey, iv, encryptedPayload, tag] = ciphertext.split('.')
+        const tamperedPayload = Buffer.from(encryptedPayload, 'base64url')
+        tamperedPayload[0] ^= 1
 
-        const tampered = [header, encryptedKey, iv, `x${tamperedCiphertext.slice(1)}`, tag].join('.')
+        const tampered = [header, encryptedKey, iv, tamperedPayload.toString('base64url'), tag].join('.')
 
+        expect(tampered).not.toBe(ciphertext)
         await expect(encryptor.decrypt(tampered)).resolves.toBeUndefined()
     })
 
