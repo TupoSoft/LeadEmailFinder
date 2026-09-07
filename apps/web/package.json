@@ -18,6 +18,9 @@
         "test:a11y": "pnpm build && playwright test tests/e2e/accessibility.spec.ts",
         "test:visual": "pnpm build && playwright test tests/e2e/visual.spec.ts",
         "test:gateway": "node ../../scripts/testing/web-live.mjs",
+        "browser-fixtures:bootstrap": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types tests/support/bootstrap-browser-fixtures.ts",
+        "test:privileged": "playwright test --config playwright.privileged.config.ts",
+        "test:privileged-artifacts": "node --test ../../scripts/testing/browser-fixture-artifacts.spec.mjs",
         "verify:ui": "pnpm build && playwright test"
     },
     "dependencies": {

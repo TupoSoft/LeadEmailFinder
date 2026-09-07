@@ -13,17 +13,23 @@ describe('ensurePlatformOperatorUser', () => {
         api.request
             .mockResolvedValueOnce([]) // find-by-email: not found
             .mockResolvedValueOnce(undefined) // POST create
-            .mockResolvedValueOnce([{ id: 'user-1', email: 'platform-operator@lef.test' }]) // find-by-email: found
+            .mockResolvedValueOnce([
+                { id: 'user-1', email: 'platform-operator@lef.test', username: 'platform-operator@lef.test' },
+            ])
             .mockResolvedValueOnce(undefined) // PUT reset-password
 
         const result = await ensurePlatformOperatorUser(api, 'platform-operator@lef.test', 'a-password')
 
-        expect(result).toEqual({ subject: 'user-1' })
+        expect(result).toEqual({ subject: 'user-1', newlyCreated: true })
         expect(api.request).toHaveBeenNthCalledWith(
             2,
             'POST',
             expect.stringContaining('/users'),
-            expect.objectContaining({ email: 'platform-operator@lef.test' }),
+            expect.objectContaining({
+                email: 'platform-operator@lef.test',
+                firstName: 'Platform',
+                lastName: 'Operator',
+            }),
             [201],
         )
         expect(api.request).toHaveBeenNthCalledWith(
@@ -35,16 +41,29 @@ describe('ensurePlatformOperatorUser', () => {
         )
     })
 
-    it('resets the password without recreating an existing user', async () => {
+    it('preserves an existing fixture password and profile on a routine seed rerun', async () => {
         const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
-        api.request
-            .mockResolvedValueOnce([{ id: 'user-1', email: 'platform-operator@lef.test' }])
-            .mockResolvedValueOnce(undefined)
+        api.request.mockResolvedValueOnce([
+            { id: 'user-1', email: 'platform-operator@lef.test', username: 'platform-operator@lef.test' },
+        ])
 
-        const result = await ensurePlatformOperatorUser(api, 'platform-operator@lef.test', 'a-password')
+        const result = await ensurePlatformOperatorUser(api, 'platform-operator@lef.test', 'a-password', {
+            previousSubject: 'user-1',
+        })
 
-        expect(result).toEqual({ subject: 'user-1' })
-        expect(api.request).not.toHaveBeenCalledWith('POST', expect.stringContaining('/users'), expect.anything(), expect.anything())
+        expect(result).toEqual({ subject: 'user-1', newlyCreated: false })
+        expect(api.request).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses an existing same-email user without matching seed provenance before any mutation', async () => {
+        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+        api.request.mockResolvedValue([
+            { id: 'existing', email: 'platform-operator@lef.test', username: 'platform-operator@lef.test' },
+        ])
+        await expect(ensurePlatformOperatorUser(api, 'platform-operator@lef.test', 'a-password')).rejects.toThrow(
+            'provenance',
+        )
+        expect(api.request).toHaveBeenCalledTimes(1)
     })
 })
 
@@ -74,10 +93,11 @@ describe('ensureExternalIdentity', () => {
         const id = await ensureExternalIdentity(dataSource, 'https://issuer', 'user-1', 'platform-operator@lef.test')
 
         expect(id).toBe('identity-1')
-        expect(query).toHaveBeenCalledWith(
-            expect.stringContaining('ON CONFLICT (issuer, subject) DO UPDATE'),
-            ['https://issuer', 'user-1', 'platform-operator@lef.test'],
-        )
+        expect(query).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT (issuer, subject) DO UPDATE'), [
+            'https://issuer',
+            'user-1',
+            'platform-operator@lef.test',
+        ])
     })
 })
 

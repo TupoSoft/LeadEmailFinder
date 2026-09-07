@@ -2,10 +2,11 @@ import { DataSource } from 'typeorm'
 import { ServiceCredentialSeed } from './bootstrap-service-credential'
 import { KeycloakAdminPort } from './keycloak-admin-api'
 import { REALM } from './provisioning'
+import { CUSTOMER_OWNER_EMAIL, CUSTOMER_OWNER_PASSWORD } from './browser-fixture-identities'
+import { configureBrowserFixtureMfa, findBrowserFixtureUser } from './browser-fixture-seed'
+export { CUSTOMER_OWNER_EMAIL, CUSTOMER_OWNER_PASSWORD } from './browser-fixture-identities'
 
 export const CUSTOMER_ORGANIZATION_NAME = 'Acme Development Customer'
-export const CUSTOMER_OWNER_EMAIL = 'owner@acme.lef.test'
-export const CUSTOMER_OWNER_PASSWORD = 'customer-owner-development-only'
 export const CUSTOMER_CREDIT_BALANCE = 1000
 // This is exactly MEMBER_PERMISSIONS (src/libs/modules/auth/src/application/role-permission-policy.service.ts):
 // the narrowest realistic set a customer integration would need (submit/poll verifications), deliberately
@@ -186,8 +187,10 @@ export async function upsertCustomerServiceCredential(
 }
 
 export interface CustomerFixtureSummary {
+    issuer: string
     organizationId: string
     ownerEmail: string
+    ownerSubject: string
     keycloakClientId: string
     issuers: string[]
 }
@@ -199,11 +202,52 @@ export async function seedCustomerFixture(deps: {
     api: KeycloakAdminPort
     dataSource: DataSource
     fetchImpl: typeof fetch
+    previousFixture?: CustomerFixtureSummary
+    expectedIssuer?: string
 }): Promise<CustomerFixtureSummary> {
-    const { apiUrl, issuer, platformToken, api, dataSource, fetchImpl } = deps
+    const { apiUrl, issuer, platformToken, api, dataSource, fetchImpl, previousFixture, expectedIssuer } = deps
 
-    const { organizationId, invitationToken } = await createOrganizationWithOwner(apiUrl, platformToken, fetchImpl)
-    await acceptOwnerInvitation(apiUrl, invitationToken, CUSTOMER_OWNER_PASSWORD, fetchImpl)
+    let owner = await findBrowserFixtureUser(api, issuer, 'owner', CUSTOMER_OWNER_EMAIL, expectedIssuer)
+    const newlyCreated = !owner
+    let organizationId: string
+    if (owner) {
+        if (
+            previousFixture?.issuer !== issuer ||
+            previousFixture.ownerEmail !== CUSTOMER_OWNER_EMAIL ||
+            previousFixture.ownerSubject !== owner.id ||
+            !previousFixture.organizationId
+        ) {
+            throw new Error('Refusing to change an existing owner without matching development fixture provenance.')
+        }
+        organizationId = previousFixture.organizationId
+        const [membership] = await dataSource.query<Array<{ matches: boolean }>>(
+            `SELECT EXISTS (
+                SELECT 1 FROM external_identities identity
+                JOIN organization_memberships membership ON membership."externalIdentityId" = identity.id
+                WHERE identity.issuer = $1 AND identity.subject = $2 AND membership."organizationId" = $3
+                    AND membership.role = 'owner' AND membership.status = 'active'
+            ) AS matches`,
+            [issuer, owner.id, organizationId],
+        )
+        if (!membership?.matches) {
+            throw new Error('The existing customer seed does not match an active owner membership.')
+        }
+    } else {
+        const created = await createOrganizationWithOwner(apiUrl, platformToken, fetchImpl)
+        organizationId = created.organizationId
+        await acceptOwnerInvitation(apiUrl, created.invitationToken, CUSTOMER_OWNER_PASSWORD, fetchImpl)
+        owner = await findBrowserFixtureUser(api, issuer, 'owner', CUSTOMER_OWNER_EMAIL, expectedIssuer)
+        if (!owner) throw new Error('The customer owner was not visible after invitation acceptance.')
+    }
+    await configureBrowserFixtureMfa(api, {
+        issuer,
+        label: 'owner',
+        email: CUSTOMER_OWNER_EMAIL,
+        subject: owner.id,
+        newlyCreated,
+        previousSubject: previousFixture?.ownerSubject,
+        expectedIssuer,
+    })
     await setCreditBalance(apiUrl, platformToken, organizationId, CUSTOMER_CREDIT_BALANCE, fetchImpl)
 
     const { subject } = await provisionCustomerServiceClient(api, CUSTOMER_SERVICE_CLIENT_ID)
@@ -213,8 +257,10 @@ export async function seedCustomerFixture(deps: {
     }
 
     return {
+        issuer,
         organizationId,
         ownerEmail: CUSTOMER_OWNER_EMAIL,
+        ownerSubject: owner.id,
         keycloakClientId: CUSTOMER_SERVICE_CLIENT_ID,
         issuers: seeds.map(seed => seed.issuer),
     }
@@ -229,7 +275,11 @@ export async function obtainClientCredentialsToken(
     const response = await fetchImpl(`${issuer}/protocol/openid-connect/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
+        body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+        }),
     })
     const token = (await response.json()) as TokenResponse
     if (!response.ok || !token.access_token) {

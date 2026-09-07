@@ -361,3 +361,8 @@ Each run seeds:
 | Customer M2M credential   | `lef-svc-dev-fixture` (Client Credentials)     | Scoped to `verification:run`/`verification:read` only                                                |
 
 Generated secrets (Keycloak client secrets, id summaries) are written only to the gitignored `.dev/keycloak/*.json` files, never printed in full.
+
+The two privileged human fixtures request TOTP enrollment on their first browser login. Run
+`corepack pnpm --filter ./apps/web browser-fixtures:bootstrap` after the reset, then use the shared MFA-aware
+Playwright login fixture. See [privileged browser testing](apps/web/tests/README.md) for repeat login, local secret
+handling, isolated stack ownership, and reset recovery.

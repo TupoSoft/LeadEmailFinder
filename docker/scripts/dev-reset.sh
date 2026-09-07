@@ -86,6 +86,7 @@ verify_and_delete_volumes() {
     # count means the volume set has drifted from what this script knows how to safely target, so refuse
     # rather than guess.
     if [ "${found_count}" -eq 0 ]; then
+        remove_browser_fixture_state
         ${COMPOSE} down
         return 0
     fi
@@ -108,9 +109,20 @@ verify_and_delete_volumes() {
         fi
     done
 
+    remove_browser_fixture_state
     ${COMPOSE} down
     # shellcheck disable=SC2086 -- pre-verified names from the allowlisted filter above, never an unresolved expansion.
     docker volume rm ${found_volumes}
+}
+
+remove_browser_fixture_state() {
+    if [ -L .dev ] || [ -L .dev/keycloak ]; then
+        printf 'Refusing to remove browser fixture state through a symbolic-link directory.\n' >&2
+        exit 1
+    fi
+    # Only the enrollment keys are reset here, after confirmation and every ownership/volume check.
+    # Routine seed commands preserve this file. Removing a file symlink never follows its target.
+    rm -f -- .dev/keycloak/browser-users.json
 }
 
 wait_healthy() {

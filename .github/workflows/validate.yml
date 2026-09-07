@@ -356,6 +356,9 @@ jobs:
       - name: Test web browser workflows
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e
         if: needs.changes.outputs.browser == 'true'
+      - name: Verify privileged authentication artifact suppression
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
+        if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
         if: needs.changes.outputs.browser == 'true'

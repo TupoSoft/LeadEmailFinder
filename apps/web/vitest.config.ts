@@ -4,11 +4,28 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
     plugins: [react()],
     test: {
-        environment: 'jsdom',
-        include: ['src/**/*.test.{ts,tsx}'],
-        setupFiles: ['./src/test/setup.ts'],
-        restoreMocks: true,
-        clearMocks: true,
-        css: true,
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: 'application',
+                    environment: 'jsdom',
+                    include: ['src/**/*.test.{ts,tsx}'],
+                    setupFiles: ['./src/test/setup.ts'],
+                    restoreMocks: true,
+                    clearMocks: true,
+                    css: true,
+                },
+            },
+            {
+                test: {
+                    name: 'browser-fixtures',
+                    environment: 'node',
+                    include: ['tests/support/**/*.test.ts'],
+                    restoreMocks: true,
+                    clearMocks: true,
+                },
+            },
+        ],
     },
 })
