@@ -56,6 +56,12 @@ test('accepts only an exact registered collection with no extra command argument
     await assert.rejects(runCollection(['bff-sessions', '--sandbox=developer'], checkoutRoot), /exactly one/)
 })
 
+test('SMTP report validation requires every checked-in request', async () => {
+    const files = await readdir(resolve(checkoutRoot, 'bruno/smtp-dev'))
+    const requests = files.filter(file => /^\d{2}-.+\.yml$/.test(file))
+    assert.equal(registeredCollection('smtp-dev').requests, requests.length)
+})
+
 test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {
     assert.deepEqual(collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential), {
         BRUNO_API_URL: metadata.apiUrl,

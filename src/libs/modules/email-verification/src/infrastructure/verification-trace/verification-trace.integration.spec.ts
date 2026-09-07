@@ -28,11 +28,12 @@ import { EmailVerification } from '../../domain/email-verification'
 import { SyncEmailVerificationController } from '../../api/http/synchronous-verification/current/sync-email-verification.controller'
 import { OldSyncEmailVerificationController } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.controller'
 import { OldSyncEmailVerificationProfile } from '../../api/http/synchronous-verification/deprecated/old-sync-email-verification.profile'
-import { AsyncEmailVerificationController } from '../../async-email-verification/async-email-verification.controller'
-import { AsyncEmailVerificationServiceImpl } from '../../async-email-verification/async-email-verification-service-impl.service'
-import { AsyncEmailVerificationProcessor } from '../../async-email-verification/async-email-verification.processor'
-import { AsyncEmailVerificationJobData } from '../../async-email-verification/async-email-verification-job-data.interface'
-import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../async-email-verification/async-email-verification.constants'
+import { AsyncEmailVerificationController } from '../../api/http/asynchronous-verification/async-email-verification.controller'
+import { AsyncEmailVerificationService } from '../../application/delivery/async/async-email-verification.service'
+import { BullAsyncVerificationJobs } from '../queues/async-verification/bull-async-verification-jobs'
+import { AsyncEmailVerificationProcessor } from '../queues/async-verification/async-email-verification.processor'
+import { AsyncEmailVerificationJobData } from '../queues/async-verification/async-email-verification-job-data.interface'
+import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../application/delivery/async/async-email-verification.service'
 import { RUN_SYNCHRONOUS_VERIFICATION, RunSynchronousVerification } from '../../application/delivery/synchronous/run-synchronous-verification'
 import { LoggingVerificationTraceObserver } from './logging-verification-trace-observer'
 
@@ -107,12 +108,14 @@ describe('captured verification trace chain', () => {
             { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as unknown as DomainPolicyService,
             observer,
         )
-        const asyncService = new AsyncEmailVerificationServiceImpl(
-            queue as unknown as Queue<
-                AsyncEmailVerificationJobData,
-                IEmailVerificationResponseDto,
-                'async-email-verification'
-            >,
+        const asyncService = new AsyncEmailVerificationService(
+            new BullAsyncVerificationJobs(
+                queue as unknown as Queue<
+                    AsyncEmailVerificationJobData,
+                    IEmailVerificationResponseDto,
+                    'async-email-verification'
+                >,
+            ),
             observer,
         )
         processor = new AsyncEmailVerificationProcessor(service)

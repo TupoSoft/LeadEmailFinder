@@ -25,7 +25,7 @@ import {
     CustomerObjectWriteSecurity,
     safeErrorType,
 } from '@tuposoft/lead-email-finder/common'
-import { AsyncEmailVerificationJobData } from '../async-email-verification/async-email-verification-job-data.interface'
+import { AsyncEmailVerificationJobData } from '../infrastructure/queues/async-verification/async-email-verification-job-data.interface'
 import { deriveResultsKey } from './derive-results-key'
 import {
     NOOP_VERIFICATION_TRACE_OBSERVER,

@@ -4,7 +4,8 @@ import { Repository } from 'typeorm'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { EmailVerificationCoreModule } from './infrastructure/email-verification-core.module'
-import { AsyncEmailVerificationModule } from './async-email-verification'
+import { AsyncEmailVerificationModule } from './infrastructure/queues/async-verification/async-email-verification.module'
+import { AsyncEmailVerificationController } from './api/http/asynchronous-verification/async-email-verification.controller'
 import { BatchEmailVerificationModule } from './batch-email-verification'
 import { SyncEmailVerificationController } from './api/http/synchronous-verification/current/sync-email-verification.controller'
 import { OldSyncEmailVerificationController } from './api/http/synchronous-verification/deprecated/old-sync-email-verification.controller'
@@ -24,6 +25,7 @@ import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/em
 @Module({
     imports: [EmailVerificationCoreModule, AsyncEmailVerificationModule, BatchEmailVerificationModule, CreditsModule],
     controllers: [
+        AsyncEmailVerificationController,
         SyncEmailVerificationController,
         OldSyncEmailVerificationController,
         EmailAdministrationController,

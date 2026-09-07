@@ -1,4 +1,4 @@
-import { Request } from 'express'
+import type { Request } from 'express'
 import {
     Body,
     Controller,
@@ -19,9 +19,11 @@ import {
     VerifyAsyncRequestBodyDto,
     VerifyAsyncResponseDto,
 } from './async-email-verification.dto'
-import { AsyncEmailVerificationService } from './async-email-verification-service.interface'
-import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
-import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from './async-email-verification.constants'
+import {
+    ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
+    AsyncEmailVerificationService,
+} from '../../../application/delivery/async/async-email-verification.service'
+import { AsyncEmailVerificationJobNotFoundException } from '../../../application/delivery/async/job-not-found.exception'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
@@ -31,7 +33,10 @@ import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 export class AsyncEmailVerificationController {
     constructor(
         @Inject(ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN)
-        private readonly asyncEmailVerificationService: AsyncEmailVerificationService,
+        private readonly asyncEmailVerificationService: Pick<
+            AsyncEmailVerificationService,
+            'verifyAsync' | 'getAsyncVerificationState'
+        >,
     ) {}
 
     @Post()
@@ -44,11 +49,12 @@ export class AsyncEmailVerificationController {
         @CurrentPrincipal() principal: AuthPrincipal,
         @Req() request: Request,
     ): Promise<VerifyAsyncResponseDto> {
-        return await this.asyncEmailVerificationService.verifyAsync(
-            body,
-            principal,
-            typeof request.id === 'string' ? request.id : undefined,
-        )
+        return await this.asyncEmailVerificationService.verifyAsync({
+            email: body.email,
+            organizationId: principal.organizationId,
+            credentialId: principal.credentialId,
+            requestId: typeof request.id === 'string' ? request.id : undefined,
+        })
     }
 
     @Get(':id')
@@ -59,7 +65,7 @@ export class AsyncEmailVerificationController {
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<GetAsyncVerificationStatusResponseDto> {
         try {
-            return await this.asyncEmailVerificationService.getAsyncVerificationState(id, principal)
+            return await this.asyncEmailVerificationService.getAsyncVerificationState(id, principal.organizationId)
         } catch (error) {
             if (error instanceof AsyncEmailVerificationJobNotFoundException) {
                 throw new NotFoundException(error.message)
