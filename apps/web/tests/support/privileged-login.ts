@@ -1,4 +1,4 @@
-import { test as base, type Page } from '@playwright/test'
+import { test as base, type Page, type TestInfoError } from '@playwright/test'
 import { browserFixtureEnvironment } from './browser-fixture-environment'
 import {
     browserFixtureError,
@@ -7,12 +7,36 @@ import {
 } from './browser-fixture-metadata'
 import { hostedMfaLogin } from './hosted-mfa-login'
 
+function safeInvitationError(value: unknown): TestInfoError {
+    const stack = typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
+        ? value.stack : ''
+    const location = stack.match(/(?:invitations-ui|team-and-invitations)\.spec\.ts:\d+:\d+/)?.[0]
+    return {
+        value: 'Invitation browser validation failed.',
+        ...(location ? { stack: location } : {}),
+    }
+}
+
 export const test = base.extend<{
     loginAs: (identity: BrowserFixtureIdentity) => Promise<Page>
     privilegedAuthPolicy: void
 }>({
     privilegedAuthPolicy: [
-        async ({ trace, screenshot, video }, runFixture) => {
+        async ({ trace, screenshot, video }, runFixture, info) => {
+            if (process.env.LEF_INVITATION_TEST_PRIVACY === '1') {
+                // Playwright still builds error-context.md from assertion messages
+                // when PLAYWRIGHT_NO_COPY_PROMPT disables DOM snapshots. Normalize
+                // errors on arrival, before its artifact recorder can persist them.
+                // The proxy also covers timeout and late teardown errors; changing
+                // reporter output or removing files afterward would be too late.
+                info.errors = new Proxy(info.errors, {
+                    set(errors, key, value) {
+                        return Reflect.set(errors, key, /^\d+$/.test(String(key))
+                            ? safeInvitationError(value)
+                            : value)
+                    },
+                })
+            }
             if (
                 trace !== 'off' ||
                 screenshot !== 'off' ||

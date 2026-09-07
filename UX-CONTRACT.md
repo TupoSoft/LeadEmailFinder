@@ -52,8 +52,13 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Session | `AuthProvider` and `AuthSession` | `frontend/08` | Bootstrap, expiry, account failure, sign-out | Generation, cache, and browser tests |
 | Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
-| Data panel | `ProductPanel` | This contract | Independent loading, retained data, and read retry | Billing component and browser tests |
+| Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
+| Form | `Form.module.css` | This contract | Invitation email, role, and password fields | Field validation and browser tests |
+| Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
+| Dialog | `TeamDialog` | This contract | Owner-role confirmation, disable confirmation, one-time invitation | Focus, dismissal, and restoration tests |
+| Team | `TeamPage` | `frontend/13` | Active and disabled memberships | Component, API, Bruno, and browser tests |
+| Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
 
@@ -114,8 +119,7 @@ state. A later API-backed plan must define those states before adding the corres
 ## Overlays and Feedback
 
 The narrow application navigation is an inline, non-modal disclosure. It has no focus trap or obscured background.
-Opening it focuses the first link; Escape and route selection close it and return focus to its trigger. The public
-routes have no overlays. Later plans resolve shared dialog and notification owners before adding those behaviors.
+Opening it focuses the first link; Escape and route selection close it and return focus to its trigger. The static public entry has no overlays. Team owns the confirmation and one-time-result dialog behavior below.
 
 ## Async and Resilience
 
@@ -134,7 +138,7 @@ prevention, and recovery before implementation.
 The public header provides sign-in. Authenticated routes display account context and effective capabilities.
 Navigation filters only registered destinations by their required capability; the API remains the authorization
 authority. Billing, team, service-client, and verification tools gain navigation entries when their working routes
-ship. These screens expose no clipboard action or secret value.
+ship. Team invitations use the one-time clipboard behavior defined below.
 
 ## Accessibility and Motion
 
@@ -223,8 +227,8 @@ a suppressed tab therefore remains conservative and offers a fresh sign-in as we
 channel cannot block local cleanup. Page hide clears protected content so a cached page snapshot does
 not contain the previous account; a persisted page show always checks the session again.
 
-The shell registers Home and capability-gated Billing. Later plans add their working destinations and required capabilities to the shared
-navigation registry. This avoids presenting unfinished billing, team, service-client, or verification screens as
+The shell registers Home, capability-gated Billing, and capability-gated Team. Later plans add their working destinations and required capabilities to the shared
+navigation registry. This avoids presenting unfinished service-client or verification screens as
 available tools. Component tests exercise each capability independently of role and of route authorization.
 The shared transport turns an operation-level 403 into access denied without signing out. No frontend capability
 check predicts whether the backend will permit a deep link.
@@ -242,7 +246,8 @@ the authenticated shell and generated-client transport. `/app/billing` uses the 
 additionally require `billing.manage`. The server enforces the corresponding permissions on every request.
 
 Summary, catalog, and history load independently with organization-scoped cache keys. `ProductPanel` owns section
-headings, stable loading feedback, retained safe data, and a read retry when a panel fails. The document owns scrolling.
+headings, optional header actions, stable loading feedback, retained safe data, and a read retry when a panel fails.
+Header actions follow the description in reading order and retain their native button semantics. The document owns scrolling.
 History uses a semantic table that becomes labeled rows at narrow widths. Ten rows appear per page, with explicit
 previous and next actions. Pagination is local to the complete server response; no server pagination is implied.
 The `page` query parameter preserves history navigation and is clamped to the available rows.
@@ -271,3 +276,64 @@ It never supplies ownership authority or payment state. The return route accepts
 from the URL and finds it within the current organization's history. Terminal states clear the local hint. Initial
 return navigation focuses the notice once; polling preserves the user's focus. Offline notices and partial errors
 remain readable alongside previously loaded data.
+
+
+## Team Management and Public Invitations
+
+The source contract is `.agents/plans/frontend/13-manage-organization-team.md`. Organization onboarding owns the
+membership and invitation policies; identity owns persistence. The generated browser contract owns field and role
+types. Navigation uses `team.manage`; direct authenticated navigation always requests the member list and obeys the
+server's permission result. Team mutation rejections remain local so the form can explain hierarchy conflicts and
+refresh authoritative data. Account and session failures retain the shared session recovery behavior.
+
+| Route | Owner | Title and heading | Recovery |
+| --- | --- | --- | --- |
+| `/app/team` | `TeamPage` | `Team` | Refresh members, inline mutation failures, or access denied |
+| `/accept-invitation/:token` | Invitation bootstrap | Sanitized before router initialization | Replace the current history entry with `/accept-invitation` |
+| `/accept-invitation` | `InvitationPage` | `Accept invitation` with state-specific heading | Reopen the original link or sign in |
+
+`Form.module.css` owns shared field, label, validation, and action-group styling. Forms use explicit labels,
+application-owned validation, first-error focus, and duplicate-submit prevention. Native role selects use the
+operating system's popup. `TeamDialog` owns the app's modal confirmation and one-time-result variants with native
+background isolation, Escape dismissal, bounded scrolling, focus containment, and focus restoration. The least
+destructive action receives initial focus for owner-role changes and membership removal.
+
+The full member response includes active and disabled memberships in server order. Ten rows appear per local page;
+the `page` query parameter preserves navigation and the visible page is clamped to available rows. Missing email
+renders `Email unavailable`. Disabled memberships retain text status and expose no reactivation control. Role and
+disable actions wait for the server and reload the list after success or rejection. A lost issuance response is
+uncertain; a second invitation requires an explicit operator action and is never retried automatically.
+
+Refresh members belongs to the Organization members panel header and stays disabled while a team operation or
+member read is pending, or the browser is offline. It reloads authoritative membership data while retaining the
+current list. Team operation feedback stays mounted within the panel's reserved live region; confirmed role changes
+and disabled access retain their existing feedback focus behavior.
+
+| Operation | Pending | Confirmed result | Failure and recovery |
+| --- | --- | --- | --- |
+| Issue invitation | One request; safe email and role remain visible | One local dialog contains the URL | Explain rejection or uncertainty and refresh members |
+| Copy invitation | Prevent duplicate copy | Remove the dialog and announce that the link was copied | Keep the current dialog available for manual copy |
+| Change owner role or disable access | Confirm object and consequence before one request | Refresh server data and announce completion | Keep server state authoritative and explain the rejection |
+| Preview invitation | Stable loading region, no shared query | Show organization, email, role, and UTC expiry | Unknown, expired, and used states contain no invitation details |
+| Accept invitation | Clear the entered password after dispatch and prevent duplicate submission | Remove preview and authority; offer sign-in | Clear all authority and password data; explain how to reopen or seek help |
+| Restore a cached page | Clear private data synchronously on page hide | A restored invitation asks for the original link | No automatic preview, acceptance, or restored issued-link dialog |
+
+Preview, issue, and acceptance use direct generated-client requests with feature-local generation and abort control.
+They never enter the shared MutationCache or query cache. Team issuance also retains the authenticated transport's
+generation fence. Public requests omit credentials and CSRF data; subscribed session boundaries invalidate their
+local authority. Old settlements cannot repopulate a dismissed or restored page. A token is held only in mutable
+memory for the mounted public flow, and passwords remain in the input until submission or cleanup. Issued URLs
+remain only in the current team dialog until copy, dismissal, navigation, or page hide. No secret enters storage,
+feedback text, or browser telemetry. Clipboard contents explicitly requested by the user belong to the operating
+system; the application clears its own copy buffers and selection without overwriting the user's clipboard.
+
+The invitation bootstrap is the first application import. It removes the secret path, query, fragment, and history
+state before initializing routes. Its one-time flow is excluded from development-only synthetic `StrictMode` remounts;
+ordinary routes retain those diagnostics. React layout effects register cleanup before paint. Page hide and persisted page
+show synchronously clear local authority, preview data, passwords, and issued URLs. Refresh and full-page history
+navigation cannot reconstruct a consumed browser token. No sign-in session is requested on the public page.
+
+Browser validation uses a dedicated configuration with trace, screenshots, video, DOM attachments, and raw failure
+output disabled throughout invitation operations. Safe team-list screenshots are captured in a separate suite that
+issues no invitations. Test fixtures generate authority at runtime; committed fixtures and validation artifacts
+contain no real invitation token or password.

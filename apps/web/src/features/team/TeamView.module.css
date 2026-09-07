@@ -1,0 +1,139 @@
+.header {
+    padding-block-end: var(--space-content-gap);
+}
+.header h1 {
+    font-size: var(--font-size-product-heading);
+    line-height: var(--line-height-product-heading);
+    margin-block: 0 var(--space-content-gap);
+}
+.header p,
+.invitation p {
+    max-width: 65ch;
+}
+.invitation {
+    padding-block: var(--space-content-gap);
+    border-top: var(--rule-width) solid var(--color-rule-soft);
+}
+.invitation h2 {
+    font-size: var(--font-size-body);
+}
+.inviteForm {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: var(--space-content-gap);
+    max-width: 65ch;
+}
+.inviteActions {
+    grid-column: 1 / -1;
+}
+.feedback {
+    min-height: var(--control-height);
+    margin-block: var(--space-content-gap);
+    overflow-wrap: anywhere;
+}
+.operationFeedback {
+    overflow-wrap: anywhere;
+}
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-compact);
+}
+.table th,
+.table td {
+    padding: var(--space-control-gap);
+    border-bottom: var(--rule-width) solid var(--color-rule-soft);
+    text-align: start;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+.caption {
+    text-align: start;
+    padding-block: var(--space-control-gap);
+}
+.memberEmail {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.status {
+    font-weight: 700;
+    white-space: nowrap;
+}
+.roleControl {
+    display: grid;
+    gap: var(--space-control-gap);
+}
+.table th:nth-child(2) {
+    min-width: 10rem;
+}
+.roleControl select {
+    cursor: pointer;
+}
+.mobileLabel {
+    display: none;
+}
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-control-gap);
+    justify-content: space-between;
+    padding-block: var(--space-content-gap);
+}
+.dialog {
+    width: min(40rem, calc(100% - var(--space-content-gap)));
+    max-height: calc(100dvh - var(--space-content-gap));
+    overflow: auto;
+    padding: var(--space-content-gap);
+    color: var(--color-ink);
+    background: var(--color-canvas);
+    border: var(--rule-width) solid var(--color-ink);
+    border-radius: var(--radius-panel);
+    scrollbar-gutter: stable;
+    overflow-wrap: anywhere;
+}
+.dialog::backdrop {
+    background: var(--color-rule);
+}
+.dialog h2 {
+    font-size: var(--font-size-product-heading);
+    line-height: var(--line-height-product-heading);
+}
+.dialogActions {
+    margin-block-start: var(--space-content-gap);
+}
+@media (max-width: 48rem) {
+    .inviteForm {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .table,
+    .table tbody,
+    .caption {
+        display: block;
+    }
+    .table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+    .table tr {
+        display: grid;
+        padding-block: var(--space-control-gap);
+        border-bottom: var(--rule-width) solid var(--color-rule-soft);
+    }
+    .table td {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+        gap: var(--space-control-gap);
+        border: 0;
+        padding-inline: 0;
+    }
+    .mobileLabel {
+        display: block;
+        font-weight: 700;
+    }
+    .table button {
+        width: 100%;
+    }
+}

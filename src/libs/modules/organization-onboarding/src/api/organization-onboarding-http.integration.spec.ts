@@ -4,6 +4,9 @@ import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
 import { AuthPrincipal, OrganizationMembershipDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthenticationService, AuthGuard, PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { InvitationPreviewService } from '../application/invitation-preview.service'
+import { InvitationConsumedError, InvitationExpiredError, InvitationNotFoundError } from '../domain/organization-onboarding.errors'
+import { configureInvitationResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-invitation-response-headers'
 import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
 import { InvitationIssuanceService } from '../application/invitation-issuance.service'
 import { MembershipListingService } from '../application/membership-listing.service'
@@ -19,10 +22,11 @@ const organizationCreationMock: jest.Mocked<Pick<OrganizationCreationService, 'c
     createWithFirstOwner: jest.fn(),
 }
 const invitationIssuanceMock: jest.Mocked<Pick<InvitationIssuanceService, 'issue'>> = { issue: jest.fn() }
+const invitationPreviewReader = { findByTokenHash: jest.fn() }
 const invitationAcceptanceMock: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>> = { accept: jest.fn() }
 const membershipRoleChangeMock: jest.Mocked<Pick<MembershipRoleChangeService, 'changeRole'>> = { changeRole: jest.fn() }
 const membershipRemovalMock: jest.Mocked<Pick<MembershipRemovalService, 'remove'>> = { remove: jest.fn() }
-const membershipListingMock: jest.Mocked<Pick<MembershipListingService, 'listActive'>> = { listActive: jest.fn() }
+const membershipListingMock: jest.Mocked<Pick<MembershipListingService, 'listForOrganization'>> = { listForOrganization: jest.fn() }
 
 const organizationId = '5b92ded1-7eba-4c66-b72e-a5fea465da68'
 const membershipId = 'ec6305c4-4f02-456a-907e-88195db4c915'
@@ -48,6 +52,7 @@ function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal
         PermissionsGuard,
         { provide: OrganizationCreationService, useValue: organizationCreationMock },
         { provide: InvitationIssuanceService, useValue: invitationIssuanceMock },
+        { provide: InvitationPreviewService, useFactory: () => new InvitationPreviewService(invitationPreviewReader) },
         { provide: InvitationAcceptanceService, useValue: invitationAcceptanceMock },
         { provide: MembershipRoleChangeService, useValue: membershipRoleChangeMock },
         { provide: MembershipRemovalService, useValue: membershipRemovalMock },
@@ -67,6 +72,7 @@ describe('organization onboarding HTTP boundary', () => {
         }).compile()
 
         app = moduleRef.createNestApplication()
+        configureInvitationResponseHeaders(app)
         app.useGlobalPipes(new ValidationPipe())
         app.useGlobalInterceptors(
             new ClassSerializerInterceptor(app.get(Reflector), { strategy: 'excludeAll', enableImplicitConversion: true }),
@@ -126,6 +132,8 @@ describe('organization onboarding HTTP boundary', () => {
             const response = await request(app.getHttpServer())
                 .post('/v1/organizations')
                 .send({ name: 'Acme', ownerEmail: 'owner@example.test' })
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
                 .expect(201)
 
             expect(response.body).toEqual({
@@ -141,7 +149,56 @@ describe('organization onboarding HTTP boundary', () => {
         })
     })
 
+    describe('GET /v1/organizations/invitations/:token', () => {
+        const record = {
+            organizationName: 'Acme', email: 'invitee@example.test', role: 'member',
+            expiresAt: new Date('2100-01-01T00:00:00Z'), status: 'pending',
+        }
+        it('previews pending display fields without authentication or cache storage', async () => {
+            invitationPreviewReader.findByTokenHash.mockResolvedValue(record)
+            const response = await request(app.getHttpServer())
+                .get('/v1/organizations/invitations/test-authority')
+                .expect('Cache-Control', 'no-store').expect('Referrer-Policy', 'no-referrer').expect(200)
+            expect(authenticationServiceMock.authenticate).not.toHaveBeenCalled()
+            expect(response.body).toEqual({ ...record, expiresAt: '2100-01-01T00:00:00.000Z' })
+        })
+        it.each([
+            [undefined, 404, undefined],
+            [{ ...record, expiresAt: new Date('2000-01-01T00:00:00Z') }, 410, 'invitation_expired'],
+            [{ ...record, status: 'accepted' }, 410, 'invitation_consumed'],
+        ])('does not disclose details for unavailable authority', async (invitation, status, code) => {
+            invitationPreviewReader.findByTokenHash.mockResolvedValue(invitation)
+            const response = await request(app.getHttpServer())
+                .get('/v1/organizations/invitations/test-authority')
+                .expect('Cache-Control', 'no-store').expect('Referrer-Policy', 'no-referrer').expect(status)
+            if (code) expect(response.body).toHaveProperty('code', code)
+            else expect(response.body).not.toHaveProperty('code')
+            for (const key of ['organizationName', 'organizationId', 'email', 'role', 'expiresAt', 'token', 'tokenHash']) {
+                expect(response.body).not.toHaveProperty(key)
+            }
+        })
+    })
+
     describe('POST /v1/organizations/invitations/:token/accept', () => {
+        it('serializes replay as generic accepted status without invitation details', async () => {
+            invitationAcceptanceMock.accept.mockResolvedValue({ status: 'accepted' })
+            const response = await request(app.getHttpServer())
+                .post('/v1/organizations/invitations/test-authority/accept')
+                .send({ password: 'password12345' })
+                .expect('Cache-Control', 'no-store').expect('Referrer-Policy', 'no-referrer').expect(201)
+            expect(response.body).toEqual({ status: 'accepted' })
+        })
+        it.each([new InvitationNotFoundError(), new InvitationExpiredError(), new InvitationConsumedError()])(
+            'retains sensitive headers on rejected acceptance', async error => {
+                invitationAcceptanceMock.accept.mockRejectedValue(error)
+                const status = error instanceof InvitationNotFoundError ? 404 : 410
+                await request(app.getHttpServer())
+                    .post('/v1/organizations/invitations/test-authority/accept')
+                    .send({ password: 'password12345' })
+                    .expect('Cache-Control', 'no-store').expect('Referrer-Policy', 'no-referrer').expect(status)
+            },
+        )
+
         it('does not require authentication', async () => {
             invitationAcceptanceMock.accept.mockResolvedValue({
                 organizationId: 'org-1',
@@ -152,16 +209,30 @@ describe('organization onboarding HTTP boundary', () => {
             const response = await request(app.getHttpServer())
                 .post('/v1/organizations/invitations/the-token/accept')
                 .send({ password: 'password12345' })
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
                 .expect(201)
 
             expect(authenticationServiceMock.authenticate).not.toHaveBeenCalled()
             expect(response.body).toEqual({ organizationId: 'org-1', role: 'member', email: 'invitee@example.test' })
         })
 
+        it('keeps cache and referrer protection when JSON parsing fails before the controller', async () => {
+            await request(app.getHttpServer())
+                .post('/v1/organizations/invitations/test-authority/accept')
+                .set('Content-Type', 'application/json')
+                .send('{"password":')
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
+                .expect(400)
+        })
+
         it('rejects a too-short password with 400', async () => {
             await request(app.getHttpServer())
                 .post('/v1/organizations/invitations/the-token/accept')
                 .send({ password: 'short' })
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
                 .expect(400)
         })
     })
@@ -173,6 +244,8 @@ describe('organization onboarding HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/invitations`)
                 .send({ email: 'new@example.test', role: 'member' })
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
                 .expect(401)
         })
 
@@ -191,6 +264,8 @@ describe('organization onboarding HTTP boundary', () => {
             const response = await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/invitations`)
                 .send({ email: 'new@example.test', role: 'member' })
+                .expect('Cache-Control', 'no-store')
+                .expect('Referrer-Policy', 'no-referrer')
                 .expect(201)
 
             expect(response.body).toEqual({
@@ -212,7 +287,7 @@ describe('organization onboarding HTTP boundary', () => {
 
         it('returns the member list mapped to the exact expected JSON shape', async () => {
             authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
-            membershipListingMock.listActive.mockResolvedValue([
+            membershipListingMock.listForOrganization.mockResolvedValue([
                 {
                     id: 'membership-1',
                     organizationId,
@@ -222,12 +297,17 @@ describe('organization onboarding HTTP boundary', () => {
                     status: 'active',
                     email: 'member@example.test',
                 } satisfies OrganizationMembershipDetailRecord,
+                {
+                    id: 'membership-disabled', organizationId, externalIdentityId: 'ext-2',
+                    externalIdentitySubject: 'kc-subject-2', role: 'member', status: 'disabled', email: null,
+                } satisfies OrganizationMembershipDetailRecord,
             ])
 
             const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}/members`).expect(200)
 
             expect(response.body).toEqual([
                 { id: 'membership-1', email: 'member@example.test', role: 'member', status: 'active' },
+                { id: 'membership-disabled', email: null, role: 'member', status: 'disabled' },
             ])
         })
     })

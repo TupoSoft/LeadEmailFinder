@@ -7,6 +7,7 @@ import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
 import { CURRENT_ACCOUNT_READER } from './application/ports/current-account-reader'
 import { EXTERNAL_IDENTITY_STORE, ExternalIdentityStore } from './application/ports/external-identity-store'
 import { INVITATION_ACCEPTANCE_STORE } from './application/ports/invitation-acceptance-store'
+import { INVITATION_PREVIEW_READER } from './application/ports/invitation-preview-reader'
 import { INVITATION_STORE } from './application/ports/invitation-store'
 import { MEMBERSHIP_DIRECTORY } from './application/ports/membership-directory'
 import { MEMBERSHIP_MUTATION_STORE } from './application/ports/membership-mutation-store'
@@ -28,6 +29,7 @@ import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-c
 import { TypeOrmCurrentAccountReader } from './infrastructure/persistence/typeorm-current-account-reader'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 import { TypeOrmInvitationAcceptanceStore } from './infrastructure/persistence/typeorm-invitation-acceptance-store'
+import { TypeOrmInvitationPreviewReader } from './infrastructure/persistence/typeorm-invitation-preview-reader'
 import { TypeOrmInvitationStore } from './infrastructure/persistence/typeorm-invitation-store'
 import { TypeOrmMembershipDirectory } from './infrastructure/persistence/typeorm-membership-directory'
 import { TypeOrmMembershipMutationStore } from './infrastructure/persistence/typeorm-membership-mutation-store'
@@ -57,6 +59,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         TypeOrmCreditLedgerStore,
         TypeOrmOrganizationRegistrationStore,
         TypeOrmInvitationStore,
+        TypeOrmInvitationPreviewReader,
         TypeOrmInvitationAcceptanceStore,
         TypeOrmMembershipDirectory,
         TypeOrmMembershipMutationStore,
@@ -68,6 +71,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         { provide: CURRENT_ACCOUNT_READER, useExisting: TypeOrmCurrentAccountReader },
         { provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore },
         { provide: ORGANIZATION_REGISTRATION_STORE, useExisting: TypeOrmOrganizationRegistrationStore },
+        { provide: INVITATION_PREVIEW_READER, useExisting: TypeOrmInvitationPreviewReader },
         { provide: INVITATION_STORE, useExisting: TypeOrmInvitationStore },
         { provide: INVITATION_ACCEPTANCE_STORE, useExisting: TypeOrmInvitationAcceptanceStore },
         { provide: MEMBERSHIP_DIRECTORY, useExisting: TypeOrmMembershipDirectory },
@@ -88,6 +92,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         CREDIT_LEDGER_STORE,
         ORGANIZATION_REGISTRATION_STORE,
         INVITATION_STORE,
+        INVITATION_PREVIEW_READER,
         INVITATION_ACCEPTANCE_STORE,
         MEMBERSHIP_DIRECTORY,
         MEMBERSHIP_MUTATION_STORE,

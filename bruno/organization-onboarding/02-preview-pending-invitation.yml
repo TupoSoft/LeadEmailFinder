@@ -1,0 +1,24 @@
+info:
+  name: 02-preview-pending-invitation
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations/invitations/{{invitationToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('invitation preview enforces pending authority and secret response headers', function() {
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
+          expect(res.status).to.equal(200);
+          expect(Object.keys(res.body).sort()).to.deep.equal(['email', 'expiresAt', 'organizationName', 'role', 'status']);
+          expect(res.body.organizationName).to.equal(`Bruno Test Org ${bru.getVar('uniqueSuffix')}`);
+          expect(res.body.email).to.equal(bru.getVar('ownerEmail'));
+          expect(res.body.role).to.equal('owner');
+          expect(res.body.status).to.equal('pending');
+          expect(Date.parse(res.body.expiresAt)).to.be.greaterThan(Date.now());
+        });

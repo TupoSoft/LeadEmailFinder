@@ -7,7 +7,12 @@
     "canonicalMap": "UX-CONTRACT.md",
     "approvedConcept": "apps/web/design/concepts/public-entry-approved.png",
     "requiredCapabilities": ["Scrollbar"],
-    "ownership": {},
+    "ownership": {
+        "Data panel": "ProductPanel",
+        "Form": "Form.module.css",
+        "Select/Listbox": "native",
+        "Dialog": "TeamDialog"
+    },
     "requiredCommands": ["unit", "browser", "accessibility", "visual"],
     "commands": {
         "unit": "corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci",
@@ -22,7 +27,10 @@
         "visualRegression": "apps/web/tests/e2e/visual.spec.ts",
         "authentication": "apps/web/tests/e2e/auth-shell.spec.ts",
         "billing": "apps/web/tests/e2e/billing-ui.spec.ts",
-        "billingRuntime": "apps/web/tests/e2e/billing.spec.ts"
+        "billingRuntime": "apps/web/tests/e2e/billing.spec.ts",
+        "team": "apps/web/tests/e2e/team-ui.spec.ts",
+        "invitationPrivacy": "apps/web/tests/e2e/invitations-ui.spec.ts",
+        "teamRuntime": "apps/web/tests/e2e/team-and-invitations.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",
@@ -247,6 +255,22 @@
         "components.action.size": {
             "reference": "spacing.control-height",
             "consumers": ["apps/web/src/shared/Action.module.css"]
+        },
+        "components.form-control.backgroundColor": {
+            "reference": "colors.canvas",
+            "consumers": ["apps/web/src/shared/Form.module.css"]
+        },
+        "components.form-control.textColor": {
+            "reference": "colors.ink",
+            "consumers": ["apps/web/src/shared/Form.module.css"]
+        },
+        "components.form-control.rounded": {
+            "reference": "rounded.control",
+            "consumers": ["apps/web/src/shared/Form.module.css"]
+        },
+        "components.form-control.size": {
+            "reference": "spacing.control-height",
+            "consumers": ["apps/web/src/shared/Form.module.css"]
         }
     }
 }

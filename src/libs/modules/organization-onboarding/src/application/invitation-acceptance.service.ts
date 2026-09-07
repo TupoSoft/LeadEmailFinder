@@ -23,9 +23,9 @@ export class InvitationAcceptanceService {
             throw new InvitationNotFoundError()
         }
         if (invitation.status === 'accepted') {
-            return { organizationId: invitation.organizationId, role: invitation.role, email: invitation.email }
+            return { status: 'accepted' }
         }
-        if (invitation.expiresAt.getTime() < Date.now()) {
+        if (invitation.expiresAt.getTime() <= Date.now()) {
             throw new InvitationExpiredError()
         }
 

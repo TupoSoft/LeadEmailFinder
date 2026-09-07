@@ -1,6 +1,45 @@
 {
   "components": {
     "schemas": {
+      "AcceptInvitationDto": {
+        "properties": {
+          "password": {
+            "description": "New-account password; minimum 12 characters.",
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
+      "AcceptInvitationResponseDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "email",
+          "organizationId"
+        ],
+        "type": "object"
+      },
       "AuthenticationRequiredResponseDto": {
         "properties": {
           "code": {
@@ -42,6 +81,22 @@
           "credits",
           "amountMinor",
           "currency"
+        ],
+        "type": "object"
+      },
+      "ChangeMembershipRoleDto": {
+        "properties": {
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
         ],
         "type": "object"
       },
@@ -261,6 +316,176 @@
         },
         "required": [
           "code"
+        ],
+        "type": "object"
+      },
+      "InvitationAcceptedResponseDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "accepted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "InvitationGoneResponseDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "invitation_expired",
+              "invitation_consumed"
+            ],
+            "type": "string"
+          },
+          "message": {
+            "description": "Generic reason without invitation or membership details.",
+            "type": "string"
+          },
+          "statusCode": {
+            "enum": [
+              410
+            ],
+            "type": "number"
+          }
+        },
+        "required": [
+          "code",
+          "statusCode",
+          "message"
+        ],
+        "type": "object"
+      },
+      "InvitationPreviewResponseDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationName",
+          "email",
+          "role",
+          "expiresAt",
+          "status"
+        ],
+        "type": "object"
+      },
+      "InvitationResponseDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "token": {
+            "description": "One-time secret. Keep only in ephemeral memory; never log or persist it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "expiresAt",
+          "token"
+        ],
+        "type": "object"
+      },
+      "IssueInvitationDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "type": "object"
+      },
+      "MembershipResponseDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "status"
         ],
         "type": "object"
       }
@@ -992,6 +1217,610 @@
         "summary": "",
         "tags": [
           "Billing"
+        ]
+      }
+    },
+    "/v1/organizations/invitations/{token}": {
+      "get": {
+        "description": "Returns display details only while the link retains acceptance authority. Responses are never cacheable.",
+        "operationId": "OrganizationsController_previewInvitation",
+        "parameters": [
+          {
+            "description": "One-time secret. Keep only in ephemeral memory; never log or persist it.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invitation not found. No invitation details are returned.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationGoneResponseDto"
+                }
+              }
+            },
+            "description": "Invitation has expired or was consumed; no invitation details are returned.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "Preview a pending invitation",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/invitations/{token}/accept": {
+      "post": {
+        "description": "Creates or reuses an invited identity. Repeated acceptance has no additional effect and returns only generic accepted status.",
+        "operationId": "OrganizationsController_acceptInvitation",
+        "parameters": [
+          {
+            "description": "One-time secret. Keep only in ephemeral memory; never log or persist it.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AcceptInvitationResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvitationAcceptedResponseDto"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "First acceptance returns account details; replay returns only accepted status.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Password must contain at least 12 characters.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invitation not found. No invitation details are returned.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The identity already has an active membership.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationGoneResponseDto"
+                }
+              }
+            },
+            "description": "Invitation has expired.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "Accept a pending invitation",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/invitations": {
+      "post": {
+        "description": "Requires members:manage. Only owners can invite another owner. The token is returned once; there is no email delivery or token recovery. Cookie sessions require a valid Origin and CSRF header.",
+        "operationId": "OrganizationsController_issueInvitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueInvitationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid organization ID, email, or membership role.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization, permission, role hierarchy, or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Issue an organization invitation",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/members": {
+      "get": {
+        "description": "Requires members:manage. Results retain actual membership status and nullable email, ordered by createdAt ASC, id ASC.",
+        "operationId": "OrganizationsController_listMembers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MembershipResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid organization ID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Principal lacks members:manage or belongs to another organization."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "List active and disabled organization members",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/members/{membershipId}": {
+      "delete": {
+        "description": "Requires members:manage. Administrators cannot remove owners. Already disabled memberships are an idempotent no-op. Cookie sessions require a valid Origin and CSRF header.",
+        "operationId": "OrganizationsController_removeMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "membershipId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The membership is disabled; it remains visible in the member list."
+          },
+          "400": {
+            "description": "Invalid organization or membership ID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Organization, permission, owner hierarchy, or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Membership not found."
+          },
+          "409": {
+            "description": "The final active owner cannot be removed."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Disable an organization membership",
+        "tags": [
+          "Organizations"
+        ]
+      },
+      "patch": {
+        "description": "Requires members:manage. Administrators cannot grant or modify owner roles. Cookie sessions require a valid Origin and CSRF header.",
+        "operationId": "OrganizationsController_changeRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "membershipId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeMembershipRoleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid ID or membership role."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Organization, permission, owner hierarchy, or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Membership not found or disabled."
+          },
+          "409": {
+            "description": "The final active owner cannot be demoted."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Change an active member role",
+        "tags": [
+          "Organizations"
         ]
       }
     }

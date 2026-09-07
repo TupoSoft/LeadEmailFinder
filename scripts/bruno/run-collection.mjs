@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
+import { withExpiredInvitation } from './invitation-expiry-fixture.mjs'
 
 const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
@@ -15,11 +16,12 @@ const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
+    'organization-onboarding': Object.freeze({ requests: 12, tests: 12, sandbox: 'developer', network: 'host', countOnly: true }),
 })
 
 export function registeredCollection(name) {
     if (!Object.hasOwn(registry, name)) {
-        throw new Error('Choose one registered Bruno collection: bff-sessions, smtp-dev, or credit-purchases')
+        throw new Error('Choose a registered Bruno collection')
     }
     return registry[name]
 }
@@ -123,6 +125,7 @@ export function cliArguments(name, environment, reportFile) {
         !environment.OIDC_ISSUER_URL ||
         !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
         !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
+        (name === 'organization-onboarding' && !environment.BRUNO_EXPIRED_INVITATION_TOKEN) ||
         (name === 'credit-purchases' &&
             (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
         (collection.network === 'compose' &&
@@ -159,10 +162,13 @@ export async function executeCollection(name, environment, checkoutRoot) {
         const reportFile = resolve(reportDirectory, 'report.json')
         await execFileAsync(
             process.execPath,
-            [resolve(dirname(cliPackageFile), 'bin/bru.js'), ...cliArguments(name, environment, reportFile)],
+            [
+                ...(collection.countOnly ? ['--import', resolve(checkoutRoot, 'scripts/bruno/count-only-reporter.mjs')] : []),
+                resolve(dirname(cliPackageFile), 'bin/bru.js'), ...cliArguments(name, environment, reportFile),
+            ],
             {
                 cwd: resolve(checkoutRoot, 'bruno', name),
-                env: { ...process.env, ...environment },
+                env: { ...process.env, ...environment, ...(collection.countOnly ? { LEF_BRUNO_COUNTS_REPORT: reportFile } : {}) },
                 timeout: 240_000,
                 maxBuffer: 8 * 1024 * 1024,
             },
@@ -275,6 +281,13 @@ export async function runCollection(args, checkoutRoot) {
         await readMetadata('service-credential.json'),
     )
     Object.assign(environment, paymentEnvironment)
+    if (name === 'organization-onboarding') {
+        await inspectDevelopmentService(checkoutRoot, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
+        const credential = await readMetadata('service-credential.json')
+        return withExpiredInvitation(metadata, credential.organizationId, environment.OIDC_ISSUER_URL, token =>
+            executeCollection(name, { ...environment, BRUNO_EXPIRED_INVITATION_TOKEN: token }, checkoutRoot),
+        )
+    }
     if (collection.network === 'compose') {
         for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
             await inspectDevelopmentService(checkoutRoot, metadata, service)

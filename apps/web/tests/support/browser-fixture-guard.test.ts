@@ -17,7 +17,7 @@ describe('privileged browser fixture integration boundaries', () => {
         expect(privileged.workers).toBe(1)
         expect(process.env.PLAYWRIGHT_NO_COPY_PROMPT).toBe('1')
         const normal = readFileSync(resolve(root, 'apps/web/playwright.config.ts'), 'utf8')
-        expect(normal).toContain("testIgnore: ['privileged-*.spec.ts', 'billing.spec.ts']")
+        expect(normal).toContain("testIgnore: ['privileged-*.spec.ts', 'billing.spec.ts', 'invitations-ui.spec.ts', 'team-and-invitations.spec.ts']")
     })
 
     it('requires the shared fixture in privileged suites and prohibits synthetic authentication', () => {

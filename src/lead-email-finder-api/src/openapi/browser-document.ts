@@ -11,6 +11,12 @@ export const BROWSER_OPERATIONS = [
     { path: '/v1/billing/credit-packs', method: 'get' },
     { path: '/v1/credit-purchases', method: 'get' },
     { path: '/v1/credit-purchases', method: 'post' },
+    { path: '/v1/organizations/{organizationId}/members', method: 'get' },
+    { path: '/v1/organizations/{organizationId}/invitations', method: 'post' },
+    { path: '/v1/organizations/invitations/{token}', method: 'get' },
+    { path: '/v1/organizations/invitations/{token}/accept', method: 'post' },
+    { path: '/v1/organizations/{organizationId}/members/{membershipId}', method: 'patch' },
+    { path: '/v1/organizations/{organizationId}/members/{membershipId}', method: 'delete' },
     { path: '/health', method: 'get' },
 ] as const
 

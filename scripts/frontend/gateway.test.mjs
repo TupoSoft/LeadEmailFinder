@@ -56,6 +56,12 @@ async function routeMatrix(origin) {
         assert.match(response.headers.get('content-type'), /text\/html/, path)
         assert.match(await response.text(), /<div id="root"><\/div>/, path)
     }
+    for (const path of ['/accept-invitation', `/accept-invitation/${marker}`, `/accept-invitation%2F${marker}`]) {
+        const response = await fetch(`${origin}${path}`)
+        assert.equal(response.status, 200, 'Invitation document is available')
+        assert.equal(response.headers.get('cache-control'), 'no-store', 'Invitation document must not be cached')
+        assert.equal(response.headers.get('referrer-policy'), 'no-referrer', 'Invitation document must not send referrers')
+    }
     const body = JSON.stringify({ value: marker })
     const response = await fetch(`${origin}/v1/gateway-probe?query=${marker}`, {
         method: 'POST',

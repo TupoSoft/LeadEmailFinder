@@ -30,6 +30,7 @@ describe('TypeOrmMembershipDirectory', () => {
         expect(managerMock.find).toHaveBeenCalledWith(OrganizationMembership, {
             where: { organizationId: 'org-1' },
             relations: ['externalIdentity'],
+            order: { createdAt: 'ASC', id: 'ASC' },
         })
         expect(result).toEqual([
             {

@@ -14,13 +14,16 @@
         "design:lint": "design.md lint ../../DESIGN.md",
         "ui:audit": "node ../../scripts/frontend/audit-premium-ui.mjs --mode strict ../..",
         "preview": "vite preview",
-        "test:e2e": "pnpm build && playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts",
+        "test:e2e": "pnpm build && playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts",
         "test:a11y": "pnpm build && playwright test tests/e2e/accessibility.spec.ts",
         "test:visual": "pnpm build && playwright test tests/e2e/visual.spec.ts",
         "test:gateway": "node ../../scripts/testing/web-live.mjs",
         "browser-fixtures:bootstrap": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types tests/support/bootstrap-browser-fixtures.ts",
         "test:privileged": "playwright test --config playwright.privileged.config.ts",
+        "test:invitations": "playwright test --config playwright.invitation.config.ts",
+        "test:team-live": "playwright test --config playwright.team.config.ts",
         "test:privileged-artifacts": "node --test ../../scripts/testing/browser-fixture-artifacts.spec.mjs",
+        "test:invitation-artifacts": "node --test ../../scripts/testing/invitation-browser-artifacts.spec.mjs",
         "verify:ui": "pnpm build && playwright test"
     },
     "dependencies": {

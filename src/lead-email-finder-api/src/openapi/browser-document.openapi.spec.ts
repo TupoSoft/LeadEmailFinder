@@ -61,7 +61,7 @@ describe('browser OpenAPI boundary', () => {
             Object.entries(browser.paths)
                 .flatMap(([path, item]) =>
                     Object.keys(item)
-                        .filter(method => ['get', 'post'].includes(method))
+                        .filter(method => ['get', 'post', 'patch', 'delete', 'put', 'head', 'options', 'trace'].includes(method))
                         .map(method => `${method} ${path}`),
                 )
                 .sort(),

@@ -58,14 +58,14 @@ describe('InvitationAcceptanceService', () => {
         expect(keycloakAdminMock.ensureUser).not.toHaveBeenCalled()
     })
 
-    it('returns the same result idempotently for an already-accepted invitation without calling Keycloak', async () => {
+    it('returns only generic accepted status idempotently for an already-accepted invitation without calling Keycloak', async () => {
         invitationStoreMock.findByTokenHash.mockResolvedValue(
             invitationFixture({ status: 'accepted', role: 'admin', email: 'invitee@example.test' }),
         )
 
         const result = await service.accept('the-raw-token', 'password12345')
 
-        expect(result).toEqual({ organizationId: 'org-1', role: 'admin', email: 'invitee@example.test' })
+        expect(result).toEqual({ status: 'accepted' })
         expect(keycloakAdminMock.ensureUser).not.toHaveBeenCalled()
     })
 
@@ -138,12 +138,12 @@ describe('InvitationAcceptanceService', () => {
         invitationStoreMock.findByTokenHash.mockResolvedValue(invitationFixture())
         acceptanceStoreMock.begin.mockResolvedValue({
             kind: 'already-accepted',
-            result: { organizationId: 'org-1', role: 'member', email: 'invitee@example.test' },
+            result: { status: 'accepted' },
         })
 
         const result = await service.accept('the-raw-token', 'password12345')
 
-        expect(result).toEqual({ organizationId: 'org-1', role: 'member', email: 'invitee@example.test' })
+        expect(result).toEqual({ status: 'accepted' })
         expect(sessionMock.complete).not.toHaveBeenCalled()
         expect(sessionMock.abort).not.toHaveBeenCalled()
     })

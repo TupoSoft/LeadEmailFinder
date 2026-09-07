@@ -28,6 +28,8 @@ runtime:
     - type: tests
       code: |-
         test('creates an organization with a pending owner invitation', function() {
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(res.headers['referrer-policy']).to.equal('no-referrer');
           expect(res.status).to.equal(201);
           expect(res.body.organizationId).to.be.a('string');
           expect(res.body.invitation.role).to.equal('owner');

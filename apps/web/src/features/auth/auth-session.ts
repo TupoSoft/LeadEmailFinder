@@ -130,6 +130,7 @@ export class AuthSession {
                 if (request.signal.aborted) throw new StaleAuthResponseError()
                 const nextRequest = new Request(request, {
                     signal: AbortSignal.any([request.signal, this.abortController.signal]),
+                    referrerPolicy: request.referrerPolicy,
                 })
                 requests.set(nextRequest, this.generation)
                 return nextRequest
@@ -153,7 +154,10 @@ export class AuthSession {
                     } else if (error.category === 'account-unavailable') {
                         this.advance({ status: 'account-unavailable', error })
                         this.boundaryErrors.set(error, this.generation)
-                    } else if (error.category === 'access-denied' && this.state.status === 'authenticated') {
+                    } else if (
+                        error.category === 'access-denied' && this.state.status === 'authenticated' &&
+                        !isTeamMutation(request.method, path)
+                    ) {
                         this.setState({ ...this.state, accessDenied: true })
                     }
                 }
@@ -323,4 +327,12 @@ export class AuthSession {
             this.advance({ status: 'loading' })
         }
     }
+}
+
+// These operations present hierarchy/permission rejections in their local form
+// and refresh membership data. Read authorization still uses the shared route.
+function isTeamMutation(method: string, path: string): boolean {
+    return (method === 'POST' && /^\/v1\/organizations\/[^/]+\/invitations$/.test(path)) ||
+        (method === 'PATCH' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
+        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path))
 }

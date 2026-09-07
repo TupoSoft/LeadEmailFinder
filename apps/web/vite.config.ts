@@ -1,7 +1,7 @@
 import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react-swc'
-import { isApiRequest, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
+import { isApiRequest, isInvitationDocument, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
 import { resolveCheckoutAllowedOrigins } from '../../src/libs/common/src/checkout-redirect.ts'
 
 // Vite's style injection and React refresh need a nonce; this fixed value is for
@@ -24,6 +24,15 @@ function staticHeaders(development: boolean): Plugin {
         server.middlewares.use((request, response, next) => {
             if (!isApiRequest(request.url ?? '/')) {
                 for (const [name, value] of Object.entries(headers)) response.setHeader(name, value)
+                if (isInvitationDocument(request.url ?? '/')) {
+                    // Vite sets no-cache while sending HTML after this middleware.
+                    // Keep the stricter policy through that final header write.
+                    const setHeader = response.setHeader.bind(response)
+                    response.setHeader = (name, value) =>
+                        setHeader(name, name.toLowerCase() === 'cache-control' ? 'no-store' : value)
+                    response.setHeader('Cache-Control', 'no-store')
+                    response.setHeader('Referrer-Policy', 'no-referrer')
+                }
             }
             next()
         })
