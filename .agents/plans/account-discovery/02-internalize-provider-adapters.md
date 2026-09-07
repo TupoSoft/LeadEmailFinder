@@ -23,7 +23,7 @@ separate business module or public account-discovery API.
 - [x] (2026-09-07) Introduce the private provider contract and consolidate HTTP, manifest, and token composition.
 - [x] (2026-09-07) Retire the old library, aliases, and unused common contract without a compatibility barrel.
 - [x] (2026-09-07) Add focused boundary and composition regression coverage and update current documentation.
-- [x] (2026-09-07) Complete focused, architecture, security, full-suite, build, Harper, and available Bruno checks; record unavailable SMTP runtime validation.
+- [x] (2026-09-07) Complete focused, architecture, security, full-suite, build, Harper, and runtime SMTP Bruno checks.
 
 ## Plan dependencies
 
@@ -80,9 +80,11 @@ Production provider bodies, headers, response mapping, regional selection, and l
 The final responsibility review found no material SOLID trade-off. SMTP and other core factories remain intact.
 
 Focused provider and Nest fixtures, repository tests, type checking, lint, build, architecture, approval validation,
-and security scanning passed. The SMTP Bruno launcher cannot execute against this checkout: no owned fixture
-stack or credentials exist, and another worktree occupies the fixed SMTP subnet and documented ports. No existing
-stack was changed. This is a recorded local runtime limitation; fixture tests provide no live vendor evidence.
+and security scanning passed. After the user removed the conflicting containers and network, a fresh development
+stack was provisioned for this checkout without deleting existing volumes. The SMTP Bruno launcher passed all
+28 requests and 57 tests, with no skips. Correlated API logs prove a fresh trusted STARTTLS exchange and rejection
+of the plaintext fixture after only `EHLO`. Local runtime validation is complete; live vendor acceptance remains
+outside the scope of this refactor.
 
 ## Context and Orientation
 
@@ -344,11 +346,23 @@ Implementation evidence from 2026-09-07:
   `corepack pnpm security:scan-linkedin-session-material --scope=working-tree` returned an empty finding list.
 - `corepack pnpm docs:lint -- .agents/plans/account-discovery/02-internalize-provider-adapters.md src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md`
   passed for all three files. `git diff --check` passed.
-- `corepack pnpm bruno:smtp-dev` exited 1 before collection execution because this checkout lacks its owned
-  development stack and credentials. Another worktree owns the SMTP overlay's fixed `172.28.0.0/24` subnet and
-  documented ports; its containers were not modified. The existing 28-request collection remains unchanged.
-  Bruno execution remains unverified, as does live vendor acceptance. No fixture approval was written to the
-  runtime manifest, and no vendor request was made.
+- The initial `corepack pnpm bruno:smtp-dev` attempt exited 1 before collection execution: this checkout lacked
+  its own development stack and credentials, and another worktree occupied the fixed SMTP subnet and ports.
+  The user subsequently removed the running containers and network and requested a runtime rerun.
+- The rerun built this checkout's API, started a fresh `lef` Compose project, and provisioned Keycloak plus the
+  platform service credential. Provisioning and `keycloak:smoke` passed. The base containers were recreated with
+  `docker/compose.smtp-dev.yaml`; named volumes were preserved. The fixture proxy bootstrap exited zero.
+- `corepack pnpm bruno:smtp-dev` passed with the pinned Bruno 4.1.0 CLI: 28 requests and 57 tests, with no skipped
+  requests. The unchanged collection passed trusted SMTP success, plaintext rejection, empty external sources,
+  proxy drain/restore, billing, compatibility, cache ownership, stored result reads, and asynchronous completion.
+- API logs captured from immediately before that run contained a trusted synchronous command sequence of
+  `ehlo`, `starttls`, `ehlo`, `mail_from`, `rcpt_to`, and `quit`. The plaintext synchronous result was
+  `secure_transport_unavailable`, and its only SMTP command was `ehlo`. Correlation used the generated request
+  identity, so cached results could not substitute for the fresh exchange evidence.
+- An in-memory log scan found no fixture domain, raw or encoded fixture address, synthetic probe local part,
+  caller-supplied correlation marker, or development client secret. Runtime inspection confirmed the fixture SMTP
+  port and CA configuration with no account-discovery provider selected. The approval manifest remains empty.
+  No collection definitions or production code changed for the rerun. The checkout's fixture stack remains running.
 
 The DNS and delivery layering work has already merged; subsequent changes must reuse this account-discovery
 boundary and leave its provider ownership intact.
