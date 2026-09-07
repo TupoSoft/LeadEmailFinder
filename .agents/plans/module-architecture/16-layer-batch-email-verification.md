@@ -91,9 +91,11 @@ children, creates and uploads a result CSV, stores its `s3://` location, and onl
 replace `/uploads/` with `/results/` in the key. Privacy plan 06 requires fail-closed production transport and supplies
 one `CustomerObjectWriteSecurity` value for the two customer-object writers.
 
-Plans 11 and 15 complete sync/deprecated and async delivery over the final plan-14 core/network composition. This
-plan owns the last delivery debt and final internal workflow recomposition; plan 12 may remove the global baseline
-only after this plan or its mandatory size-split follow-up lands.
+Plans 11 and 15 complete current and deprecated synchronous delivery and async delivery over the final plan-14
+core/network composition. `legacy-retirement/01` follows plan 11 and separately owns deprecated-route removal. This
+batch plan keeps its existing dependencies and must not recreate the deprecated route if retirement has already
+landed. This plan owns the last delivery debt and final internal workflow recomposition; plan 12 may remove the global
+baseline only after this plan or its mandatory size-split follow-up lands.
 
 ## Scope and Non-Goals
 

@@ -103,7 +103,8 @@ contains no verification, credit, or authorization policy.
 
 Recompose the async module with one queue registration and one worker. Preserve the compatibility token used by the
 still-legacy batch parent until plan 16 replaces it. Update source references and shrink only async baseline entries;
-sync/deprecated and batch entries remain untouched.
+current synchronous and batch entries remain untouched. Deprecated-route code, if still present, belongs to
+`legacy-retirement/01`; this plan must not restore retired code or baseline entries.
 
 ## Interfaces and Dependencies
 
@@ -128,7 +129,8 @@ plans 03 and 04. No public TypeScript, database, provider, SMTP, or S3 contract 
   semantics and do not alter job identity.
 - Logs and errors contain no address, raw job payload, credential, SMTP/provider payload, or external message.
 - No async application/domain file imports Nest, BullMQ, Redis, HTTP DTOs, guards, or queue implementations.
-- Sync/deprecated and batch code remains behaviorally unchanged; only async baseline keys disappear.
+- Current synchronous and batch code remains behaviorally unchanged; only async baseline keys disappear. This plan
+  does not restore deprecated-route code or baseline entries removed by `legacy-retirement/01`.
 - Focused, real Redis/Bull, HTTP, architecture, full-suite, build, docs, and diff checks pass.
 
 ## Validation
