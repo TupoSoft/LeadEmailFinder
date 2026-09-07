@@ -213,6 +213,9 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_ID}"
 export API_URL="http://localhost:53000"
 export KEYCLOAK_URL="http://localhost:58080"
 export KEYCLOAK_PUBLIC_URL="${KEYCLOAK_URL}"
+export KEYCLOAK_BFF_REDIRECT_URIS="${API_URL}/v1/auth/callback"
+export KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS="${API_URL}/"
+unset OIDC_BACKCHANNEL_URL
 pnpm keycloak:provision
 
 wait_healthy lef-api-1

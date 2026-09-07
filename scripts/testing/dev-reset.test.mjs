@@ -65,7 +65,7 @@ const file = process.env.RESET_TEST_ROOT + '/.dev/keycloak/development-stack.jso
 const metadata = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined;
 appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({
     tool: 'pnpm', command,
-    environment: Object.fromEntries(['COMPOSE_PROJECT_NAME', 'KEYCLOAK_URL', 'KEYCLOAK_PUBLIC_URL', 'API_URL'].map(key => [key, process.env[key]])),
+    environment: Object.fromEntries(['COMPOSE_PROJECT_NAME', 'KEYCLOAK_URL', 'KEYCLOAK_PUBLIC_URL', 'API_URL', 'KEYCLOAK_BFF_REDIRECT_URIS', 'KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS', 'OIDC_BACKCHANNEL_URL'].map(key => [key, process.env[key] ?? null])),
     metadata: metadata ? { composeProject: metadata.composeProject, apiUrl: metadata.apiUrl, keycloakUrl: metadata.keycloakUrl } : null,
 }) + '\\n');
 if (command === 'keycloak:bootstrap-credential') writeFileSync(process.env.RESET_TEST_ROOT + '/.dev/keycloak/service-client.json', JSON.stringify({
@@ -222,6 +222,9 @@ test('a successful default reset replaces stale isolated metadata before human s
         KEYCLOAK_URL: 'http://localhost:58101',
         KEYCLOAK_PUBLIC_URL: 'http://localhost:58101',
         API_URL: 'http://localhost:53101',
+        KEYCLOAK_BFF_REDIRECT_URIS: 'http://localhost:53101/v1/auth/callback',
+        KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS: 'http://localhost:53101/',
+        OIDC_BACKCHANNEL_URL: 'http://localhost:58101/realms/lead-email-finder',
     })
     assert.equal(result.status, 0, result.stderr)
     assert.match(result.stdout, /Development stack reset complete\./)
@@ -232,6 +235,9 @@ test('a successful default reset replaces stale isolated metadata before human s
         KEYCLOAK_URL: 'http://localhost:58080',
         KEYCLOAK_PUBLIC_URL: 'http://localhost:58080',
         API_URL: 'http://localhost:53000',
+        KEYCLOAK_BFF_REDIRECT_URIS: 'http://localhost:53000/v1/auth/callback',
+        KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS: 'http://localhost:53000/',
+        OIDC_BACKCHANNEL_URL: null,
     }
     const commands = result.tail.filter(event => event.tool === 'pnpm')
     assert.deepEqual(commands.map(event => event.command), [
