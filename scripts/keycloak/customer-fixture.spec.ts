@@ -133,6 +133,16 @@ describe('obtainClientCredentialsToken', () => {
 })
 
 describe('seedCustomerFixture', () => {
+    const previousFixture = {
+        issuer: 'http://localhost:58080/realms/lead-email-finder',
+        organizationId: 'org-1',
+        ownerEmail: 'owner@acme.lef.test',
+        ownerSubject: 'owner-1',
+        keycloakClientId: 'lef-svc-dev-fixture',
+        issuers: ['http://localhost:58080/realms/lead-email-finder'],
+    }
+    const owner = { id: 'owner-1', email: 'owner@acme.lef.test', username: 'owner@acme.lef.test' }
+
     it('seeds the customer credential only under the public issuer', async () => {
         const issuer = 'http://localhost:58080/realms/lead-email-finder'
         const fetchImpl = jest
@@ -142,6 +152,12 @@ describe('seedCustomerFixture', () => {
             .mockResolvedValueOnce(jsonResponse(200, { balance: 1000 }))
         const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
         api.request
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{ id: 'owner-1', email: 'owner@acme.lef.test', username: 'owner@acme.lef.test' }])
+            .mockResolvedValueOnce({ id: 'owner-1', email: 'owner@acme.lef.test', username: 'owner@acme.lef.test' })
+            .mockResolvedValueOnce([{ name: 'owner' }, { name: 'mfa_required' }])
+            .mockResolvedValueOnce([{ type: 'password' }])
+            .mockResolvedValueOnce(undefined)
             .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }])
             .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
             .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
@@ -159,8 +175,90 @@ describe('seedCustomerFixture', () => {
         })
 
         expect(result.issuers).toEqual([issuer])
+        expect(result.ownerSubject).toBe('owner-1')
         expect(query).toHaveBeenCalledTimes(1)
         expect(query).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining([issuer]))
         expect(JSON.stringify(query.mock.calls)).not.toContain('keycloak:8080')
+    })
+
+    it('reuses the verified customer membership and preserves the enrolled owner on a routine rerun', async () => {
+        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+        api.request
+            .mockResolvedValueOnce([owner])
+            .mockResolvedValueOnce(owner)
+            .mockResolvedValueOnce([{ name: 'owner' }, { name: 'mfa_required' }])
+            .mockResolvedValueOnce([{ type: 'password' }, { type: 'otp' }])
+            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }])
+            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
+            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
+            .mockResolvedValueOnce({ value: 'test-secret' })
+            .mockResolvedValueOnce({ id: 'service-subject' })
+        const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { balance: 1000 }))
+        const query = jest
+            .fn()
+            .mockResolvedValueOnce([{ matches: true }])
+            .mockResolvedValueOnce(undefined)
+        const result = await seedCustomerFixture({
+            apiUrl: 'http://localhost:53000',
+            issuer: previousFixture.issuer,
+            platformToken: 'test-token',
+            api,
+            dataSource: { query } as unknown as DataSource,
+            fetchImpl,
+            previousFixture,
+        })
+        expect(result).toEqual(previousFixture)
+        expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('SELECT EXISTS'), [
+            previousFixture.issuer,
+            owner.id,
+            previousFixture.organizationId,
+        ])
+        expect(fetchImpl).toHaveBeenCalledTimes(1)
+        expect(fetchImpl).toHaveBeenCalledWith('http://localhost:53000/credits/org-1', expect.anything())
+        expect(api.request.mock.calls.every(([method]) => method === 'GET')).toBe(true)
+    })
+
+    it.each([undefined, { ...previousFixture, ownerSubject: 'stale' }])(
+        'refuses a preexisting owner without matching local seed provenance',
+        async previous => {
+            const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+            api.request.mockResolvedValue([owner])
+            const fetchImpl = jest.fn()
+            const query = jest.fn()
+            await expect(
+                seedCustomerFixture({
+                    apiUrl: 'http://localhost:53000',
+                    issuer: previousFixture.issuer,
+                    platformToken: 'test-token',
+                    api,
+                    dataSource: { query } as unknown as DataSource,
+                    fetchImpl,
+                    previousFixture: previous,
+                }),
+            ).rejects.toThrow('provenance')
+            expect(fetchImpl).not.toHaveBeenCalled()
+            expect(query).not.toHaveBeenCalled()
+            expect(api.request).toHaveBeenCalledTimes(1)
+        },
+    )
+
+    it('rejects an organization mismatch before changing balances or users', async () => {
+        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
+        api.request.mockResolvedValue([owner])
+        const fetchImpl = jest.fn()
+        const query = jest.fn().mockResolvedValue([{ matches: false }])
+        await expect(
+            seedCustomerFixture({
+                apiUrl: 'http://localhost:53000',
+                issuer: previousFixture.issuer,
+                platformToken: 'test-token',
+                api,
+                dataSource: { query } as unknown as DataSource,
+                fetchImpl,
+                previousFixture,
+            }),
+        ).rejects.toThrow('active owner membership')
+        expect(fetchImpl).not.toHaveBeenCalled()
+        expect(api.request).toHaveBeenCalledTimes(1)
     })
 })

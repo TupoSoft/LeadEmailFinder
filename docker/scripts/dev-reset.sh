@@ -86,6 +86,7 @@ verify_and_delete_volumes() {
     # count means the volume set has drifted from what this script knows how to safely target, so refuse
     # rather than guess.
     if [ "${found_count}" -eq 0 ]; then
+        remove_browser_fixture_state
         ${COMPOSE} down
         return 0
     fi
@@ -108,9 +109,20 @@ verify_and_delete_volumes() {
         fi
     done
 
+    remove_browser_fixture_state
     ${COMPOSE} down
     # shellcheck disable=SC2086 -- pre-verified names from the allowlisted filter above, never an unresolved expansion.
     docker volume rm ${found_volumes}
+}
+
+remove_browser_fixture_state() {
+    if [ -L .dev ] || [ -L .dev/keycloak ]; then
+        printf 'Refusing to remove browser fixture state through a symbolic-link directory.\n' >&2
+        exit 1
+    fi
+    # Only the enrollment keys are reset here, after confirmation and every ownership/volume check.
+    # Routine seed commands preserve this file. Removing a file symlink never follows its target.
+    rm -f -- .dev/keycloak/browser-users.json
 }
 
 wait_healthy() {
@@ -196,12 +208,22 @@ wait_healthy lef-garage-1
 wait_healthy lef-keycloak-postgres-1
 wait_healthy lef-keycloak-1
 
+# Every provisioning command must target the same fixed project and public endpoints as this reset.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_ID}"
+export API_URL="http://localhost:53000"
 export KEYCLOAK_URL="http://localhost:58080"
+export KEYCLOAK_PUBLIC_URL="${KEYCLOAK_URL}"
+export KEYCLOAK_BFF_REDIRECT_URIS="${API_URL}/v1/auth/callback"
+export KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS="${API_URL}/"
+unset OIDC_BACKCHANNEL_URL
 pnpm keycloak:provision
 
 wait_healthy lef-api-1
 wait_healthy lef-web-1
 curl --fail --silent --show-error http://localhost:53000/ > /dev/null
+
+# Replace a previous isolated-stack selection so later commands from a fresh shell use this reset stack.
+node scripts/testing/refresh-development-stack.mjs
 
 postgres_password="$(cat docker/secrets/postgres_password.txt)"
 export POSTGRES_URL="postgresql://postgres:${postgres_password}@localhost:55432/lef"

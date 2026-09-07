@@ -1,6 +1,49 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { chmodSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { dirname, parse, resolve } from 'node:path'
+
+const UNSAFE_METADATA = 'Development stack metadata must use a private regular file inside this checkout.'
+
+// Validate before either reading cached credentials or discovering fresh provider credentials. In particular,
+// an ignored directory symlink is not permission to read or overwrite a different checkout's local secrets.
+export function assertDevelopmentMetadataPath(checkoutRoot) {
+    try {
+        const root = resolve(checkoutRoot)
+        if (root !== checkoutRoot || root === parse(root).root) throw new Error(UNSAFE_METADATA)
+        const ancestors = []
+        for (let current = root; current !== parse(current).root; current = dirname(current)) ancestors.unshift(current)
+        for (const directory of ancestors) {
+            const entry = lstatSync(directory)
+            if (!entry.isDirectory() || entry.isSymbolicLink() || realpathSync(directory) !== directory) {
+                throw new Error(UNSAFE_METADATA)
+            }
+        }
+        const file = resolve(root, '.dev/keycloak/development-stack.json')
+        for (const directory of [resolve(root, '.dev'), resolve(root, '.dev/keycloak')]) {
+            let entry
+            try {
+                entry = lstatSync(directory)
+            } catch (error) {
+                if (error.code === 'ENOENT') return file
+                throw error
+            }
+            if (!entry.isDirectory() || entry.isSymbolicLink() || realpathSync(directory) !== directory) {
+                throw new Error(UNSAFE_METADATA)
+            }
+        }
+        try {
+            const entry = lstatSync(file)
+            if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink !== 1 || (entry.mode & 0o777) !== 0o600) {
+                throw new Error(UNSAFE_METADATA)
+            }
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error
+        }
+        return file
+    } catch {
+        throw new Error(UNSAFE_METADATA)
+    }
+}
 
 export function runDevelopmentCommand(program, args, { cwd, env = process.env, input, timeout = 180_000 } = {}) {
     const result = spawnSync(program, args, { cwd, env, input, encoding: 'utf8', timeout, maxBuffer: 20 * 1024 * 1024 })
@@ -98,7 +141,11 @@ export function inspectDevelopmentService(checkoutRoot, metadata, service, inter
         ],
         { cwd: checkoutRoot },
     )
-    if (!/^[a-f0-9]{12,64}$/.test(id)) throw new Error('Expected exactly one running development service container')
+    if (!/^[a-f0-9]{12,64}$/.test(id)) {
+        throw new Error(
+            `Expected exactly one running development service container for ${service} in Compose project ${metadata.composeProject}.`,
+        )
+    }
     const inspected = JSON.parse(runDevelopmentCommand('docker', ['inspect', id], { cwd: checkoutRoot }))
     if (!Array.isArray(inspected) || inspected.length !== 1) throw new Error('Invalid development service inspection')
     const container = inspected[0]
@@ -117,11 +164,14 @@ function publishedEndpoint(container, internalPort, protocol) {
 
 // Refresh credentials and ownership on every invocation. The generated file is convenient provenance, not
 // permission to mutate resources: no cached ownership claim substitutes for current Docker labels.
-export function loadDevelopmentStack(checkoutRoot) {
-    const metadataPath = resolve(checkoutRoot, '.dev/keycloak/development-stack.json')
-    const previous = existsSync(metadataPath)
-        ? validateDevelopmentMetadata(JSON.parse(readFileSync(metadataPath, 'utf8')), checkoutRoot)
-        : undefined
+export function loadDevelopmentStack(checkoutRoot, { persistMetadata = true } = {}) {
+    const metadataPath = assertDevelopmentMetadataPath(checkoutRoot)
+    let previous
+    try {
+        previous = validateDevelopmentMetadata(JSON.parse(readFileSync(metadataPath, 'utf8')), checkoutRoot)
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw new Error(UNSAFE_METADATA)
+    }
     const composeProject = process.env.COMPOSE_PROJECT_NAME ?? previous?.composeProject ?? 'lef'
     if (!/^[a-z0-9][a-z0-9_-]*$/.test(composeProject)) throw new Error('Invalid development Compose project')
     const ownership = { checkoutRoot, composeProject }
@@ -174,8 +224,11 @@ export function loadDevelopmentStack(checkoutRoot) {
         },
         checkoutRoot,
     )
-    mkdirSync(resolve(checkoutRoot, '.dev/keycloak'), { recursive: true, mode: 0o700 })
-    writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 })
-    chmodSync(metadataPath, 0o600)
+    if (persistMetadata) {
+        assertDevelopmentMetadataPath(checkoutRoot)
+        mkdirSync(resolve(checkoutRoot, '.dev/keycloak'), { recursive: true, mode: 0o700 })
+        writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 })
+        chmodSync(metadataPath, 0o600)
+    }
     return metadata
 }

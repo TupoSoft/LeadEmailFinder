@@ -9,6 +9,8 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile --ignore-scripts
 COPY apps/web apps/web
 COPY packages/api-client packages/api-client
+# Node test support is typechecked by the web build; only the pure development identity contract is needed.
+COPY scripts/keycloak/browser-fixture-identities.ts scripts/keycloak/browser-fixture-identities.ts
 RUN pnpm --filter @tuposoft/lead-email-finder-web build
 
 FROM nginxinc/nginx-unprivileged:1.30.0-alpine@sha256:808f7846d21a9c94cf53833e8807a00a33fd0b65cc47fb05b79efe366c2d201f

@@ -13,12 +13,13 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 
 ## Progress
 
-- [ ] (2026-08-31) Make fresh development seeds request TOTP enrollment for the exact owner/operator fixtures.
-- [ ] (2026-08-31) Add a redacted, owner-readable local browser-fixture metadata contract.
-- [ ] (2026-08-31) Implement deterministic TOTP enrollment and repeat-login bootstrap through hosted Keycloak UI.
-- [ ] (2026-08-31) Publish one shared MFA-aware Playwright login fixture for later frontend plans.
-- [ ] (2026-08-31) Cover reset, stale metadata, redaction, MFA integrity, and real BFF login behavior.
-- [ ] (2026-08-31) Run focused, fresh-reset, browser, prose, architecture, and repository validation.
+- [x] (2026-09-07) Make fresh development seeds request TOTP enrollment for the exact owner/operator fixtures.
+- [x] (2026-09-07) Add a redacted, owner-readable local browser-fixture metadata contract.
+- [x] (2026-09-07) Implement deterministic TOTP enrollment and repeat-login bootstrap through hosted Keycloak UI.
+- [x] (2026-09-07) Publish one shared MFA-aware Playwright login fixture for later frontend plans.
+- [x] (2026-09-07) Cover reset, stale metadata, redaction, MFA integrity, and real BFF login behavior.
+- [x] (2026-09-07) Run focused, fresh isolated-stack, browser, prose, architecture, and repository validation.
+- [x] (2026-09-07) Fix stale project selection after a default reset and resume both human seeds on the live stack.
 
 ## Plan dependencies
 
@@ -26,6 +27,20 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 - `auth/10`
 
 ## Surprises & Discoveries
+
+- During initial validation, the default `lef` stack belonged to another checkout. Its reset ownership guard
+  correctly rejected this checkout, so browser validation used the fresh isolated `lef5048fb9` project.
+- After the user recreated the default stack in this checkout, human seeding still selected the cached isolated
+  project. The reset now pins its provisioning environment and refreshes verified stack metadata before seeding.
+  This also makes later commands select the reset stack without a shell override.
+- The current Playwright runner creates an ARIA page snapshot and an error-context attachment independently of its
+  screenshot setting. `PLAYWRIGHT_NO_COPY_PROMPT=1` disables the former. A sanitized scalar failure at the shared
+  fixture boundary avoids the latter; a subprocess regression test checks the resulting artifact directory.
+- The web Docker build checks Node test support types. It therefore copies the pure development identity and metadata
+  contract explicitly, while the production browser bundle continues to exclude fixture helpers and secrets.
+- The installed Keycloak theme uses stable `userLabel`, `totp`, and `otp` input IDs but does not associate the first
+  two with accessible labels. The manual enrollment link remains accessible. Its challenge rejection uses
+  `input-error-otp`; live back-to-back login exposed this distinction and verified the next-window retry.
 
 - `auth/10` seeds stable owner and platform-operator passwords, but both roles include the `mfa_required` composite
   role. Its live BFF test proves that submitting only username and password stops on the Keycloak OTP step instead of
@@ -36,6 +51,25 @@ credit, and proxy plans can therefore require live privileged browser evidence w
   or using a client-credentials token would not validate the human BFF session those features actually require.
 
 ## Decision Log
+
+- Decision: Persist the confirmed reset stack after its services become healthy and before running fixture seeds.
+  Rationale: The reset selects a fixed Compose project, while browser and seed discovery support isolated stacks.
+  Updating the shared metadata at this explicit reset boundary prevents stale selection in later shells and keeps
+  ordinary seed and browser discovery read-only.
+  Date/Author: 2026-09-07, reset integration fix.
+- Decision: Verify current Docker ownership through the existing development-stack adapter before seeding or login,
+  then bind the allowed development issuer to that stack's published Keycloak port.
+  Rationale: An isolated checkout needs alternate ports. A different issuer remains invalid unless it exactly matches
+  the verified local stack and the existing development realm. The default reset command retains its fixed scope.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Run bootstrap as a standalone Node 24 Playwright script, with no test recorder. Use a dedicated
+  artifact-disabled project, sanitized scalar authentication failures, and a static reporter for shared live tests.
+  Rationale: Capture must be prevented before credentials enter a page. Removing artifacts after failure is too late.
+  Date/Author: 2026-09-07, implementation.
+- Decision: Keep the shared reset fingerprint in the nonsecret `browser-seed.json` document, alongside both subjects.
+  Existing per-identity summaries retain their issuer and subject for routine seed provenance.
+  Rationale: One canonical fingerprint binds both accounts and avoids inconsistent per-account reset identifiers.
+  Date/Author: 2026-09-07, implementation.
 
 - Decision: Exercise the real conditional-OTP browser flow and keep the `mfa_required` composites unchanged.
   Rationale: The test fixture must validate the same security boundary as a privileged human, not create a special
@@ -65,7 +99,16 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented scoped development seeding, confined local metadata, hosted TOTP bootstrap, and a shared role-based
+Playwright fixture. Fresh isolated enrollment, repeat bootstrap, real owner and platform-operator BFF logins,
+and unchanged credential state across routine seed reruns passed. Both accounts retain `mfa_required` and exactly
+one OTP credential. No production authentication or HTTP API behavior changed.
+
+Browser evidence uses the fresh `lef5048fb9` stack at application port `53004` and Keycloak port `58084`. After the user
+recreated the default `lef` stack in this checkout, its human seed step exposed the stale project-selection bug.
+Refreshing the verified metadata and rerunning only the operator and customer seeds succeeded without environment
+overrides. The default stack remains available for manual first enrollment. The corrected destructive reset was
+not rerun against that live stack; regression tests exercise its complete sequence with simulated services.
 
 ## Context and Orientation
 
@@ -110,7 +153,8 @@ Make `dev:reset` remove only `.dev/keycloak/browser-users.json` before it destro
 realm, then write each new fixture subject and one reset identifier to the existing ignored fixture metadata. The
 identifier must change when the recreated subjects change and need not reveal a credential. Preserve the reset
 script's project confirmation and container-ownership protections. A routine seed rerun that does not recreate the
-realm must not erase a valid OTP file.
+realm must not erase a valid OTP file. Before seeding, pin the reset project's environment and refresh its verified
+development-stack metadata so a cached isolated project cannot redirect subsequent discovery.
 
 Add a small TOTP utility under frontend test support. Decode strict uppercase Base32, reject malformed or padded
 unexpected input, and compute six digits from a 30-second counter using HMAC-SHA1. Test it with published deterministic
@@ -204,7 +248,9 @@ Run focused utilities, seed, metadata, and Playwright-fixture tests:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- browser-fixture totp platform-operator customer-fixture --runInBand
     corepack pnpm --filter ./apps/web typecheck
     corepack pnpm --filter ./apps/web lint
-    corepack pnpm --filter ./apps/web test
+    corepack pnpm --filter ./apps/web test:ci
+    corepack pnpm --filter ./apps/web exec vitest run tests/support
+    corepack pnpm --filter ./apps/web test:privileged-artifacts
     corepack pnpm typecheck
     corepack pnpm lint
     corepack pnpm architecture:check
@@ -216,7 +262,7 @@ bootstrap twice:
     corepack pnpm dev:reset -- --confirm-project=LEF
     corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
     corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
-    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/privileged-login-fixtures.spec.ts --project=chromium
+    corepack pnpm --filter ./apps/web test:privileged
 
 Assert the first run enrolled exactly two OTP credentials and the second enrolled none. Force one sanitized auth
 failure and assert the configured output directories contain no trace, screenshot, video, HTML snapshot, or auth
@@ -224,7 +270,7 @@ attachment at all. Inspect the committed diff and console/Playwright summaries f
 the local file mode without printing its contents. Run Harper on every changed English Markdown file, including this
 plan and the development/testing documentation:
 
-    corepack pnpm docs:lint -- .agents/plans/frontend/09-provision-mfa-aware-browser-test-identities.md README.md
+    corepack pnpm docs:lint -- .agents/plans/frontend/09-provision-mfa-aware-browser-test-identities.md README.md apps/web/tests/README.md
 
 Append any other English Markdown file actually changed and record exact commands and results. A mocked Keycloak page
 does not satisfy the live acceptance gate.
@@ -241,6 +287,39 @@ normal destructive development reset instead of mutating the credential ad hoc. 
 unknown Compose project. This plan adds no production migration, rollback, or credential recovery mechanism.
 
 ## Artifacts and Notes
+
+Validation recorded on 2026-09-07:
+
+- `corepack pnpm --filter ./apps/web test:ci`: 234 tests across 14 files passed.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/keycloak --runInBand`: 60 tests across seven suites passed.
+- `node --test scripts/testing/development-stack.test.mjs scripts/testing/dev-reset.test.mjs`: 21 tests passed.
+  The related BFF and web launcher regression tests also passed after read-only metadata discovery was added.
+- Reset integration follow-up: `corepack pnpm test:oidc-runners` passed all 47 tests, including the complete reset
+  sequence with stale isolated metadata and inherited endpoint overrides. All 60 Keycloak tests, root type checking,
+  the architecture gate, and focused ESLint passed. Live operator and customer seeds passed without project or
+  endpoint overrides after metadata refresh. Both users require `CONFIGURE_TOTP`, have zero OTP credentials, and
+  retain their expected roles and `mfa_required`. Current metadata selects `lef` with mode `0600`, and no browser
+  enrollment file exists, leaving first enrollment available for manual testing. `corepack pnpm keycloak:smoke`
+  passed against the default issuer at port `58080`.
+- `corepack pnpm --filter ./apps/web test:privileged-artifacts`: five real Chromium checks passed, including timeout
+  and file-level trace, screenshot, and video overrides. Authentication failures retained only `.last-run.json`.
+- `COMPOSE_PROJECT_NAME=lef5048fb9 corepack pnpm --filter ./apps/web browser-fixtures:bootstrap`: fresh enrollment
+  and repeat runs passed for both labels. Repeat bootstrap left the file byte-identical with mode `0600`.
+- `COMPOSE_PROJECT_NAME=lef5048fb9 corepack pnpm --filter ./apps/web test:privileged`: both real BFF login tests passed,
+  including an immediate run after bootstrap that exercised the next-window retry.
+- Routine operator and customer seed commands preserved all credential IDs, subjects, roles, the shared fingerprint,
+  and the enrollment file's bytes. Each account retained one OTP credential and `mfa_required`.
+- Type checks and ESLint passed for both packages. The `architecture:check`, `design:lint`, `ui:audit`, CI path-selection
+  fixtures, web Docker image build, and `git diff --check` checks passed. Root ESLint retains one preexisting warning in
+  `src/libs/config/src/load-secrets.spec.ts`. The architecture gate retains its 20 baselined violations.
+- Harper passed the exact documentation command in Validation. Bruno is not applicable because this work changes
+  only development seeding and internal browser-test tooling, with no HTTP API behavior change.
+
+Architecture review keeps account seeding, filesystem metadata, TOTP computation, hosted authentication, and reporter
+output separate. The deliberate trade-off is a tested dependency on Playwright's scalar-error serialization to
+prevent automatic authentication attachments. The fixture rejects capture overrides based on actual runtime options
+before page setup. A separate bounded authentication deadline prevents the runner's timeout diagnostics from capturing
+that segment.
 
 Record focused test counts, the two nonsecret fixture labels and expected roles, reset identifier suffix if needed,
 file mode, first/second bootstrap outcomes, live callback results, and redaction inspection. Never record setup keys,

@@ -2,17 +2,9 @@ import { DataSource } from 'typeorm'
 import { ensurePlatformOrganization } from './bootstrap-service-credential'
 import { KeycloakAdminPort } from './keycloak-admin-api'
 import { REALM } from './provisioning'
-
-export const PLATFORM_OPERATOR_EMAIL = 'platform-operator@lef.test'
-// Fixed, checked-in dev-only secret, same convention as BFF_CLIENT_DEV_SECRET/ORG_ADMIN_CLIENT_DEV_SECRET
-// in provisioning.ts: this identity must be a stable, memorable local login every reset produces, not a
-// one-off random value a developer has to dig out of a JSON file.
-export const PLATFORM_OPERATOR_PASSWORD = 'platform-operator-development-only'
-
-interface KeycloakUserRepresentation {
-    id: string
-    email?: string
-}
+import { DEVELOPMENT_BROWSER_ISSUER } from './browser-fixture-identities'
+import { configureBrowserFixtureMfa, findBrowserFixtureUser } from './browser-fixture-seed'
+export { PLATFORM_OPERATOR_EMAIL, PLATFORM_OPERATOR_PASSWORD } from './browser-fixture-identities'
 
 interface KeycloakRoleRepresentation {
     id: string
@@ -23,47 +15,53 @@ export async function ensurePlatformOperatorUser(
     api: KeycloakAdminPort,
     email: string,
     password: string,
-): Promise<{ subject: string }> {
-    let [user] = await api.request<KeycloakUserRepresentation[]>(
-        'GET',
-        `/admin/realms/${REALM}/users?email=${encodeURIComponent(email)}&exact=true`,
-    )
+    options: { issuer?: string; expectedIssuer?: string; previousSubject?: string } = {},
+): Promise<{ subject: string; newlyCreated: boolean }> {
+    const issuer = options.issuer ?? DEVELOPMENT_BROWSER_ISSUER
+    let user = await findBrowserFixtureUser(api, issuer, 'platformOperator', email, options.expectedIssuer)
+    const newlyCreated = !user
+
+    if (user && user.id !== options.previousSubject) {
+        throw new Error('Refusing to change an existing user without matching development fixture provenance.')
+    }
 
     if (!user) {
         await api.request(
             'POST',
             `/admin/realms/${REALM}/users`,
-            { username: email, email, enabled: true, emailVerified: true, requiredActions: [] },
+            {
+                username: email,
+                email,
+                enabled: true,
+                emailVerified: true,
+                requiredActions: [],
+                firstName: 'Platform',
+                lastName: 'Operator',
+            },
             [201],
         )
-        ;[user] = await api.request<KeycloakUserRepresentation[]>(
-            'GET',
-            `/admin/realms/${REALM}/users?email=${encodeURIComponent(email)}&exact=true`,
-        )
+        user = await findBrowserFixtureUser(api, issuer, 'platformOperator', email, options.expectedIssuer)
         if (!user) {
             throw new Error('Keycloak user was not visible after creation')
         }
     }
 
-    await api.request(
-        'PUT',
-        `/admin/realms/${REALM}/users/${user.id}/reset-password`,
-        { type: 'password', value: password, temporary: false },
-        [204],
-    )
+    if (newlyCreated) {
+        await api.request(
+            'PUT',
+            `/admin/realms/${REALM}/users/${user.id}/reset-password`,
+            { type: 'password', value: password, temporary: false },
+            [204],
+        )
+    }
 
-    return { subject: user.id }
+    return { subject: user.id, newlyCreated }
 }
 
 export async function assignPlatformAdminRole(api: KeycloakAdminPort, subject: string): Promise<void> {
     const role = await api.request<KeycloakRoleRepresentation>('GET', `/admin/realms/${REALM}/roles/platform_admin`)
 
-    await api.request(
-        'POST',
-        `/admin/realms/${REALM}/users/${subject}/role-mappings/realm`,
-        [role],
-        [204],
-    )
+    await api.request('POST', `/admin/realms/${REALM}/users/${subject}/role-mappings/realm`, [role], [204])
 }
 
 export async function ensureExternalIdentity(
@@ -100,10 +98,35 @@ export async function ensurePlatformOperatorMembership(
 export async function bootstrapPlatformOperator(
     api: KeycloakAdminPort,
     dataSource: DataSource,
-    { issuer, email, password }: { issuer: string; email: string; password: string },
+    {
+        issuer,
+        email,
+        password,
+        previousSubject,
+        expectedIssuer,
+    }: {
+        issuer: string
+        email: string
+        password: string
+        previousSubject?: string
+        expectedIssuer?: string
+    },
 ): Promise<{ organizationId: string; externalIdentityId: string; subject: string }> {
-    const { subject } = await ensurePlatformOperatorUser(api, email, password)
-    await assignPlatformAdminRole(api, subject)
+    const { subject, newlyCreated } = await ensurePlatformOperatorUser(api, email, password, {
+        issuer,
+        previousSubject,
+        expectedIssuer,
+    })
+    if (newlyCreated) await assignPlatformAdminRole(api, subject)
+    await configureBrowserFixtureMfa(api, {
+        issuer,
+        label: 'platformOperator',
+        email,
+        subject,
+        newlyCreated,
+        previousSubject,
+        expectedIssuer,
+    })
 
     const organizationId = await ensurePlatformOrganization(dataSource)
     const externalIdentityId = await ensureExternalIdentity(dataSource, issuer, subject, email)
