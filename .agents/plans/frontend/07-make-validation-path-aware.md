@@ -46,6 +46,9 @@ consumers, and unchanged areas finish through explicit successful no-op steps. T
   container stops, Docker can retain an unreachable address long enough to produce HTTP 504 rather than HTTP 502.
   The fixture now keeps its network namespace alive independently of the API process, so stopping the API leaves
   a reachable address with a closed port. Every existing assertion and its ordering remain intact.
+- (2026-09-07) The documentation-update run exposed another existing test defect in `session-encryptor.spec.ts`.
+  Replacing the encrypted payload's first character with `x` makes no change when that character is already `x`.
+  The fixture now flips one decoded byte and verifies that the resulting token differs before asserting rejection.
 - The original Validate workflow is one backend-oriented job with PostgreSQL and an API image build on every change.
 - The frontend foundation adds web and contract checks, and the same-origin plan adds a second image plus browser
   coverage. Those checks have different expensive inputs but share the lockfile and workspace configuration.
@@ -120,7 +123,11 @@ Hosted validation also requires a narrow setup correction in `scripts/frontend/g
 container retains the fake API's network namespace after the API container stops. This removes a confirmed baseline
 Docker timing dependency while preserving the existing HTTP, availability, and privacy assertions.
 
-It does not change application source, API behavior, generated artifacts, test assertions, image contents, required
+The follow-up also corrects the encrypted-session test fixture under
+`src/libs/modules/bff-session/src/infrastructure/crypto/session-encryptor.spec.ts`. It always changes the payload
+bytes before checking the existing decryption-rejection expectation. The encryption implementation is unchanged.
+
+It does not change application source, API behavior, generated artifacts, existing rejection expectations, image contents, required
 check policy in GitHub, CI provider, release/deployment workflows, production environments, or secrets. It does not
 remove an existing validation command merely because it is expensive.
 
@@ -239,7 +246,7 @@ introduced.
 
 Implementation files are `scripts/ci/select-validation.mjs`, `scripts/ci/select-validation.spec.ts`,
 `scripts/ci/validation-fixtures.json`, `scripts/ci/validation-summary.mjs`, and `scripts/ci/validate-workflow.spec.ts`.
-The README documents the consumer matrix and local commands. No application module or HTTP contract changed;
+The README documents the consumer matrix and local commands. No application runtime or HTTP contract changed;
 Bruno additions are not applicable, and the existing BFF collection remains in browser validation.
 
 Local evidence on 2026-09-07: the full backend command passed 208 Jest suites with 2,079 tests and the existing 32
@@ -294,11 +301,17 @@ assertions. Web passed 45 unit tests and 12 audit-tool tests. Browser validation
 workflow tests, four accessibility tests, four visual tests, and three genuine same-origin session tests. Bruno passed
 15 requests and 16 tests with no skips. All three image builds, manifest checks, Compose validation, and cleanup passed.
 
-The final evidence update changes this Markdown file only. The passing implementation run above is the full runtime
-evidence; Harper and the plan ratchet validate this documentation update.
+Commit `56c139f` updated only this Markdown file. The passing implementation run above records the initial full
+runtime evidence; the subsequent hosted run exposed the session-test issue described below.
 
-The exact prose command `corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md`
-passes both files, including this final evidence update.
+The later [run 34114706751](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34114706751) passed all consumers
+except backend, where the unchanged session tampering fixture sometimes submitted the original token. The aggregate
+correctly failed. Its fixture correction has focused encryption, complete backend, architecture, type, and prose
+validation; the final revision's hosted run is recorded in PR #560 after it finishes.
+
+The original prose command checked the root README and this plan. The follow-up command
+`corepack pnpm docs:lint -- .agents/plans/frontend/07-make-validation-path-aware.md src/libs/modules/bff-session/README.md`
+passes both edited files.
 
 Record the path-to-consumer fixture matrix, redacted change-discovery output, each job conclusion, and the aggregate
 check name/result. Never record repository tokens, event payload secrets, environment dumps, cookies, user data, or
