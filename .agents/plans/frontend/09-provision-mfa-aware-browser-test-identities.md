@@ -19,6 +19,7 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 - [x] (2026-09-07) Publish one shared MFA-aware Playwright login fixture for later frontend plans.
 - [x] (2026-09-07) Cover reset, stale metadata, redaction, MFA integrity, and real BFF login behavior.
 - [x] (2026-09-07) Run focused, fresh isolated-stack, browser, prose, architecture, and repository validation.
+- [x] (2026-09-07) Fix stale project selection after a default reset and resume both human seeds on the live stack.
 
 ## Plan dependencies
 
@@ -27,8 +28,11 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 
 ## Surprises & Discoveries
 
-- The default `lef` stack belongs to another checkout. Its reset ownership guard correctly rejects this checkout.
-  Live validation uses the fresh isolated `lef5048fb9` project and existing Compose port overrides instead.
+- During initial validation, the default `lef` stack belonged to another checkout. Its reset ownership guard
+  correctly rejected this checkout, so browser validation used the fresh isolated `lef5048fb9` project.
+- After the user recreated the default stack in this checkout, human seeding still selected the cached isolated
+  project. The reset now pins its provisioning environment and refreshes verified stack metadata before seeding.
+  This also makes later commands select the reset stack without a shell override.
 - The current Playwright runner creates an ARIA page snapshot and an error-context attachment independently of its
   screenshot setting. `PLAYWRIGHT_NO_COPY_PROMPT=1` disables the former. A sanitized scalar failure at the shared
   fixture boundary avoids the latter; a subprocess regression test checks the resulting artifact directory.
@@ -48,6 +52,11 @@ credit, and proxy plans can therefore require live privileged browser evidence w
 
 ## Decision Log
 
+- Decision: Persist the confirmed reset stack after its services become healthy and before running fixture seeds.
+  Rationale: The reset selects a fixed Compose project, while browser and seed discovery support isolated stacks.
+  Updating the shared metadata at this explicit reset boundary prevents stale selection in later shells and keeps
+  ordinary seed and browser discovery read-only.
+  Date/Author: 2026-09-07, reset integration fix.
 - Decision: Verify current Docker ownership through the existing development-stack adapter before seeding or login,
   then bind the allowed development issuer to that stack's published Keycloak port.
   Rationale: An isolated checkout needs alternate ports. A different issuer remains invalid unless it exactly matches
@@ -95,10 +104,11 @@ Playwright fixture. Fresh isolated enrollment, repeat bootstrap, real owner and 
 and unchanged credential state across routine seed reruns passed. Both accounts retain `mfa_required` and exactly
 one OTP credential. No production authentication or HTTP API behavior changed.
 
-Live evidence uses the fresh `lef5048fb9` stack owned by this checkout at application port `53004` and Keycloak
-port `58084`. The ordinary `LEF` reset was not executed because its containers belong to another checkout; ten reset
-tests verify confirmation, ownership, volume, and local-file deletion behavior. This is a precise limitation of the
-live evidence, not permission to reset the other checkout.
+Browser evidence uses the fresh `lef5048fb9` stack at application port `53004` and Keycloak port `58084`. After the user
+recreated the default `lef` stack in this checkout, its human seed step exposed the stale project-selection bug.
+Refreshing the verified metadata and rerunning only the operator and customer seeds succeeded without environment
+overrides. The default stack remains available for manual first enrollment. The corrected destructive reset was
+not rerun against that live stack; regression tests exercise its complete sequence with simulated services.
 
 ## Context and Orientation
 
@@ -143,7 +153,8 @@ Make `dev:reset` remove only `.dev/keycloak/browser-users.json` before it destro
 realm, then write each new fixture subject and one reset identifier to the existing ignored fixture metadata. The
 identifier must change when the recreated subjects change and need not reveal a credential. Preserve the reset
 script's project confirmation and container-ownership protections. A routine seed rerun that does not recreate the
-realm must not erase a valid OTP file.
+realm must not erase a valid OTP file. Before seeding, pin the reset project's environment and refresh its verified
+development-stack metadata so a cached isolated project cannot redirect subsequent discovery.
 
 Add a small TOTP utility under frontend test support. Decode strict uppercase Base32, reject malformed or padded
 unexpected input, and compute six digits from a 30-second counter using HMAC-SHA1. Test it with published deterministic
@@ -283,6 +294,13 @@ Validation recorded on 2026-09-07:
 - `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/keycloak --runInBand`: 60 tests across seven suites passed.
 - `node --test scripts/testing/development-stack.test.mjs scripts/testing/dev-reset.test.mjs`: 21 tests passed.
   The related BFF and web launcher regression tests also passed after read-only metadata discovery was added.
+- Reset integration follow-up: `corepack pnpm test:oidc-runners` passed all 47 tests, including the complete reset
+  sequence with stale isolated metadata and inherited endpoint overrides. All 60 Keycloak tests, root type checking,
+  the architecture gate, and focused ESLint passed. Live operator and customer seeds passed without project or
+  endpoint overrides after metadata refresh. Both users require `CONFIGURE_TOTP`, have zero OTP credentials, and
+  retain their expected roles and `mfa_required`. Current metadata selects `lef` with mode `0600`, and no browser
+  enrollment file exists, leaving first enrollment available for manual testing. `corepack pnpm keycloak:smoke`
+  passed against the default issuer at port `58080`.
 - `corepack pnpm --filter ./apps/web test:privileged-artifacts`: five real Chromium checks passed, including timeout
   and file-level trace, screenshot, and video overrides. Authentication failures retained only `.last-run.json`.
 - `COMPOSE_PROJECT_NAME=lef5048fb9 corepack pnpm --filter ./apps/web browser-fixtures:bootstrap`: fresh enrollment

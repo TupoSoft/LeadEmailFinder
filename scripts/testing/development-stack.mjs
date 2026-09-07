@@ -141,7 +141,11 @@ export function inspectDevelopmentService(checkoutRoot, metadata, service, inter
         ],
         { cwd: checkoutRoot },
     )
-    if (!/^[a-f0-9]{12,64}$/.test(id)) throw new Error('Expected exactly one running development service container')
+    if (!/^[a-f0-9]{12,64}$/.test(id)) {
+        throw new Error(
+            `Expected exactly one running development service container for ${service} in Compose project ${metadata.composeProject}.`,
+        )
+    }
     const inspected = JSON.parse(runDevelopmentCommand('docker', ['inspect', id], { cwd: checkoutRoot }))
     if (!Array.isArray(inspected) || inspected.length !== 1) throw new Error('Invalid development service inspection')
     const container = inspected[0]

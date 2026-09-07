@@ -29,7 +29,9 @@ An explicitly provisioned isolated stack can use the existing Compose project an
 `COMPOSE_PROJECT_NAME` to that checkout-owned project's name when provisioning and running the browser commands.
 The issuer must match that stack's verified Keycloak port and the `lead-email-finder` development realm exactly.
 The ordinary `dev:reset` command continues to support only `LEF` on its documented default ports. It refuses foreign
-stacks and alternate ports; never use it to recover another project. Recreate only the isolated disposable project
+stacks and alternate ports; never use it to recover another project. Once the reset stack is healthy, it refreshes
+the saved project selection and verified endpoints before seeding. Later commands use that stack even when the
+checkout previously cached an isolated project. Recreate only the isolated disposable project
 whose ownership you have confirmed, then provision and seed it again using its original port settings.
 
 ## Local Material and Recovery

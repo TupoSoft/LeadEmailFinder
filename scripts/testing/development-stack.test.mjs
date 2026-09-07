@@ -134,10 +134,9 @@ const fs = require('node:fs');
 const containers = JSON.parse(fs.readFileSync(${JSON.stringify(stateFile)}, 'utf8'));
 const args = process.argv.slice(2);
 if (args[0] === 'ps') {
-    const filter = args.find(value => value.startsWith('label=com.docker.compose.service='));
-    const service = filter.slice(filter.lastIndexOf('=') + 1);
-    const id = Object.keys(containers).find(key => containers[key].Config.Labels['com.docker.compose.service'] === service);
-    process.stdout.write(id);
+    const labels = args.filter(value => value.startsWith('label=')).map(value => value.slice(6).split('='));
+    const ids = Object.keys(containers).filter(key => labels.every(([label, value]) => containers[key].Config.Labels[label] === value));
+    process.stdout.write(ids.join('\\n'));
 } else if (args[0] === 'inspect') {
     process.stdout.write(JSON.stringify([containers[args[1]]]));
 } else process.exit(1);
@@ -175,4 +174,24 @@ test('read-only discovery leaves existing metadata bytes, permissions, and modif
     assert.equal(afterStat.mtimeMs, beforeStat.mtimeMs)
     assert.equal(afterStat.mode, beforeStat.mode)
     assert.equal(afterStat.mode & 0o777, 0o600)
+})
+
+test('an explicit project refresh replaces stale selection for later commands without overrides', t => {
+    const root = checkout(t)
+    syntheticDocker(t, root)
+    const metadata = loadDevelopmentStack(root)
+    const file = join(root, '.dev/keycloak/development-stack.json')
+    writeFileSync(file, JSON.stringify({ ...metadata, composeProject: 'lef5048fb9' }))
+
+    assert.throws(
+        () => loadDevelopmentStack(root, { persistMetadata: false }),
+        /Expected exactly one running development service container for api in Compose project lef5048fb9\./,
+    )
+
+    process.env.COMPOSE_PROJECT_NAME = 'lef'
+    assert.deepEqual(loadDevelopmentStack(root), metadata)
+    delete process.env.COMPOSE_PROJECT_NAME
+    assert.deepEqual(loadDevelopmentStack(root, { persistMetadata: false }), metadata)
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).composeProject, 'lef')
+    assert.equal(statSync(file).mode & 0o777, 0o600)
 })

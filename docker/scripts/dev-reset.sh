@@ -208,12 +208,19 @@ wait_healthy lef-garage-1
 wait_healthy lef-keycloak-postgres-1
 wait_healthy lef-keycloak-1
 
+# Every provisioning command must target the same fixed project and public endpoints as this reset.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_ID}"
+export API_URL="http://localhost:53000"
 export KEYCLOAK_URL="http://localhost:58080"
+export KEYCLOAK_PUBLIC_URL="${KEYCLOAK_URL}"
 pnpm keycloak:provision
 
 wait_healthy lef-api-1
 wait_healthy lef-web-1
 curl --fail --silent --show-error http://localhost:53000/ > /dev/null
+
+# Replace a previous isolated-stack selection so later commands from a fresh shell use this reset stack.
+node scripts/testing/refresh-development-stack.mjs
 
 postgres_password="$(cat docker/secrets/postgres_password.txt)"
 export POSTGRES_URL="postgresql://postgres:${postgres_password}@localhost:55432/lef"
