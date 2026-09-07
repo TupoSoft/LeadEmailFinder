@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { cliArguments, executeCollection, registeredCollection } from './run-collection.mjs'
 import { customerClientSecret, validateCustomerFixture, withRestoredBalance } from './async-verification-fixture.mjs'
-import { failureDiagnostic } from './failure-diagnostic.mjs'
+import { brunoFailure, failureDiagnostic } from './failure-diagnostic.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 const organizationId = randomUUID()
@@ -122,7 +122,7 @@ test('async collection registry requires every ordered request, developer sandbo
     }
 })
 
-test('balance restoration failures retain only the approved diagnostic stage', async () => {
+test('balance restoration failures retain only approved operation and prior diagnostics', async () => {
     for (const failure of ['write', 'confirmation']) {
         let reads = 0
         await assert.rejects(
@@ -137,13 +137,75 @@ test('balance restoration failures retain only the approved diagnostic stage', a
                 },
             ),
             error => {
-                assert.deepEqual(failureDiagnostic(error), { stage: 'balance_restore' })
+                assert.deepEqual(failureDiagnostic(error), {
+                    stage: 'balance_restore',
+                    operation: failure,
+                    prior: { stage: 'collection' },
+                })
                 assert.doesNotMatch(JSON.stringify(error), /synthetic-private/)
                 assert.doesNotMatch(error.message, /synthetic-private/)
                 return true
             },
         )
     }
+})
+
+test('restoration preserves bounded HTTP status and the original collection diagnostic on dual failure', async () => {
+    const prior = { stage: 'collection', request: 8, status: 200, requests: 15, tests: 15 }
+    for (const operation of ['write', 'confirmation']) {
+        let reads = 0
+        await assert.rejects(
+            withRestoredBalance(
+                async method => {
+                    if (method === 'GET') reads++
+                    if ((operation === 'write' && method === 'PUT') || (operation === 'confirmation' && reads > 1)) {
+                        throw brunoFailure({ stage: 'fixture_bootstrap', status: 503 })
+                    }
+                    return { balance: 27 }
+                },
+                async () => {
+                    throw brunoFailure(prior)
+                },
+            ),
+            error => {
+                assert.deepEqual(failureDiagnostic(error), { stage: 'balance_restore', operation, status: 503, prior })
+                return true
+            },
+        )
+    }
+})
+
+test('a successful collection followed by failed restore has no prior failure', async () => {
+    await assert.rejects(
+        withRestoredBalance(
+            async method => {
+                if (method === 'PUT') throw brunoFailure({ stage: 'fixture_bootstrap', status: 403 })
+                return { balance: 27 }
+            },
+            async () => 'passed',
+        ),
+        error => {
+            assert.deepEqual(failureDiagnostic(error), { stage: 'balance_restore', operation: 'write', status: 403 })
+            return true
+        },
+    )
+})
+
+test('successful restoration preserves the exact callback error and its stack', async () => {
+    const original = new Error('synthetic-private-callback-output')
+    await assert.rejects(
+        withRestoredBalance(
+            async () => ({ balance: 27 }),
+            async () => {
+                throw original
+            },
+        ),
+        error => {
+            assert.equal(error, original)
+            assert.equal(error.stack, original.stack)
+            return true
+        },
+    )
 })
 
 test('pinned CLI runs the async workflow once and rejects raw queue states', async () => {

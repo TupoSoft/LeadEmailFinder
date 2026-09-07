@@ -32,7 +32,9 @@ missing, skipped, or empty reports fail the command.
 
 Failures report only a fixed stage (`fixture_bootstrap`, `collection`, `report`, or `balance_restore`) and any
 available numeric request position, HTTP status, and execution counts. The request position follows collection
-execution order. Raw child output, credentials, URLs, headers, bodies, and assertion values remain suppressed.
+execution order. Balance restoration failures also identify the write or confirmation operation and preserve one
+sanitized prior failure when the collection failed too. Raw child output, credentials, URLs, headers, bodies, and
+assertion values remain suppressed.
 
 Run the browser workflow through its dedicated configuration so hosted MFA pages are never captured:
 

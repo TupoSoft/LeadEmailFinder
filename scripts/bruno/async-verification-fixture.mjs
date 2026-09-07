@@ -2,7 +2,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
-import { brunoFailure } from './failure-diagnostic.mjs'
+import { baseFailureDiagnostic, brunoFailure, failureDiagnostic } from './failure-diagnostic.mjs'
 
 const customerSchema = z.object({
     issuer: z.string().url(),
@@ -72,24 +72,39 @@ export async function customerClientSecret(metadata, clientId, fetchImpl = fetch
 export async function withRestoredBalance(creditRequest, execute) {
     const { balance } = await creditRequest('GET')
     if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('Fixture balance must be a nonnegative integer')
-    const restore = async () => {
+    const restore = async prior => {
+        let operation = 'write'
         try {
             const restored = await creditRequest('PUT', balance)
-            if (restored.balance !== balance || (await creditRequest('GET')).balance !== balance) {
+            if (restored.balance !== balance) {
                 throw brunoFailure({ stage: 'balance_restore' })
             }
-        } catch {
-            throw brunoFailure({ stage: 'balance_restore' })
+            operation = 'confirmation'
+            if ((await creditRequest('GET')).balance !== balance) {
+                throw brunoFailure({ stage: 'balance_restore' })
+            }
+        } catch (error) {
+            const { status } = failureDiagnostic(error)
+            throw brunoFailure({
+                stage: 'balance_restore',
+                operation,
+                ...(status === undefined ? {} : { status }),
+                ...(prior === undefined ? {} : { prior }),
+            })
         }
     }
+    let prior
     try {
         return await execute(async amount => {
             if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Invalid fixture balance')
             const result = await creditRequest('PUT', amount)
             if (result.balance !== amount) throw new Error('Fixture balance update was not confirmed')
         })
+    } catch (error) {
+        prior = baseFailureDiagnostic(error)
+        throw error
     } finally {
-        await restore()
+        await restore(prior)
     }
 }
 

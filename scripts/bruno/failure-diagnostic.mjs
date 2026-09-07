@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const stages = ['fixture_bootstrap', 'collection', 'report', 'balance_restore']
-const diagnosticSchema = z
+const baseDiagnosticSchema = z
     .object({
         stage: z.enum(stages),
         request: z.number().int().min(1).max(10_000).optional(),
@@ -10,6 +10,13 @@ const diagnosticSchema = z
         tests: z.number().int().min(0).max(100_000).optional(),
     })
     .strict()
+const diagnosticSchema = baseDiagnosticSchema
+    .extend({
+        operation: z.enum(['write', 'confirmation']).optional(),
+        prior: baseDiagnosticSchema.optional(),
+    })
+    .strict()
+    .refine(value => value.stage === 'balance_restore' || (value.operation === undefined && value.prior === undefined))
 const envelopeSchema = z.object({ diagnostic: diagnosticSchema }).strict()
 
 class BrunoDiagnosticError extends Error {
@@ -27,6 +34,11 @@ export function brunoFailure(diagnostic) {
 export function failureDiagnostic(error, fallback = 'fixture_bootstrap') {
     const parsed = error instanceof BrunoDiagnosticError ? diagnosticSchema.safeParse(error.diagnostic) : undefined
     return parsed?.success ? parsed.data : { stage: stages.includes(fallback) ? fallback : 'fixture_bootstrap' }
+}
+
+export function baseFailureDiagnostic(error, fallback = 'collection') {
+    // A prior failure carries one base diagnostic, never a nested chain or raw Error fields.
+    return baseDiagnosticSchema.strip().parse(failureDiagnostic(error, fallback))
 }
 
 function boundedInteger(value, minimum, maximum) {

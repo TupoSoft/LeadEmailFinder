@@ -173,6 +173,9 @@ setup, confirming that the observed CI failure was intermittent.
 The later CI run failed in the async-verification Bruno collection. Its sanitized output did not identify the
 failing request. The runner now reports only a fixed failure stage and validated numeric request positions, HTTP
 statuses, and execution counts. Raw child output, report strings, credentials, and request content remain hidden.
+The next run passed the contract check and MFA setup but reported a balance restoration failure. Diagnostics now
+retain the fixed restoration operation, any validated HTTP status, and one sanitized prior failure when both the
+collection and cleanup fail. A successful restoration still preserves the original test error.
 Focused regressions verify privacy, propagation through Compose, and credit restoration. Errors from browser tests
 retain their original details within the existing private browser runner boundary.
 

@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import test from 'node:test'
 import {
     brunoFailure,
+    baseFailureDiagnostic,
     composeFailureOutput,
     failureDiagnostic,
     formatFailureDiagnostic,
@@ -177,4 +178,27 @@ test('Compose worker and outer CLI suppress malicious synthetic child input', as
             return true
         },
     )
+})
+
+test('restoration envelopes allow one strict prior diagnostic and reject nested or malicious values', () => {
+    const prior = { stage: 'collection', request: 8, status: 200, requests: 15, tests: 15 }
+    const diagnostic = { stage: 'balance_restore', operation: 'confirmation', status: 503, prior }
+    assert.deepEqual(failureDiagnostic(parseComposeFailure(composeFailureOutput(brunoFailure(diagnostic)))), diagnostic)
+    assert.deepEqual(baseFailureDiagnostic(brunoFailure(diagnostic)), { stage: 'balance_restore', status: 503 })
+    for (const invalid of [
+        { ...diagnostic, operation: privateValue },
+        { ...diagnostic, stage: 'collection' },
+        { ...diagnostic, status: '503' },
+        { ...diagnostic, prior: { ...prior, message: privateValue } },
+        { ...diagnostic, prior: { ...prior, request: privateValue } },
+        { ...diagnostic, prior: { ...prior, status: 600 } },
+        { ...diagnostic, prior: { ...prior, prior } },
+        { ...diagnostic, prior: { ...prior, operation: 'write' } },
+    ]) {
+        const error = parseComposeFailure(JSON.stringify({ diagnostic: invalid }))
+        assert.deepEqual(failureDiagnostic(error), { stage: 'collection' })
+        assert.doesNotMatch(formatFailureDiagnostic(error), /synthetic-private/)
+    }
+    const untrusted = Object.assign(new Error(privateValue), { diagnostic, status: 503 })
+    assert.deepEqual(baseFailureDiagnostic(untrusted), { stage: 'collection' })
 })
