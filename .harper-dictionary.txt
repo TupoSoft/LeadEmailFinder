@@ -385,3 +385,6 @@ Minitest
 RAID6
 networkd
 Netplan
+IDNA
+NFKD
+registrable
