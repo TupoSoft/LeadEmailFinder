@@ -1,3 +1,8 @@
+# Product Context
+
+- Before making product decisions, proposing features, or writing customer-facing copy, read the [ideal customer profile](docs/product/ideal-customer-profile.md).
+- Use its working customer hypothesis while distinguishing repository evidence from market assumptions that still need validation. The current task, ExecPlan, and repository contracts still govern scope.
+
 # Architecture Rules
 
 - Generate SOLID-oriented code, while favoring simple, testable designs over pattern-heavy abstractions.
