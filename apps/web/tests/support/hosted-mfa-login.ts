@@ -81,6 +81,12 @@ export async function hostedMfaLogin(options: LoginOptions): Promise<string> {
         await page.getByRole('button', { name: 'Sign In', exact: true }).click()
         assertHostedPage(page, seed.issuer) // Password alone must never complete privileged login.
 
+        // The URL can already reflect the required-action redirect before the form itself has
+        // rendered; check the count only after one of the two possible forms has actually mounted.
+        await Promise.race([
+            page.locator('#kc-totp-settings-form').waitFor(),
+            page.locator('#kc-otp-login-form').waitFor(),
+        ])
         const enrollment = (await page.locator('#kc-totp-settings-form').count()) === 1
         let secret = options.secret
         if (enrollment) {
