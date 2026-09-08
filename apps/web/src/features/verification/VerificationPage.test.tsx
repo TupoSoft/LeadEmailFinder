@@ -554,6 +554,44 @@ describe('single verification job status', () => {
         expect(screen.getByText(expected)).toBeInTheDocument()
     })
 
+    it('explains acceptance of the catch-all test address without claiming the requested mailbox exists', async () => {
+        renderVerification({
+            path: jobRoute,
+            intercept: request =>
+                new URL(request.url).pathname === statusPath
+                    ? Response.json({
+                          state: 'completed',
+                          result: { ...result, exists: null, catchAll: true, sources: [] },
+                      })
+                    : undefined,
+        })
+        expect(await screen.findByRole('heading', { name: 'Verification result' })).toBeInTheDocument()
+        expect(
+            screen.getByText(
+                'Catch-all: the server accepted a made-up address, so we couldn’t confirm whether this specific mailbox exists.',
+            ),
+        ).toBeInTheDocument()
+        expect(screen.getByText('Unknown', { exact: true })).toBeInTheDocument()
+        expect(screen.queryByText(/accepted the address during the check/i)).not.toBeInTheDocument()
+    })
+
+    it('retains account evidence copy when discovery confirms a mailbox at a catch-all domain', async () => {
+        renderVerification({
+            path: jobRoute,
+            intercept: request =>
+                new URL(request.url).pathname === statusPath
+                    ? Response.json({
+                          state: 'completed',
+                          result: { ...result, catchAll: true, reason: 'webmail', sources: ['microsoft_1'] },
+                      })
+                    : undefined,
+        })
+        expect(await screen.findByRole('heading', { name: 'Verification result' })).toBeInTheDocument()
+        expect(screen.getByText(/webmail service.*does not confirm/i)).toBeInTheDocument()
+        expect(screen.getByText('Microsoft account check 1')).toBeInTheDocument()
+        expect(screen.queryByText(/Catch-all: the server accepted a made-up address/i)).not.toBeInTheDocument()
+    })
+
     it('renders all reported sources and optional fields while projecting private data out of cache', async () => {
         const { session } = renderVerification({
             path: jobRoute,

@@ -4,7 +4,7 @@ import type { VerificationResult } from './verification-api'
 import {
     verificationCopy as copy,
     signalLabel,
-    verificationReasonLabels,
+    verificationReasonLabel,
     verificationSourceLabels,
 } from './verification-copy'
 import styles from './VerificationView.module.css'
@@ -25,9 +25,7 @@ export function VerificationResultView({ result }: { result: VerificationResult 
         { label: 'Catch-all domain', value: signalLabel(result.catchAll) },
         {
             label: 'Reason',
-            value: Object.hasOwn(verificationReasonLabels, result.reason)
-                ? verificationReasonLabels[result.reason]
-                : copy.unknown,
+            value: verificationReasonLabel(result),
         },
         {
             label: 'Sources',

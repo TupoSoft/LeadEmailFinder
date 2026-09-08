@@ -24,6 +24,7 @@ status and result after reload.
 - [x] (2026-09-08) Configure CI to complete API compilation before serving live verification requests.
 - [x] (2026-09-08) Merge current master, retaining the shared MFA readiness fix and layered batch implementation.
 - [x] (2026-09-08) Separate the result limits note from the final evidence row and verify its responsive layout.
+- [x] (2026-09-08) Explain catch-all acceptance without implying confirmation of the requested mailbox.
 
 ## Plan dependencies
 
@@ -138,6 +139,30 @@ timing, or history feature was added. There are no material SOLID trade-offs.
 The CI workflow now verifies the same HTTP and browser flow after preserving seeded volumes and recreating the
 SMTP network. It waits for successful proxy fixture setup and includes artifact-privacy validation and overlay
 cleanup. Remote CI will run on the single pull request; these results describe local validation.
+
+### Catch-All Explanation Follow-Up
+
+The reason now says “Catch-all: the server accepted a made-up address, so we couldn’t confirm whether this specific
+mailbox exists.” when `reason` is `accepted_email`, `catchAll` is true, and `exists` is null. A pure frontend copy
+selector uses the existing result fields. Other reason labels and the safe unknown-value fallback remain intact.
+There are no HTTP API, provider, verification algorithm, or shared visual contract changes.
+
+Two focused component regressions cover the catch-all probe explanation and preservation of account-discovery
+copy when separate evidence confirms the mailbox. All 62 verification component tests and 22 existing browser
+tests passed. Isolated Chromium checks at 1440 by 900 and 320 by 720 verified the exact approved sentence, ordinary
+accepted-recipient and timeout explanations after refresh, correct focus behavior, and no console errors or
+horizontal overflow. Synthetic screenshots at `/tmp/lef568-catchall-desktop.png` and
+`/tmp/lef568-catchall-narrow.png` were visually inspected. The Browser plugin was unavailable, so these checks used
+Playwright with mocked responses. The web build and type check, focused ESLint, production-source Prettier,
+design lint, and strict UI audit passed. Review found no material architectural trade-offs.
+Bruno is not applicable because only frontend explanatory copy changes.
+
+The verification commands in the limits-note follow-up apply, with these additional targets:
+
+    corepack pnpm --filter ./apps/web exec eslint src/features/verification/VerificationResultView.tsx src/features/verification/verification-copy.ts src/features/verification/VerificationPage.test.tsx
+    corepack pnpm exec prettier --check apps/web/src/features/verification/VerificationResultView.tsx apps/web/src/features/verification/verification-copy.ts
+    node /tmp/lef568-catchall-geometry.mjs
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md
 
 ### Result Limits Note Follow-Up
 

@@ -39,6 +39,8 @@ export const verificationCopy = {
     refresh: 'Refresh status',
     refreshing: 'Refreshing status…',
     result: 'Verification result',
+    catchAllUnconfirmed:
+        'Catch-all: the server accepted a made-up address, so we couldn’t confirm whether this specific mailbox exists.',
     limits: 'These signals describe the checks performed. They do not guarantee delivery or establish permission to send.',
     yes: 'Yes',
     no: 'No',
@@ -97,4 +99,13 @@ export const verificationSourceLabels = {
 
 export function signalLabel(value: boolean | null): string {
     return value === true ? verificationCopy.yes : value === false ? verificationCopy.no : verificationCopy.unknown
+}
+
+export function verificationReasonLabel(result: Pick<VerificationResult, 'reason' | 'catchAll' | 'exists'>): string {
+    if (result.reason === 'accepted_email' && result.catchAll === true && result.exists === null)
+        return verificationCopy.catchAllUnconfirmed
+
+    return Object.hasOwn(verificationReasonLabels, result.reason)
+        ? verificationReasonLabels[result.reason]
+        : verificationCopy.unknown
 }
