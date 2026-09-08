@@ -15,11 +15,11 @@ finish with a clean strict check.
 
 ## Progress
 
-- [ ] (2026-08-29) Reconcile the final checker report and prove every prerequisite removed its assigned violation keys.
-- [ ] (2026-08-29) Remove the baseline artifact, shrink-only updater, bootstrap path, and base-revision debt logic.
-- [ ] (2026-08-29) Make `architecture:check` require zero violations and strengthen strict regression fixtures.
-- [ ] (2026-08-29) Update agent instructions, architecture documentation, and CI for the permanent zero-violation invariant.
-- [ ] (2026-08-29) Complete focused, full, runtime, Bruno, documentation, and recovery validation.
+- [x] (2026-08-29) Reconcile the final checker report and prove every prerequisite removed its assigned violation keys.
+- [x] (2026-09-08) Remove the baseline artifact, shrink-only updater, bootstrap path, and base-revision debt logic.
+- [x] (2026-09-08) Make `architecture:check` require zero violations and strengthen strict regression fixtures.
+- [x] (2026-09-08) Update agent instructions, architecture documentation, and CI for the permanent zero-violation invariant.
+- [x] (2026-09-08) Complete focused, full, runtime, Bruno, documentation, and recovery validation.
 
 ## Plan dependencies
 
@@ -30,7 +30,36 @@ finish with a clean strict check.
 
 ## Surprises & Discoveries
 
-None yet.
+- Running the plan's exact four-file real-Postgres command (`identity-schema`, `credits.service`,
+  `membership-mutation-concurrency`, `payment-event.handler`) in one `--runInBand` process intermittently fails inside
+  `credits.service.integration.spec.ts` with a real Postgres `deadlock detected` error, or with a
+  `relation "organizations" does not exist` error cascading into later tests in that same file, with a different
+  specific test failing each run. Stashing this plan's changes and rerunning the identical command against
+  unmodified `master` reproduced the same nondeterministic failure, proving it predates this pull request and is
+  unrelated to the docs/scripts-only diff here (this plan touches no credits/identity/Postgres code). Each of the
+  four suites passes cleanly and deterministically in isolation (43 tests total); the combined-process flake is a
+  preexisting test-infrastructure issue for a future ExecPlan, not a blocker for this one.
+- The SMTP overlay's documented reset sequence (`docker compose -f docker/compose.yaml down` before bringing up the
+  overlay) is binding, not optional. Skipping it and layering the overlay onto an already-running plain stack left
+  `redis` reachable only by its container name, not its Compose service-name alias, because the container predated
+  the overlay's merged network configuration and was never recreated. `smtp-dev-dns-cache-reset` then failed with
+  `Could not connect to Redis at redis:6379`. A full `down` followed by `up -d --build` with both compose files
+  together recreated every container against the merged network configuration and resolved it.
+- `smtp-dev-proxy-bootstrap` (`docker/smtp-dev/bootstrap-proxy.sh`) is a one-shot, non-retrying `curl` against
+  `http://api:3000` with `restart: "no"`; on this run it raced the API container's readiness and exited `7`
+  (connection refused) even though Compose had already reported `lef-api-1 Healthy`. Because the fixture proxy was
+  never registered, the `02-verify-local-email` request in `bruno/smtp-dev` received `"reason":"unknown"` instead of
+  `"accepted_email"` (visible in the API's structured `Proxy allocation exhausted` log line), failing that request's
+  body-shape assertions while still returning `201`. Rerunning just that one-shot service
+  (`docker compose ... up -d --build smtp-dev-proxy-bootstrap`) registered the proxy and the collection then passed
+  30/30 requests, 61/61 tests. This is a preexisting fixture start-up race in the SMTP overlay, unrelated to this
+  plan's changes, and is worth a follow-up hardening pass (a retry loop, or an explicit `depends_on` readiness gate)
+  outside this plan's scope.
+- `pnpm dev:reset -- --confirm-project=LEF` deletes and recreates the `postgres-data` named volume, so the
+  `lef_identity_test` database created earlier in this session for real-Postgres validation did not survive a later
+  `dev:reset` run performed for the Bruno matrix. Recreating the disposable database
+  (`CREATE DATABASE lef_identity_test;`) was sufficient; this matches the documented disposable-data/reset-and-reseed
+  convention and needed no code change.
 
 ## Decision Log
 
@@ -71,7 +100,72 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Confirmed the precondition twice: `corepack pnpm architecture:check` reported zero violations on the branch tip
+before any edit, and rerunning `corepack pnpm architecture:baseline` produced a byte-identical file
+(`sha256sum` matched before/after: `1b568d4265a7fc226a03f3feea4c468e0c6129e4f1844e4af6bee36ceb90de75`), proving no stale
+debt remained.
+
+Removed `BASELINE_SCHEMA_VERSION`, `ArchitectureBaseline`, `ViolationSetComparison`, `assertBaselineKey`,
+`parseBaseline`, `serializeBaseline`, and `compareViolationSets` from `scripts/architecture/module-architecture.ts`
+(1304 → 1183 lines), keeping the scan logic, `ArchitectureViolation`, and rule-ID exports unchanged. Rewrote
+`scripts/architecture/check-module-architecture.ts` (414 → 65 lines) to a single code path: scan the complete tree,
+print sorted diagnostics on any violation, exit nonzero; no `--write-baseline` flag, no base-revision input, no
+updater. Deleted `scripts/architecture/module-architecture-baseline.json`. Removed the `architecture:baseline` script
+from `package.json` and the `ARCHITECTURE_BASE_SHA` environment-variable block from the "Check module architecture"
+step in `.github/workflows/validate.yml`.
+
+Updated the ratchet-base test in `scripts/ci/validate-workflow.spec.ts` to drop the architecture-specific assertion
+and added a new test asserting the step now runs with no environment-variable block at all — 103/103 passed. Updated
+`src/libs/modules/AGENTS.md` and `src/libs/modules/README.md` to describe `architecture:check` as a permanent
+zero-violation invariant with no baseline, allow list, or grandfathered path. Both now direct an agent that cannot
+meet the contract to fix the design or open an ExecPlan rather than accept a violation.
+`rg -n "baseline|bootstrap|shrink"` against both files now returns no matches. Updated the road map's
+"Shared Constraints" bullet in
+`.agents/plans/module-architecture/README.md` to record that plan 12 deletes the baseline once it is empty. Root
+`AGENTS.md` needed no edit — it never referenced baseline/ratchet wording.
+
+Rewrote the obsolete `describe('baseline format and exact comparison', ...)` and
+`describe('architecture CLI ratchet', ...)` blocks out of `scripts/architecture/module-architecture.spec.ts` (~30
+tests covering serialize/parse/compare and CLI bootstrap/shrink/reconciliation). Replaced them with a 4-test
+`describe('architecture CLI')` block (pass/fail/reject-unknown-arguments/scan-the-real-checkout-and-expect-zero), while
+preserving every rule-category fixture test unchanged. Full spec: 63/63 passed, including the real-repository
+fixture (881 milliseconds).
+
+Final validation, run against the actual final diff:
+
+- `corepack pnpm architecture:check` — "Module architecture check passed (9 modules, 0 violations)."
+- `corepack pnpm test -- scripts/architecture/module-architecture.spec.ts --runInBand` — 63/63 passed.
+- `corepack pnpm test -- scripts/ci/validate-workflow.spec.ts` — 103/103 passed.
+- `corepack pnpm typecheck` — 0 errors (after clearing a root-owned, gitignored, dev-container-recreated `dist/`
+  directory that otherwise blocks the incremental build-info write done by `tsc`; a known, preexisting
+  local-environment quirk unrelated to this plan).
+- `corepack pnpm lint` — 0 errors, 1 preexisting warning in an unrelated file
+  (`src/libs/config/src/load-secrets.spec.ts:14`, missing return type), untouched by this plan.
+- `corepack pnpm test:ci` — 227 Jest suites passed (14 skipped, 0 failed; 2501/2583 tests passed, 82 skipped) plus
+  70/70 Node test-runner cases (`test:oidc-runners`), 0 failed.
+- Real-Postgres integration matrix, each suite run individually against a disposable `lef_identity_test` database on
+  the local dev Postgres container (port 55432): `identity-schema.integration.spec.ts` 1/1,
+  `credits.service.integration.spec.ts` 19/19, `membership-mutation-concurrency.integration.spec.ts` 2/2,
+  `payment-event.handler.integration.spec.ts` 21/21 — 43/43 total. (See Surprises & Discoveries for why the combined
+  four-file command is a separate, preexisting flake left unfixed by this plan.)
+- `corepack pnpm build` — `nest build` succeeded, "Successfully compiled: 639 files with swc."
+- Runtime/Bruno matrix against a freshly reset dev stack (`pnpm dev:reset -- --confirm-project=LEF`, health check
+  confirmed `{"status":"ok"}`): `bruno/m2m-oidc-authentication` 3/3, `bruno/bff-sessions` 15 requests/16 tests,
+  `bruno/organization-onboarding` 12/12, `bruno/service-client-management` 4/4, `bruno/credit-purchases` 33/33,
+  `bruno/proxy-registry` 8/8 — all passed. After starting the SMTP overlay
+  (`docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build`, preceded by the required
+  plain-stack `down`) and re-registering the fixture proxy (see Surprises & Discoveries),
+  `corepack pnpm bruno:smtp-dev` passed 30 requests/61 tests, and `bruno/batch-verification` (run with the customer
+  service-client secret fetched per its README) passed 3/3 requests, 8/8 tests. The API stayed healthy throughout.
+- `corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md
+.agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md`
+  — Harper: 5 file(s) passed.
+- `corepack pnpm exec prettier --check` on the same five files — all use Prettier code style.
+- `git diff --check` — no output (clean).
+
+No application TypeScript/runtime source, database schema, queue protocol, provider behavior, configuration, or
+migration changed. The only public architecture interface is now `corepack pnpm architecture:check`, exiting zero
+only when the complete repository scan reports zero violations.
 
 ## Context and Orientation
 
@@ -266,4 +360,4 @@ webhook bodies, customer CSV data, database credentials, or other sensitive runt
 
 ## Plan readiness
 
-Ready to implement.
+Implemented and validated; ready for review.

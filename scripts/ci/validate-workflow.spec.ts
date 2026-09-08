@@ -263,18 +263,23 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it('retains the comparison base for documentation, approval, and architecture ratchets', () => {
+    it('retains the comparison base for documentation and approval ratchets', () => {
         const policy = workflow.jobs['repository-policy']
         expect(policy.steps.find((step) => step.uses === 'actions/checkout@v4')?.with?.['fetch-depth']).toBe(0)
         for (const [run, variable] of [
             ['corepack pnpm docs:lint:changed', 'HARPER_BASE_SHA'],
             ['corepack pnpm privacy:account-discovery-approvals-check', 'ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA'],
-            ['corepack pnpm architecture:check', 'ARCHITECTURE_BASE_SHA'],
         ]) {
             expect(policy.steps.find((step) => step.run === run)?.env?.[variable]).toBe(
                 '${{ github.event.pull_request.base.sha || github.event.before }}',
             )
         }
+    })
+
+    it('runs the architecture check without a comparison base, now that the check is a permanent zero-violation gate', () => {
+        const policy = workflow.jobs['repository-policy']
+        const step = policy.steps.find((step) => step.run === 'corepack pnpm architecture:check')
+        expect(step?.env).toBeUndefined()
     })
 
     it('keeps the real ExecPlan fixture mandatory when plan-only changes select repository policy', () => {

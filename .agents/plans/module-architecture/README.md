@@ -69,8 +69,9 @@ follows `.agents/PLANS.md` and represents exactly one pull request.
   composition module.
 - Cross-module consumers use a target module's bare public barrel. Deep and relative cross-module imports are debt,
   not contracts.
-- Plan 01 records every existing violation by stable identity. Later plans may only remove baseline entries; they
-  must not exchange one violation for another or expand the baseline.
+- Plan 01 records every existing violation by stable identity. Plans 02 through 16 may only remove baseline entries;
+  they must not exchange one violation for another or expand the baseline. Plan 12 deletes the baseline once it is
+  empty and makes the gate a permanent zero-violation invariant with no debt-accounting mechanism left to constrain.
 - Plan 01 also publishes the coding-agent workflow through a root `AGENTS.md` trigger and
   `src/libs/modules/AGENTS.md`. Both files point to the canonical module guide and executable gate. Plan 12 removes
   their transitional baseline-maintenance language when the checker becomes a strict zero-violation command.
