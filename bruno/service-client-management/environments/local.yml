@@ -9,4 +9,6 @@ variables:
   - name: serviceClientSecret
     value: "{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}"
   - name: organizationId
-    value: "5b92ded1-7eba-4c66-b72e-a5fea465da68"
+    value: "{{process.env.SERVICE_CLIENT_ORGANIZATION_ID}}"
+  - name: serviceClientRecordId
+    value: "4a2c43d4-9c60-4d30-a5cc-a54c212f9c01"

@@ -20,6 +20,11 @@ export const BROWSER_OPERATIONS = [
     { path: '/v1/organizations/{organizationId}/members/{membershipId}', method: 'patch' },
     { path: '/v1/organizations/{organizationId}/members/{membershipId}', method: 'delete' },
     { path: '/health', method: 'get' },
+    { path: '/v1/organizations/{organizationId}/service-clients', method: 'get' },
+    { path: '/v1/organizations/{organizationId}/service-clients', method: 'post' },
+    { path: '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate', method: 'post' },
+    { path: '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable', method: 'post' },
+    { path: '/v1/organizations/{organizationId}/service-clients/{serviceClientId}', method: 'delete' },
 ] as const
 
 type Node = Record<string, unknown>

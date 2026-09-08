@@ -54,11 +54,12 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
 | Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
-| Form | `Form.module.css` | This contract | Invitation and verification email, role, and password fields | Field validation and browser tests |
+| Form | `Form.module.css` | This contract | Email, role, password, description, and permission fields | Field validation and browser tests |
 | Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
-| Dialog | `TeamDialog` | This contract | Owner-role confirmation, disable confirmation, one-time invitation | Focus, dismissal, and restoration tests |
+| Dialog | `TeamDialog` | This contract | Permission and lifecycle confirmations; one-time invitation and client secret | Focus, dismissal, and restoration tests |
 | Team | `TeamPage` | `frontend/13` | Active and disabled memberships | Component, API, Bruno, and browser tests |
 | Verification | `VerificationPage`, `VerificationJobPage`, and `SignalDetails` | `frontend/11` | Single submission, bounded job reads, and evidence fields | API, component, Bruno, and browser tests |
+| Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
@@ -372,3 +373,46 @@ labels, and optional pattern and mail-exchange fields. True, false, and null rem
 uses neutral evidence styling and never claims guaranteed delivery. Unexpected server fields never enter the job
 cache or markup. The shared `useBrowserAvailability` hook owns visibility and connectivity subscriptions for billing
 and verification. Desktop, narrow, keyboard, reduced-motion, stale, error, and accessibility checks cover the routes.
+
+
+## Organization Service Clients
+
+The source contracts are `.agents/plans/frontend/14-manage-service-clients.md` and
+`src/libs/modules/service-client-management/README.md`. The page at `/app/service-clients` uses the title and heading
+`Service clients`. Navigation and route access require `service_clients.manage`. The server remains authoritative
+for human-session authorization, tenant ownership, and grantable permissions. The create form renders exactly
+`grantableServiceClientPermissions` from account context, preserving their order. It accepts an optional description
+and requires at least one unique permission; backend validation also rejects stale or forged selections.
+
+The list retains the complete server order and displays active and disabled clients. It shows ten rows per local
+page, stores the page in the URL, and clamps after deletion or a refresh. Identifiers, descriptions, permissions,
+status, and UTC timestamps wrap fully. Loading, empty, offline, stale refresh, validation, access denial, and provider
+failures reuse the existing panel and state owners. Changes appear only after an authoritative list refresh.
+
+| Operation | Pending | Confirmed result | Recovery |
+| --- | --- | --- | --- |
+| Create client | One request; prevent duplicate submission | Open the one-time secret dialog and refresh clients | Correct definite rejection or reconcile an unknown outcome |
+| Rotate secret | Confirm that the current secret stops working | Open the new secret once and refresh clients | Review the client before explicitly rotating again |
+| Disable client | Confirm permanent disablement | Refresh the status; offer no rotation or re-enable control | Refresh before deciding what to do next |
+| Delete client | Name the identifier and explain provider deletion | Refresh and clamp the visible page | Refresh before another explicit action |
+| Copy or download | Only after an explicit user action | Announce completion without the secret | Keep the dialog open on failure for an explicit retry |
+| Close or leave the page | Invalidate pending work and scrub local references | Show no secret when returning | A lost value cannot be retrieved again |
+
+One-time responses use direct generated-client requests and feature-local abort and generation control. They never
+enter query data, MutationCache, React state, storage, URLs, feedback, or telemetry. The dialog uses a local
+reference and renders the secret only in its uncontrolled, initially masked field. Show and Hide are explicit
+keyboard-operable controls. Clipboard export uses only the user-requested value. Download creates a temporary object
+URL on demand, uses a credential-free filename, revokes the URL, and explains that the file contains sensitive data.
+The operating system owns explicitly exported clipboard and download data.
+
+Dismissal, unmount, authentication boundaries, `pagehide`, and persisted `pageshow` invalidate the operation generation,
+abort requests, and synchronously clear the secret field and local references before a restored page can paint.
+Late responses cannot reopen the dialog. Create and rotate never retry automatically, including on reconnect.
+Canceling the wait or losing a response after dispatch leaves the outcome unknown and refreshes the list; another
+creation requires an explicit acknowledgment. A user may reconcile a newly listed client through delete or a fresh,
+confirmed rotation. No recovery action silently repeats a mutation.
+
+`TeamDialog` remains the canonical modal owner, with native background isolation, focus containment, Escape,
+bounded scrolling, and focus restoration. Destructive confirmations initially focus Cancel. Secret tests use a
+dedicated Playwright configuration that suppresses trace, screenshots, video, automatic attachments, and raw failure
+output for the whole run. Runtime fixture values and secret-bearing downloads never become validation artifacts.

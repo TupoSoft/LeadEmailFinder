@@ -13,11 +13,11 @@ live browser life-cycle test.
 
 ## Progress
 
-- [ ] (2026-08-31) Publish service-client browser contracts and server-provided permission choices in `OpenAPI`.
-- [ ] (2026-08-31) Implement responsive list, create, rotate, disable, and delete flows with one-time secret handling.
-- [ ] (2026-08-31) Cover permissions, confirmations, uncertain outcomes, loading, empty, error, and recovery states.
-- [ ] (2026-08-31) Update the generated client, Bruno, module documentation, and design context.
-- [ ] (2026-08-31) Run focused, live-browser, security, architecture, prose, and full validation and record evidence.
+- [x] (2026-09-08) Publish service-client browser contracts and server-provided permission choices in `OpenAPI`.
+- [x] (2026-09-08) Implement responsive list, create, rotate, disable, and delete flows with one-time secret handling.
+- [x] (2026-09-08) Cover permissions, confirmations, uncertain outcomes, loading, empty, error, and recovery states.
+- [x] (2026-09-08) Update the generated client, Bruno, module documentation, and design context.
+- [x] (2026-09-08) Run focused, live-browser, security, architecture, prose, and full validation and record evidence.
 
 ## Plan dependencies
 
@@ -29,11 +29,28 @@ live browser life-cycle test.
 
 ## Surprises & Discoveries
 
-- `module-architecture/07` will move service-client HTTP, application, domain, Keycloak, and persistence concerns into
-  final layers while preserving routes and secret behavior. This plan must extend the resulting framework-free
-  application services and API boundary rather than the current flat source layout.
+- (2026-09-08) All five prerequisite plans are complete in this checkout. Issue #509 is assigned to the
+  implementing user and its Project 9 status is In Progress.
+- (2026-09-08) The existing `lef` Compose stack belongs to another checkout. Validation uses a separate `lef509`
+  project with alternate ports, preserving the existing stack and its data.
+- (2026-09-08) Team invitation issuance already bypasses TanStack mutations for one-time values. Service-client
+  operations follow that established pattern; sensitive responses never enter the shared MutationCache.
+
+- `module-architecture/07` moved service-client HTTP, application, domain, Keycloak, and persistence concerns into
+  final layers while preserving routes and secret behavior. This implementation extends those framework-free
+  application services and the existing API boundary.
 
 ## Decision Log
+
+- Decision: Use direct generated-client requests with local generation and abort control for create and rotate.
+  Rationale: Following the completed team feature keeps response data entirely outside MutationCache, avoiding
+  retention before `reset()` or garbage collection. The cache assertion remains required. This supersedes the
+  earlier mutation-cache implementation mechanism while preserving its no-retention requirement.
+  Date/Author: 2026-09-08, implementation.
+- Decision: Reuse the shared dialog, form, action, and panel owners and page ten server-ordered rows locally.
+  Rationale: The endpoint returns a complete list; URL page state and clamping match the team page without
+  inventing server pagination or changing ordering.
+  Date/Author: 2026-09-08, implementation.
 
 - Decision: Obtain the service-client permissions the account may grant from authenticated server context and make
   account presentation and create enforcement consume one auth-owned grant policy.
@@ -45,11 +62,10 @@ live browser life-cycle test.
   Rationale: Create and rotate responses are the sole opportunity to retrieve the value. Browser storage, global
   state, logs, telemetry, and cached mutation data would unnecessarily extend the secret's lifetime.
   Date/Author: 2026-08-31, planning.
-- Decision: Give create and rotate mutations zero practical cache retention and call `reset()` immediately after
-  extracting a successful secret, on every terminal failure, and on unmount.
-  Rationale: TanStack MutationCache retains response data and variables independently of component-local state; local
-  modal cleanup alone does not remove a one-time secret from the shared client.
-  Date/Author: 2026-08-31, planning.
+- Decision: Keep create and rotate responses outside TanStack MutationCache entirely.
+  Rationale: Direct generated-client requests follow the completed team flow and remove the need for mutation
+  retention settings or `reset()`. Local generation and abort control fence every settlement.
+  Date/Author: 2026-09-08, implementation; supersedes the 2026-08-31 cache-reset proposal.
 - Decision: Offer explicit copy and user-initiated download actions, but never include the secret in a toast,
   filename, URL, analytics event, screenshot, or validation artifact.
   Rationale: Operators need a practical handoff path. Clipboard and a downloaded file are deliberate user-controlled
@@ -71,7 +87,15 @@ live browser life-cycle test.
 
 ## Outcomes & Retrospective
 
-Not started.
+The API and responsive page implement create, list, rotation, disablement, and deletion with server-provided
+permissions. One-time secrets stay outside shared caches and React state, are initially masked, and are cleared
+at dismissal and document/session boundaries. Review identified an uncertainty-state reset through pagination
+and a live-fixture cleanup timing race; both are covered by the final corrections and validation below.
+
+The live owner lifecycle passes against isolated Keycloak, PostgreSQL, and the same-origin gateway after real MFA
+login. Export tests intercept the operating-system clipboard and file write while checking the actual application
+payload, object URL creation, and revocation in memory. They do not prove an operating-system download or clipboard
+permission prompt. No production or non-Chromium browser validation is claimed. Independent review found no remaining material architecture or secret-disclosure issue after the corrections.
 
 ## Context and Orientation
 
@@ -91,8 +115,7 @@ Create and rotate return `ServiceClientSecretResponseDto`, including `clientSecr
 list for administrators at `verification:run`, `verification:read`, `members:manage`, and `credentials:manage`;
 owners additionally receive `billing:read` and `billing:manage`, while members and platform administrators receive
 an empty list. Current-account assembly and service-client creation already consume the same auth-owned policy after
-that prerequisite. Lists include disabled clients, but current ordering uses only `createdAt`; equal timestamps need a
-unique `id` tie-breaker before the UI can rely on deterministic rows.
+that prerequisite. Lists include disabled clients and order by `createdAt DESC, id DESC`, making equal-timestamp rows deterministic.
 Disabled clients cannot be rotated. Disable is local and immediately revokes request authentication; delete treats an
 already-missing provider client as success. `service-client-hardening/01` preserves provider compensation and tenant
 nondisclosure for partial failures.
@@ -147,17 +170,16 @@ remain visible, clearly labeled, and cannot offer rotate. Empty, loading, stale-
 failure states must keep actions and status understandable on desktop and mobile.
 
 Treat successful create/rotate response data specially. Extract the secret before invalidating the list, and do not
-put it in query data or persistent global state. Configure these mutations with no automatic retry and zero
-post-settlement retention, then call mutation `reset()` immediately after copying the successful value into local
-modal state, on terminal failure, and on unmount. Add a MutationCache assertion that no response data containing
+put it in query data, React state, or persistent global state. Send direct generated-client requests with no
+automatic retry, and keep the value only in a feature-local reference and the uncontrolled dialog input. Add a MutationCache assertion that no response data containing
 `clientSecret` remains. Render it only inside a focus-trapped one-time modal and clear the local reference when the
 modal unmounts. Copy through the Clipboard API only after an explicit action. Download through a
 short-lived object URL created only on request, use a secret-free filename, revoke the URL immediately, and explain
 that the resulting user-owned file contains sensitive credentials. A success toast may say `Copied` or `Downloaded`
 but must never include the value.
 
-On `pagehide`, synchronously close the one-time modal, clear secret/local form references, reset create/rotate
-mutations, revoke object URLs, and clear any application-owned clipboard buffer. On `pageshow` with
+On `pagehide`, synchronously close the one-time modal, clear secret/local form references, abort create/rotate
+requests, revoke object URLs, and clear any application-owned clipboard buffer. On `pageshow` with
 `event.persisted === true`, render the normal secret-free list before paint and never restore the modal from the
 back/forward cache. Add full-page Back/Forward and forced-navigation tests; React unmount alone is insufficient.
 
@@ -166,7 +188,7 @@ generation; modal dismissal, unmount, pagehide, and back/forward-cache restorati
 work. Ignore late success and failure from an older generation so they cannot reopen a modal or repopulate local or
 MutationCache state. Test delayed create and rotate responses across pagehide/pageshow and dismissal.
 
-Set mutation retry to false for create and rotate. Confirm rotate with text explaining that the current secret stops
+Send create and rotate once per explicit action, outside shared mutation retry configuration. Confirm rotate with text explaining that the current secret stops
 working; confirm disable with text explaining that no re-enable route exists; confirm delete using the displayed
 client ID and explain that deletion removes the provider client. Do not optimistically remove or change rows. On a
 transport failure after dispatch, show `Outcome unknown`, clear any absent secret result, refresh the list, and give
@@ -227,8 +249,8 @@ client, request/mutation layer, CSRF handling, dialogs, forms, and design tokens
   rendered row contains `clientSecret`.
 - Create and rotate reveal a returned secret exactly once in an accessible modal. Copy and explicit download work,
   and closing the modal removes the secret from application memory to the practical extent JavaScript permits.
-- Immediately after secret extraction or terminal settlement, create/rotate mutation entries are reset and retained
-  for no post-settlement interval; MutationCache tests prove no `clientSecret` response remains after modal closure.
+- Create and rotate never create shared mutation entries; MutationCache tests prove that no `clientSecret`
+  response remains while the dialog is visible or after its closure.
 - No secret appears in browser persistence, URLs, analytics, logs, telemetry, toast text, filenames, screenshots,
   fixtures, snapshots, or recorded validation artifacts.
 - Create/rotate responses are `no-store`. The `pagehide` event and back/forward-cache restoration remove modal, local,
@@ -250,7 +272,7 @@ client, request/mutation layer, CSRF handling, dialogs, forms, and design tokens
 Run focused service-client service/controller/HTTP, generated-client, web, accessibility, and repository checks:
 
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- service-client-management service-client.controller service-client-hardening --runInBand
-    corepack pnpm --filter ./apps/web test -- service-clients
+    corepack pnpm --filter ./apps/web exec vitest run src/features/service-clients/service-clients.test.tsx --maxWorkers=2
     corepack pnpm --filter ./apps/web typecheck
     corepack pnpm --filter ./apps/web lint
     corepack pnpm --filter ./apps/web build
@@ -268,7 +290,7 @@ After confirming Compose ownership, run Playwright with deterministic mocked fai
 disabled-state, and outcome-unknown cases, then run the full positive lifecycle as a seeded human owner or
 administrator.
 
-Bootstrap the MFA-aware owner fixture, then run the pinned service-client rejection collection. Its positive
+Bootstrap the MFA-aware owner fixture on a checkout-owned stack, then run the pinned service-client rejection collection. Its positive
 lifecycle remains browser-verified because Bruno cannot mint a human session.
 
     corepack pnpm dev:reset -- --confirm-project=LEF
@@ -299,6 +321,44 @@ attempt. No database reset is needed for normal recovery. Disposable development
 when the whole local environment is intentionally being recreated; no migration or backfill is added.
 
 ## Artifacts and Notes
+
+Validation on 2026-09-08:
+
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci -- --cacheDirectory=/tmp/lef509-jest-cache` passed:
+  228 Jest suites and 2,559 tests, with 14 existing optional suites and 82 tests skipped; all 72 runner tests passed.
+  The extra cache argument was forwarded to the final runner command, so Jest used its normal temporary cache.
+- `corepack pnpm --filter ./apps/web test:ci --maxWorkers=2` passed all 23 files and 427 tests. Unrestricted
+  concurrent runs had existing timeout failures during container and browser work; the bounded final run passed.
+- The focused service-client suite passed 29 tests, including late success/failure, clipboard completion after
+  closure, cache exclusion, field scrubbing, local permission rejection, and pagination preserving uncertainty.
+- The dedicated service-client browser suite passed 24 tests across 1440 by 900 and 320 by 720 viewports.
+  Four delayed-settlement cases also passed after adding an explicit route-settlement barrier.
+- Both dedicated configurations passed all eight artifact-suppression checks. The browser fixture guard passed
+  four tests. The pinned service-client Bruno launcher passed its two tests.
+- A real MFA-authenticated owner completed the disposable lifecycle at `http://localhost:53009`. Its secret
+  exports were checked through an in-memory sink; no credential-bearing file or operating-system clipboard was saved.
+- `COMPOSE_PROJECT_NAME=lef509 corepack pnpm bruno:service-client-rejections` passed six requests and six tests.
+  `COMPOSE_PROJECT_NAME=lef509 corepack pnpm bruno:bff-sessions` passed 15 requests and 16 tests, including the
+  expanded browser contract. Neither collection skipped requests.
+- The broad browser regression completed 91 of 92 cases on its first run. A concurrent asset rebuild removed CSS
+  during the remaining verification-page check; its screenshot confirmed an unstyled page. The final focused
+  rerun passed with frozen assets. The separate accessibility and visual-baseline suites passed all eight tests.
+- A separate metadata-only browser inspection at 1440 by 900 and 390 by 844 verified page identity, no horizontal
+  overflow, no framework overlay or console errors, and the final permission layout. Screenshots contain only
+  synthetic secret-free list data and are outside the repository.
+- Backend and web typecheck, lint, and builds passed. Root lint retains one unrelated warning in
+  `src/libs/config/src/load-secrets.spec.ts`. `openapi:export`, `openapi:generate`, and `openapi:check` passed.
+  The OpenAPI regression suite passed 14 tests; focused backend and ordering checks passed 123 tests.
+- `corepack pnpm architecture:check` passed nine modules with no baselined violations. `corepack pnpm design:lint`
+  passed without warnings; `corepack pnpm ui:audit` passed without findings; `git diff --check` passed.
+- Harper command: `corepack pnpm docs:lint -- .agents/plans/frontend/14-manage-service-clients.md DESIGN.md UX-CONTRACT.md src/libs/modules/service-client-management/README.md src/libs/modules/identity/README.md bruno/service-client-management/README.md` passed all six files.
+
+The isolated validation stack uses Compose project `lef509`, public web port 53009, Keycloak port 58089,
+PostgreSQL port 55439, Redis port 56389, and Garage port 59009. The API uses `pnpm exec nest start` without watch
+mode. Its ignored browser-fixture metadata belongs to this checkout. No shared stack reset or migration was needed.
+The API keeps persistence and provider ports separate; the browser uses direct ephemeral requests only for
+operations whose response lifetime must stay outside shared mutation state. No material SOLID violation was found.
+
 
 Record client IDs only when synthetic or redacted, plus status codes, test counts, browser widths, and pass/fail
 evidence. Never record a client secret, session cookie, access token, clipboard payload, or secret-bearing download.

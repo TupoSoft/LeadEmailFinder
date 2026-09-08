@@ -24,14 +24,14 @@ describe('TypeOrmServiceCredentialDirectory', () => {
         directory = new TypeOrmServiceCredentialDirectory(repoMock as unknown as Repository<ServiceCredential>)
     })
 
-    it('lists every organization credential oldest first, including disabled credentials', async () => {
+    it('lists every organization credential newest first, including disabled credentials', async () => {
         repoMock.find.mockResolvedValueOnce([credential])
 
         const result = await directory.listForOrganization('org-1')
 
         expect(repoMock.find).toHaveBeenCalledWith({
             where: { organizationId: 'org-1' },
-            order: { createdAt: 'ASC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         })
         expect(result).toEqual([
             {
@@ -49,6 +49,23 @@ describe('TypeOrmServiceCredentialDirectory', () => {
         ])
         expect(result[0]).not.toBe(credential)
         expect(result[0].permissions).not.toBe(credential.permissions)
+    })
+
+    it('uses descending IDs to break equal creation timestamps and preserves the returned order', async () => {
+        const equalTimestampRows = [
+            { ...credential, id: 'cccccccc-cccc-4ccc-accc-cccccccccccc', status: 'active' as const },
+            { ...credential, id: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' },
+        ]
+        repoMock.find.mockResolvedValueOnce(equalTimestampRows)
+
+        const result = await directory.listForOrganization('org-1')
+
+        expect(repoMock.find).toHaveBeenCalledWith({
+            where: { organizationId: 'org-1' },
+            order: { createdAt: 'DESC', id: 'DESC' },
+        })
+        expect(result.map(row => row.id)).toEqual(equalTimestampRows.map(row => row.id))
+        expect(result.map(row => row.status)).toEqual(['active', 'disabled'])
     })
 
     it('finds a credential by its id only within the requested organization', async () => {

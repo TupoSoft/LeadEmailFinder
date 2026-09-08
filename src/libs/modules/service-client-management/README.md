@@ -53,25 +53,41 @@ translates application/domain failures to HTTP behavior.
 
 ## HTTP Surface
 
-`ServiceClientsController` at `v1/organizations/:organizationId/service-clients`, excluded from Swagger, every
+`ServiceClientsController` at `v1/organizations/:organizationId/service-clients`, published in runtime and browser OpenAPI, every
 route requiring `credentials:manage`:
 
 | Method   | Path                                           | Notes                    |
 | -------- | ---------------------------------------------- | ------------------------ |
-| `POST`   | `.../service-clients`                          | Create                   |
+| `POST`   | `.../service-clients`                          | `201`; secret returned once |
 | `GET`    | `.../service-clients`                          | List                     |
-| `POST`   | `.../service-clients/:serviceClientId/rotate`  | Rotate the client secret |
+| `POST`   | `.../service-clients/:serviceClientId/rotate`  | `200`; replacement secret returned once |
 | `POST`   | `.../service-clients/:serviceClientId/disable` | `204 No Content`         |
 | `DELETE` | `.../service-clients/:serviceClientId`         | `204 No Content`         |
 
 Every route additionally requires a `human_session` credential kind at the service layer — an M2M bearer token
-can never call these endpoints, regardless of its permissions.
+can never call these endpoints, regardless of its permissions. Cookie mutations also require the existing Origin
+and CSRF checks. Organization and service-client parameters must be UUIDs. Create accepts an optional description
+of 1–200 characters and at least one unique permission from the current account's
+`grantableServiceClientPermissions`; the auth-owned grant ceiling remains authoritative for stale or forged requests.
+Duplicate permissions are rejected at both the DTO and application boundaries.
+
+Create and rotate return the one-time `clientSecret`. List returns only `id`, `clientId`, nullable `description`,
+`permissions`, `status`, `createdAt`, and `updatedAt`. Create and rotate responses carry `Cache-Control: no-store` for every success and failure. API-host middleware sets
+the header before body parsing, authentication guards, and validation.
+No endpoint retrieves an existing secret. Disabled clients cannot rotate, and there is no re-enable route.
+
+Invalid inputs return `400`; missing authentication returns `401`; disallowed credentials, roles, permissions, or
+browser requests return `403`. A missing client and a client outside the caller's organization both return `404`
+for rotate, disable, and delete. Create/list reject a different organization with `403`. Disabled rotation returns
+`409`. Provider or persistence failures return `500`; a lost create or rotate response requires explicit
+reconciliation because the operation may already have taken effect. Disable and delete return empty `204` responses.
+No schema change, migration, reset, or reseed is required.
 
 ## Persistence
 
 None owned. This module operates entirely through `ServiceCredentialDirectory` and `ServiceCredentialWriter`,
-whose TypeORM adapters are owned by `identity`. The directory performs organization-scoped lookups and oldest-first
-listing, including disabled credentials. The writer keeps each create, rotate, disable, or delete mutation atomic
+whose TypeORM adapters are owned by `identity`. The directory performs organization-scoped lookups and lists
+credentials in `createdAt DESC, id DESC` order, including disabled credentials. The writer keeps each create, rotate, disable, or delete mutation atomic
 with its corresponding audit entry in the `ServiceCredential` and `AuditLogEntry` tables. Its conditional,
 organization-scoped mutation outcomes prevent a stale pre-provider snapshot from re-enabling or recreating a
 credential that was concurrently disabled or deleted.
@@ -89,6 +105,7 @@ Focused tests live in `src/`: `application/service-client-creation.service.spec.
 `application/service-client-listing.service.spec.ts`, `application/service-client-rotation.service.spec.ts`,
 `application/service-client-disablement.service.spec.ts`, `application/service-client-deletion.service.spec.ts`,
 `api/service-clients.controller.spec.ts`, `api/service-client-management-http.integration.spec.ts`,
+`api/service-client-lifecycle-http.integration.spec.ts`,
 `service-client-management.module.spec.ts` (factory-provider wiring),
 `infrastructure/config/service-client-management-configuration.spec.ts`,
 `infrastructure/keycloak/keycloak-service-client-admin-client.service.spec.ts`, and the live-Keycloak-gated
@@ -96,10 +113,15 @@ Focused tests live in `src/`: `application/service-client-creation.service.spec.
 is covered by `infrastructure/persistence/typeorm-service-credential-directory.spec.ts` and
 `infrastructure/persistence/typeorm-service-credential-writer.spec.ts` in the identity module.
 
-The creation service tests cover the injected grant-policy boundary and reject forged or stale broader permission
-selections before any Keycloak side effect.
+The creation service tests cover ordered grant-policy choices and reject duplicate, forged, or stale broader
+permission selections before any Keycloak side effect. HTTP tests verify serialization, lifecycle authorization,
+validation, and cache prevention on successful responses and failures from body parsing, guards, and applications.
+The generated contract suite in `scripts/openapi/contracts.test.mjs` checks the five browser operations, exact status
+codes, UUID parameters, permission enums, and secret-free list types.
 
-[`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) proves only
-rejection paths — missing credential, a cross-organization actor, and unsupported/duplicate permissions —
-because Bruno cannot mint a `human_session`. The full create/list/rotate/disable/delete life cycle is instead
-covered by `infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts` above.
+[`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) covers unauthenticated
+creation and M2M rejection for all five operations, including cache prevention on create and rotate failures.
+Bruno cannot mint a genuine human session. The dedicated live browser suite instead exercises the successful human
+lifecycle, and `infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts` covers the
+provider lifecycle. Provider and persistence ports are substituted in the focused HTTP suite, so passing that suite
+alone does not establish live Keycloak or PostgreSQL behavior.

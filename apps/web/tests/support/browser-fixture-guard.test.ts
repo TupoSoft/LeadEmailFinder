@@ -6,6 +6,8 @@ import privileged from '../../playwright.privileged.config'
 import billing from '../../playwright.billing.config'
 import verification from '../../playwright.verification.config'
 import normal from '../../playwright.config'
+import serviceClients from '../../playwright.service-clients.config'
+import serviceClientsLive from '../../playwright.service-clients-live.config'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
@@ -28,8 +30,26 @@ describe('privileged browser fixture integration boundaries', () => {
                 'invitations-ui.spec.ts',
                 'team-and-invitations.spec.ts',
                 'single-verification.spec.ts',
+                'service-clients-ui.spec.ts',
+                'service-clients.spec.ts',
             ]),
         )
+    })
+
+    it('isolates service-client suites before any secret-bearing test can run', () => {
+        for (const configuration of [serviceClients, serviceClientsLive]) {
+            expect(configuration.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
+            expect(configuration.retries).toBe(0)
+            expect(configuration.workers).toBe(1)
+            expect(configuration.reporter).toBe('./tests/support/service-client-reporter.ts')
+        }
+        expect(serviceClients.testMatch).toBe('service-clients-ui.spec.ts')
+        expect(serviceClientsLive.testMatch).toBe('service-clients.spec.ts')
+        for (const suite of ['service-clients-ui.spec.ts', 'service-clients.spec.ts']) {
+            const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
+            expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
+            expect(source).not.toMatch(/storageState|addCookies|client_credentials|saveAs|\.screenshot\(|\.attach\(/)
+        }
     })
 
     it('requires the shared fixture in privileged suites and prohibits synthetic authentication', () => {

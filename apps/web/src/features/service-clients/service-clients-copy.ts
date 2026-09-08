@@ -1,0 +1,70 @@
+export const serviceClientsCopy = {
+    title: 'Service clients',
+    description:
+        'Manage credentials for applications that work with your organization. Secrets are shown only when you create or rotate a client.',
+    create: 'Create service client',
+    descriptionLabel: 'Description (optional)',
+    permissions: 'Permissions',
+    permissionsHelp:
+        'Choose only the permissions this application needs. These choices come from your current account.',
+    permissionsError: 'Select at least one permission.',
+    descriptionError: 'Keep the description to 200 characters or fewer.',
+    unavailableGrants:
+        'Your account has no permissions available to grant. Refresh your account before creating a client.',
+    list: 'Organization clients',
+    listDescription: 'Newest clients appear first. Disabled clients remain visible and cannot be re-enabled.',
+    empty: 'No service clients yet. Create one when an application needs access.',
+    refresh: 'Refresh clients',
+    offline: 'You are offline. Reconnect, then refresh clients before making changes.',
+    pending: 'Waiting for the server. Do not submit this operation again.',
+    cancelWaiting: 'Cancel waiting',
+    invalid: 'The request was rejected. Check the description and selected permissions, then submit again.',
+    rejected: 'Your account cannot make this change. Refresh your account to see its current permissions.',
+    missing: 'This client is no longer available. The client list has been refreshed.',
+    conflict: 'The client changed or is disabled. Review the refreshed list before trying another action.',
+    requestError:
+        'The change could not be confirmed. Refresh clients and check their current state before trying again.',
+    unknown: 'Outcome unknown',
+    createUnknown:
+        'The client may have been created, but its secret was not received. Review the refreshed list for a new client. Rotate that client explicitly to obtain a new secret, or delete it before creating another.',
+    rotateUnknown:
+        'The secret may have changed. The old secret may no longer work. Review the refreshed client, then explicitly rotate it again to obtain a new secret, or disable or delete the client.',
+    reviewed: "I've reviewed the refreshed list",
+    recoveryReviewed:
+        'List reviewed. Choose the appropriate client action below. Any new create or rotation requires your explicit action.',
+    disabled: 'Service client disabled.',
+    deleted: 'Service client deleted.',
+    secretTitle: 'Save your client secret',
+    secretDescription:
+        'This is the only time you can retrieve this secret. Copy it to a secure location or download it before closing. A downloaded file contains sensitive credentials.',
+    secretLabel: 'Client secret',
+    clientId: 'Client ID',
+    copy: 'Copy secret',
+    download: 'Download credentials',
+    copied: 'Copied.',
+    downloaded: 'Downloaded.',
+    copyFailed: 'Copy failed. Try again or download the credentials before closing.',
+    downloadFailed: 'Download failed. Copy the secret before closing.',
+    closed: 'Secret closed. It cannot be shown again; rotate the client if you did not save it.',
+    close: 'Close',
+    cancel: 'Cancel',
+    show: 'Show secret',
+    hide: 'Hide secret',
+    rotate: 'Rotate secret',
+    disable: 'Disable client',
+    delete: 'Delete client',
+    rotateTitle: 'Rotate client secret',
+    disableTitle: 'Disable service client',
+    deleteTitle: 'Delete service client',
+    rotateConsequence:
+        'The current secret stops working immediately. Update every application that uses this client with the new secret.',
+    disableConsequence:
+        'This client loses access immediately. There is no re-enable action; a replacement client will be needed.',
+    deleteConsequence:
+        'This permanently removes the client and its provider credentials. Applications using this client will lose access.',
+    status: { active: 'Active', disabled: 'Disabled' },
+    noDescription: 'No description',
+    dateUnavailable: 'Date unavailable',
+    previous: 'Previous clients',
+    next: 'Next clients',
+} as const

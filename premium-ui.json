@@ -32,7 +32,10 @@
         "invitationPrivacy": "apps/web/tests/e2e/invitations-ui.spec.ts",
         "teamRuntime": "apps/web/tests/e2e/team-and-invitations.spec.ts",
         "verification": "apps/web/tests/e2e/verification-ui.spec.ts",
-        "verificationRuntime": "apps/web/tests/e2e/single-verification.spec.ts"
+        "verificationRuntime": "apps/web/tests/e2e/single-verification.spec.ts",
+        "serviceClients": "apps/web/tests/e2e/service-clients-ui.spec.ts",
+        "serviceClientPrivacy": "apps/web/tests/e2e/service-clients-ui.spec.ts",
+        "serviceClientRuntime": "apps/web/tests/e2e/service-clients.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",

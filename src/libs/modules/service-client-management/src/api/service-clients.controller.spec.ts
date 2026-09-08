@@ -9,6 +9,7 @@ import { ServiceClientListingService } from '../application/service-client-listi
 import { ServiceClientRotationService } from '../application/service-client-rotation.service'
 import {
     DisabledServiceClientRotationError,
+    DuplicateServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientNotFoundError,
     ServiceClientPermissionCeilingExceededError,
@@ -100,9 +101,7 @@ describe('ServiceClientsController', () => {
         const result = await controller.list({ organizationId: 'org-1' }, principal)
 
         expect(listing.list).toHaveBeenCalledWith(principal, 'org-1')
-        expect(result).toEqual([
-            expect.objectContaining({ id: 'sc-1', clientId: 'lef-svc-1', status: 'disabled' }),
-        ])
+        expect(result).toEqual([expect.objectContaining({ id: 'sc-1', clientId: 'lef-svc-1', status: 'disabled' })])
         expect(result[0]).not.toHaveProperty('clientSecret')
     })
 
@@ -128,7 +127,9 @@ describe('ServiceClientsController', () => {
     })
 
     it('maps application access denial to ForbiddenException', async () => {
-        creation.create.mockRejectedValue(new ServiceClientAccessDeniedError('Only an owner or admin may create service clients'))
+        creation.create.mockRejectedValue(
+            new ServiceClientAccessDeniedError('Only an owner or admin may create service clients'),
+        )
 
         await expect(
             controller.create({ organizationId: 'org-1' }, { permissions: ['verification:run'] }, principal),
@@ -149,6 +150,14 @@ describe('ServiceClientsController', () => {
         await expect(
             controller.rotate({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal),
         ).rejects.toThrow(NotFoundException)
+    })
+
+    it('maps duplicate permissions rejected by the application to BadRequestException', async () => {
+        creation.create.mockRejectedValue(new DuplicateServiceClientPermissionsError())
+
+        await expect(
+            controller.create({ organizationId: 'org-1' }, { permissions: ['verification:run'] }, principal),
+        ).rejects.toThrow(BadRequestException)
     })
 
     it('maps disabled rotation to ConflictException', async () => {

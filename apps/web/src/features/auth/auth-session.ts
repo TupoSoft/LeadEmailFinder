@@ -155,8 +155,9 @@ export class AuthSession {
                         this.advance({ status: 'account-unavailable', error })
                         this.boundaryErrors.set(error, this.generation)
                     } else if (
-                        error.category === 'access-denied' && this.state.status === 'authenticated' &&
-                        !isTeamMutation(request.method, path)
+                        error.category === 'access-denied' &&
+                        this.state.status === 'authenticated' &&
+                        !isLocallyHandledMutation(request.method, path)
                     ) {
                         this.setState({ ...this.state, accessDenied: true })
                     }
@@ -330,9 +331,14 @@ export class AuthSession {
 }
 
 // These operations present hierarchy/permission rejections in their local form
-// and refresh membership data. Read authorization still uses the shared route.
-function isTeamMutation(method: string, path: string): boolean {
-    return (method === 'POST' && /^\/v1\/organizations\/[^/]+\/invitations$/.test(path)) ||
+// and refresh server state. Read authorization still uses the shared route.
+function isLocallyHandledMutation(method: string, path: string): boolean {
+    return (
+        (method === 'POST' && /^\/v1\/organizations\/[^/]+\/invitations$/.test(path)) ||
         (method === 'PATCH' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
-        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path))
+        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
+        (method === 'POST' &&
+            /^\/v1\/organizations\/[^/]+\/service-clients(?:\/[^/]+\/(?:rotate|disable))?$/.test(path)) ||
+        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/service-clients\/[^/]+$/.test(path))
+    )
 }
