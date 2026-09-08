@@ -23,6 +23,7 @@ status and result after reload.
 - [x] (2026-09-08) Add bounded, private Bruno failure diagnostics and verify runner regression coverage.
 - [x] (2026-09-08) Configure CI to complete API compilation before serving live verification requests.
 - [x] (2026-09-08) Merge current master, retaining the shared MFA readiness fix and layered batch implementation.
+- [x] (2026-09-08) Separate the result limits note from the final evidence row and verify its responsive layout.
 
 ## Plan dependencies
 
@@ -47,6 +48,12 @@ status and result after reload.
   application mapper instead of editing the legacy mixed folder.
 
 ## Decision Log
+
+- Decision: Keep the limits note below the evidence, with the existing content gap of 24 pixels, compact typography,
+  and a maximum line length of 65 characters.
+  Rationale: The note explains the whole result and needs visual separation from its final row. Existing shared
+  tokens supply the spacing and typography; the text, left alignment, and ink color stay the same.
+  Date/Author: 2026-09-08, approved visual review follow-up.
 
 - Decision: Keep an exact browser route allowlist and add explicit async security, result, and generated-type checks.
   Rationale: The earlier export test excluded every verification route, including the two routes this feature needs.
@@ -131,6 +138,33 @@ timing, or history feature was added. There are no material SOLID trade-offs.
 The CI workflow now verifies the same HTTP and browser flow after preserving seeded volumes and recreating the
 SMTP network. It waits for successful proxy fixture setup and includes artifact-privacy validation and overlay
 cleanup. Remote CI will run on the single pull request; these results describe local validation.
+
+### Result Limits Note Follow-Up
+
+The limits note now sits 24 pixels below the final evidence divider. It uses the existing compact typography
+of 14 pixels with a line height of 1.45, and a maximum width of 65 characters. The wording and left alignment
+remain unchanged. This is a local composition adjustment using existing tokens; no shared visual decision,
+HTTP API behavior, or business responsibility changes.
+
+Focused validation passed: 60 verification component tests, 22 verification browser tests, the web build and type
+check, focused ESLint, Prettier, design lint, and the strict UI audit. Chromium checks at 1440 by 900 and 320 by 720
+measured a gap of exactly 24 pixels and no horizontal overflow. The note wrapped into two desktop lines and three
+narrow lines. Manual refresh retained correct focus behavior, and console and page error checks were clean.
+Synthetic screenshots at `/tmp/lef568-limits-desktop.png` and `/tmp/lef568-limits-narrow.png` were visually inspected.
+The Browser plugin was unavailable, so the existing Playwright suite used an isolated preview and mocked API data.
+Review found no material architectural trade-offs. Bruno is not applicable because only browser layout changes.
+
+Exact focused commands:
+
+    corepack pnpm --filter ./apps/web exec vitest run src/features/verification/VerificationPage.test.tsx
+    corepack pnpm --filter ./apps/web build
+    corepack pnpm --filter ./apps/web exec eslint src/features/verification/VerificationResultView.tsx
+    corepack pnpm exec prettier --check apps/web/src/features/verification/VerificationResultView.tsx apps/web/src/features/verification/VerificationView.module.css
+    corepack pnpm design:lint
+    corepack pnpm ui:audit
+    corepack pnpm --filter ./apps/web exec playwright test --config /tmp/lef568-limits-playwright.config.ts tests/e2e/verification-ui.spec.ts --workers=2
+    node /tmp/lef568-limits-geometry.mjs
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md
 
 ### Completed-Result Spacing Follow-Up
 

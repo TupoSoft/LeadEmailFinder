@@ -55,7 +55,7 @@ export function VerificationResultView({ result }: { result: VerificationResult 
                 {copy.result}
             </h2>
             <SignalDetails entries={entries} />
-            <p>{copy.limits}</p>
+            <p className={styles.limits}>{copy.limits}</p>
         </section>
     )
 }

@@ -41,6 +41,12 @@
     font-size: var(--font-size-body);
     margin-block: 0 var(--space-content-gap);
 }
+.limits {
+    margin-block: var(--space-content-gap) 0;
+    max-width: 65ch;
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
 .progress {
     min-height: var(--state-min-height);
 }
