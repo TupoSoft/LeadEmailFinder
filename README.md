@@ -2,6 +2,9 @@
 
 Lead Email Finder is an API for finding email addresses.
 
+The [ideal customer profile](docs/product/ideal-customer-profile.md) records the working customer hypothesis,
+supporting product evidence, and guidance for AI agents making product decisions.
+
 ---
 
 ## Table of Contents
