@@ -188,6 +188,14 @@ preserving the exact CSV parsing/validation, alias-prefixed TypeORM result-row m
 established cross-module dependency pattern of injecting another module's public application service. No
 email-verification architecture-baseline violation remains.
 
+Batch status shares the async application's five public states: `queued`, `running`, `completed`, `failed`, and
+`unavailable`. The Bull adapters normalize queue states before they cross the application boundary. A completed batch
+without a valid stored result location is `unavailable`. Only failed jobs expose `failureCode`: `invalid_csv`,
+`insufficient_credits`, or `processing_failed`. The framework-free classifier accepts typed CSV validation and credit
+errors; the worker records only its safe code and preserves the original failure. Worker wait signals never create a
+failure marker. Missing or unrecognized markers use `processing_failed`, and successful retries expose no failure
+code. This generic failure makes no claim about whether credits were charged.
+
 ## Dependencies
 
 - [`credits`](../credits/README.md) — `CreditGuard` on every billed route, and `CreditsService.debit()` called
@@ -208,8 +216,8 @@ email-verification architecture-baseline violation remains.
 | `POST`                     | `/verifyAsync`              | `verification:run` + one credit | `202 Accepted`; enqueues an async job                                          |
 | `GET`                      | `/verifyAsync/:id`          | `verification:read`             | `404` if the job doesn't exist or isn't owned by the caller                    |
 | `POST`                     | `/verifyBatch/csv`          | `verification:run`              | `202 Accepted`; multipart CSV upload, `100MB` max                              |
-| `GET`                      | `/verifyBatch/:id`          | `verification:read`             | Bounded `0`–`100` progress; `404` if not found/owned                           |
-| `GET`                      | `/verifyBatch/:id/results`  | `verification:read`             | Streams the completed job's CSV (`text/csv`); `404` if not found/owned         |
+| `GET`                      | `/verifyBatch/:id`          | `verification:read`             | Five public states, safe terminal failure code, bounded `0`–`100` progress; concealed `404` |
+| `GET`                      | `/verifyBatch/:id/results`  | `verification:read`             | Binary `text/csv` with a UUID-derived attachment name; concealed `404` for unavailable results |
 | `POST` `GET` `GET` `PATCH` | `/emails`, `/emails/:email` | `platform:admin`                | Internal admin cache CRUD, excluded from Swagger — not a verification endpoint |
 
 ## Queues
@@ -239,6 +247,14 @@ credentials, region, transport policy, and shared `CustomerObjectWriteSecurity` 
 composition root, not inside this module. Both writers inject that value and always map `no-store`; production maps
 the exact SSE-KMS algorithm and key fields as well. Neither writer reads `NODE_ENV` or accepts a local security
 override.
+
+Before CSV quoting, the durable result writer prefixes an ASCII apostrophe to customer text beginning with `=`, `+`,
+`-`, `@`, tab, carriage return, or line feed. Source email, derived text, and future copied text columns use the same
+encoder; trusted identities, status fields, and numeric fields retain their normal encoding. The existing streaming
+writer and object-security binding remain the only result publication path. Download streams those retained bytes
+without modification and uses `attachment; filename="batch-verification-<uuid>.csv"`, derived from the validated job
+UUID. If the S3 result object is missing, the application returns the same `404` as unavailable or foreign work; other storage
+failures retain the existing generic error response.
 
 ## Configuration
 
@@ -284,7 +300,12 @@ Focused tests are grouped by behavior:
   `application/delivery/batch/batch-email-verification-workflow.spec.ts` cover upload/status/results and every
   state/effect/replay transition — including the `WaitForChildren` signal, invalid-row and child-dispatch failure
   classification, and completion tracing — entirely against fake ports, with no Nest, BullMQ, or S3 involved
-- **Batch HTTP**: `api/http/batch-verification/batch-email-verification.controller.spec.ts`
+- **Batch public status**: `application/delivery/batch/batch-verification-status.spec.ts` covers all application
+  snapshots, missing result locations, safe failure fallbacks, successful retries, and unknown future states.
+- **Batch HTTP**: `api/http/batch-verification/batch-email-verification.controller.spec.ts`,
+  `api/http/batch-verification/batch-verification-http.integration.spec.ts`, and
+  `api/http/batch-verification/batch-verification.openapi.spec.ts` cover multipart validation, safe status serialization,
+  authorization, ownership checks, binary download bytes, safe filenames, and explicit Swagger contracts.
 - **Batch queue adapters**: `infrastructure/queues/batch-verification/batch-email-verification.processor.spec.ts`,
   `infrastructure/queues/batch-verification/bull-batch-jobs.spec.ts`,
   `infrastructure/queues/batch-verification/bull-batch-child-flow.spec.ts`, and the real-Redis
@@ -297,7 +318,8 @@ Focused tests are grouped by behavior:
   `infrastructure/storage/batch-verification/derive-results-key.spec.ts`,
   `infrastructure/storage/batch-verification/parse-s3-result-location.spec.ts`, and
   `infrastructure/storage/batch-verification/multer-options-factory-impl.service.spec.ts`; the writer
-  specification reuses the common customer-object security contract for production and development mappings
+  specification reuses the common customer-object security contract for production and development mappings and
+  verifies every spreadsheet-formula prefix, CSV quoting, ordinary values, future text fields, and streaming chunks
 - **Email administration**: `api/http/email-administration/email-administration.controller.spec.ts`
 - **Domain/application core**: `application/domain-policy.service.spec.ts`,
   `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,

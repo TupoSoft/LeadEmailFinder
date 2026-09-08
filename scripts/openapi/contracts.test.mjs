@@ -94,10 +94,13 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
         '/verifyAsync',
         '/verifyAsync/{id}',
+        '/verifyBatch/csv',
+        '/verifyBatch/{id}',
+        '/verifyBatch/{id}/results',
     ])
     assert.deepEqual(browser.servers, [{ url: '/' }])
     for (const path of [
-        '/verify', '/verifications/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results', '/v1/proxies',
+        '/verify', '/verifications/{id}', '/v1/proxies',
     ]) {
         assert.ok(Object.hasOwn(runtime.paths, path), `Full runtime docs retain ${path}`)
         assert.equal(Object.hasOwn(browser.paths, path), false, `Browser docs exclude ${path}`)
@@ -113,7 +116,7 @@ test('exports the real app from an empty environment without provider constructi
 
 test('async verification publishes only create and status reads with their authentication and error contracts', () => {
     const operations = Object.entries(browser.paths)
-        .filter(([path]) => /verif|prox/i.test(path))
+        .filter(([path]) => path.startsWith('/verifyAsync'))
         .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
         .sort()
     assert.deepEqual(operations, ['GET /verifyAsync/{id}', 'POST /verifyAsync'])
@@ -176,6 +179,87 @@ test('async status exposes five discriminated outcomes and only safe result fiel
         assert.equal(result.properties[field].type, 'boolean')
         assert.equal(result.properties[field].nullable, true)
     }
+})
+
+test('batch publishes only multipart create, status and CSV download with safe browser contracts', () => {
+    const operations = Object.entries(browser.paths)
+        .filter(([path]) => /verif|prox/i.test(path) && !path.startsWith('/verifyAsync'))
+        .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
+        .sort()
+    assert.deepEqual(operations, ['GET /verifyBatch/{id}', 'GET /verifyBatch/{id}/results', 'POST /verifyBatch/csv'])
+    const create = browser.paths['/verifyBatch/csv'].post
+    const status = browser.paths['/verifyBatch/{id}'].get
+    const download = browser.paths['/verifyBatch/{id}/results'].get
+    assert.deepEqual(create.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+    for (const operation of [status, download]) {
+        assert.deepEqual(operation.security, [{ lef_session: [] }, { oidc: [] }])
+        assert.deepEqual(operation.parameters, [{ in: 'path', name: 'id', required: true, schema: { format: 'uuid', type: 'string' } }])
+        for (const code of ['400', '401', '403', '404']) assert.ok(operation.responses[code])
+    }
+    for (const code of ['202', '401', '403', '422']) assert.ok(create.responses[code])
+    assert.equal(create.requestBody.required, true)
+    assert.deepEqual(Object.keys(create.requestBody.content), ['multipart/form-data'])
+    assert.deepEqual(create.requestBody.content['multipart/form-data'].schema, { $ref: '#/components/schemas/UploadFileRequestDto' })
+    const schemas = browser.components.schemas
+    assert.deepEqual(schemas.UploadFileRequestDto.required, ['file'])
+    assert.deepEqual(Object.keys(schemas.UploadFileRequestDto.properties), ['file'])
+    assert.equal(schemas.UploadFileRequestDto.properties.file.format, 'binary')
+    assert.equal(schemas.UploadFileRequestDto.properties.file.type, 'string')
+    assert.equal(schemas.UploadFileResponseDto.properties.id.format, 'uuid')
+    assert.deepEqual(Object.keys(schemas.GetBatchStatusResponseDto.properties).sort(), [
+        'failureCode', 'id', 'processed', 'progress', 'status', 'total', 'unprocessed',
+    ])
+    assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.status.enum, ['queued', 'running', 'completed', 'failed', 'unavailable'])
+    assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.failureCode.enum, ['invalid_csv', 'insufficient_credits', 'processing_failed'])
+    assert.equal(schemas.GetBatchStatusResponseDto.required.includes('failureCode'), false)
+    assert.deepEqual(download.responses['200'].content, { 'text/csv': { schema: { type: 'string', format: 'binary' } } })
+    assert.ok(download.responses['200'].headers['Content-Disposition'])
+})
+
+test('generated batch operations have Blob upload/download types and exact public status fields', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'batch-contract.ts')
+    await writeFile(file, `
+        import type { paths } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type Status = paths['/verifyBatch/{id}']['get']['responses'][200]['content']['application/json']
+        type Assertions = [
+            Assert<Equal<paths['/verifyBatch/csv']['post']['requestBody']['content']['multipart/form-data'], { file: Blob }>>,
+            Assert<Equal<paths['/verifyBatch/csv']['post']['responses'][202]['content']['application/json'], { id: string }>>,
+            Assert<Equal<paths['/verifyBatch/{id}/results']['get']['responses'][200]['content']['text/csv'], Blob>>,
+            Assert<Equal<Status['status'], 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'>>,
+            Assert<Equal<Status['failureCode'], 'invalid_csv' | 'insufficient_credits' | 'processing_failed' | undefined>>,
+            Assert<Equal<keyof Status, 'id' | 'status' | 'progress' | 'total' | 'processed' | 'unprocessed' | 'failureCode'>>,
+            Assert<Equal<NonNullable<paths['/verifyBatch/csv']['get']>, never>>,
+            Assert<Equal<NonNullable<paths['/verifyBatch/{id}']['post']>, never>>,
+            Assert<Equal<NonNullable<paths['/verifyBatch/{id}/results']['post']>, never>>
+        ]
+    `)
+    const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
+})
+
+test('binary transformation preserves nullable, optional and ordinary string fields', async () => {
+    const snapshot = resolve(directory, 'binary.json')
+    const generated = resolve(directory, 'binary.d.ts')
+    await writeFile(snapshot, JSON.stringify({
+        openapi: '3.0.0', info: { title: 'Binary fixture', version: '1' }, paths: {},
+        components: { schemas: { Fixture: {
+            type: 'object', required: ['file', 'nullable', 'plain'], properties: {
+                file: { type: 'string', format: 'binary' },
+                nullable: { type: 'string', format: 'binary', nullable: true },
+                optional: { format: 'binary' },
+                plain: { type: 'string' },
+            },
+        } } },
+    }))
+    await generateSchema(snapshot, generated)
+    const source = await readFile(generated, 'utf8')
+    assert.match(source, /file: Blob;/)
+    assert.match(source, /nullable: Blob \| null;/)
+    assert.match(source, /optional\?: Blob;/)
+    assert.match(source, /plain: string;/)
 })
 
 test('generated async types preserve exact state discrimination, required results, and nullable evidence', async () => {

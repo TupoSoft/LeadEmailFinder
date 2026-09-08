@@ -8,5 +8,6 @@ declare module '*scripts/bruno/async-verification-fixture.mjs' {
     export function withAsyncVerificationFixture<T>(
         checkoutRoot: string,
         execute: (fixture: AsyncVerificationFixture) => Promise<T>,
+        options?: { useOrganizationAdmin?: boolean },
     ): Promise<T>
 }

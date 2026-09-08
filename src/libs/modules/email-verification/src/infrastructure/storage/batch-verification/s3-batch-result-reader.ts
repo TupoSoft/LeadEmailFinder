@@ -3,7 +3,8 @@ import { ok } from 'node:assert'
 import { Readable } from 'node:stream'
 import { ReadableStream } from 'node:stream/web'
 import { getS3ConnectionToken, S3 } from 'nestjs-s3'
-import { BatchResultReader } from '../../../application/delivery/batch/batch-result-reader'
+import { NoSuchKey } from '@aws-sdk/client-s3'
+import { BatchResultReader, BatchResultUnavailableError } from '../../../application/delivery/batch/batch-result-reader'
 import { parseS3ResultLocation } from './parse-s3-result-location'
 
 @Injectable()
@@ -13,7 +14,10 @@ export class S3BatchResultReader implements BatchResultReader {
     async read(resultFilePath: string): Promise<Readable> {
         const { bucket: Bucket, key: Key } = parseS3ResultLocation(resultFilePath)
 
-        const { Body } = await this.s3.getObject({ Bucket, Key })
+        const { Body } = await this.s3.getObject({ Bucket, Key }).catch((error: unknown) => {
+            if (error instanceof NoSuchKey) throw new BatchResultUnavailableError()
+            throw error
+        })
 
         ok(Body, `Failed to get object from bucket ${Bucket} with key ${Key}.`)
 

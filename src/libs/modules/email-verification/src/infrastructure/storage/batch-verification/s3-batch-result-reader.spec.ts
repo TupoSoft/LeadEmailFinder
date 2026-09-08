@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getS3ConnectionToken } from 'nestjs-s3'
 import { S3BatchResultReader } from './s3-batch-result-reader'
+import { NoSuchKey } from '@aws-sdk/client-s3'
+import { BatchResultUnavailableError } from '../../../application/delivery/batch/batch-result-reader'
 
 describe('S3BatchResultReader', () => {
     let s3: { getObject: jest.Mock }
@@ -32,6 +34,19 @@ describe('S3BatchResultReader', () => {
             Bucket: 'bucket',
             Key: 'organizations/org-1/results/result.csv',
         })
+    })
+
+    it('maps an absent retained object to the application unavailable error', async () => {
+        s3.getObject.mockRejectedValue(new NoSuchKey({ $metadata: { httpStatusCode: 404 }, message: 'private key' }))
+
+        await expect(reader.read('s3://bucket/results/file.csv')).rejects.toThrow(BatchResultUnavailableError)
+    })
+
+    it('preserves other storage failures', async () => {
+        const error = new Error('storage connection unavailable')
+        s3.getObject.mockRejectedValue(error)
+
+        await expect(reader.read('s3://bucket/results/file.csv')).rejects.toBe(error)
     })
 
     it.each(['not-a-valid-s3-url', ''])(

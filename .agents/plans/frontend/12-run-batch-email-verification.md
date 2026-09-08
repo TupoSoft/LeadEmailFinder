@@ -14,12 +14,12 @@ available under the server's retention policy.
 
 ## Progress
 
-- [ ] (2026-08-31) Add safe terminal batch-failure codes and complete multipart/status/download OpenAPI contracts.
-- [ ] (2026-08-31) Generate binary fields as `Blob` and add explicit multipart/blob transport adapters.
-- [ ] (2026-08-31) Add accessible CSV selection and indeterminate upload behavior.
-- [ ] (2026-08-31) Build the refresh-safe batch job, bounded progress, failure, and result-download routes.
-- [ ] (2026-08-31) Extend focused API, worker, Bruno, browser, responsive, and accessibility coverage.
-- [ ] (2026-08-31) Run repository, generated-client, live batch, design-contract, and premium UX validation.
+- [x] (2026-09-09) Add safe terminal batch-failure codes and complete multipart/status/download OpenAPI contracts.
+- [x] (2026-09-09) Generate binary fields as `Blob` and add explicit multipart/blob transport adapters.
+- [x] (2026-09-09) Add accessible CSV selection and indeterminate upload behavior.
+- [x] (2026-09-09) Build the refresh-safe batch job, bounded progress, failure, and result-download routes.
+- [x] (2026-09-09) Extend focused API, worker, Bruno, browser, responsive, and accessibility coverage.
+- [x] (2026-09-09) Run repository, generated-client, live batch, design-contract, and premium UX validation.
 
 ## Plan dependencies
 
@@ -32,6 +32,21 @@ available under the server's retention policy.
 
 ## Surprises & Discoveries
 
+- The prerequisite layers and single-email workflow are present at implementation start. The checkout matches
+  current `master`. Issue #507 is assigned and its Project 9 status is In Progress.
+- The default development stack belongs to a different checkout. Live validation uses the separate `lef507`
+  Compose project and loopback ports; no shared stack reset is performed.
+- The browser plugin is unavailable. Browser validation uses the repository's Playwright configurations.
+- Nest's file-size validator uses an exclusive maximum. The configured boundary now accepts exactly 104857600
+  bytes and rejects the next byte, with a focused test against the actual upload pipe.
+- A live Bull state read does not refresh the job object's cached data. Public terminal reads reload that data
+  before exposing result availability, the failure marker, or the final workflow step. Regression tests cover
+  completion and failure between reads, plus a job disappearing during the refresh.
+- The first isolated API compilation exceeded the initial Compose readiness window. The API became healthy, but the
+  dependent proxy bootstrap had not run. The bootstrap was explicitly completed with exit code zero before the
+  final live runs; browser assertions require actual SMTP acceptance rather than merely completed batch state.
+- The existing BFF Bruno collection asserted an exact browser operation list. Its assertion now includes the three
+  batch operations and their session, mutation-protection, and binary response contracts.
 - `module-architecture/16` will relocate batch API, workflow, Bull, CSV, and S3 concerns into their final layers while
   preserving upload, status, result, progress, and queue contracts. This plan extends those layered contracts rather
   than the legacy mixed batch folder.
@@ -103,7 +118,16 @@ available under the server's retention policy.
 
 ## Outcomes & Retrospective
 
-Not started.
+Backend contracts, generated binary transport, local CSV selection, refresh-safe job routes, download recovery,
+and deterministic regression coverage are implemented. Independent review found terminal queue snapshot races and
+focus loss when an uncertain upload or missing download removes its triggering button. Both now have fixes and
+focused regression coverage.
+
+The isolated live batch workflow passed with two synthetic rows, bounded progress, retained CSV download, distinct
+invalid-input rejection, authentication, and concealed tenant reads. Live browser tests passed at desktop and narrow
+widths, including hard refresh, a single upload, two accepted SMTP results, and the expected two-credit debit.
+All planned implementation and local validation are complete. The change is prepared as one pull request for
+issue #507. Hosted CI results remain separate from the completed local checks.
 
 ## Context and Orientation
 
@@ -403,6 +427,34 @@ credits, database rows, and fixture state owned by this checkout; add no migrati
 stack without confirming ownership.
 
 ## Artifacts and Notes
+
+Implementation evidence from 2026-09-09:
+
+- Generated operations are `BatchEmailVerificationController_uploadFile`,
+  `BatchEmailVerificationController_getBatchStatus`, and `BatchEmailVerificationController_getBatchResults`.
+- Safe failure mapping is typed invalid CSV to `invalid_csv`, insufficient credit to `insufficient_credits`, and
+  every other real failure or missing marker to `processing_failed`. Worker wait signals bypass classification.
+- Focused backend coverage passed 216 tests across 19 suites, including six tests against isolated Redis. The
+  generated transport passed 50 tests; generator contracts passed 17 tests and browser-document coverage passed 35.
+- All 511 web tests passed with `corepack pnpm --filter ./apps/web exec vitest run --maxWorkers=1`. The initial
+  parallel run exceeded existing short timeouts in three unrelated screens; the serial run passed unchanged.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci` passed: 231 Jest suites, 2635 tests, and all 76 runner tests.
+  The default Jest run skipped 86 tests that require optional runtime configuration; the focused isolated Redis
+  run separately passed the six batch queue integration cases.
+- The full default Playwright suite passed all 122 cases with `corepack pnpm --filter ./apps/web exec playwright test --workers=2 --output=/tmp/issue507-browser-complete`.
+- The batch browser suite passed 22 tests across 1440 by 900 and 320 by 720 viewports, including automated
+  accessibility, reduced motion, offline recovery, keyboard focus, uncertainty, and result expiry. Screenshots
+  outside the repository are `/tmp/issue507-batch-desktop.png`, `/tmp/issue507-batch-narrow.png`, and the matching
+  `/tmp/issue507-picker-*.png` selection views. They contain deterministic synthetic fixtures only.
+- The pinned batch Bruno workflow passed nine requests and fifteen tests. Live tests use the checkout-owned
+  `lef507` Compose project, with the web gateway at `http://localhost:53507` and Keycloak on port 58507.
+- The final live BFF collection passed fifteen requests and sixteen tests. Both live batch browser cases passed
+  against the final API and web builds, verifying desktop and narrow interaction, actual SMTP acceptance, retained
+  download bytes, and the expected credit debit. Fixture balances were restored after every run.
+- Web and backend type checks and lint passed. `corepack pnpm openapi:check`, `corepack pnpm architecture:check`,
+  `corepack pnpm design:lint`, `corepack pnpm ui:audit`, and `git diff --check` also passed. The architecture gate reports
+  zero baselined violations; the UI audit reports no findings. Backend lint retains one unrelated existing warning.
+- Harper passed with `corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md bruno/batch-verification/README.md src/libs/modules/email-verification/README.md .agents/plans/frontend/12-run-batch-email-verification.md`.
 
 Record the failure-code mapping table, generated upload/download operation names, focused test and Bruno counts,
 redacted job-transition and progress evidence, downloaded synthetic row count, premium-audit result, and desktop/narrow

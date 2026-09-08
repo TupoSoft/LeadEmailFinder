@@ -10,6 +10,7 @@ import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } fro
 import { BatchResultWriter } from '../../../application/delivery/batch/batch-result-writer'
 import { EmailVerificationEntity } from '../../persistence/typeorm/email-verification.entity'
 import { deriveResultsKey } from './derive-results-key'
+import { spreadsheetSafeCell } from './spreadsheet-safe-cell'
 
 type S3UploadSecurityParameters =
     | {
@@ -44,7 +45,12 @@ export class S3BatchResultWriter implements BatchResultWriter {
         private readonly dataSource: DataSource,
     ) {}
 
-    async write(bucket: string, key: string, organizationId: string, batchId: string): Promise<{ resultFilePath: string }> {
+    async write(
+        bucket: string,
+        key: string,
+        organizationId: string,
+        batchId: string,
+    ): Promise<{ resultFilePath: string }> {
         // `.stream()` returns raw driver rows keyed by TypeORM's generated hydration aliases (e.g. `ev_email`
         // for the `email` column of the `ev`-aliased query below), not bare entity property names. `key` tells
         // the stringifier which raw column to read; `header` keeps the CSV's own column names unprefixed.
@@ -58,9 +64,19 @@ export class S3BatchResultWriter implements BatchResultWriter {
             .where(`${queryAlias}.organizationId = :organizationId`, { organizationId })
             .andWhere(`${queryAlias}.batchId = :batchId`, { batchId })
             .stream()
+        const trustedFields = new Set(['id', 'batchId', 'format', 'reason', 'sources'].map(field => `${queryAlias}_${field}`))
         const stringifier = stringify({
             columns,
             header: true,
+            cast: {
+                string: (value, context) => {
+                    // Metadata-selected text columns default to untrusted, including future copied CSV fields.
+                    // These fields contain generated identities or fixed verification status values.
+                    return context.header || trustedFields.has(String(context.column))
+                        ? value
+                        : spreadsheetSafeCell(value)
+                },
+            },
         })
 
         const Body = new PassThrough()

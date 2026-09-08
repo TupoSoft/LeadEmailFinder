@@ -1,15 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
-import { HttpStatus, INestApplication, NestMiddleware } from '@nestjs/common'
+import { HttpStatus, INestApplication, NestMiddleware, ParseFilePipe } from '@nestjs/common'
 import { MiddlewareConsumer, Module } from '@nestjs/common'
 import request from 'supertest'
 import { randomUUID } from 'node:crypto'
-import { GUARDS_METADATA } from '@nestjs/common/constants'
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants'
 import { setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { NextFunction, Request, Response } from 'express'
-import { JobState } from '@tuposoft/lead-email-finder/common'
 import { Readable } from 'node:stream'
 import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
 import {
@@ -93,6 +92,21 @@ describe('BatchEmailVerificationController', () => {
     })
 
     describe('POST /verifyBatch/csv', () => {
+        it('accepts exactly 100 megabytes and rejects the next byte through the configured upload pipe', async () => {
+            const metadata = Reflect.getMetadata(
+                ROUTE_ARGS_METADATA,
+                BatchEmailVerificationController,
+                'uploadFile',
+            ) as Record<string, { pipes: unknown[] }>
+            const pipe = Object.values(metadata)
+                .flatMap(argument => argument.pipes)
+                .find(value => value instanceof ParseFilePipe) as ParseFilePipe
+            expect(pipe).toBeDefined()
+            const file = { size: 104857600, mimetype: 'text/csv' }
+            await expect(pipe.transform(file)).resolves.toBe(file)
+            await expect(pipe.transform({ ...file, size: 104857601 })).rejects.toThrow('at most 104857600 bytes')
+        })
+
         it('should return 202 if a valid CSV file is uploaded', async () => {
             const csvContent = 'email\nuser1@example.com\nuser2@example.com'
             const fileBuffer = Buffer.from(csvContent)
@@ -145,7 +159,7 @@ describe('BatchEmailVerificationController', () => {
             const id = randomUUID()
             batchEmailVerificationService.getBatchStatus.mockResolvedValueOnce({
                 id,
-                status: JobState.ACTIVE,
+                status: 'running',
                 total: 10,
                 processed: 8,
                 unprocessed: 2,

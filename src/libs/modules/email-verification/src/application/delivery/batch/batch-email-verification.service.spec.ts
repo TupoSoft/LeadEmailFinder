@@ -12,9 +12,8 @@ function handle(overrides: Partial<BatchJobHandle> & Pick<BatchJobHandle, 'data'
         id: 'job-1',
         queueQualifiedName: 'bull:batch-email-verification',
         attemptsMade: 0,
-        state: jest.fn().mockResolvedValue('active'),
+        readStatus: jest.fn().mockResolvedValue({ state: 'running' }),
         counts: jest.fn().mockResolvedValue({ processed: 0, unprocessed: 0 }),
-        returnValue: jest.fn().mockResolvedValue(undefined),
         updateStep: jest.fn(),
         ...overrides,
     }
@@ -135,7 +134,9 @@ describe('BatchEmailVerificationService', () => {
 
         it('throws BatchEmailVerificationJobNotFoundException when the job belongs to another organization', async () => {
             jobs.find.mockResolvedValueOnce(
-                handle({ data: { organizationId, step: BatchJobStep.Validate, bucket: 'b', key: 'k', credentialId: 'c' } }),
+                handle({
+                    data: { organizationId, step: BatchJobStep.Validate, bucket: 'b', key: 'k', credentialId: 'c' },
+                }),
             )
 
             await expect(service.getBatchStatus(randomUUID(), otherOrganizationId)).rejects.toThrow(
@@ -147,12 +148,36 @@ describe('BatchEmailVerificationService', () => {
             const id = randomUUID()
 
             jobs.find.mockResolvedValueOnce(
-                handle({ data: { organizationId, step: BatchJobStep.Validate, bucket: 'b', key: 'k', credentialId: 'c' } }),
+                handle({
+                    data: { organizationId, step: BatchJobStep.Validate, bucket: 'b', key: 'k', credentialId: 'c' },
+                }),
             )
 
             const status = await service.getBatchStatus(id, organizationId)
 
             expect(status).toEqual(expect.objectContaining({ id, total: 0, processed: 0, unprocessed: 0 }))
+        })
+
+        it('uses authoritative completion for progress even if older step data lags behind', async () => {
+            jobs.find.mockResolvedValue(
+                handle({
+                    data: {
+                        organizationId,
+                        step: BatchJobStep.WaitForChildren,
+                        bucket: 'b',
+                        key: 'k',
+                        credentialId: 'c',
+                    },
+                    readStatus: jest
+                        .fn()
+                        .mockResolvedValue({ state: 'completed', resultLocation: 's3://b/results/file.csv' }),
+                    counts: jest.fn().mockResolvedValue({ processed: 8, unprocessed: 2 }),
+                }),
+            )
+            await expect(service.getBatchStatus(randomUUID(), organizationId)).resolves.toMatchObject({
+                status: 'completed',
+                progress: 100,
+            })
         })
 
         it.each([
@@ -164,6 +189,7 @@ describe('BatchEmailVerificationService', () => {
             ['empty batch at upload stage', BatchJobStep.UploadResults, 0, 0, 100],
             ['finish with no children', BatchJobStep.Finish, 0, 0, 100],
             ['finish always reports 100 regardless of counts', BatchJobStep.Finish, 5, 5, 100],
+            ['nonfinite counts remain finite', BatchJobStep.WaitForChildren, Number.POSITIVE_INFINITY, Number.NaN, 100],
             [
                 'defensive: inconsistent negative counts never escape as NaN/Infinity',
                 BatchJobStep.WaitForChildren,
@@ -207,7 +233,7 @@ describe('BatchEmailVerificationService', () => {
             jobs.find.mockResolvedValueOnce(
                 handle({
                     data: { organizationId, step: BatchJobStep.Finish, resultFilePath: 's3://b/k', credentialId: 'c' },
-                    state: jest.fn().mockResolvedValue('completed'),
+                    readStatus: jest.fn().mockResolvedValue({ state: 'completed' }),
                 }),
             )
 
@@ -220,7 +246,7 @@ describe('BatchEmailVerificationService', () => {
             jobs.find.mockResolvedValueOnce(
                 handle({
                     data: { organizationId, step: BatchJobStep.Process, bucket: 'b', key: 'k', credentialId: 'c' },
-                    state: jest.fn().mockResolvedValue('active'),
+                    readStatus: jest.fn().mockResolvedValue({ state: 'running' }),
                 }),
             )
 
@@ -239,8 +265,10 @@ describe('BatchEmailVerificationService', () => {
                         resultFilePath: 's3://bucket/organizations/org-1/results/result.csv',
                         credentialId: 'c',
                     },
-                    state: jest.fn().mockResolvedValue('completed'),
-                    returnValue: jest.fn().mockResolvedValue('s3://bucket/organizations/org-1/results/result.csv'),
+                    readStatus: jest.fn().mockResolvedValue({
+                        state: 'completed',
+                        resultLocation: 's3://bucket/organizations/org-1/results/result.csv',
+                    }),
                 }),
             )
 
@@ -254,8 +282,7 @@ describe('BatchEmailVerificationService', () => {
             jobs.find.mockResolvedValueOnce(
                 handle({
                     data: { organizationId, step: BatchJobStep.Finish, resultFilePath: 's3://b/k', credentialId: 'c' },
-                    state: jest.fn().mockResolvedValue('completed'),
-                    returnValue: jest.fn().mockResolvedValue(undefined),
+                    readStatus: jest.fn().mockResolvedValue({ state: 'completed' }),
                 }),
             )
 

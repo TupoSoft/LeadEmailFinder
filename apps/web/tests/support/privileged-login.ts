@@ -24,7 +24,7 @@ function safeVerificationError(value: unknown): TestInfoError {
         typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
             ? value.stack
             : ''
-    const location = stack.match(/single-verification\.spec\.ts:\d+:\d+/)?.[0]
+    const location = stack.match(/(?:single|batch)-verification\.spec\.ts:\d+:\d+/)?.[0]
     return { value: 'Verification browser validation failed.', ...(location ? { stack: location } : {}) }
 }
 

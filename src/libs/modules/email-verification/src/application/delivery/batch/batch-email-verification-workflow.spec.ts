@@ -14,9 +14,8 @@ function fakeHandle(initial: BatchJobData): BatchJobHandle & { data: BatchJobDat
         queueQualifiedName: 'bull:batch-email-verification',
         attemptsMade: 0,
         data: initial,
-        state: jest.fn().mockResolvedValue('active'),
+        readStatus: jest.fn().mockResolvedValue({ state: 'running' }),
         counts: jest.fn().mockResolvedValue({ processed: 2, unprocessed: 0 }),
-        returnValue: jest.fn().mockResolvedValue(undefined),
         updateStep: jest.fn((next: BatchJobData) => {
             handle.data = next
             return Promise.resolve()

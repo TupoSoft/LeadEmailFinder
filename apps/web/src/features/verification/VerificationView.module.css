@@ -54,6 +54,9 @@
     min-height: var(--control-height);
     margin-block-end: var(--space-content-gap);
 }
+.jobActions {
+    margin-block-start: var(--space-content-gap);
+}
 .announcement {
     position: absolute;
     width: 1px;

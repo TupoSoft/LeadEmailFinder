@@ -6,9 +6,9 @@ import type {
     AsyncVerificationJob,
     AsyncVerificationJobData,
     AsyncVerificationJobs,
-    AsyncVerificationSnapshot,
 } from '../../../application/delivery/async/async-verification-jobs'
 import type { AsyncEmailVerificationJobData } from './async-email-verification-job-data.interface'
+import { normalizeVerificationJobState } from '../normalize-verification-job-state'
 import {
     ASYNC_EMAIL_VERIFICATION_JOB_NAME,
     ASYNC_EMAIL_VERIFICATION_QUEUE_NAME,
@@ -44,25 +44,8 @@ export class BullAsyncVerificationJobs implements AsyncVerificationJobs {
             readStatus: async () => {
                 const state = await job.getState()
                 if (state === 'completed') return { state: 'completed', result: job.returnvalue }
-                return { state: normalizeQueueState(state) }
+                return { state: normalizeVerificationJobState(state) }
             },
         }
-    }
-}
-
-function normalizeQueueState(state: string): AsyncVerificationSnapshot['state'] {
-    switch (state) {
-        case 'waiting':
-        case 'delayed':
-        case 'prioritized':
-        case 'waiting-children':
-        case 'paused':
-            return 'queued'
-        case 'active':
-            return 'running'
-        case 'failed':
-            return 'failed'
-        default:
-            return 'unavailable'
     }
 }

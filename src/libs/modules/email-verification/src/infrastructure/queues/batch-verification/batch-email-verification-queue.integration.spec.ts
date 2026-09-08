@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { Queue, QueueEvents, Worker } from 'bullmq'
 import Redis from 'ioredis'
-import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
+import { CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { BatchJobData, BatchJobStep } from '../../../domain/batch-job'
 import { BatchInput } from '../../../application/delivery/batch/batch-input'
 import { BatchResultWriter } from '../../../application/delivery/batch/batch-result-writer'
 import { BatchEmailVerificationWorkflow } from '../../../application/delivery/batch/batch-email-verification-workflow'
+import { InvalidBatchCsvError } from '../../../application/delivery/batch/batch-terminal-failure'
 import { BullBatchJobs } from './bull-batch-jobs'
 import { BullBatchChildFlow } from './bull-batch-child-flow'
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
@@ -90,7 +91,13 @@ describeWithRedis('batch verification queue compatibility with Redis and BullMQ'
         const jobId = randomUUID()
         await expect(
             jobs.enqueue(
-                { step: BatchJobStep.Validate, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' },
+                {
+                    step: BatchJobStep.Validate,
+                    bucket: 'bucket',
+                    key: 'key',
+                    organizationId: 'org-1',
+                    credentialId: 'cred-1',
+                },
                 jobId,
             ),
         ).resolves.toEqual({ id: jobId })
@@ -111,8 +118,10 @@ describeWithRedis('batch verification queue compatibility with Redis and BullMQ'
             organizationId: 'org-1',
             credentialId: 'cred-1',
         })
-        await expect(handle?.returnValue()).resolves.toBe('s3://bucket/results/file.csv')
-        await expect(handle?.state()).resolves.toBe('completed')
+        await expect(handle?.readStatus()).resolves.toEqual({
+            state: 'completed',
+            resultLocation: 's3://bucket/results/file.csv',
+        })
 
         const finalCounts = await handle?.counts()
         expect(finalCounts).toEqual({ processed: 2, unprocessed: 0 })
@@ -121,4 +130,67 @@ describeWithRedis('batch verification queue compatibility with Redis and BullMQ'
     it('returns undefined for a job Redis has never seen', async () => {
         await expect(jobs.find(randomUUID())).resolves.toBeUndefined()
     })
+
+    it.each(['invalid_csv', 'insufficient_credits', 'processing_failed'] as const)(
+        'persists only %s for a real terminal worker failure',
+        async failureCode => {
+            if (failureCode === 'invalid_csv') {
+                input.rows.mockImplementation(() => {
+                    throw new InvalidBatchCsvError()
+                })
+            } else if (failureCode === 'insufficient_credits') {
+                creditsService.debit.mockRejectedValue(new InsufficientCreditsException('org-1'))
+            } else {
+                resultWriter.write.mockRejectedValue(new Error('synthetic storage failure'))
+            }
+            const jobId = randomUUID()
+            await jobs.enqueue(
+                {
+                    step: BatchJobStep.Validate,
+                    bucket: 'bucket',
+                    key: 'key',
+                    organizationId: 'org-1',
+                    credentialId: 'cred-1',
+                },
+                jobId,
+            )
+            const job = (await batchQueue.getJob(jobId))!
+            const finished = expect(job.waitUntilFinished(batchQueueEvents, 10_000)).rejects.toThrow()
+            await startWorkers()
+            await finished
+
+            const handle = await jobs.find(jobId)
+            await expect(handle?.readStatus()).resolves.toEqual({ state: 'failed', failureCode })
+            expect(JSON.stringify(handle?.data)).not.toMatch(
+                /synthetic storage failure|Insufficient credits|stacktrace/,
+            )
+        },
+        15_000,
+    )
+
+    it('exposes a later successful attempt without the previous failure marker and without another debit', async () => {
+        resultWriter.write.mockRejectedValueOnce(new Error('synthetic temporary storage failure'))
+        const job = await batchQueue.add(
+            BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
+            {
+                step: BatchJobStep.Validate,
+                bucket: 'bucket',
+                key: 'key',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
+            { jobId: randomUUID(), attempts: 2, backoff: { type: 'fixed', delay: 10 } },
+        )
+        const finished = job.waitUntilFinished(batchQueueEvents, 10_000)
+        await startWorkers()
+        await expect(finished).resolves.toBe('s3://bucket/results/file.csv')
+
+        const handle = await jobs.find(job.id!)
+        await expect(handle?.readStatus()).resolves.toEqual({
+            state: 'completed',
+            resultLocation: 's3://bucket/results/file.csv',
+        })
+        expect(resultWriter.write).toHaveBeenCalledTimes(2)
+        expect(creditsService.debit).toHaveBeenCalledTimes(1)
+    }, 15_000)
 })

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import openapiTS, { astToString } from 'openapi-typescript'
+import ts from 'typescript'
 
 const require = createRequire(import.meta.url)
 export const rootDirectory = fileURLToPath(new URL('../../', import.meta.url))
@@ -31,7 +32,15 @@ export function exportDocuments(directory, environment = {}) {
 }
 
 export async function generateSchema(snapshot, output) {
-    const ast = await openapiTS(pathToFileURL(snapshot))
+    const ast = await openapiTS(pathToFileURL(snapshot), {
+        transform(schema) {
+            if (schema.format !== 'binary') return
+            const blob = ts.factory.createTypeReferenceNode('Blob')
+            return schema.nullable
+                ? ts.factory.createUnionTypeNode([blob, ts.factory.createLiteralTypeNode(ts.factory.createNull())])
+                : blob
+        },
+    })
     await writeFile(output, generatedHeader + astToString(ast))
 }
 

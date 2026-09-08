@@ -525,6 +525,59 @@
         ],
         "type": "object"
       },
+      "GetBatchStatusResponseDto": {
+        "properties": {
+          "failureCode": {
+            "description": "Present only for failed jobs. processing_failed makes no claim about whether credits were charged.",
+            "enum": [
+              "invalid_csv",
+              "insufficient_credits",
+              "processing_failed"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "processed": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "progress": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "total": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "unprocessed": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "progress",
+          "total",
+          "processed",
+          "unprocessed"
+        ],
+        "type": "object"
+      },
       "HumanSessionRequiredResponseDto": {
         "properties": {
           "code": {
@@ -821,6 +874,31 @@
           "createdAt",
           "updatedAt",
           "clientSecret"
+        ],
+        "type": "object"
+      },
+      "UploadFileRequestDto": {
+        "properties": {
+          "file": {
+            "description": "CSV file with an email header, media type text/csv, at most 104857600 bytes (100 megabytes).",
+            "format": "binary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "UploadFileResponseDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -3000,6 +3078,170 @@
           }
         ],
         "summary": "",
+        "tags": [
+          "Verification"
+        ]
+      }
+    },
+    "/verifyBatch/csv": {
+      "post": {
+        "operationId": "BatchEmailVerificationController_uploadFile",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFileRequestDto"
+              }
+            }
+          },
+          "description": "One file part containing text/csv with an email header. Maximum size: 104857600 bytes (100 megabytes). Row validation and credit debit happen after acceptance.",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponseDto"
+                }
+              }
+            },
+            "description": "The batch was queued; validation and charging are not yet confirmed."
+          },
+          "401": {
+            "description": "Authentication is required."
+          },
+          "403": {
+            "description": "The required verification permission or browser mutation protection is missing."
+          },
+          "422": {
+            "description": "A CSV file is required, with media type text/csv and a maximum size of 104857600 bytes."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Upload a CSV batch for asynchronous verification",
+        "tags": [
+          "Verification"
+        ]
+      }
+    },
+    "/verifyBatch/{id}": {
+      "get": {
+        "operationId": "BatchEmailVerificationController_getBatchStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchStatusResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "The batch ID must be a UUID."
+          },
+          "401": {
+            "description": "Authentication is required."
+          },
+          "403": {
+            "description": "The required verification permission or browser mutation protection is missing."
+          },
+          "404": {
+            "description": "The batch is not available to this organization."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Read an organization-owned batch status",
+        "tags": [
+          "Verification"
+        ]
+      }
+    },
+    "/verifyBatch/{id}/results": {
+      "get": {
+        "operationId": "BatchEmailVerificationController_getBatchResults",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The retained CSV result. Downloading does not enqueue verification or debit credits.",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment; filename=\"batch-verification-<uuid>.csv\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The batch ID must be a UUID."
+          },
+          "401": {
+            "description": "Authentication is required."
+          },
+          "403": {
+            "description": "The required verification permission or browser mutation protection is missing."
+          },
+          "404": {
+            "description": "The batch result is not available to this organization."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Download an organization-owned completed batch CSV",
         "tags": [
           "Verification"
         ]

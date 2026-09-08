@@ -8,6 +8,7 @@ export default defineConfig({
         'privileged-*.spec.ts',
         'billing.spec.ts',
         'single-verification.spec.ts',
+        'batch-verification.spec.ts',
         'invitations-ui.spec.ts',
         'team-and-invitations.spec.ts',
         'service-clients-ui.spec.ts',
