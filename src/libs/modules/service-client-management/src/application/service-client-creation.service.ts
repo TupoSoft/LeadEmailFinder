@@ -7,6 +7,7 @@ import {
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { ServiceClientGrantPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import {
+    DuplicateServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientPermissionCeilingExceededError,
 } from '../domain/service-client-management.errors'
@@ -42,8 +43,13 @@ export class ServiceClientCreationService {
             throw new ServiceClientAccessDeniedError('Only an owner or admin may create service clients')
         }
 
-        const allowedPermissions: readonly AuthPermission[] =
-            this.serviceClientGrantPolicy.grantablePermissionsFor(actor.membershipRole)
+        if (new Set(permissions).size !== permissions.length) {
+            throw new DuplicateServiceClientPermissionsError()
+        }
+
+        const allowedPermissions: readonly AuthPermission[] = this.serviceClientGrantPolicy.grantablePermissionsFor(
+            actor.membershipRole,
+        )
         const excessPermissions = permissions.filter(permission => !allowedPermissions.includes(permission))
         if (excessPermissions.length > 0) {
             throw new ServiceClientPermissionCeilingExceededError(excessPermissions)

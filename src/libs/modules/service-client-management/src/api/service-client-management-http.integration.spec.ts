@@ -1,15 +1,33 @@
-import { ClassSerializerInterceptor, INestApplication, Module, UnauthorizedException, ValidationPipe } from '@nestjs/common'
+import {
+    ClassSerializerInterceptor,
+    INestApplication,
+    Module,
+    UnauthorizedException,
+    ValidationPipe,
+} from '@nestjs/common'
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
 import { AuthPrincipal, ServiceCredentialDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
-import { AuthenticationService, AuthGuard, PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import {
+    AuthenticationService,
+    AuthGuard,
+    PermissionsGuard,
+    RolePermissionPolicy,
+} from '@tuposoft/lead-email-finder/modules/auth'
 import { ServiceClientCreationService } from '../application/service-client-creation.service'
 import { ServiceClientDeletionService } from '../application/service-client-deletion.service'
 import { ServiceClientDisablementService } from '../application/service-client-disablement.service'
 import { ServiceClientListingService } from '../application/service-client-listing.service'
 import { ServiceClientRotationService } from '../application/service-client-rotation.service'
 import { ServiceClientsController } from './service-clients.controller'
+import { configureServiceClientResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-service-client-response-headers'
+import {
+    DisabledServiceClientRotationError,
+    ServiceClientAccessDeniedError,
+    ServiceClientNotFoundError,
+    ServiceClientPermissionCeilingExceededError,
+} from '../domain/service-client-management.errors'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
     authenticate: jest.fn(),
@@ -36,9 +54,7 @@ function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal
     }
 }
 
-function credentialFixture(
-    overrides: Partial<ServiceCredentialDetailRecord> = {},
-): ServiceCredentialDetailRecord {
+function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {}): ServiceCredentialDetailRecord {
     return {
         id: serviceClientId,
         organizationId,
@@ -79,10 +95,14 @@ describe('service client management HTTP boundary', () => {
             imports: [ServiceClientManagementHttpTestModule],
         }).compile()
 
-        app = moduleRef.createNestApplication()
+        app = moduleRef.createNestApplication({ logger: false })
+        configureServiceClientResponseHeaders(app)
         app.useGlobalPipes(new ValidationPipe())
         app.useGlobalInterceptors(
-            new ClassSerializerInterceptor(app.get(Reflector), { strategy: 'excludeAll', enableImplicitConversion: true }),
+            new ClassSerializerInterceptor(app.get(Reflector), {
+                strategy: 'excludeAll',
+                enableImplicitConversion: true,
+            }),
         )
         await app.init()
     })
@@ -102,6 +122,7 @@ describe('service client management HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
                 .send({ permissions: ['verification:run'] })
+                .expect('Cache-Control', 'no-store')
                 .expect(401)
         })
 
@@ -111,6 +132,7 @@ describe('service client management HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
                 .send({ permissions: ['verification:run'] })
+                .expect('Cache-Control', 'no-store')
                 .expect(403)
         })
 
@@ -120,6 +142,7 @@ describe('service client management HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
                 .send({ permissions: ['not-a-real-permission'] })
+                .expect('Cache-Control', 'no-store')
                 .expect(400)
         })
 
@@ -129,6 +152,7 @@ describe('service client management HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
                 .send({ permissions: ['verification:run', 'verification:run'] })
+                .expect('Cache-Control', 'no-store')
                 .expect(400)
 
             expect(creationMock.create).not.toHaveBeenCalled()
@@ -141,6 +165,7 @@ describe('service client management HTTP boundary', () => {
             const response = await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
                 .send({ description: 'ci', permissions: ['verification:run'] })
+                .expect('Cache-Control', 'no-store')
                 .expect(201)
 
             expect(response.body).toEqual({
@@ -193,6 +218,7 @@ describe('service client management HTTP boundary', () => {
 
             const response = await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients/${serviceClientId}/rotate`)
+                .expect('Cache-Control', 'no-store')
                 .expect(200)
 
             expect(response.body).toMatchObject({ clientSecret: 'new-secret' })
@@ -230,6 +256,70 @@ describe('service client management HTTP boundary', () => {
                 organizationId,
                 serviceClientId,
             )
+        })
+    })
+
+    describe('secret-operation failure headers', () => {
+        it.each(['', `/${serviceClientId}/rotate`])(
+            'sets no-store before malformed JSON is parsed on %s',
+            async suffix => {
+                await request(app.getHttpServer())
+                    .post(`/v1/organizations/${organizationId}/service-clients${suffix}`)
+                    .set('Content-Type', 'application/json')
+                    .send('{')
+                    .expect('Cache-Control', 'no-store')
+                    .expect(400)
+            },
+        )
+
+        it.each([401, 403])('sets no-store on rotate guard rejection %s', async status => {
+            if (status === 401) authenticationServiceMock.authenticate.mockRejectedValue(new UnauthorizedException())
+            else
+                authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole: 'member' }))
+
+            await request(app.getHttpServer())
+                .post(`/v1/organizations/${organizationId}/service-clients/${serviceClientId}/rotate`)
+                .expect('Cache-Control', 'no-store')
+                .expect(status)
+        })
+
+        it.each([
+            [403, new ServiceClientAccessDeniedError('Only a human session may manage service clients')],
+            [404, new ServiceClientNotFoundError()],
+            [409, new DisabledServiceClientRotationError()],
+            [500, new Error('provider failure')],
+        ])('sets no-store on rotate application failure %s', async (status, error) => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
+            rotationMock.rotate.mockRejectedValue(error)
+            await request(app.getHttpServer())
+                .post(`/v1/organizations/${organizationId}/service-clients/${serviceClientId}/rotate`)
+                .expect('Cache-Control', 'no-store')
+                .expect(status)
+        })
+
+        it.each([
+            [400, new ServiceClientPermissionCeilingExceededError(['billing:manage'])],
+            [403, new ServiceClientAccessDeniedError('Only a human session may manage service clients')],
+            [500, new Error('provider failure')],
+        ])('sets no-store on create application failure %s', async (status, error) => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
+            creationMock.create.mockRejectedValue(error)
+            await request(app.getHttpServer())
+                .post(`/v1/organizations/${organizationId}/service-clients`)
+                .send({ permissions: ['verification:run'] })
+                .expect('Cache-Control', 'no-store')
+                .expect(status)
+        })
+
+        it('sets no-store on invalid create and rotate UUIDs', async () => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
+            for (const path of ['not-a-uuid/service-clients', `${organizationId}/service-clients/not-a-uuid/rotate`]) {
+                await request(app.getHttpServer())
+                    .post(`/v1/organizations/${path}`)
+                    .send({ permissions: ['verification:run'] })
+                    .expect('Cache-Control', 'no-store')
+                    .expect(400)
+            }
         })
     })
 })

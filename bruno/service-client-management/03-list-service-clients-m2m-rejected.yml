@@ -1,27 +1,22 @@
 info:
-  name: 02-create-service-client-requires-org-membership
+  name: 03-list-service-clients-m2m-rejected
   type: http
-  seq: 2
+  seq: 3
 
 http:
-  method: POST
+  method: GET
   url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients"
   headers:
     - name: Content-Type
       value: application/json
     - name: Authorization
       value: "Bearer {{serviceClientToken}}"
-  body:
-    type: json
-    data: |-
-      {
-        "permissions": ["verification:run"]
-      }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('rejects an actor whose organization does not match the target organization', function() {
+        test('rejects an M2M credential before client management', function() {
           expect(res.status).to.equal(403);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
         });

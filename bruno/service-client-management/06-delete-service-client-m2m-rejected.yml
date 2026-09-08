@@ -1,0 +1,22 @@
+info:
+  name: 06-delete-service-client-m2m-rejected
+  type: http
+  seq: 6
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients/{{serviceClientRecordId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects an M2M credential before client management', function() {
+          expect(res.status).to.equal(403);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
+        });

@@ -311,6 +311,16 @@ keyboard focus, and return it to the trigger. One-time invitation results use th
 immediate secret cleanup. The public invitation page uses a single readable column and the existing brand link;
 loading and recovery reserve the shared state height. This feature adds no palette, typography, or motion tokens.
 
+### Service Clients and One-Time Secrets
+
+Service-client management reuses the product heading, flat panels, shared form fields, actions, and team dialog.
+Native permission checkboxes display only server-provided choices in two desktop columns and one phone column. The metadata table becomes labeled rows at narrow
+widths, preserving full identifiers, permissions, status text, and UTC timestamps. Ten rows appear per page.
+The one-time dialog masks its secret initially and offers explicit Show, Copy, and Download controls. Copy and
+Download keep the dialog open until Close; the copy confirmation contains no credential. Confirmation dialogs name
+the client and explain rotation, permanent disablement, or deletion before the operator acts. These variants reuse
+the existing tokens and bounded dialog scrolling without adding a new visual system.
+
 ### Verification Evidence
 
 Single-email verification reuses the product headings, shared form controls, flat panels, and existing action

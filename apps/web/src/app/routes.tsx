@@ -6,6 +6,7 @@ import { BillingPage } from '../routes/BillingPage'
 import { VerificationPage } from '../routes/VerificationPage'
 import { VerificationJobPage } from '../routes/VerificationJobPage'
 import { TeamPage } from '../features/team/TeamPage'
+import { ServiceClientsPage } from '../features/service-clients/ServiceClientsPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
 import {
     AccountUnavailablePage,
@@ -36,6 +37,7 @@ export const appRoutes: RouteObject[] = [
                     { index: true, element: <WorkspaceHome /> },
                     { path: 'billing', element: <BillingPage /> },
                     { path: 'team', element: <TeamPage /> },
+                    { path: 'service-clients', element: <ServiceClientsPage /> },
                     { path: 'verifications/new', element: <VerificationPage /> },
                     { path: 'verifications/:id', element: <VerificationJobPage /> },
                     { path: 'session-expired', element: <SessionExpiredPage /> },

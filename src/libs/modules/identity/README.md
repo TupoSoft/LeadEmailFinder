@@ -134,7 +134,8 @@ hashed token. It returns no token hash, raw token, IDs, audit metadata, or accep
 pending, expired, and consumed interpretation. `MembershipDirectory` returns active and disabled rows in
 `createdAt ASC, id ASC` order. Acceptance sessions return only generic accepted status when another request has
 already consumed the invitation; the first acceptance retains its existing organization, email, and role result.
-No schema change or reset is required.
+`ServiceCredentialDirectory` includes active and disabled credentials in `createdAt DESC, id DESC` order, with the
+ID providing a deterministic tie-breaker for equal timestamps. No schema change or reset is required.
 
 Credit grants atomically insert a zero-balance account with `ON CONFLICT DO NOTHING`, then acquire a pessimistic
 write lock on the persisted account row. This serializes first grants even when no account existed before either

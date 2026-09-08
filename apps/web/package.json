@@ -26,7 +26,10 @@
         "test:team-live": "playwright test --config playwright.team.config.ts",
         "test:privileged-artifacts": "node --test ../../scripts/testing/browser-fixture-artifacts.spec.mjs",
         "test:invitation-artifacts": "node --test ../../scripts/testing/invitation-browser-artifacts.spec.mjs",
-        "verify:ui": "pnpm build && playwright test"
+        "verify:ui": "pnpm build && playwright test",
+        "test:service-clients": "playwright test --config playwright.service-clients.config.ts",
+        "test:service-clients-live": "playwright test --config playwright.service-clients-live.config.ts",
+        "test:service-client-artifacts": "node --test ../../scripts/testing/service-client-browser-artifacts.spec.mjs"
     },
     "dependencies": {
         "@fontsource-variable/inter": "5.3.0",
