@@ -187,8 +187,11 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm dev:reset -- --confirm-project=LEF',
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts',
+        'corepack pnpm bruno:async-verification',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-live',
         'docker compose -f docker/compose.yaml ps',
-        'docker compose -f docker/compose.yaml down --volumes',
+        'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans',
     ],
 }
 
@@ -328,10 +331,39 @@ describe('Validate workflow syntax and structure', () => {
     })
 
     it('keeps browser cleanup active after a selected check fails', () => {
-        for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml down --volumes']) {
+        for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans']) {
             expect(condition(workflow.jobs.browser.steps.find((step) => command(step.run) === run)?.if)).toBe(
                 "always() && needs.changes.outputs.browser == 'true'",
             )
+        }
+    })
+
+    it('retains local API watch mode and the same startup override with the SMTP overlay', () => {
+        const compose = parseAllDocuments(readFileSync(resolve(root, 'docker/compose.yaml'), 'utf8'))
+        const smtp = parseAllDocuments(readFileSync(resolve(root, 'docker/compose.smtp-dev.yaml'), 'utf8'))
+        for (const documents of [compose, smtp]) {
+            expect(documents).toHaveLength(1)
+            expect(documents[0].errors).toEqual([])
+        }
+        expect(compose[0].getIn(['services', 'api', 'command'])).toBe('${API_START_COMMAND:-pnpm start}')
+        expect(smtp[0].hasIn(['services', 'api', 'command'])).toBe(false)
+        const packageJson: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+        if (!isRecord(packageJson) || !isRecord(packageJson.scripts)) {
+            throw new Error('Expected package scripts to be a mapping.')
+        }
+        expect(packageJson.scripts.start).toBe('nest start -w')
+    })
+
+    it('disables API watch mode throughout both browser CI stack starts', () => {
+        const browser = workflow.jobs.browser
+        expect(browser.env?.API_START_COMMAND).toBe('pnpm exec nest start')
+        for (const start of [
+            'corepack pnpm dev:reset -- --confirm-project=LEF',
+            'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d',
+        ]) {
+            const steps = browser.steps.filter((step) => step.run?.split('\n').some((line) => command(line) === start))
+            expect(steps).toHaveLength(1)
+            expect({ ...browser.env, ...steps[0].env }.API_START_COMMAND).toBe('pnpm exec nest start')
         }
     })
 

@@ -1,0 +1,26 @@
+info:
+    name: enqueue-once
+    type: http
+    seq: 7
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email": "person@lef.test"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('enqueue-once', function() {
+                expect(res.status).to.equal(202);
+                expect(Object.keys(res.body)).to.deep.equal(['id']);
+                expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+                bru.setVar('asyncJobId', res.body.id);
+              });

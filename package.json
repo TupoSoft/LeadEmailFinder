@@ -17,6 +17,7 @@
         "test:bff-live": "node scripts/testing/bff-live.mjs",
         "test:oidc-runners": "node --test scripts/testing/*.test.mjs scripts/bruno/*.test.mjs",
         "bruno:bff-sessions": "node scripts/bruno/run-collection.mjs bff-sessions",
+        "bruno:async-verification": "node scripts/bruno/run-collection.mjs async-verification",
         "bruno:smtp-dev": "node scripts/bruno/run-collection.mjs smtp-dev",
         "bruno:credit-purchases": "node scripts/bruno/run-collection.mjs credit-purchases",
         "bruno:organization-onboarding": "node scripts/bruno/run-collection.mjs organization-onboarding",

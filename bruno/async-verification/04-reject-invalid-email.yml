@@ -1,0 +1,24 @@
+info:
+    name: reject-invalid-email
+    type: http
+    seq: 4
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email": "invalid-address"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reject-invalid-email', function() {
+                expect(res.status).to.equal(400);
+
+              });

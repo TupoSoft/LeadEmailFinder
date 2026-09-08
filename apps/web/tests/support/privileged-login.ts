@@ -8,13 +8,24 @@ import {
 import { hostedMfaLogin } from './hosted-mfa-login'
 
 function safeInvitationError(value: unknown): TestInfoError {
-    const stack = typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
-        ? value.stack : ''
+    const stack =
+        typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
+            ? value.stack
+            : ''
     const location = stack.match(/(?:invitations-ui|team-and-invitations)\.spec\.ts:\d+:\d+/)?.[0]
     return {
         value: 'Invitation browser validation failed.',
         ...(location ? { stack: location } : {}),
     }
+}
+
+function safeVerificationError(value: unknown): TestInfoError {
+    const stack =
+        typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
+            ? value.stack
+            : ''
+    const location = stack.match(/single-verification\.spec\.ts:\d+:\d+/)?.[0]
+    return { value: 'Verification browser validation failed.', ...(location ? { stack: location } : {}) }
 }
 
 export const test = base.extend<{
@@ -23,7 +34,9 @@ export const test = base.extend<{
 }>({
     privilegedAuthPolicy: [
         async ({ trace, screenshot, video }, runFixture, info) => {
-            if (process.env.LEF_INVITATION_TEST_PRIVACY === '1') {
+            if (process.env.LEF_INVITATION_TEST_PRIVACY === '1' || process.env.LEF_VERIFICATION_TEST_PRIVACY === '1') {
+                const sanitize =
+                    process.env.LEF_VERIFICATION_TEST_PRIVACY === '1' ? safeVerificationError : safeInvitationError
                 // Playwright still builds error-context.md from assertion messages
                 // when PLAYWRIGHT_NO_COPY_PROMPT disables DOM snapshots. Normalize
                 // errors on arrival, before its artifact recorder can persist them.
@@ -31,9 +44,7 @@ export const test = base.extend<{
                 // reporter output or removing files afterward would be too late.
                 info.errors = new Proxy(info.errors, {
                     set(errors, key, value) {
-                        return Reflect.set(errors, key, /^\d+$/.test(String(key))
-                            ? safeInvitationError(value)
-                            : value)
+                        return Reflect.set(errors, key, /^\d+$/.test(String(key)) ? sanitize(value) : value)
                     },
                 })
             }

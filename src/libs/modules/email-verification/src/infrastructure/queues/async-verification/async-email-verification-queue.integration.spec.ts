@@ -5,7 +5,6 @@ import {
     EmailVerificationReason,
     IEmailVerificationResponseDto,
     IEmailVerificationService,
-    JobState,
 } from '@tuposoft/lead-email-finder/common'
 import { AsyncEmailVerificationService } from '../../../application/delivery/async/async-email-verification.service'
 import { AsyncEmailVerificationJobNotFoundException } from '../../../application/delivery/async/job-not-found.exception'
@@ -111,7 +110,9 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         await worker.waitUntilReady()
     }
 
-    async function enqueueDirect(id: string): Promise<Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>> {
+    async function enqueueDirect(
+        id: string,
+    ): Promise<Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>> {
         const data = JSON.parse(DIRECT_JOB_DATA_V1) as AsyncEmailVerificationJobData
         await expect(jobs.enqueue(data, id)).resolves.toEqual({ id })
         const job = await queue.getJob(id)
@@ -130,12 +131,14 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
             expect(job.name).toBe('async-email-verification')
             expect(job.opts).toMatchObject({ attempts: 5, backoff: { type: 'async-email-verification' }, jobId: id })
 
-            const readOwnedStatus = async (state: JobState): Promise<void> => {
+            const readOwnedStatus = async (state: 'queued' | 'completed'): Promise<void> => {
                 const owner = async (): Promise<void> => {
                     const status = await service.getAsyncVerificationState(id, 'owner-organization')
                     expect(status.state).toBe(state)
-                    if (state === JobState.COMPLETED) {
-                        expect(status.result).toEqual(JSON.parse(JSON.stringify(result)))
+                    if (status.state === 'completed') {
+                        const safeResult = JSON.parse(JSON.stringify(result)) as Record<string, unknown>
+                        delete safeResult.createdAt
+                        expect(status.result).toEqual(safeResult)
                     } else {
                         expect(status).toEqual({ state })
                     }
@@ -150,7 +153,7 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
                 }
             }
 
-            await readOwnedStatus(JobState.WAITING)
+            await readOwnedStatus('queued')
             await expect(service.getAsyncVerificationState(randomUUID(), 'owner-organization')).rejects.toBeInstanceOf(
                 AsyncEmailVerificationJobNotFoundException,
             )
@@ -158,7 +161,7 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
             const completed = job.waitUntilFinished(queueEvents, 10_000)
             await startWorker()
             await expect(completed).resolves.toEqual(JSON.parse(JSON.stringify(result)))
-            await readOwnedStatus(JobState.COMPLETED)
+            await readOwnedStatus('completed')
             expect(enqueue).toHaveBeenCalledTimes(1)
             expect(core.verify).toHaveBeenCalledTimes(1)
             expect(core.verify).toHaveBeenCalledWith({
@@ -220,7 +223,12 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
 
     it('preserves the job ID through greylist delay and eventual completion', async () => {
         core.verify
-            .mockResolvedValueOnce({ ...result, exists: null, catchAll: null, reason: EmailVerificationReason.TemporarilyBlocked })
+            .mockResolvedValueOnce({
+                ...result,
+                exists: null,
+                catchAll: null,
+                reason: EmailVerificationReason.TemporarilyBlocked,
+            })
             .mockResolvedValue(result)
         const id = randomUUID()
         const job = await enqueueDirect(id)
@@ -238,7 +246,7 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         ])
         expect((await queue.getJob(id))?.attemptsMade).toBe(2)
         await expect(service.getAsyncVerificationState(id, 'owner-organization')).resolves.toMatchObject({
-            state: JobState.COMPLETED,
+            state: 'completed',
         })
         expect(await queue.getJobCounts('completed', 'failed')).toEqual({ completed: 1, failed: 0 })
     }, 15_000)
@@ -269,7 +277,8 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         expect(JSON.stringify(failed.stacktrace)).not.toContain(result.email)
         expect(JSON.stringify(failed.stacktrace)).not.toContain('owner-credential')
         await expect(service.getAsyncVerificationState(id, 'owner-organization')).resolves.toEqual({
-            state: JobState.FAILED,
+            state: 'failed',
+            failureCode: 'verification_failed',
         })
         expect(await queue.getJobCounts('completed', 'failed')).toEqual({ completed: 0, failed: 1 })
     }, 15_000)

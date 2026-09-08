@@ -17,6 +17,9 @@ docker compose -f docker/compose.yaml up -d --build --wait --wait-timeout 240
 ```
 
 The API image installs the backend workspace, compiles NestJS, and retains the existing development watcher.
+Compose defaults `API_START_COMMAND` to `pnpm start`. Automated browser runs set it to `pnpm exec nest start` for
+both initial provisioning and SMTP attachment. This completes type checking and Swagger metadata generation before
+the API starts, preventing a watched restart after the first successful health check.
 The web image builds the web workspace and its client dependency in Node 24, then copies only static assets and
 Nginx configuration into a version- and digest-pinned unprivileged runtime. Its health check requests static service
 health on a separate loopback listener at port 8081. It does not call the API. The full browser smoke requires both

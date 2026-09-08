@@ -1,5 +1,3 @@
-import type { IEmailVerificationResponseDto } from '@tuposoft/lead-email-finder/common'
-
 export const ASYNC_VERIFICATION_JOBS = Symbol('AsyncVerificationJobs')
 
 export interface AsyncVerificationJobData {
@@ -10,7 +8,12 @@ export interface AsyncVerificationJobData {
 
 export interface AsyncVerificationJob {
     organizationId: string
-    readStatus(): Promise<{ state: string; result?: IEmailVerificationResponseDto }>
+    readStatus(): Promise<AsyncVerificationSnapshot>
+}
+
+export interface AsyncVerificationSnapshot {
+    state: 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'
+    result?: unknown
 }
 
 export interface AsyncVerificationJobs {

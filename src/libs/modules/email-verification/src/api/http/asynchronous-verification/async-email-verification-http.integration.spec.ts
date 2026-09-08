@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import { NextFunction, Request, Response } from 'express'
 import request from 'supertest'
-import { EmailVerificationReason, JobState } from '@tuposoft/lead-email-finder/common'
+import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditGuard, CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
@@ -80,7 +80,7 @@ describe('asynchronous verification HTTP contracts', () => {
         jobs.enqueue.mockReset().mockResolvedValue({ id: jobId })
         jobs.find.mockReset().mockResolvedValue({
             organizationId,
-            readStatus: jest.fn().mockResolvedValue({ state: 'waiting' }),
+            readStatus: jest.fn().mockResolvedValue({ state: 'queued' }),
         })
         credits.debit.mockReset().mockResolvedValue(undefined)
     })
@@ -246,7 +246,7 @@ describe('asynchronous verification HTTP contracts', () => {
             expect(jobs.enqueue).not.toHaveBeenCalled()
         })
 
-        it.each(Object.values(JobState).filter(state => state !== JobState.COMPLETED))(
+        it.each(['queued', 'running', 'unavailable'])(
             'returns only %s for an owned job without debit or dispatch',
             async state => {
                 principal = { ...runPrincipal, permissions: ['verification:read'] }
@@ -271,6 +271,12 @@ describe('asynchronous verification HTTP contracts', () => {
                     id: verificationId,
                     email,
                     reason: EmailVerificationReason.AcceptedEmail,
+                    localPart: 'test',
+                    domain: 'example.com',
+                    exists: true,
+                    catchAll: null,
+                    sources: ['mx'],
+                    createdAt: '2026-09-07T00:00:00.000Z',
                     organizationId,
                     credentialId: 'private-credential',
                     internalDiagnostic: 'private queue diagnostics',
@@ -283,7 +289,16 @@ describe('asynchronous verification HTTP contracts', () => {
 
                 expect(response.body).toEqual({
                     state: 'completed',
-                    result: { id: verificationId, email, reason: EmailVerificationReason.AcceptedEmail },
+                    result: {
+                        id: verificationId,
+                        email,
+                        reason: EmailVerificationReason.AcceptedEmail,
+                        localPart: 'test',
+                        domain: 'example.com',
+                        exists: true,
+                        catchAll: null,
+                        sources: ['mx'],
+                    },
                 })
             }
 
@@ -292,15 +307,50 @@ describe('asynchronous verification HTTP contracts', () => {
             expect(jobs.enqueue).not.toHaveBeenCalled()
         })
 
-        it('maps unsupported states to a generic 500 without revealing the state', async () => {
+        it('returns the safe failure code without reading diagnostics or returning a result', async () => {
+            jobs.find.mockResolvedValue({
+                organizationId,
+                readStatus: jest.fn().mockResolvedValue({
+                    state: 'failed',
+                    result: { email },
+                    failedReason: 'private SMTP and proxy diagnostics',
+                    stacktrace: ['private stack'],
+                    failureCode: 'private-provider-code',
+                }),
+            })
+
+            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
+
+            expect(response.body).toEqual({ state: 'failed', failureCode: 'verification_failed' })
+            expect(credits.debit).not.toHaveBeenCalled()
+            expect(jobs.enqueue).not.toHaveBeenCalled()
+        })
+
+        it.each([undefined, null, {}, { email }, { email, exists: 'true' }])(
+            'reports unavailable for an incomplete or invalid completion %#',
+            async result => {
+                jobs.find.mockResolvedValue({
+                    organizationId,
+                    readStatus: jest.fn().mockResolvedValue({ state: 'completed', result }),
+                })
+
+                const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
+
+                expect(response.body).toEqual({ state: 'unavailable' })
+                expect(credits.debit).not.toHaveBeenCalled()
+                expect(jobs.enqueue).not.toHaveBeenCalled()
+            },
+        )
+
+        it('maps unsupported states to unavailable without revealing the state', async () => {
             jobs.find.mockResolvedValue({
                 organizationId,
                 readStatus: jest.fn().mockResolvedValue({ state: 'unexpected-private-diagnostics' }),
             })
 
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(500)
+            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
 
-            expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
+            expect(response.body).toEqual({ state: 'unavailable' })
             expect(credits.debit).not.toHaveBeenCalled()
             expect(jobs.enqueue).not.toHaveBeenCalled()
         })

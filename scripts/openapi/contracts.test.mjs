@@ -88,14 +88,15 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/organizations/{organizationId}/invitations',
         '/v1/organizations/{organizationId}/members',
         '/v1/organizations/{organizationId}/members/{membershipId}',
+        '/verifyAsync',
+        '/verifyAsync/{id}',
     ])
     assert.deepEqual(browser.servers, [{ url: '/' }])
-    for (const fragment of ['verify', 'proxies']) {
-        assert.ok(
-            Object.keys(runtime.paths).some(path => path.includes(fragment)),
-            `Full runtime docs retain ${fragment}`,
-        )
-        assert.ok(Object.keys(browser.paths).every(path => !path.includes(fragment)))
+    for (const path of [
+        '/verify', '/verifications/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results', '/v1/proxies',
+    ]) {
+        assert.ok(Object.hasOwn(runtime.paths, path), `Full runtime docs retain ${path}`)
+        assert.equal(Object.hasOwn(browser.paths, path), false, `Browser docs exclude ${path}`)
     }
     const account = browser.components.schemas.CurrentAccountContextDto
     assert.equal(account.properties.email.nullable, true)
@@ -104,6 +105,104 @@ test('exports the real app from an empty environment without provider constructi
     }
     assert.deepEqual(browser.paths['/v1/auth/session'].get.security, [{ lef_session: [] }])
     for (const code of ['200', '401', '403']) assert.ok(browser.paths['/v1/auth/session'].get.responses[code])
+})
+
+test('async verification publishes only create and status reads with their authentication and error contracts', () => {
+    const operations = Object.entries(browser.paths)
+        .filter(([path]) => /verif|prox/i.test(path))
+        .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
+        .sort()
+    assert.deepEqual(operations, ['GET /verifyAsync/{id}', 'POST /verifyAsync'])
+    const create = browser.paths['/verifyAsync'].post
+    const status = browser.paths['/verifyAsync/{id}'].get
+    assert.deepEqual(create.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+    assert.deepEqual(status.security, [{ lef_session: [] }, { oidc: [] }])
+    assert.deepEqual(Object.keys(create.responses).sort(), ['202', '400', '401', '402', '403'])
+    assert.deepEqual(Object.keys(status.responses).sort(), ['200', '400', '401', '403', '404'])
+    assert.equal(create.requestBody.required, true)
+    assert.deepEqual(create.requestBody.content['application/json'].schema, {
+        $ref: '#/components/schemas/VerifyAsyncRequestBodyDto',
+    })
+    assert.deepEqual(create.responses['202'].content['application/json'].schema, {
+        $ref: '#/components/schemas/VerifyAsyncResponseDto',
+    })
+    assert.deepEqual(status.parameters, [{ in: 'path', name: 'id', required: true, schema: { format: 'uuid', type: 'string' } }])
+    const schemas = browser.components.schemas
+    assert.deepEqual(schemas.VerifyAsyncRequestBodyDto.required, ['email'])
+    assert.deepEqual(Object.keys(schemas.VerifyAsyncRequestBodyDto.properties), ['email'])
+    assert.equal(schemas.VerifyAsyncRequestBodyDto.properties.email.format, 'email')
+    assert.deepEqual(schemas.VerifyAsyncResponseDto.required, ['id'])
+    assert.deepEqual(Object.keys(schemas.VerifyAsyncResponseDto.properties), ['id'])
+    assert.equal(schemas.VerifyAsyncResponseDto.properties.id.format, 'uuid')
+})
+
+test('async status exposes five discriminated outcomes and only safe result fields', () => {
+    const content = browser.paths['/verifyAsync/{id}'].get.responses['200'].content['application/json']
+    const variants = {
+        queued: 'AsyncVerificationQueuedResponseDto',
+        running: 'AsyncVerificationRunningResponseDto',
+        completed: 'AsyncVerificationCompletedResponseDto',
+        failed: 'AsyncVerificationFailedResponseDto',
+        unavailable: 'AsyncVerificationUnavailableResponseDto',
+    }
+    const mapping = Object.fromEntries(Object.entries(variants).map(([state, name]) => [state, `#/components/schemas/${name}`]))
+    assert.deepEqual(content.schema.discriminator, { propertyName: 'state', mapping })
+    assert.deepEqual(content.schema.oneOf, Object.values(mapping).map($ref => ({ $ref })))
+    const schemas = browser.components.schemas
+    for (const [state, name] of Object.entries(variants)) {
+        const schema = schemas[name]
+        const fields = state === 'completed' ? ['result', 'state'] : state === 'failed' ? ['failureCode', 'state'] : ['state']
+        assert.deepEqual(schema.properties.state, { type: 'string', enum: [state] })
+        assert.deepEqual(Object.keys(schema.properties).sort(), fields)
+        assert.deepEqual([...schema.required].sort(), fields)
+        assert.equal(content.examples[state].value.state, state)
+        assert.deepEqual(Object.keys(content.examples[state].value).sort(), fields)
+    }
+    assert.deepEqual(schemas.AsyncVerificationFailedResponseDto.properties.failureCode.enum, ['verification_failed'])
+    assert.deepEqual(content.examples.failed.value, { state: 'failed', failureCode: 'verification_failed' })
+    assert.deepEqual(schemas.AsyncVerificationCompletedResponseDto.properties.result, {
+        $ref: '#/components/schemas/AsyncVerificationResultDto',
+    })
+    const result = schemas.AsyncVerificationResultDto
+    assert.deepEqual(Object.keys(result.properties).sort(), [
+        'catchAll', 'domain', 'email', 'exists', 'format', 'id', 'localPart', 'mxDomain', 'reason', 'sources', 'targetExchange',
+    ])
+    assert.deepEqual([...result.required].sort(), ['catchAll', 'domain', 'email', 'exists', 'id', 'localPart', 'reason', 'sources'])
+    for (const field of ['exists', 'catchAll']) {
+        assert.equal(result.properties[field].type, 'boolean')
+        assert.equal(result.properties[field].nullable, true)
+    }
+})
+
+test('generated async types preserve exact state discrimination, required results, and nullable evidence', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'async-contract.ts')
+    await writeFile(file, `
+        import type { paths, components } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type Status = paths['/verifyAsync/{id}']['get']['responses'][200]['content']['application/json']
+        type Result = components['schemas']['AsyncVerificationResultDto']
+        type Assertions = [
+            Assert<Equal<Status['state'], 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'>>,
+            Assert<Equal<Extract<Status, { state: 'completed' }>, { state: 'completed'; result: Result }>>,
+            Assert<Equal<Extract<Status, { state: 'failed' }>, { state: 'failed'; failureCode: 'verification_failed' }>>,
+            Assert<Equal<Extract<Status, { state: 'queued' }>, { state: 'queued' }>>,
+            Assert<Equal<Extract<Status, { state: 'running' }>, { state: 'running' }>>,
+            Assert<Equal<Extract<Status, { state: 'unavailable' }>, { state: 'unavailable' }>>,
+            Assert<Equal<Result['exists'], boolean | null>>,
+            Assert<Equal<Result['catchAll'], boolean | null>>,
+            Assert<Equal<keyof Result, 'id' | 'email' | 'localPart' | 'domain' | 'format' | 'exists' | 'catchAll' | 'reason' | 'sources' | 'mxDomain' | 'targetExchange'>>,
+            Assert<Equal<paths['/verifyAsync']['post']['responses'][202]['content']['application/json'], { id: string }>>,
+            Assert<Equal<NonNullable<paths['/verifyAsync']['get']>, never>>,
+            Assert<Equal<NonNullable<paths['/verifyAsync/{id}']['post']>, never>>
+        ]
+    `)
+    const program = ts.createProgram([file], {
+        strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022,
+    })
+    const diagnostics = ts.getPreEmitDiagnostics(program)
+    assert.deepEqual(diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
 })
 
 test('billing exposes exactly the consumed methods and safe customer fields through generated types', async () => {

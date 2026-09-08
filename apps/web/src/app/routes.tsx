@@ -3,6 +3,8 @@ import { AuthProvider } from '../features/auth/AuthProvider'
 import { NotFoundPage } from '../routes/NotFoundPage'
 import { PublicEntryPage } from '../routes/PublicEntryPage'
 import { BillingPage } from '../routes/BillingPage'
+import { VerificationPage } from '../routes/VerificationPage'
+import { VerificationJobPage } from '../routes/VerificationJobPage'
 import { TeamPage } from '../features/team/TeamPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
 import {
@@ -34,6 +36,8 @@ export const appRoutes: RouteObject[] = [
                     { index: true, element: <WorkspaceHome /> },
                     { path: 'billing', element: <BillingPage /> },
                     { path: 'team', element: <TeamPage /> },
+                    { path: 'verifications/new', element: <VerificationPage /> },
+                    { path: 'verifications/:id', element: <VerificationJobPage /> },
                     { path: 'session-expired', element: <SessionExpiredPage /> },
                     { path: 'account-unavailable', element: <AccountUnavailablePage /> },
                     { path: 'forbidden', element: <ForbiddenPage /> },

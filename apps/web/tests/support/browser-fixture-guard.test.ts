@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import privileged from '../../playwright.privileged.config'
 import billing from '../../playwright.billing.config'
+import verification from '../../playwright.verification.config'
+import normal from '../../playwright.config'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
@@ -16,14 +18,27 @@ describe('privileged browser fixture integration boundaries', () => {
         expect(privileged.retries).toBe(0)
         expect(privileged.workers).toBe(1)
         expect(process.env.PLAYWRIGHT_NO_COPY_PROMPT).toBe('1')
-        const normal = readFileSync(resolve(root, 'apps/web/playwright.config.ts'), 'utf8')
-        expect(normal).toContain("testIgnore: ['privileged-*.spec.ts', 'billing.spec.ts', 'invitations-ui.spec.ts', 'team-and-invitations.spec.ts']")
+        expect(verification.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
+        expect(verification.retries).toBe(0)
+        expect(verification.workers).toBe(1)
+        expect(normal.testIgnore).toEqual(
+            expect.arrayContaining([
+                'privileged-*.spec.ts',
+                'billing.spec.ts',
+                'invitations-ui.spec.ts',
+                'team-and-invitations.spec.ts',
+                'single-verification.spec.ts',
+            ]),
+        )
     })
 
     it('requires the shared fixture in privileged suites and prohibits synthetic authentication', () => {
         const e2e = resolve(root, 'apps/web/tests/e2e')
         const suites = readdirSync(e2e).filter(
-            name => /^privileged-.*\.spec\.ts$/.test(name) || name === 'billing.spec.ts',
+            name =>
+                /^privileged-.*\.spec\.ts$/.test(name) ||
+                name === 'billing.spec.ts' ||
+                name === 'single-verification.spec.ts',
         )
         expect(suites.length).toBeGreaterThan(0)
         for (const suite of suites) {

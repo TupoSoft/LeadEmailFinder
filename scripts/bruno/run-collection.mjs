@@ -8,15 +8,29 @@ import { promisify } from 'node:util'
 import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
 import { withExpiredInvitation } from './invitation-expiry-fixture.mjs'
+import { withAsyncVerificationFixture } from './async-verification-fixture.mjs'
+import {
+    brunoFailure,
+    formatFailureDiagnostic,
+    parseComposeFailure,
+    reportFailureDiagnostic,
+} from './failure-diagnostic.mjs'
 
 const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
+    'async-verification': Object.freeze({ requests: 15, tests: 15, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
-    'organization-onboarding': Object.freeze({ requests: 12, tests: 12, sandbox: 'developer', network: 'host', countOnly: true }),
+    'organization-onboarding': Object.freeze({
+        requests: 12,
+        tests: 12,
+        sandbox: 'developer',
+        network: 'host',
+        countOnly: true,
+    }),
 })
 
 export function registeredCollection(name) {
@@ -125,6 +139,10 @@ export function cliArguments(name, environment, reportFile) {
         !environment.OIDC_ISSUER_URL ||
         !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
         !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
+        (name === 'async-verification' &&
+            (!environment.CUSTOMER_ORGANIZATION_ID ||
+                !environment.CUSTOMER_SERVICE_CLIENT_ID ||
+                !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
         (name === 'organization-onboarding' && !environment.BRUNO_EXPIRED_INVITATION_TOKEN) ||
         (name === 'credit-purchases' &&
             (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
@@ -158,30 +176,43 @@ export async function executeCollection(name, environment, checkoutRoot) {
         throw new Error('Install the repository-pinned Bruno CLI before running a collection')
     }
     const reportDirectory = await mkdtemp(resolve(tmpdir(), 'lef-bruno-'))
+    const reportFile = resolve(reportDirectory, 'report.json')
+    let stage = 'collection'
     try {
-        const reportFile = resolve(reportDirectory, 'report.json')
         await execFileAsync(
             process.execPath,
             [
-                ...(collection.countOnly ? ['--import', resolve(checkoutRoot, 'scripts/bruno/count-only-reporter.mjs')] : []),
-                resolve(dirname(cliPackageFile), 'bin/bru.js'), ...cliArguments(name, environment, reportFile),
+                ...(collection.countOnly
+                    ? ['--import', resolve(checkoutRoot, 'scripts/bruno/count-only-reporter.mjs')]
+                    : []),
+                resolve(dirname(cliPackageFile), 'bin/bru.js'),
+                ...cliArguments(name, environment, reportFile),
             ],
             {
                 cwd: resolve(checkoutRoot, 'bruno', name),
-                env: { ...process.env, ...environment, ...(collection.countOnly ? { LEF_BRUNO_COUNTS_REPORT: reportFile } : {}) },
+                env: {
+                    ...process.env,
+                    ...environment,
+                    ...(collection.countOnly ? { LEF_BRUNO_COUNTS_REPORT: reportFile } : {}),
+                },
                 timeout: 240_000,
                 maxBuffer: 8 * 1024 * 1024,
             },
         )
+        stage = 'report'
         return assertExecutedReport(
             JSON.parse(await readFile(reportFile, 'utf8')),
             collection.requests,
             collection.tests,
         )
     } catch {
-        throw new Error(
-            'The registered Bruno collection failed; raw output is withheld to protect credentials and cookies',
-        )
+        let report
+        try {
+            report = JSON.parse(await readFile(reportFile, 'utf8'))
+        } catch {
+            /* No trustworthy report is available. */
+        }
+        throw brunoFailure(reportFailureDiagnostic(report, stage))
     } finally {
         await rm(reportDirectory, { recursive: true, force: true })
     }
@@ -191,13 +222,15 @@ export async function executeCollection(name, environment, checkoutRoot) {
 // Credentials cross stdin, never Docker arguments or a persistent environment file.
 export const composeWorker = `
 import { executeCollection } from './scripts/bruno/run-collection.mjs';
+import { composeFailureOutput } from './scripts/bruno/failure-diagnostic.mjs';
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
 try {
     const { name, environment } = JSON.parse(input);
     const counts = await executeCollection(name, environment, process.cwd());
     process.stdout.write(JSON.stringify(counts));
-} catch {
+} catch (error) {
+    process.stdout.write(composeFailureOutput(error));
     process.stderr.write('The Compose-network Bruno collection failed; raw output is withheld.');
     process.exitCode = 1;
 }
@@ -292,22 +325,50 @@ export async function runCollection(args, checkoutRoot) {
         for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
             await inspectDevelopmentService(checkoutRoot, metadata, service)
         }
-        const command = execFileAsync(
-            'docker',
-            ['exec', '--interactive', '--workdir', '/app', api.id, 'node', '--input-type=module', '-e', composeWorker],
-            { timeout: 270_000, maxBuffer: 8 * 1024 * 1024 },
-        )
-        // A child that exits before reading stdin still fails through its exit status.
-        command.child.stdin.on('error', () => {})
-        command.child.stdin.end(JSON.stringify({ name, environment }))
-        const { stdout } = await command
-        const counts = z
-            .object({
-                requests: z.literal(collection.requests),
-                tests: collection.tests === undefined ? z.number().int().positive() : z.literal(collection.tests),
-            })
-            .parse(JSON.parse(stdout))
-        return counts
+        const runCompose = async fixtureEnvironment => {
+            const command = execFileAsync(
+                'docker',
+                [
+                    'exec',
+                    '--interactive',
+                    '--workdir',
+                    '/app',
+                    api.id,
+                    'node',
+                    '--input-type=module',
+                    '-e',
+                    composeWorker,
+                ],
+                { timeout: 270_000, maxBuffer: 8 * 1024 * 1024 },
+            )
+            // A child that exits before reading stdin still fails through its exit status.
+            command.child.stdin.on('error', () => {})
+            command.child.stdin.end(JSON.stringify({ name, environment: fixtureEnvironment }))
+            let stdout
+            try {
+                ;({ stdout } = await command)
+            } catch (error) {
+                throw parseComposeFailure(error.stdout)
+            }
+            try {
+                return z
+                    .object({
+                        requests: z.literal(collection.requests),
+                        tests:
+                            collection.tests === undefined ? z.number().int().positive() : z.literal(collection.tests),
+                    })
+                    .strict()
+                    .parse(JSON.parse(stdout))
+            } catch {
+                throw brunoFailure({ stage: 'report' })
+            }
+        }
+        if (name === 'async-verification') {
+            return withAsyncVerificationFixture(checkoutRoot, fixture =>
+                runCompose({ ...environment, ...fixture.environment }),
+            )
+        }
+        return runCompose(environment)
     }
     return executeCollection(name, environment, checkoutRoot)
 }
@@ -320,9 +381,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
                 `Bruno ${BRUNO_VERSION}: ${counts.requests} requests and ${counts.tests} tests passed; no skipped requests`,
             )
         })
-        .catch(() => {
+        .catch(error => {
             console.error(
-                'Bruno failed. Confirm the registered collection, installed dependencies, and checkout-owned development stack; raw output is withheld to protect credentials and cookies.',
+                `Bruno failed ${formatFailureDiagnostic(error)}. Confirm the registered collection, installed dependencies, and checkout-owned development stack; raw output is withheld to protect credentials and cookies.`,
             )
             process.exitCode = 1
         })

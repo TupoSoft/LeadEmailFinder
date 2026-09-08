@@ -1,0 +1,18 @@
+info:
+    name: repeat-same-job-read
+    type: http
+    seq: 9
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyAsync/{{asyncJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('repeat-same-job-read', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body).to.deep.equal({ state: 'completed', result: bru.getVar('completedResult') });
+              });
