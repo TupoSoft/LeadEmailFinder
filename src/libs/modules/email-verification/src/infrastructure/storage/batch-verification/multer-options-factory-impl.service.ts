@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config'
 import { randomUUID } from 'node:crypto'
 import { getAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN, CustomerObjectWriteSecurity } from '@tuposoft/lead-email-finder/common'
-import { BatchUploadConfiguration } from '../domain/email-verification-configuration'
+import { BatchUploadConfiguration } from '../../../domain/email-verification-configuration'
 
 type MulterS3SecurityOptions =
     | {

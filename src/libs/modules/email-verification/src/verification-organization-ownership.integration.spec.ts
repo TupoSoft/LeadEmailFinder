@@ -1,11 +1,8 @@
 import { Upload } from '@aws-sdk/lib-storage'
-import { Job } from 'bullmq'
 import { randomUUID } from 'node:crypto'
 import { DataSource } from 'typeorm'
 import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
-import { BatchEmailVerificationJobData } from './batch-email-verification/batch-email-verification-job-data.interface'
-import { BatchEmailVerificationJobStep } from './batch-email-verification/batch-email-verification-job-step.enum'
-import { BatchEmailVerificationProcessor } from './batch-email-verification/batch-email-verification.processor'
+import { S3BatchResultWriter } from './infrastructure/storage/batch-verification/s3-batch-result-writer'
 import { DomainPolicyEntity } from './infrastructure/persistence/typeorm/domain-policy.entity'
 import { EmailEntity } from './infrastructure/persistence/typeorm/email.entity'
 import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
@@ -308,36 +305,17 @@ describeWithPostgres('verification organization ownership', () => {
             }
         })
 
-        const processor = new BatchEmailVerificationProcessor(
+        const resultWriter = new S3BatchResultWriter(
             {} as never,
             {
                 mode: 'development-local',
                 cacheControl: 'no-store',
             },
-            { add: jest.fn() } as never,
             verificationRepository,
             dataSource,
-            { debit: jest.fn() } as never,
         )
-        const job = {
-            id: batchId,
-            data: {
-                step: BatchEmailVerificationJobStep.UploadResults,
-                bucket: 'bucket',
-                key: `organizations/${organizationAId}/uploads/input.csv`,
-                organizationId: organizationAId,
-                credentialId: randomUUID(),
-            },
-            updateData: jest.fn(function (
-                this: Job<BatchEmailVerificationJobData>,
-                data: BatchEmailVerificationJobData,
-            ) {
-                this.data = data
-                return Promise.resolve()
-            }),
-        } as unknown as Job<BatchEmailVerificationJobData, string>
 
-        await processor.process(job, 'token')
+        await resultWriter.write('bucket', `organizations/${organizationAId}/uploads/input.csv`, organizationAId, batchId)
 
         const csv = Buffer.concat(chunks).toString('utf8')
         expect(csv).toContain('owned@example.test')

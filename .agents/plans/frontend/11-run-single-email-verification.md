@@ -22,6 +22,7 @@ status and result after reload.
 - [x] (2026-09-07) Update stale browser-contract checks and fix the hosted MFA form readiness race.
 - [x] (2026-09-08) Add bounded, private Bruno failure diagnostics and verify runner regression coverage.
 - [x] (2026-09-08) Configure CI to complete API compilation before serving live verification requests.
+- [x] (2026-09-08) Merge current master, retaining the shared MFA readiness fix and layered batch implementation.
 
 ## Plan dependencies
 
@@ -201,6 +202,35 @@ Exact focused commands:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:oidc-runners
     corepack pnpm test -- scripts/ci/validate-workflow.spec.ts --runInBand
     corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md bruno/async-verification/README.md docker/README.md
+
+### Merge Follow-Up
+
+The merge with master at `232f2c7` preserves the layered batch-verification implementation from PR #567. PR #569
+independently added the same MFA readiness behavior, which conflicted with this branch. The resolution keeps one
+visible locator for either hosted MFA form before counting enrollment forms. It preserves the existing regression
+coverage and avoids leaving a second locator wait pending after the first form appears. The async API contract and
+CI startup override remain intact. Review found no material architectural trade-offs.
+
+Focused validation covers all 33 hosted MFA tests and 173 async/batch tests. Nine optional Redis integration tests
+remain skipped. The five synthetic authentication artifact tests passed when run separately; under concurrent
+compiler load, the timeout case initially failed because its setup had already consumed the reduced timeout budget.
+Web type checking and focused lint passed, as did the architecture gate with zero baselined violations. Backend type
+checking, all 12 OpenAPI tests, and generated-client freshness passed in a fresh temporary copy. The active checkout
+keeps regenerating stale Swagger imports for the moved batch files, even after replacing that ignored output with
+fresh metadata. No database or authentication fixture is reset for merge validation.
+
+Exact focused commands:
+
+    corepack pnpm --filter ./apps/web exec vitest run tests/support/hosted-mfa-login.test.ts
+    corepack pnpm --filter ./apps/web typecheck
+    corepack pnpm --filter ./apps/web exec eslint tests/support/hosted-mfa-login.ts tests/support/hosted-mfa-login.test.ts
+    corepack pnpm --filter ./apps/web test:privileged-artifacts
+    corepack pnpm exec jest --runInBand --testPathPatterns='email-verification/src/(api/http/(asynchronous-verification|batch-verification)|application/delivery/(async|batch)|infrastructure/queues/(async-verification|batch-verification))'
+    corepack pnpm architecture:check
+    corepack pnpm typecheck
+    node --test scripts/openapi/*.test.mjs
+    corepack pnpm openapi:check
+    corepack pnpm docs:lint -- .agents/plans/frontend/11-run-single-email-verification.md src/libs/modules/email-verification/README.md
 
 ## Context and Orientation
 

@@ -93,7 +93,7 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 
 ## Architecture
 
-The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/15`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
+The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/15`, `/16`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
@@ -171,13 +171,27 @@ application service token to the root and binds `EmailVerificationServiceToken` 
 The adapter maps waiting, delayed, prioritized, waiting-children, and paused work to `queued`, and active work to
 `running`; queue state names and raw failure diagnostics never cross the application boundary.
 The worker maps one existing payload to one organization-scoped verification command per attempt, excluding the
-credential ID, and preserves the greylist exception and trace context. There is one async worker. The legacy batch
-module retains its independent producer registration and its existing child-job options until plan 16.
+credential ID, and preserves the greylist exception and trace context. There is one async worker.
+
+Batch HTTP controllers and DTOs live under `api/http/batch-verification/`. `application/delivery/batch/` holds the
+transport-neutral `BatchEmailVerificationService` (upload registration, owned status, and owned result retrieval)
+and the pure `BatchEmailVerificationWorkflow`, which walks the same `Validate → Process → WaitForChildren →
+UploadResults → Finish` state transitions through five narrow ports — `BatchJobs`, `BatchChildFlow`, `BatchInput`,
+`BatchResultWriter`, and `BatchResultReader` — instead of BullMQ, S3, or TypeORM directly. A `WaitForChildren` step
+still pending raises the framework-free `BatchAwaitingChildrenSignal`; the thin `BatchEmailVerificationProcessor`
+under `infrastructure/queues/batch-verification/` is the only place that translates that signal into BullMQ's own
+`WaitingChildrenError`. `BullBatchJobs` and `BullBatchChildFlow` implement the queue-facing ports, registering the
+same `batch-email-verification` and `async-email-verification` queues as before; `S3BatchInput`, `S3BatchResultWriter`,
+and `S3BatchResultReader` under `infrastructure/storage/batch-verification/` implement the storage-facing ports,
+preserving the exact CSV parsing/validation, alias-prefixed TypeORM result-row mapping, and S3 upload/read mechanics.
+`CreditsService.debit()` is called directly by the workflow, one credit per validated CSV row, matching the
+established cross-module dependency pattern of injecting another module's public application service. No
+email-verification architecture-baseline violation remains.
 
 ## Dependencies
 
 - [`credits`](../credits/README.md) — `CreditGuard` on every billed route, and `CreditsService.debit()` called
-  directly by the batch processor (one credit per validated CSV row).
+  directly by the batch workflow (one credit per validated CSV row).
 - [`proxy`](../proxy/README.md) — the `IProxyService`/`IProxyAllocator` contracts and DI tokens, through its
   public barrel; SMTP verification acquires and releases leases through these contracts, not through any deep
   import into the implementation of `proxy` itself.
@@ -203,7 +217,7 @@ module retains its independent producer registration and its existing child-job 
 | Queue                      | Registered by                                               | Processor                                                                                                                                                                                                                                |
 | -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `async-email-verification` | `AsyncEmailVerificationModule` (5 attempts, custom backoff) | `AsyncEmailVerificationProcessor`                                                                                                                                                                                                        |
-| `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` — a `Validate → Process → WaitForChildren → UploadResults → Finish` state machine that fans out one `async-email-verification` child job per CSV row and waits on all of them before uploading results |
+| `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` delegates to the pure `BatchEmailVerificationWorkflow`, a `Validate → Process → WaitForChildren → UploadResults → Finish` state machine that fans out one `async-email-verification` child job per CSV row and waits on all of them before uploading results |
 
 ## Persistence
 
@@ -216,10 +230,11 @@ module retains its independent producer registration and its existing child-job 
 
 ## S3 / Storage
 
-Batch uploads are stored at `organizations/<organizationId>/uploads/<uuid>` (bucket from `S3_BUCKET`, via a
-multer-S3 storage engine). Completed results are written back beside the upload with `/uploads/` replaced by
-`/results/` (`derive-results-key.ts`), and the job's stored `s3://bucket/key` result location is parsed back
-into a bucket/key pair by `parse-s3-result-location.ts` when a result is downloaded. The S3 client's own
+Batch uploads are stored at `organizations/<organizationId>/uploads/<uuid>` (bucket from `S3_BUCKET`, via
+the multer-S3 storage engine in `MulterOptionsFactoryImpl`, under `infrastructure/storage/batch-verification/`).
+`S3BatchResultWriter` writes completed results back beside the upload with `/uploads/` replaced by `/results/`
+(`derive-results-key.ts`), and `S3BatchResultReader` parses the job's stored `s3://bucket/key` result location back
+into a bucket/key pair (`parse-s3-result-location.ts`) when a result is downloaded. The S3 client's own
 credentials, region, transport policy, and shared `CustomerObjectWriteSecurity` value are configured once at the API
 composition root, not inside this module. Both writers inject that value and always map `no-store`; production maps
 the exact SSE-KMS algorithm and key fields as well. Neither writer reads `NODE_ENV` or accepts a local security
@@ -265,13 +280,24 @@ Focused tests are grouped by behavior:
   result contract. The existing `bruno/smtp-dev` collection covers submission, completed and repeated polling, one-credit debit,
   missing jobs, malformed IDs, authentication, and insufficient credits. Its launcher requires an SMTP stack owned
   by the current checkout.
-- **Batch**: `batch-email-verification/batch-email-verification.controller.spec.ts`,
-  `batch-email-verification/batch-email-verification.processor.spec.ts`,
-  `batch-email-verification/batch-email-verification.service.spec.ts`,
-  `batch-email-verification/derive-results-key.spec.ts`,
-  `batch-email-verification/parse-s3-result-location.spec.ts`,
-  `batch-email-verification/multer-options-factory-impl.service.spec.ts`; the two writer specifications reuse the
-  common customer-object security contract for production and development mappings
+- **Batch application**: `application/delivery/batch/batch-email-verification.service.spec.ts` and
+  `application/delivery/batch/batch-email-verification-workflow.spec.ts` cover upload/status/results and every
+  state/effect/replay transition — including the `WaitForChildren` signal, invalid-row and child-dispatch failure
+  classification, and completion tracing — entirely against fake ports, with no Nest, BullMQ, or S3 involved
+- **Batch HTTP**: `api/http/batch-verification/batch-email-verification.controller.spec.ts`
+- **Batch queue adapters**: `infrastructure/queues/batch-verification/batch-email-verification.processor.spec.ts`,
+  `infrastructure/queues/batch-verification/bull-batch-jobs.spec.ts`,
+  `infrastructure/queues/batch-verification/bull-batch-child-flow.spec.ts`, and the real-Redis
+  `infrastructure/queues/batch-verification/batch-email-verification-queue.integration.spec.ts` (set
+  `TEST_REDIS_URL` to a disposable Redis instance; proves the real parent/child `moveToWaitingChildren`
+  coordination end to end)
+- **Batch storage adapters**: `infrastructure/storage/batch-verification/s3-batch-input.spec.ts`,
+  `infrastructure/storage/batch-verification/s3-batch-result-writer.spec.ts`,
+  `infrastructure/storage/batch-verification/s3-batch-result-reader.spec.ts`,
+  `infrastructure/storage/batch-verification/derive-results-key.spec.ts`,
+  `infrastructure/storage/batch-verification/parse-s3-result-location.spec.ts`, and
+  `infrastructure/storage/batch-verification/multer-options-factory-impl.service.spec.ts`; the writer
+  specification reuses the common customer-object security contract for production and development mappings
 - **Email administration**: `api/http/email-administration/email-administration.controller.spec.ts`
 - **Domain/application core**: `application/domain-policy.service.spec.ts`,
   `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,

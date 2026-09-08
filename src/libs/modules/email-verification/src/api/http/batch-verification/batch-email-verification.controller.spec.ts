@@ -3,7 +3,6 @@ import { BatchEmailVerificationController } from './batch-email-verification.con
 import { HttpStatus, INestApplication, NestMiddleware } from '@nestjs/common'
 import { MiddlewareConsumer, Module } from '@nestjs/common'
 import request from 'supertest'
-import { BatchEmailVerificationService } from './batch-email-verification-service.interface'
 import { randomUUID } from 'node:crypto'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
 import { setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
@@ -13,9 +12,12 @@ import { NextFunction, Request, Response } from 'express'
 import { JobState } from '@tuposoft/lead-email-finder/common'
 import { Readable } from 'node:stream'
 import { GetBatchStatusResponseDto } from './batch-email-verification.dto'
-import { JobNotFoundException } from './job-not-found.exception'
+import {
+    BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN,
+    BatchEmailVerificationService,
+} from '../../../application/delivery/batch/batch-email-verification.service'
+import { BatchEmailVerificationJobNotFoundException } from '../../../application/delivery/batch/job-not-found.exception'
 
-const batchEmailVerificationServiceToken = 'BatchEmailVerificationServiceToken'
 const requestId = '11584325-be4b-4219-8a2c-06ba72b710d0'
 const principal = { organizationId: 'org-1', credentialId: 'cred-1' } as AuthPrincipal
 
@@ -31,7 +33,7 @@ class FixturePrincipalMiddleware implements NestMiddleware {
     controllers: [BatchEmailVerificationController],
     providers: [
         {
-            provide: batchEmailVerificationServiceToken,
+            provide: BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN,
             useValue: {
                 uploadFile: jest.fn(),
                 getBatchStatus: jest.fn(),
@@ -58,7 +60,7 @@ describe('BatchEmailVerificationController', () => {
             .useValue(null)
             .compile()
 
-        batchEmailVerificationService = module.get(batchEmailVerificationServiceToken)
+        batchEmailVerificationService = module.get(BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN)
         app = module.createNestApplication()
 
         await app.init()
@@ -107,8 +109,7 @@ describe('BatchEmailVerificationController', () => {
                 .expect(HttpStatus.ACCEPTED, { id })
 
             expect(batchEmailVerificationService.uploadFile).toHaveBeenCalledWith(
-                expect.objectContaining({ originalname: 'test.csv' }),
-                principal,
+                expect.objectContaining({ organizationId: 'org-1', credentialId: 'cred-1' }),
                 requestId,
             )
         })
@@ -175,7 +176,9 @@ describe('BatchEmailVerificationController', () => {
 
         it('returns 404 when the service reports the job as not found or not owned', async () => {
             const id = randomUUID()
-            batchEmailVerificationService.getBatchResults.mockRejectedValueOnce(new JobNotFoundException(id))
+            batchEmailVerificationService.getBatchResults.mockRejectedValueOnce(
+                new BatchEmailVerificationJobNotFoundException(id),
+            )
 
             const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}/results`)
 
