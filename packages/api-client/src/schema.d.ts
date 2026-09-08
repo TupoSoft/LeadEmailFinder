@@ -251,6 +251,40 @@ export interface paths {
         patch: operations["OrganizationsController_changeRole"];
         trace?: never;
     };
+    "/verifyAsync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Enqueues one email for the authenticated organization. A request may consume one credit, including validation or dispatch failures. Do not automatically retry an uncertain submission. Browser sessions require same-origin mutation protection. */
+        post: operations["AsyncEmailVerificationController_verifyAsync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/verifyAsync/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads an organization-owned job without debit or submission. Missing, expired, and foreign jobs are concealed with the same 404 response. */
+        get: operations["AsyncEmailVerificationController_getAsyncVerificationState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -265,6 +299,81 @@ export interface components {
             organizationId: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
+        };
+        AsyncVerificationCompletedResponseDto: {
+            result: components["schemas"]["AsyncVerificationResultDto"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "completed";
+        };
+        AsyncVerificationFailedResponseDto: {
+            /** @enum {string} */
+            failureCode: "verification_failed";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "failed";
+        };
+        AsyncVerificationQueuedResponseDto: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "queued";
+        };
+        AsyncVerificationResultDto: {
+            /** @example null */
+            catchAll: boolean | null;
+            /** @example lef.test */
+            domain: string;
+            /**
+             * Format: email
+             * @example person@lef.test
+             */
+            email: string;
+            /** @example true */
+            exists: boolean | null;
+            /** @enum {string} */
+            format?: "{first}" | "{last}" | "{first}.{last}" | "{f}{last}" | "{f}.{last}" | "{first}{last}" | "{first}{l}" | "{first}.{l}" | "{last}.{first}" | "{first}_{last}" | "{last}{f}" | "{f}{l}" | "{l}{first}" | "{l}.{first}" | "{last}{first}" | "{first}-{last}";
+            /**
+             * Format: uuid
+             * @example 00000000-0000-4000-8000-000000000002
+             */
+            id: string;
+            /** @example person */
+            localPart: string;
+            /** @example lef.test */
+            mxDomain?: string;
+            /**
+             * @example accepted_email
+             * @enum {string}
+             */
+            reason: "accepted_email" | "rejected_email" | "timeout" | "temporarily_blocked" | "no_mx_records" | "unexpected_error" | "blacklisted" | "no_connect" | "exceeded_storage" | "sender_blocked" | "secure_transport_unavailable" | "webmail" | "unknown";
+            /**
+             * @example [
+             *       "mx"
+             *     ]
+             */
+            sources: ("mx" | "microsoft_1" | "microsoft_2" | "microsoft_4" | "mimecast" | "linkedin")[];
+            /** @example mx.lef.test */
+            targetExchange?: string;
+        };
+        AsyncVerificationRunningResponseDto: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "running";
+        };
+        AsyncVerificationUnavailableResponseDto: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "unavailable";
         };
         AuthenticationRequiredResponseDto: {
             /** @enum {string} */
@@ -407,6 +516,20 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** @enum {string} */
             status: "active" | "disabled";
+        };
+        VerifyAsyncRequestBodyDto: {
+            /**
+             * Format: email
+             * @example person@lef.test
+             */
+            email: string;
+        };
+        VerifyAsyncResponseDto: {
+            /**
+             * Format: uuid
+             * @example 00000000-0000-4000-8000-000000000001
+             */
+            id: string;
         };
     };
     responses: never;
@@ -1170,6 +1293,162 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    AsyncEmailVerificationController_verifyAsync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyAsyncRequestBodyDto"];
+            };
+        };
+        responses: {
+            /** @description The job was accepted. Use its ID to read status. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyAsyncResponseDto"];
+                };
+            };
+            /** @description The email is missing or invalid. Validation runs after the credit guard. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string[];
+                        /** @enum {integer} */
+                        statusCode: 400;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "authentication_required";
+                    };
+                };
+            };
+            /** @description The organization has insufficient credits; no job was submitted. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        message: "Insufficient credits";
+                        /** @enum {integer} */
+                        statusCode: 402;
+                    };
+                };
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        error?: string;
+                        message?: string;
+                        /** @example 403 */
+                        statusCode?: number;
+                    };
+                };
+            };
+        };
+    };
+    AsyncEmailVerificationController_getAsyncVerificationState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A sanitized job outcome. Unavailable means a trustworthy outcome cannot be reported. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsyncVerificationQueuedResponseDto"] | components["schemas"]["AsyncVerificationRunningResponseDto"] | components["schemas"]["AsyncVerificationCompletedResponseDto"] | components["schemas"]["AsyncVerificationFailedResponseDto"] | components["schemas"]["AsyncVerificationUnavailableResponseDto"];
+                };
+            };
+            /** @description The job ID is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string[];
+                        /** @enum {integer} */
+                        statusCode: 400;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "authentication_required";
+                    };
+                };
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        error?: string;
+                        message?: string;
+                        /** @example 403 */
+                        statusCode?: number;
+                    };
+                };
+            };
+            /** @description No accessible job matches the ID. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string;
+                        /** @enum {integer} */
+                        statusCode: 404;
+                    };
+                };
             };
         };
     };

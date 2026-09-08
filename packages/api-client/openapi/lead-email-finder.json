@@ -40,6 +40,195 @@
         ],
         "type": "object"
       },
+      "AsyncVerificationCompletedResponseDto": {
+        "properties": {
+          "result": {
+            "$ref": "#/components/schemas/AsyncVerificationResultDto"
+          },
+          "state": {
+            "enum": [
+              "completed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "result"
+        ],
+        "type": "object"
+      },
+      "AsyncVerificationFailedResponseDto": {
+        "properties": {
+          "failureCode": {
+            "enum": [
+              "verification_failed"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "failureCode"
+        ],
+        "type": "object"
+      },
+      "AsyncVerificationQueuedResponseDto": {
+        "properties": {
+          "state": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "AsyncVerificationResultDto": {
+        "properties": {
+          "catchAll": {
+            "example": null,
+            "nullable": true,
+            "type": "boolean"
+          },
+          "domain": {
+            "example": "lef.test",
+            "type": "string"
+          },
+          "email": {
+            "example": "person@lef.test",
+            "format": "email",
+            "type": "string"
+          },
+          "exists": {
+            "example": true,
+            "nullable": true,
+            "type": "boolean"
+          },
+          "format": {
+            "enum": [
+              "{first}",
+              "{last}",
+              "{first}.{last}",
+              "{f}{last}",
+              "{f}.{last}",
+              "{first}{last}",
+              "{first}{l}",
+              "{first}.{l}",
+              "{last}.{first}",
+              "{first}_{last}",
+              "{last}{f}",
+              "{f}{l}",
+              "{l}{first}",
+              "{l}.{first}",
+              "{last}{first}",
+              "{first}-{last}"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "example": "00000000-0000-4000-8000-000000000002",
+            "format": "uuid",
+            "type": "string"
+          },
+          "localPart": {
+            "example": "person",
+            "type": "string"
+          },
+          "mxDomain": {
+            "example": "lef.test",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "accepted_email",
+              "rejected_email",
+              "timeout",
+              "temporarily_blocked",
+              "no_mx_records",
+              "unexpected_error",
+              "blacklisted",
+              "no_connect",
+              "exceeded_storage",
+              "sender_blocked",
+              "secure_transport_unavailable",
+              "webmail",
+              "unknown"
+            ],
+            "example": "accepted_email",
+            "type": "string"
+          },
+          "sources": {
+            "example": [
+              "mx"
+            ],
+            "items": {
+              "enum": [
+                "mx",
+                "microsoft_1",
+                "microsoft_2",
+                "microsoft_4",
+                "mimecast",
+                "linkedin"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "targetExchange": {
+            "example": "mx.lef.test",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "localPart",
+          "domain",
+          "exists",
+          "catchAll",
+          "reason",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "AsyncVerificationRunningResponseDto": {
+        "properties": {
+          "state": {
+            "enum": [
+              "running"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "AsyncVerificationUnavailableResponseDto": {
+        "properties": {
+          "state": {
+            "enum": [
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
       "AuthenticationRequiredResponseDto": {
         "properties": {
           "code": {
@@ -486,6 +675,32 @@
           "email",
           "role",
           "status"
+        ],
+        "type": "object"
+      },
+      "VerifyAsyncRequestBodyDto": {
+        "properties": {
+          "email": {
+            "example": "person@lef.test",
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "VerifyAsyncResponseDto": {
+        "properties": {
+          "id": {
+            "example": "00000000-0000-4000-8000-000000000001",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       }
@@ -1821,6 +2036,404 @@
         "summary": "Change an active member role",
         "tags": [
           "Organizations"
+        ]
+      }
+    },
+    "/verifyAsync": {
+      "post": {
+        "description": "Enqueues one email for the authenticated organization. A request may consume one credit, including validation or dispatch failures. Do not automatically retry an uncertain submission. Browser sessions require same-origin mutation protection.",
+        "operationId": "AsyncEmailVerificationController_verifyAsync",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyAsyncRequestBodyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyAsyncResponseDto"
+                }
+              }
+            },
+            "description": "The job was accepted. Use its ID to read status."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "error": "Bad Request",
+                    "message": [
+                      "email must be an email"
+                    ],
+                    "statusCode": 400
+                  },
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        400
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The email is missing or invalid. Validation runs after the credit guard."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "code": "authentication_required"
+                  },
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "authentication_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authentication is required."
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "Insufficient credits",
+                    "statusCode": 402
+                  },
+                  "properties": {
+                    "message": {
+                      "enum": [
+                        "Insufficient credits"
+                      ],
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        402
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The organization has insufficient credits; no job was submitted."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "error": "Forbidden",
+                    "message": "Missing required permission",
+                    "statusCode": 403
+                  },
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "example": 403,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The required verification permission or browser mutation protection is missing."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Verification"
+        ]
+      }
+    },
+    "/verifyAsync/{id}": {
+      "get": {
+        "description": "Reads an organization-owned job without debit or submission. Missing, expired, and foreign jobs are concealed with the same 404 response.",
+        "operationId": "AsyncEmailVerificationController_getAsyncVerificationState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "completed": {
+                    "value": {
+                      "result": {
+                        "catchAll": null,
+                        "domain": "lef.test",
+                        "email": "person@lef.test",
+                        "exists": true,
+                        "id": "00000000-0000-4000-8000-000000000002",
+                        "localPart": "person",
+                        "reason": "accepted_email",
+                        "sources": [
+                          "mx"
+                        ]
+                      },
+                      "state": "completed"
+                    }
+                  },
+                  "failed": {
+                    "value": {
+                      "failureCode": "verification_failed",
+                      "state": "failed"
+                    }
+                  },
+                  "queued": {
+                    "value": {
+                      "state": "queued"
+                    }
+                  },
+                  "running": {
+                    "value": {
+                      "state": "running"
+                    }
+                  },
+                  "unavailable": {
+                    "value": {
+                      "state": "unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "completed": "#/components/schemas/AsyncVerificationCompletedResponseDto",
+                      "failed": "#/components/schemas/AsyncVerificationFailedResponseDto",
+                      "queued": "#/components/schemas/AsyncVerificationQueuedResponseDto",
+                      "running": "#/components/schemas/AsyncVerificationRunningResponseDto",
+                      "unavailable": "#/components/schemas/AsyncVerificationUnavailableResponseDto"
+                    },
+                    "propertyName": "state"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AsyncVerificationQueuedResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AsyncVerificationRunningResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AsyncVerificationCompletedResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AsyncVerificationFailedResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AsyncVerificationUnavailableResponseDto"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "A sanitized job outcome. Unavailable means a trustworthy outcome cannot be reported."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "error": "Bad Request",
+                    "message": [
+                      "id must be a UUID"
+                    ],
+                    "statusCode": 400
+                  },
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        400
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The job ID is not a UUID."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "code": "authentication_required"
+                  },
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "authentication_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authentication is required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "error": "Forbidden",
+                    "message": "Missing required permission",
+                    "statusCode": 403
+                  },
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "example": 403,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The required verification permission or browser mutation protection is missing."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "error": "Not Found",
+                    "message": "Job with id \"00000000-0000-4000-8000-000000000001\" not found.",
+                    "statusCode": 404
+                  },
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        404
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "No accessible job matches the ID."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Verification"
         ]
       }
     }

@@ -158,12 +158,18 @@ Async HTTP controllers and DTOs live under `api/http/asynchronous-verification/`
 `AsyncEmailVerificationService` under `application/delivery/async/` accepts scalar organization and credential
 identity, dispatches through `AsyncVerificationJobs`, and checks ownership before reading job state. Missing and
 foreign jobs produce the same application error, which the controller maps to the existing `404`. The application
-maps the existing state enum and includes a result only for completed jobs; status reads perform no credit debit
-or queue submission.
+maps the transport-neutral snapshot to `queued`, `running`, `completed`, `failed`, or `unavailable`. Completed
+jobs expose only validated public result fields; nullable database values for optional pattern/MX fields are omitted.
+Failed jobs expose only `failureCode: verification_failed`. Unknown queue states or invalid completed results are
+`unavailable`, which makes no claim about success, failure, or credit adjustment. Status reads perform no credit
+debit or queue submission. The API documents five discriminated response variants and includes only the async
+create/status operations in the generated browser contract.
 
 `infrastructure/queues/async-verification/` owns `BullAsyncVerificationJobs`, the serialized job contract,
 queue defaults, custom backoff, and `AsyncEmailVerificationProcessor`. Its private composition module exports the
 application service token to the root and binds `EmailVerificationServiceToken` to the existing orchestrator.
+The adapter maps waiting, delayed, prioritized, waiting-children, and paused work to `queued`, and active work to
+`running`; queue state names and raw failure diagnostics never cross the application boundary.
 The worker maps one existing payload to one organization-scoped verification command per attempt, excluding the
 credential ID, and preserves the greylist exception and trace context. There is one async worker.
 
@@ -172,8 +178,8 @@ transport-neutral `BatchEmailVerificationService` (upload registration, owned st
 and the pure `BatchEmailVerificationWorkflow`, which walks the same `Validate → Process → WaitForChildren →
 UploadResults → Finish` state transitions through five narrow ports — `BatchJobs`, `BatchChildFlow`, `BatchInput`,
 `BatchResultWriter`, and `BatchResultReader` — instead of BullMQ, S3, or TypeORM directly. A `WaitForChildren` step
-still pending raises the framework-free `BatchAwaitingChildrenSignal`; `infrastructure/queues/batch-verification/`'s
-thin `BatchEmailVerificationProcessor` is the only place that translates that signal into BullMQ's own
+still pending raises the framework-free `BatchAwaitingChildrenSignal`; the thin `BatchEmailVerificationProcessor`
+under `infrastructure/queues/batch-verification/` is the only place that translates that signal into BullMQ's own
 `WaitingChildrenError`. `BullBatchJobs` and `BullBatchChildFlow` implement the queue-facing ports, registering the
 same `batch-email-verification` and `async-email-verification` queues as before; `S3BatchInput`, `S3BatchResultWriter`,
 and `S3BatchResultReader` under `infrastructure/storage/batch-verification/` implement the storage-facing ports,
@@ -225,7 +231,7 @@ email-verification architecture-baseline violation remains.
 ## S3 / Storage
 
 Batch uploads are stored at `organizations/<organizationId>/uploads/<uuid>` (bucket from `S3_BUCKET`, via
-`MulterOptionsFactoryImpl`'s multer-S3 storage engine, under `infrastructure/storage/batch-verification/`).
+the multer-S3 storage engine in `MulterOptionsFactoryImpl`, under `infrastructure/storage/batch-verification/`).
 `S3BatchResultWriter` writes completed results back beside the upload with `/uploads/` replaced by `/results/`
 (`derive-results-key.ts`), and `S3BatchResultReader` parses the job's stored `s3://bucket/key` result location back
 into a bucket/key pair (`parse-s3-result-location.ts`) when a result is downloaded. The S3 client's own
@@ -263,12 +269,15 @@ Focused tests are grouped by behavior:
 - **Synchronous POST behavior and retired GET rejection**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
 - **Current synchronous controller**: `api/http/synchronous-verification/current/sync-email-verification.controller.spec.ts`
 - **Async application and HTTP**: `application/delivery/async/async-email-verification.service.spec.ts`,
-  `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`, and
-  `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`
+  `application/delivery/async/async-verification-status.spec.ts`,
+  `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`,
+  `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`, and
+  `api/http/asynchronous-verification/async-verification.openapi.spec.ts`
 - **Async queues and composition**: `infrastructure/queues/async-verification/` contains producer, worker, backoff,
   Redis compatibility, and production Nest composition specifications. Set `TEST_REDIS_URL` to a disposable Redis
   instance to run the Redis suites; each suite uses its own queue prefix.
-- **Async runtime workflow**: `bruno/smtp-dev` covers submission, completed and repeated polling, one-credit debit,
+- **Async runtime workflow**: `bruno/async-verification` covers the browser-facing async workflow and sanitized
+  result contract. The existing `bruno/smtp-dev` collection covers submission, completed and repeated polling, one-credit debit,
   missing jobs, malformed IDs, authentication, and insufficient credits. Its launcher requires an SMTP stack owned
   by the current checkout.
 - **Batch application**: `application/delivery/batch/batch-email-verification.service.spec.ts` and

@@ -1,0 +1,18 @@
+info:
+    name: reject-malformed-job-id
+    type: http
+    seq: 5
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyAsync/not-a-uuid'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reject-malformed-job-id', function() {
+                expect(res.status).to.equal(400);
+
+              });

@@ -1,11 +1,6 @@
 import { ok } from 'node:assert'
 import { randomUUID } from 'node:crypto'
-import {
-    fromStringToEnum,
-    IEmailVerificationResponseDto,
-    JobState,
-    safeErrorType,
-} from '@tuposoft/lead-email-finder/common'
+import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import {
     NOOP_VERIFICATION_TRACE_OBSERVER,
     observeSafely,
@@ -13,16 +8,12 @@ import {
 } from '../../verification-trace/verification-trace-observer'
 import { AsyncVerificationJobData, AsyncVerificationJobs } from './async-verification-jobs'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
+import { AsyncVerificationStatus, mapAsyncVerificationStatus } from './async-verification-status'
 
 export const ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN = 'AsyncEmailVerificationServiceToken'
 
 export interface EnqueueAsyncVerification extends AsyncVerificationJobData {
     requestId?: string
-}
-
-export interface AsyncVerificationStatus {
-    state: JobState
-    result?: IEmailVerificationResponseDto
 }
 
 export class AsyncEmailVerificationService {
@@ -68,11 +59,6 @@ export class AsyncEmailVerificationService {
         ok(job, new AsyncEmailVerificationJobNotFoundException(id))
         ok(job.organizationId === organizationId, new AsyncEmailVerificationJobNotFoundException(id))
 
-        const status = await job.readStatus()
-        const state = fromStringToEnum(JobState, status.state)
-
-        ok(state, 'async_email_verification_state_unknown')
-
-        return state === JobState.COMPLETED ? { state, result: status.result } : { state }
+        return mapAsyncVerificationStatus(await job.readStatus())
     }
 }

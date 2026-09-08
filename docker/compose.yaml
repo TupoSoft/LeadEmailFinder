@@ -23,6 +23,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    command: ${API_START_COMMAND:-pnpm start}
     volumes:
       - "..:/app"
       - "/app/node_modules"

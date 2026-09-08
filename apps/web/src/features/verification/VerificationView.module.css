@@ -1,0 +1,63 @@
+.header {
+    padding-block-end: var(--space-content-gap);
+}
+.header h1 {
+    font-size: var(--font-size-product-heading);
+    line-height: var(--line-height-product-heading);
+    margin-block: 0 var(--space-content-gap);
+}
+.header p {
+    max-width: 65ch;
+}
+.form {
+    display: grid;
+    gap: var(--space-content-gap);
+    max-width: 40rem;
+}
+.feedback {
+    min-height: var(--control-height);
+}
+.feedback p {
+    margin-block: 0 var(--space-control-gap);
+}
+.acknowledgment {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-control-gap);
+    cursor: pointer;
+}
+.acknowledgment input {
+    flex-shrink: 0;
+    min-width: var(--control-height);
+    min-height: var(--control-height);
+    cursor: pointer;
+}
+.result {
+    margin-block-start: var(--space-content-gap);
+    padding-block: var(--space-content-gap);
+    border-top: var(--rule-width) solid var(--color-rule);
+}
+.result h2 {
+    font-size: var(--font-size-body);
+    margin-block: 0 var(--space-content-gap);
+}
+.limits {
+    margin-block: var(--space-content-gap) 0;
+    max-width: 65ch;
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
+.progress {
+    min-height: var(--state-min-height);
+}
+.status {
+    min-height: var(--control-height);
+    margin-block-end: var(--space-content-gap);
+}
+.announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}

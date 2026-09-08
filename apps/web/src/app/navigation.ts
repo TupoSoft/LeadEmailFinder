@@ -12,6 +12,7 @@ export interface ApplicationDestination {
 // feature routes still call their API and handle its authoritative response.
 export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app', label: authCopy.home },
+    { path: '/app/verifications/new', label: 'Verify an email', capability: 'verification.run' },
     { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
 ]

@@ -1,0 +1,27 @@
+.details {
+    margin: 0;
+}
+.details > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--space-control-gap);
+    padding-block: var(--space-control-gap);
+    border-bottom: var(--rule-width) solid var(--color-rule-soft);
+}
+.details dt {
+    font-weight: 700;
+}
+.details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+.details ul {
+    margin: 0;
+    padding-inline-start: var(--space-content-gap);
+}
+@media (max-width: 48rem) {
+    .details > div {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

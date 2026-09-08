@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../api/api-error'
 import { billingCopy } from '../../content/billing'
@@ -36,30 +36,7 @@ export function useBillingQueries(organizationId: string) {
     return { organizationId, summary, packs, purchases, refresh }
 }
 
-function subscribeAvailability(listener: () => void) {
-    window.addEventListener('online', listener)
-    window.addEventListener('offline', listener)
-    document.addEventListener('visibilitychange', listener)
-    return () => {
-        window.removeEventListener('online', listener)
-        window.removeEventListener('offline', listener)
-        document.removeEventListener('visibilitychange', listener)
-    }
-}
-
-export function useBrowserAvailability() {
-    const available = useSyncExternalStore(
-        subscribeAvailability,
-        () => navigator.onLine && document.visibilityState !== 'hidden',
-        () => true,
-    )
-    const online = useSyncExternalStore(
-        subscribeAvailability,
-        () => navigator.onLine,
-        () => true,
-    )
-    return { available, online }
-}
+export { useBrowserAvailability } from '../../shared/use-browser-availability'
 
 export const returnPolling = { interval: 5000, maxChecks: 12 } as const
 
