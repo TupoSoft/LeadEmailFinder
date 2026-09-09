@@ -332,6 +332,23 @@ gap at 1440 by 900 and 320 by 720, visible keyboard focus, and no overlap or hor
 presentation only. A Docker registry connection failure prevented rebuilding the local gateway image; the newly built
 static assets were copied into the verified checkout-owned gateway, and its served HTML matched the local build.
 
+### Confirmation Button Spacing Follow-up, 2026-09-09
+
+Review feedback showed the confirmation buttons touching the final details divider. Credit confirmation actions now
+reuse the existing team dialog action spacing, adding the 24-pixel content gap above the button row. The same class
+also separates abandonment actions from their recovery explanation. This reuses the shared visual contract without
+changing API behavior or credit operations.
+
+The web production build, focused ESLint, design lint, and premium audit passed. The built HTML, JavaScript, and CSS
+were copied into the verified checkout-owned gateway and matched its served assets. Browser verification with
+`node /tmp/lef-credit-dialog-spacing-check.mjs` passed all six add, set, and abandonment cases at 1440 by 900 and
+320 by 720. Each footer had a 24-pixel gap, no horizontal overflow, visible Cancel focus, keyboard focus containment,
+and Escape focus restoration. Accessibility checks found no serious or critical violations. Synthetic screenshots
+remain under `/tmp/lef-platform-credits-review`. The Browser plugin was unavailable, so verification used Playwright.
+Both existing success scenarios also passed with
+`PLATFORM_CREDITS_SCREENSHOTS=1 corepack pnpm --filter ./apps/web test:platform-credits --grep='directory entry'`.
+Bruno is not applicable because this follow-up changes presentation only.
+
 ## Plan readiness
 
 Ready to implement.

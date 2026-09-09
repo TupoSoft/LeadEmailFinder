@@ -11,6 +11,7 @@ import styles from '../service-clients/ServiceClientsView.module.css'
 import { useAuth } from '../auth/use-auth'
 import { formatCredits } from '../billing/format-billing'
 import { TeamDialog } from '../team/TeamDialog'
+import dialogStyles from '../team/TeamView.module.css'
 import { creditsCopy as copy } from './platform-credits-copy'
 import { usePlatformCredits } from './use-platform-credits'
 import pageStyles from './PlatformCreditsPage.module.css'
@@ -289,7 +290,7 @@ function CreditsContent({ membershipId, organizationId }: { membershipId: string
                         ]}
                     />
                     {confirmation.kind === 'abandon' ? <p>{copy.recoveryLimit}</p> : null}
-                    <div className={form.actions}>
+                    <div className={`${form.actions} ${dialogStyles.dialogActions}`}>
                         <button
                             data-initial-focus
                             type="button"
