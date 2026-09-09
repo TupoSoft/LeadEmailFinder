@@ -10,3 +10,7 @@ variables:
     value: "{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}"
   - name: expiredInvitationToken
     value: "{{process.env.BRUNO_EXPIRED_INVITATION_TOKEN}}"
+  - name: customerServiceClientId
+    value: "{{process.env.CUSTOMER_SERVICE_CLIENT_ID}}"
+  - name: customerServiceClientSecret
+    value: "{{process.env.CUSTOMER_SERVICE_CLIENT_SECRET}}"

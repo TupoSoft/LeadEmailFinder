@@ -1,0 +1,40 @@
+info:
+  name: 17-directory-final-page
+  type: http
+  seq: 17
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations?pageSize=100&pageToken={{directoryPageToken}}"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('directory terminates with an omitted cursor and never returns an invitation', async function() {
+          expect(res.status).to.equal(200);
+          const seen = new Set(bru.getVar('directorySeenIds'));
+          let page = res.body;
+          let reads = 0;
+          while (true) {
+            expect(page).not.to.have.property('total');
+            for (const row of page.organizations) {
+              expect(row).to.have.all.keys('id', 'name', 'createdAt', 'updatedAt');
+              expect(seen.has(row.id)).to.equal(false);
+              seen.add(row.id);
+            }
+            if (!Object.hasOwn(page, 'nextPageToken')) break;
+            expect(page.nextPageToken).to.be.a('string').and.not.empty;
+            if (++reads > 100) throw new Error('Disposable directory exceeded its fixture bound');
+            const response = await fetch(`${bru.getEnvVar('baseUrl')}/v1/organizations?pageSize=100&pageToken=${encodeURIComponent(page.nextPageToken)}`, {
+              headers: { authorization: `Bearer ${bru.getVar('serviceClientToken')}` },
+            });
+            expect(response.status).to.equal(200);
+            page = await response.json();
+          }
+          expect(page).to.have.all.keys('organizations');
+          expect(seen.has(bru.getVar('organizationId'))).to.equal(true);
+        });

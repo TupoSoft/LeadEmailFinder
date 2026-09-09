@@ -14,26 +14,56 @@ import { withExpiredInvitation } from './invitation-expiry-fixture.mjs'
 const root = resolve(import.meta.dirname, '../..')
 const execute = promisify(execFile)
 
-test('organization collection requires twelve executed requests in order and keeps runtime secrets outside arguments', async () => {
+test('organization collection requires every executed request in order and keeps runtime secrets outside arguments', async () => {
     const directory = resolve(root, 'bruno/organization-onboarding')
     const files = (await readdir(directory)).filter(file => /^\d.+\.yml$/.test(file))
-    const sequences = await Promise.all(files.map(async file => parse(await readFile(resolve(directory, file), 'utf8')).info.seq))
+    const sequences = await Promise.all(
+        files.map(async file => parse(await readFile(resolve(directory, file), 'utf8')).info.seq),
+    )
     const registered = registeredCollection('organization-onboarding')
     assert.equal(registered.requests, files.length)
-    assert.equal(registered.tests, 12)
+    assert.equal(registered.tests, 23)
     assert.equal(registered.countOnly, true)
-    assert.deepEqual(sequences.sort((a, b) => a - b), Array.from({ length: 12 }, (_, index) => index + 1))
+    assert.deepEqual(
+        sequences.sort((a, b) => a - b),
+        Array.from({ length: 23 }, (_, index) => index + 1),
+    )
     const environment = {
-        BRUNO_API_URL: 'http://localhost:53000', OIDC_ISSUER_URL: 'http://localhost:58080',
-        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service', KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(),
+        BRUNO_API_URL: 'http://localhost:53000',
+        OIDC_ISSUER_URL: 'http://localhost:58080',
+        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
+        KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(),
         BRUNO_EXPIRED_INVITATION_TOKEN: randomUUID(),
+        CUSTOMER_SERVICE_CLIENT_ID: 'customer',
+        CUSTOMER_SERVICE_CLIENT_SECRET: randomUUID(),
     }
     const args = cliArguments('organization-onboarding', environment, '/tmp/report.json')
     assert.equal(args[4], 'developer')
-    for (const secret of [environment.KEYCLOAK_SERVICE_CLIENT_SECRET, environment.BRUNO_EXPIRED_INVITATION_TOKEN]) {
-        assert.equal(JSON.stringify(args).includes(secret), false, 'Runtime credentials must stay out of command arguments')
+    for (const secret of [
+        environment.KEYCLOAK_SERVICE_CLIENT_SECRET,
+        environment.BRUNO_EXPIRED_INVITATION_TOKEN,
+        environment.CUSTOMER_SERVICE_CLIENT_SECRET,
+    ]) {
+        assert.equal(
+            JSON.stringify(args).includes(secret),
+            false,
+            'Runtime credentials must stay out of command arguments',
+        )
     }
-    assert.throws(() => cliArguments('organization-onboarding', { ...environment, BRUNO_EXPIRED_INVITATION_TOKEN: '' }, '/tmp/report.json'))
+    assert.throws(() =>
+        cliArguments(
+            'organization-onboarding',
+            { ...environment, BRUNO_EXPIRED_INVITATION_TOKEN: '' },
+            '/tmp/report.json',
+        ),
+    )
+    assert.throws(() =>
+        cliArguments(
+            'organization-onboarding',
+            { ...environment, CUSTOMER_SERVICE_CLIENT_SECRET: '' },
+            '/tmp/report.json',
+        ),
+    )
 })
 
 test('invitation CLI reporter writes only counts and emits no secrets on its failure path', async () => {
@@ -93,28 +123,67 @@ test('expired fixture hashes its runtime token and removes only its exact invita
 test('pinned CLI executes invitation preview, replay, expiry, and header assertions without secret artifacts', async () => {
     const expiredToken = randomUUID()
     const invitations = new Map()
+    const platformToken = randomUUID()
+    const customerToken = randomUUID()
+    const organizations = [
+        {
+            id: randomUUID(),
+            name: 'Platform fixture',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        },
+    ]
     let ownerEmail
     let failHeaders = false
     let baseUrl
     const server = createServer(async (request, response) => {
-        const pathname = new URL(request.url, baseUrl).pathname
+        const url = new URL(request.url, baseUrl)
+        const pathname = url.pathname
         const reply = (status, body) => {
             response.writeHead(status, {
-                'content-type': 'application/json', 'cache-control': failHeaders ? 'public' : 'no-store', 'referrer-policy': 'no-referrer',
+                'content-type': 'application/json',
+                'cache-control': failHeaders ? 'public' : 'no-store',
+                'referrer-policy': 'no-referrer',
             })
             response.end(JSON.stringify(body))
         }
-        if (pathname.endsWith('/protocol/openid-connect/token')) return reply(200, { access_token: randomUUID() })
         let raw = ''
         for await (const chunk of request) raw += chunk
+        if (pathname.endsWith('/protocol/openid-connect/token'))
+            return reply(200, {
+                access_token: new URLSearchParams(raw).get('client_id') === 'customer' ? customerToken : platformToken,
+            })
         if (pathname === '/v1/organizations') {
             if (!request.headers.authorization) return reply(401, {})
+            if (request.headers.authorization === `Bearer ${customerToken}`) return reply(403, {})
+            if (request.method === 'GET') {
+                const size = Number(url.searchParams.get('pageSize') ?? 50)
+                const cursor = url.searchParams.get('pageToken')
+                if (!Number.isInteger(size) || size < 1 || size > 100 || (cursor && !/^page-\d+$/.test(cursor)))
+                    return reply(400, {})
+                const offset = cursor ? Number(cursor.slice(5)) : 0
+                return reply(200, {
+                    organizations: organizations.slice(offset, offset + size),
+                    ...(offset + size < organizations.length ? { nextPageToken: `page-${offset + size}` } : {}),
+                })
+            }
             const body = JSON.parse(raw)
+            if (!body.name || body.ownerEmail === 'invalid') return reply(400, {})
             const token = randomBytes(32).toString('base64url')
             const organizationId = randomUUID()
+            organizations.unshift({
+                id: organizationId,
+                name: body.name,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            })
             invitations.set(token, {
-                organizationId, organizationName: body.name, email: body.ownerEmail, role: 'owner',
-                expiresAt: new Date(Date.now() + 86_400_000).toISOString(), status: 'pending',
+                organizationId,
+                organizationName: body.name,
+                email: body.ownerEmail,
+                role: 'owner',
+                expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+                status: 'pending',
             })
             return reply(201, { organizationId, invitation: { token, role: 'owner', email: body.ownerEmail } })
         }
@@ -141,14 +210,22 @@ test('pinned CLI executes invitation preview, replay, expiry, and header asserti
     await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
     baseUrl = `http://127.0.0.1:${server.address().port}`
     const environment = {
-        BRUNO_API_URL: baseUrl, OIDC_ISSUER_URL: baseUrl, KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(), BRUNO_EXPIRED_INVITATION_TOKEN: expiredToken,
+        BRUNO_API_URL: baseUrl,
+        OIDC_ISSUER_URL: baseUrl,
+        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
+        KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(),
+        BRUNO_EXPIRED_INVITATION_TOKEN: expiredToken,
+        CUSTOMER_SERVICE_CLIENT_ID: 'customer',
+        CUSTOMER_SERVICE_CLIENT_SECRET: randomUUID(),
     }
     const directory = await mkdtemp(resolve(tmpdir(), 'lef-invitation-cli-'))
     const previous = process.env.TMPDIR
     process.env.TMPDIR = directory
     try {
-        assert.deepEqual(await executeCollection('organization-onboarding', environment, root), { requests: 12, tests: 12 })
+        assert.deepEqual(await executeCollection('organization-onboarding', environment, root), {
+            requests: 23,
+            tests: 23,
+        })
         assert.deepEqual(await readdir(directory), [])
         failHeaders = true
         await assert.rejects(executeCollection('organization-onboarding', environment, root), /raw output is withheld/)

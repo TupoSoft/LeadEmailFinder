@@ -9,6 +9,7 @@ import { BatchVerificationPage } from '../routes/BatchVerificationPage'
 import { BatchVerificationJobPage } from '../routes/BatchVerificationJobPage'
 import { TeamPage } from '../features/team/TeamPage'
 import { ServiceClientsPage } from '../features/service-clients/ServiceClientsPage'
+import { PlatformOrganizationsPage } from '../features/platform-organizations/PlatformOrganizationsPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
 import {
     AccountUnavailablePage,
@@ -40,6 +41,7 @@ export const appRoutes: RouteObject[] = [
                     { path: 'billing', element: <BillingPage /> },
                     { path: 'team', element: <TeamPage /> },
                     { path: 'service-clients', element: <ServiceClientsPage /> },
+                    { path: 'platform/organizations', element: <PlatformOrganizationsPage /> },
                     { path: 'verifications/new', element: <VerificationPage /> },
                     { path: 'verifications/batches/new', element: <BatchVerificationPage /> },
                     { path: 'verifications/batches/:id', element: <BatchVerificationJobPage /> },

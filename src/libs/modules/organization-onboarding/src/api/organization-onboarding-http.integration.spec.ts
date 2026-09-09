@@ -13,6 +13,7 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationListingService } from '../application/organization-listing.service'
 import { OrganizationsController } from './organizations.controller'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
@@ -21,6 +22,7 @@ const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authen
 const organizationCreationMock: jest.Mocked<Pick<OrganizationCreationService, 'createWithFirstOwner'>> = {
     createWithFirstOwner: jest.fn(),
 }
+const organizationDirectoryReader = { list: jest.fn() }
 const invitationIssuanceMock: jest.Mocked<Pick<InvitationIssuanceService, 'issue'>> = { issue: jest.fn() }
 const invitationPreviewReader = { findByTokenHash: jest.fn() }
 const invitationAcceptanceMock: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>> = { accept: jest.fn() }
@@ -51,6 +53,7 @@ function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal
         RolePermissionPolicy,
         PermissionsGuard,
         { provide: OrganizationCreationService, useValue: organizationCreationMock },
+        { provide: OrganizationListingService, useFactory: () => new OrganizationListingService(organizationDirectoryReader) },
         { provide: InvitationIssuanceService, useValue: invitationIssuanceMock },
         { provide: InvitationPreviewService, useFactory: () => new InvitationPreviewService(invitationPreviewReader) },
         { provide: InvitationAcceptanceService, useValue: invitationAcceptanceMock },
@@ -95,6 +98,7 @@ describe('organization onboarding HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post('/v1/organizations')
                 .send({ name: 'Acme', ownerEmail: 'owner@example.test' })
+                .expect('Cache-Control', 'no-store')
                 .expect(401)
         })
 
@@ -104,6 +108,7 @@ describe('organization onboarding HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post('/v1/organizations')
                 .send({ name: 'Acme', ownerEmail: 'owner@example.test' })
+                .expect('Cache-Control', 'no-store')
                 .expect(403)
         })
 
@@ -113,6 +118,7 @@ describe('organization onboarding HTTP boundary', () => {
             await request(app.getHttpServer())
                 .post('/v1/organizations')
                 .send({ name: '', ownerEmail: 'not-an-email' })
+                .expect('Cache-Control', 'no-store')
                 .expect(400)
         })
 
@@ -146,6 +152,102 @@ describe('organization onboarding HTTP boundary', () => {
                     token: 'raw-token-value',
                 },
             })
+        })
+
+        it('prevents caching a malformed JSON creation request before guards and pipes run', async () => {
+            await request(app.getHttpServer())
+                .post('/v1/organizations')
+                .set('Content-Type', 'application/json')
+                .send('{"name":')
+                .expect('Cache-Control', 'no-store')
+                .expect(400)
+            expect(organizationCreationMock.createWithFirstOwner).not.toHaveBeenCalled()
+        })
+
+        it('prevents caching an unexpected creation failure', async () => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole: 'platform_admin' }))
+            organizationCreationMock.createWithFirstOwner.mockRejectedValue(new Error('Synthetic store failure'))
+            await request(app.getHttpServer())
+                .post('/v1/organizations')
+                .send({ name: 'Acme', ownerEmail: 'owner@example.test' })
+                .expect('Cache-Control', 'no-store')
+                .expect(500)
+        })
+    })
+
+    describe('GET /v1/organizations', () => {
+        const organization = {
+            id: organizationId, name: 'Synthetic directory organization',
+            createdAt: new Date('2026-09-09T12:34:56.789Z'), updatedAt: new Date('2026-09-09T12:34:56.790Z'),
+        }
+
+        beforeEach(() => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole: 'platform_admin' }))
+            organizationDirectoryReader.list.mockResolvedValue({ organizations: [organization], hasMore: false })
+        })
+
+        it('rejects unauthenticated requests before the directory is read', async () => {
+            authenticationServiceMock.authenticate.mockRejectedValue(new UnauthorizedException('missing credential'))
+            await request(app.getHttpServer()).get('/v1/organizations').expect(401)
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
+        })
+
+        it.each(['member', 'admin', 'owner'] as const)('denies the %s customer role without directory data', async membershipRole => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole }))
+            const response = await request(app.getHttpServer()).get('/v1/organizations').expect(403)
+            expect(response.body).not.toHaveProperty('organizations')
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
+        })
+
+        it('defaults to 50 and serializes only directory fields, omitting totals, secrets, and a terminal cursor', async () => {
+            organizationDirectoryReader.list.mockResolvedValue({
+                organizations: [{ ...organization, token: 'synthetic-secret-excluded', ownerEmail: 'excluded@example.test' }],
+                hasMore: false,
+            })
+            const response = await request(app.getHttpServer()).get('/v1/organizations').expect(200)
+            expect(organizationDirectoryReader.list).toHaveBeenCalledWith({ limit: 50 })
+            expect(response.body).toEqual({ organizations: [{
+                ...organization, createdAt: organization.createdAt.toISOString(), updatedAt: organization.updatedAt.toISOString(),
+            }] })
+        })
+
+        it.each([1, 100])('transforms the page size %s into the typed boundary value', async pageSize => {
+            await request(app.getHttpServer()).get('/v1/organizations').query({ pageSize }).expect(200)
+            expect(organizationDirectoryReader.list).toHaveBeenCalledWith({ limit: pageSize })
+        })
+
+        it('returns an empty terminal page without a cursor', async () => {
+            organizationDirectoryReader.list.mockResolvedValue({ organizations: [], hasMore: false })
+            const response = await request(app.getHttpServer()).get('/v1/organizations').expect(200)
+            expect(response.body).toEqual({ organizations: [] })
+        })
+
+        it('returns a continuation cursor and consumes it as a typed millisecond seek key', async () => {
+            organizationDirectoryReader.list.mockResolvedValueOnce({ organizations: [organization], hasMore: true })
+            const first = await request(app.getHttpServer()).get('/v1/organizations').query({ pageSize: 1 }).expect(200)
+            const { nextPageToken } = first.body as { nextPageToken: string }
+            expect(typeof nextPageToken).toBe('string')
+            await request(app.getHttpServer()).get('/v1/organizations')
+                .query({ pageSize: 1, pageToken: nextPageToken }).expect(200)
+            expect(organizationDirectoryReader.list).toHaveBeenLastCalledWith({
+                limit: 1, before: { createdAtMilliseconds: organization.createdAt.getTime(), id: organization.id },
+            })
+        })
+
+        it.each(['0', '-1', '101', '1.5', 'invalid', '', 'Infinity'])('rejects invalid page size %s', async pageSize => {
+            await request(app.getHttpServer()).get('/v1/organizations').query({ pageSize }).expect(400)
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
+        })
+
+        it.each(['invalid', '', 'a'.repeat(513)])('rejects malformed page token case %#', async pageToken => {
+            await request(app.getHttpServer()).get('/v1/organizations').query({ pageToken }).expect(400)
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
+        })
+
+        it('rejects repeated page-size and cursor query parameters', async () => {
+            await request(app.getHttpServer()).get('/v1/organizations?pageSize=1&pageSize=2').expect(400)
+            await request(app.getHttpServer()).get('/v1/organizations?pageToken=one&pageToken=two').expect(400)
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
         })
     })
 

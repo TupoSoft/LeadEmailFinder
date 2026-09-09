@@ -1,15 +1,65 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Expose, Type } from 'class-transformer'
-import { IsEmail, IsIn, IsNotEmpty, IsString, IsUUID, Length, MinLength } from 'class-validator'
+import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, MinLength } from 'class-validator'
 import { AuthRole, MembershipStatus } from '@tuposoft/lead-email-finder/modules/identity'
 
 export class CreateOrganizationDto {
+    @ApiProperty({ type: String, minLength: 1, maxLength: 200 })
     @IsString()
     @Length(1, 200)
     name: string
 
     @IsEmail()
+    @ApiProperty({ type: String, format: 'email' })
     ownerEmail: string
+}
+
+export class ListOrganizationsQueryDto {
+    @ApiPropertyOptional({ type: 'integer', default: 50, minimum: 1, maximum: 100 })
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(100)
+    pageSize: number = 50
+
+    @ApiPropertyOptional({
+        type: String,
+        maxLength: 512,
+        description: 'Opaque continuation token returned by the preceding page. Omit for the first page.',
+    })
+    @IsOptional()
+    @IsString()
+    @MaxLength(512)
+    pageToken?: string
+}
+
+export class OrganizationDirectoryEntryDto {
+    @Expose()
+    @ApiProperty({ type: String, format: 'uuid' })
+    id: string
+
+    @Expose()
+    @ApiProperty({ type: String })
+    name: string
+
+    @Expose()
+    @ApiProperty({ type: String, format: 'date-time' })
+    createdAt: Date
+
+    @Expose()
+    @ApiProperty({ type: String, format: 'date-time' })
+    updatedAt: Date
+}
+
+export class OrganizationDirectoryResponseDto {
+    @Expose()
+    @Type(() => OrganizationDirectoryEntryDto)
+    @ApiProperty({ type: OrganizationDirectoryEntryDto, isArray: true })
+    organizations: readonly OrganizationDirectoryEntryDto[]
+
+    @Expose()
+    @ApiPropertyOptional({ type: String, description: 'Present only when another page exists. No total is calculated.' })
+    nextPageToken?: string
 }
 
 export class InvitationResponseDto {
@@ -42,10 +92,12 @@ export class InvitationResponseDto {
 
 export class CreateOrganizationResponseDto {
     @Expose()
+    @ApiProperty({ type: String, format: 'uuid' })
     organizationId: string
 
     @Expose()
     @Type(() => InvitationResponseDto)
+    @ApiProperty({ type: InvitationResponseDto })
     invitation: InvitationResponseDto
 }
 

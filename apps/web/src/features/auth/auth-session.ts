@@ -337,6 +337,7 @@ function isLocallyHandledMutation(method: string, path: string): boolean {
         (method === 'POST' && /^\/v1\/organizations\/[^/]+\/invitations$/.test(path)) ||
         (method === 'PATCH' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
         (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
+        (method === 'POST' && path === '/v1/organizations') ||
         (method === 'POST' &&
             /^\/v1\/organizations\/[^/]+\/service-clients(?:\/[^/]+\/(?:rotate|disable))?$/.test(path)) ||
         (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/service-clients\/[^/]+$/.test(path))

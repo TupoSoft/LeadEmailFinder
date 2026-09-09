@@ -6,6 +6,7 @@ import {
     MEMBERSHIP_DIRECTORY,
     MEMBERSHIP_MUTATION_STORE,
     ORGANIZATION_REGISTRATION_STORE,
+    ORGANIZATION_DIRECTORY_READER,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { InvitationPreviewService } from './application/invitation-preview.service'
 import { InvitationAcceptanceService } from './application/invitation-acceptance.service'
@@ -14,6 +15,7 @@ import { MembershipListingService } from './application/membership-listing.servi
 import { MembershipRemovalService } from './application/membership-removal.service'
 import { MembershipRoleChangeService } from './application/membership-role-change.service'
 import { OrganizationCreationService } from './application/organization-creation.service'
+import { OrganizationListingService } from './application/organization-listing.service'
 import { KEYCLOAK_ORGANIZATION_ADMIN } from './application/ports/keycloak-organization-admin'
 import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organization-admin-client.service'
 import { OrganizationOnboardingModule } from './organization-onboarding.module'
@@ -28,6 +30,7 @@ describe('OrganizationOnboardingModule', () => {
         expect(providers).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ provide: OrganizationCreationService, inject: [ORGANIZATION_REGISTRATION_STORE] }),
+                expect.objectContaining({ provide: OrganizationListingService, inject: [ORGANIZATION_DIRECTORY_READER] }),
                 expect.objectContaining({ provide: InvitationPreviewService, inject: [INVITATION_PREVIEW_READER] }),
                 expect.objectContaining({ provide: InvitationIssuanceService, inject: [INVITATION_STORE] }),
                 expect.objectContaining({ provide: MembershipListingService, inject: [MEMBERSHIP_DIRECTORY] }),

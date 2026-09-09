@@ -39,7 +39,9 @@
         "batchVerificationRuntime": "apps/web/tests/e2e/batch-verification.spec.ts",
         "serviceClients": "apps/web/tests/e2e/service-clients-ui.spec.ts",
         "serviceClientPrivacy": "apps/web/tests/e2e/service-clients-ui.spec.ts",
-        "serviceClientRuntime": "apps/web/tests/e2e/service-clients.spec.ts"
+        "serviceClientRuntime": "apps/web/tests/e2e/service-clients.spec.ts",
+        "platformOrganizations": "apps/web/tests/e2e/platform-organizations-ui.spec.ts",
+        "platformOrganizationRuntime": "apps/web/tests/e2e/platform-organizations.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",

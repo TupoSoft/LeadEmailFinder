@@ -11,6 +11,7 @@ import { INVITATION_PREVIEW_READER } from './application/ports/invitation-previe
 import { INVITATION_STORE } from './application/ports/invitation-store'
 import { MEMBERSHIP_DIRECTORY } from './application/ports/membership-directory'
 import { MEMBERSHIP_MUTATION_STORE } from './application/ports/membership-mutation-store'
+import { ORGANIZATION_DIRECTORY_READER } from './application/ports/organization-directory-reader'
 import { ORGANIZATION_REGISTRATION_STORE } from './application/ports/organization-registration-store'
 import { SERVICE_CREDENTIAL_DIRECTORY } from './application/ports/service-credential-directory'
 import { SERVICE_CREDENTIAL_WRITER } from './application/ports/service-credential-writer'
@@ -33,6 +34,7 @@ import { TypeOrmInvitationPreviewReader } from './infrastructure/persistence/typ
 import { TypeOrmInvitationStore } from './infrastructure/persistence/typeorm-invitation-store'
 import { TypeOrmMembershipDirectory } from './infrastructure/persistence/typeorm-membership-directory'
 import { TypeOrmMembershipMutationStore } from './infrastructure/persistence/typeorm-membership-mutation-store'
+import { TypeOrmOrganizationDirectoryReader } from './infrastructure/persistence/typeorm-organization-directory-reader'
 import { TypeOrmOrganizationRegistrationStore } from './infrastructure/persistence/typeorm-organization-registration-store'
 import { TypeOrmServiceCredentialDirectory } from './infrastructure/persistence/typeorm-service-credential-directory'
 import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typeorm-service-credential-writer'
@@ -57,6 +59,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         TypeOrmActiveServiceCredentialReader,
         TypeOrmCurrentAccountReader,
         TypeOrmCreditLedgerStore,
+        TypeOrmOrganizationDirectoryReader,
         TypeOrmOrganizationRegistrationStore,
         TypeOrmInvitationStore,
         TypeOrmInvitationPreviewReader,
@@ -70,6 +73,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         { provide: ACTIVE_SERVICE_CREDENTIAL_READER, useExisting: TypeOrmActiveServiceCredentialReader },
         { provide: CURRENT_ACCOUNT_READER, useExisting: TypeOrmCurrentAccountReader },
         { provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore },
+        { provide: ORGANIZATION_DIRECTORY_READER, useExisting: TypeOrmOrganizationDirectoryReader },
         { provide: ORGANIZATION_REGISTRATION_STORE, useExisting: TypeOrmOrganizationRegistrationStore },
         { provide: INVITATION_PREVIEW_READER, useExisting: TypeOrmInvitationPreviewReader },
         { provide: INVITATION_STORE, useExisting: TypeOrmInvitationStore },
@@ -90,6 +94,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         ACTIVE_SERVICE_CREDENTIAL_READER,
         CURRENT_ACCOUNT_READER,
         CREDIT_LEDGER_STORE,
+        ORGANIZATION_DIRECTORY_READER,
         ORGANIZATION_REGISTRATION_STORE,
         INVITATION_STORE,
         INVITATION_PREVIEW_READER,

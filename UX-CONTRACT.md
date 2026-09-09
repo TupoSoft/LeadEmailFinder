@@ -63,6 +63,7 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Progress | `ProgressIndicator` | `frontend/12` | Indeterminate upload or exact finite server progress | Semantic and narrow browser tests |
 | Batch verification | `BatchVerificationJobPage` and shared polling policy | `frontend/12` | Validation, counts, safe failures, and retained CSV download | API, Bruno, component, and browser tests |
 | Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
+| Platform organizations | `PlatformOrganizationsPage` | `frontend/15` | Cursor directory, tenant creation, and one-time owner invitation | API, PostgreSQL, component, Bruno, and browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
@@ -448,3 +449,39 @@ Invalid CSV offers correction through a fresh selection. Insufficient credits li
 `billing.read`, otherwise it advises contacting an organization owner. Generic processing failure explains that
 credits may have been charged. Unavailable states and download errors never trigger another upload. There is no
 batch history, cancellation, resumption, automatic retry, or browser result preview.
+
+
+## Platform Organization Bootstrap
+
+The source contract is `.agents/plans/frontend/15-bootstrap-customer-organizations.md`. The route
+`/app/platform/organizations` has heading `Organizations` and title `Organizations | Lead Email Finder`.
+Only `platform.organizations.manage` exposes its navigation and content. The API independently requires
+`platform:admin` on both `GET` and `POST /v1/organizations`.
+
+The directory uses the server's opaque continuation unchanged, appends unique IDs, and shows Load more only when
+a continuation exists. Refresh organizations starts at the first page; confirmed creation also resets the directory.
+There is no numeric total, guessed page count, or terminal-page claim. A malformed cursor offers a fresh read.
+Failed later reads preserve existing rows and permit an explicit retry. Names, identifiers, and UTC timestamps wrap
+fully in both desktop rows and narrow cards. The document owns scrolling. Cursors stay in transient query state;
+they are not shareable navigation or persistent browser state.
+
+Create organization validates Organization name and First owner email, focuses the first invalid field, and submits
+once. This operation uses the generated client outside `QueryCache` and `MutationCache`, following the existing team
+invitation pattern. An abort controller and operation generation ignore late responses after Cancel waiting,
+navigation, unmount, pagehide, or restored pageshow. Successful creation keeps the invitation URL only in the visible
+local dialog and an uncontrolled input. The copy action, dismissal, navigation, and page lifecycle events clear the URL.
+Restoring a cached document cannot redisplay the invitation. The creation response is `no-store`, and the directory
+never contains invitation data.
+
+An unconfirmed outcome refreshes the directory and disables further creation until the operator explicitly selects
+I have reconciled the unconfirmed creation. Cancellation cannot undo a server write. A secret-free reconciliation
+marker survives route navigation and cached-page restoration in memory. A membership-scoped session-storage flag
+also preserves reconciliation across an ordinary reload; it is written before dispatch and cleared on a confirmed
+outcome or explicit acknowledgment. Neither mechanism stores submitted fields or invitation content. If session
+storage is unavailable, the memory guard still covers the current document and its cached restoration. Automatic mutation retries are disabled. The UI provides no invitation recovery or email delivery.
+
+The platform tests use the existing invitation artifact policy: no screenshots, traces, videos, response dumps, or
+DOM attachments during creation or authentication. Deterministic browser tests cover 1440 by 900 and 320 by 720
+viewports, keyboard focus, accessibility, lost responses, delayed settlement, and page restoration. A separate live
+suite uses the owned development stack and MFA-aware operator fixture. The privacy guard exercises deliberate
+assertion and timeout failures before inspecting output for runtime secret markers.

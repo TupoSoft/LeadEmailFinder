@@ -8,7 +8,11 @@ import { promisify } from 'node:util'
 import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
 import { withExpiredInvitation } from './invitation-expiry-fixture.mjs'
-import { withAsyncVerificationFixture } from './async-verification-fixture.mjs'
+import {
+    customerClientSecret,
+    validateCustomerFixture,
+    withAsyncVerificationFixture,
+} from './async-verification-fixture.mjs'
 import {
     brunoFailure,
     formatFailureDiagnostic,
@@ -33,8 +37,8 @@ const registry = Object.freeze({
         countOnly: true,
     }),
     'organization-onboarding': Object.freeze({
-        requests: 12,
-        tests: 12,
+        requests: 23,
+        tests: 23,
         sandbox: 'developer',
         network: 'host',
         countOnly: true,
@@ -154,7 +158,10 @@ export function cliArguments(name, environment, reportFile) {
             (!environment.CUSTOMER_ORGANIZATION_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
-        (name === 'organization-onboarding' && !environment.BRUNO_EXPIRED_INVITATION_TOKEN) ||
+        (name === 'organization-onboarding' &&
+            (!environment.BRUNO_EXPIRED_INVITATION_TOKEN ||
+                !environment.CUSTOMER_SERVICE_CLIENT_ID ||
+                !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
         (name === 'service-client-management' && !environment.SERVICE_CLIENT_ORGANIZATION_ID) ||
         (name === 'credit-purchases' &&
             (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
@@ -329,8 +336,23 @@ export async function runCollection(args, checkoutRoot) {
     if (name === 'organization-onboarding') {
         await inspectDevelopmentService(checkoutRoot, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
         const credential = await readMetadata('service-credential.json')
+        const customer = validateCustomerFixture(
+            await readMetadata('customer-fixture.json'),
+            environment.OIDC_ISSUER_URL,
+            credential.organizationId,
+        )
+        const customerSecret = await customerClientSecret(metadata, customer.keycloakClientId)
         return withExpiredInvitation(metadata, credential.organizationId, environment.OIDC_ISSUER_URL, token =>
-            executeCollection(name, { ...environment, BRUNO_EXPIRED_INVITATION_TOKEN: token }, checkoutRoot),
+            executeCollection(
+                name,
+                {
+                    ...environment,
+                    BRUNO_EXPIRED_INVITATION_TOKEN: token,
+                    CUSTOMER_SERVICE_CLIENT_ID: customer.keycloakClientId,
+                    CUSTOMER_SERVICE_CLIENT_SECRET: customerSecret,
+                },
+                checkoutRoot,
+            ),
         )
     }
     if (collection.network === 'compose') {

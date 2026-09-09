@@ -15,6 +15,8 @@ import {
     MembershipMutationStore,
     ORGANIZATION_REGISTRATION_STORE,
     OrganizationRegistrationStore,
+    ORGANIZATION_DIRECTORY_READER,
+    OrganizationDirectoryReader,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { InvitationPreviewService } from './application/invitation-preview.service'
@@ -25,6 +27,7 @@ import { MembershipListingService } from './application/membership-listing.servi
 import { MembershipRemovalService } from './application/membership-removal.service'
 import { MembershipRoleChangeService } from './application/membership-role-change.service'
 import { OrganizationCreationService } from './application/organization-creation.service'
+import { OrganizationListingService } from './application/organization-listing.service'
 import { KEYCLOAK_ORGANIZATION_ADMIN, KeycloakOrganizationAdmin } from './application/ports/keycloak-organization-admin'
 import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organization-admin-client.service'
 
@@ -35,6 +38,11 @@ import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organ
         RolePermissionPolicy,
         PermissionsGuard,
         { provide: KEYCLOAK_ORGANIZATION_ADMIN, useClass: KeycloakOrganizationAdminClient },
+        {
+            provide: OrganizationListingService,
+            inject: [ORGANIZATION_DIRECTORY_READER],
+            useFactory: (reader: OrganizationDirectoryReader) => new OrganizationListingService(reader),
+        },
         {
             provide: OrganizationCreationService,
             inject: [ORGANIZATION_REGISTRATION_STORE],

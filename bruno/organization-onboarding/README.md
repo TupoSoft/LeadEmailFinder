@@ -1,11 +1,15 @@
 # Organization Onboarding Bruno Collection
 
-This collection executes 12 requests through the HTTP boundary. A platform service creates an organization and
+This collection executes 23 requests through the HTTP boundary. A platform service creates an organization and
 its first owner invitation. The public preview returns pending organization, email, role, and expiry information.
 Acceptance creates the owner, consumed preview returns a generic `410`, and duplicate acceptance returns only
 `{ "status": "accepted" }`. Further requests cover an existing-owner conflict, organization-scoping rejection,
 unknown tokens, and deterministic expiry. Invitation responses require `Cache-Control: no-store` and
 `Referrer-Policy: no-referrer`.
+
+The platform directory cases cover first, middle, and terminal pages, the default size, omitted terminal cursors,
+non-overlapping identifiers, metadata-only reads, malformed cursors, and page sizes outside 1 through 100.
+Customer credentials must receive `403` for list and create. Rejected creation retains `no-store`.
 
 Use the repository-pinned launcher against a development stack owned by this checkout:
 
@@ -14,8 +18,9 @@ corepack pnpm bruno:organization-onboarding
 ```
 
 For an isolated stack, include its `COMPOSE_PROJECT_NAME` environment variable. Provision the development service
-credential first with the documented Keycloak bootstrap workflow. The launcher validates container ownership and
+credential and customer fixture first with the documented Keycloak bootstrap workflow. The launcher validates container ownership and
 loads the ignored `.dev/keycloak/service-client.json` and `.dev/keycloak/service-credential.json` internally.
+The customer credential is read from the owned Keycloak fixture and stays in the child environment.
 Credentials never enter command arguments. It runs `bru run --env local --sandbox developer` using pinned Bruno
 4.1.0 and rejects missing, skipped, failed, or zero-execution results.
 

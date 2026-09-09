@@ -83,6 +83,7 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/billing/credit-packs',
         '/v1/billing/summary',
         '/v1/credit-purchases',
+        '/v1/organizations',
         '/v1/organizations/invitations/{token}',
         '/v1/organizations/invitations/{token}/accept',
         '/v1/organizations/{organizationId}/invitations',
@@ -424,7 +425,6 @@ test('rejects missing or stale JSON and TypeScript without repairing either file
 
 test('team and invitation operations publish reviewed safe browser contracts', () => {
     const schemas = browser.components.schemas
-    assert.equal(Object.hasOwn(runtime.paths, '/v1/organizations'), false)
     assert.equal(schemas.MembershipResponseDto.properties.email.nullable, true)
     assert.deepEqual(schemas.MembershipResponseDto.properties.status.enum, ['active', 'disabled'])
     assert.equal(schemas.AcceptInvitationDto.properties.password.minLength, 12)
@@ -452,6 +452,74 @@ test('team and invitation operations publish reviewed safe browser contracts', (
         assert.deepEqual(operation.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
         for (const status of ['401', '403', '404', '409']) assert.ok(operation.responses[status])
     }
+})
+
+test('platform organization operations expose a bounded cursor directory and one-time creation contract', () => {
+    const operations = browser.paths['/v1/organizations']
+    assert.deepEqual(Object.keys(operations).sort(), ['get', 'post'])
+    assert.deepEqual(operations, runtime.paths['/v1/organizations'])
+    assert.equal(operations.get.operationId, 'OrganizationsController_list')
+    assert.equal(operations.post.operationId, 'OrganizationsController_create')
+    assert.deepEqual(operations.get.security, [{ lef_session: [] }, { oidc: [] }])
+    assert.deepEqual(operations.post.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+    for (const operation of Object.values(operations)) {
+        assert.match(operation.description, /platform:admin/)
+        for (const status of ['400', '401', '403']) assert.ok(operation.responses[status])
+    }
+    const pageSize = operations.get.parameters.find(parameter => parameter.name === 'pageSize')
+    assert.equal(pageSize.in, 'query')
+    assert.equal(pageSize.required, false)
+    assert.deepEqual(pageSize.schema, { default: 50, maximum: 100, minimum: 1, type: 'integer' })
+    const pageToken = operations.get.parameters.find(parameter => parameter.name === 'pageToken')
+    assert.equal(pageToken.required, false)
+    assert.equal(pageToken.schema.type, 'string')
+    assert.equal(pageToken.schema.maxLength, 512)
+    const schemas = browser.components.schemas
+    const directory = schemas.OrganizationDirectoryResponseDto
+    assert.deepEqual(Object.keys(directory.properties).sort(), ['nextPageToken', 'organizations'])
+    assert.deepEqual(directory.required, ['organizations'])
+    assert.equal(directory.properties.nextPageToken.type, 'string')
+    assert.notEqual(directory.properties.nextPageToken.nullable, true)
+    assert.deepEqual(Object.keys(schemas.OrganizationDirectoryEntryDto.properties).sort(), ['createdAt', 'id', 'name', 'updatedAt'])
+    for (const field of ['createdAt', 'updatedAt']) {
+        assert.equal(schemas.OrganizationDirectoryEntryDto.properties[field].format, 'date-time')
+    }
+    assert.equal(schemas.OrganizationDirectoryEntryDto.properties.id.format, 'uuid')
+    assert.deepEqual(Object.keys(schemas.CreateOrganizationDto.properties).sort(), ['name', 'ownerEmail'])
+    assert.equal(schemas.CreateOrganizationDto.properties.name.minLength, 1)
+    assert.equal(schemas.CreateOrganizationDto.properties.name.maxLength, 200)
+    assert.equal(schemas.CreateOrganizationDto.properties.ownerEmail.format, 'email')
+    assert.deepEqual(Object.keys(schemas.CreateOrganizationResponseDto.properties).sort(), ['invitation', 'organizationId'])
+    assert.match(schemas.InvitationResponseDto.properties.token.description, /One-time secret/)
+    for (const response of Object.values(operations.post.responses)) {
+        assert.deepEqual(response.headers['Cache-Control'].schema.enum, ['no-store'])
+        assert.deepEqual(response.headers['Referrer-Policy'].schema.enum, ['no-referrer'])
+    }
+})
+
+test('generated platform directory types expose optional cursors without totals or invitation secrets', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'organization-directory-contract.ts')
+    await writeFile(file, `
+        import type { paths, components } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type List = paths['/v1/organizations']['get']['responses'][200]['content']['application/json']
+        type Query = NonNullable<paths['/v1/organizations']['get']['parameters']['query']>
+        type Created = paths['/v1/organizations']['post']['responses'][201]['content']['application/json']
+        type Assertions = [
+            Assert<Equal<keyof List, 'organizations' | 'nextPageToken'>>,
+            Assert<Equal<List['nextPageToken'], string | undefined>>,
+            Assert<Equal<keyof List['organizations'][number], 'id' | 'name' | 'createdAt' | 'updatedAt'>>,
+            Assert<Equal<List['organizations'][number]['createdAt'], string>>,
+            Assert<Equal<Query['pageSize'], number | undefined>>,
+            Assert<Equal<Query['pageToken'], string | undefined>>,
+            Assert<Equal<Created['invitation'], components['schemas']['InvitationResponseDto']>>,
+            Assert<Equal<Created['invitation']['token'], string>>
+        ]
+    `)
+    const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
 })
 
 

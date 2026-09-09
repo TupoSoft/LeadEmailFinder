@@ -11,6 +11,7 @@ import { TypeOrmInvitationPreviewReader } from './infrastructure/persistence/typ
 import { INVITATION_STORE } from './application/ports/invitation-store'
 import { MEMBERSHIP_DIRECTORY } from './application/ports/membership-directory'
 import { MEMBERSHIP_MUTATION_STORE } from './application/ports/membership-mutation-store'
+import { ORGANIZATION_DIRECTORY_READER } from './application/ports/organization-directory-reader'
 import { ORGANIZATION_REGISTRATION_STORE } from './application/ports/organization-registration-store'
 import { SERVICE_CREDENTIAL_DIRECTORY } from './application/ports/service-credential-directory'
 import { SERVICE_CREDENTIAL_WRITER } from './application/ports/service-credential-writer'
@@ -24,6 +25,7 @@ import { TypeOrmInvitationAcceptanceStore } from './infrastructure/persistence/t
 import { TypeOrmInvitationStore } from './infrastructure/persistence/typeorm-invitation-store'
 import { TypeOrmMembershipDirectory } from './infrastructure/persistence/typeorm-membership-directory'
 import { TypeOrmMembershipMutationStore } from './infrastructure/persistence/typeorm-membership-mutation-store'
+import { TypeOrmOrganizationDirectoryReader } from './infrastructure/persistence/typeorm-organization-directory-reader'
 import { TypeOrmOrganizationRegistrationStore } from './infrastructure/persistence/typeorm-organization-registration-store'
 import { TypeOrmServiceCredentialDirectory } from './infrastructure/persistence/typeorm-service-credential-directory'
 import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typeorm-service-credential-writer'
@@ -52,6 +54,10 @@ describe('IdentityModule', () => {
                 }),
                 expect.objectContaining({ provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore }),
                 expect.objectContaining({
+                    provide: ORGANIZATION_DIRECTORY_READER,
+                    useExisting: TypeOrmOrganizationDirectoryReader,
+                }),
+                expect.objectContaining({
                     provide: CURRENT_ACCOUNT_READER,
                     useExisting: TypeOrmCurrentAccountReader,
                 }),
@@ -59,7 +65,10 @@ describe('IdentityModule', () => {
                     provide: ORGANIZATION_REGISTRATION_STORE,
                     useExisting: TypeOrmOrganizationRegistrationStore,
                 }),
-                expect.objectContaining({ provide: INVITATION_PREVIEW_READER, useExisting: TypeOrmInvitationPreviewReader }),
+                expect.objectContaining({
+                    provide: INVITATION_PREVIEW_READER,
+                    useExisting: TypeOrmInvitationPreviewReader,
+                }),
                 expect.objectContaining({ provide: INVITATION_STORE, useExisting: TypeOrmInvitationStore }),
                 expect.objectContaining({
                     provide: INVITATION_ACCEPTANCE_STORE,
@@ -92,6 +101,7 @@ describe('IdentityModule', () => {
                 ACTIVE_MEMBERSHIP_READER,
                 ACTIVE_SERVICE_CREDENTIAL_READER,
                 CREDIT_LEDGER_STORE,
+                ORGANIZATION_DIRECTORY_READER,
                 CURRENT_ACCOUNT_READER,
                 ORGANIZATION_REGISTRATION_STORE,
                 INVITATION_STORE,
