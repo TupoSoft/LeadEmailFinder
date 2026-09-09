@@ -1,8 +1,8 @@
 # Business Modules
 
 This directory contains internal business modules. This guide is the canonical human-readable contract for their
-structure, dependencies, public boundaries, documentation, tests, and architecture-debt ratchet. The executable
-counterpart is `corepack pnpm architecture:check`.
+structure, dependencies, public boundaries, documentation, and tests, enforced as a permanent zero-violation
+invariant. The executable counterpart is `corepack pnpm architecture:check`.
 
 ## Module Structure
 
@@ -113,35 +113,23 @@ dependencies. It must also cover its routes and queues, persistence, the configu
 values, and links to focused tests and Bruno coverage. Existing deep imports are architecture debt, not supported
 public API, and must be described as such rather than presented as contracts.
 
-## Architecture Gate and Debt Ratchet
+## Architecture Gate
 
 Run the read-only gate after changing a module or one of its consumers:
 
     corepack pnpm architecture:check
 
-The gate compares the complete current violation set with
-`scripts/architecture/module-architecture-baseline.json`. Baseline entries identify temporary existing debt; they are
-not exceptions to this contract. Exact equality is required:
-
-- A current violation without a matching baseline entry fails the check as `new debt`.
-- A baseline entry without a matching current violation fails the check as `stale debt` and must be removed.
+The gate scans the complete repository and requires zero violations. It is a permanent invariant, not a ratchet: any
+violation fails the check, and there is no baseline, allow list, grandfathered path, or warning-only mode to accept
+one. A change that cannot satisfy the canonical contract needs a different design, not an exception; update or create
+an ExecPlan to correct it.
 
 The ignored host file `src/metadata.ts` is Nest's generated Swagger aggregate. The gate excludes this exact build
 artifact because its DTO imports describe documentation metadata. Handwritten host files and every other file named
 `metadata.ts` remain subject to the public import boundaries.
 
 Violation identities are stable, sorted, unique keys that exclude absolute paths and source positions. Diagnostics
-report current line and column information separately. The baseline has a schema version and a `violations` array
-sorted in lexicographical order; malformed, duplicate, or incorrectly ordered entries cause the check to fail.
-
-When a remediation leaves only stale entries, inspect the change and run the shrink-only updater, then rerun the gate:
-
-    corepack pnpm architecture:baseline
-    corepack pnpm architecture:check
-
-After its initial bootstrap, the updater may remove resolved keys but must refuse new keys. CI also compares the
-committed baseline with the pull request's base revision to prevent baseline growth. Do not add inline suppressions,
-per-file exceptions, or a general baseline-growth switch. A legitimate contract change must update this guide, the
+report current line and column information separately. A legitimate contract change must update this guide, the
 scanner, its focused tests, and the relevant ExecPlan together.
 
 ## Module Catalog
