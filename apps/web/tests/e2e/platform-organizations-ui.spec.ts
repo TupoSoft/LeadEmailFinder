@@ -23,6 +23,10 @@ async function account(context: BrowserContext, capabilities = ['platform.organi
     )
 }
 async function accessible(page: Page) {
+    // Audit the settled state after controls finish their enabled/disabled color transition.
+    await page.evaluate(async () => {
+        await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => undefined)))
+    })
     const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
     expect(result.violations.filter(value => ['serious', 'critical'].includes(value.impact ?? '')).length).toBe(0)
     expect(

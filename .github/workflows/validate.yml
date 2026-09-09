@@ -381,6 +381,9 @@ jobs:
       - name: Test platform organization directory and invitation recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-organizations
         if: needs.changes.outputs.browser == 'true'
+      - name: Test platform credit adjustment and recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits
+        if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
         if: needs.changes.outputs.browser == 'true'
@@ -404,6 +407,12 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test live platform organization bootstrap
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-organizations-live
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test platform credit HTTP contracts with Bruno
+        run: corepack pnpm bruno:platform-credits
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live platform credit adjustment and recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live
         if: needs.changes.outputs.browser == 'true'
       - name: Test live team management and invitation acceptance
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live

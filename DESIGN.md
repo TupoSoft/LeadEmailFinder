@@ -328,6 +328,15 @@ and `TeamDialog`. Desktop rows become labeled narrow rows with the same organiza
 timestamps. Load more follows the server cursor without a total or page count. The first-owner invitation uses the
 team copy-and-clear dialog. These screens preserve the existing palette, typography, spacing, and motion tokens.
 
+### Platform Organization Credits
+
+The organization credit page places authoritative organization identity and balance before two separate flat panels:
+Add credits and Set absolute balance. It reuses `ProductPanel`, `SignalDetails`, shared form and action styles, and
+`TeamDialog`. Confirmation names the organization, current balance, operation, and requested value, with initial
+focus on Cancel. Unconfirmed additions and absolute overwrites use persistent explanatory text and explicit recovery
+actions. The document owns scrolling, identifiers wrap in full, and narrow layouts retain both operations in the same
+order. This feature introduces no new visual tokens.
+
 ### Verification Evidence
 
 Single-email verification reuses the product headings, shared form controls, flat panels, and existing action

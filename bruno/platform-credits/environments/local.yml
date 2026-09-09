@@ -14,3 +14,7 @@ variables:
     value: "{{process.env.BRUNO_PLATFORM_TOKEN}}"
   - name: customerToken
     value: "{{process.env.BRUNO_CUSTOMER_TOKEN}}"
+  - name: setOrganizationId
+    value: "{{process.env.BRUNO_SET_ORGANIZATION_ID}}"
+  - name: unknownOrganizationId
+    value: "{{process.env.BRUNO_UNKNOWN_ORGANIZATION_ID}}"

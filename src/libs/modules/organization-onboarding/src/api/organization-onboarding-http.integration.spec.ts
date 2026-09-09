@@ -13,6 +13,7 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationDetailService } from '../application/organization-detail.service'
 import { OrganizationListingService } from '../application/organization-listing.service'
 import { OrganizationsController } from './organizations.controller'
 
@@ -22,7 +23,7 @@ const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authen
 const organizationCreationMock: jest.Mocked<Pick<OrganizationCreationService, 'createWithFirstOwner'>> = {
     createWithFirstOwner: jest.fn(),
 }
-const organizationDirectoryReader = { list: jest.fn() }
+const organizationDirectoryReader = { list: jest.fn(), findById: jest.fn() }
 const invitationIssuanceMock: jest.Mocked<Pick<InvitationIssuanceService, 'issue'>> = { issue: jest.fn() }
 const invitationPreviewReader = { findByTokenHash: jest.fn() }
 const invitationAcceptanceMock: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>> = { accept: jest.fn() }
@@ -53,6 +54,7 @@ function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal
         RolePermissionPolicy,
         PermissionsGuard,
         { provide: OrganizationCreationService, useValue: organizationCreationMock },
+        { provide: OrganizationDetailService, useFactory: () => new OrganizationDetailService(organizationDirectoryReader) },
         { provide: OrganizationListingService, useFactory: () => new OrganizationListingService(organizationDirectoryReader) },
         { provide: InvitationIssuanceService, useValue: invitationIssuanceMock },
         { provide: InvitationPreviewService, useFactory: () => new InvitationPreviewService(invitationPreviewReader) },
@@ -172,6 +174,56 @@ describe('organization onboarding HTTP boundary', () => {
                 .send({ name: 'Acme', ownerEmail: 'owner@example.test' })
                 .expect('Cache-Control', 'no-store')
                 .expect(500)
+        })
+    })
+
+    describe('GET /v1/organizations/:organizationId', () => {
+        const organization = {
+            id: organizationId, name: 'Synthetic detail organization',
+            createdAt: new Date('2026-09-09T12:34:56.789Z'), updatedAt: new Date('2026-09-09T12:34:56.790Z'),
+        }
+        beforeEach(() => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole: 'platform_admin' }))
+            organizationDirectoryReader.findById.mockResolvedValue(organization)
+        })
+
+        it('returns only safe directory fields without scanning the directory', async () => {
+            organizationDirectoryReader.findById.mockResolvedValue({ ...organization, balance: 123, memberships: [], token: 'excluded' })
+            const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}`).expect(200)
+            expect(response.body).toEqual({ ...organization,
+                createdAt: organization.createdAt.toISOString(), updatedAt: organization.updatedAt.toISOString() })
+            expect(organizationDirectoryReader.findById).toHaveBeenCalledWith(organizationId)
+            expect(organizationDirectoryReader.list).not.toHaveBeenCalled()
+        })
+
+        it('returns a non-disclosing 404 for an absent organization', async () => {
+            organizationDirectoryReader.findById.mockResolvedValue(null)
+            const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}`).expect(404)
+            expect(response.body).toEqual({ statusCode: 404, error: 'Not Found', message: 'Organization not found' })
+        })
+
+        it('rejects malformed UUIDs before reading', async () => {
+            await request(app.getHttpServer()).get('/v1/organizations/not-a-uuid').expect(400)
+            expect(organizationDirectoryReader.findById).not.toHaveBeenCalled()
+        })
+
+        it('rejects missing authentication before reading', async () => {
+            authenticationServiceMock.authenticate.mockRejectedValue(new UnauthorizedException())
+            await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}`).expect(401)
+            expect(organizationDirectoryReader.findById).not.toHaveBeenCalled()
+        })
+
+        it.each(['member', 'admin', 'owner'] as const)('rejects %s without organization data', async membershipRole => {
+            authenticationServiceMock.authenticate.mockResolvedValue(principalFixture({ membershipRole }))
+            const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}`).expect(403)
+            expect(response.body).not.toHaveProperty('name')
+            expect(organizationDirectoryReader.findById).not.toHaveBeenCalled()
+        })
+
+        it('maps unexpected persistence failures to a generic server response', async () => {
+            organizationDirectoryReader.findById.mockRejectedValue(new Error('synthetic private store detail'))
+            const response = await request(app.getHttpServer()).get(`/v1/organizations/${organizationId}`).expect(500)
+            expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
         })
     })
 

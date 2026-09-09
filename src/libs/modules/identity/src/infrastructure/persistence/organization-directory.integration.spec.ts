@@ -52,6 +52,16 @@ describeWithPostgres('organization directory PostgreSQL pagination', () => {
         )
     }
 
+    it('reads the matching organization projection by UUID and returns null for absence', async () => {
+        await insert(1, '2026-08-31T12:00:00.123999Z')
+        await insert(2, '2026-08-31T12:00:00.456789Z')
+        await expect(reader.findById(organizationId(1))).resolves.toEqual({
+            id: organizationId(1), name: 'Synthetic directory organization 1',
+            createdAt: new Date('2026-08-31T12:00:00.123Z'), updatedAt: new Date('2026-08-31T12:00:00.123Z'),
+        })
+        await expect(reader.findById(organizationId(3))).resolves.toBeNull()
+    })
+
     it('returns an empty directory without claiming a later page', async () => {
         await expect(reader.list({ limit: 2 })).resolves.toEqual({ organizations: [], hasMore: false })
     })

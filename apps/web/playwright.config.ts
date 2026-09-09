@@ -12,6 +12,8 @@ export default defineConfig({
         'invitations-ui.spec.ts',
         'platform-organizations-ui.spec.ts',
         'platform-organizations.spec.ts',
+        'platform-credits-ui.spec.ts',
+        'platform-credits.spec.ts',
         'team-and-invitations.spec.ts',
         'service-clients-ui.spec.ts',
         'service-clients.spec.ts',

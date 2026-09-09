@@ -6,7 +6,7 @@ import { TypeOrmOrganizationDirectoryReader } from './typeorm-organization-direc
 type QueryBuilderMock = jest.Mocked<
     Pick<
         SelectQueryBuilder<Organization>,
-        'select' | 'addSelect' | 'orderBy' | 'addOrderBy' | 'limit' | 'where' | 'getRawMany'
+        'select' | 'addSelect' | 'orderBy' | 'addOrderBy' | 'limit' | 'where' | 'getRawMany' | 'getRawOne'
     >
 >
 
@@ -23,6 +23,7 @@ describe('TypeOrmOrganizationDirectoryReader', () => {
             limit: jest.fn().mockReturnThis(),
             where: jest.fn().mockReturnThis(),
             getRawMany: jest.fn(),
+            getRawOne: jest.fn(),
         }
         const repository = {
             createQueryBuilder: jest.fn().mockReturnValue(query),
@@ -30,6 +31,27 @@ describe('TypeOrmOrganizationDirectoryReader', () => {
         reader = new TypeOrmOrganizationDirectoryReader({
             getRepository: jest.fn().mockReturnValue(repository),
         } as unknown as DataSource)
+    })
+
+    it('reads one UUID with the safe projection and no directory scan', async () => {
+        const row = record('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+        query.getRawOne.mockResolvedValue({ ...row, secret: 'excluded' })
+        await expect(reader.findById(row.id)).resolves.toEqual(row)
+        expect(query.where).toHaveBeenCalledWith('organization.id = :organizationId', { organizationId: row.id })
+        expect(query.getRawMany).not.toHaveBeenCalled()
+        expect(query.addSelect.mock.calls).toEqual([
+            ['organization.name', 'name'],
+            ["date_trunc('milliseconds', organization.createdAt)", 'createdAt'],
+            ['organization.updatedAt', 'updatedAt'],
+        ])
+    })
+
+    it('returns null when an organization is absent and propagates persistence failures', async () => {
+        query.getRawOne.mockResolvedValue(undefined)
+        await expect(reader.findById('absent')).resolves.toBeNull()
+        const failure = new Error('database unavailable')
+        query.getRawOne.mockRejectedValue(failure)
+        await expect(reader.findById('absent')).rejects.toBe(failure)
     })
 
     it('fetches one extra row, returns only requested records, and reports another page', async () => {

@@ -40,6 +40,19 @@
         ],
         "type": "object"
       },
+      "AddCreditsDto": {
+        "properties": {
+          "amount": {
+            "description": "Number of credits to add for this logical operation",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "type": "object"
+      },
       "AsyncVerificationCompletedResponseDto": {
         "properties": {
           "result": {
@@ -955,6 +968,19 @@
         ],
         "type": "object"
       },
+      "SetBalanceDto": {
+        "properties": {
+          "amount": {
+            "description": "Absolute credit balance",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "type": "object"
+      },
       "UploadFileRequestDto": {
         "properties": {
           "file": {
@@ -1038,6 +1064,196 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/credits/{organizationId}": {
+      "get": {
+        "description": "Requires platform:admin. Returns zero when no credit account exists; this does not prove organization existence.",
+        "operationId": "CreditsController_getBalance",
+        "parameters": [
+          {
+            "description": "Organization whose credit balance is managed",
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid organization UUID."
+          },
+          "401": {
+            "description": "Missing or invalid authentication."
+          },
+          "403": {
+            "description": "Authenticated caller lacks platform:admin."
+          },
+          "500": {
+            "description": "The balance could not be loaded."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Read the authoritative organization credit balance",
+        "tags": [
+          "Credits"
+        ]
+      },
+      "post": {
+        "description": "Requires platform:admin. Cookie sessions require Origin and CSRF protection. Reuse one key for the same organization and amount to return the current balance without another grant. Reusing that key with a different amount returns 409 without changing the balance. Both the first successful request and an equivalent replay return 201.",
+        "operationId": "CreditsController_addCredits",
+        "parameters": [
+          {
+            "description": "Organization whose credit balance is managed",
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exactly one canonical lowercase UUID per logical credit addition; reuse it only for retries.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCreditsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditResponseDto"
+                }
+              }
+            },
+            "description": "Grant applied or equivalent replay; current balance."
+          },
+          "400": {
+            "description": "Invalid organization, amount, or missing, repeated, or malformed key."
+          },
+          "401": {
+            "description": "Missing or invalid authentication."
+          },
+          "403": {
+            "description": "Authenticated caller lacks platform:admin."
+          },
+          "409": {
+            "description": "The organization and key already identify a grant with a different amount."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Add platform credits idempotently",
+        "tags": [
+          "Credits"
+        ]
+      },
+      "put": {
+        "description": "Requires platform:admin. Replaces the balance with the requested value. Cookie sessions require Origin and CSRF protection. Reload after uncertainty before another explicit set.",
+        "operationId": "CreditsController_setBalance",
+        "parameters": [
+          {
+            "description": "Organization whose credit balance is managed",
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetBalanceDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid organization UUID or nonnegative integer amount."
+          },
+          "401": {
+            "description": "Missing or invalid authentication."
+          },
+          "403": {
+            "description": "Authenticated caller lacks platform:admin or browser CSRF check denied."
+          },
+          "500": {
+            "description": "The outcome may be uncertain; reload the balance before another explicit set."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Set an absolute organization credit balance",
+        "tags": [
+          "Credits"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "getHealth",
@@ -2223,6 +2439,62 @@
         },
         "security": [],
         "summary": "Accept a pending invitation",
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}": {
+      "get": {
+        "description": "Requires platform:admin. Returns only the directory identity and timestamps; no membership or credit data.",
+        "operationId": "OrganizationsController_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDirectoryEntryDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid organization UUID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Platform administration permission is required."
+          },
+          "404": {
+            "description": "Organization not found. No organization details are returned."
+          },
+          "500": {
+            "description": "Organization details could not be loaded."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Read one organization for a platform operator",
         "tags": [
           "Organizations"
         ]

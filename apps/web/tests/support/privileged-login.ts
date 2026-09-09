@@ -13,7 +13,7 @@ function safeInvitationError(value: unknown): TestInfoError {
             ? value.stack
             : ''
     const location = stack.match(
-        /(?:invitations-ui|team-and-invitations|platform-organizations(?:-ui)?)\.spec\.ts:\d+:\d+/,
+        /(?:invitations-ui|team-and-invitations|platform-(?:organizations|credits)(?:-ui)?)\.spec\.ts:\d+:\d+/,
     )?.[0]
     return {
         value: 'Invitation browser validation failed.',

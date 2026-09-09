@@ -18,7 +18,7 @@ describe('OrganizationListingService', () => {
     let service: OrganizationListingService
 
     beforeEach(() => {
-        reader = { list: jest.fn().mockResolvedValue({ organizations: [record], hasMore: false }) }
+        reader = { findById: jest.fn(), list: jest.fn().mockResolvedValue({ organizations: [record], hasMore: false }) }
         service = new OrganizationListingService(reader)
     })
 

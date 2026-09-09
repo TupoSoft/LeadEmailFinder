@@ -14,6 +14,19 @@ const millisecondCreationTime = "date_trunc('milliseconds', organization.created
 export class TypeOrmOrganizationDirectoryReader implements OrganizationDirectoryReader {
     constructor(private readonly dataSource: DataSource) {}
 
+    async findById(organizationId: string): Promise<OrganizationDirectoryRecord | null> {
+        const row = await this.dataSource
+            .getRepository(Organization)
+            .createQueryBuilder('organization')
+            .select('organization.id', 'id')
+            .addSelect('organization.name', 'name')
+            .addSelect(millisecondCreationTime, 'createdAt')
+            .addSelect('organization.updatedAt', 'updatedAt')
+            .where('organization.id = :organizationId', { organizationId })
+            .getRawOne<OrganizationDirectoryRecord>()
+        return row ? { id: row.id, name: row.name, createdAt: row.createdAt, updatedAt: row.updatedAt } : null
+    }
+
     async list(input: OrganizationDirectoryReadInput): Promise<OrganizationDirectoryPage> {
         const query = this.dataSource
             .getRepository(Organization)

@@ -26,6 +26,9 @@ export interface OrganizationDirectoryPage {
 }
 
 export interface OrganizationDirectoryReader {
+    /** Returns the safe directory projection for one organization, or null when absent. */
+    findById(organizationId: string): Promise<OrganizationDirectoryRecord | null>
+
     /** Returns at most limit records in descending millisecond creation time and UUID order. */
     list(input: OrganizationDirectoryReadInput): Promise<OrganizationDirectoryPage>
 }

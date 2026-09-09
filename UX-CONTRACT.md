@@ -64,6 +64,7 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Batch verification | `BatchVerificationJobPage` and shared polling policy | `frontend/12` | Validation, counts, safe failures, and retained CSV download | API, Bruno, component, and browser tests |
 | Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
 | Platform organizations | `PlatformOrganizationsPage` | `frontend/15` | Cursor directory, tenant creation, and one-time owner invitation | API, PostgreSQL, component, Bruno, and browser tests |
+| Platform credits | `PlatformCreditsPage` | `frontend/17` | Authoritative balance, confirmed add and absolute set, and explicit recovery | API, component, Bruno, accessibility, and browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
@@ -485,3 +486,35 @@ DOM attachments during creation or authentication. Deterministic browser tests c
 viewports, keyboard focus, accessibility, lost responses, delayed settlement, and page restoration. A separate live
 suite uses the owned development stack and MFA-aware operator fixture. The privacy guard exercises deliberate
 assertion and timeout failures before inspecting output for runtime secret markers.
+
+## Platform Organization Credits
+
+The source contract is `.agents/plans/frontend/17-administer-organization-credits.md`. The route
+`/app/platform/organizations/:organizationId/credits` and directory action require `platform.credits.manage`.
+The title and primary heading are Organization credits. All API operations independently require `platform:admin`.
+The page reads organization details by UUID before reading balance. Invalid IDs return to the directory; missing or
+denied organizations expose no balance. Navigation state may supply an initial name but never establishes authority.
+
+Add credits and Set absolute balance are separate panels. Both confirm organization, current server balance, operation,
+and requested value using `TeamDialog`, initially focusing Cancel. The displayed balance stays unchanged while the
+request is pending. Both operations disable automatic retries and reload the authoritative balance after settlement.
+A failed refresh blocks further mutations until a successful read. An uncertain absolute set reports only observed
+balance; a matching value does not prove which request caused it.
+
+An addition generates one UUID after confirmation and persists a versioned record before dispatch. Its membership,
+organization, amount, key, state, and creation time live only in principal-scoped, per-tab session storage; the full
+key never enters shared query or mutation caches, rendered content, or diagnostics. Storage failure prevents dispatch.
+One unresolved record blocks a separate addition or absolute set until resolution or explicit abandonment.
+Explicit retries preserve the original key and amount. Conflict retains the record and requests reconciliation.
+
+Hard refresh restores only a valid record matching the confirmed membership and route organization, then requires
+organization and balance reads before exposing recovery. It never resends automatically. Malformed and foreign records
+are removed without displaying their contents. Logout, expired or unusable sessions, and principal replacement remove
+inapplicable records. Page hiding preserves a matching recovery key while the session boundary hides account data;
+cached-page restoration reconfirms identity before exposing recovery.
+
+The local recovery window lasts 24 hours. Expiry disables retry but retains the record until the operator acknowledges
+that server application remains unknown. Abandonment explains this uncertainty and the loss of recovery before clearing
+the key. Closing the tab or clearing browser storage also loses recovery. The operator must reconcile the outcome
+before making a separate adjustment; a balance read alone cannot establish causality. See
+`docs/platform-credits.md` for the operator procedure.

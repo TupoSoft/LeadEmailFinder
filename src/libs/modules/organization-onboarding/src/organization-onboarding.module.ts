@@ -27,6 +27,7 @@ import { MembershipListingService } from './application/membership-listing.servi
 import { MembershipRemovalService } from './application/membership-removal.service'
 import { MembershipRoleChangeService } from './application/membership-role-change.service'
 import { OrganizationCreationService } from './application/organization-creation.service'
+import { OrganizationDetailService } from './application/organization-detail.service'
 import { OrganizationListingService } from './application/organization-listing.service'
 import { KEYCLOAK_ORGANIZATION_ADMIN, KeycloakOrganizationAdmin } from './application/ports/keycloak-organization-admin'
 import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organization-admin-client.service'
@@ -38,6 +39,11 @@ import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organ
         RolePermissionPolicy,
         PermissionsGuard,
         { provide: KEYCLOAK_ORGANIZATION_ADMIN, useClass: KeycloakOrganizationAdminClient },
+        {
+            provide: OrganizationDetailService,
+            inject: [ORGANIZATION_DIRECTORY_READER],
+            useFactory: (reader: OrganizationDirectoryReader) => new OrganizationDetailService(reader),
+        },
         {
             provide: OrganizationListingService,
             inject: [ORGANIZATION_DIRECTORY_READER],

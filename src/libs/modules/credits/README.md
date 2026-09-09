@@ -51,7 +51,7 @@ authentication returns `401`, and an authenticated caller without billing read p
 serialization and Swagger metadata expose the balance contract to the generated browser client.
 
 
-`CreditsController` at `/credits`, restricted to the `platform:admin` permission and excluded from Swagger:
+`CreditsController` at `/credits`, restricted to the `platform:admin` permission and published in runtime and browser OpenAPI:
 
 | Method | Path                       | Access           |
 | ------ | -------------------------- | ---------------- |
@@ -69,8 +69,12 @@ request, including any intervening operations. Reusing the same organization and
 Missing, repeated, combined, or malformed keys return `400`, as do invalid organization UUIDs or amounts. Invalid
 requests never reach the ledger. Missing or invalid authentication returns `401`; an authenticated caller without
 `platform:admin` receives `403`. Error responses do not include the supplied key. Absolute `PUT` and balance `GET`
-operations do not require an idempotency key. Source Swagger annotations describe the additive contract while the
-controller remains excluded from the published document and the browser allow list.
+operations do not require an idempotency key. GET returns the current balance, including zero when no account exists.
+PUT accepts an integer of zero or greater and replaces the absolute balance, including zero. Complete Swagger annotations
+publish UUID paths, amounts, balances, validation, authentication, authorization, and additive replay/conflict responses.
+Browser mutations use session cookies with Origin and CSRF protection; bearer credentials remain supported.
+Organization existence and display details come from the onboarding detail read, because zero credits does not prove
+that an organization exists. This publication does not change ledger or absolute-set semantics.
 
 `addPlatformCredits()` prefixes the accepted key with the private `platform-credit-add:` namespace and interprets the
 ledger's inserted or existing grant result. Only an existing grant with a different recorded amount raises
@@ -124,8 +128,8 @@ The container keeps its database in temporary memory. To remove it after testing
 ignored metadata and run `CREDITS_TEST_PASSWORD=unused docker compose -p <projectName> -f docker/compose.credits-test.yaml down`.
 Rerunning the test command recreates the same isolated stack and schema.
 
-[`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) exercises additive success, replay, conflict,
-header validation, authentication, authorization, and concurrent retries. Run it with
+[`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) exercises organization detail, balance reads, absolute sets including zero, additive success, replay, conflict,
+input validation, authentication, authorization, and concurrent retries. Run it with
 `corepack pnpm bruno:platform-credits` against the developer sandbox.
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the customer billing summary and
 verifies the resulting balance after a webhook grant. Both

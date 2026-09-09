@@ -9,6 +9,7 @@ import { BatchVerificationPage } from '../routes/BatchVerificationPage'
 import { BatchVerificationJobPage } from '../routes/BatchVerificationJobPage'
 import { TeamPage } from '../features/team/TeamPage'
 import { ServiceClientsPage } from '../features/service-clients/ServiceClientsPage'
+import { PlatformCreditsPage } from '../features/platform-credits/PlatformCreditsPage'
 import { PlatformOrganizationsPage } from '../features/platform-organizations/PlatformOrganizationsPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
 import {
@@ -42,6 +43,7 @@ export const appRoutes: RouteObject[] = [
                     { path: 'team', element: <TeamPage /> },
                     { path: 'service-clients', element: <ServiceClientsPage /> },
                     { path: 'platform/organizations', element: <PlatformOrganizationsPage /> },
+                    { path: 'platform/organizations/:organizationId/credits', element: <PlatformCreditsPage /> },
                     { path: 'verifications/new', element: <VerificationPage /> },
                     { path: 'verifications/batches/new', element: <BatchVerificationPage /> },
                     { path: 'verifications/batches/:id', element: <BatchVerificationJobPage /> },

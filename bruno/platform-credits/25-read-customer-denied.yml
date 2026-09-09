@@ -1,0 +1,22 @@
+info:
+  name: 25-read-customer-denied
+  type: http
+  seq: 25
+
+http:
+  method: GET
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{customerToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('25-read-customer-denied', function() {
+          expect(res.status).to.equal(403);
+          expect(res.body).not.to.have.property('balance');
+        });

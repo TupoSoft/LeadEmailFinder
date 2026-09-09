@@ -1,0 +1,24 @@
+info:
+  name: 17-organization-detail
+  type: http
+  seq: 17
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('17-organization-detail', function() {
+          expect(res.status).to.equal(200);
+          expect(Object.keys(res.body).sort()).to.deep.equal(['createdAt', 'id', 'name', 'updatedAt']);
+          expect(res.body.id).to.equal(bru.getEnvVar('organizationId'));
+          expect(res.body.name).to.equal('Bruno platform credit fixture');
+        });

@@ -1,0 +1,22 @@
+info:
+  name: 22-read-authoritative-balance
+  type: http
+  seq: 22
+
+http:
+  method: GET
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('22-read-authoritative-balance', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body).to.deep.equal({ balance: 26 });
+        });

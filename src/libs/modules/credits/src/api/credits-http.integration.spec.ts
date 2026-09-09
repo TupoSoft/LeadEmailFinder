@@ -187,6 +187,27 @@ describe('platform credits HTTP boundary', () => {
         expectNoLedgerAccess()
     })
 
+    it.each(['get', 'put'] as const)('protects credit %s with authentication, platform permission, and UUID validation', async method => {
+        await request(app.getHttpServer())[method](route).send({ amount: 0 }).expect(401)
+        await request(app.getHttpServer())[method](route)
+            .set('Authorization', 'Bearer customer-test-token').send({ amount: 0 }).expect(403)
+        await request(app.getHttpServer())[method]('/credits/not-a-uuid')
+            .set('Authorization', 'Bearer platform-test-token').send({ amount: 0 }).expect(400)
+        expectNoLedgerAccess()
+    })
+
+    it.each([{}, { amount: -1 }, { amount: 1.5 }, { amount: '5' }])('rejects invalid absolute set body %j', async body => {
+        await request(app.getHttpServer()).put(route).set('Authorization', 'Bearer platform-test-token').send(body).expect(400)
+        expectNoLedgerAccess()
+    })
+
+    it('accepts zero as an absolute balance without an idempotency key', async () => {
+        store.setBalance.mockResolvedValue(0)
+        await request(app.getHttpServer()).put(route).set('Authorization', 'Bearer platform-test-token')
+            .send({ amount: 0 }).expect(200, { balance: 0 })
+        expect(store.setBalance).toHaveBeenCalledWith(organizationId, 0)
+    })
+
     it('keeps absolute set and balance lookup independent of an idempotency key', async () => {
         store.setBalance.mockResolvedValue(7)
         store.getBalance.mockResolvedValue(7)
