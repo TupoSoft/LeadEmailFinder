@@ -30,6 +30,9 @@ who is acting and what they are allowed to do.
   Keycloak call. Each exposes only `complete()`/`abort()`, or `changeRole()`/`disable()`/`abort()`. The external
   call happens inside the same lock window a single transaction gave the pre-migration code, and this module
   never learns anything about Keycloak.
+- Organization directory reads (`OrganizationDirectoryReader`) return names, identifiers, and timestamps for
+  `organization-onboarding`. Identity owns deterministic pagination over millisecond creation times and UUIDs;
+  onboarding owns platform authorization, HTTP query validation, and opaque cursor encoding.
 - Organization-scoped service-credential lookup/listing and atomic credential/audit mutation
   (`ServiceCredentialDirectory`, `ServiceCredentialWriter`) — used by `service-client-management` since
   `module-architecture/07`. The directory returns persistence-independent credential records; the writer owns the
@@ -49,15 +52,15 @@ who is acting and what they are allowed to do.
 
 ## Public API
 
-Everything under `src/` is exported from [`src/index.ts`](src/index.ts). Unlike most modules in this directory,
-the public surface of `identity` is its whole `src/` tree — there is no internal implementation hidden behind the
-barrel. It splits into two parts:
+The public surface is exported from [`src/index.ts`](src/index.ts). Persistence adapters stay internal, while
+application contracts and the entity classes used for test fixtures form two supported parts:
 
 **Supported application ports** — the contract new and migrating consumers should depend on: `IdentityModule`,
-`ExternalIdentityResolver`, the thirteen ports and their injection tokens (`ExternalIdentityStore`/
+`ExternalIdentityResolver`, the fourteen ports and their injection tokens (`ExternalIdentityStore`/
 `EXTERNAL_IDENTITY_STORE`, `ActiveMembershipReader`/`ACTIVE_MEMBERSHIP_READER`, `ActiveServiceCredentialReader`/
 `ACTIVE_SERVICE_CREDENTIAL_READER`, `CurrentAccountReader`/`CURRENT_ACCOUNT_READER`, `CreditLedgerStore`/
 `CREDIT_LEDGER_STORE`,
+`OrganizationDirectoryReader`/`ORGANIZATION_DIRECTORY_READER`,
 `OrganizationRegistrationStore`/`ORGANIZATION_REGISTRATION_STORE`, `InvitationStore`/`INVITATION_STORE`,
 `InvitationPreviewReader`/`INVITATION_PREVIEW_READER`,
 `InvitationAcceptanceStore`/`INVITATION_ACCEPTANCE_STORE`, `MembershipDirectory`/`MEMBERSHIP_DIRECTORY`,
@@ -73,6 +76,10 @@ the `inserted` or `existing` disposition, the recorded grant amount, and the cur
 Identity does not interpret amount mismatches or platform reference namespaces.
 `ExternalIdentityResolver` separates lookup, email synchronization, and explicit create-if-missing behavior so a
 consumer can defer identity writes until its own authorization preconditions have passed.
+The directory port also exports `OrganizationDirectoryReadInput`, `OrganizationDirectorySeekKey`,
+`OrganizationDirectoryRecord`, and `OrganizationDirectoryPage`. Its typed input contains a limit from 1 through
+100 and an optional `before` key with `createdAtMilliseconds` and `id`. Its result contains at most that many
+organization records and a `hasMore` flag, without a total count or invitation fields.
 
 **Test-fixture-only surface** — every entity class listed under Persistence below, exported from the TypeScript
 barrel for exactly one purpose. It lets another module's own real-Postgres or live-Keycloak integration test build
@@ -119,9 +126,9 @@ Identity owns each of the following TypeORM entities, registered via `TypeOrmMod
 
 Every entity carries an `organizationId` foreign key back to `Organization`, cascading on delete except
 `OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same nine tables are also
-reachable through the thirteen supported ports above, for the narrower operations and fields each contract exposes.
+reachable through the fourteen supported ports above, for the narrower operations and fields each contract exposes.
 `ActiveMembershipReader`, `ActiveServiceCredentialReader`, `CurrentAccountReader`, `InvitationPreviewReader`,
-`MembershipDirectory`, and
+`MembershipDirectory`, `OrganizationDirectoryReader`, and
 `ServiceCredentialDirectory` are read-only. `OrganizationRegistrationStore`, `InvitationStore.issueWithAudit`, and
 the operation-shaped `ServiceCredentialWriter` methods use identity-owned transactions for their paired state/audit
 writes. Its conditional mutation outcomes keep disablement idempotent and prevent stale callers from overwriting a
@@ -136,6 +143,12 @@ pending, expired, and consumed interpretation. `MembershipDirectory` returns act
 already consumed the invitation; the first acceptance retains its existing organization, email, and role result.
 `ServiceCredentialDirectory` includes active and disabled credentials in `createdAt DESC, id DESC` order, with the
 ID providing a deterministic tie-breaker for equal timestamps. No schema change or reset is required.
+
+`OrganizationDirectoryReader` orders by `date_trunc('milliseconds', createdAt) DESC, id DESC`. The selected
+creation time and tuple seek predicate use that same expression, so PostgreSQL microseconds cannot disagree
+with the JavaScript `Date` used to encode a cursor. The adapter fetches one extra row to determine `hasMore`
+and omits it from the result. A new organization inserted before the current boundary appears on refresh;
+it does not shift later pages or repeat existing rows. No schema change, migration, or reset is required.
 
 Credit grants atomically insert a zero-balance account with `ON CONFLICT DO NOTHING`, then acquire a pessimistic
 write lock on the persisted account row. This serializes first grants even when no account existed before either
@@ -157,6 +170,7 @@ Focused tests live in `src/`: `application/external-identity-resolver.service.sp
 `infrastructure/persistence/typeorm-active-membership-reader.spec.ts`,
 `infrastructure/persistence/typeorm-active-service-credential-reader.spec.ts`,
 `infrastructure/persistence/typeorm-current-account-reader.spec.ts`,
+`infrastructure/persistence/typeorm-organization-directory-reader.spec.ts`,
 `infrastructure/persistence/typeorm-credit-ledger-store.spec.ts`,
 `infrastructure/persistence/typeorm-organization-registration-store.spec.ts`,
 `infrastructure/persistence/typeorm-invitation-store.spec.ts`,
@@ -174,6 +188,14 @@ and amount conflicts. The ledger unit suite covers immutable persistence results
 locking, winning-grant lookup after a unique conflict, and propagation of unrelated database errors.
 `MembershipMutationStore` final-owner locking is exercised through the
 `application/membership-mutation-concurrency.integration.spec.ts` file owned by `organization-onboarding`.
+
+`infrastructure/persistence/organization-directory.integration.spec.ts` verifies empty, first, middle, and
+final pages, equal timestamps, distinct microseconds within one millisecond, insertion between requests,
+and a deleted boundary row against PostgreSQL. Set `TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL` to a disposable
+database whose name ends with `_test`. The suite creates and removes its own randomly named schema;
+it never resets another test suite's tables. Run it with:
+
+    corepack pnpm exec jest organization-directory.integration.spec.ts --runInBand
 
 No Bruno collection targets identity directly — its persistence is exercised indirectly through every other
 module's collection (see the [root README](../../../../README.md) for the full list).

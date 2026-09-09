@@ -11,12 +11,13 @@ Bruno, and a disposable live flow all observe the same organization and invitati
 
 ## Progress
 
-- [ ] (2026-08-31) Add the identity-owned paginated organization directory reader and adapter.
-- [ ] (2026-08-31) Expose platform organization list and existing creation contracts in OpenAPI.
-- [ ] (2026-08-31) Implement cursor-driven directory, creation, and one-time invitation UX.
-- [ ] (2026-08-31) Cover platform authorization, cursor, secret, loading, empty, error, and recovery states.
-- [ ] (2026-08-31) Update generated client, Bruno, module documentation, and design context.
-- [ ] (2026-08-31) Run focused, PostgreSQL, live-browser, premium, architecture, prose, and full validation.
+- [x] (2026-09-09) Add the identity-owned paginated organization directory reader and adapter.
+- [x] (2026-09-09) Expose platform organization list and existing creation contracts in OpenAPI.
+- [x] (2026-09-09) Implement cursor-driven directory, creation, and one-time invitation UX.
+- [x] (2026-09-09) Cover platform authorization, cursor, secret, loading, empty, error, and recovery states.
+- [x] (2026-09-09) Update generated client, Bruno, module documentation, and design context.
+- [x] (2026-09-09) Run focused backend, real PostgreSQL, generated-client, browser, artifact, full regression,
+  architecture, premium, and prose validation. Record commands, counts, and limits below.
 
 ## Plan dependencies
 
@@ -27,6 +28,15 @@ Bruno, and a disposable live flow all observe the same organization and invitati
 
 ## Surprises & Discoveries
 
+- The existing API-host middleware already applies `no-store` and `no-referrer` to organization creation before
+  parsing, guards, and validation. HTTP tests now verify success, invalid input, unauthenticated, forbidden, and
+  application-failure responses rather than adding duplicate middleware.
+- The authenticated shell clears its entire query cache on pagehide and restored pageshow. The unconfirmed-creation
+  guard therefore needs a secret-free marker outside that cache to survive restoration; invitation data is still
+  discarded synchronously.
+- The BFF Bruno collection asserts the complete OpenAPI path allow list. It also needs the newly exposed
+  `/v1/organizations` path, even though the main HTTP workflow belongs to the onboarding collection.
+
 - `OrganizationOnboardingModule` already exposes platform-admin `POST /v1/organizations`, but the controller is
   excluded from Swagger and there is no organization-list endpoint.
 - The `Organization` entity belongs to identity and has ID, name, `createdAt`, and `updatedAt`. Onboarding must not
@@ -34,6 +44,21 @@ Bruno, and a disposable live flow all observe the same organization and invitati
 - Creation returns a raw first-owner invitation token once because the project has no invitation-email delivery.
 
 ## Decision Log
+
+- Decision: Persist only a membership-scoped reconciliation flag in session storage, before sending creation.
+  Rationale: An ordinary reload must not hide an unresolved outcome. Confirmed success or rejection, or the operator's
+  explicit acknowledgment, clears the flag. A document-local marker remains available when storage is blocked;
+  that fallback cannot survive a full reload. Neither marker contains form fields, an organization ID, or a token.
+  Date/Author: 2026-09-09, implementation review.
+- Decision: Use direct generated-client creation outside the query and mutation caches, as existing team invitations
+  do. Store the URL in a local reference and an uncontrolled dialog input only.
+  Rationale: This avoids retaining sensitive response data or mutation variables in the first place. Generation and
+  abort checks still invalidate late settlement, and successful copy or dismissal clears the input and reference.
+  Date/Author: 2026-09-09, implementation.
+- Decision: Reuse the existing form, product panel, service-client metadata table styles, and team dialog without
+  new visual tokens. Record the platform workflow in the design and UX contracts and add its evidence to the audit.
+  Rationale: The approved system already supports this directory and one-time invitation flow.
+  Date/Author: 2026-09-09, implementation.
 
 - Decision: Keep organization bootstrap as a post-MVP platform route separate from customer navigation and data.
   Rationale: Creating tenants and first owners is an operational power; browser visibility does not replace backend
@@ -66,7 +91,14 @@ Bruno, and a disposable live flow all observe the same organization and invitati
 
 ## Outcomes & Retrospective
 
-Not started.
+The API exposes platform-authorized directory reads and the existing organization creation contract through runtime
+OpenAPI and the generated client. Identity owns the typed directory adapter, while onboarding owns cursor validation
+and authorization. The platform route supports metadata-only pagination, explicit creation, one-time invitation copy,
+and reconciliation after uncertain outcomes. No schema or credit behavior changed.
+
+Validation confirmed the database boundary, generated contract, and live API flows. Browser checks covered MFA
+operator creation, customer rejection, synthetic fixture cleanup, responsive behavior, and artifact suppression.
+The command results and remaining environment limits appear below.
 
 ## Context and Orientation
 
@@ -126,8 +158,9 @@ first page after confirmed creation. Never display a numeric total, guessed page
 desktop rows and narrow cards with equivalent name, identifier, and timestamps.
 
 Create accepts the existing organization/owner input and sends one mutation with automatic retries disabled. On
-success, extract the first-owner URL into local modal memory only when the operation generation is current, then
-immediately reset mutation data and variables. Keep that local URL only until explicit copy/dismissal, navigation,
+success, extract the first-owner URL into local modal memory only when the operation generation is current. Use a
+direct generated-client request outside the query and mutation caches, and clear submitted form references after
+settlement. Keep that local URL only until explicit copy/dismissal, navigation,
 pagehide, or unmount; do not clear it merely because the successful mutation settled. On failed settlement, clear all
 secret state. Register cleanup before the modal can enter the back/forward cache. On `pagehide`, synchronously close
 it, clear the invitation URL, form secret references, mutation data/variables, and any application-owned copy buffer.
@@ -248,6 +281,48 @@ Live tests use unique labels and clean up only captured synthetic IDs. If interr
 removal and never broadly reset shared data. No migration or production recovery step is introduced.
 
 ## Artifacts and Notes
+
+Implementation evidence from 2026-09-09:
+
+- `corepack pnpm test:ci` passed: 233 Jest suites and 2,676 tests, followed by 76 runner tests. The default suite
+  skipped 15 optional integration suites with 91 tests; the new PostgreSQL suite was executed separately.
+- `corepack pnpm --filter ./apps/web exec vitest run --maxWorkers=2` passed all 544 tests in 26 files. The platform
+  subset contains 33 tests, including storage denial, membership isolation, generation races, and reload recovery.
+  Two workers avoid contention with concurrent browser and container checks; an earlier full-concurrency run timed
+  out in an unchanged team test, which passed both independently and in the final full run.
+- The identity reader and module wiring passed eight focused tests. Five real PostgreSQL 18 tests passed with
+  equal timestamps, distinct microseconds in one millisecond, inserted rows, deleted cursor boundaries, and empty
+  results. The suite used its own random schemas; those schemas, its temporary container, and credentials were removed.
+- The onboarding service, controller, HTTP, and composition checks passed 98 tests. The OpenAPI contract suite passed
+  19 tests, and `corepack pnpm openapi:export`, `corepack pnpm openapi:generate`, and `corepack pnpm openapi:check`
+  passed. The generated operations are `OrganizationsController_list` and `OrganizationsController_create`.
+- `corepack pnpm --filter ./apps/web test:platform-organizations` passed 16 browser cases at 1440 by 900 and 320 by
+  720. The cases include cursor forwarding, duplicate removal, form validation, copy cleanup, delayed settlement,
+  cancellation, navigation, cached-page restoration, and reload reconciliation. No secrets were recorded.
+- `COMPOSE_PROJECT_NAME=lef-510-b629 corepack pnpm --filter ./apps/web test:platform-organizations-live` passed two
+  real browser tests at `http://localhost:53110`. MFA operator creation returned `201` with `no-store`; customer
+  access returned `403`. The test removed and verified its exact created organization, invitation, and audit rows.
+- `COMPOSE_PROJECT_NAME=lef-510-b629 corepack pnpm bruno:organization-onboarding` passed 23 requests and 23 tests;
+  `COMPOSE_PROJECT_NAME=lef-510-b629 corepack pnpm bruno:bff-sessions` passed 15 requests and 16 tests. Neither run
+  skipped a request. The onboarding CLI's synthetic success, failure, and secret-reporting tests also passed.
+- `corepack pnpm --filter ./apps/web test:invitation-artifacts` passed 16 deliberate assertion, timeout, and teardown
+  failure checks across the invitation, team, and two platform configurations. Runtime secret markers were absent
+  from output files and CLI logs without after-the-fact redaction.
+- Web and backend type checks and lint passed. Root lint retains one existing return-type warning in
+  `src/libs/config/src/load-secrets.spec.ts`. `corepack pnpm architecture:check` passed with nine modules and zero
+  violations. CI selector fixtures and `git diff --check` passed. Review found no material SOLID trade-off.
+- `corepack pnpm design:lint` and `corepack pnpm ui:audit` passed without warnings or violations. Synthetic-only
+  screenshots at both browser widths confirmed full wrapping, visible controls, no horizontal overflow, no console
+  errors, and zero accessibility violations. Screenshots remain outside the repository at
+  `/tmp/lef510-platform-desktop.png` and `/tmp/lef510-platform-narrow.png`.
+- Harper passed all six edited Markdown files: this plan, `DESIGN.md`, `UX-CONTRACT.md`, the onboarding Bruno README,
+  and both affected module `README.md` files, using `corepack pnpm docs:lint --` followed by those paths.
+- Browser plugin not available: the repository's Playwright workflows supplied browser verification. Docker registry
+  networking failed during a fresh dependency-image build. The isolated API image reused a cached image whose lockfile
+  hash exactly matched this checkout, then compiled the current source. The web image used the current local production
+  build. Fresh image dependency download remains an environment limitation; no Dockerfile change was required.
+- If session storage is blocked, reconciliation survives navigation and cached-page restoration in the current
+  document but cannot survive an ordinary reload. Invitation secrets never enter either storage mechanism.
 
 Record the cursor contract, redacted synthetic IDs, page sizes, HTTP statuses, generated operation names, test counts,
 browser widths, premium result, and cleanup outcome. Never record invitation URLs/tokens, passwords, cookies, access

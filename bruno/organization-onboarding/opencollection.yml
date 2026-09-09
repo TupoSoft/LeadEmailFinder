@@ -28,3 +28,16 @@ request:
           }
           bru.setVar('serviceClientToken', payload.access_token);
         }
+        if (!bru.getVar('customerServiceClientToken')) {
+          const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
+            method: 'POST',
+            body: new URLSearchParams({
+              grant_type: 'client_credentials',
+              client_id: bru.getEnvVar('customerServiceClientId'),
+              client_secret: bru.getEnvVar('customerServiceClientSecret'),
+            }),
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.access_token) throw new Error('Customer fixture authentication failed');
+          bru.setVar('customerServiceClientToken', payload.access_token);
+        }

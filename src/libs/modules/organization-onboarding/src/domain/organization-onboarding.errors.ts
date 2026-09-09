@@ -5,6 +5,13 @@ export class NotInOrganizationError extends Error {
     }
 }
 
+export class InvalidOrganizationCursorError extends Error {
+    constructor() {
+        super('Invalid organization page token')
+        this.name = InvalidOrganizationCursorError.name
+    }
+}
+
 export class InsufficientPermissionError extends Error {
     constructor(message: string) {
         super(message)

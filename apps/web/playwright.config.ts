@@ -10,6 +10,8 @@ export default defineConfig({
         'single-verification.spec.ts',
         'batch-verification.spec.ts',
         'invitations-ui.spec.ts',
+        'platform-organizations-ui.spec.ts',
+        'platform-organizations.spec.ts',
         'team-and-invitations.spec.ts',
         'service-clients-ui.spec.ts',
         'service-clients.spec.ts',

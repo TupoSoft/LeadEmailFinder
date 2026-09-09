@@ -1,0 +1,23 @@
+info:
+  name: 23-create-rejects-customer
+  type: http
+  seq: 23
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Authorization
+      value: "Bearer {{customerServiceClientToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {"name": "Forbidden synthetic organization", "ownerEmail": "forbidden@example.test"}
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('customer cannot create a tenant and the rejection is not cached', function() { expect(res.status).to.equal(403); expect(res.headers['cache-control']).to.equal('no-store'); });

@@ -12,7 +12,9 @@ function safeInvitationError(value: unknown): TestInfoError {
         typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
             ? value.stack
             : ''
-    const location = stack.match(/(?:invitations-ui|team-and-invitations)\.spec\.ts:\d+:\d+/)?.[0]
+    const location = stack.match(
+        /(?:invitations-ui|team-and-invitations|platform-organizations(?:-ui)?)\.spec\.ts:\d+:\d+/,
+    )?.[0]
     return {
         value: 'Invitation browser validation failed.',
         ...(location ? { stack: location } : {}),

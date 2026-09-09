@@ -1,0 +1,17 @@
+info:
+  name: 14-list-rejects-customer
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Authorization
+      value: "Bearer {{customerServiceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('customer cannot read platform directory', function() { expect(res.status).to.equal(403); expect(res.body).not.to.have.property('organizations'); });

@@ -147,6 +147,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List customer organizations for a platform operator
+         * @description Requires platform:admin. Orders by millisecond creation time descending and UUID descending. Pass the returned opaque token unchanged; the terminal page omits nextPageToken. No total is calculated.
+         */
+        get: operations["OrganizationsController_list"];
+        put?: never;
+        /**
+         * Create a customer organization and its first owner invitation
+         * @description Requires platform:admin. Returns the first owner invitation token once, with no email delivery or token recovery. Never persist or log the response. Creation is not idempotent; reconcile an uncertain outcome before explicitly creating again. Cookie sessions require a valid Origin and CSRF header.
+         */
+        post: operations["OrganizationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations/invitations/{token}": {
         parameters: {
             query?: never;
@@ -543,6 +567,16 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "paid" | "failed" | "expired";
         };
+        CreateOrganizationDto: {
+            name: string;
+            /** Format: email */
+            ownerEmail: string;
+        };
+        CreateOrganizationResponseDto: {
+            invitation: components["schemas"]["InvitationResponseDto"];
+            /** Format: uuid */
+            organizationId: string;
+        };
         CreateServiceClientDto: {
             description?: string;
             /** @description Choose only from the current account grantableServiceClientPermissions; the server enforces that ceiling. */
@@ -671,6 +705,20 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** @enum {string} */
             status: "active" | "disabled";
+        };
+        OrganizationDirectoryEntryDto: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        OrganizationDirectoryResponseDto: {
+            /** @description Present only when another page exists. No total is calculated. */
+            nextPageToken?: string;
+            organizations: components["schemas"]["OrganizationDirectoryEntryDto"][];
         };
         ServiceClientResponseDto: {
             clientId: string;
@@ -1136,6 +1184,121 @@ export interface operations {
             /** @description Checkout could not be created safely */
             502: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_list: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                /** @description Opaque continuation token returned by the preceding page. Omit for the first page. */
+                pageToken?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDirectoryResponseDto"];
+                };
+            };
+            /** @description Page size must be an integer from 1 through 100; the page token must be a supported, valid cursor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Platform administration permission is required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrganizationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrganizationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateOrganizationResponseDto"];
+                };
+            };
+            /** @description Organization name must contain 1 through 200 characters and ownerEmail must be valid. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Platform administration permission or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Creation outcome may be uncertain; reconcile before creating again. */
+            500: {
+                headers: {
+                    /** @description Prevents storage of invitation responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    /** @description Prevents disclosure of invitation authority in referrers. */
+                    "Referrer-Policy"?: "no-referrer";
                     [name: string]: unknown;
                 };
                 content?: never;

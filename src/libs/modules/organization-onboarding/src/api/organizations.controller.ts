@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Body,
     ConflictException,
     Controller,
@@ -12,17 +13,19 @@ import {
     Param,
     Patch,
     Post,
+    Query,
     SerializeOptions,
     UseGuards,
+    ValidationPipe,
 } from '@nestjs/common'
 import {
     ApiBadRequestResponse,
     ApiConflictResponse,
     ApiCreatedResponse,
-    ApiExcludeEndpoint,
     ApiExtraModels,
     ApiForbiddenResponse,
     ApiGoneResponse,
+    ApiInternalServerErrorResponse,
     ApiNoContentResponse,
     ApiNotFoundResponse,
     ApiOkResponse,
@@ -44,10 +47,12 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationListingService } from '../application/organization-listing.service'
 import {
     ConflictingMembershipError,
     FinalOwnerConflictError,
     InsufficientPermissionError,
+    InvalidOrganizationCursorError,
     InvitationConsumedError,
     InvitationExpiredError,
     InvitationNotFoundError,
@@ -66,9 +71,11 @@ import {
     InvitationPreviewResponseDto,
     InvitationGoneResponseDto,
     IssueInvitationDto,
+    ListOrganizationsQueryDto,
     MembershipParamsDto,
     MembershipResponseDto,
     OrganizationParamsDto,
+    OrganizationDirectoryResponseDto,
 } from './organizations.dto'
 
 const INVITATION_HEADERS = {
@@ -96,6 +103,7 @@ export class OrganizationsController {
         private readonly membershipRemoval: MembershipRemovalService,
         private readonly membershipListing: MembershipListingService,
         private readonly invitationPreview: InvitationPreviewService,
+        private readonly organizationListing: OrganizationListingService,
     ) {}
 
     // Declared before the ':organizationId/...' routes so a static-prefix route can never be shadowed.
@@ -168,8 +176,40 @@ export class OrganizationsController {
         return this.handleErrors(() => this.invitationPreview.preview(token))
     }
 
+    @Get()
+    @ApiOperation({
+        operationId: 'OrganizationsController_list',
+        summary: 'List customer organizations for a platform operator',
+        security: SESSION_SECURITY,
+        description:
+            'Requires platform:admin. Orders by millisecond creation time descending and UUID descending. Pass the returned opaque token unchanged; the terminal page omits nextPageToken. No total is calculated.',
+    })
+    @ApiOkResponse({ type: OrganizationDirectoryResponseDto })
+    @ApiBadRequestResponse({ description: 'Page size must be an integer from 1 through 100; the page token must be a supported, valid cursor.' })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.' })
+    @ApiForbiddenResponse({ description: 'Platform administration permission is required.' })
+    @RequirePermissions('platform:admin')
+    @SerializeOptions({ type: OrganizationDirectoryResponseDto })
+    async list(
+        @Query(new ValidationPipe({ transform: true })) { pageSize, pageToken }: ListOrganizationsQueryDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<OrganizationDirectoryResponseDto> {
+        return this.handleErrors(() => this.organizationListing.list(principal, pageSize, pageToken))
+    }
+
     @Post()
-    @ApiExcludeEndpoint()
+    @ApiOperation({
+        operationId: 'OrganizationsController_create',
+        summary: 'Create a customer organization and its first owner invitation',
+        security: MUTATION_SECURITY,
+        description:
+            'Requires platform:admin. Returns the first owner invitation token once, with no email delivery or token recovery. Never persist or log the response. Creation is not idempotent; reconcile an uncertain outcome before explicitly creating again. Cookie sessions require a valid Origin and CSRF header.',
+    })
+    @ApiCreatedResponse({ type: CreateOrganizationResponseDto, headers: INVITATION_HEADERS })
+    @ApiBadRequestResponse({ description: 'Organization name must contain 1 through 200 characters and ownerEmail must be valid.', headers: INVITATION_HEADERS })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.', headers: INVITATION_HEADERS })
+    @ApiForbiddenResponse({ description: 'Platform administration permission or browser CSRF check denied.', headers: INVITATION_HEADERS })
+    @ApiInternalServerErrorResponse({ description: 'Creation outcome may be uncertain; reconcile before creating again.', headers: INVITATION_HEADERS })
     @RequirePermissions('platform:admin')
     @SerializeOptions({ type: CreateOrganizationResponseDto })
     async create(
@@ -324,6 +364,9 @@ export class OrganizationsController {
         try {
             return await operation()
         } catch (error) {
+            if (error instanceof InvalidOrganizationCursorError) {
+                throw new BadRequestException(error.message)
+            }
             if (error instanceof NotInOrganizationError || error instanceof InsufficientPermissionError) {
                 throw new ForbiddenException(error.message)
             }

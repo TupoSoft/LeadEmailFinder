@@ -321,6 +321,13 @@ Download keep the dialog open until Close; the copy confirmation contains no cre
 the client and explain rotation, permanent disablement, or deletion before the operator acts. These variants reuse
 the existing tokens and bounded dialog scrolling without adding a new visual system.
 
+### Platform Organization Directory
+
+The platform organization console reuses the service-client metadata table, shared form controls, `ProductPanel`,
+and `TeamDialog`. Desktop rows become labeled narrow rows with the same organization name, full identifier, and UTC
+timestamps. Load more follows the server cursor without a total or page count. The first-owner invitation uses the
+team copy-and-clear dialog. These screens preserve the existing palette, typography, spacing, and motion tokens.
+
 ### Verification Evidence
 
 Single-email verification reuses the product headings, shared form controls, flat panels, and existing action

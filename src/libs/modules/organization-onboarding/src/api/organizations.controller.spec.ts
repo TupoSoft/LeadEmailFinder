@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, GoneException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, GoneException, NotFoundException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
@@ -9,10 +9,12 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationListingService } from '../application/organization-listing.service'
 import {
     ConflictingMembershipError,
     FinalOwnerConflictError,
     InsufficientPermissionError,
+    InvalidOrganizationCursorError,
     InvitationExpiredError,
     InvitationNotFoundError,
     MembershipNotFoundError,
@@ -33,6 +35,7 @@ const principal: AuthPrincipal = {
 describe('OrganizationsController', () => {
     let controller: OrganizationsController
     let organizationCreation: jest.Mocked<Pick<OrganizationCreationService, 'createWithFirstOwner'>>
+    let organizationListing: jest.Mocked<Pick<OrganizationListingService, 'list'>>
     let invitationIssuance: jest.Mocked<Pick<InvitationIssuanceService, 'issue'>>
     let invitationAcceptance: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>>
     let membershipRoleChange: jest.Mocked<Pick<MembershipRoleChangeService, 'changeRole'>>
@@ -41,6 +44,7 @@ describe('OrganizationsController', () => {
 
     beforeEach(async () => {
         organizationCreation = { createWithFirstOwner: jest.fn() }
+        organizationListing = { list: jest.fn() }
         invitationIssuance = { issue: jest.fn() }
         invitationAcceptance = { accept: jest.fn() }
         membershipRoleChange = { changeRole: jest.fn() }
@@ -51,6 +55,7 @@ describe('OrganizationsController', () => {
             controllers: [OrganizationsController],
             providers: [
                 { provide: OrganizationCreationService, useValue: organizationCreation },
+                { provide: OrganizationListingService, useValue: organizationListing },
                 { provide: InvitationIssuanceService, useValue: invitationIssuance },
                 { provide: InvitationPreviewService, useValue: { preview: jest.fn() } },
                 { provide: InvitationAcceptanceService, useValue: invitationAcceptance },
@@ -64,6 +69,19 @@ describe('OrganizationsController', () => {
             .compile()
 
         controller = moduleRef.get(OrganizationsController)
+    })
+
+    it('passes the typed page size and unchanged opaque cursor to the listing use case', async () => {
+        organizationListing.list.mockResolvedValue({ organizations: [], nextPageToken: 'next' })
+        await expect(controller.list({ pageSize: 20, pageToken: 'opaque' }, principal)).resolves.toEqual({
+            organizations: [], nextPageToken: 'next',
+        })
+        expect(organizationListing.list).toHaveBeenCalledWith(principal, 20, 'opaque')
+    })
+
+    it('maps an invalid directory cursor to 400 without exposing its contents', async () => {
+        organizationListing.list.mockRejectedValue(new InvalidOrganizationCursorError())
+        await expect(controller.list({ pageSize: 20, pageToken: 'invalid' }, principal)).rejects.toThrow(BadRequestException)
     })
 
     it('creates an organization and returns the organization id and invitation', async () => {

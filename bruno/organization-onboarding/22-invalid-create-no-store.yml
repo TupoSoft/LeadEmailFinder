@@ -1,0 +1,23 @@
+info:
+  name: 22-invalid-create-no-store
+  type: http
+  seq: 22
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {"name": "", "ownerEmail": "invalid"}
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('invalid creation is not cached', function() { expect(res.status).to.equal(400); expect(res.headers['cache-control']).to.equal('no-store'); });

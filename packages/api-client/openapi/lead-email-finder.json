@@ -329,6 +329,40 @@
         ],
         "type": "object"
       },
+      "CreateOrganizationDto": {
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ownerEmail": {
+            "format": "email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ownerEmail"
+        ],
+        "type": "object"
+      },
+      "CreateOrganizationResponseDto": {
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/InvitationResponseDto"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "invitation"
+        ],
+        "type": "object"
+      },
       "CreateServiceClientDto": {
         "properties": {
           "description": {
@@ -759,6 +793,50 @@
           "email",
           "role",
           "status"
+        ],
+        "type": "object"
+      },
+      "OrganizationDirectoryEntryDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "OrganizationDirectoryResponseDto": {
+        "properties": {
+          "nextPageToken": {
+            "description": "Present only when another page exists. No total is calculated.",
+            "type": "string"
+          },
+          "organizations": {
+            "items": {
+              "$ref": "#/components/schemas/OrganizationDirectoryEntryDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "organizations"
         ],
         "type": "object"
       },
@@ -1656,6 +1734,220 @@
         "summary": "",
         "tags": [
           "Billing"
+        ]
+      }
+    },
+    "/v1/organizations": {
+      "get": {
+        "description": "Requires platform:admin. Orders by millisecond creation time descending and UUID descending. Pass the returned opaque token unchanged; the terminal page omits nextPageToken. No total is calculated.",
+        "operationId": "OrganizationsController_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque continuation token returned by the preceding page. Omit for the first page.",
+            "in": "query",
+            "name": "pageToken",
+            "required": false,
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDirectoryResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Page size must be an integer from 1 through 100; the page token must be a supported, valid cursor."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Platform administration permission is required."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "List customer organizations for a platform operator",
+        "tags": [
+          "Organizations"
+        ]
+      },
+      "post": {
+        "description": "Requires platform:admin. Returns the first owner invitation token once, with no email delivery or token recovery. Never persist or log the response. Creation is not idempotent; reconcile an uncertain outcome before explicitly creating again. Cookie sessions require a valid Origin and CSRF header.",
+        "operationId": "OrganizationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrganizationResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Organization name must contain 1 through 200 characters and ownerEmail must be valid.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Platform administration permission or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Creation outcome may be uncertain; reconcile before creating again.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of invitation responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "description": "Prevents disclosure of invitation authority in referrers.",
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Create a customer organization and its first owner invitation",
+        "tags": [
+          "Organizations"
         ]
       }
     },

@@ -1,0 +1,22 @@
+info:
+  name: 21-directory-default-page
+  type: http
+  seq: 21
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('default page stays bounded and exposes only organization metadata', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.organizations.length).to.be.at.most(50);
+          expect(res.body).not.to.have.property('total');
+          for (const row of res.body.organizations) expect(row).to.have.all.keys('id', 'name', 'createdAt', 'updatedAt');
+        });
