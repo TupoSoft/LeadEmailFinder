@@ -349,6 +349,29 @@ Both existing success scenarios also passed with
 `PLATFORM_CREDITS_SCREENSHOTS=1 corepack pnpm --filter ./apps/web test:platform-credits --grep='directory entry'`.
 Bruno is not applicable because this follow-up changes presentation only.
 
+### Organization Accessibility Timing Follow-up, 2026-09-09
+
+Validation run `34366463913` failed the narrow organization recovery scenario during its accessibility scan; the
+aggregate validation failure reported the same browser failure. The backend, web, contract, image, and repository
+policy checks passed. Both earlier PR revisions passed the complete workflow.
+
+A synthetic reproduction isolated a transient contrast ratio of 4.37 to 1 on the newly enabled Create organization button.
+Its foreground changes immediately while its background completes the existing 140-millisecond transition. The
+settled control passes the contrast check. The organization accessibility helper now waits for active animations to
+finish before scanning, matching the existing credit helper. It retains every accessibility rule and assertion,
+uses no fixed sleep or retry, and preserves the invitation artifact policy. Product code and HTTP behavior are unchanged.
+
+An independent synthetic counterexample confirmed that the animation wait still rejects persistent low contrast.
+The following checks passed with normal motion and the existing privacy reporter:
+
+- `corepack pnpm --filter ./apps/web test:platform-organizations`: 16 of 16 scenarios.
+- `corepack pnpm --filter ./apps/web test:platform-organizations --project=narrow-chromium --grep='lost response reconciles' --repeat-each=10`: 10 of 10 runs.
+- `corepack pnpm --filter ./apps/web test:platform-credits`: 24 of 24 scenarios.
+- Focused ESLint, web type checking, and `git diff --check`.
+
+The PR's Validate workflow supplies remote validation for this fix. Bruno is not applicable because only browser
+test timing changed; every HTTP assertion and product behavior remains unchanged.
+
 ## Plan readiness
 
 Ready to implement.
