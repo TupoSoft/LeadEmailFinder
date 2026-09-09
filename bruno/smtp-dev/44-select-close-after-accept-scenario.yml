@@ -1,0 +1,25 @@
+info:
+  name: 44-select-close-after-accept-scenario
+  type: http
+  seq: 44
+
+http:
+  method: PUT
+  url: "{{evidenceControlUrl}}/scenario"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "scenario": "close_after_accept"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('selects the close-after-accept evidence scenario', function() {
+          expect(res.status).to.equal(204);
+        });

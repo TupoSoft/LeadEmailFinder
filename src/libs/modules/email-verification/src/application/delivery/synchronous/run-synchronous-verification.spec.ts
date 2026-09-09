@@ -2,6 +2,7 @@ import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead
 import { Email } from '../../../domain/email'
 import { EmailVerification, OwnedEmailVerification } from '../../../domain/email-verification'
 import { DomainVerificationForbiddenError } from '../../../domain/errors'
+import { MailboxEvidence, NO_MAILBOX_EVIDENCE } from '../../../domain/verification-evidence'
 import { DomainPolicyService } from '../../domain-policy.service'
 import { EmailAdministrationService } from '../../email-administration.service'
 import { EmailVerificationOrchestrator } from '../../email-verification.service'
@@ -18,6 +19,31 @@ const organizationId = '10000000-0000-4000-8000-000000000001'
 const otherOrganizationId = '10000000-0000-4000-8000-000000000002'
 const email = 'person@example.test'
 const date = new Date('2026-09-07T00:00:00.000Z')
+
+function evidenceFor(accepted: boolean): MailboxEvidence {
+    return accepted
+        ? {
+              kind: 'smtp_recipient_accepted',
+              observedAt: date,
+              policyVersion: 1,
+              origin: 'fresh',
+              stage: 'rcpt_to',
+              code: 250,
+              verifiedTransport: true,
+              senderAccepted: true,
+          }
+        : {
+              kind: 'smtp_recipient_missing',
+              observedAt: date,
+              policyVersion: 1,
+              origin: 'fresh',
+              stage: 'rcpt_to',
+              code: 550,
+              enhancedCode: '5.1.1',
+              verifiedTransport: true,
+              senderAccepted: true,
+          }
+}
 
 interface Fixture {
     command: RunSynchronousVerification
@@ -77,6 +103,7 @@ function fixture(): Fixture {
             exists: address === email,
             reason: address === email ? EmailVerificationReason.AcceptedEmail : EmailVerificationReason.RejectedEmail,
             targetExchange: 'mx.example.test',
+            evidence: evidenceFor(address === email),
         }),
     )
     const accountDiscovery: jest.Mocked<AccountDiscovery> = { discover: jest.fn().mockResolvedValue([]) }
@@ -119,6 +146,9 @@ describe('RunSynchronousVerification', () => {
             reason: EmailVerificationReason.AcceptedEmail,
             sources: [EmailVerificationSource.MX],
             createdAt: date,
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt: date,
+            evidencePolicyVersion: 1,
         }
         const core: jest.Mocked<SynchronousVerificationCore> = { verify: jest.fn().mockResolvedValue(result) }
         const command = new RunSynchronousVerification(core)
@@ -188,6 +218,7 @@ describe('RunSynchronousVerification', () => {
             exists: null,
             reason: EmailVerificationReason.SecureTransportUnavailable,
             targetExchange: 'mx.example.test',
+            evidence: NO_MAILBOX_EVIDENCE,
         })
 
         const result = await command.execute({ organizationId, email })
@@ -229,17 +260,16 @@ describe('RunSynchronousVerification', () => {
 
     it('keeps probes, results, and latest-result links separate for two organizations verifying the same address', async () => {
         const { command, mailboxProbe, emails, verifications } = fixture()
-        mailboxProbe.probe.mockImplementation((owner, address) =>
-            Promise.resolve({
+        mailboxProbe.probe.mockImplementation((owner, address) => {
+            const accepted = owner === organizationId && address === email
+            return Promise.resolve({
                 email: address,
-                exists: owner === organizationId && address === email,
-                reason:
-                    owner === organizationId && address === email
-                        ? EmailVerificationReason.AcceptedEmail
-                        : EmailVerificationReason.RejectedEmail,
+                exists: accepted,
+                reason: accepted ? EmailVerificationReason.AcceptedEmail : EmailVerificationReason.RejectedEmail,
                 targetExchange: 'mx.example.test',
-            }),
-        )
+                evidence: evidenceFor(accepted),
+            })
+        })
 
         const firstResult = await command.execute({ organizationId, email: 'Person@Example.Test' })
         const secondResult = await command.execute({ organizationId: otherOrganizationId, email })

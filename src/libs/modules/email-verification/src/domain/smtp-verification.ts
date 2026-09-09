@@ -8,6 +8,8 @@ export interface SmtpVerification {
     secureTransport: boolean
     targetExchange?: string
     proxyId?: string
+    evidenceObservedAt: Date | null
+    evidencePolicyVersion: number | null
     createdAt: Date
     updatedAt: Date
 }

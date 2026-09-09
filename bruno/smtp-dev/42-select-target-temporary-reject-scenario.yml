@@ -1,0 +1,25 @@
+info:
+  name: 42-select-target-temporary-reject-scenario
+  type: http
+  seq: 42
+
+http:
+  method: PUT
+  url: "{{evidenceControlUrl}}/scenario"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "scenario": "target_temporary_reject"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('selects the temporary-rejection evidence scenario', function() {
+          expect(res.status).to.equal(204);
+        });

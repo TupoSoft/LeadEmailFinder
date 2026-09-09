@@ -137,7 +137,7 @@ export async function withRestoredBalance(creditRequest, execute) {
 // Bruno and live browser suites from changing the seeded customer's balance concurrently.
 export async function withAsyncVerificationFixture(checkoutRoot, execute, { useOrganizationAdmin = false } = {}) {
     const metadata = loadDevelopmentStack(checkoutRoot)
-    for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
+    for (const service of ['smtp-evidence', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
         inspectDevelopmentService(checkoutRoot, metadata, service)
     }
     const readMetadata = async name => JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', name), 'utf8'))

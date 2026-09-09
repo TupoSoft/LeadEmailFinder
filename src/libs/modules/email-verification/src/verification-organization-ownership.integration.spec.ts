@@ -137,6 +137,9 @@ describeWithPostgres('verification organization ownership', () => {
                 catchAll: false,
                 reason: EmailVerificationReason.AcceptedEmail,
                 sources: [EmailVerificationSource.MX],
+                verificationQuality: 'conclusive_positive',
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
             verificationRepository.create({
                 organizationId: organizationBId,
@@ -147,6 +150,9 @@ describeWithPostgres('verification organization ownership', () => {
                 catchAll: false,
                 reason: EmailVerificationReason.RejectedEmail,
                 sources: [EmailVerificationSource.MX],
+                verificationQuality: 'conclusive_negative',
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
         ])
 
@@ -161,6 +167,8 @@ describeWithPostgres('verification organization ownership', () => {
                 exists: true,
                 reason: SmtpVerificationReason.AcceptedEmail,
                 secureTransport: true,
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
             smtpRepository.create({
                 organizationId: organizationBId,
@@ -168,6 +176,8 @@ describeWithPostgres('verification organization ownership', () => {
                 exists: false,
                 reason: SmtpVerificationReason.RejectedEmail,
                 secureTransport: true,
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
         ])
 
@@ -195,6 +205,7 @@ describeWithPostgres('verification organization ownership', () => {
 
         const dnsService = { resolve: jest.fn() }
         const mxResolver = { resolve: jest.fn() }
+        const clock = { now: () => new Date() }
         const smtpMailboxProbe = new SmtpMailboxProbe(
             dnsService as never,
             mxResolver,
@@ -203,6 +214,7 @@ describeWithPostgres('verification organization ownership', () => {
             { create: jest.fn() } as never,
             new TypeOrmSmtpVerificationStore(smtpRepository),
             { onConnectionOutcome: jest.fn() } as never,
+            clock,
         )
 
         await expect(smtpMailboxProbe.probe(organizationAId, address)).resolves.toEqual(
@@ -236,6 +248,9 @@ describeWithPostgres('verification organization ownership', () => {
                 reason: EmailVerificationReason.AcceptedEmail,
                 sources: [EmailVerificationSource.MX],
                 batchId,
+                verificationQuality: 'conclusive_positive',
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
             verificationRepository.create({
                 organizationId: organizationBId,
@@ -247,6 +262,9 @@ describeWithPostgres('verification organization ownership', () => {
                 reason: EmailVerificationReason.RejectedEmail,
                 sources: [EmailVerificationSource.MX],
                 batchId,
+                verificationQuality: 'conclusive_negative',
+                evidenceObservedAt: new Date(),
+                evidencePolicyVersion: 1,
             }),
         ])
 
@@ -260,6 +278,9 @@ describeWithPostgres('verification organization ownership', () => {
                     catchAll: false,
                     reason: EmailVerificationReason.RejectedEmail,
                     sources: [EmailVerificationSource.MX],
+                    verificationQuality: 'conclusive_negative',
+                    evidenceObservedAt: new Date(),
+                    evidencePolicyVersion: 1,
                 }),
             } as unknown as MailboxVerificationService,
             new TypeOrmVerificationStore(verificationRepository),

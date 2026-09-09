@@ -23,6 +23,7 @@ import { SmtpResponse } from './smtp-response.interface'
 import { SmtpErrorStatusCode, SmtpOkStatusCode } from './smtp.enums'
 import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
+import { SmtpCommandKind } from './smtp-command-kind'
 
 export interface SmtpClientTimeoutConfig {
     greeting: number
@@ -42,7 +43,6 @@ export interface SmtpClientConstructorOptions {
 }
 
 type SmtpStatusCode = SmtpErrorStatusCode | SmtpOkStatusCode
-type SmtpCommandKind = 'ehlo' | 'starttls' | 'mail_from' | 'rcpt_to' | 'quit'
 
 export class SmtpClient implements ISmtpClient {
     private static readonly DEFAULT_TIMEOUT_CONFIG: Required<SmtpClientTimeoutConfig> = {
@@ -172,8 +172,8 @@ export class SmtpClient implements ISmtpClient {
         await this.sendCommandWithTimeout('MAIL FROM: <' + email + '>', 'mail_from', this.timeouts.mail)
     }
 
-    async rcptTo(email: string): Promise<void> {
-        await this.sendCommandWithTimeout('RCPT TO: <' + email + '>', 'rcpt_to', this.timeouts.rcpt)
+    async rcptTo(email: string): Promise<SmtpResponse> {
+        return this.sendCommandWithTimeout('RCPT TO: <' + email + '>', 'rcpt_to', this.timeouts.rcpt)
     }
 
     async quit(): Promise<void> {
@@ -192,7 +192,7 @@ export class SmtpClient implements ISmtpClient {
         }
     }
 
-    private async readResponse(signal?: AbortSignal): Promise<SmtpResponse> {
+    private async readResponse(signal?: AbortSignal, commandKind?: SmtpCommandKind): Promise<SmtpResponse> {
         const response = await readUntil(this.socket, SMTP_RESPONSE_REGEX, undefined, signal)
         const smtpResponse = parseSmtpResponse(response)
         const { code, enhancedCode, message } = smtpResponse
@@ -210,6 +210,7 @@ export class SmtpClient implements ISmtpClient {
                 message,
                 targetExchange: this.exchange,
                 proxyId: this.proxy?.id,
+                commandKind,
             })
         }
 
@@ -225,7 +226,7 @@ export class SmtpClient implements ISmtpClient {
         this.logger.log('smtp_command_sent', { commandKind })
 
         await write(this.socket, command + '\r\n', signal)
-        return this.readResponse(signal)
+        return this.readResponse(signal, commandKind)
     }
 
     private async sendCommandWithTimeout(

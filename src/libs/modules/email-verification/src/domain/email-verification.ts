@@ -1,4 +1,5 @@
 import { EmailPatternEnum, EmailVerificationReadSource, EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
+import { VerificationQuality } from './verification-evidence'
 
 export interface EmailVerification {
     organizationId: string
@@ -15,6 +16,9 @@ export interface EmailVerification {
     sources: EmailVerificationReadSource[]
     createdAt: Date
     batchId?: string
+    verificationQuality: VerificationQuality
+    evidenceObservedAt: Date | null
+    evidencePolicyVersion: number
 }
 
 export type NewEmailVerification = Omit<EmailVerification, 'id' | 'organizationId' | 'createdAt'>

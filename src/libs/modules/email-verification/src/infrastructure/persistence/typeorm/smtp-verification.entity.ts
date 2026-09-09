@@ -40,6 +40,12 @@ export class SmtpVerificationEntity {
     @Column({ nullable: true })
     proxyId?: string
 
+    @Column({ type: 'timestamptz', nullable: true, default: null })
+    evidenceObservedAt: Date | null
+
+    @Column({ type: 'int', nullable: true, default: null })
+    evidencePolicyVersion: number | null
+
     @CreateDateColumn({ type: 'timestamptz' })
     createdAt: Date
 

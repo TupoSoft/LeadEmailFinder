@@ -62,6 +62,9 @@ const preDiscoveryResult = {
     format: undefined,
     targetExchange: 'mx.example.test',
     mxDomain: 'example.test',
+    verificationQuality: 'inconclusive',
+    evidenceObservedAt: null,
+    evidencePolicyVersion: 1,
 }
 
 function approval(): AccountDiscoveryApproval {
@@ -125,6 +128,7 @@ describe('Account discovery Nest composition', () => {
                         exists: true,
                         reason: 'accepted_email',
                         targetExchange: 'mx.example.test',
+                        evidence: { kind: 'none' },
                     }),
             ),
         }

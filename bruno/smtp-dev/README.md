@@ -24,6 +24,22 @@ principals in the async HTTP integration suite; this collection uses the provisi
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
+Requests 31–47 prove the evidence-classification policy from `verification-billing/01` through HTTP against
+`docker/smtp-dev/evidence-server.mjs`, a deterministic STARTTLS fixture that replaces the former accepts-all
+`mailpit` service at the same trusted `smtp.lef.test` address. Its fixture-only HTTP control endpoint
+(`{{evidenceControlUrl}}`, reachable only on the Docker network) selects one closed scenario before each request
+and is reset to the original accepts-all baseline afterward. Each scenario uses its own `evidence.lef.test`
+target address (that domain shares the same MX host as `lef.test`) so no scenario's persisted evidence can
+satisfy a later one. After setting the organization's balance to exactly seven credits, the requests prove a
+target `250` after a conclusively missing control produces `accepted_email`, and the target's own exact
+`550 5.1.1` produces `rejected_email`. They also prove the identical `550 5.1.1` at `MAIL FROM` instead produces
+`unexpected_error`, never a false negative; a bare `550` and a `554 5.7.1` both remain ineligible generic
+failures; a temporary `450` produces `temporarily_blocked`; and an accepted target survives the fixture closing
+the connection before it answers `QUIT`. A final balance read confirms exactly one credit was debited per
+scenario. Existing credit assertions in
+requests 01–30 remain accurate for this collection; these evidence checks do not themselves enable the later
+billing cutover.
+
 Within the email-verification module, `api/http/asynchronous-verification/` adapts enqueue and status requests to
 commands in `application/delivery/async/`. The queue producer, status lookup, and worker live under
 `infrastructure/queues/async-verification/` and preserve the existing queue protocol and organization ownership.
@@ -74,7 +90,7 @@ corepack pnpm bruno:smtp-dev
 The launcher confirms that this checkout owns the API and SMTP fixture containers, then runs the installed Bruno
 CLI inside the API container with `bru run --env local --sandbox developer`. It loads ignored development
 credentials without printing them, selects `http://api:3000` and the internal Keycloak protocol endpoint explicitly,
-and requires all 30 requests to execute. It fails on missing prerequisites, skipped requests, failed assertions,
+and requires all 47 requests to execute. It fails on missing prerequisites, skipped requests, failed assertions,
 or zero executed tests. The developer sandbox supplies the `fetch` function needed by the token-minting script.
 
 For a stack started with `docker compose -p <project>`, set `COMPOSE_PROJECT_NAME` to the same project when running

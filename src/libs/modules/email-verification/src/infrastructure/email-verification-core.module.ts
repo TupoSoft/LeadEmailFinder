@@ -36,10 +36,17 @@ import { EmailVerificationOrchestrator } from '../application/email-verification
 import { MX_RESOLVER, MxResolver } from '../application/ports/mx-resolver'
 import { DOMAIN_SYNONYM_DISCOVERY } from '../application/ports/domain-synonym-discovery'
 import { MAILBOX_PROBE } from '../application/ports/mailbox-probe'
+import { VERIFICATION_CLOCK, VerificationClock } from '../application/ports/verification-clock'
 import {
     VERIFICATION_TRACE_OBSERVER,
     VerificationTraceObserver,
 } from '../application/verification-trace/verification-trace-observer'
+
+class SystemVerificationClock implements VerificationClock {
+    now(): Date {
+        return new Date()
+    }
+}
 
 @Module({
     imports: [
@@ -76,6 +83,10 @@ import {
         },
         SmtpClientFactory,
         {
+            provide: VERIFICATION_CLOCK,
+            useClass: SystemVerificationClock,
+        },
+        {
             provide: MAILBOX_PROBE,
             inject: [
                 DnsService,
@@ -85,6 +96,7 @@ import {
                 SmtpClientFactory,
                 getRepositoryToken(SmtpVerificationEntity),
                 ALLOCATION_OBSERVER_TOKEN,
+                VERIFICATION_CLOCK,
             ],
             useFactory: (
                 dnsService: IDnsService,
@@ -94,6 +106,7 @@ import {
                 smtpClientFactory: SmtpClientFactory,
                 smtpVerificationRepository: Repository<SmtpVerificationEntity>,
                 allocationObserver: IAllocationObserver,
+                clock: VerificationClock,
             ) =>
                 new SmtpMailboxProbe(
                     dnsService,
@@ -103,6 +116,7 @@ import {
                     smtpClientFactory,
                     new TypeOrmSmtpVerificationStore(smtpVerificationRepository),
                     allocationObserver,
+                    clock,
                 ),
         },
         {

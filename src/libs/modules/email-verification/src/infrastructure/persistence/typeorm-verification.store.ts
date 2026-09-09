@@ -19,6 +19,9 @@ function toRecord(entity: EmailVerificationEntity): EmailVerification {
         sources: entity.sources,
         createdAt: entity.createdAt,
         batchId: entity.batchId,
+        verificationQuality: entity.verificationQuality,
+        evidenceObservedAt: entity.evidenceObservedAt,
+        evidencePolicyVersion: entity.evidencePolicyVersion,
     }
 }
 

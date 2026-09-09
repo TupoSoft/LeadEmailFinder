@@ -11,6 +11,8 @@ function entity(overrides: Partial<SmtpVerificationEntity> = {}): SmtpVerificati
         reason: 'accepted_email',
         exists: true,
         secureTransport: true,
+        evidenceObservedAt: new Date(),
+        evidencePolicyVersion: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
@@ -54,13 +56,15 @@ describe('TypeOrmSmtpVerificationStore', () => {
 
         await store.upsert(ORGANIZATION_ID, 'fresh@example.com', {
             reason: 'no_mx_records',
-            exists: false,
+            exists: null,
             secureTransport: false,
+            evidenceObservedAt: null,
+            evidencePolicyVersion: null,
         })
 
         expect(repository.create).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, id: 'fresh@example.com' })
         expect(repository.save).toHaveBeenCalledWith(
-            expect.objectContaining({ reason: 'no_mx_records', exists: false, secureTransport: false }),
+            expect.objectContaining({ reason: 'no_mx_records', exists: null, secureTransport: false }),
         )
     })
 
@@ -72,6 +76,8 @@ describe('TypeOrmSmtpVerificationStore', () => {
             reason: 'accepted_email',
             exists: true,
             secureTransport: true,
+            evidenceObservedAt: new Date(),
+            evidencePolicyVersion: 1,
         })
 
         expect(repository.create).not.toHaveBeenCalled()

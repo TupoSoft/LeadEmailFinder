@@ -4,6 +4,9 @@ import {
     EmailVerificationReadSource,
     EmailVerificationReason,
 } from '@tuposoft/lead-email-finder/common'
+import { VerificationQuality } from '../../../domain/verification-evidence'
+
+const VERIFICATION_QUALITIES = ['conclusive_positive', 'conclusive_negative', 'inconclusive'] as const satisfies readonly VerificationQuality[]
 
 @Entity('email_verifications')
 @Index(['organizationId', 'email', 'createdAt'])
@@ -50,4 +53,13 @@ export class EmailVerificationEntity {
 
     @Column({ nullable: true })
     batchId?: string
+
+    @Column({ type: 'enum', enum: VERIFICATION_QUALITIES })
+    verificationQuality: VerificationQuality
+
+    @Column({ type: 'timestamptz', nullable: true })
+    evidenceObservedAt: Date | null
+
+    @Column({ type: 'int' })
+    evidencePolicyVersion: number
 }

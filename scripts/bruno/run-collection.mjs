@@ -27,7 +27,7 @@ const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 15, tests: 15, sandbox: 'developer', network: 'compose' }),
     'batch-verification': Object.freeze({ requests: 9, tests: 15, sandbox: 'developer', network: 'compose' }),
-    'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
+    'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
     'service-client-management': Object.freeze({
         requests: 6,
@@ -356,7 +356,7 @@ export async function runCollection(args, checkoutRoot) {
         )
     }
     if (collection.network === 'compose') {
-        for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
+        for (const service of ['smtp-evidence', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
             await inspectDevelopmentService(checkoutRoot, metadata, service)
         }
         const runCompose = async fixtureEnvironment => {

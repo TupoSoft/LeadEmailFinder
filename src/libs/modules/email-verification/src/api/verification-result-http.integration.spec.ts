@@ -30,6 +30,9 @@ const records: EmailVerificationEntity[] = [
         sources: [EmailVerificationSource.MX],
         createdAt,
         batchId: '00000000-0000-4000-8000-000000000030',
+        verificationQuality: 'conclusive_positive',
+        evidenceObservedAt: createdAt,
+        evidencePolicyVersion: 1,
     },
     {
         id: foreignId,
@@ -42,6 +45,9 @@ const records: EmailVerificationEntity[] = [
         reason: EmailVerificationReason.RejectedEmail,
         sources: [EmailVerificationSource.MX],
         createdAt,
+        verificationQuality: 'conclusive_negative',
+        evidenceObservedAt: createdAt,
+        evidencePolicyVersion: 1,
     },
 ]
 const repository = {

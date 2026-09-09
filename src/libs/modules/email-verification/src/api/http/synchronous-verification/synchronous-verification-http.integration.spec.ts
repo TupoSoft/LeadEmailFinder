@@ -50,6 +50,9 @@ function successfulVerification(): OwnedEmailVerification {
         targetExchange: 'mail.example.com',
         createdAt,
         batchId: '00000000-0000-4000-8000-000000000005',
+        verificationQuality: 'conclusive_positive',
+        evidenceObservedAt: createdAt,
+        evidencePolicyVersion: 1,
     }
 }
 
