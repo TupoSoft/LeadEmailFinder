@@ -5,6 +5,8 @@ import { PublicEntryPage } from '../routes/PublicEntryPage'
 import { BillingPage } from '../routes/BillingPage'
 import { VerificationPage } from '../routes/VerificationPage'
 import { VerificationJobPage } from '../routes/VerificationJobPage'
+import { BatchVerificationPage } from '../routes/BatchVerificationPage'
+import { BatchVerificationJobPage } from '../routes/BatchVerificationJobPage'
 import { TeamPage } from '../features/team/TeamPage'
 import { ServiceClientsPage } from '../features/service-clients/ServiceClientsPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
@@ -39,6 +41,8 @@ export const appRoutes: RouteObject[] = [
                     { path: 'team', element: <TeamPage /> },
                     { path: 'service-clients', element: <ServiceClientsPage /> },
                     { path: 'verifications/new', element: <VerificationPage /> },
+                    { path: 'verifications/batches/new', element: <BatchVerificationPage /> },
+                    { path: 'verifications/batches/:id', element: <BatchVerificationJobPage /> },
                     { path: 'verifications/:id', element: <VerificationJobPage /> },
                     { path: 'session-expired', element: <SessionExpiredPage /> },
                     { path: 'account-unavailable', element: <AccountUnavailablePage /> },

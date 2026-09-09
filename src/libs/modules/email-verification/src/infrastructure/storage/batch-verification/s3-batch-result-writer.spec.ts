@@ -196,4 +196,61 @@ describe('S3BatchResultWriter', () => {
         const csv = Buffer.concat(chunks).toString('utf8')
         expect(csv).toBe('id,email\nid-1,person@lef.test\nid-2,other@lef.test\n')
     })
+
+    it('neutralizes streamed customer text before quoting while preserving trusted status and numeric cells', async () => {
+        const chunks: Buffer[] = []
+        mockUploadDrivenByBody(body => body.on('data', (chunk: Buffer) => chunks.push(chunk)))
+        const values = [
+            '=SUM(1,2)',
+            '+person@lef.test',
+            '-person@lef.test',
+            '@person',
+            '\tperson',
+            '\rperson',
+            '\nperson',
+            'person@lef.test',
+            'quoted,"comma"\nline',
+        ]
+        const cursor = Readable.from(
+            (async function* () {
+                for (const value of values) {
+                    await Promise.resolve()
+                    yield {
+                        ev_email: value,
+                        ev_localPart: value,
+                        ev_copiedInput: value,
+                        ev_reason: 'accepted_email',
+                        ev_count: -1,
+                    }
+                }
+            })(),
+            { objectMode: true, highWaterMark: 1 },
+        )
+        const writer = await buildWriter(cursor, [
+            { propertyName: 'email' },
+            { propertyName: 'localPart' },
+            { propertyName: 'copiedInput' },
+            { propertyName: 'reason' },
+            { propertyName: 'count' },
+        ])
+
+        await writer.write('bucket', 'organizations/org-1/uploads/file.csv', 'org-1', 'job-1')
+
+        const expectedCells = [
+            '"\'=SUM(1,2)"',
+            "'+person@lef.test",
+            "'-person@lef.test",
+            "'@person",
+            "'\tperson",
+            "'\rperson",
+            '"\'\nperson"',
+            'person@lef.test',
+            '"quoted,""comma""\nline"',
+        ]
+        const expected =
+            'email,localPart,copiedInput,reason,count\n' +
+            expectedCells.map(cell => `${cell},${cell},${cell},accepted_email,-1\n`).join('')
+        expect(Buffer.concat(chunks)).toEqual(Buffer.from(expected))
+        expect(chunks.length).toBeGreaterThan(1)
+    })
 })

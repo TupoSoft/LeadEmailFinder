@@ -1,0 +1,34 @@
+info:
+    name: 05-invalid-csv-status
+    type: http
+    seq: 5
+
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyBatch/{{invalidBatchJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              for (let attempt = 0; attempt < 90; attempt++) {
+                const response = await fetch(`${bru.getEnvVar('baseUrl')}/verifyBatch/${bru.getVar('invalidBatchJobId')}`, {
+                  headers: { Authorization: `Bearer ${bru.getVar('serviceClientToken')}` },
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error('Batch read failed');
+                if (payload.status === 'failed') break;
+                if (!['queued', 'running'].includes(payload.status) || attempt === 89) throw new Error('Expected terminal CSV rejection');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+        - type: tests
+          code: |-
+              test('reports terminal invalid CSV using only a safe code', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.status).to.equal('failed');
+                expect(res.body.failureCode).to.equal('invalid_csv');
+                expect(Object.keys(res.body).sort()).to.deep.equal(['id', 'status', 'progress', 'total', 'processed', 'unprocessed', 'failureCode'].sort());
+              });

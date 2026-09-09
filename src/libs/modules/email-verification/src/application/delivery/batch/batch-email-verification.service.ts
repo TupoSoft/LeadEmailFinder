@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { ok } from 'node:assert'
-import { JobState, fromStringToEnum, safeErrorType } from '@tuposoft/lead-email-finder/common'
+import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import {
     NOOP_VERIFICATION_TRACE_OBSERVER,
     observeSafely,
@@ -9,8 +9,11 @@ import {
 } from '../../verification-trace/verification-trace-observer'
 import { BatchJobStep } from '../../../domain/batch-job'
 import { BatchJobs } from './batch-jobs'
-import { BatchResultReader } from './batch-result-reader'
+import { BatchResultReader, BatchResultUnavailableError } from './batch-result-reader'
 import { BatchEmailVerificationJobNotFoundException } from './job-not-found.exception'
+import { VerificationJobState } from '../verification-job-state'
+import { BatchTerminalFailureCode } from './batch-terminal-failure'
+import { mapBatchVerificationStatus } from './batch-verification-status'
 
 export const BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN = 'BatchEmailVerificationServiceToken'
 
@@ -27,7 +30,8 @@ export interface EnqueueBatchResponse {
 
 export interface GetBatchStatusResponse {
     id: string
-    status: JobState
+    status: VerificationJobState
+    failureCode?: BatchTerminalFailureCode
     total: number
     processed: number
     unprocessed: number
@@ -85,11 +89,11 @@ export class BatchEmailVerificationService {
             throw new BatchEmailVerificationJobNotFoundException(id)
         }
 
-        const state = await job.state()
-        const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
+        const status = mapBatchVerificationStatus(await job.readStatus())
         const stats = await this.getStats(job)
+        if (status.status === 'completed') stats.progress = 100
 
-        return { id, status, ...stats }
+        return { id, ...status, ...stats }
     }
 
     async getBatchResults(id: string, organizationId: string): Promise<Readable> {
@@ -98,23 +102,28 @@ export class BatchEmailVerificationService {
         ok(job, new BatchEmailVerificationJobNotFoundException(id))
         ok(job.data.organizationId === organizationId, new BatchEmailVerificationJobNotFoundException(id))
 
-        const state = await job.state()
-        const status = fromStringToEnum(JobState, state) ?? JobState.UNKNOWN
+        const snapshot = await job.readStatus()
+        if (mapBatchVerificationStatus(snapshot).status !== 'completed' || !snapshot.resultLocation) {
+            throw new BatchEmailVerificationJobNotFoundException(id)
+        }
 
-        ok(status === JobState.COMPLETED, `Job ${id} is not completed. Current state: ${status}`)
-
-        const resultFilePath = await job.returnValue()
-
-        ok(resultFilePath, `Job ${id} completed without a stored result location.`)
-
-        return this.resultReader.read(resultFilePath)
+        try {
+            return await this.resultReader.read(snapshot.resultLocation)
+        } catch (error) {
+            if (error instanceof BatchResultUnavailableError) throw new BatchEmailVerificationJobNotFoundException(id)
+            throw error
+        }
     }
 
     private async getStats(
         job: Awaited<ReturnType<BatchJobs['find']>> & object,
     ): Promise<{ total: number; processed: number; unprocessed: number; progress: number }> {
         const { step } = job.data
-        const { processed, unprocessed } = await job.counts()
+        const counts = await job.counts()
+        const boundedCount = (value: number): number =>
+            Number.isFinite(value) ? clamp(Math.floor(value), 0, Math.floor(Number.MAX_SAFE_INTEGER / 2)) : 0
+        const processed = boundedCount(counts.processed)
+        const unprocessed = boundedCount(counts.unprocessed)
         const total = processed + unprocessed
 
         const stats = { total, processed, unprocessed, progress: 0 }

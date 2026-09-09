@@ -12,7 +12,10 @@ describe('BullBatchJobs', () => {
         queue = { add: jest.fn(), getJob: jest.fn() }
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [BullBatchJobs, { provide: getQueueToken(BATCH_EMAIL_VERIFICATION_QUEUE_NAME), useValue: queue }],
+            providers: [
+                BullBatchJobs,
+                { provide: getQueueToken(BATCH_EMAIL_VERIFICATION_QUEUE_NAME), useValue: queue },
+            ],
         }).compile()
 
         jobs = module.get(BullBatchJobs)
@@ -22,14 +25,26 @@ describe('BullBatchJobs', () => {
         queue.add.mockResolvedValueOnce({ id: 'job-1' })
 
         const result = await jobs.enqueue(
-            { step: BatchJobStep.Validate, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' },
+            {
+                step: BatchJobStep.Validate,
+                bucket: 'bucket',
+                key: 'key',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
             'job-1',
         )
 
         expect(result).toEqual({ id: 'job-1' })
         expect(queue.add).toHaveBeenCalledWith(
             BATCH_EMAIL_VERIFICATION_QUEUE_NAME,
-            { step: BatchJobStep.Validate, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' },
+            {
+                step: BatchJobStep.Validate,
+                bucket: 'bucket',
+                key: 'key',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
             { jobId: 'job-1' },
         )
     })
@@ -40,11 +55,108 @@ describe('BullBatchJobs', () => {
         await expect(jobs.find('missing')).resolves.toBeUndefined()
     })
 
+    it.each([
+        ['waiting', 'queued'],
+        ['delayed', 'queued'],
+        ['prioritized', 'queued'],
+        ['waiting-children', 'queued'],
+        ['paused', 'queued'],
+        ['active', 'running'],
+        ['completed', 'completed'],
+        ['failed', 'failed'],
+        ['unknown', 'unavailable'],
+        ['future-private-queue-state', 'unavailable'],
+    ])('normalizes %s before crossing the application boundary', async (rawState, state) => {
+        queue.getJob.mockResolvedValue({
+            id: 'job-1',
+            data: { failureCode: 'invalid_csv' },
+            getState: jest.fn().mockResolvedValue(rawState),
+            returnvalue: 's3://bucket/results/file.csv',
+            failedReason: 'private parser details',
+            stacktrace: ['private stack'],
+        })
+
+        const handle = await jobs.find('job-1')
+
+        await expect(handle?.readStatus()).resolves.toEqual(
+            state === 'completed'
+                ? { state, resultLocation: 's3://bucket/results/file.csv' }
+                : state === 'failed'
+                  ? { state, failureCode: 'invalid_csv' }
+                  : { state },
+        )
+    })
+
+    it.each([undefined, null, {}, '', 'https://private.example/result.csv', 's3://bucket/', 's3://bucket/%zz'])(
+        'omits an invalid completed result location %#',
+        async returnvalue => {
+            queue.getJob.mockResolvedValue({
+                data: {},
+                getState: jest.fn().mockResolvedValue('completed'),
+                returnvalue,
+            })
+
+            const handle = await jobs.find('job-1')
+
+            await expect(handle?.readStatus()).resolves.toEqual({ state: 'completed', resultLocation: undefined })
+        },
+    )
+
+    it('refreshes terminal metadata when the worker completes between job lookup and state lookup', async () => {
+        const initial = {
+            id: 'job-1',
+            data: { organizationId: 'org-1', step: BatchJobStep.WaitForChildren },
+            getState: jest.fn().mockResolvedValue('completed'),
+            returnvalue: undefined,
+        }
+        const completed = {
+            ...initial,
+            data: { organizationId: 'org-1', step: BatchJobStep.Finish },
+            returnvalue: 's3://bucket/results/file.csv',
+        }
+        queue.getJob.mockResolvedValueOnce(initial).mockResolvedValueOnce(completed)
+
+        const handle = await jobs.find('job-1')
+
+        await expect(handle?.readStatus()).resolves.toEqual({
+            state: 'completed',
+            resultLocation: 's3://bucket/results/file.csv',
+        })
+        expect(handle?.data).toBe(completed.data)
+    })
+
+    it('refreshes the last attempt failure marker before reporting a terminal failure', async () => {
+        const initial = { id: 'job-1', data: {}, getState: jest.fn().mockResolvedValue('failed') }
+        queue.getJob
+            .mockResolvedValueOnce(initial)
+            .mockResolvedValueOnce({ ...initial, data: { failureCode: 'insufficient_credits' } })
+
+        const handle = await jobs.find('job-1')
+
+        await expect(handle?.readStatus()).resolves.toEqual({ state: 'failed', failureCode: 'insufficient_credits' })
+    })
+
+    it('reports unavailable if a terminal job disappears during the metadata refresh', async () => {
+        queue.getJob
+            .mockResolvedValueOnce({ data: {}, getState: jest.fn().mockResolvedValue('completed') })
+            .mockResolvedValueOnce(undefined)
+
+        const handle = await jobs.find('job-1')
+
+        await expect(handle?.readStatus()).resolves.toEqual({ state: 'unavailable' })
+    })
+
     it('returns a handle whose fields delegate to the underlying job', async () => {
         const updateData = jest.fn().mockResolvedValue(undefined)
         const rawJob = {
             id: 'job-1',
-            data: { step: BatchJobStep.Validate, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' },
+            data: {
+                step: BatchJobStep.Validate,
+                bucket: 'bucket',
+                key: 'key',
+                organizationId: 'org-1',
+                credentialId: 'cred-1',
+            },
             queueQualifiedName: 'bull:batch-email-verification',
             attemptsMade: 2,
             getState: jest.fn().mockResolvedValue('active'),
@@ -61,11 +173,16 @@ describe('BullBatchJobs', () => {
         expect(handle?.queueQualifiedName).toBe('bull:batch-email-verification')
         expect(handle?.attemptsMade).toBe(2)
         expect(handle?.data).toBe(rawJob.data)
-        await expect(handle?.state()).resolves.toBe('active')
+        await expect(handle?.readStatus()).resolves.toEqual({ state: 'running' })
         await expect(handle?.counts()).resolves.toEqual({ processed: 3, unprocessed: 1 })
-        await expect(handle?.returnValue()).resolves.toBe('s3://bucket/results/file.csv')
 
-        const next: BatchJobData = { step: BatchJobStep.Process, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' }
+        const next: BatchJobData = {
+            step: BatchJobStep.Process,
+            bucket: 'bucket',
+            key: 'key',
+            organizationId: 'org-1',
+            credentialId: 'cred-1',
+        }
         await handle?.updateStep(next)
         expect(updateData).toHaveBeenCalledWith(next)
     })

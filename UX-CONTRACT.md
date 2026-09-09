@@ -59,6 +59,9 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Dialog | `TeamDialog` | This contract | Permission and lifecycle confirmations; one-time invitation and client secret | Focus, dismissal, and restoration tests |
 | Team | `TeamPage` | `frontend/13` | Active and disabled memberships | Component, API, Bruno, and browser tests |
 | Verification | `VerificationPage`, `VerificationJobPage`, and `SignalDetails` | `frontend/11` | Single submission, bounded job reads, and evidence fields | API, component, Bruno, and browser tests |
+| File upload | Native file input and `BatchVerificationPage` | `frontend/12` | One CSV; local selection and explicit replacement/removal | Cache-boundary, component, and browser tests |
+| Progress | `ProgressIndicator` | `frontend/12` | Indeterminate upload or exact finite server progress | Semantic and narrow browser tests |
+| Batch verification | `BatchVerificationJobPage` and shared polling policy | `frontend/12` | Validation, counts, safe failures, and retained CSV download | API, Bruno, component, and browser tests |
 | Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
@@ -416,3 +419,32 @@ confirmed rotation. No recovery action silently repeats a mutation.
 bounded scrolling, and focus restoration. Destructive confirmations initially focus Cancel. Secret tests use a
 dedicated Playwright configuration that suppresses trace, screenshots, video, automatic attachments, and raw failure
 output for the whole run. Runtime fixture values and secret-bearing downloads never become validation artifacts.
+
+## Batch Email Verification
+
+The source contract is `.agents/plans/frontend/12-run-batch-email-verification.md`. The form at
+`/app/verifications/batches/new` requires `verification.run`; the job URL at `/app/verifications/batches/:id`
+requires `verification.read`. The browser reuses the generated same-origin transport and authentication boundary.
+
+The visible native picker explains the email column and 100-megabyte limit before selection. Extension and size checks
+provide early feedback; server validation remains authoritative. The selected file and filename stay local to the
+mounted form. Settlement, removal, page hide, or route disposal clears file references and the native input. No
+file, multipart body, filename, or downloaded CSV enters shared caches, persistent storage, or diagnostics.
+
+| Operation | Pending | Confirmed response | Failure and recovery |
+| --- | --- | --- | --- |
+| Upload CSV | Disable duplicate submission and replacement; indeterminate Uploading CSV | Open the returned batch UUID route | Associate a rejected file with correction guidance; clear selection |
+| Uncertain upload | Never retry the POST automatically | No invented job link | Explain possible job creation and charging; require acknowledgment and fresh selection |
+| Read batch | Shared five-second polling with at most sixty checks | Show exact server progress and counts | Pause when hidden or offline; retain stale values and offer manual refresh |
+| Terminal status | Stop automatic polling | Completion enables result download | Failure uses a safe code; unavailable makes no outcome or charging claim |
+| Download result | Disable duplicate activation during the authenticated GET | Start the CSV download and revoke its object URL | Retry only the GET; a later 404 renders Result no longer available |
+
+`ProgressIndicator` owns determinate and indeterminate semantics. Job progress uses the finite server value without
+smoothing, estimates, or upload percentages. Zero counts during validation do not mean that the input is empty.
+Announcements describe state changes rather than each count update; manual status reads preserve the user's focus.
+Completion is announced once. A missing or foreign job uses the same non-disclosing recovery state.
+
+Invalid CSV offers correction through a fresh selection. Insufficient credits links to billing only with
+`billing.read`, otherwise it advises contacting an organization owner. Generic processing failure explains that
+credits may have been charged. Unavailable states and download errors never trigger another upload. There is no
+batch history, cancellation, resumption, automatic retry, or browser result preview.

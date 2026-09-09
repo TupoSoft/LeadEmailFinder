@@ -418,6 +418,12 @@ jobs:
       - name: Test live single-email verification and route recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-live
         if: needs.changes.outputs.browser == 'true'
+      - name: Test batch verification HTTP contracts with Bruno
+        run: corepack pnpm bruno:batch-verification
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live batch upload, route recovery, and result download
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:batch-verification-live
+        if: needs.changes.outputs.browser == 'true'
       - name: Report service health
         if: always() && needs.changes.outputs.browser == 'true'
         run: docker compose -f docker/compose.yaml ps

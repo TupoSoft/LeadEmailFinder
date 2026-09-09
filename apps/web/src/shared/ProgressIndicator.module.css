@@ -1,0 +1,22 @@
+.indicator {
+    min-height: var(--control-height);
+    margin-block: var(--space-content-gap);
+}
+.indicator p {
+    margin-block: 0 var(--space-control-gap);
+}
+.track {
+    height: var(--space-control-gap);
+    background: var(--color-sage);
+    border: var(--rule-width) solid var(--color-rule);
+}
+.fill {
+    display: block;
+    height: 100%;
+    background: var(--color-evergreen);
+}
+@media (forced-colors: active) {
+    .fill {
+        background: Highlight;
+    }
+}

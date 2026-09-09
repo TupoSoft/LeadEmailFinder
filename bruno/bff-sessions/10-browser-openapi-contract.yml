@@ -24,7 +24,7 @@ runtime:
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
-            '/verifyAsync', '/verifyAsync/{id}'
+            '/verifyAsync', '/verifyAsync/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results'
           ]);
           expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
           var serviceClients = '/v1/organizations/{organizationId}/service-clients';
@@ -42,6 +42,12 @@ runtime:
           expect(Object.keys(res.body.paths['/verifyAsync'])).to.deep.equal(['post']);
           expect(Object.keys(res.body.paths['/verifyAsync/{id}'])).to.deep.equal(['get']);
           expect(res.body.paths['/verifyAsync'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
+          expect(Object.keys(res.body.paths['/verifyBatch/csv'])).to.deep.equal(['post']);
+          expect(Object.keys(res.body.paths['/verifyBatch/{id}'])).to.deep.equal(['get']);
+          expect(Object.keys(res.body.paths['/verifyBatch/{id}/results'])).to.deep.equal(['get']);
+          expect(res.body.paths['/verifyBatch/csv'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
+          expect(res.body.paths['/verifyBatch/{id}'].get.security).to.deep.include({ lef_session: [] });
+          expect(res.body.paths['/verifyBatch/{id}/results'].get.responses['200'].content['text/csv'].schema.format).to.equal('binary');
           expect(Object.keys(res.body.paths['/v1/billing/credit-packs'])).to.deep.equal(['get']);
           var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
             return parameter.name === 'destination';

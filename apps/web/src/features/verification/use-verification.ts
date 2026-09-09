@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { skipToken, useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../api/api-error'
 import { useAuth } from '../auth/use-auth'
-import { useBrowserAvailability } from '../../shared/use-browser-availability'
+import { useVerificationPolling } from './use-verification-polling'
 import { createVerification, readVerification, verificationQueryKeys } from './verification-api'
+
+export { verificationPolling } from './use-verification-polling'
 
 type SubmissionState =
     | { phase: 'idle' | 'pending' | 'invalid' | 'insufficient' | 'uncertain' }
@@ -77,13 +79,8 @@ export function useVerificationSubmission(organizationId: string, onCreated: (id
     }
 }
 
-export const verificationPolling = { interval: 5000, maxChecks: 60 } as const
-
 export function useVerificationJob(organizationId: string, id: string) {
     const { api } = useAuth()
-    const { available, online } = useBrowserAvailability()
-    const [checks, setChecks] = useState(0)
-    const started = useRef(false)
     const query = useQuery({
         queryKey: verificationQueryKeys.job(organizationId, id),
         queryFn: ({ signal }) => readVerification(api, id, signal),
@@ -91,32 +88,11 @@ export function useVerificationJob(organizationId: string, id: string) {
         retry: false,
         networkMode: 'always',
     })
-    const { refetch } = query
-    useEffect(() => {
-        if (!available || started.current) return
-        started.current = true
-        void refetch()
-    }, [available, refetch])
-    const active = query.data?.state === 'queued' || query.data?.state === 'running'
-    useEffect(() => {
-        if (!available || !active || query.isFetching || query.isError || checks >= verificationPolling.maxChecks)
-            return
-        const timer = window.setTimeout(() => {
-            if (!navigator.onLine || document.visibilityState === 'hidden') return
-            setChecks(value => value + 1)
-            void refetch()
-        }, verificationPolling.interval)
-        return () => window.clearTimeout(timer)
-    }, [active, available, checks, query.isError, query.isFetching, refetch])
-    return {
-        query,
-        available,
-        online,
-        pollingStopped: checks >= verificationPolling.maxChecks,
-        refresh: () => {
-            if (!navigator.onLine || query.isFetching) return
-            setChecks(0)
-            void refetch()
-        },
-    }
+    const polling = useVerificationPolling({
+        active: query.data?.state === 'queued' || query.data?.state === 'running',
+        isFetching: query.isFetching,
+        isError: query.isError,
+        refetch: query.refetch,
+    })
+    return { query, ...polling }
 }

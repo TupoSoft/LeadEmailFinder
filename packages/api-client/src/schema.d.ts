@@ -369,6 +369,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/verifyBatch/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a CSV batch for asynchronous verification */
+        post: operations["BatchEmailVerificationController_uploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/verifyBatch/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an organization-owned batch status */
+        get: operations["BatchEmailVerificationController_getBatchStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/verifyBatch/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download an organization-owned completed batch CSV */
+        get: operations["BatchEmailVerificationController_getBatchResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -551,6 +602,21 @@ export interface components {
             /** @description Display name of the active organization. */
             name: string;
         };
+        GetBatchStatusResponseDto: {
+            /**
+             * @description Present only for failed jobs. processing_failed makes no claim about whether credits were charged.
+             * @enum {string}
+             */
+            failureCode?: "invalid_csv" | "insufficient_credits" | "processing_failed";
+            /** Format: uuid */
+            id: string;
+            processed: number;
+            progress: number;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "failed" | "unavailable";
+            total: number;
+            unprocessed: number;
+        };
         HumanSessionRequiredResponseDto: {
             /** @enum {string} */
             code: "human_session_required";
@@ -633,6 +699,17 @@ export interface components {
             status: "active" | "disabled";
             /** Format: date-time */
             updatedAt: string;
+        };
+        UploadFileRequestDto: {
+            /**
+             * Format: binary
+             * @description CSV file with an email header, media type text/csv, at most 104857600 bytes (100 megabytes).
+             */
+            file: Blob;
+        };
+        UploadFileResponseDto: {
+            /** Format: uuid */
+            id: string;
         };
         VerifyAsyncRequestBodyDto: {
             /**
@@ -1868,6 +1945,153 @@ export interface operations {
                         statusCode: 404;
                     };
                 };
+            };
+        };
+    };
+    BatchEmailVerificationController_uploadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One file part containing text/csv with an email header. Maximum size: 104857600 bytes (100 megabytes). Row validation and credit debit happen after acceptance. */
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["UploadFileRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The batch was queued; validation and charging are not yet confirmed. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadFileResponseDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A CSV file is required, with media type text/csv and a maximum size of 104857600 bytes. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    BatchEmailVerificationController_getBatchStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetBatchStatusResponseDto"];
+                };
+            };
+            /** @description The batch ID must be a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The batch is not available to this organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    BatchEmailVerificationController_getBatchResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The retained CSV result. Downloading does not enqueue verification or debit credits. */
+            200: {
+                headers: {
+                    /** @description attachment; filename="batch-verification-<uuid>.csv" */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": Blob;
+                };
+            };
+            /** @description The batch ID must be a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The batch result is not available to this organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

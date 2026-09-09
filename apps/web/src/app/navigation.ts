@@ -13,6 +13,7 @@ export interface ApplicationDestination {
 export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app', label: authCopy.home },
     { path: '/app/verifications/new', label: 'Verify an email', capability: 'verification.run' },
+    { path: '/app/verifications/batches/new', label: 'Verify a CSV file', capability: 'verification.run' },
     { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
     { path: '/app/service-clients', label: 'Service clients', capability: 'service_clients.manage' },

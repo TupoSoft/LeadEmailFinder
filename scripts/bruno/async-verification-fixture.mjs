@@ -36,20 +36,45 @@ async function jsonResponse(response) {
     return response.json()
 }
 
-export async function customerClientSecret(metadata, clientId, fetchImpl = fetch) {
+export async function customerClientSecret(metadata, clientId, fetchImpl = fetch, { orgAdmin } = {}) {
+    const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
+    if (
+        orgAdmin !== undefined &&
+        (!orgAdmin ||
+            orgAdmin.issuer !== issuer ||
+            orgAdmin.clientId !== 'lef-org-admin-service' ||
+            typeof orgAdmin.clientSecret !== 'string' ||
+            !orgAdmin.clientSecret ||
+            clientId !== 'lef-svc-dev-fixture')
+    )
+        throw new Error('Batch verification requires matching organization administration credentials')
+    const tokenIssuer = orgAdmin ? issuer : `${metadata.keycloakUrl}/realms/master`
+    const credentials = orgAdmin
+        ? { grant_type: 'client_credentials', client_id: orgAdmin.clientId, client_secret: orgAdmin.clientSecret }
+        : {
+              grant_type: 'password',
+              client_id: 'admin-cli',
+              username: metadata.keycloakAdminUsername,
+              password: metadata.keycloakAdminPassword,
+          }
     const { access_token: token } = await jsonResponse(
-        await fetchImpl(`${metadata.keycloakUrl}/realms/master/protocol/openid-connect/token`, {
+        await fetchImpl(`${tokenIssuer}/protocol/openid-connect/token`, {
             method: 'POST',
-            body: new URLSearchParams({
-                grant_type: 'password',
-                client_id: 'admin-cli',
-                username: metadata.keycloakAdminUsername,
-                password: metadata.keycloakAdminPassword,
-            }),
+            body: new URLSearchParams(credentials),
             signal: AbortSignal.timeout(15_000),
         }),
     )
     if (typeof token !== 'string' || !token) throw new Error('Async verification fixture admin token is missing')
+    if (orgAdmin) {
+        let claims
+        try {
+            claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+        } catch {
+            throw new Error('Organization administration token identity could not be confirmed')
+        }
+        if (claims?.iss !== issuer || claims.azp !== orgAdmin.clientId)
+            throw new Error('Organization administration token identity did not match')
+    }
     const headers = { authorization: `Bearer ${token}` }
     const clients = await jsonResponse(
         await fetchImpl(
@@ -110,7 +135,7 @@ export async function withRestoredBalance(creditRequest, execute) {
 
 // Ownership is verified before reading seed material or changing credits. The exclusive lock prevents the
 // Bruno and live browser suites from changing the seeded customer's balance concurrently.
-export async function withAsyncVerificationFixture(checkoutRoot, execute) {
+export async function withAsyncVerificationFixture(checkoutRoot, execute, { useOrganizationAdmin = false } = {}) {
     const metadata = loadDevelopmentStack(checkoutRoot)
     for (const service of ['mailpit', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
         inspectDevelopmentService(checkoutRoot, metadata, service)
@@ -133,7 +158,9 @@ export async function withAsyncVerificationFixture(checkoutRoot, execute) {
         issuer,
         credential.organizationId,
     )
-    const secret = await customerClientSecret(metadata, customer.keycloakClientId)
+    const secret = await customerClientSecret(metadata, customer.keycloakClientId, fetch, {
+        ...(useOrganizationAdmin ? { orgAdmin: await readMetadata('org-admin-client.json') } : {}),
+    })
     const lock = resolve(checkoutRoot, '.dev/async-verification.lock')
     await mkdir(lock, { mode: 0o700 })
     try {

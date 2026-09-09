@@ -22,9 +22,16 @@ export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 15, tests: 15, sandbox: 'developer', network: 'compose' }),
+    'batch-verification': Object.freeze({ requests: 9, tests: 15, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
-    'service-client-management': Object.freeze({ requests: 6, tests: 6, sandbox: 'developer', network: 'host', countOnly: true }),
+    'service-client-management': Object.freeze({
+        requests: 6,
+        tests: 6,
+        sandbox: 'developer',
+        network: 'host',
+        countOnly: true,
+    }),
     'organization-onboarding': Object.freeze({
         requests: 12,
         tests: 12,
@@ -121,7 +128,9 @@ export function collectionEnvironment(name, metadata, serviceClient, serviceCred
             KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
             KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
             ...(name === 'credit-purchases' ? { PLATFORM_ORGANIZATION_ID: credential.data.organizationId } : {}),
-            ...(name === 'service-client-management' ? { SERVICE_CLIENT_ORGANIZATION_ID: credential.data.organizationId } : {}),
+            ...(name === 'service-client-management'
+                ? { SERVICE_CLIENT_ORGANIZATION_ID: credential.data.organizationId }
+                : {}),
         }
     }
     return {
@@ -141,7 +150,7 @@ export function cliArguments(name, environment, reportFile) {
         !environment.OIDC_ISSUER_URL ||
         !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
         !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
-        (name === 'async-verification' &&
+        (['async-verification', 'batch-verification'].includes(name) &&
             (!environment.CUSTOMER_ORGANIZATION_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
@@ -366,9 +375,14 @@ export async function runCollection(args, checkoutRoot) {
                 throw brunoFailure({ stage: 'report' })
             }
         }
-        if (name === 'async-verification') {
-            return withAsyncVerificationFixture(checkoutRoot, fixture =>
-                runCompose({ ...environment, ...fixture.environment }),
+        if (['async-verification', 'batch-verification'].includes(name)) {
+            return withAsyncVerificationFixture(
+                checkoutRoot,
+                async fixture => {
+                    if (name === 'batch-verification') await fixture.setBalance(2)
+                    return runCompose({ ...environment, ...fixture.environment })
+                },
+                { useOrganizationAdmin: name === 'batch-verification' },
             )
         }
         return runCompose(environment)

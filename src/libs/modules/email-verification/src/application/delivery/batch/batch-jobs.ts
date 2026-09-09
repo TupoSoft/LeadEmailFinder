@@ -1,4 +1,5 @@
 import { BatchJobData, BatchJobStep } from '../../../domain/batch-job'
+import { VerificationJobSnapshot } from '../verification-job-state'
 
 export const BATCH_JOBS = Symbol('BatchJobs')
 
@@ -15,14 +16,19 @@ export interface NewBatchJob {
     credentialId: string
 }
 
+export interface BatchVerificationSnapshot extends VerificationJobSnapshot {
+    /** Only a validated, retained storage location may be supplied by the adapter. */
+    resultLocation?: string
+    failureCode?: unknown
+}
+
 export interface BatchJobHandle {
     readonly id: string
     readonly data: BatchJobData
     readonly queueQualifiedName: string
     readonly attemptsMade: number
-    state(): Promise<string>
+    readStatus(): Promise<BatchVerificationSnapshot>
     counts(): Promise<BatchJobCounts>
-    returnValue(): Promise<string | undefined>
     updateStep(next: BatchJobData): Promise<void>
 }
 

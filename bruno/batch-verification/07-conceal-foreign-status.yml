@@ -1,0 +1,28 @@
+info:
+    name: 07-conceal-foreign-status
+    type: http
+    seq: 7
+
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyBatch/{{batchJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
+                method: 'POST', body: new URLSearchParams({ grant_type: 'client_credentials',
+                  client_id: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_ID'),
+                  client_secret: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_SECRET'),
+                }),
+              });
+              if (!response.ok) throw new Error('Fixture token request failed');
+              const payload = await response.json();
+              req.setHeader('Authorization', `Bearer ${payload.access_token}`);
+        - type: tests
+          code: |-
+              test('conceals foreign jobs', function() { expect(res.status).to.equal(404); });

@@ -329,6 +329,14 @@ At widths of 48rem or below, each value follows its label in one column. The pen
 existing state height. Completed results use neutral text: completion is a finished check, not a positive delivery
 verdict. Status changes use restrained text announcements and add no animation or new visual tokens.
 
+### Batch File Selection and Progress
+
+Batch verification extends the shared form and flat panel styles with a visible native file picker and wrapping
+filename feedback. `ProgressIndicator` owns indeterminate upload and determinate job progress. It uses the existing
+evergreen, sage, spacing, and control tokens; indeterminate activity has readable text without continuous motion.
+The counts use the shared description-list layout. Failures and download feedback retain the panel geometry and
+existing action treatments. This adds no palette, typography, or motion tokens.
+
 ### Signal Path
 
 The signal path is explanatory content, not a progress control. Its four nodes use ink and evergreen circles on the

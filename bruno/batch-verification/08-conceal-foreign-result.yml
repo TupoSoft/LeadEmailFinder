@@ -1,0 +1,28 @@
+info:
+    name: 08-conceal-foreign-result
+    type: http
+    seq: 8
+
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyBatch/{{batchJobId}}/results'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
+                method: 'POST', body: new URLSearchParams({ grant_type: 'client_credentials',
+                  client_id: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_ID'),
+                  client_secret: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_SECRET'),
+                }),
+              });
+              if (!response.ok) throw new Error('Fixture token request failed');
+              const payload = await response.json();
+              req.setHeader('Authorization', `Bearer ${payload.access_token}`);
+        - type: tests
+          code: |-
+              test('conceals foreign results', function() { expect(res.status).to.equal(404); });

@@ -1,48 +1,26 @@
-# Batch Verification Bruno Collection
+# Batch Verification Collection
 
-Uploads a small fixture CSV through `POST /verifyBatch/csv`, then polls `GET /verifyBatch/:id` until the
-job completes, asserting every observed `progress` value is a finite number within `[0, 100]` and that
-the completed job reports exactly `100`. A third request independently polls `GET /verifyBatch/:id` to
-completion (a fixed wait is not reliable here) and then downloads `GET /verifyBatch/:id/results`, asserting
-the returned CSV's `email` column matches the uploaded fixture addresses exactly. Every response includes a
-server-generated `X-Request-ID` UUID. The upload retains its single `id` field containing the batch UUID, and each
-CSV row retains its persisted verification UUID in the existing `id` column.
+Run the pinned launcher from the repository root:
 
-Run this collection against the local Compose API using OAuth Client Credentials. Authenticate as the seeded
-**customer** M2M client `lef-svc-dev-fixture`, which belongs to "Acme Development Customer" and has 1000 seeded
-credits. The `verification:run` permission debits a credit from the caller's own organization. The platform client
-`lef-development-service` belongs to an organization seeded with zero credits, so its uploads fail with
-`InsufficientCreditsException`.
-
-```shell
-pnpm dev:reset
+```bash
+corepack pnpm bruno:batch-verification
 ```
 
-The secret for `lef-svc-dev-fixture` is never written to disk. Fetch it from the Keycloak Admin API using the
-organization administrator service credentials that `pnpm dev:reset` already wrote:
+The launcher verifies that the API, web gateway, Keycloak, and SMTP development fixtures belong to this checkout.
+It retrieves the seeded customer client's current secret, preserves the public issuer through the Compose back
+channel, and runs `bru run --env local --sandbox developer` with the pinned CLI. It requires all nine requests and
+fifteen tests to execute successfully; zero execution, skipped requests, and missing reports fail validation.
 
-```shell
-export OIDC_ISSUER_URL=$(jq -r .issuer .dev/keycloak/service-client.json)
-export CUSTOMER_SERVICE_CLIENT_ID=lef-svc-dev-fixture
+The shared verification fixture locks the seeded customer's balance against concurrent verification suites, sets
+two credits for the two-row synthetic CSV, and restores and verifies the previous balance after the run. Tokens,
+credentials, headers, and bodies are withheld from reports. Run this only against the checkout's disposable stack.
 
-ORG_ADMIN_ID=$(jq -r .clientId .dev/keycloak/org-admin-client.json)
-ORG_ADMIN_SECRET=$(jq -r .clientSecret .dev/keycloak/org-admin-client.json)
-ADMIN_TOKEN=$(curl -s --data-urlencode grant_type=client_credentials \
-    --data-urlencode "client_id=${ORG_ADMIN_ID}" --data-urlencode "client_secret=${ORG_ADMIN_SECRET}" \
-    "${OIDC_ISSUER_URL}/protocol/openid-connect/token" | jq -r .access_token)
-INTERNAL_ID=$(curl -s -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-    "http://localhost:58080/admin/realms/lead-email-finder/clients?clientId=${CUSTOMER_SERVICE_CLIENT_ID}" \
-    | jq -r '.[0].id')
-export CUSTOMER_SERVICE_CLIENT_SECRET=$(curl -s -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-    "http://localhost:58080/admin/realms/lead-email-finder/clients/${INTERNAL_ID}/client-secret" | jq -r .value)
+The workflow uploads `fixtures/sample.csv`, checks the five-state public status, verifies finite progress between
+zero and one hundred, waits for completion, and downloads the exact two synthetic email rows. The result must use
+`text/csv` and the attachment filename derived from the job UUID. An invalid CSV then exercises asynchronous
+`invalid_csv` rejection. The remaining requests verify authentication, concealed foreign status and result reads,
+and immediate rejection of a non-CSV media type. Worker tests cover insufficient credits and infrastructure failure.
 
-cd bruno/batch-verification
-npx @usebruno/cli run --env local --sandbox developer
-```
-
-A collection-root `before-request` script mints and caches a Client Credentials token as
-`{{serviceClientToken}}` before the first request that needs it, reused for every request in this
-collection.
-
-`fixtures/sample.csv` uses the local SMTP-development fixture domain (`lef.test`, see
-`bruno/smtp-dev/`) so verification resolves deterministically without external network access.
+The retained result is read through the existing authenticated API. A later missing object or job is not a promise
+of permanent retention. The collection records no job identifiers, customer filenames, rows, or raw worker failures
+in committed artifacts. Repeated runs create fresh batch jobs and use the existing retention policy for cleanup.

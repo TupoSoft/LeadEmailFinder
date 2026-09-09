@@ -11,8 +11,7 @@ export interface AsyncVerificationJob {
     readStatus(): Promise<AsyncVerificationSnapshot>
 }
 
-export interface AsyncVerificationSnapshot {
-    state: 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'
+export interface AsyncVerificationSnapshot extends VerificationJobSnapshot {
     result?: unknown
 }
 
@@ -20,3 +19,4 @@ export interface AsyncVerificationJobs {
     enqueue(data: AsyncVerificationJobData, jobId: string): Promise<{ id?: string }>
     find(id: string): Promise<AsyncVerificationJob | undefined>
 }
+import { VerificationJobSnapshot } from '../verification-job-state'

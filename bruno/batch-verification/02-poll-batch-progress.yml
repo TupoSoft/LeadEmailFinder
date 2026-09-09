@@ -1,38 +1,52 @@
 info:
-  name: 02-poll-batch-progress
-  type: http
-  seq: 2
+    name: 02-poll-batch-progress
+    type: http
+    seq: 2
 
 http:
-  method: GET
-  url: "{{baseUrl}}/verifyBatch/{{batchJobId}}"
-  headers:
-    - name: Authorization
-      value: "Bearer {{serviceClientToken}}"
+    method: GET
+    url: '{{baseUrl}}/verifyBatch/{{batchJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
 
 runtime:
-  scripts:
-    - type: before-request
-      code: |-
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-    - type: tests
-      code: |-
-        test('reports a finite, bounded progress value', function() {
-          expect(res.status).to.equal(200);
-          expect(res.body.progress).to.be.a('number');
-          expect(Number.isFinite(res.body.progress)).to.equal(true);
-          expect(res.body.progress).to.be.at.least(0);
-          expect(res.body.progress).to.be.at.most(100);
-        });
+    scripts:
+        - type: before-request
+          code: |-
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+        - type: tests
+          code: |-
+              test('exposes only the stable public status and safe terminal failure code', function() {
+                expect(['queued', 'running', 'completed', 'failed', 'unavailable']).to.include(res.body.status);
+                const keys = ['id', 'status', 'progress', 'total', 'processed', 'unprocessed'];
+                if (res.body.status === 'failed') {
+                  keys.push('failureCode');
+                  expect(['invalid_csv', 'insufficient_credits', 'processing_failed']).to.include(res.body.failureCode);
+                }
+                expect(Object.keys(res.body).sort()).to.deep.equal(keys.sort());
+                for (const field of ['total', 'processed', 'unprocessed']) {
+                  expect(Number.isSafeInteger(res.body[field])).to.equal(true);
+                  expect(res.body[field]).to.be.at.least(0);
+                }
+              });
 
-        test('a completed job reports exactly 100', function() {
-          if (res.body.status !== 'completed') {
-            return;
-          }
-          expect(res.body.progress).to.equal(100);
-        });
+              test('reports a finite, bounded progress value', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.progress).to.be.a('number');
+                expect(Number.isFinite(res.body.progress)).to.equal(true);
+                expect(res.body.progress).to.be.at.least(0);
+                expect(res.body.progress).to.be.at.most(100);
+              });
 
-        test('returns a server-generated request UUID', function() {
-          expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-          expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
-        });
+              test('a completed job reports exactly 100', function() {
+                if (res.body.status !== 'completed') {
+                  return;
+                }
+                expect(res.body.progress).to.equal(100);
+              });
+
+              test('returns a server-generated request UUID', function() {
+                expect(res.headers['x-request-id']).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+                expect(res.headers['x-request-id']).not.to.equal('caller-controlled-correlation');
+              });

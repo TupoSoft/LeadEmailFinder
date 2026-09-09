@@ -11,7 +11,9 @@
         "Data panel": "ProductPanel",
         "Form": "Form.module.css",
         "Select/Listbox": "native",
-        "Dialog": "TeamDialog"
+        "Dialog": "TeamDialog",
+        "File upload": "native",
+        "Progress": "ProgressIndicator"
     },
     "requiredCommands": ["unit", "browser", "accessibility", "visual"],
     "commands": {
@@ -33,6 +35,8 @@
         "teamRuntime": "apps/web/tests/e2e/team-and-invitations.spec.ts",
         "verification": "apps/web/tests/e2e/verification-ui.spec.ts",
         "verificationRuntime": "apps/web/tests/e2e/single-verification.spec.ts",
+        "batchVerification": "apps/web/tests/e2e/batch-verification-ui.spec.ts",
+        "batchVerificationRuntime": "apps/web/tests/e2e/batch-verification.spec.ts",
         "serviceClients": "apps/web/tests/e2e/service-clients-ui.spec.ts",
         "serviceClientPrivacy": "apps/web/tests/e2e/service-clients-ui.spec.ts",
         "serviceClientRuntime": "apps/web/tests/e2e/service-clients.spec.ts"
