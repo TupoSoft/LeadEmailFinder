@@ -4,6 +4,34 @@
  */
 
 export interface paths {
+    "/credits/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the authoritative organization credit balance
+         * @description Requires platform:admin. Returns zero when no credit account exists; this does not prove organization existence.
+         */
+        get: operations["CreditsController_getBalance"];
+        /**
+         * Set an absolute organization credit balance
+         * @description Requires platform:admin. Replaces the balance with the requested value. Cookie sessions require Origin and CSRF protection. Reload after uncertainty before another explicit set.
+         */
+        put: operations["CreditsController_setBalance"];
+        /**
+         * Add platform credits idempotently
+         * @description Requires platform:admin. Cookie sessions require Origin and CSRF protection. Reuse one key for the same organization and amount to return the current balance without another grant. Reusing that key with a different amount returns 409 without changing the balance. Both the first successful request and an equivalent replay return 201.
+         */
+        post: operations["CreditsController_addCredits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -205,6 +233,26 @@ export interface paths {
          * @description Creates or reuses an invited identity. Repeated acceptance has no additional effect and returns only generic accepted status.
          */
         post: operations["OrganizationsController_acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one organization for a platform operator
+         * @description Requires platform:admin. Returns only the directory identity and timestamps; no membership or credit data.
+         */
+        get: operations["OrganizationsController_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -458,6 +506,10 @@ export interface components {
             organizationId: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
+        };
+        AddCreditsDto: {
+            /** @description Number of credits to add for this logical operation */
+            amount: number;
         };
         AsyncVerificationCompletedResponseDto: {
             result: components["schemas"]["AsyncVerificationResultDto"];
@@ -748,6 +800,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        SetBalanceDto: {
+            /** @description Absolute credit balance */
+            amount: number;
+        };
         UploadFileRequestDto: {
             /**
              * Format: binary
@@ -782,6 +838,168 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    CreditsController_getBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization whose credit balance is managed */
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditResponseDto"];
+                };
+            };
+            /** @description Invalid organization UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid authentication. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated caller lacks platform:admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The balance could not be loaded. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CreditsController_setBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization whose credit balance is managed */
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBalanceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditResponseDto"];
+                };
+            };
+            /** @description Invalid organization UUID or nonnegative integer amount. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid authentication. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated caller lacks platform:admin or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The outcome may be uncertain; reload the balance before another explicit set. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CreditsController_addCredits: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Exactly one canonical lowercase UUID per logical credit addition; reuse it only for retries. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Organization whose credit balance is managed */
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCreditsDto"];
+            };
+        };
+        responses: {
+            /** @description Grant applied or equivalent replay; current balance. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditResponseDto"];
+                };
+            };
+            /** @description Invalid organization, amount, or missing, repeated, or malformed key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid authentication. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated caller lacks platform:admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The organization and key already identify a grant with a different amount. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -1429,6 +1647,62 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InvitationGoneResponseDto"];
                 };
+            };
+        };
+    };
+    OrganizationsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDirectoryEntryDto"];
+                };
+            };
+            /** @description Invalid organization UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Platform administration permission is required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization not found. No organization details are returned. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization details could not be loaded. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

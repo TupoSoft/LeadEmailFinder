@@ -39,5 +39,7 @@ export const organizationsCopy = {
     id: 'ID',
     createdAt: 'Created',
     updatedAt: 'Updated',
+    actions: 'Actions',
+    manageCredits: 'Manage credits',
     dateUnavailable: 'Date unavailable',
 } as const

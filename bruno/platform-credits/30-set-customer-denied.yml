@@ -1,0 +1,25 @@
+info:
+  name: 30-set-customer-denied
+  type: http
+  seq: 30
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/credits/{{setOrganizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{customerToken}}"
+  body:
+    type: json
+    data: '{"amount": 33}'
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('30-set-customer-denied', function() {
+          expect(res.status).to.equal(403);
+          expect(res.body).not.to.have.property('balance');
+        });

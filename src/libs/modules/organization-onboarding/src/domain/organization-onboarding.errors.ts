@@ -60,3 +60,10 @@ export class InvitationConsumedError extends Error {
         this.name = InvitationConsumedError.name
     }
 }
+
+export class OrganizationNotFoundError extends Error {
+    constructor() {
+        super('Organization not found')
+        this.name = OrganizationNotFoundError.name
+    }
+}

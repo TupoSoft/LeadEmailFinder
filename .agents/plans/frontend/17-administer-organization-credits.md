@@ -12,12 +12,12 @@ ledger semantics in the same pull request.
 
 ## Progress
 
-- [ ] (2026-08-31) Publish credit read/add/set operations in the browser OpenAPI allow list and generated client.
-- [ ] (2026-08-31) Build the platform balance route with distinct add and absolute-set controls.
-- [ ] (2026-08-31) Retain one additive idempotency key across pending, uncertain, and explicit retry states.
-- [ ] (2026-08-31) Cover authorization, validation, confirmation, uncertainty, conflict, and recovery states.
-- [ ] (2026-08-31) Extend browser, accessibility, Bruno, documentation, and premium-design evidence.
-- [ ] (2026-08-31) Run focused, live-browser, architecture, prose, and repository validation.
+- [x] (2026-09-09) Publish organization detail and credit read/add/set operations in the browser OpenAPI allow list and generated client.
+- [x] (2026-09-09) Build the platform balance route with distinct add and absolute-set controls.
+- [x] (2026-09-09) Retain one additive idempotency key across pending, uncertain, and explicit retry states.
+- [x] (2026-09-09) Cover authorization, validation, confirmation, uncertainty, conflict, and recovery states.
+- [x] (2026-09-09) Extend browser, accessibility, Bruno, documentation, and premium-design evidence.
+- [x] (2026-09-09) Run focused, live-browser, architecture, prose, and repository validation.
 
 ## Plan dependencies
 
@@ -35,6 +35,18 @@ ledger semantics in the same pull request.
 - The current credit read returns zero when no credit-account row exists and does not distinguish an unknown
   organization. A refresh-safe detail page therefore needs a narrow platform organization-detail read rather than a
   fabricated interpretation of balance zero.
+- The implementation checkout matched current `master` at `2c2edfa`; prerequisite issues 504, 505, 510, and 511 were
+  closed. Issue 512 is assigned and its Project 9 status is In Progress.
+- The worktree initially had no dependencies. Installation succeeded with a writable pnpm store under the Codex cache.
+  Docker build metadata also needs a writable `BUILDX_CONFIG` in this sandbox.
+- The legacy Bruno launcher expected separate metadata that normal development bootstrap did not write. It now reuses
+  shared checkout-owned stack discovery without adding another configuration file or weakening ownership checks.
+- Unrestricted web-test workers competed with Docker builds and timed out in existing billing, team, and directory
+  suites. The complete suite passed with two workers; no global timeout or validation rule was relaxed.
+- Cached organization details can report success while a fresh lookup is pending. Balance queries now wait for that
+  lookup to settle successfully, including on an in-app revisit; a regression test proves a new `404` sends no credit read.
+- A request-triggered authentication error can arrive before React unmounts the page. Mutation handlers now stop their
+  local execution before cleanup can be followed by another storage write or balance read.
 
 ## Decision Log
 
@@ -72,7 +84,16 @@ ledger semantics in the same pull request.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented and locally validated on `kk/512-organization-credits`. Platform operators can enter from the directory,
+read authoritative organization identity and balance, add with durable explicit replay, and confirm absolute sets.
+Recovery survives a matching same-tab reload, never resends automatically, expires only through acknowledgment, and
+respects authentication boundaries. The operator procedure is in `docs/platform-credits.md`.
+
+The detail service remains separate from listing, the identity adapter owns the UUID query, and the credit service
+continues to own ledger semantics. React components reuse the existing visual primitives. The only architectural
+trade-off is repeating the small platform authorization check in the two purpose-specific directory services.
+No schema, migration, provider, or ledger-semantic change was introduced. GitHub review and merge remain separate
+from the local acceptance evidence below.
 
 ## Context and Orientation
 
@@ -261,6 +282,44 @@ invitation secrets, real customer data, or payment-provider payloads.
 
 The generated browser boundary, financial UI distinction, same-key lifecycle, uncertainty policy, recovery, design
 states, validation, and one-pull-request scope are decision-complete.
+
+### Implementation Evidence, 2026-09-09
+
+- `corepack pnpm openapi:export`, `corepack pnpm openapi:generate`, and `corepack pnpm openapi:check` passed; the focused
+  OpenAPI contract suite passed 21 tests. The generated POST contract requires `Idempotency-Key`.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci` passed 234 Jest suites and 2,707 tests, with 15 suites and
+  92 tests skipped for optional environment dependencies; its Node runner suite passed all 76 tests. The subsequently
+  updated Bruno runner passed four focused tests, and shared stack discovery passed 12 tests.
+- `corepack pnpm exec jest organization-directory.integration.spec.ts --runInBand`, with
+  `TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL` supplied privately, passed all six tests against a uniquely created
+  disposable database. Both its schema and database were removed.
+- `corepack pnpm --filter ./apps/web test:ci --maxWorkers=2` passed all 607 tests across 29 files, including 25 credit
+  component tests. Web typecheck, focused web lint, root typecheck, and root lint passed. Root lint retains one existing
+  warning in `src/libs/config/src/load-secrets.spec.ts`.
+- `corepack pnpm --filter ./apps/web test:platform-credits` passed 24 browser scenarios at 1440 by 900 and 320 by 720.
+  Coverage includes accessibility, confirmation focus, same-key recovery, hard refresh, expiration, permissions,
+  storage failure, timeouts, delayed responses, and safe organization lookup failures. Browser plugin automation was
+  unavailable; the repository Playwright configuration supplied rendered evidence.
+- `corepack pnpm --filter ./apps/web browser-fixtures:bootstrap` passed for owner and MFA platform operator.
+  `corepack pnpm --filter ./apps/web test:platform-credits-live` passed both live tests on `http://localhost:53000`.
+  The owned organization moved through `0 -> 100 -> 125 -> 135`; replay stayed at `135`, a real key conflict returned
+  `409` with observed balance `141`, and a lost absolute-set response refreshed to `500` before an explicit reset to zero.
+  Success responses were `201` for additions and replay, and `200` for absolute sets. Customer reads and writes returned
+  `403`. Cleanup verified no remaining organization, invitation, audit, account, grant, or debit rows for the fixture.
+- `corepack pnpm bruno:platform-credits` passed 32 requests and 32 tests with Bruno 4.1.0 and no skips. Direct database
+  checks verified balances `26`, `13`, `5`, and `19`, plus absolute set `33 -> 0`; all five fixture organizations and
+  temporary reports were removed.
+- `corepack pnpm architecture:check` passed for nine modules with zero violations. `corepack pnpm design:lint` passed
+  without warnings; `corepack pnpm ui:audit` passed with zero findings. `git diff --check` passed.
+- Harper passed the exact command below for all eight changed Markdown files:
+
+      corepack pnpm docs:lint -- .agents/plans/frontend/17-administer-organization-credits.md DESIGN.md UX-CONTRACT.md docs/platform-credits.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md src/libs/modules/organization-onboarding/README.md bruno/platform-credits/README.md
+
+The screenshots use synthetic page data and stay outside the repository under `/tmp/lef-platform-credits-review`.
+Live authentication and mutation runs suppress screenshots, traces, videos, and raw diagnostics. No complete recovery
+key, cookie, token, invitation secret, or real customer data is recorded in this evidence. The development stack remains
+available for review; only run-owned test resources were cleaned up. This is disposable local-stack evidence, not a
+production validation claim.
 
 ## Plan readiness
 

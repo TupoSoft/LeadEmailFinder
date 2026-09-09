@@ -19,7 +19,7 @@ const scenarios = [
 
 // Browser-dependent: run explicitly after Chromium installation. All secret
 // markers originate in memory; generated source and config files contain none.
-for (const configurationName of ['invitation', 'team', 'platform-organizations', 'platform-organizations-live']) {
+for (const configurationName of ['invitation', 'team', 'platform-organizations', 'platform-organizations-live', 'platform-credits', 'platform-credits-live']) {
     for (const scenario of scenarios) {
         test(`${configurationName} browser ${scenario.name} preserves secret artifact policy`, { timeout: 60_000 }, () => {
             const directory = mkdtempSync(join(tmpdir(), 'lef-invitation-artifact-guard-'))

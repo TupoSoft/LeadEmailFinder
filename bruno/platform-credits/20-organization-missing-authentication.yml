@@ -1,0 +1,19 @@
+info:
+  name: 20-organization-missing-authentication
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('20-organization-missing-authentication', function() {
+          expect(res.status).to.equal(401);
+        });

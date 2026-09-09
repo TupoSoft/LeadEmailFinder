@@ -32,7 +32,8 @@ who is acting and what they are allowed to do.
   never learns anything about Keycloak.
 - Organization directory reads (`OrganizationDirectoryReader`) return names, identifiers, and timestamps for
   `organization-onboarding`. Identity owns deterministic pagination over millisecond creation times and UUIDs;
-  onboarding owns platform authorization, HTTP query validation, and opaque cursor encoding.
+  a UUID lookup returns the same safe projection or null when absent. Onboarding owns platform authorization,
+  not-found interpretation, HTTP query validation, and opaque cursor encoding.
 - Organization-scoped service-credential lookup/listing and atomic credential/audit mutation
   (`ServiceCredentialDirectory`, `ServiceCredentialWriter`) — used by `service-client-management` since
   `module-architecture/07`. The directory returns persistence-independent credential records; the writer owns the
@@ -79,7 +80,8 @@ consumer can defer identity writes until its own authorization preconditions hav
 The directory port also exports `OrganizationDirectoryReadInput`, `OrganizationDirectorySeekKey`,
 `OrganizationDirectoryRecord`, and `OrganizationDirectoryPage`. Its typed input contains a limit from 1 through
 100 and an optional `before` key with `createdAtMilliseconds` and `id`. Its result contains at most that many
-organization records and a `hasMore` flag, without a total count or invitation fields.
+organization records and a `hasMore` flag, without a total count or invitation fields. `findById(organizationId)`
+returns one `OrganizationDirectoryRecord` or null without scanning directory pages or reading credit accounts.
 
 **Test-fixture-only surface** — every entity class listed under Persistence below, exported from the TypeScript
 barrel for exactly one purpose. It lets another module's own real-Postgres or live-Keycloak integration test build
@@ -148,7 +150,9 @@ ID providing a deterministic tie-breaker for equal timestamps. No schema change 
 creation time and tuple seek predicate use that same expression, so PostgreSQL microseconds cannot disagree
 with the JavaScript `Date` used to encode a cursor. The adapter fetches one extra row to determine `hasMore`
 and omits it from the result. A new organization inserted before the current boundary appears on refresh;
-it does not shift later pages or repeat existing rows. No schema change, migration, or reset is required.
+it does not shift later pages or repeat existing rows. UUID lookup uses the existing organization primary key and
+selects only ID, name, and timestamps with the same millisecond creation projection. No schema change, migration,
+or reset is required.
 
 Credit grants atomically insert a zero-balance account with `ON CONFLICT DO NOTHING`, then acquire a pessimistic
 write lock on the persisted account row. This serializes first grants even when no account existed before either
@@ -191,7 +195,7 @@ locking, winning-grant lookup after a unique conflict, and propagation of unrela
 
 `infrastructure/persistence/organization-directory.integration.spec.ts` verifies empty, first, middle, and
 final pages, equal timestamps, distinct microseconds within one millisecond, insertion between requests,
-and a deleted boundary row against PostgreSQL. Set `TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL` to a disposable
+a deleted boundary row, and UUID detail lookup with an absent result against PostgreSQL. Set `TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL` to a disposable
 database whose name ends with `_test`. The suite creates and removes its own randomly named schema;
 it never resets another test suite's tables. Run it with:
 

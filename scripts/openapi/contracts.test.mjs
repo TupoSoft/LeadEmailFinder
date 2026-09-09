@@ -75,6 +75,7 @@ test('rejects generated artifacts that exist but are not tracked in Git', async 
 
 test('exports the real app from an empty environment without provider construction or network I/O', () => {
     assert.deepEqual(Object.keys(browser.paths), [
+        '/credits/{organizationId}',
         '/health',
         '/v1/auth/callback',
         '/v1/auth/login',
@@ -86,6 +87,7 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/organizations',
         '/v1/organizations/invitations/{token}',
         '/v1/organizations/invitations/{token}/accept',
+        '/v1/organizations/{organizationId}',
         '/v1/organizations/{organizationId}/invitations',
         '/v1/organizations/{organizationId}/members',
         '/v1/organizations/{organizationId}/members/{membershipId}',
@@ -592,6 +594,79 @@ test('generated service-client list types exclude clientSecret and preserve perm
             Assert<Equal<Rotated['clientSecret'], string>>,
             Assert<Equal<keyof Created, keyof List[number] | 'clientSecret'>>,
             Assert<Equal<keyof Rotated, keyof List[number] | 'clientSecret'>>
+        ]
+    `)
+    const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
+})
+
+
+test('platform credit and organization detail operations retain complete protected browser contracts', () => {
+    const detail = browser.paths['/v1/organizations/{organizationId}']
+    const credits = browser.paths['/credits/{organizationId}']
+    assert.deepEqual(Object.keys(detail), ['get'])
+    assert.deepEqual(Object.keys(credits), ['get', 'post', 'put'])
+    for (const [path, method, statuses] of [
+        ['/v1/organizations/{organizationId}', 'get', ['200', '400', '401', '403', '404', '500']],
+        ['/credits/{organizationId}', 'get', ['200', '400', '401', '403', '500']],
+        ['/credits/{organizationId}', 'post', ['201', '400', '401', '403', '409']],
+        ['/credits/{organizationId}', 'put', ['200', '400', '401', '403', '500']],
+    ]) {
+        const operation = browser.paths[path][method]
+        assert.deepEqual(operation, runtime.paths[path][method])
+        assert.match(operation.description, /platform:admin/)
+        assert.deepEqual(operation.security, method === 'get'
+            ? [{ lef_session: [] }, { oidc: [] }]
+            : [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+        assert.deepEqual(Object.keys(operation.responses).sort(), statuses)
+        const organizationId = operation.parameters.find(parameter => parameter.name === 'organizationId')
+        assert.equal(organizationId.in, 'path')
+        assert.equal(organizationId.required, true)
+        assert.deepEqual(organizationId.schema, { type: 'string', format: 'uuid' })
+    }
+    assert.deepEqual(detail.get.responses['200'].content['application/json'].schema,
+        { $ref: '#/components/schemas/OrganizationDirectoryEntryDto' })
+    const header = credits.post.parameters.find(parameter => parameter.name === 'Idempotency-Key')
+    assert.equal(header.in, 'header')
+    assert.equal(header.required, true)
+    assert.deepEqual(header.schema, { type: 'string', format: 'uuid' })
+    assert.match(credits.post.description, /equivalent replay return 201/)
+    for (const method of ['get', 'put']) {
+        assert.equal(credits[method].parameters.some(parameter => parameter.in === 'header'), false)
+    }
+    for (const [method, dto, minimum] of [['post', 'AddCreditsDto', 1], ['put', 'SetBalanceDto', 0]]) {
+        assert.equal(credits[method].requestBody.required, true)
+        assert.deepEqual(credits[method].requestBody.content['application/json'].schema,
+            { $ref: '#/components/schemas/' + dto })
+        assert.deepEqual(browser.components.schemas[dto].required, ['amount'])
+        assert.equal(browser.components.schemas[dto].properties.amount.type, 'integer')
+        assert.equal(browser.components.schemas[dto].properties.amount.minimum, minimum)
+    }
+    for (const method of ['get', 'post', 'put']) {
+        assert.deepEqual(credits[method].responses[method === 'post' ? '201' : '200'].content['application/json'].schema,
+            { $ref: '#/components/schemas/CreditResponseDto' })
+    }
+})
+
+test('generated platform credits require the caller key and preserve exact request and response types', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'platform-credit-contract.ts')
+    await writeFile(file, `
+        import type { paths, components } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type Credit = paths['/credits/{organizationId}']
+        type Detail = paths['/v1/organizations/{organizationId}']['get']['responses'][200]['content']['application/json']
+        type Assertions = [
+            Assert<Equal<Credit['post']['parameters']['header'], { 'Idempotency-Key': string }>>,
+            Assert<Equal<Credit['get']['parameters']['path'], { organizationId: string }>>,
+            Assert<Equal<Credit['post']['requestBody']['content']['application/json'], { amount: number }>>,
+            Assert<Equal<Credit['put']['requestBody']['content']['application/json'], { amount: number }>>,
+            Assert<Equal<Credit['get']['responses'][200]['content']['application/json'], { balance: number }>>,
+            Assert<Equal<Credit['post']['responses'][201]['content']['application/json'], { balance: number }>>,
+            Assert<Equal<Credit['put']['responses'][200]['content']['application/json'], { balance: number }>>,
+            Assert<Equal<Detail, components['schemas']['OrganizationDirectoryEntryDto']>>,
+            Assert<Equal<keyof Detail, 'id' | 'name' | 'createdAt' | 'updatedAt'>>
         ]
     `)
     const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })

@@ -15,10 +15,10 @@ runtime:
           expect(res.status).to.equal(200);
           expect(res.headers['content-type']).to.include('application/json');
           expect(Object.keys(res.body.paths).sort()).to.deep.equal([
-            '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
+            '/credits/{organizationId}', '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
             '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases', '/v1/organizations',
             '/v1/organizations/invitations/{token}', '/v1/organizations/invitations/{token}/accept',
-            '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
+            '/v1/organizations/{organizationId}', '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
             '/v1/organizations/{organizationId}/members/{membershipId}',
             '/v1/organizations/{organizationId}/service-clients',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
@@ -30,6 +30,8 @@ runtime:
           expect(Object.keys(res.body.paths['/v1/organizations']).sort()).to.deep.equal(['get', 'post']);
           expect(res.body.paths['/v1/organizations'].get.security).to.deep.equal([{ lef_session: [] }, { oidc: [] }]);
           expect(res.body.paths['/v1/organizations'].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]);
+          expect(Object.keys(res.body.paths['/credits/{organizationId}']).sort()).to.deep.equal(['get', 'post', 'put']);
+          expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}'])).to.deep.equal(['get']);
           var serviceClients = '/v1/organizations/{organizationId}/service-clients';
           expect(Object.keys(res.body.paths[serviceClients]).sort()).to.deep.equal(['get', 'post']);
           expect(res.body.paths[serviceClients].get.security).to.deep.equal([{ lef_session: [] }]);

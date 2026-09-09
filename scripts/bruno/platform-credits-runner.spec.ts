@@ -1,4 +1,4 @@
-import { assertExecutedBrunoReport, assertOwnedContainer, ComposeContainer, validateMetadata } from './platform-credits-runner'
+import { assertExecutedBrunoReport, loadPlatformCreditsStack } from './platform-credits-runner'
 
 const metadata = {
     checkoutRoot: '/checkout', composeProject: 'lef-test', apiUrl: 'http://localhost:53000',
@@ -15,13 +15,17 @@ function report(): unknown[] {
 }
 
 describe('platform credit Bruno runner', () => {
-    it('loads local metadata only for its own checkout', () => {
-        expect(validateMetadata(metadata, '/checkout')).toEqual(metadata)
-        expect(() => validateMetadata(metadata, '/other')).toThrow('checkout ownership')
-        expect(() => validateMetadata({ ...metadata, apiUrl: 'https://production.example' }, '/checkout')).toThrow()
-        expect(() => validateMetadata({ ...metadata, postgresUrl: 'postgres://host/shared' }, '/checkout')).toThrow()
-        expect(() => validateMetadata({ ...metadata, postgresUrl: `${metadata.postgresUrl}?host=remote.example` }, '/checkout')).toThrow()
-        expect(() => validateMetadata({ ...metadata, postgresUrl: `${metadata.postgresUrl}#fragment` }, '/checkout')).toThrow()
+    it('uses shared live stack discovery for this checkout without requiring or writing bespoke metadata', () => {
+        const loadDevelopmentStack = jest.fn().mockReturnValue(metadata)
+        expect(loadPlatformCreditsStack('/checkout', { loadDevelopmentStack })).toBe(metadata)
+        expect(loadDevelopmentStack).toHaveBeenCalledWith('/checkout', { persistMetadata: false })
+    })
+
+    it('propagates shared ownership and discovery failures instead of trusting cached fixture endpoints', () => {
+        const failure = new Error('Development service is not owned by this checkout and Compose project')
+        const loadDevelopmentStack = jest.fn().mockImplementation(() => { throw failure })
+        expect(() => loadPlatformCreditsStack('/checkout', { loadDevelopmentStack })).toThrow(failure)
+        expect(loadDevelopmentStack).toHaveBeenCalledTimes(1)
     })
 
     it('requires every registered request and a nonzero passing test count', () => {
@@ -42,25 +46,4 @@ describe('platform credit Bruno runner', () => {
         expect(() => assertExecutedBrunoReport([{ ...successful, summary: { ...successful.summary, totalTests: 2, passedTests: 2 } }], 1)).toThrow()
     })
 
-    it('confirms the container checkout, service, running state, and published endpoint', () => {
-        const container: ComposeContainer = {
-            Config: { Labels: { 'com.docker.compose.project': 'lef-test', 'com.docker.compose.service': 'web',
-                'com.docker.compose.project.working_dir': '/checkout/docker' } },
-            State: { Running: true }, NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '53000' }] } },
-        }
-        const check = (value: ComposeContainer, root = '/checkout', endpoint = 'http://localhost:53000'): void =>
-            assertOwnedContainer(value, root, 'lef-test', 'web', '8080/tcp', endpoint)
-        expect(() => check(container)).not.toThrow()
-        expect(() => check(container, '/other')).toThrow()
-        expect(() => check(container, '/checkout', 'http://localhost:53001')).toThrow()
-        expect(() => check({ ...container, State: { Running: false } })).toThrow()
-        const withHostIp = (hostIp: string): ComposeContainer => ({ ...container,
-            NetworkSettings: { Ports: { '8080/tcp': [{ HostIp: hostIp, HostPort: '53000' }] } } })
-        expect(() => check(withHostIp('192.0.2.1'))).toThrow()
-        expect(() => check(withHostIp('0.0.0.0'))).not.toThrow()
-        expect(() => check(withHostIp('::1'), '/checkout', 'http://[::1]:53000')).not.toThrow()
-        expect(() => check(withHostIp('::'), '/checkout', 'http://[::1]:53000')).not.toThrow()
-        expect(() => check(withHostIp('::1'), '/checkout', 'http://127.0.0.1:53000')).toThrow()
-        expect(() => check(withHostIp('127.0.0.1'), '/checkout', 'http://[::1]:53000')).toThrow()
-    })
 })

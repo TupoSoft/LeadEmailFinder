@@ -159,6 +159,18 @@ describe('platform organization console', () => {
         expect(requests(fetch)).toHaveLength(0)
     })
 
+    it('exposes a concrete credit action only with the credit-management capability', async () => {
+        renderOrganizations({ capabilities: ['platform.organizations.manage', 'platform.credits.manage'] })
+        const link = await screen.findByRole('link', { name: `${copy.manageCredits} for ${organization.name}` })
+        expect(link).toHaveAttribute('href', `/app/platform/organizations/${organization.id}/credits`)
+    })
+
+    it('does not expose credit actions with only organization-management capability', async () => {
+        renderOrganizations()
+        await screen.findByText(organization.name)
+        expect(screen.queryByRole('link', { name: /Manage credits/ })).not.toBeInTheDocument()
+    })
+
     it('passes opaque cursors unchanged, deduplicates rows, and has no invented terminal count', async () => {
         const token = 'Opaque_Middle-Position'
         const second = { ...organization, id: '00000000-0000-4000-8000-000000000002', name: 'Older customer' }

@@ -1,0 +1,22 @@
+info:
+  name: 21-organization-customer-denied
+  type: http
+  seq: 21
+
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{customerToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('21-organization-customer-denied', function() {
+          expect(res.status).to.equal(403);
+          expect(res.body).not.to.have.property('name');
+        });

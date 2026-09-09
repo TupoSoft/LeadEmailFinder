@@ -12,14 +12,14 @@ import {
 } from '@nestjs/common'
 import {
     ApiBadRequestResponse,
-    ApiBearerAuth,
     ApiBody,
     ApiConflictResponse,
     ApiCreatedResponse,
-    ApiExcludeController,
     ApiForbiddenResponse,
     ApiHeader,
     ApiOperation,
+    ApiOkResponse,
+    ApiInternalServerErrorResponse,
     ApiParam,
     ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
@@ -30,14 +30,28 @@ import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finde
 import { CreditIdempotencyConflict } from '../domain/credits.error'
 import { parseCreditIdempotencyKey } from './credit-idempotency-key'
 
+const SESSION_SECURITY: Record<string, string[]>[] = [{ lef_session: [] }, { oidc: [] }]
+const MUTATION_SECURITY: Record<string, string[]>[] = [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]
+
 @UseGuards(PermissionsGuard)
 @RequirePermissions('platform:admin')
-@ApiExcludeController()
 @Controller('credits')
 export class CreditsController {
     constructor(private readonly creditsService: CreditsService) {}
 
     @Get(':organizationId')
+    @ApiOperation({
+        operationId: 'CreditsController_getBalance',
+        summary: 'Read the authoritative organization credit balance',
+        description: 'Requires platform:admin. Returns zero when no credit account exists; this does not prove organization existence.',
+        security: SESSION_SECURITY,
+    })
+    @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
+    @ApiOkResponse({ type: CreditResponseDto })
+    @ApiBadRequestResponse({ description: 'Invalid organization UUID.' })
+    @ApiUnauthorizedResponse({ description: 'Missing or invalid authentication.' })
+    @ApiForbiddenResponse({ description: 'Authenticated caller lacks platform:admin.' })
+    @ApiInternalServerErrorResponse({ description: 'The balance could not be loaded.' })
     @SerializeOptions({ type: CreditResponseDto })
     async getBalance(@Param() { organizationId }: CreditsAccountParamsDto): Promise<CreditResponseDto> {
         const balance = await this.creditsService.getBalance(organizationId)
@@ -46,13 +60,14 @@ export class CreditsController {
 
     @Post(':organizationId')
     @ApiOperation({
+        operationId: 'CreditsController_addCredits',
         summary: 'Add platform credits idempotently',
+        security: MUTATION_SECURITY,
         description:
-            'Reuse one key for the same organization and amount to return the current balance without another grant. ' +
+            'Requires platform:admin. Cookie sessions require Origin and CSRF protection. Reuse one key for the same organization and amount to return the current balance without another grant. ' +
             'Reusing that key with a different amount returns 409 without changing the balance. ' +
             'Both the first successful request and an equivalent replay return 201.',
     })
-    @ApiBearerAuth('oidc')
     @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
     @ApiHeader({
         name: 'Idempotency-Key',
@@ -88,6 +103,19 @@ export class CreditsController {
     }
 
     @Put(':organizationId')
+    @ApiOperation({
+        operationId: 'CreditsController_setBalance',
+        summary: 'Set an absolute organization credit balance',
+        description: 'Requires platform:admin. Replaces the balance with the requested value. Cookie sessions require Origin and CSRF protection. Reload after uncertainty before another explicit set.',
+        security: MUTATION_SECURITY,
+    })
+    @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
+    @ApiBody({ type: SetBalanceDto })
+    @ApiOkResponse({ type: CreditResponseDto })
+    @ApiBadRequestResponse({ description: 'Invalid organization UUID or nonnegative integer amount.' })
+    @ApiUnauthorizedResponse({ description: 'Missing or invalid authentication.' })
+    @ApiForbiddenResponse({ description: 'Authenticated caller lacks platform:admin or browser CSRF check denied.' })
+    @ApiInternalServerErrorResponse({ description: 'The outcome may be uncertain; reload the balance before another explicit set.' })
     @SerializeOptions({ type: CreditResponseDto })
     async setBalance(
         @Param() { organizationId }: CreditsAccountParamsDto,

@@ -9,6 +9,7 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationDetailService } from '../application/organization-detail.service'
 import { OrganizationListingService } from '../application/organization-listing.service'
 import {
     ConflictingMembershipError,
@@ -19,6 +20,7 @@ import {
     InvitationNotFoundError,
     MembershipNotFoundError,
     NotInOrganizationError,
+    OrganizationNotFoundError,
 } from '../domain/organization-onboarding.errors'
 import { OrganizationsController } from './organizations.controller'
 
@@ -35,6 +37,7 @@ const principal: AuthPrincipal = {
 describe('OrganizationsController', () => {
     let controller: OrganizationsController
     let organizationCreation: jest.Mocked<Pick<OrganizationCreationService, 'createWithFirstOwner'>>
+    let organizationDetail: jest.Mocked<Pick<OrganizationDetailService, 'get'>>
     let organizationListing: jest.Mocked<Pick<OrganizationListingService, 'list'>>
     let invitationIssuance: jest.Mocked<Pick<InvitationIssuanceService, 'issue'>>
     let invitationAcceptance: jest.Mocked<Pick<InvitationAcceptanceService, 'accept'>>
@@ -45,6 +48,7 @@ describe('OrganizationsController', () => {
     beforeEach(async () => {
         organizationCreation = { createWithFirstOwner: jest.fn() }
         organizationListing = { list: jest.fn() }
+        organizationDetail = { get: jest.fn() }
         invitationIssuance = { issue: jest.fn() }
         invitationAcceptance = { accept: jest.fn() }
         membershipRoleChange = { changeRole: jest.fn() }
@@ -55,6 +59,7 @@ describe('OrganizationsController', () => {
             controllers: [OrganizationsController],
             providers: [
                 { provide: OrganizationCreationService, useValue: organizationCreation },
+                { provide: OrganizationDetailService, useValue: organizationDetail },
                 { provide: OrganizationListingService, useValue: organizationListing },
                 { provide: InvitationIssuanceService, useValue: invitationIssuance },
                 { provide: InvitationPreviewService, useValue: { preview: jest.fn() } },
@@ -69,6 +74,18 @@ describe('OrganizationsController', () => {
             .compile()
 
         controller = moduleRef.get(OrganizationsController)
+    })
+
+    it('passes the actor and organization ID to the detail use case', async () => {
+        const organization = { id: 'org-1', name: 'Synthetic', createdAt: new Date(), updatedAt: new Date() }
+        organizationDetail.get.mockResolvedValue(organization)
+        await expect(controller.get({ organizationId: 'org-1' }, principal)).resolves.toEqual(organization)
+        expect(organizationDetail.get).toHaveBeenCalledWith(principal, 'org-1')
+    })
+
+    it('maps a typed absent organization to a safe 404', async () => {
+        organizationDetail.get.mockRejectedValue(new OrganizationNotFoundError())
+        await expect(controller.get({ organizationId: 'org-1' }, principal)).rejects.toThrow(NotFoundException)
     })
 
     it('passes the typed page size and unchanged opaque cursor to the listing use case', async () => {

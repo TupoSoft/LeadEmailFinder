@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ApiError } from '../../api/api-error'
 import { useDocumentTitle } from '../../app/useDocumentTitle'
 import { ProductPanel } from '../../shared/ProductPanel'
@@ -105,6 +105,9 @@ function DateValue({ value }: { value: string }) {
 }
 
 function Directory({ organizations }: { organizations: DirectoryOrganization[] }) {
+    const { state } = useAuth()
+    const canManageCredits =
+        state.status === 'authenticated' && state.account.capabilities.includes('platform.credits.manage')
     return (
         <table className={styles.table}>
             <caption className={styles.caption}>{copy.directory}</caption>
@@ -115,6 +118,7 @@ function Directory({ organizations }: { organizations: DirectoryOrganization[] }
                             {label}
                         </th>
                     ))}
+                    {canManageCredits ? <th scope="col">{copy.actions}</th> : null}
                 </tr>
             </thead>
             <tbody>
@@ -128,6 +132,17 @@ function Directory({ organizations }: { organizations: DirectoryOrganization[] }
                         <Cell label={copy.updatedAt}>
                             <DateValue value={organization.updatedAt} />
                         </Cell>
+                        {canManageCredits ? (
+                            <Cell label={copy.actions}>
+                                <Link
+                                    to={`/app/platform/organizations/${encodeURIComponent(organization.id)}/credits`}
+                                    state={{ organization }}
+                                    aria-label={`${copy.manageCredits} for ${organization.name}`}
+                                >
+                                    {copy.manageCredits}
+                                </Link>
+                            </Cell>
+                        ) : null}
                     </tr>
                 ))}
             </tbody>

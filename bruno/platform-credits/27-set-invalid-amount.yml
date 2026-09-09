@@ -1,0 +1,24 @@
+info:
+  name: 27-set-invalid-amount
+  type: http
+  seq: 27
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/credits/{{setOrganizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{platformToken}}"
+  body:
+    type: json
+    data: '{"amount": -1}'
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('27-set-invalid-amount', function() {
+          expect(res.status).to.equal(400);
+        });

@@ -1,0 +1,19 @@
+info:
+  name: 24-read-missing-authentication
+  type: http
+  seq: 24
+
+http:
+  method: GET
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('24-read-missing-authentication', function() {
+          expect(res.status).to.equal(401);
+        });

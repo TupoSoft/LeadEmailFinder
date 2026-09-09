@@ -7,13 +7,13 @@ export default class InvitationReporter implements Reporter {
         if (result.status !== 'passed') {
             // Only source coordinates help locate a failing assertion. No error text is printed.
             const location = result.error?.stack?.match(
-                /(?:invitations-ui|team-and-invitations|platform-organizations(?:-ui)?)\.spec\.ts:\d+:\d+/,
+                /(?:invitations-ui|team-and-invitations|platform-(?:organizations|credits)(?:-ui)?)\.spec\.ts:\d+:\d+/,
             )?.[0]
             if (location) console.error(location)
             for (const error of result.errors) {
                 if (
                     error.location &&
-                    /(?:invitations-ui|team-and-invitations|platform-organizations(?:-ui)?)\.spec\.ts$/.test(
+                    /(?:invitations-ui|team-and-invitations|platform-(?:organizations|credits)(?:-ui)?)\.spec\.ts$/.test(
                         error.location.file,
                     )
                 ) {

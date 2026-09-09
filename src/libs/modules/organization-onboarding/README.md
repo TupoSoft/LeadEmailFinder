@@ -8,7 +8,8 @@ change must stay consistent.
 ## Responsibility
 
 - Creating a new organization together with its first owner's invitation (`platform:admin` only).
-- Listing organizations for platform operators through a cursor-based directory without a total count.
+- Listing organizations for platform operators through a cursor-based directory without a total count, and reading
+  one organization by UUID with the same safe directory fields.
 - Issuing invitations into an existing organization, previewing pending invitations, and accepting an invitation (public, bearer-token
   authenticated by the invitation itself) to create or reuse a Keycloak user.
 - Listing members, changing a member's role, and removing a member, all under a final-owner protection that
@@ -38,7 +39,7 @@ private `KeycloakOrganizationAdmin` port; both are framework-free, constructed t
 `organization-onboarding.module.ts`. `domain/` holds invitation token generation/hashing/TTL, and the typed
 errors `NotInOrganizationError`/`InsufficientPermissionError`/`MembershipNotFoundError`/`InvitationNotFoundError`/
 `InvitationExpiredError`/`InvitationConsumedError`/`ConflictingMembershipError`/`FinalOwnerConflictError`/
-`InvalidOrganizationCursorError`. `infrastructure/` holds the
+`InvalidOrganizationCursorError`/`OrganizationNotFoundError`. `infrastructure/` holds the
 `KeycloakOrganizationAdminClient` adapter. The controller's private `handleErrors()` maps each domain error to
 the `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException`/`BadRequestException` HTTP behavior.
 
@@ -46,7 +47,9 @@ the `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException`
 identity seek key. Tokens contain version 1, an integer creation timestamp in milliseconds, and a lowercase UUID.
 Parsing requires canonical base64url without padding and canonical JSON; unknown fields, unsupported versions, malformed
 UUIDs, fractional timestamps, and dates outside years 0001 through 9999 fail with `400`. Only identity implements
-the database ordering and seek predicate.
+the database ordering and seek predicate. `OrganizationDetailService` checks platform authorization before UUID
+lookup through the same reader. Absence raises `OrganizationNotFoundError`, mapped to a generic `404` without
+organization, membership, or credit details. The service never interprets a zero credit balance as existence.
 
 Every use case that must call Keycloak while a lock is held — `InvitationAcceptanceService`,
 `MembershipRoleChangeService`, `MembershipRemovalService` — does so through one of identity's two session-shaped
@@ -80,10 +83,15 @@ appear in the runtime and browser OpenAPI contracts:
 | `POST`   | `v1/organizations/invitations/:token/accept`             | Public — authenticated by the invitation token itself |
 | `POST`   | `v1/organizations`                                       | `platform:admin`                                      |
 | `GET`    | `v1/organizations`                                       | `platform:admin`                                      |
+| `GET`    | `v1/organizations/:organizationId`                       | `platform:admin`                                      |
 | `POST`   | `v1/organizations/:organizationId/invitations`           | `members:manage`                                      |
 | `GET`    | `v1/organizations/:organizationId/members`               | `members:manage`                                      |
 | `PATCH`  | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`                                      |
 | `DELETE` | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`; `204 No Content`                    |
+
+Organization detail returns only `{ id, name, createdAt, updatedAt }`. Invalid UUIDs return `400`, unauthenticated
+requests return `401`, customer roles return `403`, and absent organizations return `404`. Authorization runs before
+lookup and no credit data is included. Browser and runtime OpenAPI expose this refresh-safe selection contract.
 
 Member listing preserves active and disabled rows, nullable email, and deterministic `createdAt ASC, id ASC`
 ordering. Role and removal operations retain server hierarchy and final-owner protection.
@@ -123,7 +131,7 @@ write the `Organization`, `OrganizationMembership`, `OrganizationInvitation`, `E
 ## Validation
 
 Focused tests live in `src/`: `application/organization-creation.service.spec.ts`,
-`application/organization-listing.service.spec.ts`,
+`application/organization-listing.service.spec.ts`, `application/organization-detail.service.spec.ts`,
 `application/invitation-issuance.service.spec.ts`, `application/invitation-acceptance.service.spec.ts`,
 `application/invitation-preview.service.spec.ts`,
 `application/membership-listing.service.spec.ts`, `application/membership-role-change.service.spec.ts`,
@@ -135,6 +143,8 @@ the final-owner invariant, gated on `TEST_POSTGRES_URL`, built from the real `Id
 wiring), and the live-Keycloak-gated
 `infrastructure/keycloak-organization-admin.live-keycloak.integration.spec.ts`.
 
+Detail tests cover UUID lookup, safe serialization, missing organizations, invalid IDs, authentication, all customer
+roles, explicit service-client permission, and unexpected storage failures.
 Directory tests cover first, continuation, empty, and terminal pages; the default and boundary sizes; invalid and
 unsupported cursors; cursor encodings that are not canonical; customer-role denial; and safe response serialization. HTTP creation tests
 verify `no-store` on success, invalid bodies, malformed JSON, missing authentication, denied permission, and an
@@ -147,3 +157,6 @@ creation with a pending owner invitation, no-session invitation acceptance, gene
 Role-hierarchy enforcement, final-owner protection, and Keycloak MFA-role assignment on promotion require a
 genuine human session and are instead covered by `organization-onboarding-http.integration.spec.ts` and the
 live-Keycloak spec above.
+
+[`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) covers organization detail success, absence,
+UUID validation, authentication, and customer-role denial before balance administration.

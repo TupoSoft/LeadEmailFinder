@@ -30,6 +30,7 @@ import {
     ApiNotFoundResponse,
     ApiOkResponse,
     ApiOperation,
+    ApiParam,
     ApiUnauthorizedResponse,
     getSchemaPath,
 } from '@nestjs/swagger'
@@ -47,6 +48,7 @@ import { MembershipListingService } from '../application/membership-listing.serv
 import { MembershipRemovalService } from '../application/membership-removal.service'
 import { MembershipRoleChangeService } from '../application/membership-role-change.service'
 import { OrganizationCreationService } from '../application/organization-creation.service'
+import { OrganizationDetailService } from '../application/organization-detail.service'
 import { OrganizationListingService } from '../application/organization-listing.service'
 import {
     ConflictingMembershipError,
@@ -58,6 +60,7 @@ import {
     InvitationNotFoundError,
     MembershipNotFoundError,
     NotInOrganizationError,
+    OrganizationNotFoundError,
 } from '../domain/organization-onboarding.errors'
 import {
     AcceptInvitationDto,
@@ -76,6 +79,7 @@ import {
     MembershipResponseDto,
     OrganizationParamsDto,
     OrganizationDirectoryResponseDto,
+    OrganizationDirectoryEntryDto,
 } from './organizations.dto'
 
 const INVITATION_HEADERS = {
@@ -104,6 +108,7 @@ export class OrganizationsController {
         private readonly membershipListing: MembershipListingService,
         private readonly invitationPreview: InvitationPreviewService,
         private readonly organizationListing: OrganizationListingService,
+        private readonly organizationDetail: OrganizationDetailService,
     ) {}
 
     // Declared before the ':organizationId/...' routes so a static-prefix route can never be shadowed.
@@ -234,6 +239,29 @@ export class OrganizationsController {
                 },
             }
         })
+    }
+
+    @Get(':organizationId')
+    @ApiOperation({
+        operationId: 'OrganizationsController_get',
+        summary: 'Read one organization for a platform operator',
+        security: SESSION_SECURITY,
+        description: 'Requires platform:admin. Returns only the directory identity and timestamps; no membership or credit data.',
+    })
+    @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
+    @ApiOkResponse({ type: OrganizationDirectoryEntryDto })
+    @ApiBadRequestResponse({ description: 'Invalid organization UUID.' })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.' })
+    @ApiForbiddenResponse({ description: 'Platform administration permission is required.' })
+    @ApiNotFoundResponse({ description: 'Organization not found. No organization details are returned.' })
+    @ApiInternalServerErrorResponse({ description: 'Organization details could not be loaded.' })
+    @RequirePermissions('platform:admin')
+    @SerializeOptions({ type: OrganizationDirectoryEntryDto })
+    async get(
+        @Param() { organizationId }: OrganizationParamsDto,
+        @CurrentPrincipal() principal: AuthPrincipal,
+    ): Promise<OrganizationDirectoryEntryDto> {
+        return this.handleErrors(() => this.organizationDetail.get(principal, organizationId))
     }
 
     @Post(':organizationId/invitations')
@@ -370,7 +398,7 @@ export class OrganizationsController {
             if (error instanceof NotInOrganizationError || error instanceof InsufficientPermissionError) {
                 throw new ForbiddenException(error.message)
             }
-            if (error instanceof MembershipNotFoundError || error instanceof InvitationNotFoundError) {
+            if (error instanceof MembershipNotFoundError || error instanceof InvitationNotFoundError || error instanceof OrganizationNotFoundError) {
                 throw new NotFoundException(error.message)
             }
             if (error instanceof ConflictingMembershipError || error instanceof FinalOwnerConflictError) {
