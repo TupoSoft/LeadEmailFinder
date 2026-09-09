@@ -1,0 +1,25 @@
+info:
+  name: 32-select-target-accepted-scenario
+  type: http
+  seq: 32
+
+http:
+  method: PUT
+  url: "{{evidenceControlUrl}}/scenario"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "scenario": "target_accepted"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('selects the target-accepted evidence scenario', function() {
+          expect(res.status).to.equal(204);
+        });

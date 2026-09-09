@@ -12,3 +12,5 @@ variables:
     value: "{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}"
   - name: organizationId
     value: "{{process.env.PLATFORM_ORGANIZATION_ID}}"
+  - name: evidenceControlUrl
+    value: http://smtp-evidence:8025

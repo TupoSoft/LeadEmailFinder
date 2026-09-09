@@ -96,11 +96,27 @@ lives in `src/application/verification-trace/`, with Nest logging wiring in `src
 The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/15`, `/16`, `/17`, `/18`): `domain/` holds plain `Email`, `DomainPolicy`,
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
-administration use cases (`EmailAdministrationService`, `DomainPolicyService`), and eight purpose-specific ports
-under `application/ports/` — `EmailStore`, `DomainStore`, `VerificationStore`, `SmtpVerificationStore`,
-`MxResolver`, `DomainSynonymDiscovery`, `MailboxProbe`, and `AccountDiscovery`; `infrastructure/` holds technical adapters, and `api/`
+administration use cases (`EmailAdministrationService`, `DomainPolicyService`), the pure `classifyVerificationQuality`
+evidence classifier, and nine purpose-specific ports under `application/ports/` — `EmailStore`, `DomainStore`,
+`VerificationStore`, `SmtpVerificationStore`, `MxResolver`, `DomainSynonymDiscovery`, `MailboxProbe`,
+`AccountDiscovery`, and `VerificationClock`; `infrastructure/` holds technical adapters, and `api/`
 holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
 client.
+
+`domain/verification-evidence.ts` defines the internal `VerificationQuality` (`conclusive_positive`,
+`conclusive_negative`, or `inconclusive`), the `MailboxEvidence` discriminated union, and the pure
+`deriveMailboxEvidence` for policy version `1`. Only a target `250` response after verified TLS and an accepted
+sender is `smtp_recipient_accepted` evidence; only a target `5xx` with exact enhanced status `5.1.1` under the
+same prerequisites is `smtp_recipient_missing` evidence. The pure `classifyVerificationQuality` in
+`application/classify-verification-quality.ts` requires both a `smtp_recipient_accepted` target and a
+`smtp_recipient_missing` control for `conclusive_positive`; a `smtp_recipient_missing` target alone is
+`conclusive_negative`; every other combination is `inconclusive`. `deriveEvidenceObservedAt` derives the
+persisted observation time from the oldest
+decisive input. Neither function imports credits, a clock, or infrastructure. `MailboxVerificationService` gates
+the target probe on the control's evidence kind, not a bare Boolean, and attaches the resulting quality and
+evidence time to its returned record; `EmailVerificationOrchestrator` persists them unchanged. The synchronous,
+asynchronous, and batch response DTOs never expose them: existing HTTP response shapes are unchanged by this
+policy version.
 
 `infrastructure/persistence/` holds the four persistence-port adapters — `TypeOrmEmailStore`,
 `TypeOrmDomainStore`, `TypeOrmVerificationStore`, and `TypeOrmSmtpVerificationStore` — over `EmailEntity`,
@@ -137,7 +153,14 @@ the injected `MxResolver` port, leases a proxy through `IProxyService`/`IProxyAl
 protocol exchange through `infrastructure/mailbox/smtp/smtp-client.ts` (built by `SmtpClientFactory`), and persists
 each outcome through the `SmtpVerificationStore` port instead of a raw repository. It still resolves the SMTP
 client's own reverse-DNS hostname directly through the injected `IDnsService`, since no port covers that narrow
-technical need.
+technical need. `SmtpClient.rcptTo()` resolves with the actual response code and enhanced status rather than a
+bare `void`; `SmtpException` records the failing command's stage so the probe can require exact `rcpt_to`-stage
+`5.1.1` proof before treating a rejection as decisive. Once acceptance or an exact missing-recipient answer is
+observed, a later `QUIT` rejection or peer close cannot erase it. Stored SMTP evidence is reused only for its
+owning organization, current policy version, verified transport, and an observation age strictly below 24 hours;
+an injected `VerificationClock` (bound to a real system clock in `infrastructure/email-verification-core.module.ts`)
+supplies the read, so freshness tests never sleep. An empty MX result now produces `exists: null`, since it means
+the resolver returned no usable records, not authoritative mailbox absence.
 
 `infrastructure/email-verification-core.module.ts` composes the core: it registers the four consumed
 persistence entities with TypeORM, builds every application service and port through explicit factory providers
@@ -209,32 +232,32 @@ code. This generic failure makes no claim about whether credits were charged.
 
 ## HTTP Surface
 
-| Method                     | Path                        | Access                          | Notes                                                                          |
-| -------------------------- | --------------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
-| `POST`                     | `/verify`                   | `verification:run` + one credit | Current synchronous verification                                               |
-| `GET`                      | `/verifications/:id`       | `verification:read`             | Owned persisted result; `404` for missing or foreign IDs, `400` for invalid UUIDs |
-| `POST`                     | `/verifyAsync`              | `verification:run` + one credit | `202 Accepted`; enqueues an async job                                          |
-| `GET`                      | `/verifyAsync/:id`          | `verification:read`             | `404` if the job doesn't exist or isn't owned by the caller                    |
-| `POST`                     | `/verifyBatch/csv`          | `verification:run`              | `202 Accepted`; multipart CSV upload, `100MB` max                              |
-| `GET`                      | `/verifyBatch/:id`          | `verification:read`             | Five public states, safe terminal failure code, bounded `0`–`100` progress; concealed `404` |
+| Method                     | Path                        | Access                          | Notes                                                                                          |
+| -------------------------- | --------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `POST`                     | `/verify`                   | `verification:run` + one credit | Current synchronous verification                                                               |
+| `GET`                      | `/verifications/:id`        | `verification:read`             | Owned persisted result; `404` for missing or foreign IDs, `400` for invalid UUIDs              |
+| `POST`                     | `/verifyAsync`              | `verification:run` + one credit | `202 Accepted`; enqueues an async job                                                          |
+| `GET`                      | `/verifyAsync/:id`          | `verification:read`             | `404` if the job doesn't exist or isn't owned by the caller                                    |
+| `POST`                     | `/verifyBatch/csv`          | `verification:run`              | `202 Accepted`; multipart CSV upload, `100MB` max                                              |
+| `GET`                      | `/verifyBatch/:id`          | `verification:read`             | Five public states, safe terminal failure code, bounded `0`–`100` progress; concealed `404`    |
 | `GET`                      | `/verifyBatch/:id/results`  | `verification:read`             | Binary `text/csv` with a UUID-derived attachment name; concealed `404` for unavailable results |
-| `POST` `GET` `GET` `PATCH` | `/emails`, `/emails/:email` | `platform:admin`                | Internal admin cache CRUD, excluded from Swagger — not a verification endpoint |
+| `POST` `GET` `GET` `PATCH` | `/emails`, `/emails/:email` | `platform:admin`                | Internal admin cache CRUD, excluded from Swagger — not a verification endpoint                 |
 
 ## Queues
 
-| Queue                      | Registered by                                               | Processor                                                                                                                                                                                                                                |
-| -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `async-email-verification` | `AsyncEmailVerificationModule` (5 attempts, custom backoff) | `AsyncEmailVerificationProcessor`                                                                                                                                                                                                        |
+| Queue                      | Registered by                                               | Processor                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `async-email-verification` | `AsyncEmailVerificationModule` (5 attempts, custom backoff) | `AsyncEmailVerificationProcessor`                                                                                                                                                                                                                                                              |
 | `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` delegates to the pure `BatchEmailVerificationWorkflow`, a `Validate → Process → WaitForChildren → UploadResults → Finish` state machine that fans out one `async-email-verification` child job per CSV row and waits on all of them before uploading results |
 
 ## Persistence
 
-| Entity                    | Table                 | Ownership and identity                                                                |
-| -------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
-| `EmailVerificationEntity`  | `email_verifications` | Required organization; UUID result ID                                                 |
-| `DomainPolicyEntity`       | `domains`             | Shared technical policy; domain name                                                  |
-| `EmailEntity`              | `emails`              | Organization plus normalized address                                                  |
-| `SmtpVerificationEntity`   | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps and secure-transport proof |
+| Entity                    | Table                 | Ownership and identity                                                                                                                            |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EmailVerificationEntity` | `email_verifications` | Required organization; UUID result ID; adds `verificationQuality`, `evidenceObservedAt`, `evidencePolicyVersion`                                  |
+| `DomainPolicyEntity`      | `domains`             | Shared technical policy; domain name                                                                                                              |
+| `EmailEntity`             | `emails`              | Organization plus normalized address                                                                                                              |
+| `SmtpVerificationEntity`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps, secure-transport proof, and reuse fields `evidenceObservedAt`/`evidencePolicyVersion` |
 
 ## S3 / Storage
 
@@ -324,6 +347,9 @@ Focused tests are grouped by behavior:
 - **Domain/application core**: `application/domain-policy.service.spec.ts`,
   `application/email-administration.service.spec.ts`, `application/mailbox-verification.service.spec.ts`,
   `application/email-verification.service.spec.ts`
+- **Evidence classification**: `domain/verification-evidence.spec.ts` (pure evidence-derivation table covering
+  every prerequisite, command stage, and status-code combination) and
+  `application/classify-verification-quality.spec.ts` (quality and observation-time derivation table)
 - **Persistence stores**: `infrastructure/persistence/typeorm-email.store.spec.ts`,
   `infrastructure/persistence/typeorm-domain.store.spec.ts`,
   `infrastructure/persistence/typeorm-verification.store.spec.ts`,
@@ -350,11 +376,15 @@ Focused tests are grouped by behavior:
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
 
-[`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted STARTTLS fixture and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. It also
+[`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted, deterministic STARTTLS fixture (`docker/smtp-dev/evidence-server.mjs`) and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. Its fixture-only HTTP control endpoint selects a closed scenario enum so the same collection also proves target
+acceptance, exact `5.1.1` recipient rejection, and an identical `MAIL FROM`-stage rejection staying ineligible.
+Further scenarios cover a bare rejection, an ambiguous `5.7.1` rejection, a temporary rejection, and an accepted
+answer surviving a connection close before `QUIT` completes — one credit each, using independent
+`evidence.lef.test` target addresses. It also
 drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that
 `POST /verify` consumes one credit and rejects a zero balance with `402`. The retired `GET /verify` returns `404`
 while one credit is available, leaves that balance unchanged, and returns a server request UUID. The collection
-retains the asynchronous checks and requires all 30 requests to execute.
+retains the asynchronous checks and requires all 47 requests to execute.
 Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the
 authenticated organization's cache.
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) uploads a fixture CSV, polls to

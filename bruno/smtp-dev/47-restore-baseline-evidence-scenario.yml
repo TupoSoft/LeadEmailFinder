@@ -1,0 +1,16 @@
+info:
+  name: 47-restore-baseline-evidence-scenario
+  type: http
+  seq: 47
+
+http:
+  method: POST
+  url: "{{evidenceControlUrl}}/reset"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('restores the accepts-all baseline scenario after the evidence-classification checks', function() {
+          expect(res.status).to.equal(204);
+        });

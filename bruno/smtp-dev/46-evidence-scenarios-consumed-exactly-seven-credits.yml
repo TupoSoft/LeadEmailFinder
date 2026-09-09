@@ -1,0 +1,20 @@
+info:
+  name: 46-evidence-scenarios-consumed-exactly-seven-credits
+  type: http
+  seq: 46
+
+http:
+  method: GET
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('debits exactly one credit for each of the seven evidence-classification verifications', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.balance).to.equal(0);
+        });

@@ -1,0 +1,28 @@
+info:
+  name: 31-add-credits-for-evidence-scenarios
+  type: http
+  seq: 31
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/credits/{{organizationId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 7
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('sets exactly one credit per evidence-classification scenario below', function() {
+          expect(res.status).to.equal(200);
+          expect(res.body.balance).to.equal(7);
+        });

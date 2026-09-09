@@ -15,7 +15,7 @@
         "test:ci": "jest --runInBand && pnpm test:oidc-runners",
         "test:ci-paths": "node scripts/ci/select-validation.mjs --fixtures",
         "test:bff-live": "node scripts/testing/bff-live.mjs",
-        "test:oidc-runners": "node --test scripts/testing/*.test.mjs scripts/bruno/*.test.mjs",
+        "test:oidc-runners": "node --test scripts/testing/*.test.mjs scripts/bruno/*.test.mjs docker/smtp-dev/*.test.mjs",
         "bruno:bff-sessions": "node scripts/bruno/run-collection.mjs bff-sessions",
         "bruno:async-verification": "node scripts/bruno/run-collection.mjs async-verification",
         "bruno:batch-verification": "node scripts/bruno/run-collection.mjs batch-verification",

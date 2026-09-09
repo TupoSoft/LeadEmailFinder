@@ -60,6 +60,7 @@ describe('SmtpClient', () => {
             rejectStartTls?: boolean
             stallRcpt?: boolean
             rejectRecipient?: string
+            rejectSender?: string
         } = {},
     ): void {
         server.once('connection', socket => {
@@ -79,7 +80,11 @@ describe('SmtpClient', () => {
                             options.rejectStartTls === true ? '454 TLS unavailable\r\n' : '220 Ready for TLS\r\n',
                         )
                     } else if (command.startsWith('MAIL FROM')) {
-                        socket.write('250 OK\r\n')
+                        socket.write(
+                            options.rejectSender === undefined
+                                ? '250 OK\r\n'
+                                : '550 5.1.1 ' + options.rejectSender + ' does not exist\r\n',
+                        )
                     } else if (command.startsWith('RCPT TO')) {
                         if (options.stallRcpt === true) continue
                         socket.write(
@@ -131,9 +136,11 @@ describe('SmtpClient', () => {
         await client.connect()
         await client.startSession('client.example.com')
         await client.mailFrom('sender@example.com')
-        await client.rcptTo('recipient@example.com')
+        const rcptResponse = await client.rcptTo('recipient@example.com')
         await client.quit()
         client.end()
+
+        expect(rcptResponse).toMatchObject({ code: 250, enhancedCode: '', message: 'OK' })
 
         expect(client.secureTransport).toBe(true)
         expect(transcript).toEqual([
@@ -223,6 +230,21 @@ describe('SmtpClient', () => {
         expect(client.secureTransport).toBe(false)
     })
 
+    it('tags a MAIL FROM rejection with its own command stage, distinct from RCPT TO', async () => {
+        const sender = 'unique-sender@private.example'
+        serveSmtp({ rejectSender: sender })
+        const client = new SmtpClient({ host: '127.0.0.1', port })
+
+        await client.connect()
+        await client.startSession('client.example.com')
+
+        await expect(client.mailFrom(sender)).rejects.toMatchObject({
+            code: 550,
+            enhancedCode: '5.1.1',
+            commandKind: 'mail_from',
+        })
+    })
+
     it('closes the encrypted session when RCPT TO stalls', async () => {
         serveSmtp({ stallRcpt: true })
         const client = new SmtpClient({
@@ -259,6 +281,7 @@ describe('SmtpClient', () => {
                 code: 550,
                 enhancedCode: '5.1.1',
                 message: sentinel + ' does not exist',
+                commandKind: 'rcpt_to',
             })
             await closed
 

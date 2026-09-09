@@ -15,12 +15,12 @@ contract; existing deduction timing remains in place until the later billing cut
 
 ## Progress
 
-- [ ] (2026-09-08) Add server-owned evidence contracts and a pure quality classifier.
-- [ ] (2026-09-08) Preserve SMTP command stage, response codes, verified transport, and observation time.
-- [ ] (2026-09-08) Correct uncertain SMTP and DNS outcomes and bound reuse of stored evidence.
-- [ ] (2026-09-08) Persist quality metadata and keep public result serialization compatible.
-- [ ] (2026-09-08) Add deterministic fixture cases and focused unit, HTTP, persistence, and Bruno coverage.
-- [ ] (2026-09-08) Run required checks and record implementation and runtime evidence separately.
+- [x] (2026-09-09) Add server-owned evidence contracts and a pure quality classifier.
+- [x] (2026-09-09) Preserve SMTP command stage, response codes, verified transport, and observation time.
+- [x] (2026-09-09) Correct uncertain SMTP and DNS outcomes and bound reuse of stored evidence.
+- [x] (2026-09-09) Persist quality metadata and keep public result serialization compatible.
+- [x] (2026-09-09) Add deterministic fixture cases and focused unit, HTTP, persistence, and Bruno coverage.
+- [x] (2026-09-09) Run required checks and record implementation and runtime evidence separately.
 
 ## Plan dependencies
 
@@ -38,6 +38,29 @@ None.
   observation time nor a cache indicator. Reuse currently has no age check.
 - `privacy-compliance/07` specifies a 24-hour SMTP cache maximum. This plan uses the same freshness ceiling without
   taking ownership of physical deletion or waiting for that broader retention work.
+- Implementation confirmed the planning-time reading of `smtpErrorHandlingStrategies`: `MailboxBusy` (`550`) and
+  `InvalidTransaction` (`554`) shared one case returning `exists: false` regardless of command or enhanced status.
+  Folding both into the existing `default` branch (`exists: null`, `unexpected_error`) was sufficient; no new
+  branch was needed once the exact `rcpt_to`-stage `5.1.1` check runs first and rethrows any less specific error.
+- The connectivity probe in `docker/smtp-dev/bootstrap-proxy.sh` (`curl --request NOOP ... smtp://smtp.lef.test:2525`)
+  talks to the fixture in plaintext with no STARTTLS, and its `until` loop retries forever on a bad reply. The new
+  `docker/smtp-dev/evidence-server.mjs` fixture had no `NOOP` handler, so it fell through to the generic `500`
+  response and the bootstrap container hung indefinitely (`docker inspect` showed `status: running` well past
+  when it should have exited). Adding an explicit `NOOP` → `250 OK` handler (never scenario-dependent, matching
+  plain RFC 5321 semantics) fixed it; a focused test now exercises this exact plaintext exchange.
+- The first live Bruno run against the rebuilt SMTP overlay failed with request 2 returning
+  `"reason":"unknown"` because the overlay's one-shot `smtp-dev-proxy-bootstrap` service raced the API
+  container's readiness (a preexisting flake also seen and documented during validation for
+  `module-architecture/12`). Rerunning that one-shot service after the API was confirmed healthy registered the fixture proxy
+  and resolved it; this is unrelated to the evidence-classification change itself.
+- The evidence-classification Bruno scenarios (requests 31–47) all address `evidence.lef.test`, sharing one fixed
+  catch-all control address for every scenario in the run. An earlier scenario conclusively proves that control
+  missing, and this proof stays cached for 24 hours. So the `sender_rejected` scenario's own control probe is
+  satisfied from that valid cache rather than reprobed live; only the target's own `MAIL FROM` is actually
+  rejected live. The request's assertion was corrected to expect `catchAll: false` (from the cached control)
+  rather than `null`, with the response `exists: null` / `reason: unexpected_error` still proving that a
+  target-side `MAIL FROM` rejection never produces a false conclusion. This is a caching interaction worth knowing
+  before adding further fixture-address scenarios to this collection.
 
 ## Decision Log
 
@@ -64,7 +87,100 @@ None.
 
 ## Outcomes & Retrospective
 
-Not started.
+Added `domain/verification-evidence.ts` (`VerificationQuality`, `MailboxEvidence` discriminated union, the pure
+`deriveMailboxEvidence` for policy version 1) and `application/classify-verification-quality.ts` (the pure
+`classifyVerificationQuality` and `deriveEvidenceObservedAt`); neither imports credits, a clock, or
+infrastructure. Added `application/ports/verification-clock.ts`, bound to a real system clock in
+`infrastructure/email-verification-core.module.ts` and injected into `SmtpMailboxProbe`.
+
+Extended the private `MailboxProbeResult` (`application/ports/mailbox-probe.ts`) with a required `evidence` field
+rather than leaving it a bare alias of the shared `ISmtpVerificationResponse`. Added the shared
+`infrastructure/mailbox/smtp/smtp-command-kind.ts` type; `SmtpException` now carries `commandKind`, and
+`SmtpClient.rcptTo()` resolves with the actual `SmtpResponse` (code and enhanced status) instead of `void`.
+`SmtpClient.mailFrom()`/`quit()` are unaffected. Rewrote `SmtpMailboxProbe.tryVerify()` to isolate the recipient
+answer from cleanup: a `rcpt_to`-stage response is classified into `MailboxEvidence` immediately, then `QUIT` is
+attempted and any failure (rejection or peer close) is swallowed without altering the result already decided.
+`smtpErrorHandlingStrategies`' `MailboxBusy`/`InvalidTransaction` case was removed (folded into the existing
+`default` branch), so a generic recipient rejection without the exact `5.1.1` proof is `unexpected_error`, never a
+conclusive negative — including the identical code and enhanced status arriving at `MAIL FROM` instead of
+`RCPT TO`, which the command-stage check alone distinguishes. The empty-MX branch now returns `exists: null`
+(`no_mx_records` stays the reason) instead of `false`. Stored-evidence reuse now requires matching policy version,
+verified transport, an observation no later than now, and age strictly below 24 hours, computed from two new
+nullable `SmtpVerificationEntity` columns (`evidenceObservedAt`, `evidencePolicyVersion`); a legacy row missing
+either is ineligible. `MailboxVerificationService` gates the target probe on the control's evidence kind
+(`smtp_recipient_missing`), not a bare Boolean, and attaches the resulting `verificationQuality`/
+`evidenceObservedAt`/`evidencePolicyVersion` (three new columns on `EmailVerificationEntity`, the last a
+non-nullable constant) to every returned record; `EmailVerificationOrchestrator` persists them unchanged. Neither
+field is `@Expose()`d on `EmailVerificationResponseDto`, so existing exact-equality HTTP response assertions
+(unchanged in this PR) continue to prove they do not leak.
+
+Added `docker/smtp-dev/evidence-server.mjs`: a deterministic STARTTLS fixture with paired SMTP and fixture-only
+HTTP control servers, factored as a testable `createEvidenceFixture()` with a gated auto-start block. It replaces
+the former accepts-all `mailpit` service in `docker/compose.smtp-dev.yaml` at the same trusted `smtp.lef.test`
+address, reusing the existing fixture certificate and key. It recognizes the one fixed catch-all control local
+part and otherwise serves one of eight closed scenarios (`default` plus seven rejection/closure variants)
+selected through its control endpoint, never sends mail, and never logs an address, command, or raw reply. Added
+`evidence.lef.test` to `docker/smtp-dev/coredns/lef.test.zone`; it shares the existing MX host used by
+`lef.test`. Updated the `mailpit` → `smtp-evidence` rename across `depends_on` blocks in
+`docker/compose.smtp-dev.yaml` and the two Bruno-launcher ownership-check lists
+(`scripts/bruno/run-collection.mjs`, `scripts/bruno/async-verification-fixture.mjs`).
+
+Extended `bruno/smtp-dev` with 17 new requests (31–47). After setting the organization's balance to exactly
+seven credits, seven scenario pairs (select, then verify a unique `evidence.lef.test` address) prove target
+acceptance, the target's own exact `5.1.1` rejection, and the identical rejection at `MAIL FROM` instead staying
+ineligible. Further pairs cover a bare rejection, an ambiguous `5.7.1` rejection, a temporary rejection, and an
+accepted answer surviving the fixture closing the connection before it answers `QUIT`; a final balance read and a
+scenario reset close the sequence. Updated the registered request count (30 → 47) in
+`scripts/bruno/run-collection.mjs`; its own
+file-driven static test needed no other change. Added `docker/smtp-dev/evidence-server.test.mjs` (13 focused
+Node test cases covering every scenario, the pre/post-TLS EHLO shape, `NOOP`, and the control endpoint) and wired
+it into `test:oidc-runners`/`test:ci` via `package.json`.
+
+Final validation, run against the actual final diff:
+
+- `corepack pnpm test -- classify-verification-quality.spec.ts verification-evidence.spec.ts
+mailbox-verification.service.spec.ts email-verification.service.spec.ts --runInBand` — 40/40 passed.
+- `corepack pnpm test -- smtp-client.spec.ts smtp-mailbox-probe.spec.ts --runInBand` — 34/34 passed, including new
+  cases for command-stage-tagged exceptions, `QUIT`-failure evidence preservation, and stored-evidence freshness
+  boundaries (stale, future, and wrong-policy-version rows all correctly ignored).
+- `corepack pnpm test -- src/libs/modules/email-verification --runInBand` — 67/67 non-skipped suites passed
+  (620 tests), including the real-Postgres `typeorm-stores-organization-isolation.integration.spec.ts` and
+  `verification-organization-ownership.integration.spec.ts` against the disposable `lef_identity_test` database.
+- `node --test docker/smtp-dev/evidence-server.test.mjs scripts/bruno/run-collection.test.mjs` — 24/24 passed.
+- `corepack pnpm test:oidc-runners` — 89/89 passed.
+- `corepack pnpm architecture:check` — "Module architecture check passed (9 modules, 0 violations)."
+- `corepack pnpm typecheck` — 0 errors (after clearing a root-owned, gitignored, dev-container-recreated `dist/`
+  directory; a known, preexisting local-environment quirk unrelated to this plan).
+- `corepack pnpm lint` — 0 errors, 1 preexisting warning in an unrelated file
+  (`src/libs/config/src/load-secrets.spec.ts:14`, missing return type).
+- `corepack pnpm openapi:check` — passed; the public DTO shape is unchanged.
+- `corepack pnpm test:ci` — 236 Jest suites passed (15 skipped, 0 failed; 2736/2828 tests passed, 92 skipped) plus
+  89/89 Node test-runner cases, 0 failed.
+- Runtime/Bruno matrix against a freshly reset dev stack (`pnpm dev:reset -- --confirm-project=LEF`, then the
+  documented plain-stack `down` before the SMTP overlay `up`, health confirmed `{"status":"ok"}`):
+  `bruno/m2m-oidc-authentication` 3/3, `bruno/service-client-management` 6/6, `bruno/proxy-registry` 8/8,
+  `bruno/bff-sessions` 15 requests/16 tests, `bruno/organization-onboarding` 23/23, `bruno/credit-purchases`
+  33/33, `bruno/async-verification` 15/15, `bruno/batch-verification` 9 requests/15 tests, and
+  **`bruno/smtp-dev` 47 requests/78 tests** (including all 17 new evidence-classification requests) — all
+  passed. The API stayed healthy throughout.
+- `corepack pnpm docs:lint -- bruno/smtp-dev/README.md src/libs/modules/email-verification/README.md` —
+  Harper: 2 file(s) passed.
+- `corepack pnpm exec prettier --check` on the same two files, plus every changed script or configuration file — all use
+  Prettier code style.
+- `git diff --check` — no output (clean).
+
+No application HTTP route, DTO field, authorization rule, queue protocol, or provider behavior changed. Deduction
+timing is unchanged: `CreditGuard` still debits before validation, and the batch workflow still debits one credit
+per validated row; this plan only adds internal evidence metadata that later billing work
+(`verification-billing/03`) will consume.
+
+**Material architectural trade-off**: the `SmtpMailboxProbe` constructor grew from seven to eight collaborators
+(`VerificationClock` joins the DNS service, MX resolver, proxy service/allocator, SMTP client factory, SMTP
+verification store, and allocation observer). Each remains a small, single-purpose port — this is not a generic
+manager — but the adapter is accumulating cross-cutting dependencies for one still-cohesive responsibility
+(driving one SMTP verification attempt end to end). No violation exists today; a future plan that adds another
+cross-cutting concern to this adapter should weigh splitting connection acquisition from protocol/evidence
+interpretation rather than adding a ninth constructor parameter.
 
 ## Context and Orientation
 
@@ -261,4 +377,4 @@ review its final diff for single-responsibility violations and record material t
 
 ## Plan readiness
 
-Ready to implement
+Implemented and validated; ready for review.

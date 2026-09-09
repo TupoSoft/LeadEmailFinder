@@ -12,6 +12,8 @@ function toRecord(entity: SmtpVerificationEntity): SmtpVerification {
         secureTransport: entity.secureTransport,
         targetExchange: entity.targetExchange,
         proxyId: entity.proxyId,
+        evidenceObservedAt: entity.evidenceObservedAt,
+        evidencePolicyVersion: entity.evidencePolicyVersion,
         createdAt: entity.createdAt,
         updatedAt: entity.updatedAt,
     }

@@ -2,10 +2,13 @@ import { SmtpMailboxProbe } from './smtp-mailbox-probe'
 import { SmtpVerificationReason } from './smtp.enums'
 import { IAllocationObserver, IProxy, IProxyAllocator, LeasedProxy } from '@tuposoft/lead-email-finder/modules/proxy'
 import { ISmtpClient } from './smtp-client.interface'
+import { SmtpException } from './smtp.exception'
 import { Logger } from '@nestjs/common'
 import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
 import { MxResolver } from '../../../application/ports/mx-resolver'
 import { SmtpVerificationStore } from '../../../application/ports/smtp-verification-store'
+import { VerificationClock } from '../../../application/ports/verification-clock'
+import { MailboxEvidence, NO_MAILBOX_EVIDENCE } from '../../../domain/verification-evidence'
 
 interface SmtpMailboxProbeInternals {
     tryConnect: jest.Mock
@@ -17,6 +20,35 @@ interface SmtpMailboxProbeInternals {
 const organizationId = '1d33b587-bc90-49f7-9693-92d72cc5c271'
 const otherOrganizationId = '3dc5deaf-c1f0-4b48-a0dc-caa8504f3a78'
 const email = 'person@example.com'
+const now = new Date('2026-09-08T12:00:00.000Z')
+
+function acceptedEvidence(observedAt: Date = now, origin: 'fresh' | 'stored' = 'fresh'): MailboxEvidence {
+    return {
+        kind: 'smtp_recipient_accepted',
+        observedAt,
+        policyVersion: 1,
+        origin,
+        stage: 'rcpt_to',
+        code: 250,
+        enhancedCode: origin === 'fresh' ? '' : undefined,
+        verifiedTransport: true,
+        senderAccepted: true,
+    }
+}
+
+function missingEvidence(observedAt: Date = now): MailboxEvidence {
+    return {
+        kind: 'smtp_recipient_missing',
+        observedAt,
+        policyVersion: 1,
+        origin: 'fresh',
+        stage: 'rcpt_to',
+        code: 550,
+        enhancedCode: '5.1.1',
+        verifiedTransport: true,
+        senderAccepted: true,
+    }
+}
 
 describe('SmtpMailboxProbe', () => {
     let probe: SmtpMailboxProbe
@@ -26,6 +58,7 @@ describe('SmtpMailboxProbe', () => {
     let smtpClientFactory: { create: jest.Mock }
     let smtpVerificationStore: jest.Mocked<SmtpVerificationStore>
     let allocationObserver: { onAllocation: jest.Mock; onConnectionOutcome: jest.Mock; onLeaseRelease: jest.Mock }
+    let clock: jest.Mocked<VerificationClock>
     let loggerErrorSpy: jest.SpiedFunction<Logger['error']>
 
     beforeEach(() => {
@@ -35,6 +68,7 @@ describe('SmtpMailboxProbe', () => {
         smtpClientFactory = { create: jest.fn() }
         smtpVerificationStore = { findByAddress: jest.fn(), upsert: jest.fn() }
         allocationObserver = { onAllocation: jest.fn(), onConnectionOutcome: jest.fn(), onLeaseRelease: jest.fn() }
+        clock = { now: jest.fn().mockReturnValue(now) }
         probe = new SmtpMailboxProbe(
             { resolve: jest.fn() } as any,
             mxResolver,
@@ -43,6 +77,7 @@ describe('SmtpMailboxProbe', () => {
             smtpClientFactory,
             smtpVerificationStore,
             allocationObserver as unknown as IAllocationObserver,
+            clock,
         )
         internals = probe as unknown as SmtpMailboxProbeInternals
     })
@@ -139,6 +174,7 @@ describe('SmtpMailboxProbe', () => {
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
+            evidence: NO_MAILBOX_EVIDENCE,
         })
         expect(smtpVerificationStore.findByAddress).toHaveBeenCalledWith(organizationId, email)
     })
@@ -155,6 +191,7 @@ describe('SmtpMailboxProbe', () => {
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
+            evidence: NO_MAILBOX_EVIDENCE,
         })
         expect(loggerErrorSpy).toHaveBeenCalledWith('smtp_connection_failed', { errorClass: 'Error' })
         expect(JSON.stringify(loggerErrorSpy.mock.calls)).not.toContain(sentinel)
@@ -171,6 +208,8 @@ describe('SmtpMailboxProbe', () => {
                 reason: SmtpVerificationReason.AcceptedEmail,
                 targetExchange: 'mx.example.com',
                 secureTransport: true,
+                evidenceObservedAt: now,
+                evidencePolicyVersion: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             })
@@ -182,11 +221,13 @@ describe('SmtpMailboxProbe', () => {
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
             targetExchange: 'mx.example.com',
+            evidence: acceptedEvidence(now, 'stored'),
         })
         await expect(probe.probe(otherOrganizationId, email)).resolves.toEqual({
             email,
-            exists: false,
+            exists: null,
             reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
         })
 
         expect(smtpVerificationStore.findByAddress).toHaveBeenNthCalledWith(1, organizationId, email)
@@ -203,6 +244,8 @@ describe('SmtpMailboxProbe', () => {
             targetExchange: 'mx.example.com',
             proxyId: 'proxy-id',
             secureTransport: true,
+            evidenceObservedAt: null,
+            evidencePolicyVersion: null,
             createdAt: new Date(),
             updatedAt: new Date(),
         })
@@ -213,6 +256,7 @@ describe('SmtpMailboxProbe', () => {
             email,
             exists: null,
             reason: SmtpVerificationReason.Unknown,
+            evidence: NO_MAILBOX_EVIDENCE,
         })
 
         expect(smtpVerificationStore.findByAddress).toHaveBeenCalledWith(organizationId, email)
@@ -233,6 +277,7 @@ describe('SmtpMailboxProbe', () => {
             email,
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
+            evidence: acceptedEvidence(),
         }
         smtpVerificationStore.findByAddress.mockResolvedValueOnce(null)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])
@@ -251,6 +296,8 @@ describe('SmtpMailboxProbe', () => {
             targetExchange: undefined,
             proxyId: undefined,
             secureTransport: true,
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 1,
         })
         expect(proxyAllocator.release).toHaveBeenCalledWith(allocation)
     })
@@ -262,6 +309,8 @@ describe('SmtpMailboxProbe', () => {
             exists: true,
             reason: SmtpVerificationReason.AcceptedEmail,
             secureTransport: false,
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         })
@@ -269,10 +318,105 @@ describe('SmtpMailboxProbe', () => {
 
         await expect(probe.probe(organizationId, email)).resolves.toEqual({
             email,
-            exists: false,
+            exists: null,
             reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
         })
         expect(internals.getExchanges).toHaveBeenCalledTimes(1)
+    })
+
+    it('ignores a stale cache row whose evidence is 24 hours old or older', async () => {
+        const staleObservedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        smtpVerificationStore.findByAddress.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            secureTransport: true,
+            evidenceObservedAt: staleObservedAt,
+            evidencePolicyVersion: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
+    })
+
+    it('ignores a cache row whose evidence policy version does not match the current policy', async () => {
+        smtpVerificationStore.findByAddress.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            secureTransport: true,
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 2,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
+    })
+
+    it('ignores a cache row with no recorded evidence observation time', async () => {
+        smtpVerificationStore.findByAddress.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            secureTransport: true,
+            evidenceObservedAt: null,
+            evidencePolicyVersion: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
+    })
+
+    it('ignores a cache row whose evidence observation time is in the future', async () => {
+        const futureObservedAt = new Date(now.getTime() + 1000)
+        smtpVerificationStore.findByAddress.mockResolvedValue({
+            organizationId,
+            id: email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            secureTransport: true,
+            evidenceObservedAt: futureObservedAt,
+            evidencePolicyVersion: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        internals.getExchanges = jest.fn().mockResolvedValue([])
+
+        await expect(probe.probe(organizationId, email)).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.NoMxRecords,
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
     })
 
     it('maps STARTTLS negotiation failure before sending either address-bearing command', async () => {
@@ -292,11 +436,155 @@ describe('SmtpMailboxProbe', () => {
             exists: null,
             reason: SmtpVerificationReason.SecureTransportUnavailable,
             targetExchange: 'mx.example.com',
+            evidence: NO_MAILBOX_EVIDENCE,
         })
         expect(client.startSession).toHaveBeenCalledWith('client.example.com')
         expect(client.mailFrom).not.toHaveBeenCalled()
         expect(client.rcptTo).not.toHaveBeenCalled()
         expect(client.end).toHaveBeenCalledTimes(1)
+    })
+
+    function fakeClient(overrides: Partial<ISmtpClient> = {}): ISmtpClient {
+        return {
+            hostname: 'client.example.com',
+            exchange: 'mx.example.com',
+            secureTransport: true,
+            startSession: jest.fn().mockResolvedValue(undefined),
+            mailFrom: jest.fn().mockResolvedValue(undefined),
+            rcptTo: jest.fn(),
+            quit: jest.fn().mockResolvedValue(undefined),
+            end: jest.fn(),
+            ...overrides,
+        } as unknown as ISmtpClient
+    }
+
+    it('records conclusive positive evidence for a target 250 and debits no evidence from a later successful QUIT', async () => {
+        const client = fakeClient({
+            rcptTo: jest.fn().mockResolvedValue({ code: 250, enhancedCode: '', message: 'OK', lines: [], capabilities: [] }),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            evidence: acceptedEvidence(),
+        })
+        expect(client.quit).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves an accepted recipient answer even when QUIT rejects afterward', async () => {
+        const client = fakeClient({
+            rcptTo: jest.fn().mockResolvedValue({ code: 250, enhancedCode: '', message: 'OK', lines: [], capabilities: [] }),
+            quit: jest.fn().mockRejectedValue(new Error('connection reset')),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: true,
+            reason: SmtpVerificationReason.AcceptedEmail,
+            targetExchange: 'mx.example.com',
+            evidence: acceptedEvidence(),
+        })
+    })
+
+    it('records conclusive missing-recipient evidence for a target 550 5.1.1', async () => {
+        const client = fakeClient({
+            rcptTo: jest
+                .fn()
+                .mockRejectedValue(
+                    new SmtpException({
+                        code: 550,
+                        enhancedCode: '5.1.1',
+                        message: 'no such user',
+                        targetExchange: 'mx.example.com',
+                        commandKind: 'rcpt_to',
+                    }),
+                ),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: false,
+            reason: SmtpVerificationReason.RejectedEmail,
+            targetExchange: 'mx.example.com',
+            evidence: missingEvidence(),
+        })
+        expect(client.quit).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves a missing-recipient answer even when the peer closes before QUIT completes', async () => {
+        const client = fakeClient({
+            rcptTo: jest
+                .fn()
+                .mockRejectedValue(
+                    new SmtpException({
+                        code: 550,
+                        enhancedCode: '5.1.1',
+                        message: 'no such user',
+                        targetExchange: 'mx.example.com',
+                        commandKind: 'rcpt_to',
+                    }),
+                ),
+            quit: jest.fn().mockRejectedValue(new Error('socket closed')),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: false,
+            reason: SmtpVerificationReason.RejectedEmail,
+            targetExchange: 'mx.example.com',
+            evidence: missingEvidence(),
+        })
+    })
+
+    it('treats a generic RCPT TO rejection with a different enhanced status as ineligible, not conclusive', async () => {
+        const client = fakeClient({
+            rcptTo: jest
+                .fn()
+                .mockRejectedValue(
+                    new SmtpException({
+                        code: 550,
+                        enhancedCode: '5.7.1',
+                        message: 'recipient policy violation',
+                        targetExchange: 'mx.example.com',
+                        commandKind: 'rcpt_to',
+                    }),
+                ),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.UnexpectedError,
+            targetExchange: 'mx.example.com',
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
+    })
+
+    it('does not treat the same 550 5.1.1 rejection at MAIL FROM as conclusive', async () => {
+        const client = fakeClient({
+            mailFrom: jest
+                .fn()
+                .mockRejectedValue(
+                    new SmtpException({
+                        code: 550,
+                        enhancedCode: '5.1.1',
+                        message: 'sender rejected',
+                        targetExchange: 'mx.example.com',
+                        commandKind: 'mail_from',
+                    }),
+                ),
+        })
+
+        await expect(internals.tryVerify({ client, email })).resolves.toEqual({
+            email,
+            exists: null,
+            reason: SmtpVerificationReason.UnexpectedError,
+            targetExchange: 'mx.example.com',
+            evidence: NO_MAILBOX_EVIDENCE,
+        })
+        expect(client.rcptTo).not.toHaveBeenCalled()
     })
 
     it('retries repeated secure-transport failures instead of caching them as mailbox outcomes', async () => {
@@ -307,6 +595,8 @@ describe('SmtpMailboxProbe', () => {
             exists: null,
             reason: SmtpVerificationReason.SecureTransportUnavailable,
             secureTransport: false,
+            evidenceObservedAt: null,
+            evidencePolicyVersion: null,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -315,6 +605,7 @@ describe('SmtpMailboxProbe', () => {
             exists: null,
             reason: SmtpVerificationReason.SecureTransportUnavailable,
             targetExchange: 'mx.example.com',
+            evidence: NO_MAILBOX_EVIDENCE,
         }
         smtpVerificationStore.findByAddress.mockResolvedValue(cachedFailure)
         internals.getExchanges = jest.fn().mockResolvedValue(['mx.example.com'])

@@ -1,0 +1,25 @@
+info:
+  name: 34-select-target-missing-scenario
+  type: http
+  seq: 34
+
+http:
+  method: PUT
+  url: "{{evidenceControlUrl}}/scenario"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "scenario": "target_missing"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('selects the target-missing evidence scenario', function() {
+          expect(res.status).to.equal(204);
+        });

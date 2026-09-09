@@ -23,6 +23,9 @@ const probeResult: NewEmailVerification = {
     catchAll: false,
     reason: EmailVerificationReason.AcceptedEmail,
     sources: [EmailVerificationSource.MX],
+    verificationQuality: 'conclusive_positive',
+    evidenceObservedAt: date,
+    evidencePolicyVersion: 1,
 }
 
 function verificationRecord(overrides: Partial<EmailVerification> = {}): EmailVerification {

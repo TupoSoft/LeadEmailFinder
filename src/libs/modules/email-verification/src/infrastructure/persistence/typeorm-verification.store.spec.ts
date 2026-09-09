@@ -31,6 +31,9 @@ describe('TypeOrmVerificationStore', () => {
             catchAll: false,
             reason: 'accepted_email' as never,
             sources: [],
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt: new Date(),
+            evidencePolicyVersion: 1,
         })
 
         expect(repository.create).toHaveBeenCalledWith(

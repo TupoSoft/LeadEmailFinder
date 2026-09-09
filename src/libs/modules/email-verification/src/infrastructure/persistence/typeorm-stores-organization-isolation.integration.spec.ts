@@ -59,6 +59,7 @@ describeWithPostgres('email-verification persistence stores organization isolati
         await expect(emailStore.findByAddress(organizationAId, address)).resolves.toMatchObject({ exists: true })
         await expect(emailStore.findByAddress(organizationBId, address)).resolves.toMatchObject({ exists: false })
 
+        const evidenceObservedAt = new Date()
         const verificationA = await verificationStore.create(organizationAId, {
             email: address,
             domain: 'example.test',
@@ -67,6 +68,9 @@ describeWithPostgres('email-verification persistence stores organization isolati
             catchAll: false,
             reason: 'accepted_email' as never,
             sources: [],
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
         const verificationB = await verificationStore.create(organizationBId, {
             email: address,
@@ -76,30 +80,46 @@ describeWithPostgres('email-verification persistence stores organization isolati
             catchAll: false,
             reason: 'rejected_email' as never,
             sources: [],
+            verificationQuality: 'conclusive_negative',
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
 
         expect(verificationA.id).not.toBe(verificationB.id)
         expect(verificationA.organizationId).toBe(organizationAId)
         expect(verificationB.organizationId).toBe(organizationBId)
+        expect(verificationA.verificationQuality).toBe('conclusive_positive')
+        expect(verificationA.evidenceObservedAt).toEqual(evidenceObservedAt)
+        expect(verificationA.evidencePolicyVersion).toBe(1)
+        expect(verificationB.verificationQuality).toBe('conclusive_negative')
+        expect(verificationB.evidenceObservedAt).toEqual(evidenceObservedAt)
 
         await smtpVerificationStore.upsert(organizationAId, address, {
             reason: 'accepted_email',
             exists: true,
             secureTransport: true,
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
         await smtpVerificationStore.upsert(organizationBId, address, {
             reason: 'rejected_email',
             exists: false,
             secureTransport: true,
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
 
         await expect(smtpVerificationStore.findByAddress(organizationAId, address)).resolves.toMatchObject({
             exists: true,
             reason: 'accepted_email',
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
         await expect(smtpVerificationStore.findByAddress(organizationBId, address)).resolves.toMatchObject({
             exists: false,
             reason: 'rejected_email',
+            evidenceObservedAt,
+            evidencePolicyVersion: 1,
         })
     })
 

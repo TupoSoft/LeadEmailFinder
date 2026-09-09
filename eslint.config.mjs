@@ -79,6 +79,7 @@ export default tseslint.config(
             'scripts/testing/*.mjs',
             'scripts/frontend/*.mjs',
             'scripts/openapi/*.mjs',
+            'docker/smtp-dev/*.mjs',
         ],
         languageOptions: {
             sourceType: 'module',

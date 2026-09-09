@@ -12,7 +12,7 @@ services:
         condition: service_started
       keycloak:
         condition: service_healthy
-      mailpit:
+      smtp-evidence:
         condition: service_healthy
       plaintext-mailpit:
         condition: service_healthy
@@ -32,21 +32,22 @@ services:
       default:
         ipv4_address: 172.28.0.53
 
-  mailpit:
-    image: axllent/mailpit:v1.30.7
+  smtp-evidence:
+    image: node:24-alpine
     restart: unless-stopped
     environment:
-      MP_DISABLE_VERSION_CHECK: true
-      MP_SMTP_BIND_ADDR: 0.0.0.0:2525
-      MP_SMTP_DISABLE_RDNS: true
-      MP_SMTP_TLS_CERT: /smtp-dev-tls/smtp.crt
-      MP_SMTP_TLS_KEY: /smtp-dev-tls/smtp.key
-      MP_SMTP_REQUIRE_STARTTLS: true
+      EVIDENCE_HOSTNAME: smtp.lef.test
+      EVIDENCE_SMTP_PORT: 2525
+      EVIDENCE_CONTROL_PORT: 8025
+      EVIDENCE_TLS_CERT_FILE: /smtp-dev-tls/smtp.crt
+      EVIDENCE_TLS_KEY_FILE: /smtp-dev-tls/smtp.key
     volumes:
+      - ./smtp-dev/evidence-server.mjs:/evidence-server.mjs:ro
       - ./smtp-dev/tls/smtp.crt:/smtp-dev-tls/smtp.crt:ro
       - ./smtp-dev/tls/smtp.key:/smtp-dev-tls/smtp.key:ro
+    entrypoint: ["node", "/evidence-server.mjs"]
     healthcheck:
-      test: ["CMD", "/mailpit", "readyz"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8025/counters').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -104,7 +105,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      mailpit:
+      smtp-evidence:
         condition: service_healthy
       plaintext-mailpit:
         condition: service_healthy

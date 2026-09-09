@@ -1,0 +1,25 @@
+info:
+  name: 36-select-sender-rejected-scenario
+  type: http
+  seq: 36
+
+http:
+  method: PUT
+  url: "{{evidenceControlUrl}}/scenario"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "scenario": "sender_rejected"
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('selects the sender-rejected evidence scenario', function() {
+          expect(res.status).to.equal(204);
+        });

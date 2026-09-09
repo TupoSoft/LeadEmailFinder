@@ -15,12 +15,21 @@ import { getDomain } from 'tldts'
 import { MailboxProbe, MailboxProbeResult } from '../../../application/ports/mailbox-probe'
 import { MxResolver } from '../../../application/ports/mx-resolver'
 import { SmtpVerificationStore, SmtpVerificationUpdate } from '../../../application/ports/smtp-verification-store'
+import { VerificationClock } from '../../../application/ports/verification-clock'
 import { SmtpVerification } from '../../../domain/smtp-verification'
+import {
+    deriveMailboxEvidence,
+    MailboxEvidence,
+    NO_MAILBOX_EVIDENCE,
+    VERIFICATION_EVIDENCE_POLICY_VERSION,
+} from '../../../domain/verification-evidence'
 import { ISmtpClient } from './smtp-client.interface'
 import { ISmtpClientFactory } from './smtp-client-factory.interface'
 import { SmtpException } from './smtp.exception'
 import { SmtpSecureTransportUnavailableException } from '../../smtp/smtp-secure-transport-unavailable.exception'
 import { SmtpErrorStatusCode, SmtpVerificationReason } from './smtp.enums'
+
+const EVIDENCE_FRESHNESS_MS = 24 * 60 * 60 * 1000
 
 interface GetExchangesParams {
     domain: string
@@ -49,7 +58,7 @@ interface SmtpClientAcquisition {
 
 type SmtpErrorHandlingStrategy = [
     (error: SmtpException) => boolean,
-    (error: SmtpException) => Omit<MailboxProbeResult, 'email'>,
+    (error: SmtpException) => Omit<MailboxProbeResult, 'email' | 'evidence'>,
 ]
 
 /** Implements the `MailboxProbe` port with the proxy-leased SMTP protocol, replacing module-architecture/18's compatibility wrapper. */
@@ -86,14 +95,6 @@ export class SmtpMailboxProbe implements MailboxProbe {
                             reason: SmtpVerificationReason.TemporarilyBlocked,
                             proxyId,
                         }
-                    case SmtpErrorStatusCode.MailboxBusy:
-                    case SmtpErrorStatusCode.InvalidTransaction:
-                        return {
-                            exists: false,
-                            targetExchange,
-                            reason: SmtpVerificationReason.RejectedEmail,
-                            proxyId,
-                        }
                     case SmtpErrorStatusCode.MailboxFull:
                         return {
                             exists: null,
@@ -102,6 +103,9 @@ export class SmtpMailboxProbe implements MailboxProbe {
                             proxyId,
                         }
                     default:
+                        // Includes a generic recipient rejection without the exact evidence rule's enhanced
+                        // status (checked and consumed earlier in tryVerify): it is ineligible proof, not a
+                        // conclusive negative.
                         return {
                             exists: null,
                             targetExchange,
@@ -123,6 +127,7 @@ export class SmtpMailboxProbe implements MailboxProbe {
         private readonly smtpClientFactory: ISmtpClientFactory,
         private readonly smtpVerificationStore: SmtpVerificationStore,
         private readonly allocationObserver: IAllocationObserver,
+        private readonly clock: VerificationClock,
     ) {}
 
     private static isTemporarilyBlocked(
@@ -131,10 +136,49 @@ export class SmtpMailboxProbe implements MailboxProbe {
         return result?.secureTransport === true && result.reason === SmtpVerificationReason.TemporarilyBlocked
     }
 
-    private static hasEmailVerificationOutcome(
-        result: Pick<SmtpVerification, 'exists' | 'secureTransport'> | null,
-    ): result is { exists: boolean; secureTransport: true } {
-        return result?.secureTransport === true && result.exists != null
+    /**
+     * Reuse requires matching policy, verified transport, its own recipient proof, an observation no later than
+     * now, and age strictly below 24 hours. A read never advances this age.
+     */
+    private static deriveStoredEvidence(cached: SmtpVerification | null, now: Date): MailboxEvidence {
+        if (cached === null || cached.secureTransport !== true) return NO_MAILBOX_EVIDENCE
+        if (cached.evidencePolicyVersion !== VERIFICATION_EVIDENCE_POLICY_VERSION) return NO_MAILBOX_EVIDENCE
+        if (cached.evidenceObservedAt == null) return NO_MAILBOX_EVIDENCE
+
+        const observedAtMs = cached.evidenceObservedAt.getTime()
+        if (!Number.isFinite(observedAtMs)) return NO_MAILBOX_EVIDENCE
+
+        const nowMs = now.getTime()
+        if (observedAtMs > nowMs || nowMs - observedAtMs >= EVIDENCE_FRESHNESS_MS) return NO_MAILBOX_EVIDENCE
+
+        if (cached.exists === true && cached.reason === SmtpVerificationReason.AcceptedEmail) {
+            return {
+                kind: 'smtp_recipient_accepted',
+                observedAt: cached.evidenceObservedAt,
+                policyVersion: cached.evidencePolicyVersion,
+                origin: 'stored',
+                stage: 'rcpt_to',
+                code: 250,
+                verifiedTransport: true,
+                senderAccepted: true,
+            }
+        }
+
+        if (cached.exists === false && cached.reason === SmtpVerificationReason.RejectedEmail) {
+            return {
+                kind: 'smtp_recipient_missing',
+                observedAt: cached.evidenceObservedAt,
+                policyVersion: cached.evidencePolicyVersion,
+                origin: 'stored',
+                stage: 'rcpt_to',
+                code: 550,
+                enhancedCode: '5.1.1',
+                verifiedTransport: true,
+                senderAccepted: true,
+            }
+        }
+
+        return NO_MAILBOX_EVIDENCE
     }
 
     async probe(organizationId: string, email: string): Promise<MailboxProbeResult> {
@@ -144,14 +188,17 @@ export class SmtpMailboxProbe implements MailboxProbe {
         const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
 
         const cachedResult = await this.smtpVerificationStore.findByAddress(organizationId, email)
-        if (SmtpMailboxProbe.hasEmailVerificationOutcome(cachedResult)) {
-            const { id: cachedEmail, exists, targetExchange, reason } = cachedResult
+        const cachedEvidence = SmtpMailboxProbe.deriveStoredEvidence(cachedResult, this.clock.now())
+
+        if (cachedResult !== null && cachedEvidence.kind !== 'none') {
+            const { id: cachedEmail, targetExchange, reason } = cachedResult
 
             return {
                 email: cachedEmail,
-                exists,
+                exists: cachedEvidence.kind === 'smtp_recipient_accepted',
                 targetExchange,
                 reason,
+                evidence: cachedEvidence,
             }
         }
 
@@ -164,10 +211,12 @@ export class SmtpMailboxProbe implements MailboxProbe {
 
         getSmtpClientParams.exchanges = await this.getExchanges(getExchangesParams)
         if (getSmtpClientParams.exchanges.length === 0) {
+            // An empty resolver result means no usable records, not authoritative mailbox absence.
             return {
                 email,
-                exists: false,
+                exists: null,
                 reason: SmtpVerificationReason.NoMxRecords,
+                evidence: NO_MAILBOX_EVIDENCE,
             }
         }
 
@@ -177,6 +226,7 @@ export class SmtpMailboxProbe implements MailboxProbe {
                 email,
                 exists: null,
                 reason: attemptedConnection ? SmtpVerificationReason.NoConnect : SmtpVerificationReason.Unknown,
+                evidence: NO_MAILBOX_EVIDENCE,
             }
         }
 
@@ -193,13 +243,15 @@ export class SmtpMailboxProbe implements MailboxProbe {
             targetExchange: result.targetExchange,
             proxyId: result.proxyId,
             secureTransport: leasedClient.client.secureTransport,
+            evidenceObservedAt: result.evidence.kind === 'none' ? null : result.evidence.observedAt,
+            evidencePolicyVersion: result.evidence.kind === 'none' ? null : result.evidence.policyVersion,
         }
         await this.smtpVerificationStore.upsert(organizationId, email, update)
 
         return result
     }
 
-    private async handleSmtpError(error: SmtpException): Promise<Omit<MailboxProbeResult, 'email'>> {
+    private async handleSmtpError(error: SmtpException): Promise<Omit<MailboxProbeResult, 'email' | 'evidence'>> {
         const strategy = SmtpMailboxProbe.smtpErrorHandlingStrategies.find(([predicate]) => predicate(error))
         const { targetExchange, proxyId } = error
 
@@ -243,14 +295,51 @@ export class SmtpMailboxProbe implements MailboxProbe {
             const senderEmail = `${senderUsername}@${clientDomain}`
 
             await client.mailFrom(senderEmail)
-            await client.rcptTo(email)
-            await client.quit()
+
+            let exists: boolean
+            let evidence: MailboxEvidence
+
+            try {
+                const response = await client.rcptTo(email)
+                exists = true
+                evidence = deriveMailboxEvidence({
+                    stage: 'rcpt_to',
+                    code: response.code,
+                    enhancedCode: response.enhancedCode,
+                    verifiedTransport: client.secureTransport,
+                    senderAccepted: true,
+                    observedAt: this.clock.now(),
+                    origin: 'fresh',
+                })
+            } catch (error) {
+                if (!(error instanceof SmtpException) || error.commandKind !== 'rcpt_to') throw error
+
+                const candidateEvidence = deriveMailboxEvidence({
+                    stage: 'rcpt_to',
+                    code: error.code,
+                    enhancedCode: error.enhancedCode,
+                    verifiedTransport: client.secureTransport,
+                    senderAccepted: true,
+                    observedAt: this.clock.now(),
+                    origin: 'fresh',
+                })
+                // Not the exact missing-recipient evidence rule (e.g. a different enhanced status): fall through
+                // to generic classification below, which treats it as ineligible rather than conclusive.
+                if (candidateEvidence.kind !== 'smtp_recipient_missing') throw error
+
+                exists = false
+                evidence = candidateEvidence
+            }
+
+            // A recipient answer is already decided: a later QUIT rejection or peer close must not erase it.
+            await this.tryQuit(client)
 
             return {
                 email,
-                exists: true,
-                reason: SmtpVerificationReason.AcceptedEmail,
+                exists,
+                reason: exists ? SmtpVerificationReason.AcceptedEmail : SmtpVerificationReason.RejectedEmail,
                 targetExchange,
+                evidence,
             }
         } catch (error) {
             if (error instanceof SmtpSecureTransportUnavailableException) {
@@ -259,21 +348,31 @@ export class SmtpMailboxProbe implements MailboxProbe {
                     exists: null,
                     reason: SmtpVerificationReason.SecureTransportUnavailable,
                     targetExchange,
+                    evidence: NO_MAILBOX_EVIDENCE,
                 }
             }
 
             if (error instanceof SmtpException) {
                 const result = await this.handleSmtpError(error)
-                return { ...result, email }
+                return { ...result, email, evidence: NO_MAILBOX_EVIDENCE }
             }
 
             return {
                 email,
                 exists: null,
                 reason: SmtpVerificationReason.UnexpectedError,
+                evidence: NO_MAILBOX_EVIDENCE,
             }
         } finally {
             client.end()
+        }
+    }
+
+    private async tryQuit(client: ISmtpClient): Promise<void> {
+        try {
+            await client.quit()
+        } catch {
+            // Decisive recipient evidence has already been captured; never let cleanup override it.
         }
     }
 

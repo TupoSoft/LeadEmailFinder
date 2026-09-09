@@ -7,6 +7,8 @@ import {
 import { ok } from 'node:assert'
 import { NewEmailVerification } from '../domain/email-verification'
 import { deriveMxDomain } from '../domain/mx-domain'
+import { MailboxEvidence, NO_MAILBOX_EVIDENCE, VERIFICATION_EVIDENCE_POLICY_VERSION } from '../domain/verification-evidence'
+import { classifyVerificationQuality, deriveEvidenceObservedAt } from './classify-verification-quality'
 import { MailboxProbe, MailboxProbeResult } from './ports/mailbox-probe'
 import { AccountDiscovery } from './ports/account-discovery'
 
@@ -38,6 +40,9 @@ export class MailboxVerificationService {
             localPart,
             email,
             format,
+            verificationQuality: 'inconclusive',
+            evidenceObservedAt: null,
+            evidencePolicyVersion: VERIFICATION_EVIDENCE_POLICY_VERSION,
         }
 
         const wrongEmail = `${MailboxVerificationService.CATCH_ALL_EMAIL_USERNAME}@${domain}`
@@ -48,17 +53,20 @@ export class MailboxVerificationService {
         result.reason = catchAllProbe.reason
         result.catchAll = catchAllProbe.exists
 
-        if (catchAllProbe.exists === false) {
+        let targetEvidence: MailboxEvidence = NO_MAILBOX_EVIDENCE
+
+        if (catchAllProbe.evidence.kind === 'smtp_recipient_missing') {
             const realProbe = await this.probe(organizationId, email)
 
             result.exists = realProbe.exists
             result.reason = realProbe.reason
+            targetEvidence = realProbe.evidence
 
             if (realProbe.exists !== null) {
                 result.targetExchange = realProbe.targetExchange
                 result.mxDomain = deriveMxDomain(realProbe.targetExchange)
                 result.sources.push(EmailVerificationSource.MX)
-                return result
+                return MailboxVerificationService.withQuality(result, targetEvidence, catchAllProbe.evidence)
             }
         }
 
@@ -72,7 +80,21 @@ export class MailboxVerificationService {
             }
         }
 
-        return result
+        return MailboxVerificationService.withQuality(result, targetEvidence, catchAllProbe.evidence)
+    }
+
+    private static withQuality(
+        result: NewEmailVerification,
+        target: MailboxEvidence,
+        control: MailboxEvidence,
+    ): NewEmailVerification {
+        const verificationQuality = classifyVerificationQuality(target, control)
+
+        return {
+            ...result,
+            verificationQuality,
+            evidenceObservedAt: deriveEvidenceObservedAt(verificationQuality, target, control),
+        }
     }
 
     private async probe(
