@@ -364,6 +364,12 @@ jobs:
       - name: Verify verification browser artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts
         if: needs.changes.outputs.browser == 'true'
+      - name: Verify service-client browser artifact suppression
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-client-artifacts
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test service-client secret handling and recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients
+        if: needs.changes.outputs.browser == 'true'
       - name: Test invitation browser behavior and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitations
         if: needs.changes.outputs.browser == 'true'
@@ -390,6 +396,12 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test live team management and invitation acceptance
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test service-client rejection contracts with Bruno
+        run: corepack pnpm bruno:service-client-rejections
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live service-client lifecycle
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients-live
         if: needs.changes.outputs.browser == 'true'
       - name: Attach disposable SMTP and DNS verification fixtures
         run: |

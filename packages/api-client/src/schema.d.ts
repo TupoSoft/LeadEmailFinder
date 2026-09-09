@@ -251,6 +251,90 @@ export interface paths {
         patch: operations["OrganizationsController_changeRole"];
         trace?: never;
     };
+    "/v1/organizations/{organizationId}/service-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active and disabled service clients without secrets
+         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.
+         */
+        get: operations["ServiceClientsController_list"];
+        put?: never;
+        /**
+         * Create an organization service client and reveal its secret once
+         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.
+         */
+        post: operations["ServiceClientsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a service client and its provider client
+         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the provider client and local credential. An already-missing provider client is treated as success.
+         */
+        delete: operations["ServiceClientsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a service client immediately
+         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.
+         */
+        post: operations["ServiceClientsController_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invalidate the current secret and reveal a replacement once
+         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.
+         */
+        post: operations["ServiceClientsController_rotate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/verifyAsync": {
         parameters: {
             query?: never;
@@ -408,6 +492,11 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "paid" | "failed" | "expired";
         };
+        CreateServiceClientDto: {
+            description?: string;
+            /** @description Choose only from the current account grantableServiceClientPermissions; the server enforces that ceiling. */
+            permissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage" | "platform:admin")[];
+        };
         CreditPurchaseResponseDto: {
             /** @description Price in the currency minor unit */
             amountMinor: number;
@@ -516,6 +605,34 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** @enum {string} */
             status: "active" | "disabled";
+        };
+        ServiceClientResponseDto: {
+            clientId: string;
+            /** Format: date-time */
+            createdAt: string;
+            description: string | null;
+            /** Format: uuid */
+            id: string;
+            permissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage" | "platform:admin")[];
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ServiceClientSecretResponseDto: {
+            clientId: string;
+            /** @description Returned only by this create or rotate response. Cannot be retrieved later. */
+            clientSecret: string;
+            /** Format: date-time */
+            createdAt: string;
+            description: string | null;
+            /** Format: uuid */
+            id: string;
+            permissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage" | "platform:admin")[];
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            updatedAt: string;
         };
         VerifyAsyncRequestBodyDto: {
             /**
@@ -1290,6 +1407,308 @@ export interface operations {
             /** @description The final active owner cannot be demoted. */
             409: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ServiceClientsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceClientResponseDto"][];
+                };
+            };
+            /** @description Invalid organization UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization, credential kind, permission, or role check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ServiceClientsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceClientDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceClientSecretResponseDto"];
+                };
+            };
+            /** @description Invalid organization UUID, description, or permissions, including duplicate or excess grants. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization, credential kind, permission, role, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome. */
+            500: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ServiceClientsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                serviceClientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service client deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid organization or service-client UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential kind, permission, role, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service client not found, including a client outside the caller organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider or persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ServiceClientsController_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                serviceClientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client disabled; repeated disablement has no additional effect. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid organization or service-client UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential kind, permission, role, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service client not found, including a client outside the caller organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ServiceClientsController_rotate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                serviceClientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceClientSecretResponseDto"];
+                };
+            };
+            /** @description Invalid organization or service-client UUID. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential kind, permission, role, or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service client not found, including a client outside the caller organization. */
+            404: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The service client is disabled and cannot be rotated. */
+            409: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying. */
+            500: {
+                headers: {
+                    /** @description Prevents storage of all create and rotate responses, including failures. */
+                    "Cache-Control"?: "no-store";
                     [name: string]: unknown;
                 };
                 content?: never;

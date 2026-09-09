@@ -10,6 +10,8 @@ export default defineConfig({
         'single-verification.spec.ts',
         'invitations-ui.spec.ts',
         'team-and-invitations.spec.ts',
+        'service-clients-ui.spec.ts',
+        'service-clients.spec.ts',
     ],
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),

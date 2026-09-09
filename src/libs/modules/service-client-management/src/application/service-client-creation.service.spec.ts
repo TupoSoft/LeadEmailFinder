@@ -4,11 +4,9 @@ import {
     ServiceCredentialDetailRecord,
     ServiceCredentialWriter,
 } from '@tuposoft/lead-email-finder/modules/identity'
+import { ServiceClientGrantablePermission, ServiceClientGrantPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import {
-    ServiceClientGrantablePermission,
-    ServiceClientGrantPolicy,
-} from '@tuposoft/lead-email-finder/modules/auth'
-import {
+    DuplicateServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientPermissionCeilingExceededError,
 } from '../domain/service-client-management.errors'
@@ -114,6 +112,24 @@ describe('ServiceClientCreationService', () => {
             excessPermissions: ['billing:manage'],
         })
         expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
+    })
+
+    it('rejects duplicate permissions in direct service calls before any provider or persistence side effect', async () => {
+        await expect(
+            service.create(principalFixture(), 'org-1', null, ['verification:run', 'verification:run']),
+        ).rejects.toBeInstanceOf(DuplicateServiceClientPermissionsError)
+        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
+        expect(credentialWriter.createWithAudit).not.toHaveBeenCalled()
+    })
+
+    it.each(['owner', 'admin'] as const)('accepts the ordered server grant choices for %s unchanged', async role => {
+        const choices = serviceClientGrantPolicy.grantablePermissionsFor(role)
+        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
+        credentialWriter.createWithAudit.mockResolvedValue(credentialFixture())
+
+        await service.create(principalFixture({ membershipRole: role }), 'org-1', null, choices)
+
+        expect(credentialWriter.createWithAudit).toHaveBeenCalledWith(expect.objectContaining({ permissions: choices }))
     })
 
     it('authoritatively rejects an owner forged platform grant', async () => {

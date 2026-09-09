@@ -47,7 +47,8 @@
         "typecheck": "tsc --noEmit -p tsconfig.json",
         "prepare": "husky || true",
         "test:gateway": "node --test scripts/frontend/gateway.test.mjs scripts/frontend/checkout-config.test.mjs",
-        "test:web-live": "node scripts/testing/web-live.mjs"
+        "test:web-live": "node scripts/testing/web-live.mjs",
+        "bruno:service-client-rejections": "node scripts/bruno/run-collection.mjs service-client-management"
     },
     "author": {
         "url": "https://tuposoft.com",

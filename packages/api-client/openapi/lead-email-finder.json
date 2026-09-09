@@ -329,6 +329,37 @@
         ],
         "type": "object"
       },
+      "CreateServiceClientDto": {
+        "properties": {
+          "description": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "permissions": {
+            "description": "Choose only from the current account grantableServiceClientPermissions; the server enforces that ceiling.",
+            "items": {
+              "enum": [
+                "verification:run",
+                "verification:read",
+                "members:manage",
+                "credentials:manage",
+                "billing:read",
+                "billing:manage",
+                "platform:admin"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "type": "object"
+      },
       "CreditPurchaseResponseDto": {
         "properties": {
           "amountMinor": {
@@ -675,6 +706,121 @@
           "email",
           "role",
           "status"
+        ],
+        "type": "object"
+      },
+      "ServiceClientResponseDto": {
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "verification:run",
+                "verification:read",
+                "members:manage",
+                "credentials:manage",
+                "billing:read",
+                "billing:manage",
+                "platform:admin"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "description",
+          "permissions",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ServiceClientSecretResponseDto": {
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "description": "Returned only by this create or rotate response. Cannot be retrieved later.",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "enum": [
+                "verification:run",
+                "verification:read",
+                "members:manage",
+                "credentials:manage",
+                "billing:read",
+                "billing:manage",
+                "platform:admin"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "description",
+          "permissions",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "clientSecret"
         ],
         "type": "object"
       },
@@ -2036,6 +2182,428 @@
         "summary": "Change an active member role",
         "tags": [
           "Organizations"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/service-clients": {
+      "get": {
+        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.",
+        "operationId": "ServiceClientsController_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceClientResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid organization UUID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Organization, credential kind, permission, or role check denied."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          }
+        ],
+        "summary": "List active and disabled service clients without secrets",
+        "tags": [
+          "ServiceClients"
+        ]
+      },
+      "post": {
+        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.",
+        "operationId": "ServiceClientsController_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceClientDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceClientSecretResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid organization UUID, description, or permissions, including duplicate or excess grants.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization, credential kind, permission, role, or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Create an organization service client and reveal its secret once",
+        "tags": [
+          "ServiceClients"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}": {
+      "delete": {
+        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the provider client and local credential. An already-missing provider client is treated as success.",
+        "operationId": "ServiceClientsController_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serviceClientId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Service client deleted."
+          },
+          "400": {
+            "description": "Invalid organization or service-client UUID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Credential kind, permission, role, or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Service client not found, including a client outside the caller organization."
+          },
+          "500": {
+            "description": "Provider or persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Delete a service client and its provider client",
+        "tags": [
+          "ServiceClients"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable": {
+      "post": {
+        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.",
+        "operationId": "ServiceClientsController_disable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serviceClientId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Client disabled; repeated disablement has no additional effect."
+          },
+          "400": {
+            "description": "Invalid organization or service-client UUID."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Credential kind, permission, role, or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Service client not found, including a client outside the caller organization."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Disable a service client immediately",
+        "tags": [
+          "ServiceClients"
+        ]
+      }
+    },
+    "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate": {
+      "post": {
+        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.",
+        "operationId": "ServiceClientsController_rotate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organizationId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serviceClientId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceClientSecretResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid organization or service-client UUID.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential kind, permission, role, or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Service client not found, including a client outside the caller organization.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The service client is disabled and cannot be rotated.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of all create and rotate responses, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Invalidate the current secret and reveal a replacement once",
+        "tags": [
+          "ServiceClients"
         ]
       }
     },

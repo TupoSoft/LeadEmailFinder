@@ -15,6 +15,7 @@ export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app/verifications/new', label: 'Verify an email', capability: 'verification.run' },
     { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
+    { path: '/app/service-clients', label: 'Service clients', capability: 'service_clients.manage' },
 ]
 
 export function visibleDestinations(

@@ -24,6 +24,7 @@ const registry = Object.freeze({
     'async-verification': Object.freeze({ requests: 15, tests: 15, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 30, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
+    'service-client-management': Object.freeze({ requests: 6, tests: 6, sandbox: 'developer', network: 'host', countOnly: true }),
     'organization-onboarding': Object.freeze({
         requests: 12,
         tests: 12,
@@ -120,6 +121,7 @@ export function collectionEnvironment(name, metadata, serviceClient, serviceCred
             KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
             KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
             ...(name === 'credit-purchases' ? { PLATFORM_ORGANIZATION_ID: credential.data.organizationId } : {}),
+            ...(name === 'service-client-management' ? { SERVICE_CLIENT_ORGANIZATION_ID: credential.data.organizationId } : {}),
         }
     }
     return {
@@ -144,6 +146,7 @@ export function cliArguments(name, environment, reportFile) {
                 !environment.CUSTOMER_SERVICE_CLIENT_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
         (name === 'organization-onboarding' && !environment.BRUNO_EXPIRED_INVITATION_TOKEN) ||
+        (name === 'service-client-management' && !environment.SERVICE_CLIENT_ORGANIZATION_ID) ||
         (name === 'credit-purchases' &&
             (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
         (collection.network === 'compose' &&

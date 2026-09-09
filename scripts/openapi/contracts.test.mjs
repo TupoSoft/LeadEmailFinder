@@ -88,6 +88,10 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/organizations/{organizationId}/invitations',
         '/v1/organizations/{organizationId}/members',
         '/v1/organizations/{organizationId}/members/{membershipId}',
+        '/v1/organizations/{organizationId}/service-clients',
+        '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
+        '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
+        '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
         '/verifyAsync',
         '/verifyAsync/{id}',
     ])
@@ -364,4 +368,80 @@ test('team and invitation operations publish reviewed safe browser contracts', (
         assert.deepEqual(operation.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
         for (const status of ['401', '403', '404', '409']) assert.ok(operation.responses[status])
     }
+})
+
+
+test('service-client operations publish exact session, UUID, secret and error contracts', () => {
+    const base = '/v1/organizations/{organizationId}/service-clients'
+    const member = base + '/{serviceClientId}'
+    const expected = [
+        [base, 'get', ['200', '400', '401', '403', '500']],
+        [base, 'post', ['201', '400', '401', '403', '500']],
+        [member, 'delete', ['204', '400', '401', '403', '404', '500']],
+        [member + '/disable', 'post', ['204', '400', '401', '403', '404', '500']],
+        [member + '/rotate', 'post', ['200', '400', '401', '403', '404', '409', '500']],
+    ]
+    const operations = Object.entries(browser.paths)
+        .filter(([path]) => path.includes('/service-clients'))
+        .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
+        .sort()
+    assert.deepEqual(operations, expected.map(([path, method]) => `${method.toUpperCase()} ${path}`).sort())
+    for (const [path, method, statuses] of expected) {
+        const operation = browser.paths[path][method]
+        assert.deepEqual(operation, runtime.paths[path][method])
+        assert.deepEqual(Object.keys(operation.responses).sort(), statuses)
+        assert.deepEqual(operation.security, method === 'get' ? [{ lef_session: [] }] : [{ lef_session: [], 'x-csrf-token': [] }])
+        for (const parameter of operation.parameters) {
+            assert.equal(parameter.in, 'path')
+            assert.equal(parameter.required, true)
+            assert.deepEqual(parameter.schema, { format: 'uuid', type: 'string' })
+        }
+        assert.deepEqual(operation.parameters.map(parameter => parameter.name).sort(), path === base ? ['organizationId'] : ['organizationId', 'serviceClientId'])
+        if ((path === base && method === 'post') || path.endsWith('/rotate')) {
+            for (const response of Object.values(operation.responses)) {
+                assert.deepEqual(response.headers['Cache-Control'].schema.enum, ['no-store'])
+            }
+        }
+    }
+    const schemas = browser.components.schemas
+    assert.equal(schemas.CreateServiceClientDto.properties.permissions.minItems, 1)
+    assert.equal(schemas.CreateServiceClientDto.properties.permissions.uniqueItems, true)
+    assert.deepEqual(schemas.CreateServiceClientDto.required, ['permissions'])
+    assert.equal(schemas.CreateServiceClientDto.properties.description.maxLength, 200)
+    const response = schemas.ServiceClientResponseDto
+    assert.deepEqual(Object.keys(response.properties).sort(), ['clientId', 'createdAt', 'description', 'id', 'permissions', 'status', 'updatedAt'])
+    assert.deepEqual(response.properties.status.enum, ['active', 'disabled'])
+    assert.equal(response.properties.description.nullable, true)
+    assert.equal(response.properties.id.format, 'uuid')
+    assert.deepEqual(response.properties.permissions.items.enum, schemas.CreateServiceClientDto.properties.permissions.items.enum)
+    assert.equal(schemas.ServiceClientSecretResponseDto.properties.clientSecret.type, 'string')
+    assert.deepEqual(browser.paths[base].get.responses['200'].content['application/json'].schema, {
+        type: 'array', items: { $ref: '#/components/schemas/ServiceClientResponseDto' },
+    })
+})
+
+test('generated service-client list types exclude clientSecret and preserve permission and status unions', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'service-client-contract.ts')
+    await writeFile(file, `
+        import type { paths, components } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type List = paths['/v1/organizations/{organizationId}/service-clients']['get']['responses'][200]['content']['application/json']
+        type Created = paths['/v1/organizations/{organizationId}/service-clients']['post']['responses'][201]['content']['application/json']
+        type Rotated = paths['/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate']['post']['responses'][200]['content']['application/json']
+        type Assertions = [
+            Assert<Equal<Extract<'clientSecret', keyof List[number]>, never>>,
+            Assert<Equal<List[number], components['schemas']['ServiceClientResponseDto']>>,
+            Assert<Equal<List[number]['status'], 'active' | 'disabled'>>,
+            Assert<Equal<List[number]['description'], string | null>>,
+            Assert<Equal<List[number]['permissions'][number], components['schemas']['CreateServiceClientDto']['permissions'][number]>>,
+            Assert<Equal<Created['clientSecret'], string>>,
+            Assert<Equal<Rotated['clientSecret'], string>>,
+            Assert<Equal<keyof Created, keyof List[number] | 'clientSecret'>>,
+            Assert<Equal<keyof Rotated, keyof List[number] | 'clientSecret'>>
+        ]
+    `)
+    const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
 })

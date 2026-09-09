@@ -14,6 +14,13 @@ export class ServiceClientPermissionCeilingExceededError extends Error {
     }
 }
 
+export class DuplicateServiceClientPermissionsError extends Error {
+    constructor() {
+        super('Service client permissions must be unique')
+        this.name = DuplicateServiceClientPermissionsError.name
+    }
+}
+
 export class ServiceClientNotFoundError extends Error {
     constructor() {
         super('Service client not found')

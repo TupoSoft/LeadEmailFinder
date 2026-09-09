@@ -28,15 +28,32 @@ function safeVerificationError(value: unknown): TestInfoError {
     return { value: 'Verification browser validation failed.', ...(location ? { stack: location } : {}) }
 }
 
+function safeServiceClientError(value: unknown): TestInfoError {
+    const stack =
+        typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
+            ? value.stack
+            : ''
+    const location = stack.match(/service-clients(?:-ui)?\.spec\.ts:\d+:\d+/)?.[0]
+    return { value: 'Service-client browser validation failed.', ...(location ? { stack: location } : {}) }
+}
+
 export const test = base.extend<{
     loginAs: (identity: BrowserFixtureIdentity) => Promise<Page>
     privilegedAuthPolicy: void
 }>({
     privilegedAuthPolicy: [
         async ({ trace, screenshot, video }, runFixture, info) => {
-            if (process.env.LEF_INVITATION_TEST_PRIVACY === '1' || process.env.LEF_VERIFICATION_TEST_PRIVACY === '1') {
+            if (
+                process.env.LEF_INVITATION_TEST_PRIVACY === '1' ||
+                process.env.LEF_VERIFICATION_TEST_PRIVACY === '1' ||
+                process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1'
+            ) {
                 const sanitize =
-                    process.env.LEF_VERIFICATION_TEST_PRIVACY === '1' ? safeVerificationError : safeInvitationError
+                    process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1'
+                        ? safeServiceClientError
+                        : process.env.LEF_VERIFICATION_TEST_PRIVACY === '1'
+                          ? safeVerificationError
+                          : safeInvitationError
                 // Playwright still builds error-context.md from assertion messages
                 // when PLAYWRIGHT_NO_COPY_PROMPT disables DOM snapshots. Normalize
                 // errors on arrival, before its artifact recorder can persist them.

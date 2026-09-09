@@ -12,14 +12,14 @@ http:
   body:
     type: json
     data: |-
-      {
-        "permissions": ["verification:run"]
-      }
+      { "permissions": ["verification:run"] }
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('rejects service client creation without a credential', function() {
+        test('rejects a missing credential', function() {
           expect(res.status).to.equal(401);
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
         });

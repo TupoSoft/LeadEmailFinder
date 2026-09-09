@@ -31,6 +31,7 @@ ESM
 ExecPlan
 ExecPlans
 gitignored
+ICP
 idempotence
 idempotently
 Idempotence
@@ -385,3 +386,6 @@ Minitest
 RAID6
 networkd
 Netplan
+IDNA
+NFKD
+registrable

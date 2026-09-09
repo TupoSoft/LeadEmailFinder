@@ -14,7 +14,18 @@ import {
     SerializeOptions,
     UseGuards,
 } from '@nestjs/common'
-import { ApiExcludeController } from '@nestjs/swagger'
+import {
+    ApiBadRequestResponse,
+    ApiConflictResponse,
+    ApiCreatedResponse,
+    ApiForbiddenResponse,
+    ApiInternalServerErrorResponse,
+    ApiNoContentResponse,
+    ApiNotFoundResponse,
+    ApiOkResponse,
+    ApiOperation,
+    ApiUnauthorizedResponse,
+} from '@nestjs/swagger'
 import { AuthPrincipal, ServiceCredentialDetailRecord } from '@tuposoft/lead-email-finder/modules/identity'
 import { CurrentPrincipal, PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
 import { ServiceClientCreationService } from '../application/service-client-creation.service'
@@ -24,6 +35,7 @@ import { ServiceClientListingService } from '../application/service-client-listi
 import { ServiceClientRotationService } from '../application/service-client-rotation.service'
 import {
     DisabledServiceClientRotationError,
+    DuplicateServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientNotFoundError,
     ServiceClientPermissionCeilingExceededError,
@@ -48,8 +60,17 @@ function toResponse(credential: ServiceCredentialDetailRecord): ServiceClientRes
     }
 }
 
+const SECRET_HEADERS = {
+    'Cache-Control': {
+        description: 'Prevents storage of all create and rotate responses, including failures.',
+        schema: { type: 'string' as const, enum: ['no-store'] },
+    },
+}
+const MUTATION_SECURITY: Record<string, string[]>[] = [{ lef_session: [], 'x-csrf-token': [] }]
+const ACCESS_DESCRIPTION =
+    'Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header.'
+
 @UseGuards(PermissionsGuard)
-@ApiExcludeController()
 @Controller('v1/organizations/:organizationId/service-clients')
 export class ServiceClientsController {
     constructor(
@@ -61,6 +82,29 @@ export class ServiceClientsController {
     ) {}
 
     @Post()
+    @ApiOperation({
+        operationId: 'ServiceClientsController_create',
+        summary: 'Create an organization service client and reveal its secret once',
+        security: MUTATION_SECURITY,
+        description:
+            ACCESS_DESCRIPTION +
+            ' Requested permissions must be unique and within the current account grantableServiceClientPermissions.',
+    })
+    @ApiCreatedResponse({ type: ServiceClientSecretResponseDto, headers: SECRET_HEADERS })
+    @ApiBadRequestResponse({
+        description: 'Invalid organization UUID, description, or permissions, including duplicate or excess grants.',
+        headers: SECRET_HEADERS,
+    })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.', headers: SECRET_HEADERS })
+    @ApiForbiddenResponse({
+        description: 'Organization, credential kind, permission, role, or browser CSRF check denied.',
+        headers: SECRET_HEADERS,
+    })
+    @ApiInternalServerErrorResponse({
+        description:
+            'Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.',
+        headers: SECRET_HEADERS,
+    })
     @RequirePermissions('credentials:manage')
     @SerializeOptions({ type: ServiceClientSecretResponseDto })
     async create(
@@ -81,6 +125,19 @@ export class ServiceClientsController {
     }
 
     @Get()
+    @ApiOperation({
+        operationId: 'ServiceClientsController_list',
+        summary: 'List active and disabled service clients without secrets',
+        security: [{ lef_session: [] }],
+        description:
+            ACCESS_DESCRIPTION +
+            ' Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.',
+    })
+    @ApiOkResponse({ type: ServiceClientResponseDto, isArray: true })
+    @ApiBadRequestResponse({ description: 'Invalid organization UUID.' })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.' })
+    @ApiForbiddenResponse({ description: 'Organization, credential kind, permission, or role check denied.' })
+    @ApiInternalServerErrorResponse({ description: 'Persistence failure.' })
     @RequirePermissions('credentials:manage')
     @SerializeOptions({ type: ServiceClientResponseDto })
     async list(
@@ -95,6 +152,34 @@ export class ServiceClientsController {
     }
 
     @Post(':serviceClientId/rotate')
+    @ApiOperation({
+        operationId: 'ServiceClientsController_rotate',
+        summary: 'Invalidate the current secret and reveal a replacement once',
+        security: MUTATION_SECURITY,
+        description:
+            ACCESS_DESCRIPTION +
+            ' A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.',
+    })
+    @ApiOkResponse({ type: ServiceClientSecretResponseDto, headers: SECRET_HEADERS })
+    @ApiBadRequestResponse({ description: 'Invalid organization or service-client UUID.', headers: SECRET_HEADERS })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.', headers: SECRET_HEADERS })
+    @ApiForbiddenResponse({
+        description: 'Credential kind, permission, role, or browser CSRF check denied.',
+        headers: SECRET_HEADERS,
+    })
+    @ApiNotFoundResponse({
+        description: 'Service client not found, including a client outside the caller organization.',
+        headers: SECRET_HEADERS,
+    })
+    @ApiConflictResponse({
+        description: 'The service client is disabled and cannot be rotated.',
+        headers: SECRET_HEADERS,
+    })
+    @ApiInternalServerErrorResponse({
+        description:
+            'Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying.',
+        headers: SECRET_HEADERS,
+    })
     @RequirePermissions('credentials:manage')
     @HttpCode(HttpStatus.OK)
     @SerializeOptions({ type: ServiceClientSecretResponseDto })
@@ -114,16 +199,50 @@ export class ServiceClientsController {
     }
 
     @Post(':serviceClientId/disable')
+    @ApiOperation({
+        operationId: 'ServiceClientsController_disable',
+        summary: 'Disable a service client immediately',
+        security: MUTATION_SECURITY,
+        description:
+            ACCESS_DESCRIPTION +
+            ' Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.',
+    })
+    @ApiNoContentResponse({ description: 'Client disabled; repeated disablement has no additional effect.' })
+    @ApiBadRequestResponse({ description: 'Invalid organization or service-client UUID.' })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.' })
+    @ApiForbiddenResponse({ description: 'Credential kind, permission, role, or browser CSRF check denied.' })
+    @ApiNotFoundResponse({
+        description: 'Service client not found, including a client outside the caller organization.',
+    })
+    @ApiInternalServerErrorResponse({ description: 'Persistence failure.' })
     @RequirePermissions('credentials:manage')
     @HttpCode(HttpStatus.NO_CONTENT)
     async disable(
         @Param() { organizationId, serviceClientId }: ServiceClientMemberParamsDto,
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<void> {
-        return this.handleErrors(() => this.serviceClientDisablement.disable(principal, organizationId, serviceClientId))
+        return this.handleErrors(() =>
+            this.serviceClientDisablement.disable(principal, organizationId, serviceClientId),
+        )
     }
 
     @Delete(':serviceClientId')
+    @ApiOperation({
+        operationId: 'ServiceClientsController_remove',
+        summary: 'Delete a service client and its provider client',
+        security: MUTATION_SECURITY,
+        description:
+            ACCESS_DESCRIPTION +
+            ' Deletes the provider client and local credential. An already-missing provider client is treated as success.',
+    })
+    @ApiNoContentResponse({ description: 'Service client deleted.' })
+    @ApiBadRequestResponse({ description: 'Invalid organization or service-client UUID.' })
+    @ApiUnauthorizedResponse({ description: 'Authentication required.' })
+    @ApiForbiddenResponse({ description: 'Credential kind, permission, role, or browser CSRF check denied.' })
+    @ApiNotFoundResponse({
+        description: 'Service client not found, including a client outside the caller organization.',
+    })
+    @ApiInternalServerErrorResponse({ description: 'Provider or persistence failure.' })
     @RequirePermissions('credentials:manage')
     @HttpCode(HttpStatus.NO_CONTENT)
     async remove(
@@ -140,7 +259,10 @@ export class ServiceClientsController {
             if (error instanceof ServiceClientAccessDeniedError) {
                 throw new ForbiddenException(error.message)
             }
-            if (error instanceof ServiceClientPermissionCeilingExceededError) {
+            if (
+                error instanceof ServiceClientPermissionCeilingExceededError ||
+                error instanceof DuplicateServiceClientPermissionsError
+            ) {
                 throw new BadRequestException(error.message)
             }
             if (error instanceof ServiceClientNotFoundError) {

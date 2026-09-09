@@ -19,9 +19,23 @@ runtime:
             '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases',
             '/v1/organizations/invitations/{token}', '/v1/organizations/invitations/{token}/accept',
             '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
-            '/v1/organizations/{organizationId}/members/{membershipId}', '/verifyAsync', '/verifyAsync/{id}'
+            '/v1/organizations/{organizationId}/members/{membershipId}',
+            '/v1/organizations/{organizationId}/service-clients',
+            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
+            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
+            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
+            '/verifyAsync', '/verifyAsync/{id}'
           ]);
           expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
+          var serviceClients = '/v1/organizations/{organizationId}/service-clients';
+          expect(Object.keys(res.body.paths[serviceClients]).sort()).to.deep.equal(['get', 'post']);
+          expect(res.body.paths[serviceClients].get.security).to.deep.equal([{ lef_session: [] }]);
+          expect(res.body.paths[serviceClients].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }]);
+          expect(res.body.components.schemas.ServiceClientResponseDto.properties).not.to.have.property('clientSecret');
+          expect(res.body.components.schemas.ServiceClientSecretResponseDto.properties).to.have.property('clientSecret');
+          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}'])).to.deep.equal(['delete']);
+          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/rotate'])).to.deep.equal(['post']);
+          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/disable'])).to.deep.equal(['post']);
           expect(res.body.paths['/v1/organizations/invitations/{token}'].get.security).to.deep.equal([]);
           expect(Object.keys(res.body.paths['/v1/credit-purchases']).sort()).to.deep.equal(['get', 'post']);
           expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);

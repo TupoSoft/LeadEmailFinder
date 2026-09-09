@@ -1,0 +1,27 @@
+info:
+  name: 02-create-service-client-m2m-rejected
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/organizations/{{organizationId}}/service-clients"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{serviceClientToken}}"
+  body:
+    type: json
+    data: |-
+      { "permissions": ["verification:run"] }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects an M2M credential before client management', function() {
+          expect(res.status).to.equal(403);
+          expect(res.headers['cache-control']).to.equal('no-store');
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
+        });

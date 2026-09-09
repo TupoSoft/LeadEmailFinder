@@ -14,7 +14,7 @@ export class TypeOrmServiceCredentialDirectory implements ServiceCredentialDirec
     async listForOrganization(organizationId: string): Promise<readonly ServiceCredentialDetailRecord[]> {
         const credentials = await this.serviceCredentialRepo.find({
             where: { organizationId },
-            order: { createdAt: 'ASC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         })
 
         return credentials.map(toRecord)
