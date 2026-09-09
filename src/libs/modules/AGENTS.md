@@ -1,8 +1,8 @@
 # Business Module Workflow
 
 These instructions apply whenever a task edits a business module in this directory or imports one from elsewhere.
-`src/libs/modules/README.md` is the canonical architecture contract; do not infer supported structure from existing
-baseline debt.
+`src/libs/modules/README.md` is the canonical architecture contract; do not infer supported structure from an
+existing violation.
 
 ## Before Coding
 
@@ -35,9 +35,9 @@ Run the architecture gate, focused tests, and type checking:
     corepack pnpm test -- <focused-test-files> --runInBand
     corepack pnpm typecheck
 
-Treat every current-only violation as a defect to fix. When a remediation produces only stale baseline entries,
-inspect the resolved debt, run `corepack pnpm architecture:baseline`, and rerun the architecture gate. The updater is
-shrink-only: never add or broaden a baseline entry to accept a change.
+`architecture:check` scans the complete repository and must exit zero: it accepts no violation. If a change cannot
+satisfy the canonical contract, update or create an ExecPlan to correct the design instead of treating a violation
+as acceptable debt.
 
 Review the final diff against the canonical guide and report any material architectural trade-offs and validation
 limits.

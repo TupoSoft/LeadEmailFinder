@@ -3,8 +3,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import ts from 'typescript'
 
-export const BASELINE_SCHEMA_VERSION = 1 as const
-
 const DEFAULT_MODULES_DIRECTORY = 'src/libs/modules'
 const DEFAULT_TSCONFIG_PATH = 'tsconfig.json'
 // Nest generates this aggregate during builds; its DTO imports describe Swagger metadata,
@@ -78,8 +76,6 @@ export const ARCHITECTURE_RULE_IDS = [
     'module-cycle',
 ] as const
 
-const ARCHITECTURE_RULE_ID_SET: ReadonlySet<string> = new Set(ARCHITECTURE_RULE_IDS)
-
 export type ArchitectureLayer = (typeof ALLOWED_LAYERS)[number]
 
 export type ArchitectureRuleId = (typeof ARCHITECTURE_RULE_IDS)[number]
@@ -106,17 +102,6 @@ export interface ArchitectureScanOptions {
 export interface ArchitectureScanResult {
     readonly modules: readonly string[]
     readonly violations: readonly ArchitectureViolation[]
-}
-
-export interface ArchitectureBaseline {
-    readonly schemaVersion: typeof BASELINE_SCHEMA_VERSION
-    readonly violations: readonly string[]
-}
-
-export interface ViolationSetComparison {
-    readonly currentOnly: readonly ArchitectureViolation[]
-    readonly baselineOnly: readonly string[]
-    readonly matches: boolean
 }
 
 export class ArchitectureScanError extends Error {
@@ -1195,110 +1180,4 @@ export function scanModuleArchitecture(options: ArchitectureScanOptions): Archit
         modules: modules.map(module => module.name),
         violations: finalizeViolations(rawViolations),
     }
-}
-
-function assertBaselineKey(value: unknown, sourceName: string, index: number): asserts value is string {
-    if (typeof value !== 'string' || value.includes('\n') || value.includes('\r')) {
-        throw new ArchitectureScanError(`${sourceName} has a malformed violation key at index ${index}.`)
-    }
-
-    const parts = value.split('|')
-    const occurrence = parts[3]
-    const validOccurrence = occurrence === undefined || /^(?:occurrence=(?:[2-9]|[1-9][0-9]+))$/.test(occurrence)
-    if (
-        (parts.length !== 3 && parts.length !== 4) ||
-        !ARCHITECTURE_RULE_ID_SET.has(parts[0] ?? '') ||
-        !parts[1] ||
-        !parts[2] ||
-        !validOccurrence
-    ) {
-        throw new ArchitectureScanError(`${sourceName} has a malformed violation key at index ${index}: "${value}".`)
-    }
-}
-
-/** Parses and strictly validates the checked-in, exact-set baseline format. */
-export function parseBaseline(text: string, sourceName = 'architecture baseline'): ArchitectureBaseline {
-    let value: unknown
-    try {
-        value = JSON.parse(text)
-    } catch (error) {
-        throw new ArchitectureScanError(
-            `${sourceName} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-        )
-    }
-
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new ArchitectureScanError(`${sourceName} must be a JSON object.`)
-    }
-
-    const record = value as Record<string, unknown>
-    const unknownFields = Object.keys(record).filter(key => key !== 'schemaVersion' && key !== 'violations')
-    if (unknownFields.length > 0) {
-        throw new ArchitectureScanError(
-            `${sourceName} has unknown field(s): ${unknownFields.sort(compareText).join(', ')}.`,
-        )
-    }
-    if (record.schemaVersion !== BASELINE_SCHEMA_VERSION) {
-        throw new ArchitectureScanError(
-            `${sourceName} has unsupported schemaVersion ${JSON.stringify(record.schemaVersion)}; expected ${BASELINE_SCHEMA_VERSION}.`,
-        )
-    }
-    if (!Array.isArray(record.violations)) {
-        throw new ArchitectureScanError(`${sourceName}.violations must be an array.`)
-    }
-
-    const rawKeys = record.violations as unknown[]
-    const keys = rawKeys.map((key, index) => {
-        assertBaselineKey(key, sourceName, index)
-        return key
-    })
-    for (let index = 1; index < keys.length; index += 1) {
-        const previous = keys[index - 1]
-        const current = keys[index]
-        if (previous === current) {
-            throw new ArchitectureScanError(`${sourceName} contains duplicate violation key "${current}".`)
-        }
-        if (compareText(previous, current) > 0) {
-            throw new ArchitectureScanError(`${sourceName}.violations must be sorted lexicographically.`)
-        }
-    }
-
-    return { schemaVersion: BASELINE_SCHEMA_VERSION, violations: keys }
-}
-
-/** Produces byte-stable baseline JSON. Scanner keys are unique; duplicate caller input is safely collapsed. */
-export function serializeBaseline(keys: readonly string[]): string {
-    const uniqueKeys = [...new Set(keys)]
-    uniqueKeys.forEach((key, index) => assertBaselineKey(key, 'architecture baseline', index))
-    uniqueKeys.sort(compareText)
-    return `${JSON.stringify({ schemaVersion: BASELINE_SCHEMA_VERSION, violations: uniqueKeys }, null, 4)}\n`
-}
-
-/** Compares exact stable-key sets while retaining current diagnostics for CLI output. */
-export function compareViolationSets(
-    currentViolations: readonly ArchitectureViolation[],
-    baselineKeys: readonly string[],
-): ViolationSetComparison {
-    const currentByKey = new Map<string, ArchitectureViolation>()
-    for (const violation of currentViolations) {
-        if (currentByKey.has(violation.key)) {
-            throw new ArchitectureScanError(`Current scan contains duplicate violation key "${violation.key}".`)
-        }
-        currentByKey.set(violation.key, violation)
-    }
-
-    const baselineSet = new Set<string>()
-    for (const key of baselineKeys) {
-        if (baselineSet.has(key)) {
-            throw new ArchitectureScanError(`Baseline comparison contains duplicate violation key "${key}".`)
-        }
-        baselineSet.add(key)
-    }
-
-    const currentOnly = [...currentByKey.values()]
-        .filter(violation => !baselineSet.has(violation.key))
-        .sort((left, right) => compareText(left.key, right.key))
-    const baselineOnly = [...baselineSet].filter(key => !currentByKey.has(key)).sort(compareText)
-
-    return { currentOnly, baselineOnly, matches: currentOnly.length === 0 && baselineOnly.length === 0 }
 }

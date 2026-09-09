@@ -25,7 +25,6 @@
         "test:credits-postgres": "ts-node scripts/testing/credits-postgres.ts",
         "bruno:platform-credits": "ts-node scripts/bruno/run-platform-credits.ts",
         "architecture:check": "ts-node scripts/architecture/check-module-architecture.ts",
-        "architecture:baseline": "ts-node scripts/architecture/check-module-architecture.ts --write-baseline",
         "keycloak:provision": "ts-node scripts/keycloak/provision.ts",
         "keycloak:bootstrap-credential": "ts-node scripts/keycloak/bootstrap-credential.ts",
         "keycloak:bootstrap-operator": "ts-node scripts/keycloak/bootstrap-operator.ts",
