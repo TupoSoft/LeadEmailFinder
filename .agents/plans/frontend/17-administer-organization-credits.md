@@ -321,6 +321,17 @@ key, cookie, token, invitation secret, or real customer data is recorded in this
 available for review; only run-owned test resources were cleaned up. This is disposable local-stack evidence, not a
 production validation claim.
 
+### Back Navigation Spacing Follow-up, 2026-09-09
+
+Review feedback identified insufficient separation between Back to organizations and the Organization credits title.
+The link now uses a content-width block with the existing 24-pixel content-gap token below it. This is local page
+spacing; shared tokens, interface behavior, API contracts, and ledger semantics are unchanged.
+
+The web production build, focused ESLint, and premium audit passed. Direct browser measurements confirmed a 24-pixel
+gap at 1440 by 900 and 320 by 720, visible keyboard focus, and no overlap or horizontal overflow. Bruno is not applicable to this follow-up because it changes
+presentation only. A Docker registry connection failure prevented rebuilding the local gateway image; the newly built
+static assets were copied into the verified checkout-owned gateway, and its served HTML matched the local build.
+
 ## Plan readiness
 
 Ready to implement.

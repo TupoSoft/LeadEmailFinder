@@ -13,6 +13,7 @@ import { formatCredits } from '../billing/format-billing'
 import { TeamDialog } from '../team/TeamDialog'
 import { creditsCopy as copy } from './platform-credits-copy'
 import { usePlatformCredits } from './use-platform-credits'
+import pageStyles from './PlatformCreditsPage.module.css'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const directoryRoute = '/app/platform/organizations'
@@ -124,7 +125,9 @@ function CreditsContent({ membershipId, organizationId }: { membershipId: string
     return (
         <>
             <header className={styles.header}>
-                <Link to={directoryRoute}>{copy.back}</Link>
+                <Link className={pageStyles.backLink} to={directoryRoute}>
+                    {copy.back}
+                </Link>
                 <h1>{copy.title}</h1>
                 <p>{copy.description}</p>
                 {!feature.organization.isError && name ? <p>{name}</p> : null}

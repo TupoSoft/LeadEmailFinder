@@ -1,0 +1,5 @@
+.backLink {
+    display: block;
+    width: fit-content;
+    margin-block-end: var(--space-content-gap);
+}
