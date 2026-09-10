@@ -61,11 +61,33 @@ describe('credits PostgreSQL runner boundaries', () => {
             numFailedTests: 0,
             numFailedTestSuites: 0,
             numPendingTestSuites: 0,
+            testResults: [
+                { name: '/checkout/src/libs/modules/credits/src/application/credits.service.integration.spec.ts' },
+                {
+                    name: '/checkout/src/libs/modules/payments/src/application/payment-event.handler.integration.spec.ts',
+                },
+            ],
         }
         expect(passedCreditsTests(report)).toBe(5)
         expect(() => passedCreditsTests({ ...report, numPassedTests: 0, numTotalTests: 0 })).toThrow()
         expect(() => passedCreditsTests({ ...report, numPendingTests: 1 })).toThrow()
         expect(() => passedCreditsTests({ ...report, success: false })).toThrow()
         expect(() => passedCreditsTests({ ...report, numPassedTests: 4 })).toThrow()
+    })
+    it('rejects a report missing either required suite', () => {
+        const report = {
+            success: true,
+            numPassedTests: 3,
+            numTotalTests: 3,
+            numPendingTests: 0,
+            numFailedTests: 0,
+            numFailedTestSuites: 0,
+            numPendingTestSuites: 0,
+            testResults: [
+                { name: '/checkout/src/libs/modules/credits/src/application/credits.service.integration.spec.ts' },
+            ],
+        }
+        expect(() => passedCreditsTests(report)).toThrow('missing a required test suite')
+        expect(() => passedCreditsTests({ ...report, testResults: [] })).toThrow()
     })
 })

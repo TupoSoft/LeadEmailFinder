@@ -5,9 +5,12 @@ import { randomUUID } from 'node:crypto'
 import {
     AuditLogEntry,
     CREDIT_LEDGER_STORE,
+    CREDIT_RESERVATION_STORE,
     CreditDebit,
     CreditGrant,
     CreditLedgerStore,
+    CreditReservation,
+    CreditReservationStore,
     ExternalIdentity,
     IdentityModule,
     Organization,
@@ -17,6 +20,7 @@ import {
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { CreditsService } from './credits.service'
+import { CreditReservationService } from './credit-reservation.service'
 import { CreditIdempotencyConflict } from '../domain/credits.error'
 
 // Deliberately its own env var, not TEST_POSTGRES_URL: identity-schema.integration.spec.ts also gates on
@@ -26,7 +30,7 @@ const postgresUrl = process.env['TEST_CREDITS_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 
 // The full identity entity set, not just the three credit tables: IdentityModule's own TypeOrmModule.forFeature
-// call registers repositories for all nine, so the root DataSource must already know all nine or repository
+// call registers repositories for all ten, so the root DataSource must already know all ten or repository
 // resolution fails with a "no metadata found" error.
 const entities = [
     Organization,
@@ -36,6 +40,7 @@ const entities = [
     OrganizationCreditAccount,
     CreditDebit,
     CreditGrant,
+    CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
 ]
@@ -44,6 +49,7 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
     let schemaDataSource: DataSource
     let moduleRef: TestingModule
     let service: CreditsService
+    let reservations: CreditReservationService
     let organizationId: string
 
     beforeAll(async () => {
@@ -72,10 +78,16 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
                     useFactory: (store: CreditLedgerStore) => new CreditsService(store),
                     inject: [CREDIT_LEDGER_STORE],
                 },
+                {
+                    provide: CreditReservationService,
+                    useFactory: (store: CreditReservationStore) => new CreditReservationService(store),
+                    inject: [CREDIT_RESERVATION_STORE],
+                },
             ],
         }).compile()
 
         service = moduleRef.get(CreditsService)
+        reservations = moduleRef.get(CreditReservationService)
     })
 
     afterAll(async () => {
@@ -276,5 +288,161 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
         await expect(
             schemaDataSource.getRepository(CreditGrant).findBy({ organizationId, reference: 'adjustment-restore' }),
         ).resolves.toEqual([expect.objectContaining({ amount: 5 })])
+    })
+
+    describe('CreditReservationService reserve/capture/release against a real, freshly-synced Postgres schema', () => {
+        async function readAccount(): Promise<OrganizationCreditAccount> {
+            return schemaDataSource.getRepository(OrganizationCreditAccount).findOneByOrFail({ organizationId })
+        }
+
+        it('holds without reducing balance, then captures once and debits once', async () => {
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 3 })
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 3 }))
+            await expect(service.getBalance(organizationId)).resolves.toBe(10)
+
+            const settlement = await reservations.capture(organizationId, operationId)
+            expect(settlement.disposition).toBe('applied')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 7, reserved: 0 }))
+
+            const debitRows = await schemaDataSource
+                .getRepository(CreditDebit)
+                .findBy({ organizationId, reference: `verification-reservation:${operationId}` })
+            expect(debitRows).toEqual([expect.objectContaining({ amount: 3 })])
+
+            const replay = await reservations.capture(organizationId, operationId)
+            expect(replay.disposition).toBe('replayed')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 7, reserved: 0 }))
+            await expect(
+                schemaDataSource
+                    .getRepository(CreditDebit)
+                    .countBy({ organizationId, reference: `verification-reservation:${operationId}` }),
+            ).resolves.toBe(1)
+        })
+
+        it('restores available credit on release without ever touching balance or the ledger', async () => {
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 3 })
+
+            const settlement = await reservations.release(organizationId, operationId)
+            expect(settlement.disposition).toBe('applied')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+            await expect(schemaDataSource.getRepository(CreditGrant).countBy({ organizationId })).resolves.toBe(0)
+            await expect(schemaDataSource.getRepository(CreditDebit).countBy({ organizationId })).resolves.toBe(0)
+
+            const replay = await reservations.release(organizationId, operationId)
+            expect(replay.disposition).toBe('replayed')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+        })
+
+        it('never admits a hold that would push available credit negative', async () => {
+            await expect(
+                reservations.reserve(organizationId, { operationId: randomUUID(), amount: 11 }),
+            ).rejects.toThrow()
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+        })
+
+        it('closes a batch of missing, still-reserved, and already-released IDs atomically without ever touching balance', async () => {
+            const stillReservedId = randomUUID()
+            const alreadyReleasedId = randomUUID()
+            const missingId = randomUUID()
+            await reservations.reserveMany(organizationId, [
+                { operationId: stillReservedId, amount: 2 },
+                { operationId: alreadyReleasedId, amount: 4 },
+            ])
+            await reservations.release(organizationId, alreadyReleasedId)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 2 }))
+
+            const closed = await reservations.closeAdmissionMany(organizationId, [
+                { operationId: stillReservedId, amount: 2 },
+                { operationId: alreadyReleasedId, amount: 4 },
+                { operationId: missingId, amount: 5 },
+            ])
+
+            const byOperationId = new Map(closed.map(settlement => [settlement.operationId, settlement]))
+            expect(byOperationId.get(stillReservedId)).toEqual(
+                expect.objectContaining({ state: 'released', disposition: 'applied' }),
+            )
+            expect(byOperationId.get(alreadyReleasedId)).toEqual(
+                expect.objectContaining({ state: 'released', disposition: 'replayed' }),
+            )
+            expect(byOperationId.get(missingId)).toEqual(
+                expect.objectContaining({ state: 'released', disposition: 'applied' }),
+            )
+
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+            await expect(schemaDataSource.getRepository(CreditGrant).countBy({ organizationId })).resolves.toBe(0)
+            await expect(schemaDataSource.getRepository(CreditDebit).countBy({ organizationId })).resolves.toBe(0)
+        })
+
+        it('rolls back the whole closure batch when one ID is already captured', async () => {
+            const capturedId = randomUUID()
+            const reservedId = randomUUID()
+            await reservations.reserveMany(organizationId, [
+                { operationId: capturedId, amount: 2 },
+                { operationId: reservedId, amount: 3 },
+            ])
+            await reservations.capture(organizationId, capturedId)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 8, reserved: 3 }))
+
+            await expect(
+                reservations.closeAdmissionMany(organizationId, [
+                    { operationId: capturedId, amount: 2 },
+                    { operationId: reservedId, amount: 3 },
+                ]),
+            ).rejects.toThrow()
+
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 8, reserved: 3 }))
+            await expect(reservations.getReservation(organizationId, reservedId)).resolves.toEqual(
+                expect.objectContaining({ state: 'reserved' }),
+            )
+        })
+
+        it('rolls back the whole closure batch when one ID carries a mismatched amount', async () => {
+            const mismatchedId = randomUUID()
+            const reservedId = randomUUID()
+            await reservations.reserveMany(organizationId, [
+                { operationId: mismatchedId, amount: 2 },
+                { operationId: reservedId, amount: 3 },
+            ])
+
+            await expect(
+                reservations.closeAdmissionMany(organizationId, [
+                    { operationId: mismatchedId, amount: 9 },
+                    { operationId: reservedId, amount: 3 },
+                ]),
+            ).rejects.toThrow()
+
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 5 }))
+            await expect(reservations.getReservation(organizationId, reservedId)).resolves.toEqual(
+                expect.objectContaining({ state: 'reserved' }),
+            )
+        })
+
+        it('fences a delayed duplicate reserve after an insufficient-funds denial is closed and the account is replenished', async () => {
+            const operationId = randomUUID()
+            await expect(reservations.reserve(organizationId, { operationId, amount: 11 })).rejects.toThrow()
+
+            await reservations.closeAdmissionMany(organizationId, [{ operationId, amount: 11 }])
+            await service.credit(organizationId, 20, 'replenish-after-denial')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 30, reserved: 0 }))
+
+            const delayedDuplicate = await reservations.reserve(organizationId, { operationId, amount: 11 })
+            expect(delayedDuplicate).toEqual(expect.objectContaining({ state: 'released', disposition: 'existing' }))
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 30, reserved: 0 }))
+        })
+
+        it('serializes a reserve racing a close on the same operation ID without ever admitting a captured amount twice', async () => {
+            const operationId = randomUUID()
+            const results = await Promise.allSettled([
+                reservations.reserve(organizationId, { operationId, amount: 3 }),
+                reservations.closeAdmissionMany(organizationId, [{ operationId, amount: 3 }]),
+            ])
+
+            expect(results.every(result => result.status === 'fulfilled')).toBe(true)
+            const finalReservation = await reservations.getReservation(organizationId, operationId)
+            expect(finalReservation?.state).toBe('released')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+        })
     })
 })

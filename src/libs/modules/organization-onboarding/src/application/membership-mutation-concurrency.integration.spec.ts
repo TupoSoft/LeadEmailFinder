@@ -6,6 +6,7 @@ import {
     AuthPrincipal,
     CreditDebit,
     CreditGrant,
+    CreditReservation,
     ExternalIdentity,
     IdentityModule,
     MEMBERSHIP_MUTATION_STORE,
@@ -26,8 +27,8 @@ const describeWithPostgres = postgresUrl === undefined ? describe.skip : describ
 const schema = `membership_mutation_${process.pid}`
 
 // The full identity entity set, not just the four this test touches: IdentityModule's own
-// TypeOrmModule.forFeature call registers repositories for all nine, so the root DataSource must already
-// know all nine or repository resolution fails with a "no metadata found" error.
+// TypeOrmModule.forFeature call registers repositories for all ten, so the root DataSource must already
+// know all ten or repository resolution fails with a "no metadata found" error.
 const entities = [
     Organization,
     ExternalIdentity,
@@ -36,6 +37,7 @@ const entities = [
     OrganizationCreditAccount,
     CreditDebit,
     CreditGrant,
+    CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
 ]
@@ -85,7 +87,8 @@ describeWithPostgres('concurrent final-owner membership mutations', () => {
                 {
                     provide: MembershipRoleChangeService,
                     inject: [MEMBERSHIP_MUTATION_STORE],
-                    useFactory: (store: MembershipMutationStore) => new MembershipRoleChangeService(store, keycloakAdmin),
+                    useFactory: (store: MembershipMutationStore) =>
+                        new MembershipRoleChangeService(store, keycloakAdmin),
                 },
             ],
         }).compile()
@@ -176,9 +179,7 @@ async function createOrganizationWithTwoOwners(dataSource: DataSource, label: st
 async function expectExactlyOneConflict(
     dataSource: DataSource,
     fixture: OrganizationFixture,
-    startOperations: (
-        memberships: OrganizationFixture['memberships'],
-    ) => readonly [Promise<unknown>, Promise<unknown>],
+    startOperations: (memberships: OrganizationFixture['memberships']) => readonly [Promise<unknown>, Promise<unknown>],
     expectedAuditAction: string,
 ): Promise<void> {
     const blocker = dataSource.createQueryRunner()

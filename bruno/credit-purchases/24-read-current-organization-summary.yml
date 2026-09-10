@@ -13,6 +13,8 @@ runtime:
           code: |-
               test('derives the organization from the principal rather than request input', function() {
                 expect(res.status).to.equal(200);
-                expect(Object.keys(res.body)).to.deep.equal(['balance']);
+                expect(Object.keys(res.body).sort()).to.deep.equal(['available', 'balance', 'reserved']);
                 expect(res.body.balance).to.equal(Number(bru.getVar('paidBalance')));
+                expect(res.body.reserved).to.equal(0);
+                expect(res.body.available).to.equal(res.body.balance - res.body.reserved);
               });

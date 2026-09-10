@@ -10,6 +10,7 @@ import {
     AuditLogEntry,
     AuthPrincipal,
     CreditDebit,
+    CreditReservation,
     ExternalIdentity,
     Organization,
     OrganizationCreditAccount,
@@ -56,6 +57,7 @@ const identityEntities = [
     ServiceCredential,
     OrganizationCreditAccount,
     CreditDebit,
+    CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
 ]
@@ -92,7 +94,10 @@ interface KeycloakClientRepresentation {
     serviceAccountsEnabled?: boolean
 }
 
-async function findRawKeycloakClient(adminToken: string, clientId: string): Promise<KeycloakClientRepresentation | undefined> {
+async function findRawKeycloakClient(
+    adminToken: string,
+    clientId: string,
+): Promise<KeycloakClientRepresentation | undefined> {
     const response = await fetch(
         `${keycloakBaseUrl()}/admin/realms/${realmName()}/clients?clientId=${encodeURIComponent(clientId)}`,
         { headers: { authorization: `Bearer ${adminToken}` } },
@@ -126,7 +131,11 @@ async function obtainClientCredentialsToken(clientId: string, clientSecret: stri
     const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
+        body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+        }),
     })
     const token = (await response.json()) as TokenResponse
     if (!response.ok || !token.access_token) {
@@ -254,62 +263,55 @@ describeWithKeycloakAndPostgres('service client lifecycle against a live Keycloa
         await moduleRef.close()
     }, 30_000)
 
-    it(
-        'create -> token -> use -> rotate -> disable -> delete',
-        async () => {
-            const actor = actorFixture(organizationId)
+    it('create -> token -> use -> rotate -> disable -> delete', async () => {
+        const actor = actorFixture(organizationId)
 
-            const created = await creationService.create(actor, organizationId, 'ci integration', ['verification:run'])
-            const rawClient = await findRawKeycloakClient(adminToken, created.credential.keycloakClientId)
-            if (!rawClient) {
-                throw new Error('Keycloak client was not visible after creation')
-            }
-            createdInternalIds.push(rawClient.id)
+        const created = await creationService.create(actor, organizationId, 'ci integration', ['verification:run'])
+        const rawClient = await findRawKeycloakClient(adminToken, created.credential.keycloakClientId)
+        if (!rawClient) {
+            throw new Error('Keycloak client was not visible after creation')
+        }
+        createdInternalIds.push(rawClient.id)
 
-            expect(rawClient.serviceAccountsEnabled).toBe(true)
-            const defaultScopeNames = await getDefaultClientScopeNames(adminToken, rawClient.id)
-            expect(defaultScopeNames).toContain('lef-api-audience')
+        expect(rawClient.serviceAccountsEnabled).toBe(true)
+        const defaultScopeNames = await getDefaultClientScopeNames(adminToken, rawClient.id)
+        expect(defaultScopeNames).toContain('lef-api-audience')
 
-            const firstToken = await obtainClientCredentialsToken(created.credential.keycloakClientId, created.secret)
-            expect(decodeSubject(firstToken)).toBe(created.credential.subject)
+        const firstToken = await obtainClientCredentialsToken(created.credential.keycloakClientId, created.secret)
+        expect(decodeSubject(firstToken)).toBe(created.credential.subject)
 
-            await request(app.getHttpServer())
-                .get('/service-client-live-test/run')
-                .set('authorization', `Bearer ${firstToken}`)
-                .expect(200)
-            await request(app.getHttpServer())
-                .get('/service-client-live-test/manage')
-                .set('authorization', `Bearer ${firstToken}`)
-                .expect(403)
+        await request(app.getHttpServer())
+            .get('/service-client-live-test/run')
+            .set('authorization', `Bearer ${firstToken}`)
+            .expect(200)
+        await request(app.getHttpServer())
+            .get('/service-client-live-test/manage')
+            .set('authorization', `Bearer ${firstToken}`)
+            .expect(403)
 
-            const rotated = await rotationService.rotate(actor, organizationId, created.credential.id)
-            await expect(
-                obtainClientCredentialsToken(created.credential.keycloakClientId, created.secret),
-            ).rejects.toThrow()
-            const secondToken = await obtainClientCredentialsToken(created.credential.keycloakClientId, rotated.secret)
-            await request(app.getHttpServer())
-                .get('/service-client-live-test/run')
-                .set('authorization', `Bearer ${secondToken}`)
-                .expect(200)
+        const rotated = await rotationService.rotate(actor, organizationId, created.credential.id)
+        await expect(
+            obtainClientCredentialsToken(created.credential.keycloakClientId, created.secret),
+        ).rejects.toThrow()
+        const secondToken = await obtainClientCredentialsToken(created.credential.keycloakClientId, rotated.secret)
+        await request(app.getHttpServer())
+            .get('/service-client-live-test/run')
+            .set('authorization', `Bearer ${secondToken}`)
+            .expect(200)
 
-            const preDisableToken = await obtainClientCredentialsToken(
-                created.credential.keycloakClientId,
-                rotated.secret,
-            )
-            await disablementService.disable(actor, organizationId, created.credential.id)
-            await request(app.getHttpServer())
-                .get('/service-client-live-test/run')
-                .set('authorization', `Bearer ${preDisableToken}`)
-                .expect(401)
+        const preDisableToken = await obtainClientCredentialsToken(created.credential.keycloakClientId, rotated.secret)
+        await disablementService.disable(actor, organizationId, created.credential.id)
+        await request(app.getHttpServer())
+            .get('/service-client-live-test/run')
+            .set('authorization', `Bearer ${preDisableToken}`)
+            .expect(401)
 
-            await deletionService.delete(actor, organizationId, created.credential.id)
-            const rawClientAfterDelete = await findRawKeycloakClient(adminToken, created.credential.keycloakClientId)
-            expect(rawClientAfterDelete).toBeUndefined()
-            await request(app.getHttpServer())
-                .get('/service-client-live-test/run')
-                .set('authorization', `Bearer ${preDisableToken}`)
-                .expect(401)
-        },
-        60_000,
-    )
+        await deletionService.delete(actor, organizationId, created.credential.id)
+        const rawClientAfterDelete = await findRawKeycloakClient(adminToken, created.credential.keycloakClientId)
+        expect(rawClientAfterDelete).toBeUndefined()
+        await request(app.getHttpServer())
+            .get('/service-client-live-test/run')
+            .set('authorization', `Bearer ${preDisableToken}`)
+            .expect(401)
+    }, 60_000)
 })

@@ -1,5 +1,9 @@
-import { CreditLedgerStore } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditIdempotencyConflict, InsufficientCreditsException } from '../domain/credits.error'
+import { CreditBalanceSnapshot, CreditLedgerStore } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    BalanceBelowReservedException,
+    CreditIdempotencyConflict,
+    InsufficientCreditsException,
+} from '../domain/credits.error'
 
 export class CreditsService {
     constructor(private readonly store: CreditLedgerStore) {}
@@ -38,8 +42,17 @@ export class CreditsService {
         return this.store.getBalance(organizationId)
     }
 
+    async getBalanceSnapshot(organizationId: string): Promise<CreditBalanceSnapshot & { available: number }> {
+        const { balance, reserved } = await this.store.getBalanceSnapshot(organizationId)
+        return { balance, reserved, available: balance - reserved }
+    }
+
     async setBalance(organizationId: string, amount: number): Promise<number> {
-        return this.store.setBalance(organizationId, amount)
+        const outcome = await this.store.setBalance(organizationId, amount)
+        if (outcome.kind === 'below-reserved') {
+            throw new BalanceBelowReservedException(organizationId)
+        }
+        return outcome.balance
     }
 
     private assertNonNegativeInteger(amount: number): void {

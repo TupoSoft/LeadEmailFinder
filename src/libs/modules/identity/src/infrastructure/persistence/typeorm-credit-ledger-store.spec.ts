@@ -55,7 +55,11 @@ describe('TypeOrmCreditLedgerStore', () => {
         const organizationId = 'org-1'
 
         it('decrements the balance and records the reference when sufficient and new', async () => {
-            managerMock.findOne.mockResolvedValue({ organizationId, balance: 10 } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue({
+                organizationId,
+                balance: 10,
+                reserved: 0,
+            } as OrganizationCreditAccount)
             managerMock.existsBy.mockResolvedValue(false)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('applied')
@@ -76,7 +80,25 @@ describe('TypeOrmCreditLedgerStore', () => {
         })
 
         it('reports insufficient-balance without writing when the balance is too low', async () => {
-            managerMock.findOne.mockResolvedValue({ organizationId, balance: 1 } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue({
+                organizationId,
+                balance: 1,
+                reserved: 0,
+            } as OrganizationCreditAccount)
+            managerMock.existsBy.mockResolvedValue(false)
+
+            await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('insufficient-balance')
+
+            expect(managerMock.save).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
+        })
+
+        it('reports insufficient-balance when reserved credits make the raw balance unavailable', async () => {
+            managerMock.findOne.mockResolvedValue({
+                organizationId,
+                balance: 5,
+                reserved: 3,
+            } as OrganizationCreditAccount)
             managerMock.existsBy.mockResolvedValue(false)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('insufficient-balance')
@@ -95,7 +117,11 @@ describe('TypeOrmCreditLedgerStore', () => {
         })
 
         it('is idempotent: a reference already charged reports replayed without writing again', async () => {
-            managerMock.findOne.mockResolvedValue({ organizationId, balance: 10 } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue({
+                organizationId,
+                balance: 10,
+                reserved: 0,
+            } as OrganizationCreditAccount)
             managerMock.existsBy.mockResolvedValue(true)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('replayed')
@@ -105,7 +131,11 @@ describe('TypeOrmCreditLedgerStore', () => {
         })
 
         it('reports replayed even when a replayed reference is now below the required balance', async () => {
-            managerMock.findOne.mockResolvedValue({ organizationId, balance: 1 } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue({
+                organizationId,
+                balance: 1,
+                reserved: 0,
+            } as OrganizationCreditAccount)
             managerMock.existsBy.mockResolvedValue(true)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('replayed')
@@ -124,7 +154,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             const result = await store.credit('org-1', 5, 'ref-1')
 
             expect(accountInsertMock.into).toHaveBeenCalledWith(OrganizationCreditAccount)
-            expect(accountInsertMock.values).toHaveBeenCalledWith({ organizationId: 'org-1', balance: 0 })
+            expect(accountInsertMock.values).toHaveBeenCalledWith({ organizationId: 'org-1', balance: 0, reserved: 0 })
             expect(accountInsertMock.onConflict).toHaveBeenCalledWith('("organizationId") DO NOTHING')
             expect(managerMock.findOneOrFail).toHaveBeenCalledWith(OrganizationCreditAccount, {
                 where: { organizationId: 'org-1' },
@@ -316,27 +346,53 @@ describe('TypeOrmCreditLedgerStore', () => {
     })
 
     describe('setBalance', () => {
-        it('sets the balance of an existing account', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue({
+        it('inserts an absent account before locking, then sets its balance under the shared lock discipline', async () => {
+            managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 10,
+                reserved: 0,
             } as OrganizationCreditAccount)
-            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
+            managerMock.save.mockImplementation((_entity, account) =>
+                Promise.resolve(account as OrganizationCreditAccount),
+            )
 
-            const result = await store.setBalance('org-1', 7)
+            await expect(store.setBalance('org-1', 7)).resolves.toEqual({ kind: 'applied', balance: 7 })
 
-            expect(result).toBe(7)
+            expect(accountInsertMock.into).toHaveBeenCalledWith(OrganizationCreditAccount)
+            expect(accountInsertMock.values).toHaveBeenCalledWith({ organizationId: 'org-1', balance: 0, reserved: 0 })
+            expect(managerMock.findOneOrFail).toHaveBeenCalledWith(OrganizationCreditAccount, {
+                where: { organizationId: 'org-1' },
+                lock: { mode: 'pessimistic_write' },
+            })
+            expect(managerMock.save).toHaveBeenCalledWith(
+                OrganizationCreditAccount,
+                expect.objectContaining({ balance: 7 }),
+            )
         })
 
-        it('creates a new account when none exists', async () => {
-            accountRepoMock.findOneBy.mockResolvedValue(null)
-            accountRepoMock.create.mockReturnValue({ organizationId: 'org-1' } as OrganizationCreditAccount)
-            accountRepoMock.save.mockImplementation(account => Promise.resolve(account as OrganizationCreditAccount))
+        it('rejects a target below reserved credits without writing', async () => {
+            managerMock.findOneOrFail.mockResolvedValue({
+                organizationId: 'org-1',
+                balance: 10,
+                reserved: 4,
+            } as OrganizationCreditAccount)
 
-            const result = await store.setBalance('org-1', 7)
+            await expect(store.setBalance('org-1', 3)).resolves.toEqual({ kind: 'below-reserved' })
 
-            expect(accountRepoMock.create).toHaveBeenCalledWith({ organizationId: 'org-1' })
-            expect(result).toBe(7)
+            expect(managerMock.save).not.toHaveBeenCalled()
+        })
+
+        it('accepts a target exactly equal to reserved credits', async () => {
+            managerMock.findOneOrFail.mockResolvedValue({
+                organizationId: 'org-1',
+                balance: 10,
+                reserved: 4,
+            } as OrganizationCreditAccount)
+            managerMock.save.mockImplementation((_entity, account) =>
+                Promise.resolve(account as OrganizationCreditAccount),
+            )
+
+            await expect(store.setBalance('org-1', 4)).resolves.toEqual({ kind: 'applied', balance: 4 })
         })
     })
 
@@ -354,6 +410,24 @@ describe('TypeOrmCreditLedgerStore', () => {
             accountRepoMock.findOneBy.mockResolvedValue(null)
 
             await expect(store.getBalance('org-1')).resolves.toBe(0)
+        })
+    })
+
+    describe('getBalanceSnapshot', () => {
+        it('reads balance and reserved from one consistent account row', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue({
+                organizationId: 'org-1',
+                balance: 42,
+                reserved: 9,
+            } as OrganizationCreditAccount)
+
+            await expect(store.getBalanceSnapshot('org-1')).resolves.toEqual({ balance: 42, reserved: 9 })
+        })
+
+        it('returns zeros when no account exists', async () => {
+            accountRepoMock.findOneBy.mockResolvedValue(null)
+
+            await expect(store.getBalanceSnapshot('org-1')).resolves.toEqual({ balance: 0, reserved: 0 })
         })
     })
 })

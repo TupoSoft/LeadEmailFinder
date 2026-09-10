@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -12,7 +13,9 @@ import {
     customerClientSecret,
     validateCustomerFixture,
     withAsyncVerificationFixture,
+    withRestoredBalance,
 } from './async-verification-fixture.mjs'
+import { withBillingReadForCustomerFixture } from './customer-billing-read-fixture.mjs'
 import {
     brunoFailure,
     formatFailureDiagnostic,
@@ -28,7 +31,7 @@ const registry = Object.freeze({
     'async-verification': Object.freeze({ requests: 15, tests: 15, sandbox: 'developer', network: 'compose' }),
     'batch-verification': Object.freeze({ requests: 9, tests: 15, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
-    'credit-purchases': Object.freeze({ requests: 33, sandbox: 'developer', network: 'host' }),
+    'credit-purchases': Object.freeze({ requests: 34, sandbox: 'developer', network: 'host' }),
     'service-client-management': Object.freeze({
         requests: 6,
         tests: 6,
@@ -164,7 +167,11 @@ export function cliArguments(name, environment, reportFile) {
                 !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
         (name === 'service-client-management' && !environment.SERVICE_CLIENT_ORGANIZATION_ID) ||
         (name === 'credit-purchases' &&
-            (!environment.PAYMENTS_STUB_WEBHOOK_SECRET || !environment.PLATFORM_ORGANIZATION_ID)) ||
+            (!environment.PAYMENTS_STUB_WEBHOOK_SECRET ||
+                !environment.PLATFORM_ORGANIZATION_ID ||
+                !environment.CUSTOMER_BILLING_TOKEN ||
+                !environment.CUSTOMER_HELD_BALANCE ||
+                !environment.CUSTOMER_HELD_RESERVED)) ||
         (collection.network === 'compose' &&
             (!environment.OIDC_BACKCHANNEL_URL || !environment.PLATFORM_ORGANIZATION_ID))
     ) {
@@ -290,6 +297,116 @@ export async function stubPaymentEnvironment(container, checkoutRoot, apiUrl) {
     return { PAYMENTS_STUB_WEBHOOK_SECRET: secret }
 }
 
+const CREDIT_PURCHASES_HELD_BALANCE = 500
+const CREDIT_PURCHASES_HELD_RESERVED = 75
+
+async function mintClientCredentialsToken(issuer, clientId, clientSecret) {
+    const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
+        method: 'POST',
+        body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+        }),
+        signal: AbortSignal.timeout(15_000),
+    })
+    if (!response.ok) throw new Error('Failed to mint a client-credentials token for the reservation fixture')
+    const { access_token: token } = await response.json()
+    if (typeof token !== 'string' || !token) throw new Error('Reservation fixture token is missing')
+    return token
+}
+
+async function runReservationFixture(checkoutRoot, metadata, organizationId, operationId, action, amount) {
+    await execFileAsync(
+        process.execPath,
+        [require.resolve('ts-node/dist/bin.js'), 'scripts/bruno/reservation-fixture.ts'],
+        {
+            cwd: checkoutRoot,
+            env: {
+                ...process.env,
+                RESERVATION_POSTGRES_URL: metadata.postgresUrl,
+                RESERVATION_ORGANIZATION_ID: organizationId,
+                RESERVATION_OPERATION_ID: operationId,
+                RESERVATION_ACTION: action,
+                ...(amount === undefined ? {} : { RESERVATION_AMOUNT: String(amount) }),
+            },
+            timeout: 60_000,
+            maxBuffer: 1024 * 1024,
+        },
+    )
+}
+
+// Reuses the same seeded, isolated customer organization (and its exclusive lock) that
+// withAsyncVerificationFixture uses, so this real reservation hold never perturbs the platform organization
+// that the rest of the credit-purchases collection exercises. withRestoredBalance guarantees the customer
+// organization's balance returns to whatever it was before this fixture ran, regardless of outcome.
+async function withCreditPurchasesReservationFixture(checkoutRoot, metadata, environment, execute) {
+    const readMetadata = async name => JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', name), 'utf8'))
+    const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
+    const credential = await readMetadata('service-credential.json')
+    const customer = validateCustomerFixture(
+        await readMetadata('customer-fixture.json'),
+        issuer,
+        credential.organizationId,
+    )
+    const customerSecret = await customerClientSecret(metadata, customer.keycloakClientId)
+    const lock = resolve(checkoutRoot, '.dev/async-verification.lock')
+    await mkdir(lock, { mode: 0o700 })
+    try {
+        const creditRequest = async (method, amount) => {
+            const platformToken = await mintClientCredentialsToken(
+                issuer,
+                environment.KEYCLOAK_SERVICE_CLIENT_ID,
+                environment.KEYCLOAK_SERVICE_CLIENT_SECRET,
+            )
+            const response = await fetch(`${metadata.apiUrl}/credits/${customer.organizationId}`, {
+                method,
+                headers: { authorization: `Bearer ${platformToken}`, 'content-type': 'application/json' },
+                ...(method === 'PUT' ? { body: JSON.stringify({ amount }) } : {}),
+                signal: AbortSignal.timeout(15_000),
+            })
+            if (!response.ok) throw new Error('Credit-purchases reservation fixture balance request failed')
+            return response.json()
+        }
+        return await withRestoredBalance(creditRequest, async setBalance => {
+            await setBalance(CREDIT_PURCHASES_HELD_BALANCE)
+            const operationId = randomUUID()
+            await runReservationFixture(
+                checkoutRoot,
+                metadata,
+                customer.organizationId,
+                operationId,
+                'reserve',
+                CREDIT_PURCHASES_HELD_RESERVED,
+            )
+            try {
+                return await withBillingReadForCustomerFixture(
+                    metadata,
+                    issuer,
+                    customer.keycloakClientId,
+                    async () => {
+                        const customerToken = await mintClientCredentialsToken(
+                            issuer,
+                            customer.keycloakClientId,
+                            customerSecret,
+                        )
+                        return execute({
+                            ...environment,
+                            CUSTOMER_BILLING_TOKEN: customerToken,
+                            CUSTOMER_HELD_BALANCE: String(CREDIT_PURCHASES_HELD_BALANCE),
+                            CUSTOMER_HELD_RESERVED: String(CREDIT_PURCHASES_HELD_RESERVED),
+                        })
+                    },
+                )
+            } finally {
+                await runReservationFixture(checkoutRoot, metadata, customer.organizationId, operationId, 'release')
+            }
+        })
+    } finally {
+        await rm(lock, { recursive: true })
+    }
+}
+
 async function bootstrapCreditPurchaseCredential(checkoutRoot, metadata) {
     await execFileAsync(
         process.execPath,
@@ -353,6 +470,12 @@ export async function runCollection(args, checkoutRoot) {
                 },
                 checkoutRoot,
             ),
+        )
+    }
+    if (name === 'credit-purchases') {
+        await inspectDevelopmentService(checkoutRoot, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
+        return withCreditPurchasesReservationFixture(checkoutRoot, metadata, environment, fixtureEnvironment =>
+            executeCollection(name, fixtureEnvironment, checkoutRoot),
         )
     }
     if (collection.network === 'compose') {

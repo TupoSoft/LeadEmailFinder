@@ -27,7 +27,7 @@ import { Request } from 'express'
 import { CreditsService } from '../application/credits.service'
 import { AddCreditsDto, CreditResponseDto, CreditsAccountParamsDto, SetBalanceDto } from './credits.dto'
 import { PermissionsGuard, RequirePermissions } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditIdempotencyConflict } from '../domain/credits.error'
+import { BalanceBelowReservedException, CreditIdempotencyConflict } from '../domain/credits.error'
 import { parseCreditIdempotencyKey } from './credit-idempotency-key'
 
 const SESSION_SECURITY: Record<string, string[]>[] = [{ lef_session: [] }, { oidc: [] }]
@@ -43,7 +43,8 @@ export class CreditsController {
     @ApiOperation({
         operationId: 'CreditsController_getBalance',
         summary: 'Read the authoritative organization credit balance',
-        description: 'Requires platform:admin. Returns zero when no credit account exists; this does not prove organization existence.',
+        description:
+            'Requires platform:admin. Returns zero when no credit account exists; this does not prove organization existence.',
         security: SESSION_SECURITY,
     })
     @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
@@ -106,7 +107,8 @@ export class CreditsController {
     @ApiOperation({
         operationId: 'CreditsController_setBalance',
         summary: 'Set an absolute organization credit balance',
-        description: 'Requires platform:admin. Replaces the balance with the requested value. Cookie sessions require Origin and CSRF protection. Reload after uncertainty before another explicit set.',
+        description:
+            'Requires platform:admin. Replaces the balance with the requested value. Cookie sessions require Origin and CSRF protection. Reload after uncertainty before another explicit set.',
         security: MUTATION_SECURITY,
     })
     @ApiParam({ name: 'organizationId', type: String, format: 'uuid' })
@@ -115,13 +117,25 @@ export class CreditsController {
     @ApiBadRequestResponse({ description: 'Invalid organization UUID or nonnegative integer amount.' })
     @ApiUnauthorizedResponse({ description: 'Missing or invalid authentication.' })
     @ApiForbiddenResponse({ description: 'Authenticated caller lacks platform:admin or browser CSRF check denied.' })
-    @ApiInternalServerErrorResponse({ description: 'The outcome may be uncertain; reload the balance before another explicit set.' })
+    @ApiConflictResponse({
+        description: 'The requested balance is below credits already reserved for accepted operations.',
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'The outcome may be uncertain; reload the balance before another explicit set.',
+    })
     @SerializeOptions({ type: CreditResponseDto })
     async setBalance(
         @Param() { organizationId }: CreditsAccountParamsDto,
         @Body() { amount }: SetBalanceDto,
     ): Promise<CreditResponseDto> {
-        const balance = await this.creditsService.setBalance(organizationId, amount)
-        return { balance }
+        try {
+            const balance = await this.creditsService.setBalance(organizationId, amount)
+            return { balance }
+        } catch (error) {
+            if (error instanceof BalanceBelowReservedException) {
+                throw new ConflictException('Requested balance is below reserved credits')
+            }
+            throw error
+        }
     }
 }

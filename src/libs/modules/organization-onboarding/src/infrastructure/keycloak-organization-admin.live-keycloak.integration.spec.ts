@@ -7,6 +7,7 @@ import {
     AuditLogEntry,
     AuthPrincipal,
     CreditDebit,
+    CreditReservation,
     ExternalIdentity,
     Organization,
     OrganizationCreditAccount,
@@ -16,7 +17,10 @@ import {
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
 import { InvitationIssuanceService } from '../application/invitation-issuance.service'
-import { KEYCLOAK_ORGANIZATION_ADMIN, KeycloakOrganizationAdmin } from '../application/ports/keycloak-organization-admin'
+import {
+    KEYCLOAK_ORGANIZATION_ADMIN,
+    KeycloakOrganizationAdmin,
+} from '../application/ports/keycloak-organization-admin'
 import { ConflictingMembershipError } from '../domain/organization-onboarding.errors'
 import { OrganizationOnboardingModule } from '../organization-onboarding.module'
 
@@ -42,6 +46,7 @@ const identityEntities = [
     ServiceCredential,
     OrganizationCreditAccount,
     CreditDebit,
+    CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
 ]
@@ -189,116 +194,100 @@ describeWithKeycloakAndPostgres('KeycloakOrganizationAdmin against a live Keyclo
         await moduleRef.close()
     }, 30_000)
 
-    it(
-        'ensureUser creates a real Keycloak user and preserves its credential on retry',
-        async () => {
-            const email = `org-admin-test-${randomUUID()}@example.test`
+    it('ensureUser creates a real Keycloak user and preserves its credential on retry', async () => {
+        const email = `org-admin-test-${randomUUID()}@example.test`
 
-            const first = await keycloakAdmin.ensureUser({ email, password: 'first-password-123' })
-            const second = await keycloakAdmin.ensureUser({ email, password: 'second-password-123' })
-            createdUserIds.push(first.subject)
+        const first = await keycloakAdmin.ensureUser({ email, password: 'first-password-123' })
+        const second = await keycloakAdmin.ensureUser({ email, password: 'second-password-123' })
+        createdUserIds.push(first.subject)
 
-            expect(first).toEqual({ subject: expect.any(String), created: true })
-            expect(second).toEqual({ subject: first.subject, created: false })
-            const foundUser = await findUserByEmail(adminToken, email)
-            expect(foundUser?.id).toBe(first.subject)
+        expect(first).toEqual({ subject: expect.any(String), created: true })
+        expect(second).toEqual({ subject: first.subject, created: false })
+        const foundUser = await findUserByEmail(adminToken, email)
+        expect(foundUser?.id).toBe(first.subject)
 
-            await expectPasswordAuthentication(email, 'first-password-123', true)
-            await expectPasswordAuthentication(email, 'second-password-123', false)
-        },
-        30_000,
-    )
+        await expectPasswordAuthentication(email, 'first-password-123', true)
+        await expectPasswordAuthentication(email, 'second-password-123', false)
+    }, 30_000)
 
-    it(
-        'rejects an invitation for an active member before assigning a realm role or changing the password',
-        async () => {
-            const email = `org-admin-conflict-${randomUUID()}@example.test`
-            const originalPassword = 'original-password-123'
-            const replacementPassword = 'replacement-password-123'
-            const existingUser = await keycloakAdmin.ensureUser({ email, password: originalPassword })
-            createdUserIds.push(existingUser.subject)
+    it('rejects an invitation for an active member before assigning a realm role or changing the password', async () => {
+        const email = `org-admin-conflict-${randomUUID()}@example.test`
+        const originalPassword = 'original-password-123'
+        const replacementPassword = 'replacement-password-123'
+        const existingUser = await keycloakAdmin.ensureUser({ email, password: originalPassword })
+        createdUserIds.push(existingUser.subject)
 
-            const existingOrganization = await organizationRepo.save(
-                organizationRepo.create({ name: `existing-org-${randomUUID()}` }),
-            )
-            const externalIdentity = await externalIdentityRepo.save(
-                externalIdentityRepo.create({ issuer: issuer!, subject: existingUser.subject, email }),
-            )
-            await membershipRepo.save(
-                membershipRepo.create({
-                    organizationId: existingOrganization.id,
-                    externalIdentityId: externalIdentity.id,
-                    role: 'member',
-                    status: 'active',
-                }),
-            )
+        const existingOrganization = await organizationRepo.save(
+            organizationRepo.create({ name: `existing-org-${randomUUID()}` }),
+        )
+        const externalIdentity = await externalIdentityRepo.save(
+            externalIdentityRepo.create({ issuer: issuer!, subject: existingUser.subject, email }),
+        )
+        await membershipRepo.save(
+            membershipRepo.create({
+                organizationId: existingOrganization.id,
+                externalIdentityId: externalIdentity.id,
+                role: 'member',
+                status: 'active',
+            }),
+        )
 
-            const invitedOrganization = await organizationRepo.save(
-                organizationRepo.create({ name: `invited-org-${randomUUID()}` }),
-            )
-            const { invitation, rawToken } = await invitationIssuance.issue(
-                { ...actorFixture(), organizationId: invitedOrganization.id, membershipRole: 'owner' },
-                invitedOrganization.id,
-                email,
-                'owner',
-            )
+        const invitedOrganization = await organizationRepo.save(
+            organizationRepo.create({ name: `invited-org-${randomUUID()}` }),
+        )
+        const { invitation, rawToken } = await invitationIssuance.issue(
+            { ...actorFixture(), organizationId: invitedOrganization.id, membershipRole: 'owner' },
+            invitedOrganization.id,
+            email,
+            'owner',
+        )
 
-            await expect(invitationAcceptance.accept(rawToken, replacementPassword)).rejects.toThrow(
-                ConflictingMembershipError,
-            )
+        await expect(invitationAcceptance.accept(rawToken, replacementPassword)).rejects.toThrow(
+            ConflictingMembershipError,
+        )
 
-            const unchangedInvitation = await invitationRepo.findOneByOrFail({ id: invitation.id })
-            expect(unchangedInvitation.status).toBe('pending')
-            expect(await getRealmRoleNames(adminToken, existingUser.subject)).not.toContain('owner')
-            await expectPasswordAuthentication(email, originalPassword, true)
-            await expectPasswordAuthentication(email, replacementPassword, false)
-        },
-        30_000,
-    )
+        const unchangedInvitation = await invitationRepo.findOneByOrFail({ id: invitation.id })
+        expect(unchangedInvitation.status).toBe('pending')
+        expect(await getRealmRoleNames(adminToken, existingUser.subject)).not.toContain('owner')
+        await expectPasswordAuthentication(email, originalPassword, true)
+        await expectPasswordAuthentication(email, replacementPassword, false)
+    }, 30_000)
 
-    it(
-        "assignRealmRole('owner') verifiably grants the realm role",
-        async () => {
-            const email = `org-admin-role-test-${randomUUID()}@example.test`
-            const { subject } = await keycloakAdmin.ensureUser({ email, password: 'a-password-123' })
-            createdUserIds.push(subject)
+    it("assignRealmRole('owner') verifiably grants the realm role", async () => {
+        const email = `org-admin-role-test-${randomUUID()}@example.test`
+        const { subject } = await keycloakAdmin.ensureUser({ email, password: 'a-password-123' })
+        createdUserIds.push(subject)
 
-            await keycloakAdmin.assignRealmRole(subject, 'owner')
+        await keycloakAdmin.assignRealmRole(subject, 'owner')
 
-            const roleNames = await getRealmRoleNames(adminToken, subject)
-            expect(roleNames).toContain('owner')
-        },
-        30_000,
-    )
+        const roleNames = await getRealmRoleNames(adminToken, subject)
+        expect(roleNames).toContain('owner')
+    }, 30_000)
 
-    it(
-        'drives invitation issuance and acceptance end to end, leaving an identity bff-session login could resolve',
-        async () => {
-            const organization = await organizationRepo.save(
-                organizationRepo.create({ name: `org-admin-e2e-test-${randomUUID()}` }),
-            )
-            const email = `org-admin-e2e-${randomUUID()}@example.test`
+    it('drives invitation issuance and acceptance end to end, leaving an identity bff-session login could resolve', async () => {
+        const organization = await organizationRepo.save(
+            organizationRepo.create({ name: `org-admin-e2e-test-${randomUUID()}` }),
+        )
+        const email = `org-admin-e2e-${randomUUID()}@example.test`
 
-            const { invitation, rawToken } = await invitationIssuance.issue(
-                { ...actorFixture(), organizationId: organization.id, membershipRole: 'owner' },
-                organization.id,
-                email,
-                'owner',
-            )
-            expect(invitation.status).toBe('pending')
+        const { invitation, rawToken } = await invitationIssuance.issue(
+            { ...actorFixture(), organizationId: organization.id, membershipRole: 'owner' },
+            organization.id,
+            email,
+            'owner',
+        )
+        expect(invitation.status).toBe('pending')
 
-            const result = await invitationAcceptance.accept(rawToken, 'accepted-password-123')
+        const result = await invitationAcceptance.accept(rawToken, 'accepted-password-123')
 
-            expect(result).toEqual({ organizationId: organization.id, role: 'owner', email })
+        expect(result).toEqual({ organizationId: organization.id, role: 'owner', email })
 
-            const externalIdentity = await externalIdentityRepo.findOneOrFail({ where: { issuer, email } })
-            createdUserIds.push(externalIdentity.subject)
-            expect(externalIdentity.issuer).toBe(issuer)
-            expect(externalIdentity.subject).toEqual(expect.any(String))
+        const externalIdentity = await externalIdentityRepo.findOneOrFail({ where: { issuer, email } })
+        createdUserIds.push(externalIdentity.subject)
+        expect(externalIdentity.issuer).toBe(issuer)
+        expect(externalIdentity.subject).toEqual(expect.any(String))
 
-            const roleNames = await getRealmRoleNames(adminToken, externalIdentity.subject)
-            expect(roleNames).toContain('owner')
-        },
-        30_000,
-    )
+        const roleNames = await getRealmRoleNames(adminToken, externalIdentity.subject)
+        expect(roleNames).toContain('owner')
+    }, 30_000)
 })

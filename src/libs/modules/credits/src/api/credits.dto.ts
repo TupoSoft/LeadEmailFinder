@@ -27,3 +27,21 @@ export class CreditResponseDto {
     @Expose()
     balance: number
 }
+
+export class BillingSummaryResponseDto {
+    @ApiProperty({ type: 'integer', minimum: 0, description: 'Total credits owned by the organization' })
+    @Expose()
+    balance: number
+
+    @ApiProperty({ type: 'integer', minimum: 0, description: 'Credits held by accepted operations, not yet charged' })
+    @Expose()
+    reserved: number
+
+    @ApiProperty({
+        type: 'integer',
+        minimum: 0,
+        description: 'Credits usable for new spending: balance minus reserved',
+    })
+    @Expose()
+    available: number
+}
