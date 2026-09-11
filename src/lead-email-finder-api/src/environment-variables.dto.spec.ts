@@ -1,10 +1,6 @@
 import { plainToInstance } from 'class-transformer'
 import { validateSync } from 'class-validator'
-import {
-    EnvironmentVariablesDto,
-    normalizeEnvironmentConfiguration,
-    normalizePaymentCheckoutUrlConfiguration,
-} from './environment-variables.dto'
+import { EnvironmentVariablesDto, normalizeEnvironmentConfiguration } from './environment-variables.dto'
 
 describe('EnvironmentVariablesDto', (): void => {
     it.each([
@@ -462,41 +458,50 @@ describe('EnvironmentVariablesDto', (): void => {
             configuration: { PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html' },
         },
         {
-            name: 'the legacy checkout URL only',
-            configuration: { PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:57000/checkout.html' },
-        },
-        {
-            name: 'matching canonical and legacy checkout URLs',
+            name: 'the canonical checkout URL with an explicitly undefined removed alias',
             configuration: {
                 PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html',
-                PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:57000/checkout.html',
+                PAYMENTS_CHECKOUT_RETURN_URL: undefined,
             },
         },
     ])('normalizes and accepts $name', ({ configuration }): void => {
-        const normalized = normalizePaymentCheckoutUrlConfiguration(configuration)
+        const normalized = normalizeEnvironmentConfiguration(configuration)
         const environment = plainToInstance(EnvironmentVariablesDto, normalized)
 
+        expect(normalized).toBe(configuration)
         expect(environment.PAYMENTS_CHECKOUT_URL).toBe('http://localhost:57000/checkout.html')
         expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
     })
 
-    it('rejects conflicting canonical and legacy checkout URLs', (): void => {
-        expect(() =>
-            normalizePaymentCheckoutUrlConfiguration({
-                PAYMENTS_CHECKOUT_URL: 'http://localhost:57000/checkout.html',
-                PAYMENTS_CHECKOUT_RETURN_URL: 'http://localhost:53000/billing/complete',
-            }),
-        ).toThrow('PAYMENTS_CHECKOUT_URL and PAYMENTS_CHECKOUT_RETURN_URL must match when both are set')
+    describe.each([
+        ['absent', undefined],
+        ['valid', 'http://localhost:57000/checkout.html'],
+        ['invalid', 'invalid-canonical-url'],
+    ])('when the canonical checkout URL is %s', (_name, checkoutUrl): void => {
+        it.each([
+            'http://localhost:57000/checkout.html',
+            'http://localhost:53000/billing/complete',
+            '',
+            null,
+            'invalid-removed-url',
+        ])('rejects the defined removed alias %p without disclosing configured values', removedUrl => {
+            expect(() =>
+                normalizeEnvironmentConfiguration({
+                    PAYMENTS_CHECKOUT_URL: checkoutUrl,
+                    PAYMENTS_CHECKOUT_RETURN_URL: removedUrl,
+                }),
+            ).toThrow(new Error('PAYMENTS_CHECKOUT_RETURN_URL: removed; use PAYMENTS_CHECKOUT_URL'))
+        })
     })
 
     it.each([
-        ['canonical', { PAYMENTS_CHECKOUT_URL: 'not-a-url' }],
-        ['legacy', { PAYMENTS_CHECKOUT_RETURN_URL: 'not-a-url' }],
-    ])('rejects an invalid %s checkout URL', (_name, configuration): void => {
-        const normalized = normalizePaymentCheckoutUrlConfiguration(configuration)
+        ['missing', {}],
+        ['invalid', { PAYMENTS_CHECKOUT_URL: 'not-a-url' }],
+    ])('rejects a %s canonical checkout URL during DTO validation', (_name, configuration): void => {
+        const normalized = normalizeEnvironmentConfiguration(configuration)
         const environment = plainToInstance(EnvironmentVariablesDto, normalized)
 
-        expect(validateSync(environment, { skipMissingProperties: true })).not.toHaveLength(0)
+        expect(validateSync(environment).map(error => error.property)).toContain('PAYMENTS_CHECKOUT_URL')
     })
 
     it('accepts the nonsecret checkout origin list as a string', (): void => {

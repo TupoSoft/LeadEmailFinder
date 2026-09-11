@@ -20,9 +20,8 @@ only credits previously removed when Paddle sends an approved inverse adjustment
 
 - No credit ledger persistence or account mutation logic (owned by [`credits`](../credits/README.md)); payments calls
   purpose-specific credit operations after calculating and persisting the permitted adjustment movement.
-  Adjustment debits still clamp to whatever the ledger reports available, so an organization's own active
-  verification hold (owned by `credits`/`identity`, unrelated to payments) narrows an adjustment debit exactly as
-  it would any other clamped debit; payments performs no reservation logic of its own.
+  Adjustment debits clamp to the balance available around an organization's active verification hold (owned by
+  `credits`/`identity`). Payments treats this limit like any other clamped debit and performs no reservation logic.
 - No card/bank detail handling — that is delegated entirely to the configured provider.
 
 ## Public API
@@ -117,11 +116,15 @@ references.
 - `PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` — comma-separated exact origins, required for Paddle; the stub derives its sole
   allowed origin from its configured loopback return URL. The same input supplies the API runtime and web build.
   Invalid origins fail application startup, and only the normalized nonsecret origin array reaches browser code.
-- `PAYMENTS_CHECKOUT_RETURN_URL` — deprecated alias accepted only when the canonical value is absent or identical
 - `PAYMENTS_STUB_WEBHOOK_SECRET` (required only when `PAYMENTS_PROVIDER=stub`)
 - `PADDLE_API_KEY` (required only when `PAYMENTS_PROVIDER=paddle`)
 - `PADDLE_WEBHOOK_SECRET` (required only when `PAYMENTS_PROVIDER=paddle`)
 - `PADDLE_ENVIRONMENT` (required only when `PAYMENTS_PROVIDER=paddle`; must be `sandbox`)
+
+Only `PAYMENTS_CHECKOUT_URL` is supported for the checkout page URL. Rename any `PAYMENTS_CHECKOUT_RETURN_URL`
+setting to `PAYMENTS_CHECKOUT_URL` and remove the old setting before restarting. Any defined old setting, including
+an empty value or one matching the canonical URL, causes initialization to fail with
+`PAYMENTS_CHECKOUT_RETURN_URL: removed; use PAYMENTS_CHECKOUT_URL`. The error never includes either configured value.
 
 The reusable Paddle sandbox checkout, tunnel, and notification-replay workflow is documented in
 [`docker/paddle-dev/README.md`](../../../../docker/paddle-dev/README.md).
