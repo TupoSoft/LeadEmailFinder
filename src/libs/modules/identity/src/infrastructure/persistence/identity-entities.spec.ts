@@ -3,6 +3,7 @@ import { AUTH_ROLES } from '../../domain/auth-principal'
 import { AuditLogEntry } from './audit-log-entry.entity'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
+import { CreditReservation } from './credit-reservation.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { OrganizationInvitation } from './organization-invitation.entity'
@@ -31,6 +32,7 @@ describe('identity and organization entities', () => {
         [OrganizationCreditAccount, 'organization_credit_accounts'],
         [CreditDebit, 'credit_debits'],
         [CreditGrant, 'credit_grants'],
+        [CreditReservation, 'credit_reservations'],
         [OrganizationInvitation, 'organization_invitations'],
         [AuditLogEntry, 'audit_log_entries'],
     ])('maps %p to %s', (entity, tableName) => {
@@ -74,20 +76,23 @@ describe('identity and organization entities', () => {
 
     it('uniquely identifies a service credential by issuer and Keycloak client id', () => {
         const uniqueIndex = metadata.indices.find(
-            index => index.target === ServiceCredential && index.name === 'UQ_service_credentials_issuer_keycloak_client_id',
+            index =>
+                index.target === ServiceCredential && index.name === 'UQ_service_credentials_issuer_keycloak_client_id',
         )
 
         expect(uniqueIndex?.columns).toEqual(['issuer', 'keycloakClientId'])
     })
 
-    it('uses one non-negative credit account per organization', () => {
+    it('uses one non-negative credit account per organization, with reserved bounded by balance', () => {
         const primaryColumn = metadata.columns.find(
             column => column.target === OrganizationCreditAccount && column.propertyName === 'organizationId',
         )
-        const balanceCheck = metadata.checks.find(check => check.target === OrganizationCreditAccount)
+        const checks = metadata.checks.filter(check => check.target === OrganizationCreditAccount)
 
         expect(primaryColumn?.options.primary).toBe(true)
-        expect(balanceCheck?.expression).toBe('"balance" >= 0')
+        expect(checks.map(check => check.expression)).toEqual(
+            expect.arrayContaining(['"balance" >= 0', '"reserved" >= 0 AND "reserved" <= "balance"']),
+        )
     })
 
     it('uniquely identifies a credit debit by organization and reference, so retrying a reference is a no-op', () => {
@@ -112,6 +117,20 @@ describe('identity and organization entities', () => {
 
         expect(organizationIdColumn?.options.primary).toBe(true)
         expect(referenceColumn?.options.primary).toBe(true)
+    })
+
+    it('uniquely identifies a credit reservation by organization and operation, and requires a positive amount', () => {
+        const organizationIdColumn = metadata.columns.find(
+            column => column.target === CreditReservation && column.propertyName === 'organizationId',
+        )
+        const operationIdColumn = metadata.columns.find(
+            column => column.target === CreditReservation && column.propertyName === 'operationId',
+        )
+        const check = metadata.checks.find(entry => entry.target === CreditReservation)
+
+        expect(organizationIdColumn?.options.primary).toBe(true)
+        expect(operationIdColumn?.options.primary).toBe(true)
+        expect(check?.expression).toBe('"amount" > 0')
     })
 
     it('uniquely identifies an organization invitation by its token hash', () => {
@@ -156,12 +175,13 @@ describe('identity and organization entities', () => {
                 OrganizationCreditAccount,
                 CreditDebit,
                 CreditGrant,
+                CreditReservation,
                 OrganizationInvitation,
                 AuditLogEntry,
             ],
         })
 
         await expect(dataSource.buildEntityMetadata()).resolves.toBeUndefined()
-        expect(dataSource.entityMetadatas).toHaveLength(9)
+        expect(dataSource.entityMetadatas).toHaveLength(10)
     })
 })

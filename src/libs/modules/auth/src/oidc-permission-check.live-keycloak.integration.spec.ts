@@ -7,6 +7,7 @@ import { DataSource, Repository } from 'typeorm'
 import request from 'supertest'
 import {
     AuthPrincipal,
+    CreditReservation,
     ExternalIdentity,
     Organization,
     OrganizationCreditAccount,
@@ -35,7 +36,14 @@ const audience = process.env['TEST_OIDC_AUDIENCE']
 const describeWithKeycloakAndPostgres =
     postgresUrl && issuer && clientId && clientSecret && audience ? describe : describe.skip
 
-const identityEntities = [Organization, ExternalIdentity, OrganizationMembership, ServiceCredential, OrganizationCreditAccount]
+const identityEntities = [
+    Organization,
+    ExternalIdentity,
+    OrganizationMembership,
+    ServiceCredential,
+    OrganizationCreditAccount,
+    CreditReservation,
+]
 
 interface TokenResponse {
     access_token?: string

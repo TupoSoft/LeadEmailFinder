@@ -21,7 +21,15 @@ who is acting and what they are allowed to do.
 - Atomic credit-ledger persistence (`CreditLedgerStore`) — locking, idempotent debit/grant, and balance
   mutation — used by `credits` since `module-architecture/04`. Identity owns the transaction and locking
   mechanics and reports immutable grant facts through `CreditGrantPersistenceResult`; `credits` owns the
-  business rules (strict-vs-clamped debit, platform replay conflicts, exception mapping).
+  business rules (strict-vs-clamped debit, platform replay conflicts, exception mapping). `debit()`/`debitUpTo()`
+  compare against `balance - reserved`, so an active hold narrows what strict and clamped spending can consume.
+- Atomic credit-reservation persistence (`CreditReservationStore`) — hold admission, capture, release, and
+  fenced batch closure — used by `credits` since `verification-billing/02`. A hold reduces an account's
+  `available` credit (`balance - reserved`) without reducing `balance`; capture reduces `balance` once and
+  releases the hold; release restores `available` with no grant or debit. The account row is the sole
+  serialization point: every mutating method first inserts an absent account (its organization foreign key as
+  the conflict target), then locks that account, before reading or writing reservation rows. `identity` owns
+  this locking discipline and reports typed outcomes; `credits` owns which outcome maps to which exception.
 - Organization/invitation registration, invitation lookup, narrow invitation preview reads, and failure-audit append, locked invitation-acceptance
   sessions, membership listing, and locked membership-mutation sessions (`OrganizationRegistrationStore`,
   `InvitationStore`, `InvitationPreviewReader`, `InvitationAcceptanceStore`, `MembershipDirectory`, `MembershipMutationStore`) — used by
@@ -57,10 +65,10 @@ The public surface is exported from [`src/index.ts`](src/index.ts). Persistence 
 application contracts and the entity classes used for test fixtures form two supported parts:
 
 **Supported application ports** — the contract new and migrating consumers should depend on: `IdentityModule`,
-`ExternalIdentityResolver`, the fourteen ports and their injection tokens (`ExternalIdentityStore`/
+`ExternalIdentityResolver`, the fifteen ports and their injection tokens (`ExternalIdentityStore`/
 `EXTERNAL_IDENTITY_STORE`, `ActiveMembershipReader`/`ACTIVE_MEMBERSHIP_READER`, `ActiveServiceCredentialReader`/
 `ACTIVE_SERVICE_CREDENTIAL_READER`, `CurrentAccountReader`/`CURRENT_ACCOUNT_READER`, `CreditLedgerStore`/
-`CREDIT_LEDGER_STORE`,
+`CREDIT_LEDGER_STORE`, `CreditReservationStore`/`CREDIT_RESERVATION_STORE`,
 `OrganizationDirectoryReader`/`ORGANIZATION_DIRECTORY_READER`,
 `OrganizationRegistrationStore`/`ORGANIZATION_REGISTRATION_STORE`, `InvitationStore`/`INVITATION_STORE`,
 `InvitationPreviewReader`/`INVITATION_PREVIEW_READER`,
@@ -72,9 +80,25 @@ application contracts and the entity classes used for test fixtures form two sup
 `ServiceCredentialDetailRecord`, `OrganizationRecord`, `OrganizationInvitationRecord`,
 `OrganizationMembershipDetailRecord`, `InvitationPreviewRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
 `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
-The ledger port also exports `CreditDebitOutcome` and `CreditGrantPersistenceResult`. The grant result contains
-the `inserted` or `existing` disposition, the recorded grant amount, and the current authoritative balance.
-Identity does not interpret amount mismatches or platform reference namespaces.
+The ledger port also exports `CreditDebitOutcome`, `CreditGrantPersistenceResult`, `CreditBalanceSnapshot`, and
+`SetBalanceOutcome`. The grant result contains the `inserted` or `existing` disposition, the recorded grant
+amount, and the current authoritative balance. `CreditBalanceSnapshot` carries `balance` and `reserved`;
+`SetBalanceOutcome` is `{ kind: 'applied', balance }` or `{ kind: 'below-reserved' }` when a target undercuts an
+active hold. Identity does not interpret amount mismatches or platform reference namespaces.
+
+The reservation port also exports `CreditReservationState`, `CreditReservationItem`, `CreditReservationRecord`,
+`CreditReservationAdmission`, `CreditReservationSettlement`, and the `kind`-discriminated
+`CreditReservationAdmissionOutcome`, `CreditReservationSettlementOutcome`, and `CreditReservationClosureOutcome`
+unions. `reserveMany` admits a complete group atomically: an existing reservation with a matching amount is
+observed, not recreated; a different amount conflicts the whole group; and if the aggregate amount needed for
+missing operation IDs exceeds available credit, no reservation and no balance change occur. `capture` and
+`release` each report `settled` (with an `applied`/`replayed` disposition), `missing`, or `conflict` (the
+opposite terminal transition, or — for capture — an unexpected preexisting debit under the reservation's private
+reference). `closeAdmissionMany` inspects every ID in the batch before mutating any row: an existing captured
+receipt or amount mismatch conflicts the whole closure; otherwise a reserved receipt is released, a missing ID
+gets a durable released receipt with no preceding hold (blocking a later delayed reserve), and a replay of an
+already-released ID returns the same record. Closure and release never touch `balance` and never insert a grant
+or debit.
 `ExternalIdentityResolver` separates lookup, email synchronization, and explicit create-if-missing behavior so a
 consumer can defer identity writes until its own authorization preconditions have passed.
 The directory port also exports `OrganizationDirectoryReadInput`, `OrganizationDirectorySeekKey`,
@@ -123,12 +147,16 @@ Identity owns each of the following TypeORM entities, registered via `TypeOrmMod
 | `OrganizationCreditAccount` | `organization_credit_accounts` |
 | `CreditDebit`               | `credit_debits`                |
 | `CreditGrant`               | `credit_grants`                |
+| `CreditReservation`         | `credit_reservations`          |
 | `OrganizationInvitation`    | `organization_invitations`     |
 | `AuditLogEntry`             | `audit_log_entries`            |
 
 Every entity carries an `organizationId` foreign key back to `Organization`, cascading on delete except
-`OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same nine tables are also
-reachable through the fourteen supported ports above, for the narrower operations and fields each contract exposes.
+`OrganizationInvitation.acceptedByExternalIdentity`, which is set to null instead. The same ten tables are also
+reachable through the fifteen supported ports above, for the narrower operations and fields each contract exposes.
+`OrganizationCreditAccount` carries a `reserved` column (default zero) alongside `balance`, with a database check
+that `0 <= reserved <= balance`; `CreditReservation` is keyed by `(organizationId, operationId)`, with a positive
+integer `amount` and `state` one of `reserved`, `captured`, or `released` — terminal states never reopen.
 `ActiveMembershipReader`, `ActiveServiceCredentialReader`, `CurrentAccountReader`, `InvitationPreviewReader`,
 `MembershipDirectory`, `OrganizationDirectoryReader`, and
 `ServiceCredentialDirectory` are read-only. `OrganizationRegistrationStore`, `InvitationStore.issueWithAudit`, and
@@ -159,7 +187,15 @@ write lock on the persisted account row. This serializes first grants even when 
 transaction started, without resetting an existing balance. Grant insertion targets the unique organization and
 reference pair; an insertion conflict reads the winning grant without changing the balance. Other database errors
 abort the transaction. Both `credit()` and `creditOnce()` use this path; `creditOnce()` still returns the originally
-recorded amount. No schema change, migration, or data reset is required.
+recorded amount. `setBalance()` follows the same insert-then-lock sequence before comparing the target against
+`reserved`. No schema change, migration, or data reset is required.
+
+Reservation admission (`reserveMany`) and batch closure (`closeAdmissionMany`) follow the identical insert-then-lock
+sequence on the account before reading or writing any `credit_reservations` row, sharing one small internal helper
+(`lock-credit-account.ts`) with the ledger store rather than duplicating the pattern. `capture` and `release` lock
+the already-present account directly, since a reservation cannot exist without one. This keeps the account row as
+the single serialization point for every change to its `balance` and `reserved` fields, matching the ledger's own
+locking discipline. No schema change, migration, or data reset is required.
 
 ## Configuration
 
@@ -176,6 +212,7 @@ Focused tests live in `src/`: `application/external-identity-resolver.service.sp
 `infrastructure/persistence/typeorm-current-account-reader.spec.ts`,
 `infrastructure/persistence/typeorm-organization-directory-reader.spec.ts`,
 `infrastructure/persistence/typeorm-credit-ledger-store.spec.ts`,
+`infrastructure/persistence/typeorm-credit-reservation-store.spec.ts`,
 `infrastructure/persistence/typeorm-organization-registration-store.spec.ts`,
 `infrastructure/persistence/typeorm-invitation-store.spec.ts`,
 `infrastructure/persistence/typeorm-invitation-preview-reader.spec.ts`,
@@ -185,8 +222,9 @@ Focused tests live in `src/`: `application/external-identity-resolver.service.sp
 `infrastructure/persistence/typeorm-service-credential-directory.spec.ts`,
 `infrastructure/persistence/typeorm-service-credential-writer.spec.ts`, and
 `infrastructure/persistence/identity-schema.integration.spec.ts` (schema-level, gated on `TEST_POSTGRES_URL`). The
-real-Postgres behavioral coverage for `CreditLedgerStore` (locking, concurrent debit/grant, replay) lives in the
-`application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapter.
+real-Postgres behavioral coverage for `CreditLedgerStore` and `CreditReservationStore` (locking, concurrent
+debit/grant, reservation admission/settlement/closure, replay) lives in the
+`application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapters.
 The platform cases include first grants without an existing account, duplicate and distinct concurrent keys,
 and amount conflicts. The ledger unit suite covers immutable persistence results, account insertion before
 locking, winning-grant lookup after a unique conflict, and propagation of unrelated database errors.

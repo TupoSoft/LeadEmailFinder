@@ -8,6 +8,7 @@ import {
     AuditLogEntry,
     CreditDebit,
     CreditGrant,
+    CreditReservation,
     ExternalIdentity,
     Organization,
     OrganizationCreditAccount,
@@ -53,8 +54,8 @@ const baseConfig = new Map<string, string>([
 // imported module regardless of overrides elsewhere or export visibility, so this graph needs a DataSource
 // somewhere even though nothing here exercises real credit-ledger behavior. A @Global() stub reaches it without
 // identity exporting the adapter. module-architecture/08 stopped IdentityModule from exporting TypeOrmModule, but
-// its internal TypeOrmModule.forFeature(9 entities) registration still instantiates eagerly regardless of export
-// status — confirmed empirically: removing these nine overrides breaks this suite with the stub DataSource
+// its internal TypeOrmModule.forFeature(10 entities) registration still instantiates eagerly regardless of export
+// status — confirmed empirically: removing these ten overrides breaks this suite with the stub DataSource
 // missing entityMetadatas, so they stay.
 @Global()
 @Module({
@@ -85,6 +86,8 @@ async function compilePaymentsModule(configOverrides: ReadonlyMap<string, string
         .overrideProvider(getRepositoryToken(CreditDebit))
         .useValue({})
         .overrideProvider(getRepositoryToken(CreditGrant))
+        .useValue({})
+        .overrideProvider(getRepositoryToken(CreditReservation))
         .useValue({})
         .overrideProvider(getRepositoryToken(OrganizationInvitation))
         .useValue({})

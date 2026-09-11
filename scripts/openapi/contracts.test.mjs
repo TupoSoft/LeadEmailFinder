@@ -610,7 +610,7 @@ test('platform credit and organization detail operations retain complete protect
         ['/v1/organizations/{organizationId}', 'get', ['200', '400', '401', '403', '404', '500']],
         ['/credits/{organizationId}', 'get', ['200', '400', '401', '403', '500']],
         ['/credits/{organizationId}', 'post', ['201', '400', '401', '403', '409']],
-        ['/credits/{organizationId}', 'put', ['200', '400', '401', '403', '500']],
+        ['/credits/{organizationId}', 'put', ['200', '400', '401', '403', '409', '500']],
     ]) {
         const operation = browser.paths[path][method]
         assert.deepEqual(operation, runtime.paths[path][method])

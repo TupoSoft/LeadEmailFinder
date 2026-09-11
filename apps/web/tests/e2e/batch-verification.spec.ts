@@ -79,7 +79,7 @@ for (const width of [1440, 320]) {
                 await download.delete()
                 expect(posts).toBe(1)
                 const balance = await page.request.get(`${fixture.origin}/v1/billing/summary`)
-                expect(await balance.json()).toEqual({ balance: 0 })
+                expect(await balance.json()).toEqual({ balance: 0, reserved: 0, available: 0 })
                 const accessibility = await new AxeBuilder({ page })
                     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
                     .analyze()

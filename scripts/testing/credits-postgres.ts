@@ -59,6 +59,13 @@ export function assertCreditsContainer(
         throw new Error('Refusing a PostgreSQL container not owned by this checkout and test Compose file')
 }
 
+// Both suites share one disposable database (see runCreditsPostgres), so a report missing either one would
+// silently mean the reservation-hold interaction scenarios in the payment suite never ran.
+const REQUIRED_CREDITS_POSTGRES_SUITES = [
+    'credits.service.integration.spec.ts',
+    'payment-event.handler.integration.spec.ts',
+] as const
+
 export function passedCreditsTests(value: unknown): number {
     const report = z
         .object({
@@ -69,10 +76,18 @@ export function passedCreditsTests(value: unknown): number {
             numFailedTests: z.literal(0),
             numFailedTestSuites: z.literal(0),
             numPendingTestSuites: z.literal(0),
+            testResults: z.array(z.object({ name: z.string() })).nonempty(),
         })
         .safeParse(value)
     if (!report.success || report.data.numPassedTests !== report.data.numTotalTests) {
         throw new Error('Credits PostgreSQL suite failed, skipped tests, or executed zero tests')
+    }
+    const suiteNames = report.data.testResults.map(result => result.name)
+    const missingSuites = REQUIRED_CREDITS_POSTGRES_SUITES.filter(
+        suite => !suiteNames.some(name => name.endsWith(suite)),
+    )
+    if (missingSuites.length > 0) {
+        throw new Error('Credits PostgreSQL report is missing a required test suite')
     }
     return report.data.numPassedTests
 }
@@ -156,13 +171,20 @@ export function runCreditsPostgres(): void {
             'exec',
             'jest',
             'credits.service.integration.spec.ts',
+            'payment-event.handler.integration.spec.ts',
             '--runInBand',
             '--json',
             `--outputFile=${reportPath}`,
         ],
         {
             cwd: checkoutRoot,
-            env: { ...process.env, TEST_CREDITS_POSTGRES_URL: loaded.TEST_CREDITS_POSTGRES_URL },
+            env: {
+                ...process.env,
+                // Both suites run serially in one worker (--runInBand) against the same disposable database,
+                // one full dropSchema+synchronize cycle completing before the next begins.
+                TEST_CREDITS_POSTGRES_URL: loaded.TEST_CREDITS_POSTGRES_URL,
+                TEST_PAYMENT_WEBHOOK_POSTGRES_URL: loaded.TEST_CREDITS_POSTGRES_URL,
+            },
             encoding: 'utf8',
             timeout: 180_000,
             maxBuffer: 10 * 1024 * 1024,

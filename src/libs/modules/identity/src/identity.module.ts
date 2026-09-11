@@ -4,6 +4,7 @@ import { ExternalIdentityResolver } from './application/external-identity-resolv
 import { ACTIVE_MEMBERSHIP_READER } from './application/ports/active-membership-reader'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from './application/ports/active-service-credential-reader'
 import { CREDIT_LEDGER_STORE } from './application/ports/credit-ledger-store'
+import { CREDIT_RESERVATION_STORE } from './application/ports/credit-reservation-store'
 import { CURRENT_ACCOUNT_READER } from './application/ports/current-account-reader'
 import { EXTERNAL_IDENTITY_STORE, ExternalIdentityStore } from './application/ports/external-identity-store'
 import { INVITATION_ACCEPTANCE_STORE } from './application/ports/invitation-acceptance-store'
@@ -18,6 +19,7 @@ import { SERVICE_CREDENTIAL_WRITER } from './application/ports/service-credentia
 import { AuditLogEntry } from './infrastructure/persistence/audit-log-entry.entity'
 import { CreditDebit } from './infrastructure/persistence/credit-debit.entity'
 import { CreditGrant } from './infrastructure/persistence/credit-grant.entity'
+import { CreditReservation } from './infrastructure/persistence/credit-reservation.entity'
 import { ExternalIdentity } from './infrastructure/persistence/external-identity.entity'
 import { OrganizationCreditAccount } from './infrastructure/persistence/organization-credit-account.entity'
 import { OrganizationInvitation } from './infrastructure/persistence/organization-invitation.entity'
@@ -27,6 +29,7 @@ import { ServiceCredential } from './infrastructure/persistence/service-credenti
 import { TypeOrmActiveMembershipReader } from './infrastructure/persistence/typeorm-active-membership-reader'
 import { TypeOrmActiveServiceCredentialReader } from './infrastructure/persistence/typeorm-active-service-credential-reader'
 import { TypeOrmCreditLedgerStore } from './infrastructure/persistence/typeorm-credit-ledger-store'
+import { TypeOrmCreditReservationStore } from './infrastructure/persistence/typeorm-credit-reservation-store'
 import { TypeOrmCurrentAccountReader } from './infrastructure/persistence/typeorm-current-account-reader'
 import { TypeOrmExternalIdentityStore } from './infrastructure/persistence/typeorm-external-identity-store'
 import { TypeOrmInvitationAcceptanceStore } from './infrastructure/persistence/typeorm-invitation-acceptance-store'
@@ -49,6 +52,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
             OrganizationCreditAccount,
             CreditDebit,
             CreditGrant,
+            CreditReservation,
             OrganizationInvitation,
             AuditLogEntry,
         ]),
@@ -59,6 +63,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         TypeOrmActiveServiceCredentialReader,
         TypeOrmCurrentAccountReader,
         TypeOrmCreditLedgerStore,
+        TypeOrmCreditReservationStore,
         TypeOrmOrganizationDirectoryReader,
         TypeOrmOrganizationRegistrationStore,
         TypeOrmInvitationStore,
@@ -73,6 +78,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         { provide: ACTIVE_SERVICE_CREDENTIAL_READER, useExisting: TypeOrmActiveServiceCredentialReader },
         { provide: CURRENT_ACCOUNT_READER, useExisting: TypeOrmCurrentAccountReader },
         { provide: CREDIT_LEDGER_STORE, useExisting: TypeOrmCreditLedgerStore },
+        { provide: CREDIT_RESERVATION_STORE, useExisting: TypeOrmCreditReservationStore },
         { provide: ORGANIZATION_DIRECTORY_READER, useExisting: TypeOrmOrganizationDirectoryReader },
         { provide: ORGANIZATION_REGISTRATION_STORE, useExisting: TypeOrmOrganizationRegistrationStore },
         { provide: INVITATION_PREVIEW_READER, useExisting: TypeOrmInvitationPreviewReader },
@@ -94,6 +100,7 @@ import { TypeOrmServiceCredentialWriter } from './infrastructure/persistence/typ
         ACTIVE_SERVICE_CREDENTIAL_READER,
         CURRENT_ACCOUNT_READER,
         CREDIT_LEDGER_STORE,
+        CREDIT_RESERVATION_STORE,
         ORGANIZATION_DIRECTORY_READER,
         ORGANIZATION_REGISTRATION_STORE,
         INVITATION_STORE,

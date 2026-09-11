@@ -600,6 +600,14 @@ export interface components {
             /** @description Server-defined credit pack identifier */
             id: string;
         };
+        BillingSummaryResponseDto: {
+            /** @description Credits usable for new spending: balance minus reserved */
+            available: number;
+            /** @description Total credits owned by the organization */
+            balance: number;
+            /** @description Credits held by accepted operations, not yet charged */
+            reserved: number;
+        };
         ChangeMembershipRoleDto: {
             /** @enum {string} */
             role: "owner" | "admin" | "member";
@@ -928,6 +936,13 @@ export interface operations {
             };
             /** @description Authenticated caller lacks platform:admin or browser CSRF check denied. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested balance is below credits already reserved for accepted operations. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1300,7 +1315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreditResponseDto"];
+                    "application/json": components["schemas"]["BillingSummaryResponseDto"];
                 };
             };
             /** @description Authentication is required */
