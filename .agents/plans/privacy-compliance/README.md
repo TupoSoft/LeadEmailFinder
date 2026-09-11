@@ -36,13 +36,13 @@ converge.
    on `privacy-compliance/20` and `privacy-compliance/24`.
 10. [Establish Customer Data-Processing Terms and Subprocessor Governance](10-establish-customer-data-processing-terms.md) —
     obtains terms, assent, vendor/transfer approvals, and populates the executable plan-02 approval manifest; depends on
-    `privacy-compliance/01` and `privacy-compliance/02`.
+    `privacy-compliance/01`, `privacy-compliance/02`, and `privacy-compliance/35`.
 11. [Enforce Managed Processor-Copy Log and Backup Controls](11-enforce-managed-log-and-backup-controls.md) — validates
     provider policy boundaries, a maximum 30-day lifecycle, access, and evidence only for managed processor-side
     customer-verification copies; depends on `privacy-compliance/03` and `privacy-compliance/10`.
 12. [Define the Controller-Data Purpose, Notice, Retention, and Rights Contract](12-define-controller-data-contract.md) —
     obtains exact controller purposes, notices, lifecycle/rights decisions, and recovery-receipt contract; depends on
-    `privacy-compliance/01`.
+    `privacy-compliance/01` and `privacy-compliance/36`.
 13. [Build the Controller-Privacy Request Core](13-fulfill-controller-data-rights.md) — adds default-disabled
     orchestration, crypto, an exact adapter/capability registry, deadlines/appeals, one-time exports, and fake-only
     legal-hold query/guard ports; depends on `privacy-compliance/06`, `privacy-compliance/12`,
@@ -130,6 +130,16 @@ converge.
     returns the server request UUID, links it to existing job, batch, and verification UUIDs through safe lifecycle
     events, and adds an organization-owned verification-result lookup; depends on `privacy-compliance/03` and
     `privacy-compliance/04`.
+35. [Prepare Customer Processing Decisions](35-prepare-customer-processing-decisions.md) — records the repository
+    inventory, external evidence gaps, and owner questions for plan 10; depends on `privacy-compliance/01` and
+    `privacy-compliance/02`.
+36. [Inventory Controller Data Decisions](36-inventory-controller-data-decisions.md) — records source-backed fields,
+    flows, and unresolved policy questions for plan 12; depends on `privacy-compliance/01`.
+
+Plans 35 and 36 each deliver one preparation document and can finish with explicitly recorded unknowns. They do not
+require the legal, vendor, or security decisions they prepare. Plans 10 and 12 consume those documents and retain
+their existing approval requirements. A completed inventory or proposed decision is not approval or evidence that
+the dependent controls are implemented.
 
 The graph is acyclic. Plan 02 can merge with an empty approval manifest before plan 10. Module-architecture plans 10,
 13, 14, 11, 15, and 16 split core/persistence, discovery, SMTP/proxy, synchronous, asynchronous, and batch delivery;

@@ -18,8 +18,8 @@ Merging repository Markdown does not execute a contract or make the terms bindin
 
 ## Progress
 
-- [ ] (2026-08-30) Obtain counsel-approved processor, GDPR Article 28, and CCPA service-provider terms plus the selected assent mechanism.
-- [ ] (2026-08-30) Inventory and approve subprocessors, regions, onward terms, transfer safeguards, and customer-notice owners.
+- [ ] (2026-09-11) Review the plan-35 decision inputs and obtain counsel-approved processor, GDPR Article 28, and CCPA service-provider terms plus the selected assent mechanism.
+- [ ] (2026-09-11) Enrich the plan-35 recipient inventory with actual external evidence and approve subprocessors, regions, onward terms, transfer safeguards, and customer-notice owners.
 - [ ] (2026-08-30) Publish the versioned addendum, register, change-control, audit/remediation, and end-of-service procedures.
 - [ ] (2026-08-30) Populate and version the plan-02 account-discovery approval manifest only for fully approved entries.
 - [ ] (2026-08-30) Exercise assent evidence, subprocessor change notice, audit remediation, and return/delete scenarios with synthetic records.
@@ -29,6 +29,7 @@ Merging repository Markdown does not execute a contract or make the terms bindin
 
 - `privacy-compliance/01`
 - `privacy-compliance/02`
+- `privacy-compliance/35`
 
 ## Surprises & Discoveries
 
@@ -36,6 +37,10 @@ None yet.
 
 ## Decision Log
 
+- Decision: Consume the plan-35 engineering packet before obtaining the existing customer and provider approvals.
+  Rationale: Repository inventory and explicit questions can finish separately; the packet cannot approve recipients,
+  select assent, or satisfy this plan's readiness conditions by itself.
+  Date/Author: 2026-09-11, backlog preparation planning.
 - Decision: Treat source-controlled contract language as an approved template and revision record, not as proof that a
   customer agreed to it.
   Rationale: Contract formation requires the assent mechanism selected by counsel; a Git commit cannot establish that
@@ -113,14 +118,16 @@ create sender consent or permission.
 
 ## Plan of Work
 
-Start from the plan-01 recipient and transfer inventory. For each actual recipient, classify the role, service,
-processing purpose, data categories, region, access mode, deletion commitment, incident commitment, contract owner,
+Start by reviewing `docs/privacy/customer-processing-decision-inputs.md` from plan 35 against the current plan-01
+recipient and transfer inventory. Reuse its source citations and focused questions, reconcile any source changes, and
+enrich the packet with actual external evidence. For each actual recipient, confirm the role, service, processing
+purpose, data categories, region, access mode, deletion commitment, incident commitment, contract owner,
 security-review owner, and current approval evidence. Unknown facts remain `pending` and block activation; do not fill
-them with a plausible provider or region.
+them with a plausible provider or region. The preparation packet is not an approved register or customer agreement.
 
 Privacy counsel then supplies or approves the customer addendum and selects how customers assent: an executed bilateral
 addendum, incorporation into a signed master agreement, or an approved versioned online acceptance flow. Document and
-test only that selected mechanism. Store a non-secret evidence reference containing customer record ID, terms version,
+test only that selected mechanism. Store a nonsecret evidence reference containing customer record ID, terms version,
 accepted-at time, and evidence system owner; do not commit a signature, customer identity, or full executed contract.
 If the selected mechanism requires application changes, keep them within this pull request and add focused and HTTP
 coverage for version presentation, affirmative assent, immutable evidence, and rejection of processing before assent.
@@ -204,7 +211,7 @@ Validate the plan graph and source-controlled contract package:
     git diff --check
 
 Have privacy counsel, security, vendor management, and the commercial owner sign the repository approval table using
-their normal non-secret review evidence. In a test contract workspace, prove the selected assent mechanism retains the
+their normal nonsecret review evidence. In a test contract workspace, prove the selected assent mechanism retains the
 exact version and timestamp, then exercise one approved change, one blocked incomplete vendor, one customer objection,
 one overdue audit finding, and one end-of-service deletion. Record only fictional identifiers and evidence references.
 
@@ -227,7 +234,7 @@ the contract owner must follow the approved replacement/termination process.
 ## Artifacts and Notes
 
 Record approved document versions, approver roles, register row counts, blocked-item counts, notice dates, fictional
-exercise IDs, and non-secret evidence references. Never record customer identities, signatures, executed agreements,
+exercise IDs, and nonsecret evidence references. Never record customer identities, signatures, executed agreements,
 private legal advice, credentials, raw addresses, or vendor secrets.
 
 ## Plan readiness
