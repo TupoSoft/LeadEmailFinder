@@ -1,0 +1,24 @@
+info:
+  name: 15-get-healthy-proxy
+  type: http
+  seq: 15
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/proxies/healthy?mxHost=mx.bruno.example.test"
+  headers:
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('healthy selection remains credential redacted', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(200);
+          expect(res.body.id).to.be.a('string');
+          expect(res.body.state).to.equal('active');
+          expect(res.body.blacklists).to.be.an('array');
+        });

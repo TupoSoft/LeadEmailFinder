@@ -2,15 +2,17 @@ info:
   name: 01-unauthorized-list
   type: http
   seq: 1
-
 http:
   method: GET
   url: "{{baseUrl}}/v1/proxies"
-
 runtime:
   scripts:
     - type: tests
       code: |-
-        test('rejects requests without a credential', function() {
+        test('rejects a list without a credential', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
           expect(res.status).to.equal(401);
         });

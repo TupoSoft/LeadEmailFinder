@@ -1,0 +1,49 @@
+info:
+  name: 09-list-remaining-pages
+  type: http
+  seq: 9
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/proxies?pageSize=100&pageToken={{proxyPageToken}}"
+  headers:
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('follows each cursor unchanged until the empty terminal cursor', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(200);
+          const seen = new Set(bru.getVar('proxySeenIds'));
+          let page = res.body;
+          let reads = 0;
+          while (true) {
+            expect(page).to.have.all.keys('proxies', 'nextPageToken');
+            expect(page.proxies).to.be.an('array');
+            expect(page.nextPageToken).to.be.a('string');
+            expect(JSON.stringify(page)).not.to.match(/"(?:auth|user|pass)"\s*:/);
+            for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+              expect(JSON.stringify(page)).not.to.include(bru.getVar(key));
+            }
+            for (const proxy of page.proxies) {
+              expect(proxy.blacklists).to.be.an('array');
+              expect(seen.has(proxy.id)).to.equal(false);
+              seen.add(proxy.id);
+            }
+            if (page.nextPageToken === '') break;
+            expect(page.nextPageToken).to.equal(page.proxies.at(-1).id);
+            if (++reads > 100) throw new Error('Disposable proxy registry exceeded its fixture bound');
+            const response = await fetch(
+              bru.getEnvVar('baseUrl') + '/v1/proxies?pageSize=100&pageToken=' + encodeURIComponent(page.nextPageToken),
+              { headers: { authorization: 'Bearer ' + bru.getVar('serviceClientToken') } },
+            );
+            expect(response.status).to.equal(200);
+            page = await response.json();
+          }
+          expect(seen.has(bru.getVar('proxyId'))).to.equal(true);
+          expect(seen.has(bru.getVar('paginationProxyId'))).to.equal(true);
+        });

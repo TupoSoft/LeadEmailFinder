@@ -1,12 +1,19 @@
 opencollection: 1.0.0
-
 info:
   name: Proxy Registry
-
 request:
   scripts:
     - type: before-request
       code: |-
+        if (!bru.getVar('proxyFixtureDescription')) {
+          const crypto = require('node:crypto');
+          const suffix = crypto.randomUUID();
+          bru.setVar('proxyFixtureDescription', 'Bruno proxy-registry ' + suffix);
+          bru.setVar('paginationFixtureDescription', 'Bruno proxy-registry pagination ' + suffix);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            bru.setVar(key, 'synthetic-' + crypto.randomBytes(24).toString('hex'));
+          }
+        }
         if (!bru.getVar('serviceClientToken')) {
           const response = await fetch(`${bru.getEnvVar('oidcIssuerUrl')}/protocol/openid-connect/token`, {
             method: 'POST',

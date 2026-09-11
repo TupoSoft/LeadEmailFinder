@@ -13,11 +13,11 @@ contract and generated client, focused tests, Bruno, and a disposable live brows
 
 ## Progress
 
-- [ ] (2026-08-31) Complete the credential-safe proxy registry and blacklist browser contract.
-- [ ] (2026-08-31) Implement paginated list, create, edit, lifecycle, blacklist, and delete workflows.
-- [ ] (2026-08-31) Cover cursor truth, hidden authentication, confirmations, permission, error, and recovery behavior.
-- [ ] (2026-08-31) Update generated client, Bruno, module documentation, and the durable design context.
-- [ ] (2026-08-31) Run focused, live-browser, premium-design, architecture, prose, and full validation and record it.
+- [x] (2026-09-09) Complete the credential-safe proxy registry and blacklist browser contract.
+- [x] (2026-09-09) Implement paginated list, create, edit, lifecycle, blacklist, and delete workflows.
+- [x] (2026-09-09) Cover cursor truth, hidden authentication, confirmations, permission, error, and recovery behavior.
+- [x] (2026-09-09) Update generated client, Bruno, module documentation, and the durable design context.
+- [x] (2026-09-09) Finish live browser, premium design, architecture, prose, and full validation and record it.
 
 ## Plan dependencies
 
@@ -27,9 +27,33 @@ contract and generated client, focused tests, Bruno, and a disposable live brows
 
 ## Surprises & Discoveries
 
-None yet.
+- The existing generated client marks request fields with schema defaults as required TypeScript properties even
+  though the wire schema makes them optional. Creation supplies explicit defaults; ordinary edits omit lifecycle.
+- The backend previously accepted null or array authentication through nested optional validation. Authentication
+  now accepts omission or one complete object; null and arrays are rejected without enabling credential removal.
+- The default running development stack belongs to another worktree. Validation uses the new isolated Compose
+  project `lef5139e84` and alternate ports; the shared `lef` stack is untouched.
+- A confirmation can mount before its detail read settles. The dialog remounts at the ready boundary so its safe
+  initial-focus target exists; pending detail reads retain an explicit Cancel action.
 
 ## Decision Log
+
+- Decision: Keep proxy writes outside the shared mutation cache, following the existing organization and
+  service-client secret workflows, instead of allocating and resetting credential-bearing mutation entries.
+  Rationale: Exclusion provides zero cache retention both during and after dispatch. Direct generated requests retain
+  the authenticated transport, abort controller, and operation-generation fence. Local native inputs and request
+  references are cleared on every settlement and lifecycle boundary.
+  Date/Author: 2026-09-09, implementation.
+- Decision: Keep cursor state transient and retain only a membership-scoped reconciliation boolean across route
+  navigation and cached-page restoration. Do not persist submitted fields or authentication.
+  Rationale: Continuations are not shareable resource locations. An unknown write requires a successful directory read
+  and explicit acknowledgment before another action. Ordinary reload persistence is outside this plan's contract.
+  Date/Author: 2026-09-09, implementation.
+- Decision: Reuse the shared panel's reserved loading region and readable pending indicator without adding a
+  separate skeleton component.
+  Rationale: This preserves the approved panel behavior and keeps the header actions stable. The acceptance
+  requirement is accessible, stable loading; duplicating a loading owner adds no useful registry information.
+  Date/Author: 2026-09-09, implementation.
 
 - Decision: Keep proxy operations in a platform-only post-MVP route and retain backend `platform:admin`
   authorization on every operation.
@@ -77,7 +101,11 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the platform-only console, generated browser contract, API response protections, and repeatable Bruno
+workflow. Component, API, contract, architecture, design, prose, and browser checks pass. The isolated live lifecycle
+and HTTP collections pass. The original purpose is met without new entities, migrations, providers, visual tokens,
+or domain-service changes. Direct ephemeral writes keep credentials outside the mutation cache; the existing
+application-service and adapter boundaries remain intact. Changes are local and uncommitted; remote CI was not run.
 
 ## Context and Orientation
 
@@ -268,13 +296,16 @@ After confirming Compose ownership, run Playwright for mocked permission, page, 
 and recovery cases, then run create/list/edit/lifecycle/blacklist/delete against a disposable stack with a uniquely
 identifiable proxy.
 
+    corepack pnpm --filter ./apps/web build
+    corepack pnpm --filter ./apps/web test:platform-proxies
+
 Bootstrap the MFA-aware platform operator, run the updated Bruno collection from its root, and rerun the relevant
 `smtp-dev` drain/exclusion regression when the fixture is available:
 
     corepack pnpm dev:reset -- --confirm-project=LEF
     corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
     corepack pnpm bruno:proxy-registry
-    corepack pnpm --filter ./apps/web exec playwright test tests/e2e/platform-proxies.spec.ts --project=chromium
+    corepack pnpm --filter ./apps/web test:platform-proxies-live
     corepack pnpm ui:audit
     docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
     corepack pnpm bruno:smtp-dev
@@ -303,6 +334,52 @@ Compose or deleting unrelated proxies. No schema reset is required. A wholly dis
 the documented `pnpm dev:reset` procedure; no migration or production recovery is added.
 
 ## Artifacts and Notes
+
+Current validation evidence (2026-09-09):
+
+- `corepack pnpm --filter ./apps/web test:ci`: 621 tests passed across 30 files. Focused proxy tests: 13 passed.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci`: 2,753 Jest tests passed in 235 suites;
+  92 tests in 15 environment-dependent suites were skipped. All 79 runner tests passed.
+- Focused proxy HTTP, mapper, Swagger, service, repository, and browser allowlist checks: 137 tests passed.
+- `node --test scripts/openapi/contracts.test.mjs`: 23 tests passed. `openapi:export`, `openapi:generate`,
+  and `openapi:check` passed. Root and web type checks and production builds passed.
+- `corepack pnpm architecture:check`: nine modules checked with zero violations. Root lint passed with one
+  preexisting warning in `src/libs/config/src/load-secrets.spec.ts`; web lint passed without errors.
+- `corepack pnpm design:lint` passed with zero errors or warnings; `corepack pnpm ui:audit` reported zero findings.
+- `COMPOSE_PROJECT_NAME=lef5139e84 corepack pnpm bruno:proxy-registry`: 27 requests and 27 tests passed.
+- `COMPOSE_PROJECT_NAME=lef5139e84 corepack pnpm bruno:bff-sessions`: 15 requests and 16 tests passed.
+- `COMPOSE_PROJECT_NAME=lef5139e84 corepack pnpm bruno:smtp-dev`: 30 requests and 61 tests passed, including
+  allocation drain, exclusion, and restoration. Every live collection executed without skipped tests.
+- The real operator browser lifecycle and customer-denial tests passed, with exact-fixture deletion. Browser
+  artifact guards passed all ten deliberate failure cases; browser fixture guards passed all five tests.
+- `PROXY_BROWSER_PORT=41759 corepack pnpm --filter ./apps/web test:platform-proxies`: 40 tests passed across
+  1440 by 900 and 320 by 720 viewports. Coverage includes real cached-page restoration, cancellation, delayed
+  success and failure, permission changes, malformed cursors, confirmations, and accessibility.
+- `COMPOSE_PROJECT_NAME=lef5139e84 corepack pnpm --filter ./apps/web test:platform-proxies-live`: both tests
+  passed again after the final web rebuild. The operator completed create, edit, lifecycle, blacklist, delete,
+  and reload; customer access was denied by both route and API.
+- Final browser output directories contain only `.last-run.json`. Separate credential-free desktop and narrow
+  screenshot review found no clipping, horizontal overflow, missing controls, or runtime console errors.
+  All preview processes started for this task were stopped.
+- Final cleanup verified zero browser or Bruno proxy fixtures before removing the isolated stack with
+  `docker compose -p lef5139e84 -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans`.
+  No isolated containers, volumes, or networks remain. All eight original shared-worktree containers remain running
+  with their original IDs. Ignored local fixture metadata is retained; it no longer points to a running stack.
+- CI command inventory and prerequisite ordering checks passed 103 tests. The Validate workflow now runs proxy
+  artifact guards, the mocked browser suite, live Bruno, and the live browser lifecycle. No remote CI was dispatched.
+- The Browser plugin is unavailable. Playwright uses the repository configuration. Inherited HTTP proxy variables
+  must be unset for local preview reads, with `NODE_USE_ENV_PROXY=0`; this affects local test transport only.
+- On 2026-09-10, the end-of-list message gained the existing pagination padding after visual feedback. It now uses
+  the shared 1.5rem content gap below the final divider on desktop and narrow layouts, without changing tokens or API
+  behavior. Both focused browser checks passed. Text clearance measured 25.5 pixels on desktop and 25 pixels on the
+  narrow viewport, exceeding the shared minimum of 24 pixels. Neither viewport had horizontal overflow or runtime
+  errors.
+- `corepack pnpm docs:lint -- .agents/plans/frontend/18-operate-proxy-fleet.md src/libs/modules/proxy/README.md bruno/proxy-registry/README.md DESIGN.md UX-CONTRACT.md`:
+  five files passed. `git diff --check` passed.
+- On 2026-09-11, the implementation was rebased onto `7f4e8e1`, which adds SMTP evidence classification. All 19
+  shared Bruno runner checks and 103 CI workflow checks passed afterward. The architecture gate again found zero
+  violations across nine modules, and all five changed Markdown files passed Harper. The live results above
+  precede that upstream SMTP change; the disposable live stack was not recreated for publication.
 
 Record only synthetic/redacted proxy IDs, hostnames, cursor suffixes if necessary, lifecycle values, status codes,
 test counts, browser widths, and cleanup outcome. Never record proxy users/passwords, cookies, access tokens, raw

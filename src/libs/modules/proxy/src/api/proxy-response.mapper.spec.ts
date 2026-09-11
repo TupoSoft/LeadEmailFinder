@@ -36,9 +36,20 @@ describe('toProxyDto', () => {
             maxConcurrent: 3,
             requestsPerMinute: 20,
             description: 'a proxy',
+            blacklists: ['mx.example.com'],
         })
         expect(dto.auth).toBeUndefined()
-        expect(dto).not.toHaveProperty('blacklists')
+        expect(dto).not.toHaveProperty('user')
+        expect(dto).not.toHaveProperty('pass')
+    })
+
+    it('returns an independent blacklist array, defaulting missing state to an empty list', () => {
+        const source = record()
+        const dto = toProxyDto(source)
+        dto.blacklists.push('another.example.test')
+
+        expect(source.blacklists).toEqual(['mx.example.com'])
+        expect(toProxyDto(record({ blacklists: undefined })).blacklists).toEqual([])
     })
 })
 

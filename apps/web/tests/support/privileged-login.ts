@@ -39,6 +39,15 @@ function safeServiceClientError(value: unknown): TestInfoError {
     return { value: 'Service-client browser validation failed.', ...(location ? { stack: location } : {}) }
 }
 
+function safeProxyError(value: unknown): TestInfoError {
+    const stack =
+        typeof value === 'object' && value !== null && 'stack' in value && typeof value.stack === 'string'
+            ? value.stack
+            : ''
+    const location = stack.match(/platform-proxies(?:-ui)?\.spec\.ts:\d+:\d+/)?.[0]
+    return { value: 'Proxy browser validation failed.', ...(location ? { stack: location } : {}) }
+}
+
 export const test = base.extend<{
     loginAs: (identity: BrowserFixtureIdentity) => Promise<Page>
     privilegedAuthPolicy: void
@@ -48,14 +57,17 @@ export const test = base.extend<{
             if (
                 process.env.LEF_INVITATION_TEST_PRIVACY === '1' ||
                 process.env.LEF_VERIFICATION_TEST_PRIVACY === '1' ||
-                process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1'
+                process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1' ||
+                process.env.LEF_PROXY_TEST_PRIVACY === '1'
             ) {
                 const sanitize =
-                    process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1'
-                        ? safeServiceClientError
-                        : process.env.LEF_VERIFICATION_TEST_PRIVACY === '1'
-                          ? safeVerificationError
-                          : safeInvitationError
+                    process.env.LEF_PROXY_TEST_PRIVACY === '1'
+                        ? safeProxyError
+                        : process.env.LEF_SERVICE_CLIENT_TEST_PRIVACY === '1'
+                          ? safeServiceClientError
+                          : process.env.LEF_VERIFICATION_TEST_PRIVACY === '1'
+                            ? safeVerificationError
+                            : safeInvitationError
                 // Playwright still builds error-context.md from assertion messages
                 // when PLAYWRIGHT_NO_COPY_PROMPT disables DOM snapshots. Normalize
                 // errors on arrival, before its artifact recorder can persist them.
@@ -66,6 +78,10 @@ export const test = base.extend<{
                         return Reflect.set(errors, key, /^\d+$/.test(String(key)) ? sanitize(value) : value)
                     },
                 })
+            }
+            if (process.env.LEF_PROXY_TEST_PRIVACY === '1') {
+                // Refuse explicit attachments before Playwright can write credential-bearing bytes.
+                info.attach = () => Promise.reject(new Error('Proxy browser attachments are disabled.'))
             }
             if (
                 trace !== 'off' ||

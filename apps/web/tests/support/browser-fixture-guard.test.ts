@@ -8,6 +8,8 @@ import verification from '../../playwright.verification.config'
 import normal from '../../playwright.config'
 import serviceClients from '../../playwright.service-clients.config'
 import serviceClientsLive from '../../playwright.service-clients-live.config'
+import platformProxies from '../../playwright.platform-proxies.config'
+import platformProxiesLive from '../../playwright.platform-proxies-live.config'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
@@ -32,6 +34,8 @@ describe('privileged browser fixture integration boundaries', () => {
                 'single-verification.spec.ts',
                 'service-clients-ui.spec.ts',
                 'service-clients.spec.ts',
+                'platform-proxies-ui.spec.ts',
+                'platform-proxies.spec.ts',
             ]),
         )
     })
@@ -46,6 +50,22 @@ describe('privileged browser fixture integration boundaries', () => {
         expect(serviceClients.testMatch).toBe('service-clients-ui.spec.ts')
         expect(serviceClientsLive.testMatch).toBe('service-clients.spec.ts')
         for (const suite of ['service-clients-ui.spec.ts', 'service-clients.spec.ts']) {
+            const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
+            expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
+            expect(source).not.toMatch(/storageState|addCookies|client_credentials|saveAs|\.screenshot\(|\.attach\(/)
+        }
+    })
+
+    it('isolates proxy credential suites before entering any credential', () => {
+        for (const configuration of [platformProxies, platformProxiesLive]) {
+            expect(configuration.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
+            expect(configuration.retries).toBe(0)
+            expect(configuration.workers).toBe(1)
+            expect(configuration.reporter).toBe('./tests/support/platform-proxy-reporter.ts')
+        }
+        expect(platformProxies.testMatch).toBe('platform-proxies-ui.spec.ts')
+        expect(platformProxiesLive.testMatch).toBe('platform-proxies.spec.ts')
+        for (const suite of ['platform-proxies-ui.spec.ts', 'platform-proxies.spec.ts']) {
             const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
             expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
             expect(source).not.toMatch(/storageState|addCookies|client_credentials|saveAs|\.screenshot\(|\.attach\(/)

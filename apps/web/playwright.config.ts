@@ -17,6 +17,8 @@ export default defineConfig({
         'team-and-invitations.spec.ts',
         'service-clients-ui.spec.ts',
         'service-clients.spec.ts',
+        'platform-proxies-ui.spec.ts',
+        'platform-proxies.spec.ts',
     ],
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),

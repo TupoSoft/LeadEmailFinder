@@ -376,6 +376,71 @@
         ],
         "type": "object"
       },
+      "CreateProxyDto": {
+        "properties": {
+          "auth": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProxyAuthDto"
+              }
+            ],
+            "description": "Optional complete username/password pair. Never returned.",
+            "writeOnly": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "host": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxConcurrent": {
+            "default": 1,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol": {
+            "description": "1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "number"
+          },
+          "requestsPerMinute": {
+            "default": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "state": {
+            "default": "disabled",
+            "enum": [
+              "active",
+              "draining",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "weight": {
+            "default": 1,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol",
+          "host",
+          "port"
+        ],
+        "type": "object"
+      },
       "CreateServiceClientDto": {
         "properties": {
           "description": {
@@ -853,6 +918,139 @@
         ],
         "type": "object"
       },
+      "ProxyAuthDto": {
+        "properties": {
+          "pass": {
+            "description": "Proxy authentication password. Never returned.",
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          },
+          "user": {
+            "description": "Proxy authentication username. Never returned.",
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "user",
+          "pass"
+        ],
+        "type": "object"
+      },
+      "ProxyDto": {
+        "properties": {
+          "blacklists": {
+            "description": "MX hosts reported as blacklisting this proxy. Repeated reports are deduplicated.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "maxConcurrent": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol": {
+            "description": "1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "number"
+          },
+          "requestsPerMinute": {
+            "description": "Maximum allocation requests per minute.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "state": {
+            "description": "Draining and disabled exclude new allocation; neither proves that active leases have ended.",
+            "enum": [
+              "active",
+              "draining",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "weight": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "host",
+          "port",
+          "state",
+          "weight",
+          "maxConcurrent",
+          "requestsPerMinute",
+          "blacklists",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ProxyListDto": {
+        "properties": {
+          "nextPageToken": {
+            "description": "Pass this cursor unchanged as pageToken. An empty string means this traversal is complete; no total is provided.",
+            "type": "string"
+          },
+          "proxies": {
+            "items": {
+              "$ref": "#/components/schemas/ProxyDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "proxies",
+          "nextPageToken"
+        ],
+        "type": "object"
+      },
+      "ReportBlacklistDto": {
+        "properties": {
+          "mxHost": {
+            "description": "MX host to exclude for this proxy. Repeating the same value does not duplicate it.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "mxHost"
+        ],
+        "type": "object"
+      },
       "ServiceClientResponseDto": {
         "properties": {
           "clientId": {
@@ -979,6 +1177,62 @@
         "required": [
           "amount"
         ],
+        "type": "object"
+      },
+      "UpdateProxyDto": {
+        "properties": {
+          "auth": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProxyAuthDto"
+              }
+            ],
+            "description": "Complete replacement username/password pair. Omission preserves stored authentication; clearing is unsupported.",
+            "writeOnly": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "host": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxConcurrent": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol": {
+            "description": "1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "type": "number"
+          },
+          "requestsPerMinute": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "draining",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "weight": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "UploadFileRequestDto": {
@@ -3246,6 +3500,474 @@
         "summary": "Invalidate the current secret and reveal a replacement once",
         "tags": [
           "ServiceClients"
+        ]
+      }
+    },
+    "/v1/proxies": {
+      "get": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Orders by ID. Pass the returned nextPageToken unchanged; an empty string ends the traversal. No total is provided.",
+        "operationId": "ProxyController_listProxies",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The nonempty nextPageToken from the previous page. Omit for the first page.",
+            "in": "query",
+            "name": "pageToken",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyListDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Invalid page size or page token."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Permission denied."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "List proxies",
+        "tags": [
+          "Proxies"
+        ]
+      },
+      "post": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Defaults to disabled. Authentication is never returned. Reconcile the registry before explicitly retrying an uncertain create.",
+        "operationId": "ProxyController_createProxy",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProxyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid proxy fields or incomplete authentication.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persistence failure; the create outcome may be uncertain.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Create a proxy",
+        "tags": [
+          "Proxies"
+        ]
+      }
+    },
+    "/v1/proxies/{id}": {
+      "delete": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. ",
+        "operationId": "ProxyController_deleteProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Permission or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Proxy not found."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Delete a proxy",
+        "tags": [
+          "Proxies"
+        ]
+      },
+      "get": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. ",
+        "operationId": "ProxyController_getProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Permission denied."
+          },
+          "404": {
+            "description": "Proxy not found."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Get a proxy",
+        "tags": [
+          "Proxies"
+        ]
+      },
+      "patch": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Updates only supplied fields. Omit auth to preserve stored authentication. A redacted read cannot resolve an uncertain authentication replacement; do not retry automatically.",
+        "operationId": "ProxyController_updateProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProxyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty update or invalid proxy fields, including incomplete authentication.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission or browser CSRF check denied.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Proxy not found.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persistence failure; authentication may already have changed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents storage of every create and update response, including failures.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Update a proxy",
+        "tags": [
+          "Proxies"
+        ]
+      }
+    },
+    "/v1/proxies/{id}/blacklists": {
+      "post": {
+        "description": "Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Repeated identical reports converge. Read the proxy afterward to see its current blacklist array. Removal is unsupported.",
+        "operationId": "ProxyController_reportProxyBlacklist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBlacklistDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "An MX host is required."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Permission or browser CSRF check denied."
+          },
+          "404": {
+            "description": "Proxy not found."
+          },
+          "500": {
+            "description": "Persistence failure."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          },
+          {
+            "oidc": []
+          }
+        ],
+        "summary": "Exclude a proxy for an MX host",
+        "tags": [
+          "Proxies"
         ]
       }
     },

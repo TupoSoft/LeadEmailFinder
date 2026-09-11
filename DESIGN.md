@@ -337,6 +337,15 @@ focus on Cancel. Unconfirmed additions and absolute overwrites use persistent ex
 actions. The document owns scrolling, identifiers wrap in full, and narrow layouts retain both operations in the same
 order. This feature introduces no new visual tokens.
 
+### Platform Proxy Fleet
+
+The proxy fleet console reuses the service-client metadata table, `ProductPanel`, shared form controls, and
+`TeamDialog`. Desktop rows become labeled narrow rows, preserving the endpoint, full identifier, allocation settings,
+blacklists, and UTC timestamps. Creation, editing, and confirmations use bounded dialogs. Native protocol selects
+retain platform popup behavior. Authentication controls appear only after explicit enablement and remain masked by
+default. Lifecycle labels use text; no color or icon implies health or completed draining. This feature adds no
+visual tokens and preserves document scrolling.
+
 ### Verification Evidence
 
 Single-email verification reuses the product headings, shared form controls, flat panels, and existing action

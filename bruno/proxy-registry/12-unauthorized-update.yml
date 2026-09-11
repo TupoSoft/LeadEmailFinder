@@ -1,0 +1,31 @@
+info:
+  name: 12-unauthorized-update
+  type: http
+  seq: 12
+http:
+  method: PATCH
+  url: "{{baseUrl}}/v1/proxies/{{proxyId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "auth": {
+          "user": "{{replacementUser}}",
+          "pass": "{{replacementPassword}}"
+        }
+      }
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('unauthenticated credential replacement is not cached', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(401);
+          expect(res.headers['cache-control']).to.equal('no-store');
+        });

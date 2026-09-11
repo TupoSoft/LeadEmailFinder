@@ -186,6 +186,10 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
         'corepack pnpm bruno:platform-credits',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
+        'corepack pnpm bruno:proxy-registry',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
         'corepack pnpm test:gateway',
         'corepack pnpm dev:reset -- --confirm-project=LEF',
         'corepack pnpm test:web-live',
@@ -392,6 +396,9 @@ describe('Validate workflow syntax and structure', () => {
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
             'corepack pnpm test:web-live',
         ]) {
             before('corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium', run)
@@ -402,9 +409,21 @@ describe('Validate workflow syntax and structure', () => {
         for (const run of [
             'corepack pnpm bruno:platform-credits',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
+            'corepack pnpm bruno:proxy-registry',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
         ]) {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
             before('corepack pnpm --filter @tuposoft/lead-email-finder-web browser-fixtures:bootstrap', run)
+        }
+        before(
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
+        )
+        for (const run of [
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
+        ]) {
+            before('corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts', run)
         }
     })
 
