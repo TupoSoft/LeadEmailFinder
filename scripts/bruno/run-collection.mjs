@@ -32,6 +32,13 @@ const registry = Object.freeze({
     'batch-verification': Object.freeze({ requests: 9, tests: 15, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 34, sandbox: 'developer', network: 'host' }),
+    'proxy-registry': Object.freeze({
+        requests: 27,
+        tests: 27,
+        sandbox: 'developer',
+        network: 'host',
+        countOnly: true,
+    }),
     'service-client-management': Object.freeze({
         requests: 6,
         tests: 6,

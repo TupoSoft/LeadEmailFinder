@@ -1,4 +1,4 @@
-// Loaded before the pinned CLI. Invitation URLs and assertion values must never
+// Loaded before the pinned CLI. Credentials, invitation URLs, and assertion values must never
 // reach a reporter file or terminal, including when the CLI exits unsuccessfully.
 import fs from 'node:fs'
 import path from 'node:path'

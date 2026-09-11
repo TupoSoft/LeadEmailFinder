@@ -1,0 +1,36 @@
+info:
+  name: 05-invalid-create-array
+  type: http
+  seq: 5
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/proxies"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "protocol": 1,
+        "host": "proxy.bruno.example.test",
+        "port": 8080,
+        "auth": [],
+        "maxConcurrent": 1,
+        "requestsPerMinute": 10,
+        "description": "{{proxyFixtureDescription}}"
+      }
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('rejects array authentication without caching the error', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(400);
+          expect(res.headers['cache-control']).to.equal('no-store');
+        });

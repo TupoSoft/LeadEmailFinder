@@ -1,0 +1,32 @@
+info:
+  name: 21-disable-proxy
+  type: http
+  seq: 21
+http:
+  method: PATCH
+  url: "{{baseUrl}}/v1/proxies/{{proxyId}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "state": "disabled"
+      }
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('disables the captured fixture', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(200);
+          expect(res.body.id).to.equal(bru.getVar('proxyId'));
+          expect(res.body.state).to.equal('disabled');
+          expect(res.headers['cache-control']).to.equal('no-store');
+        });
