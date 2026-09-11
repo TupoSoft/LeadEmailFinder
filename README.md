@@ -251,6 +251,10 @@ The web gateway publishes `53000:8080`. The API listens on `api:3000` inside Com
 Unknown API descendants return JSON errors; unknown UI routes render the product's not-found page. Swagger uses the
 relative server URL `/`, so its requests stay on the origin that served the documentation.
 
+The editor HTTP client's `dev` environment in `http-client.env.json` uses this Compose gateway at
+`http://localhost:53000`. This repository no longer schedules application deployment. Previously queued deployment
+runs and remote resources require separate operator follow-up.
+
 Use the built gateway for authenticated browser flows. To work on UI code with Vite while the gateway owns port
 53000, run `corepack pnpm --filter @tuposoft/lead-email-finder-web dev` on Vite's default port. Its explicit API proxy
 uses `http://localhost:53000`; `WEB_API_PROXY_TARGET` selects a different backend for standalone development.

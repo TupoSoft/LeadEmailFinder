@@ -40,6 +40,5 @@ docker/proxy-fleet/*
 !docker/proxy-fleet/healthcheck.sh
 Makefile
 eslint.config.mjs
-swarm.yml
 !docker/web/
 !docker/web/**
