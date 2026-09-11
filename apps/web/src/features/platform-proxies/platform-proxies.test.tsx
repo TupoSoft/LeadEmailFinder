@@ -4,6 +4,7 @@ import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentAccount } from '../../api/current-account'
 import { ForbiddenPage, ProtectedApplication } from '../../app/AuthRoutes'
+import { productCopy } from '../../content/product'
 import { AuthProvider } from '../auth/AuthProvider'
 import { AuthSession } from '../auth/auth-session'
 import { PlatformProxiesPage } from './PlatformProxiesPage'
@@ -190,8 +191,13 @@ describe('platform-proxies', () => {
 
     it('creates disabled with hidden auth, validates pair, and keeps pending and settled caches free of credentials', async () => {
         const settled = deferred<Response>()
+        const refreshed = deferred<Response>()
+        let reads = 0
         const { fetch, session } = renderProxies({
-            intercept: request => (request.method === 'POST' ? settled.promise : undefined),
+            intercept: request => {
+                if (request.method === 'POST') return settled.promise
+                if (new URL(request.url).pathname === collection && ++reads > 1) return refreshed.promise
+            },
         })
         const { user, dialog } = await openCreate()
         expect(within(dialog).queryByLabelText(copy.username)).not.toBeInTheDocument()
@@ -219,7 +225,103 @@ describe('platform-proxies', () => {
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
         expect(cacheIsSafe(session)).toBe(true)
         expect(screen.getByText(copy.success).parentElement).toHaveFocus()
+        await act(async () => {
+            refreshed.resolve(Response.json({ proxies: [proxy], nextPageToken: '' }))
+            await refreshed.promise
+        })
+        await waitFor(() => expect(screen.queryByText(copy.success)).not.toBeInTheDocument())
     })
+
+    it.each([
+        ['create', 'success'],
+        ['create', 'failure'],
+        ['update', 'success'],
+        ['update', 'failure'],
+    ] as const)(
+        'clears confirmed %s feedback when its registry refresh settles with %s',
+        async (operation, outcome) => {
+            const refreshed = deferred<Response>()
+            let written = false
+            renderProxies({
+                intercept: request => {
+                    if (request.method === 'POST' || request.method === 'PATCH') written = true
+                    if (request.method === 'GET' && new URL(request.url).pathname === collection && written)
+                        return refreshed.promise
+                },
+            })
+            const user = userEvent.setup()
+            if (operation === 'create') {
+                const { dialog } = await openCreate(user)
+                await user.click(within(dialog).getByRole('button', { name: copy.create }))
+            } else {
+                await user.click(await screen.findByRole('button', { name: copy.edit }))
+                await user.click(await screen.findByRole('button', { name: copy.save }))
+            }
+            expect(await screen.findByText(copy.success)).toBeInTheDocument()
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+            expect(screen.getByRole('button', { name: copy.create })).toBeDisabled()
+            expect(screen.getByRole('region', { name: copy.registry })).toHaveAttribute('aria-busy', 'true')
+            await act(async () => {
+                refreshed.resolve(
+                    outcome === 'success'
+                        ? Response.json({ proxies: [{ ...proxy, description: 'Confirmed change' }], nextPageToken: '' })
+                        : new Response(null, { status: 500 }),
+                )
+                await refreshed.promise
+            })
+            await waitFor(() => expect(screen.queryByText(copy.success)).not.toBeInTheDocument())
+            expect(screen.queryByText(copy.unknown)).not.toBeInTheDocument()
+            expect(screen.getByRole('region', { name: copy.registry })).toHaveAttribute('aria-busy', 'false')
+            if (outcome === 'success') {
+                expect(await screen.findByText('Confirmed change')).toBeInTheDocument()
+                expect(screen.getByRole('button', { name: copy.create })).toBeEnabled()
+            } else {
+                expect(await screen.findByText(productCopy.readError)).toBeInTheDocument()
+                expect(screen.getByRole('button', { name: productCopy.retry })).toBeEnabled()
+                expect(screen.getByRole('button', { name: copy.create })).toBeDisabled()
+            }
+        },
+    )
+
+    it.each(['pagehide', 'unmount'] as const)(
+        'discards confirmed refresh feedback across %s without marking the write uncertain',
+        async boundary => {
+            const refreshed = deferred<Response>()
+            let reads = 0
+            const { router } = renderProxies({
+                intercept: request => {
+                    if (request.method === 'GET' && new URL(request.url).pathname === collection && ++reads === 2)
+                        return refreshed.promise
+                },
+            })
+            const { user, dialog } = await openCreate()
+            await user.click(within(dialog).getByRole('button', { name: copy.create }))
+            expect(await screen.findByText(copy.success)).toBeInTheDocument()
+            if (boundary === 'pagehide') {
+                act(() => {
+                    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
+                    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+                })
+            } else {
+                await act(async () => {
+                    await router.navigate('/outside')
+                })
+            }
+            expect(screen.queryByText(copy.success)).not.toBeInTheDocument()
+            await act(async () => {
+                refreshed.resolve(Response.json({ proxies: [proxy], nextPageToken: '' }))
+                await refreshed.promise
+            })
+            if (boundary === 'unmount') {
+                await act(async () => {
+                    await router.navigate(route)
+                })
+            }
+            await waitFor(() => expect(screen.getByRole('button', { name: copy.create })).toBeEnabled())
+            expect(screen.queryByText(copy.success)).not.toBeInTheDocument()
+            expect(screen.queryByText(copy.unknown)).not.toBeInTheDocument()
+        },
+    )
 
     it('reads fresh detail and omits auth and lifecycle for an ordinary edit', async () => {
         let patch: Request | undefined
@@ -276,6 +378,7 @@ describe('platform-proxies', () => {
         await user.click(within(dialog).getByRole('button', { name: copy.create }))
         expect(await screen.findByText(copy.unknown)).toBeInTheDocument()
         await waitFor(() => expect(screen.getByRole('button', { name: copy.reviewed })).toBeEnabled())
+        expect(screen.getByText(copy.unknown)).toBeInTheDocument()
         expect(screen.getByRole('button', { name: copy.create })).toBeDisabled()
         await user.click(screen.getByRole('button', { name: copy.refresh }))
         expect(requests(fetch, 'POST')).toHaveLength(1)
@@ -338,6 +441,7 @@ describe('platform-proxies', () => {
         expect(await screen.findByText(copy.invalid)).toBeInTheDocument()
         expect(screen.queryByText(copy.unknown)).not.toBeInTheDocument()
         await waitFor(() => expect(screen.getByRole('button', { name: copy.create })).toBeEnabled())
+        expect(screen.getByText(copy.invalid)).toBeInTheDocument()
     })
     it('keeps loaded later-page rows visible after a confirmed blacklist report', async () => {
         let blacklisted = false

@@ -70,6 +70,58 @@ async function authenticationAbsent(page: Page) {
 
 const rowFor = (page: Page, description: string) => page.getByRole('row').filter({ hasText: description })
 
+for (const mode of ['create', 'edit'] as const) {
+    test(`${mode} fields stay aligned with absent or wrapped help text`, async ({ page, context }) => {
+        await account(context)
+        const item = proxy()
+        await context.route(`**${collection}**`, route =>
+            route.fulfill({
+                json:
+                    new URL(route.request().url()).pathname === collection
+                        ? { proxies: [item], nextPageToken: '' }
+                        : item,
+            }),
+        )
+        let runtimeErrors = 0
+        page.on('pageerror', () => runtimeErrors++)
+        page.on('console', message => {
+            if (message.type() === 'error') runtimeErrors++
+        })
+        await page.goto(routePath)
+        await expect(page).toHaveTitle('Proxy fleet | Lead Email Finder')
+        await page.getByRole('button', { name: mode === 'create' ? 'Create proxy' : 'Edit proxy', exact: true }).click()
+        const dialog = page.getByRole('dialog', {
+            name: mode === 'create' ? 'Create proxy' : 'Edit proxy',
+            exact: true,
+        })
+        await expect(dialog.getByLabel('Host', { exact: true })).toBeVisible()
+        await page.evaluate(() => document.fonts.ready)
+        const controls = await dialog.locator('select, input:not([type="checkbox"])').evaluateAll(elements =>
+            elements.map(element => {
+                const { top, left, height } = element.getBoundingClientRect()
+                return { top, left, height }
+            }),
+        )
+        expect(controls).toHaveLength(7)
+        // Native selects can differ slightly from text inputs even without grid stretching.
+        for (const control of controls) expect(Math.abs(control.height - controls[1].height)).toBeLessThanOrEqual(2)
+        if (page.viewportSize()!.width > 768) {
+            for (const index of [0, 2, 4]) {
+                expect(Math.abs(controls[index].top - controls[index + 1].top)).toBeLessThanOrEqual(1)
+            }
+        } else {
+            for (const [index, control] of controls.entries()) {
+                expect(Math.abs(control.left - controls[0].left)).toBeLessThanOrEqual(1)
+                if (index > 0) expect(control.top).toBeGreaterThan(controls[index - 1].top)
+            }
+        }
+        await accessible(page)
+        await page.keyboard.press('Escape')
+        await expect(dialog).toHaveCount(0)
+        expect(runtimeErrors).toBe(0)
+    })
+}
+
 test('registry follows returned cursors, deduplicates rows, and shows no invented total at either width', async ({
     page,
     context,
@@ -157,6 +209,7 @@ test('create stays disabled, requires complete opted-in authentication, and clea
     await accessible(page)
     await dialog.getByRole('button', { name: 'Create proxy', exact: true }).click()
     await expect(rowFor(page, created.description)).toContainText('Disabled')
+    await expect(page.getByText('The change was confirmed. Refreshing the registry…', { exact: true })).toHaveCount(0)
     await authenticationAbsent(page)
     expect(writes === 1 && safeBody).toBe(true)
     expect(
@@ -275,6 +328,7 @@ test('lifecycle and deletion wait for confirmation and blacklist reporting rende
     expect(deletes).toBe(0)
     await deletion.getByRole('button', { name: 'Delete proxy', exact: true }).click()
     await expect(row).toHaveCount(0)
+    await expect(page.getByText('The change was confirmed. Refreshing the registry…', { exact: true })).toHaveCount(0)
     expect(transitions).toEqual(['active', 'draining', 'disabled'])
     expect(reports === 2 && deletes === 1).toBe(true)
 })

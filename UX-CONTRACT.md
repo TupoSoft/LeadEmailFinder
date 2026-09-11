@@ -535,6 +535,10 @@ loading and retained data use `ProductPanel`; failed continuation reads keep exi
 Invalid cursors request a fresh read. Denied reads hide registry data. Current details are read before any row action;
 a missing record exposes no editable fields. Desktop and narrow layouts retain all metadata and actions.
 
+The confirmed-change message appears while the resulting registry refresh is pending and clears when that refresh
+settles. A failed refresh uses the panel's read-error state. Rejected writes and unconfirmed outcomes retain their
+existing feedback and recovery actions. Dismissal or page hide also clears the transient confirmation.
+
 Create proxy uses disabled as its explicit initial state. Edit proxy includes response-visible fields and omits state;
 lifecycle changes have separate controls. Use authentication and Replace authentication start off with no credential
 inputs in the document. Enabling either requires a complete pair. Replacement additionally requires an explicit

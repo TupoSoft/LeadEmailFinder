@@ -18,6 +18,7 @@ contract and generated client, focused tests, Bruno, and a disposable live brows
 - [x] (2026-09-09) Cover cursor truth, hidden authentication, confirmations, permission, error, and recovery behavior.
 - [x] (2026-09-09) Update generated client, Bruno, module documentation, and the durable design context.
 - [x] (2026-09-09) Finish live browser, premium design, architecture, prose, and full validation and record it.
+- [x] (2026-09-11) Align create and edit controls and clear confirmed-change feedback when the registry refresh settles.
 
 ## Plan dependencies
 
@@ -388,6 +389,18 @@ Current validation evidence (2026-09-09):
   artifact comparisons. The architecture gate checked nine modules with zero violations; focused runner lint and
   `git diff --check` passed. The resolution introduces no additional API behavior or architectural changes. The
   full development stack and live browser suites were not rerun for this merge.
+- On 2026-09-11, screenshot feedback identified uneven form controls and a confirmation that remained after the
+  registry finished refreshing. The proxy form now aligns field groups at the top so absent or wrapping helper text
+  cannot stretch neighboring controls. Confirmed-change feedback clears when its refresh settles, including a failed
+  refresh, while rejected and unconfirmed writes retain their feedback. Existing generation guards protect later
+  operations and page lifecycle boundaries. No shared tokens, API behavior, or module boundaries changed.
+- Validation for these UI corrections: `corepack pnpm --filter ./apps/web test:ci --reporter=dot` passed all 627
+  tests, including 19 focused proxy tests. `corepack pnpm --filter ./apps/web test:platform-proxies` passed all 44
+  mocked browser cases at 1440 by 900 and 320 by 720. New create and edit geometry checks reproduce the original
+  stretching and verify aligned controls; create and delete scenarios verify that completed refresh feedback clears.
+  Credential-free screenshots independently confirmed the corrected form, with zero console or runtime errors.
+  The build, web lint, design lint, UI audit, and `git diff --check` passed. The Browser plugin was unavailable, so
+  validation used the repository's Playwright configuration. The full live stack was not rerun for these UI changes.
 
 Record only synthetic/redacted proxy IDs, hostnames, cursor suffixes if necessary, lifecycle values, status codes,
 test counts, browser widths, and cleanup outcome. Never record proxy users/passwords, cookies, access tokens, raw

@@ -70,6 +70,7 @@ export function usePlatformProxies(membershipId: string) {
         const active = invalidate()
         setPending(false)
         setFormVersion(value => value + 1)
+        setNotice(value => (value === copy.success ? '' : value))
         if (active) {
             setUnknown(true)
             setNotice('')
@@ -138,7 +139,8 @@ export function usePlatformProxies(membershipId: string) {
                 lifetime.current.operation = null
                 setPending(false)
                 setFormVersion(value => value + 1)
-                void (operation.kind === 'create' || operation.kind === 'delete' ? refresh() : refreshLoaded())
+                await (operation.kind === 'create' || operation.kind === 'delete' ? refresh() : refreshLoaded())
+                if (current()) setNotice(value => (value === copy.success ? '' : value))
             }
         }
     }
