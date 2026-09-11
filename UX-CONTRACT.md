@@ -65,6 +65,7 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
 | Platform organizations | `PlatformOrganizationsPage` | `frontend/15` | Cursor directory, tenant creation, and one-time owner invitation | API, PostgreSQL, component, Bruno, and browser tests |
 | Platform credits | `PlatformCreditsPage` | `frontend/17` | Authoritative balance, confirmed add and absolute set, and explicit recovery | API, component, Bruno, accessibility, and browser tests |
+| Platform proxies | `PlatformProxiesPage` | `frontend/18` | Cursor registry, credential-safe forms, and confirmed lifecycle actions | API, component, Bruno, privacy, accessibility, and live browser tests |
 | Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
 
 ## Route and Copy Ownership
@@ -518,3 +519,56 @@ that server application remains unknown. Abandonment explains this uncertainty a
 the key. Closing the tab or clearing browser storage also loses recovery. The operator must reconcile the outcome
 before making a separate adjustment; a balance read alone cannot establish causality. See
 `docs/platform-credits.md` for the operator procedure.
+
+
+## Platform Proxy Fleet
+
+The source contract is `.agents/plans/frontend/18-operate-proxy-fleet.md`. The route `/app/platform/proxies`, its
+navigation entry, and heading `Proxy fleet` require `platform.proxies.manage`. The document title is
+`Proxy fleet | Lead Email Finder`. The API independently requires `platform:admin` for every management operation.
+
+The registry consumes `nextPageToken` unchanged, appends unique IDs, and offers Load more only for a nonempty cursor.
+Refresh proxies, creation, and deletion restart the directory. Edits and blacklist reports refresh all loaded pages
+so their affected rows remain visible. No numeric total or page count is inferred. Cursors
+remain transient query state because they are continuation instructions, not shareable resource locations. Initial
+loading and retained data use `ProductPanel`; failed continuation reads keep existing rows and offer an explicit retry.
+Invalid cursors request a fresh read. Denied reads hide registry data. Current details are read before any row action;
+a missing record exposes no editable fields. Desktop and narrow layouts retain all metadata and actions.
+
+The confirmed-change message appears while the resulting registry refresh is pending and clears when that refresh
+settles. A failed refresh uses the panel's read-error state. Rejected writes and unconfirmed outcomes retain their
+existing feedback and recovery actions. Dismissal or page hide also clears the transient confirmation.
+
+Create proxy uses disabled as its explicit initial state. Edit proxy includes response-visible fields and omits state;
+lifecycle changes have separate controls. Use authentication and Replace authentication start off with no credential
+inputs in the document. Enabling either requires a complete pair. Replacement additionally requires an explicit
+confirmation naming the endpoint and connectivity consequence. Turning replacement off omits authentication from
+the PATCH body. Stored values cannot be read, removed, or recovered through this console.
+
+Credential inputs are uncontrolled, proxy-specific, and excluded from application state. Forms and usernames use
+`autocomplete="off"`; passwords use `autocomplete="new-password"` and offer explicit Show and Hide controls. These
+hints supplement local cleanup and are not a security boundary. Direct generated-client writes stay outside
+`QueryCache` and `MutationCache`, disable replay, discard mutation responses, and request `no-store`. An abort
+controller and operation generation fence late results. Settlement, dismissal, unmount, pagehide, and persisted
+pageshow clear credentials and close the form. Browser-restored values cannot submit automatically. Public reads
+apply an explicit field projection before entering the query cache.
+
+| Operation | Confirmation and pending behavior | Confirmed result | Recovery |
+| --- | --- | --- | --- |
+| Create proxy | Starts disabled; prevent duplicate requests | Refresh the registry | Reconcile an unconfirmed creation before another write |
+| Edit visible fields | Read current detail; omit authentication and lifecycle | Refresh the registry | Correct a rejection through a fresh form |
+| Replace authentication | Explain loss of old values and connectivity risk; initially focus Cancel | Clear input and refresh | A redacted response cannot establish which credentials were stored |
+| Activate, Drain, Disable | Name source, target, and allocation consequence; initially focus Cancel | Refresh server state | Never infer that active leases or connections ended |
+| Report MX blacklist | Validate one nonempty MX host | Read the server's deduplicated array | Retry explicitly; no removal control |
+| Delete proxy | Name the exact endpoint and registry deletion; initially focus Cancel | Refresh directory membership | Reconcile before another explicit action |
+
+No row changes optimistically. Mutations pause while a required read is pending, failed, or offline. Unexpected server
+or network failure after dispatch is an unconfirmed outcome. Cancellation stops waiting but cannot undo a server write.
+A secret-free, membership-scoped marker survives navigation and cached-page restoration in the current document.
+It blocks another write until a successful registry read and explicit reconciliation acknowledgment; it does not
+survive an ordinary reload. No recovery action automatically replays a mutation.
+
+Credential browser tests disable traces, screenshots, videos, DOM attachments, and raw errors for the entire run.
+Runtime marker guards exercise assertion, timeout, and teardown failures and inspect CLI output and artifact files.
+Live tests use the owned disposable stack, the MFA-aware operator fixture, a unique description, and captured IDs;
+The cleanup step deletes only the exact fixtures created by the tests.

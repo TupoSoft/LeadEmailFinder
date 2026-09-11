@@ -1,0 +1,26 @@
+info:
+  name: 08-list-first-page
+  type: http
+  seq: 8
+http:
+  method: GET
+  url: "{{baseUrl}}/v1/proxies?pageSize=1"
+  headers:
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('returns the last visible ID as the cursor without a total', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(200);
+          expect(res.body).to.have.all.keys('proxies', 'nextPageToken');
+          expect(res.body.proxies).to.have.lengthOf(1);
+          expect(res.body.nextPageToken).to.equal(res.body.proxies[0].id);
+          bru.setVar('proxyPageToken', res.body.nextPageToken);
+          bru.setVar('proxySeenIds', res.body.proxies.map(proxy => proxy.id));
+        });

@@ -407,6 +407,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/proxies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List proxies
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Orders by ID. Pass the returned nextPageToken unchanged; an empty string ends the traversal. No total is provided.
+         */
+        get: operations["ProxyController_listProxies"];
+        put?: never;
+        /**
+         * Create a proxy
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Defaults to disabled. Authentication is never returned. Reconcile the registry before explicitly retrying an uncertain create.
+         */
+        post: operations["ProxyController_createProxy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/proxies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a proxy
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header.
+         */
+        get: operations["ProxyController_getProxy"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a proxy
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header.
+         */
+        delete: operations["ProxyController_deleteProxy"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a proxy
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Updates only supplied fields. Omit auth to preserve stored authentication. A redacted read cannot resolve an uncertain authentication replacement; do not retry automatically.
+         */
+        patch: operations["ProxyController_updateProxy"];
+        trace?: never;
+    };
+    "/v1/proxies/{id}/blacklists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exclude a proxy for an MX host
+         * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Repeated identical reports converge. Read the proxy afterward to see its current blacklist array. Removal is unsupported.
+         */
+        post: operations["ProxyController_reportProxyBlacklist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/verifyAsync": {
         parameters: {
             query?: never;
@@ -637,6 +709,29 @@ export interface components {
             /** Format: uuid */
             organizationId: string;
         };
+        CreateProxyDto: {
+            /** @description Optional complete username/password pair. Never returned. */
+            auth?: components["schemas"]["ProxyAuthDto"];
+            description?: string;
+            host: string;
+            /** @default 1 */
+            maxConcurrent: number;
+            port: number;
+            /**
+             * @description 1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.
+             * @enum {number}
+             */
+            protocol: 1 | 2 | 3 | 4;
+            /** @default 10 */
+            requestsPerMinute: number;
+            /**
+             * @default disabled
+             * @enum {string}
+             */
+            state: "active" | "draining" | "disabled";
+            /** @default 1 */
+            weight: number;
+        };
         CreateServiceClientDto: {
             description?: string;
             /** @description Choose only from the current account grantableServiceClientPermissions; the server enforces that ceiling. */
@@ -780,6 +875,48 @@ export interface components {
             nextPageToken?: string;
             organizations: components["schemas"]["OrganizationDirectoryEntryDto"][];
         };
+        ProxyAuthDto: {
+            /** @description Proxy authentication password. Never returned. */
+            pass: string;
+            /** @description Proxy authentication username. Never returned. */
+            user: string;
+        };
+        ProxyDto: {
+            /** @description MX hosts reported as blacklisting this proxy. Repeated reports are deduplicated. */
+            blacklists: string[];
+            /** Format: date-time */
+            createdAt: string;
+            description?: string;
+            host: string;
+            /** Format: uuid */
+            id: string;
+            maxConcurrent: number;
+            port: number;
+            /**
+             * @description 1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.
+             * @enum {number}
+             */
+            protocol: 1 | 2 | 3 | 4;
+            /** @description Maximum allocation requests per minute. */
+            requestsPerMinute: number;
+            /**
+             * @description Draining and disabled exclude new allocation; neither proves that active leases have ended.
+             * @enum {string}
+             */
+            state: "active" | "draining" | "disabled";
+            /** Format: date-time */
+            updatedAt: string;
+            weight: number;
+        };
+        ProxyListDto: {
+            /** @description Pass this cursor unchanged as pageToken. An empty string means this traversal is complete; no total is provided. */
+            nextPageToken: string;
+            proxies: components["schemas"]["ProxyDto"][];
+        };
+        ReportBlacklistDto: {
+            /** @description MX host to exclude for this proxy. Repeating the same value does not duplicate it. */
+            mxHost: string;
+        };
         ServiceClientResponseDto: {
             clientId: string;
             /** Format: date-time */
@@ -811,6 +948,23 @@ export interface components {
         SetBalanceDto: {
             /** @description Absolute credit balance */
             amount: number;
+        };
+        UpdateProxyDto: {
+            /** @description Complete replacement username/password pair. Omission preserves stored authentication; clearing is unsupported. */
+            auth?: components["schemas"]["ProxyAuthDto"];
+            description?: string;
+            host?: string;
+            maxConcurrent?: number;
+            port?: number;
+            /**
+             * @description 1: HTTP, 2: HTTPS, 3: SOCKS5, 4: SOCKS4.
+             * @enum {number}
+             */
+            protocol?: 1 | 2 | 3 | 4;
+            requestsPerMinute?: number;
+            /** @enum {string} */
+            state?: "active" | "draining" | "disabled";
+            weight?: number;
         };
         UploadFileRequestDto: {
             /**
@@ -2238,6 +2392,346 @@ export interface operations {
                 headers: {
                     /** @description Prevents storage of all create and rotate responses, including failures. */
                     "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_listProxies: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                /** @description The nonempty nextPageToken from the previous page. Omit for the first page. */
+                pageToken?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyListDto"];
+                };
+            };
+            /** @description Invalid page size or page token. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_createProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProxyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyDto"];
+                };
+            };
+            /** @description Invalid proxy fields or incomplete authentication. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure; the create outcome may be uncertain. */
+            500: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_getProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyDto"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxy not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_deleteProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyDto"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxy not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_updateProxy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProxyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyDto"];
+                };
+            };
+            /** @description Empty update or invalid proxy fields, including incomplete authentication. */
+            400: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission or browser CSRF check denied. */
+            403: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxy not found. */
+            404: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure; authentication may already have changed. */
+            500: {
+                headers: {
+                    /** @description Prevents storage of every create and update response, including failures. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProxyController_reportProxyBlacklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportBlacklistDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An MX host is required. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission or browser CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxy not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Persistence failure. */
+            500: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content?: never;

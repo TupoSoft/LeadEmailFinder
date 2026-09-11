@@ -11,6 +11,7 @@ import { TeamPage } from '../features/team/TeamPage'
 import { ServiceClientsPage } from '../features/service-clients/ServiceClientsPage'
 import { PlatformCreditsPage } from '../features/platform-credits/PlatformCreditsPage'
 import { PlatformOrganizationsPage } from '../features/platform-organizations/PlatformOrganizationsPage'
+import { PlatformProxiesPage } from '../features/platform-proxies/PlatformProxiesPage'
 import { InvitationPage } from '../features/invitations/InvitationPage'
 import {
     AccountUnavailablePage,
@@ -43,6 +44,7 @@ export const appRoutes: RouteObject[] = [
                     { path: 'team', element: <TeamPage /> },
                     { path: 'service-clients', element: <ServiceClientsPage /> },
                     { path: 'platform/organizations', element: <PlatformOrganizationsPage /> },
+                    { path: 'platform/proxies', element: <PlatformProxiesPage /> },
                     { path: 'platform/organizations/:organizationId/credits', element: <PlatformCreditsPage /> },
                     { path: 'verifications/new', element: <VerificationPage /> },
                     { path: 'verifications/batches/new', element: <BatchVerificationPage /> },

@@ -12,6 +12,7 @@ export function toProxyDto(record: ProxyRecord): ProxyDto {
     dto.maxConcurrent = record.maxConcurrent
     dto.requestsPerMinute = record.requestsPerMinute
     dto.description = record.description
+    dto.blacklists = [...(record.blacklists ?? [])]
     dto.createdAt = record.createdAt
     dto.updatedAt = record.updatedAt
     return dto

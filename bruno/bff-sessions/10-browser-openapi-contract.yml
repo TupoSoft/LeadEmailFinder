@@ -24,12 +24,23 @@ runtime:
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
+            '/v1/proxies', '/v1/proxies/{id}', '/v1/proxies/{id}/blacklists',
             '/verifyAsync', '/verifyAsync/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results'
           ]);
           expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
           expect(Object.keys(res.body.paths['/v1/organizations']).sort()).to.deep.equal(['get', 'post']);
           expect(res.body.paths['/v1/organizations'].get.security).to.deep.equal([{ lef_session: [] }, { oidc: [] }]);
           expect(res.body.paths['/v1/organizations'].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]);
+          expect(Object.keys(res.body.paths['/v1/proxies']).sort()).to.deep.equal(['get', 'post']);
+          expect(Object.keys(res.body.paths['/v1/proxies/{id}']).sort()).to.deep.equal(['delete', 'get', 'patch']);
+          expect(Object.keys(res.body.paths['/v1/proxies/{id}/blacklists'])).to.deep.equal(['post']);
+          expect(res.body.paths).not.to.have.property('/v1/proxies/healthy');
+          expect(res.body.paths['/v1/proxies'].get.security).to.deep.equal([{ lef_session: [] }, { oidc: [] }]);
+          expect(res.body.paths['/v1/proxies'].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]);
+          expect(res.body.components.schemas.ProxyDto.properties.blacklists.type).to.equal('array');
+          for (const field of ['auth', 'user', 'pass']) {
+            expect(res.body.components.schemas.ProxyDto.properties).not.to.have.property(field);
+          }
           expect(Object.keys(res.body.paths['/credits/{organizationId}']).sort()).to.deep.equal(['get', 'post', 'put']);
           expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}'])).to.deep.equal(['get']);
           var serviceClients = '/v1/organizations/{organizationId}/service-clients';

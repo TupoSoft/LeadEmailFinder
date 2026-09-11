@@ -18,6 +18,7 @@ export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
     { path: '/app/service-clients', label: 'Service clients', capability: 'service_clients.manage' },
     { path: '/app/platform/organizations', label: 'Organizations', capability: 'platform.organizations.manage' },
+    { path: '/app/platform/proxies', label: 'Proxy fleet', capability: 'platform.proxies.manage' },
 ]
 
 export function visibleDestinations(
