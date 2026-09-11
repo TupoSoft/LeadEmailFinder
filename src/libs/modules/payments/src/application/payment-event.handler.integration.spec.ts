@@ -5,9 +5,12 @@ import { DataSource } from 'typeorm'
 import {
     AuditLogEntry,
     CREDIT_LEDGER_STORE,
+    CREDIT_RESERVATION_STORE,
     CreditDebit,
     CreditGrant,
     CreditLedgerStore,
+    CreditReservation,
+    CreditReservationStore,
     ExternalIdentity,
     IdentityModule,
     Organization,
@@ -16,7 +19,11 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
+import {
+    CreditReservationService,
+    CreditsService,
+    InsufficientCreditsException,
+} from '@tuposoft/lead-email-finder/modules/credits'
 import { PaymentEvent } from '../domain/payment-event'
 import { PaymentAdjustmentHandler } from './payment-adjustment.handler'
 import { PaymentEventHandler } from './payment-event.handler'
@@ -39,7 +46,7 @@ import { CreditPurchase, CreditPurchaseStatus } from '../infrastructure/persiste
 const postgresUrl = process.env['TEST_PAYMENT_WEBHOOK_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 // The full identity entity set, not just the three credit tables: IdentityModule's own TypeOrmModule.forFeature
-// call registers repositories for all nine, so the root DataSource must already know all nine or repository
+// call registers repositories for all ten, so the root DataSource must already know all ten or repository
 // resolution fails with a "no metadata found" error.
 const entities = [
     Organization,
@@ -49,15 +56,13 @@ const entities = [
     OrganizationCreditAccount,
     CreditDebit,
     CreditGrant,
+    CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
     CreditPurchase,
     CreditPurchaseAdjustment,
 ]
-type AdjustmentEvent = Extract<
-    PaymentEvent,
-    { kind: 'purchase_adjustment_debit' | 'purchase_adjustment_restore' }
->
+type AdjustmentEvent = Extract<PaymentEvent, { kind: 'purchase_adjustment_debit' | 'purchase_adjustment_restore' }>
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
     let resolve!: () => void
@@ -72,6 +77,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
     let moduleRef: TestingModule
     let handler: PaymentEventHandler
     let credits: CreditsService
+    let reservations: CreditReservationService
     let adjustmentStore: PaymentAdjustmentStore
     let purchaseStore: PaymentPurchaseStore
     let organizationId: string
@@ -104,6 +110,11 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
                     useFactory: (store: CreditLedgerStore) => new CreditsService(store),
                     inject: [CREDIT_LEDGER_STORE],
                 },
+                {
+                    provide: CreditReservationService,
+                    useFactory: (store: CreditReservationStore) => new CreditReservationService(store),
+                    inject: [CREDIT_RESERVATION_STORE],
+                },
                 TypeOrmPaymentPurchaseStore,
                 TypeOrmPaymentAdjustmentStore,
                 { provide: PAYMENT_PURCHASE_STORE, useExisting: TypeOrmPaymentPurchaseStore },
@@ -133,6 +144,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
 
         handler = moduleRef.get(PaymentEventHandler)
         credits = moduleRef.get(CreditsService)
+        reservations = moduleRef.get(CreditReservationService)
         adjustmentStore = moduleRef.get(PAYMENT_ADJUSTMENT_STORE)
         purchaseStore = moduleRef.get(PAYMENT_PURCHASE_STORE)
     })
@@ -212,9 +224,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
     })
 
     it('correlates by purchase id, binds the reference, and grants once when a paid event arrives before checkout saves it', async () => {
-        await schemaDataSource
-            .getRepository(CreditPurchase)
-            .update({ id: purchase.id }, { providerReference: null })
+        await schemaDataSource.getRepository(CreditPurchase).update({ id: purchase.id }, { providerReference: null })
         const providerReference = `stub_${randomUUID()}`
         const event = {
             kind: 'purchase_paid' as const,
@@ -412,9 +422,7 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
         const debitHandling = handler.handle(debit)
         await debitLedgerEntered.promise
         try {
-            await expect(handler.handle(restore)).rejects.toBeInstanceOf(
-                PaymentAdjustmentDirectionInProgressError,
-            )
+            await expect(handler.handle(restore)).rejects.toBeInstanceOf(PaymentAdjustmentDirectionInProgressError)
         } finally {
             releaseDebitLedger.resolve()
         }
@@ -547,7 +555,6 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
         await expect(credits.getBalance(organizationId)).resolves.toBe(110)
         await expect(handler.handle(event)).resolves.toBeUndefined()
         await expect(credits.getBalance(organizationId)).resolves.toBe(10)
-
     })
 
     it('converges after the credit ledger commits but adjustment completion fails', async () => {
@@ -678,5 +685,80 @@ describeWithPostgres('PaymentEventHandler against a real, freshly-synced Postgre
                 reference: 'payment-adjustment:adjustment-post-completion-retry:debit',
             }),
         ).resolves.toHaveLength(1)
+    })
+
+    describe('interaction with a verification credit reservation', () => {
+        async function readAccount(): Promise<OrganizationCreditAccount> {
+            return schemaDataSource.getRepository(OrganizationCreditAccount).findOneByOrFail({ organizationId })
+        }
+
+        it('clamps an adjustment debit to the balance still available around an active hold, and the hold survives the adjustment', async () => {
+            await settlePurchase()
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 15 })
+            await expect(readAccount()).resolves.toMatchObject({ balance: 110, reserved: 15 })
+
+            await handler.handle(adjustmentEvent('purchase_adjustment_debit', 'adjustment-under-hold'))
+
+            await expect(readAccount()).resolves.toMatchObject({ balance: 15, reserved: 15 })
+            await expect(
+                schemaDataSource
+                    .getRepository(CreditPurchaseAdjustment)
+                    .findOneByOrFail({ providerAdjustmentId: 'adjustment-under-hold' }),
+            ).resolves.toMatchObject({ requestedCredits: 100, appliedDebit: 95 })
+
+            const settlement = await reservations.capture(organizationId, operationId)
+            expect(settlement.disposition).toBe('applied')
+            await expect(readAccount()).resolves.toMatchObject({ balance: 0, reserved: 0 })
+            await expect(
+                schemaDataSource
+                    .getRepository(CreditDebit)
+                    .findBy({ organizationId, reference: `verification-reservation:${operationId}` }),
+            ).resolves.toEqual([expect.objectContaining({ amount: 15 })])
+        })
+
+        it('applies a full adjustment debit once the hold blocking it is released', async () => {
+            await settlePurchase()
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 20 })
+            await reservations.release(organizationId, operationId)
+            await expect(readAccount()).resolves.toMatchObject({ balance: 110, reserved: 0 })
+
+            await handler.handle(adjustmentEvent('purchase_adjustment_debit', 'adjustment-after-release'))
+
+            await expect(readAccount()).resolves.toMatchObject({ balance: 10, reserved: 0 })
+        })
+
+        it('applies one debit under a hold when the same adjustment is delivered concurrently, leaving the hold untouched', async () => {
+            await settlePurchase()
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 15 })
+            const event = adjustmentEvent('purchase_adjustment_debit', 'adjustment-concurrent-under-hold')
+
+            await Promise.all([handler.handle(event), handler.handle(event)])
+
+            await expect(readAccount()).resolves.toMatchObject({ balance: 15, reserved: 15 })
+            await expect(
+                schemaDataSource.getRepository(CreditDebit).findBy({
+                    organizationId,
+                    reference: 'payment-adjustment:adjustment-concurrent-under-hold:debit',
+                }),
+            ).resolves.toEqual([expect.objectContaining({ amount: 95 })])
+        })
+
+        it('leaves an active hold untouched when an unrelated restore grants credits back', async () => {
+            await settlePurchase()
+            await handler.handle(adjustmentEvent('purchase_adjustment_debit', 'adjustment-before-hold-restore'))
+            const operationId = randomUUID()
+            await reservations.reserve(organizationId, { operationId, amount: 5 })
+            await expect(readAccount()).resolves.toMatchObject({ balance: 10, reserved: 5 })
+
+            await handler.handle(adjustmentEvent('purchase_adjustment_restore', 'adjustment-restore-under-hold'))
+
+            await expect(readAccount()).resolves.toMatchObject({ balance: 110, reserved: 5 })
+
+            await reservations.release(organizationId, operationId)
+            await expect(readAccount()).resolves.toMatchObject({ balance: 110, reserved: 0 })
+        })
     })
 })

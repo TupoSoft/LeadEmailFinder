@@ -7,13 +7,15 @@ corepack pnpm bruno:platform-credits
 ```
 
 The launcher uses the exact Bruno CLI version in `package.json`, selects `--env local --sandbox developer`,
-and rejects missing, skipped, failed, or empty execution. It checks 32 requests, including organization detail, balance reads, absolute sets, authenticated grants,
+and rejects missing, skipped, failed, or empty execution. It checks 34 requests, including organization detail, balance reads, absolute sets, authenticated grants,
 equivalent replay, conflicting replay, malformed or repeated keys, missing authentication, invalid authentication,
 and a customer credential without platform permission. Concurrent requests cover duplicate keys, different keys,
 and conflicting amounts, including organizations without a credit account. A replay after other grants checks
 that the response returns the current balance. Detail reads cover safe fields, absence, invalid UUIDs, and access
 denial. GET and PUT cover UUID validation, missing authentication, and customer-role denial; PUT also rejects
-negative amounts and accepts zero. Read-after-set proves the observed final balance.
+negative amounts and accepts zero. Read-after-set proves the observed final balance. Two further requests target a
+sixth, held organization: setting its balance below the credits its active reservation has reserved returns `409`
+without exposing reservation or operation details, and a follow-up read confirms the balance never changed.
 
 The launcher uses the shared development-stack discovery from `scripts/testing/development-stack.mjs`, just like
 browser fixture bootstrap and the other live runners. It discovers running API, web, PostgreSQL, Redis, and Keycloak
@@ -33,13 +35,17 @@ The platform service client and customer fixture must exist in the ignored `.dev
 `COMPOSE_PROJECT_NAME` through the shared discovery contract. It never starts or resets a stack and rejects
 containers belonging to another checkout before any fixture mutation.
 
-The launcher bootstraps the platform credential internally, obtains platform and customer tokens, and creates five
+The launcher bootstraps the platform credential internally, obtains platform and customer tokens, and creates six
 unique synthetic organizations without credit accounts. Each logical grant gets a UUID; equivalent and conflicting
 replays reuse the original key. Tokens travel through child-process environment variables. The launcher withholds
 raw CLI output, omits headers and bodies from temporary reports, and prints only counts and synthetic fixture
-balances. It checks account counts, grant counts, and exact balances directly in PostgreSQL, then deletes only its
-synthetic organizations and removes the temporary report directory, including after a failed collection run. The
-fifth organization isolates absolute-set tests from the additive replay fixtures and finishes at zero without grants.
+balances. It checks account counts, grant counts, reserved amounts, and exact balances directly in PostgreSQL, then
+deletes only its synthetic organizations and removes the temporary report directory, including after a failed
+collection run. The fifth organization isolates absolute-set tests from the additive replay fixtures and finishes
+at zero without grants. The sixth organization is funded through the real `POST /credits/:id` endpoint and then
+given an active hold through the real `CreditReservationService` — a short-lived Nest application context built
+from `IdentityModule`, never raw SQL — so its `reserved` balance reflects an actual application-level reservation
+rather than a fixture shortcut.
 
 No migration or schema reset is required. Tests use the current synchronized development schema. If a process is
 forcibly terminated, inspect organizations named `Bruno platform credit fixture` in this disposable database before

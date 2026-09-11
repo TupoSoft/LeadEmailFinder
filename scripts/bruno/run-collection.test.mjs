@@ -69,7 +69,10 @@ test('SMTP report validation requires every checked-in request', async () => {
             return request.info.seq
         }),
     )
-    assert.deepEqual(sequence, Array.from({ length: requests.length }, (_, index) => index + 1))
+    assert.deepEqual(
+        sequence,
+        Array.from({ length: requests.length }, (_, index) => index + 1),
+    )
 })
 
 test('credit-purchase report validation requires every checked-in request', async () => {
@@ -83,12 +86,21 @@ test('credit-purchase signing secret stays in the environment and the runner rej
     const environment = {
         ...collectionEnvironment('credit-purchases', metadata, serviceClient, serviceCredential),
         PAYMENTS_STUB_WEBHOOK_SECRET: 'synthetic-webhook-key',
+        CUSTOMER_BILLING_TOKEN: 'synthetic-customer-token',
+        CUSTOMER_HELD_BALANCE: '500',
+        CUSTOMER_HELD_RESERVED: '75',
     }
     assert.equal(environment.PLATFORM_ORGANIZATION_ID, serviceCredential.organizationId)
     const args = cliArguments('credit-purchases', environment, '/tmp/report.json')
     assert.deepEqual(args.slice(0, 5), ['run', '--env', 'local', '--sandbox', 'developer'])
     assert.ok(!JSON.stringify(args).includes(environment.PAYMENTS_STUB_WEBHOOK_SECRET))
-    for (const key of ['PAYMENTS_STUB_WEBHOOK_SECRET', 'PLATFORM_ORGANIZATION_ID']) {
+    for (const key of [
+        'PAYMENTS_STUB_WEBHOOK_SECRET',
+        'PLATFORM_ORGANIZATION_ID',
+        'CUSTOMER_BILLING_TOKEN',
+        'CUSTOMER_HELD_BALANCE',
+        'CUSTOMER_HELD_RESERVED',
+    ]) {
         assert.throws(
             () => cliArguments('credit-purchases', { ...environment, [key]: '' }, '/tmp/report'),
             /prerequisites/,
@@ -162,7 +174,12 @@ test('pinned CLI executes all billing scripts, signatures, and rejection asserti
             return reply(200, { received: true })
         }
         if (!request.headers.authorization) return reply(401, {})
-        if (pathname === '/v1/billing/summary') return reply(200, { balance })
+        if (pathname === '/v1/billing/summary') {
+            if (request.headers.authorization === 'Bearer synthetic-customer-token') {
+                return reply(200, { balance: 500, reserved: 75, available: 425 })
+            }
+            return reply(200, { balance, reserved: 0, available: balance })
+        }
         if (pathname === '/v1/billing/credit-packs') return reply(200, [pack])
         if (pathname === '/v1/credit-purchases' && request.method === 'GET') return reply(200, [...purchases].reverse())
         if (pathname === '/v1/credit-purchases' && request.method === 'POST') {
@@ -196,10 +213,13 @@ test('pinned CLI executes all billing scripts, signatures, and rejection asserti
                 KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-client-key',
                 PLATFORM_ORGANIZATION_ID: serviceCredential.organizationId,
                 PAYMENTS_STUB_WEBHOOK_SECRET: secret,
+                CUSTOMER_BILLING_TOKEN: 'synthetic-customer-token',
+                CUSTOMER_HELD_BALANCE: '500',
+                CUSTOMER_HELD_RESERVED: '75',
             },
             checkoutRoot,
         )
-        assert.deepEqual(counts, { requests: 33, tests: 33 })
+        assert.deepEqual(counts, { requests: 34, tests: 34 })
         assert.equal(balance, 117)
         assert.deepEqual(
             purchases.map(row => row.status),

@@ -29,6 +29,7 @@ request:
               }
               if (
                 !req.getName().includes('unauthorized') &&
+                !req.getName().includes('active-hold') &&
                 !req.getUrl().includes('/v1/payments/webhook')
               ) {
                 req.setHeader('Authorization', `Bearer ${bru.getVar('serviceClientToken')}`);

@@ -29,6 +29,7 @@ describe('platform credits HTTP boundary', () => {
             credit: jest.fn(),
             creditOnce: jest.fn(),
             getBalance: jest.fn(),
+            getBalanceSnapshot: jest.fn(),
             setBalance: jest.fn(),
         }
         const authenticator: CredentialAuthenticator = {
@@ -187,29 +188,52 @@ describe('platform credits HTTP boundary', () => {
         expectNoLedgerAccess()
     })
 
-    it.each(['get', 'put'] as const)('protects credit %s with authentication, platform permission, and UUID validation', async method => {
-        await request(app.getHttpServer())[method](route).send({ amount: 0 }).expect(401)
-        await request(app.getHttpServer())[method](route)
-            .set('Authorization', 'Bearer customer-test-token').send({ amount: 0 }).expect(403)
-        await request(app.getHttpServer())[method]('/credits/not-a-uuid')
-            .set('Authorization', 'Bearer platform-test-token').send({ amount: 0 }).expect(400)
-        expectNoLedgerAccess()
-    })
+    it.each(['get', 'put'] as const)(
+        'protects credit %s with authentication, platform permission, and UUID validation',
+        async method => {
+            await request(app.getHttpServer())[method](route).send({ amount: 0 }).expect(401)
+            const forbidden = request(app.getHttpServer())[method](route)
+            await forbidden.set('Authorization', 'Bearer customer-test-token').send({ amount: 0 }).expect(403)
+            const invalidId = request(app.getHttpServer())[method]('/credits/not-a-uuid')
+            await invalidId.set('Authorization', 'Bearer platform-test-token').send({ amount: 0 }).expect(400)
+            expectNoLedgerAccess()
+        },
+    )
 
-    it.each([{}, { amount: -1 }, { amount: 1.5 }, { amount: '5' }])('rejects invalid absolute set body %j', async body => {
-        await request(app.getHttpServer()).put(route).set('Authorization', 'Bearer platform-test-token').send(body).expect(400)
-        expectNoLedgerAccess()
-    })
+    it.each([{}, { amount: -1 }, { amount: 1.5 }, { amount: '5' }])(
+        'rejects invalid absolute set body %j',
+        async body => {
+            await request(app.getHttpServer())
+                .put(route)
+                .set('Authorization', 'Bearer platform-test-token')
+                .send(body)
+                .expect(400)
+            expectNoLedgerAccess()
+        },
+    )
 
     it('accepts zero as an absolute balance without an idempotency key', async () => {
-        store.setBalance.mockResolvedValue(0)
-        await request(app.getHttpServer()).put(route).set('Authorization', 'Bearer platform-test-token')
-            .send({ amount: 0 }).expect(200, { balance: 0 })
+        store.setBalance.mockResolvedValue({ kind: 'applied', balance: 0 })
+        await request(app.getHttpServer())
+            .put(route)
+            .set('Authorization', 'Bearer platform-test-token')
+            .send({ amount: 0 })
+            .expect(200, { balance: 0 })
         expect(store.setBalance).toHaveBeenCalledWith(organizationId, 0)
     })
 
+    it('returns 409 without exposing reservation details when the target is below reserved credits', async () => {
+        store.setBalance.mockResolvedValue({ kind: 'below-reserved' })
+        const response = await request(app.getHttpServer())
+            .put(route)
+            .set('Authorization', 'Bearer platform-test-token')
+            .send({ amount: 2 })
+            .expect(409)
+        expect(JSON.stringify(response.body)).not.toMatch(/reservation|operation/i)
+    })
+
     it('keeps absolute set and balance lookup independent of an idempotency key', async () => {
-        store.setBalance.mockResolvedValue(7)
+        store.setBalance.mockResolvedValue({ kind: 'applied', balance: 7 })
         store.getBalance.mockResolvedValue(7)
 
         await request(app.getHttpServer())

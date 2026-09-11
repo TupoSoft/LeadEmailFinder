@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
 import {
+    CreditBalanceSnapshot,
     CreditDebitOutcome,
     CreditGrantPersistenceResult,
     CreditLedgerStore,
+    SetBalanceOutcome,
 } from '../../application/ports/credit-ledger-store'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
+import { insertAccountIfAbsent, lockAccount } from './lock-credit-account'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 
 @Injectable()
@@ -33,7 +36,7 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
                 return 'replayed'
             }
 
-            if (account.balance < amount) {
+            if (account.balance - account.reserved < amount) {
                 return 'insufficient-balance'
             }
 
@@ -53,7 +56,8 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
             const existing = await manager.findOne(CreditDebit, { where: { organizationId, reference } })
             if (existing) return existing.amount
 
-            const applied = Math.min(account?.balance ?? 0, amount)
+            const available = Math.max(0, (account?.balance ?? 0) - (account?.reserved ?? 0))
+            const applied = Math.min(available, amount)
             if (account && applied > 0) {
                 account.balance -= applied
                 await manager.save(OrganizationCreditAccount, account)
@@ -65,18 +69,9 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
 
     async credit(organizationId: string, amount: number, reference: string): Promise<CreditGrantPersistenceResult> {
         return this.dataSource.transaction(async manager => {
-            // Persist before locking: an absent row cannot serialize concurrent first grants.
-            await manager
-                .createQueryBuilder()
-                .insert()
-                .into(OrganizationCreditAccount)
-                .values({ organizationId, balance: 0 })
-                .onConflict('("organizationId") DO NOTHING')
-                .execute()
-            const account = await manager.findOneOrFail(OrganizationCreditAccount, {
-                where: { organizationId },
-                lock: { mode: 'pessimistic_write' },
-            })
+            // Insert before locking: an absent row cannot serialize concurrent first grants.
+            await insertAccountIfAbsent(manager, organizationId)
+            const account = await lockAccount(manager, organizationId)
             const existing = await manager.findOne(CreditGrant, { where: { organizationId, reference } })
 
             if (existing) {
@@ -121,12 +116,23 @@ export class TypeOrmCreditLedgerStore implements CreditLedgerStore {
         return account?.balance ?? 0
     }
 
-    async setBalance(organizationId: string, amount: number): Promise<number> {
-        const account =
-            (await this.accountRepo.findOneBy({ organizationId })) ?? this.accountRepo.create({ organizationId })
-        account.balance = amount
+    async getBalanceSnapshot(organizationId: string): Promise<CreditBalanceSnapshot> {
+        const account = await this.accountRepo.findOneBy({ organizationId })
+        return { balance: account?.balance ?? 0, reserved: account?.reserved ?? 0 }
+    }
 
-        const saved = await this.accountRepo.save(account)
-        return saved.balance
+    async setBalance(organizationId: string, amount: number): Promise<SetBalanceOutcome> {
+        return this.dataSource.transaction(async manager => {
+            await insertAccountIfAbsent(manager, organizationId)
+            const account = await lockAccount(manager, organizationId)
+
+            if (amount < account.reserved) {
+                return { kind: 'below-reserved' }
+            }
+
+            account.balance = amount
+            const saved = await manager.save(OrganizationCreditAccount, account)
+            return { kind: 'applied', balance: saved.balance }
+        })
     }
 }

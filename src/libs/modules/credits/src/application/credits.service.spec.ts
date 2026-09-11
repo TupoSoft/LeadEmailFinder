@@ -1,5 +1,9 @@
 import { CreditLedgerStore } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditIdempotencyConflict, InsufficientCreditsException } from '../domain/credits.error'
+import {
+    BalanceBelowReservedException,
+    CreditIdempotencyConflict,
+    InsufficientCreditsException,
+} from '../domain/credits.error'
 import { CreditsService } from './credits.service'
 
 describe('CreditsService', () => {
@@ -13,6 +17,7 @@ describe('CreditsService', () => {
             credit: jest.fn(),
             creditOnce: jest.fn(),
             getBalance: jest.fn(),
+            getBalanceSnapshot: jest.fn(),
             setBalance: jest.fn(),
         }
         service = new CreditsService(store)
@@ -131,12 +136,31 @@ describe('CreditsService', () => {
         })
     })
 
+    describe('getBalanceSnapshot', () => {
+        it('derives available credits from one consistent snapshot read', async () => {
+            store.getBalanceSnapshot.mockResolvedValue({ balance: 10, reserved: 3 })
+
+            await expect(service.getBalanceSnapshot('org-1')).resolves.toEqual({
+                balance: 10,
+                reserved: 3,
+                available: 7,
+            })
+            expect(store.getBalanceSnapshot).toHaveBeenCalledWith('org-1')
+        })
+    })
+
     describe('setBalance', () => {
-        it('delegates to the store', async () => {
-            store.setBalance.mockResolvedValue(7)
+        it('delegates to the store and returns the applied balance', async () => {
+            store.setBalance.mockResolvedValue({ kind: 'applied', balance: 7 })
 
             await expect(service.setBalance('org-1', 7)).resolves.toBe(7)
             expect(store.setBalance).toHaveBeenCalledWith('org-1', 7)
+        })
+
+        it('throws BalanceBelowReservedException when the store rejects a target below reserved', async () => {
+            store.setBalance.mockResolvedValue({ kind: 'below-reserved' })
+
+            await expect(service.setBalance('org-1', 2)).rejects.toBeInstanceOf(BalanceBelowReservedException)
         })
     })
 })

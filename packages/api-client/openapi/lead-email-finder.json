@@ -286,6 +286,31 @@
         ],
         "type": "object"
       },
+      "BillingSummaryResponseDto": {
+        "properties": {
+          "available": {
+            "description": "Credits usable for new spending: balance minus reserved",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "balance": {
+            "description": "Total credits owned by the organization",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reserved": {
+            "description": "Credits held by accepted operations, not yet charged",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "balance",
+          "reserved",
+          "available"
+        ],
+        "type": "object"
+      },
       "ChangeMembershipRoleDto": {
         "properties": {
           "role": {
@@ -1489,6 +1514,9 @@
           "403": {
             "description": "Authenticated caller lacks platform:admin or browser CSRF check denied."
           },
+          "409": {
+            "description": "The requested balance is below credits already reserved for accepted operations."
+          },
           "500": {
             "description": "The outcome may be uncertain; reload the balance before another explicit set."
           }
@@ -2068,7 +2096,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreditResponseDto"
+                  "$ref": "#/components/schemas/BillingSummaryResponseDto"
                 }
               }
             },

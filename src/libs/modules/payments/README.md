@@ -20,6 +20,9 @@ only credits previously removed when Paddle sends an approved inverse adjustment
 
 - No credit ledger persistence or account mutation logic (owned by [`credits`](../credits/README.md)); payments calls
   purpose-specific credit operations after calculating and persisting the permitted adjustment movement.
+  Adjustment debits still clamp to whatever the ledger reports available, so an organization's own active
+  verification hold (owned by `credits`/`identity`, unrelated to payments) narrows an adjustment debit exactly as
+  it would any other clamped debit; payments performs no reservation logic of its own.
 - No card/bank detail handling — that is delegated entirely to the configured provider.
 
 ## Public API
@@ -138,9 +141,16 @@ rejected origins, normalization, credentials, fragments, and defensive configura
 covers every supported action, status, and adjustment webhook type), the TypeORM store specs under
 `infrastructure/persistence/`, and `payments.module.spec.ts` (factory-provider wiring). The gated
 `application/payment-event.handler.integration.spec.ts` exercises locking, replay, shortfall, inverse ordering,
-and injected recovery boundaries against real PostgreSQL.
+and injected recovery boundaries against real PostgreSQL. It also has its own `describe` block covering interaction
+with an active `credits`/`identity` reservation hold. An adjustment debit clamps to the balance still available
+around the hold rather than the hold's amount silently disappearing. A full adjustment debit applies normally once
+the blocking hold is released. Concurrent duplicate delivery under a hold still applies exactly one debit, and an
+unrelated restore leaves the hold's `reserved` amount untouched. `corepack pnpm test:credits-postgres` runs this
+suite together with `credits`' own reservation-focused `credits.service.integration.spec.ts` serially against one
+disposable database.
 
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) exercises the checkout flow, purchase
 listing, signed webhook crediting, debit adjustment, replay, inverse restoration, and inverse replay end to end
 against the local stub provider, including a tampered-signature rejection. It also links to the manual Paddle
-sandbox purchase and refund procedure.
+sandbox purchase and refund procedure, and separately proves an active reservation hold's billing-summary
+accounting against the isolated seeded customer organization.

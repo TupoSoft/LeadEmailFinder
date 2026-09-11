@@ -14,6 +14,7 @@ import {
     OrganizationMembership,
     ExternalIdentity,
     OrganizationCreditAccount,
+    CreditReservation,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import {
@@ -59,6 +60,7 @@ const identityEntities = [
     OrganizationMembership,
     ServiceCredential,
     OrganizationCreditAccount,
+    CreditReservation,
 ]
 
 // BffSessionModule injects Redis without importing RedisModule itself, relying on it being registered

@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm'
 import { AuditLogEntry } from './audit-log-entry.entity'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
+import { CreditReservation } from './credit-reservation.entity'
 import { ExternalIdentity } from './external-identity.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { OrganizationInvitation } from './organization-invitation.entity'
@@ -34,6 +35,7 @@ describeWithPostgres('identity schema synchronization', () => {
                 OrganizationCreditAccount,
                 CreditDebit,
                 CreditGrant,
+                CreditReservation,
                 OrganizationInvitation,
                 AuditLogEntry,
             ],
@@ -57,6 +59,7 @@ describeWithPostgres('identity schema synchronization', () => {
             'audit_log_entries',
             'credit_debits',
             'credit_grants',
+            'credit_reservations',
             'external_identities',
             'organization_credit_accounts',
             'organization_invitations',

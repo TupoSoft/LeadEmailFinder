@@ -22,3 +22,9 @@ variables:
       value: 500
     - name: expectedCurrency
       value: USD
+    - name: customerBillingToken
+      value: '{{process.env.CUSTOMER_BILLING_TOKEN}}'
+    - name: customerHeldBalance
+      value: '{{process.env.CUSTOMER_HELD_BALANCE}}'
+    - name: customerHeldReserved
+      value: '{{process.env.CUSTOMER_HELD_RESERVED}}'

@@ -105,7 +105,8 @@ Implemented the platform-only console, generated browser contract, API response 
 workflow. Component, API, contract, architecture, design, prose, and browser checks pass. The isolated live lifecycle
 and HTTP collections pass. The original purpose is met without new entities, migrations, providers, visual tokens,
 or domain-service changes. Direct ephemeral writes keep credentials outside the mutation cache; the existing
-application-service and adapter boundaries remain intact. Changes are local and uncommitted; remote CI was not run.
+application-service and adapter boundaries remain intact. The implementation is published in PR #590. The dated
+validation record below distinguishes local checks from live-stack and remote CI results.
 
 ## Context and Orientation
 
@@ -380,6 +381,13 @@ Current validation evidence (2026-09-09):
   shared Bruno runner checks and 103 CI workflow checks passed afterward. The architecture gate again found zero
   violations across nine modules, and all five changed Markdown files passed Harper. The live results above
   precede that upstream SMTP change; the disposable live stack was not recreated for publication.
+- On 2026-09-11, a follow-up merge incorporated `master` at `099d1d0`. The only conflict was in
+  `scripts/bruno/run-collection.mjs`: the resolution preserves the 34 credit-purchase requests from `master` and
+  this PR's 27 proxy requests and tests, including credential-safe reporting. All 19 shared Bruno runner tests
+  passed against disposable HTTP contract fixtures, and all 23 OpenAPI contract tests passed, including generated
+  artifact comparisons. The architecture gate checked nine modules with zero violations; focused runner lint and
+  `git diff --check` passed. The resolution introduces no additional API behavior or architectural changes. The
+  full development stack and live browser suites were not rerun for this merge.
 
 Record only synthetic/redacted proxy IDs, hostnames, cursor suffixes if necessary, lifecycle values, status codes,
 test counts, browser widths, and cleanup outcome. Never record proxy users/passwords, cookies, access tokens, raw

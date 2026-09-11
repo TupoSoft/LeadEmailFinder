@@ -48,7 +48,7 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
         expect(completed.result.reason).toBe('accepted_email')
         const balance = await page.request.get(`${fixture.origin}/v1/billing/summary`)
         expect(balance.status()).toBe(200)
-        expect(await balance.json()).toEqual({ balance: 0 })
+        expect(await balance.json()).toEqual({ balance: 0, reserved: 0, available: 0 })
 
         await page.setViewportSize({ width: 320, height: 720 })
         await page.emulateMedia({ reducedMotion: 'reduce' })

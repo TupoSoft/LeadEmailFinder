@@ -14,8 +14,8 @@ function requireData<T>(result: { data?: T; response: Response }): T {
 }
 
 export async function readBillingSummary(api: ApiClient, signal?: AbortSignal): Promise<BillingSummary> {
-    const { balance } = requireData(await api.GET('/v1/billing/summary', { signal }))
-    return { balance }
+    const { balance, reserved, available } = requireData(await api.GET('/v1/billing/summary', { signal }))
+    return { balance, reserved, available }
 }
 
 export async function readCreditPacks(api: ApiClient, signal?: AbortSignal): Promise<CreditPack[]> {

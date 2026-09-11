@@ -1,0 +1,27 @@
+info:
+    name: 33-read-active-hold-summary
+    type: http
+    seq: 33
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/billing/summary'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerBillingToken}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reports the isolated customer organization balance, hold, and available credit', function() {
+                expect(res.status).to.equal(200);
+                const heldBalance = Number(bru.getEnvVar('customerHeldBalance'));
+                const heldReserved = Number(bru.getEnvVar('customerHeldReserved'));
+                expect(res.body).to.deep.equal({
+                  balance: heldBalance,
+                  reserved: heldReserved,
+                  available: heldBalance - heldReserved,
+                });
+                expect(res.body.balance).to.not.equal(Number(bru.getVar('paidBalance')));
+              });

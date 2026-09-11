@@ -391,3 +391,4 @@ NFKD
 registrable
 rethrows
 reprobed
+Prettier
