@@ -97,10 +97,11 @@ The module is layered (`module-architecture/10`, `/11`, `/13`, `/14`, `/15`, `/1
 `EmailVerification`, and `SmtpVerification` records and typed errors; `application/` holds the central
 verification sequence (`EmailVerificationOrchestrator`, `MailboxVerificationService`), email/domain
 administration use cases (`EmailAdministrationService`, `DomainPolicyService`), the pure `classifyVerificationQuality`
-evidence classifier, and nine purpose-specific ports under `application/ports/` — `EmailStore`, `DomainStore`,
+evidence classifier, and thirteen purpose-specific ports under `application/ports/` — `EmailStore`, `DomainStore`,
 `VerificationStore`, `SmtpVerificationStore`, `MxResolver`, `DomainSynonymDiscovery`, `MailboxProbe`,
-`AccountDiscovery`, and `VerificationClock`; `infrastructure/` holds technical adapters, and `api/`
-holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
+`AccountDiscovery`, `VerificationClock`, `VerificationRequestStore`, `VerificationExecutionStore`,
+`VerificationSettlementStore`, and `VerificationResultCacheReader`; `infrastructure/` holds technical adapters, and
+`api/` holds the HTTP surface. Neither `domain/` nor `application/` imports Nest, TypeORM, Automapper, or any network
 client.
 
 `domain/verification-evidence.ts` defines the internal `VerificationQuality` (`conclusive_positive`,
@@ -219,10 +220,67 @@ errors; the worker records only its safe code and preserves the original failure
 failure marker. Missing or unrecognized markers use `processing_failed`, and successful retries expose no failure
 code. This generic failure makes no claim about whether credits were charged.
 
+Durable verification operations and billing recovery live under `application/ports/` (`VerificationRequestStore`,
+`VerificationExecutionStore`, `VerificationSettlementStore`, `VerificationResultCacheReader`) and
+`application/operations/` (`VerificationAdmissionService`, `VerificationExecutionRunner`,
+`VerificationSettlementService`, `VerificationOperationsReader`, `VerificationReconciler`), backed by
+`infrastructure/persistence/typeorm-verification-request.store.ts`,
+`typeorm-verification-execution.store.ts`, `typeorm-verification-settlement.store.ts`, and
+`typeorm-verification-result-cache-reader.ts` over three new TypeORM entities under
+`infrastructure/persistence/typeorm/`. This stack is additive in this revision: it is fully wired and tested but not
+yet invoked from any HTTP route, and `EmailVerificationOrchestrator` and its existing routes are unchanged. It gives
+three guarantees. A fresh, conclusive cached result is reused for free. Concurrent admissions for one
+organization/address share a single execution. A crash between reserving a credit and confirming settlement always
+recovers to exactly one terminal outcome with at most one debit.
+
+`VerificationAdmissionService.admit()` first replays or rejects a caller-supplied idempotency key — a canonical
+lowercase UUIDv7, checked at first admission for an age under 24 hours and a lookahead under 5 minutes via
+`application/verification-idempotency-key.ts`. It then checks `VerificationResultCacheReader` for a fresh,
+conclusive, policy-current result through the pure `isCachedResultUsable` in
+`application/verification-result-cache.ts`. Absent a usable cache hit, `VerificationExecutionStore.claimOrJoin()`
+locks the `(organizationId, normalizedAddress)` slot and rechecks that same freshness predicate under the lock,
+closing the race between the caller's own check and the claim. It then either reports the fresh result, joins the
+nonterminal execution already claiming that slot, or inserts a new `funding_pending` row. A newly created execution reserves one
+credit through `CreditReservationService.reserve()` (from [`credits`](../credits/README.md)). An
+`InsufficientCreditsException` fences the execution through `cancelFundingFailure` and `closeAdmissionMany` before
+reporting `insufficient-funds` — the canceled row still exists, outside the partial unique index that covers only
+nonterminal states, so the address slot is free for a later retry.
+
+`VerificationExecutionRunner.execute()` acquires a generation-fenced lease, 60 seconds long and renewed/polled every
+5 seconds for the whole probe call, since the application layer cannot observe the underlying SMTP socket's
+lifecycle more precisely without new plumbing. It threads an `AbortSignal` tied to lease loss through
+`MailboxVerificationService.verify()` down to `SmtpMailboxProbe` and its `ISmtpClientFactory`, then calls
+`VerificationSettlementStore.persistResultAndIntention()` guarded by the expected attempt generation. A
+`temporarily_blocked` reason schedules a retry instead of persisting a result, waiting `(generation + 1)` minutes to
+match the existing async queue's own greylist delay. Any other thrown probe failure schedules a flat 10-second
+retry instead. `VerificationSettlementService.settle()` then captures or releases the reservation, using the execution ID as
+the stable reference, and confirms settlement — mirroring `PaymentAdjustmentHandler`, whose claim-then-call-credits-
+then-complete shape stays replay-safe at every step. `confirmSettlement` flips the execution and every linked
+request row terminal in one transaction, crediting only the payer request's `chargedCount` and marking every other
+joined or shared request `shared`.
+
+`VerificationReconciler.reconcile(limit)` is the only dispatcher for `queued` and due `awaiting_retry` executions in
+this revision, since no HTTP route enqueues a queue job for a single execution yet. It pages nonterminal executions
+and either drives each one forward or recovers it. Recovery confirms a `funding_pending` row against
+`CreditReservationService.getReservation()`, reclaims a `running` lease abandoned past a 5-second shutdown grace
+through `takeoverForRetry`, or cancels anything past its 24-hour deadline — unless a capture intention already
+exists, since capture always wins. It then confirms every pending settlement intention through
+`VerificationSettlementService.settle()`. It runs on its own repeatable BullMQ job, this module's first periodic
+queue, under `infrastructure/queues/verification-reconciliation/`. `OnApplicationBootstrap` schedules it every 30
+seconds through the `VerificationReconciliationScheduler` port and its `BullVerificationReconciliationScheduler`
+adapter, which calls `Queue.upsertJobScheduler`.
+
+`VerificationOperationsReader.read()` looks up one operation by its `requestId` handle: `settled` (with the result,
+final reason, and charged count once past a 7-day terminal-visibility window it reports `expired` instead),
+`pending` with the execution's current state, or `not-found`. `EmailVerificationCoreModule` wires every store and
+service above as explicit factory providers (matching its existing convention of instantiating concrete stores
+inline rather than giving them their own DI token) and now imports `CreditsModule`.
+
 ## Dependencies
 
-- [`credits`](../credits/README.md) — `CreditGuard` on every billed route, and `CreditsService.debit()` called
-  directly by the batch workflow (one credit per validated CSV row).
+- [`credits`](../credits/README.md) — `CreditGuard` on every billed route, `CreditsService.debit()` called
+  directly by the batch workflow (one credit per validated CSV row), and `CreditReservationService` used by the
+  durable admission/settlement/reconciliation stack above.
 - [`proxy`](../proxy/README.md) — the `IProxyService`/`IProxyAllocator` contracts and DI tokens, through its
   public barrel; SMTP verification acquires and releases leases through these contracts, not through any deep
   import into the implementation of `proxy` itself.
@@ -249,6 +307,7 @@ code. This generic failure makes no claim about whether credits were charged.
 | -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `async-email-verification` | `AsyncEmailVerificationModule` (5 attempts, custom backoff) | `AsyncEmailVerificationProcessor`                                                                                                                                                                                                                                                              |
 | `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` delegates to the pure `BatchEmailVerificationWorkflow`, a `Validate → Process → WaitForChildren → UploadResults → Finish` state machine that fans out one `async-email-verification` child job per CSV row and waits on all of them before uploading results |
+| `verification-reconciliation` | `VerificationReconciliationModule` (one repeatable job every 30 seconds, scheduled via `OnApplicationBootstrap`) | `VerificationReconciliationProcessor` delegates to `VerificationReconciler.reconcile()` — this module's first periodic queue, and currently the only dispatcher for `queued`/due-`awaiting_retry` executions |
 
 ## Persistence
 
@@ -258,6 +317,9 @@ code. This generic failure makes no claim about whether credits were charged.
 | `DomainPolicyEntity`      | `domains`             | Shared technical policy; domain name                                                                                                              |
 | `EmailEntity`             | `emails`              | Organization plus normalized address                                                                                                              |
 | `SmtpVerificationEntity`  | `smtp_verifications`  | Organization plus normalized address; lifecycle timestamps, secure-transport proof, and reuse fields `evidenceObservedAt`/`evidencePolicyVersion` |
+| `VerificationRequestEntity` | `verification_requests` | UUID request ID; partial unique index on `(organizationId, clientRequestKey)` where the key is not null; durable record of one caller submission |
+| `VerificationExecutionEntity` | `verification_executions` | UUID execution ID; partial unique index on `(organizationId, normalizedAddress)` for nonterminal states — at most one live execution per address |
+| `VerificationSettlementIntentionEntity` | `verification_settlement_intentions` | UUID execution ID as primary key — enforces at most one settlement intention, ever, per execution |
 
 ## S3 / Storage
 
@@ -288,6 +350,8 @@ failures retain the existing generic error response.
 - `CATCH_ALL_PROVIDER_APPROVAL_ID` and `CATCH_ALL_PROVIDER_REGION` (required with `CATCH_ALL_PROVIDER`)
 - `SMTP_PORT` (optional, default 25)
 - `SMTP_TLS_CA_FILE` (optional path to an SMTP-only PEM root; default Node trust remains active)
+- `VERIFICATION_RESULT_CACHE_TTL_SECONDS` (optional, default 86400, range 1–86400; how long a fresh conclusive
+  result stays reusable for free by `VerificationAdmissionService`)
 
 The runtime always reads `config/privacy/account-discovery-approvals.yaml`; no environment variable can redirect that
 path. The committed manifest is empty, so the default development and SMTP workflows select no external provider.
@@ -375,6 +439,22 @@ Focused tests are grouped by behavior:
   `scripts/security/scan-linkedin-session-material.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
+- **Verification operations and billing recovery**: `application/verification-idempotency-key.spec.ts`,
+  `application/verification-result-cache.spec.ts`,
+  `application/operations/verification-admission.service.spec.ts`,
+  `application/operations/verification-execution-runner.spec.ts` (including a fake-timer crash-injection test for
+  a lease lost mid-probe), `application/operations/verification-settlement.service.spec.ts`,
+  `application/operations/verification-operations-reader.spec.ts`,
+  `application/operations/verification-reconciler.spec.ts`,
+  `infrastructure/persistence/typeorm-verification-request.store.spec.ts`,
+  `infrastructure/persistence/typeorm-verification-execution.store.spec.ts` (covers the optimistic-insert/unique-
+  violation address-claim race), `infrastructure/persistence/typeorm-verification-settlement.store.spec.ts`, and
+  `infrastructure/persistence/typeorm-verification-result-cache-reader.spec.ts`. The real-Postgres
+  `infrastructure/persistence/verification-billing.integration.spec.ts` covers a concurrent admission race, the full
+  funded-capture-and-cache-reuse pipeline, insufficient-funds fencing, and settlement replay against a real,
+  freshly-synced schema shared with the full `identity` entity set. Run
+  `corepack pnpm test:verification-billing-postgres` for the disposable real-Postgres stack — its own
+  `verification_billing_test` database, modeled on `test:credits-postgres`.
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted, deterministic STARTTLS fixture (`docker/smtp-dev/evidence-server.mjs`) and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. Its fixture-only HTTP control endpoint selects a closed scenario enum so the same collection also proves target
 acceptance, exact `5.1.1` recipient rejection, and an identical `MAIL FROM`-stage rejection staying ineligible.

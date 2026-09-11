@@ -65,7 +65,7 @@ describe('MailboxVerificationService', () => {
         const result = await service.verify(organizationId, email, EmailPatternEnum.First)
 
         expect(mailboxProbe.probe).toHaveBeenCalledTimes(1)
-        expect(mailboxProbe.probe).toHaveBeenCalledWith(organizationId, wrongEmail)
+        expect(mailboxProbe.probe).toHaveBeenCalledWith(organizationId, wrongEmail, undefined)
         expect(accountDiscovery.discover).toHaveBeenCalledTimes(1)
         expect(accountDiscovery.discover).toHaveBeenCalledWith(email)
         expect(result).toEqual({
@@ -107,8 +107,8 @@ describe('MailboxVerificationService', () => {
             const result = await service.verify(organizationId, email)
 
             expect(mailboxProbe.probe).toHaveBeenCalledTimes(2)
-            expect(mailboxProbe.probe).toHaveBeenNthCalledWith(1, organizationId, wrongEmail)
-            expect(mailboxProbe.probe).toHaveBeenNthCalledWith(2, organizationId, email)
+            expect(mailboxProbe.probe).toHaveBeenNthCalledWith(1, organizationId, wrongEmail, undefined)
+            expect(mailboxProbe.probe).toHaveBeenNthCalledWith(2, organizationId, email, undefined)
             expect(accountDiscovery.discover).not.toHaveBeenCalled()
             expect(result).toMatchObject({
                 exists,

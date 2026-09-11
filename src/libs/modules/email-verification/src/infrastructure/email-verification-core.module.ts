@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { HttpModule } from '@nestjs/axios'
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
+import { DataSource, Repository } from 'typeorm'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
+import { CreditReservationService, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { AccountDiscoveryModule } from './account-discovery/account-discovery.module'
 import {
     ALLOCATION_OBSERVER_TOKEN,
@@ -21,10 +22,17 @@ import { EmailEntity } from './persistence/typeorm/email.entity'
 import { DomainPolicyEntity } from './persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from './persistence/typeorm/email-verification.entity'
 import { SmtpVerificationEntity } from './persistence/typeorm/smtp-verification.entity'
+import { VerificationRequestEntity } from './persistence/typeorm/verification-request.entity'
+import { VerificationExecutionEntity } from './persistence/typeorm/verification-execution.entity'
+import { VerificationSettlementIntentionEntity } from './persistence/typeorm/verification-settlement-intention.entity'
 import { TypeOrmEmailStore } from './persistence/typeorm-email.store'
 import { TypeOrmDomainStore } from './persistence/typeorm-domain.store'
 import { TypeOrmVerificationStore } from './persistence/typeorm-verification.store'
 import { TypeOrmSmtpVerificationStore } from './persistence/typeorm-smtp-verification.store'
+import { TypeOrmVerificationRequestStore } from './persistence/typeorm-verification-request.store'
+import { TypeOrmVerificationExecutionStore } from './persistence/typeorm-verification-execution.store'
+import { TypeOrmVerificationSettlementStore } from './persistence/typeorm-verification-settlement.store'
+import { TypeOrmVerificationResultCacheReader } from './persistence/typeorm-verification-result-cache-reader'
 import { DnsMxResolver } from './discovery/dns/dns-mx-resolver'
 import { HttpDomainSynonymDiscovery } from './discovery/http/http-domain-synonym-discovery'
 import { SmtpClientFactory } from './mailbox/smtp/smtp-client.factory'
@@ -37,10 +45,29 @@ import { MX_RESOLVER, MxResolver } from '../application/ports/mx-resolver'
 import { DOMAIN_SYNONYM_DISCOVERY } from '../application/ports/domain-synonym-discovery'
 import { MAILBOX_PROBE } from '../application/ports/mailbox-probe'
 import { VERIFICATION_CLOCK, VerificationClock } from '../application/ports/verification-clock'
+import { VERIFICATION_REQUEST_STORE, VerificationRequestStore } from '../application/ports/verification-request-store'
+import { VERIFICATION_EXECUTION_STORE, VerificationExecutionStore } from '../application/ports/verification-execution-store'
+import { VERIFICATION_SETTLEMENT_STORE, VerificationSettlementStore } from '../application/ports/verification-settlement-store'
+import {
+    VERIFICATION_RESULT_CACHE_READER,
+    VerificationResultCacheReader,
+} from '../application/ports/verification-result-cache-reader'
+import { VerificationAdmissionService } from '../application/operations/verification-admission.service'
+import { VerificationSettlementService } from '../application/operations/verification-settlement.service'
+import { VerificationExecutionRunner } from '../application/operations/verification-execution-runner'
+import { VerificationReconciler } from '../application/operations/verification-reconciler'
+import {
+    VERIFICATION_EXECUTION_DEADLINE_MS,
+    VERIFICATION_LEASE_DURATION_MS,
+    VERIFICATION_LEASE_LIVENESS_POLL_MS,
+    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
+} from '../application/operations/verification-execution-timing'
 import {
     VERIFICATION_TRACE_OBSERVER,
     VerificationTraceObserver,
 } from '../application/verification-trace/verification-trace-observer'
+
+const DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS = 86_400
 
 class SystemVerificationClock implements VerificationClock {
     now(): Date {
@@ -51,12 +78,21 @@ class SystemVerificationClock implements VerificationClock {
 @Module({
     imports: [
         VerificationTraceModule,
-        TypeOrmModule.forFeature([EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerificationEntity]),
+        TypeOrmModule.forFeature([
+            EmailEntity,
+            DomainPolicyEntity,
+            EmailVerificationEntity,
+            SmtpVerificationEntity,
+            VerificationRequestEntity,
+            VerificationExecutionEntity,
+            VerificationSettlementIntentionEntity,
+        ]),
         ConfigModule,
         DnsModule,
         HttpModule,
         ProxyModule,
         AccountDiscoveryModule,
+        CreditsModule,
     ],
     providers: [
         {
@@ -149,7 +185,123 @@ class SystemVerificationClock implements VerificationClock {
                     traceObserver,
                 ),
         },
+        {
+            provide: VERIFICATION_REQUEST_STORE,
+            inject: [DataSource],
+            useFactory: (dataSource: DataSource) => new TypeOrmVerificationRequestStore(dataSource),
+        },
+        {
+            provide: VERIFICATION_EXECUTION_STORE,
+            inject: [DataSource],
+            useFactory: (dataSource: DataSource) => new TypeOrmVerificationExecutionStore(dataSource),
+        },
+        {
+            provide: VERIFICATION_SETTLEMENT_STORE,
+            inject: [DataSource],
+            useFactory: (dataSource: DataSource) => new TypeOrmVerificationSettlementStore(dataSource),
+        },
+        {
+            provide: VERIFICATION_RESULT_CACHE_READER,
+            inject: [DataSource],
+            useFactory: (dataSource: DataSource) => new TypeOrmVerificationResultCacheReader(dataSource.manager),
+        },
+        {
+            provide: VerificationAdmissionService,
+            inject: [
+                VERIFICATION_REQUEST_STORE,
+                VERIFICATION_EXECUTION_STORE,
+                VERIFICATION_RESULT_CACHE_READER,
+                CreditReservationService,
+                VERIFICATION_CLOCK,
+                ConfigService,
+            ],
+            useFactory: (
+                requests: VerificationRequestStore,
+                executions: VerificationExecutionStore,
+                cacheReader: VerificationResultCacheReader,
+                credits: CreditReservationService,
+                clock: VerificationClock,
+                configService: ConfigService,
+            ) =>
+                new VerificationAdmissionService(
+                    requests,
+                    executions,
+                    cacheReader,
+                    credits,
+                    clock,
+                    (configService.get<number>('VERIFICATION_RESULT_CACHE_TTL_SECONDS') ??
+                        DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS) * 1000,
+                    VERIFICATION_EXECUTION_DEADLINE_MS,
+                ),
+        },
+        {
+            provide: VerificationSettlementService,
+            inject: [VERIFICATION_SETTLEMENT_STORE, CreditReservationService],
+            useFactory: (settlements: VerificationSettlementStore, credits: CreditReservationService) =>
+                new VerificationSettlementService(settlements, credits),
+        },
+        {
+            provide: VerificationExecutionRunner,
+            inject: [VERIFICATION_EXECUTION_STORE, VERIFICATION_SETTLEMENT_STORE, VerificationSettlementService, MailboxVerificationService, VERIFICATION_CLOCK],
+            useFactory: (
+                executions: VerificationExecutionStore,
+                settlements: VerificationSettlementStore,
+                settlementService: VerificationSettlementService,
+                mailboxVerification: MailboxVerificationService,
+                clock: VerificationClock,
+            ) =>
+                new VerificationExecutionRunner(
+                    executions,
+                    settlements,
+                    settlementService,
+                    mailboxVerification,
+                    clock,
+                    VERIFICATION_LEASE_DURATION_MS,
+                    VERIFICATION_LEASE_LIVENESS_POLL_MS,
+                ),
+        },
+        {
+            provide: VerificationReconciler,
+            inject: [
+                VERIFICATION_EXECUTION_STORE,
+                VERIFICATION_SETTLEMENT_STORE,
+                VerificationSettlementService,
+                VerificationExecutionRunner,
+                CreditReservationService,
+                VERIFICATION_CLOCK,
+            ],
+            useFactory: (
+                executions: VerificationExecutionStore,
+                settlements: VerificationSettlementStore,
+                settlementService: VerificationSettlementService,
+                runner: VerificationExecutionRunner,
+                credits: CreditReservationService,
+                clock: VerificationClock,
+            ) =>
+                new VerificationReconciler(
+                    executions,
+                    settlements,
+                    settlementService,
+                    runner,
+                    credits,
+                    clock,
+                    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
+                ),
+        },
     ],
-    exports: [EmailVerificationOrchestrator, EmailAdministrationService, DomainPolicyService, TypeOrmModule],
+    exports: [
+        EmailVerificationOrchestrator,
+        EmailAdministrationService,
+        DomainPolicyService,
+        TypeOrmModule,
+        VERIFICATION_CLOCK,
+        VERIFICATION_REQUEST_STORE,
+        VERIFICATION_EXECUTION_STORE,
+        VERIFICATION_SETTLEMENT_STORE,
+        VerificationAdmissionService,
+        VerificationSettlementService,
+        VerificationExecutionRunner,
+        VerificationReconciler,
+    ],
 })
 export class EmailVerificationCoreModule {}

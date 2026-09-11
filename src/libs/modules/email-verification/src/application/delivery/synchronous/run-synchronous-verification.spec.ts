@@ -178,7 +178,7 @@ describe('RunSynchronousVerification', () => {
         expect(result).not.toHaveProperty('organizationId')
         expect(domainStore.findByName).toHaveBeenCalledWith('example.test')
         expect(mailboxProbe.probe).toHaveBeenCalledTimes(2)
-        expect(mailboxProbe.probe).toHaveBeenLastCalledWith(organizationId, email)
+        expect(mailboxProbe.probe).toHaveBeenLastCalledWith(organizationId, email, undefined)
         expect(verificationStore.create).toHaveBeenCalledTimes(1)
         expect(emailStore.upsert).toHaveBeenLastCalledWith(organizationId, email, {
             exists: true,
@@ -277,8 +277,8 @@ describe('RunSynchronousVerification', () => {
         expect(firstResult.exists).toBe(true)
         expect(secondResult.exists).toBe(false)
         expect(firstResult.id).not.toBe(secondResult.id)
-        expect(mailboxProbe.probe).toHaveBeenCalledWith(organizationId, email)
-        expect(mailboxProbe.probe).toHaveBeenCalledWith(otherOrganizationId, email)
+        expect(mailboxProbe.probe).toHaveBeenCalledWith(organizationId, email, undefined)
+        expect(mailboxProbe.probe).toHaveBeenCalledWith(otherOrganizationId, email, undefined)
         expect(verifications).toEqual([
             { ...firstResult, organizationId },
             { ...secondResult, organizationId: otherOrganizationId },

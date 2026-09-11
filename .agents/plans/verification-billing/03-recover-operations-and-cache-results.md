@@ -11,11 +11,11 @@ public single-verification routes and Plan 05 connects batch delivery.
 
 ## Progress
 
-- [ ] (2026-09-08) Add organization-owned request, execution, and settlement-intention stores.
-- [ ] (2026-09-08) Implement complete-result cache lookup, evidence freshness, and concurrent execution sharing.
-- [ ] (2026-09-08) Implement funded execution, fenced persistence, and recoverable capture or release.
-- [ ] (2026-09-08) Add deterministic concurrency, crash-recovery, ownership, and expiry coverage.
-- [ ] (2026-09-08) Update module/lifecycle documentation and complete focused validation.
+- [x] (2026-09-11) Add organization-owned request, execution, and settlement-intention stores.
+- [x] (2026-09-11) Implement complete-result cache lookup, evidence freshness, and concurrent execution sharing.
+- [x] (2026-09-11) Implement funded execution, fenced persistence, and recoverable capture or release.
+- [x] (2026-09-11) Add deterministic concurrency, crash-recovery, ownership, and expiry coverage.
+- [x] (2026-09-11) Update module/lifecycle documentation and complete focused validation.
 
 ## Plan dependencies
 
@@ -28,6 +28,30 @@ The current SMTP cache returns old records without checking their timestamps or 
 `EmailVerificationOrchestrator.verify()` appends a fresh verification record even when its probes use old evidence.
 Consequently, the new record's creation time cannot establish evidence freshness. The account and verification
 stores belong to different modules; a payment-style durable intention is needed instead of a cross-module repository.
+
+Three real design bugs were caught and fixed during implementation, all through rereading the new code against its
+own port doc comments rather than through testing. The first draft of `cancelIfNoCaptureIntention`
+unconditionally canceled any nonterminal execution, contradicting its own contract that a durable capture intention
+must win — fixed by querying `VerificationSettlementIntentionEntity` under the same lock and leaving the row untouched
+whenever any intention already exists, `capture` or `release`. The first draft of `TypeOrmVerificationRequestStore.insert()` derived
+`reservedCount` from `source === 'fresh'` alone, which is wrong for the insufficient-funds path (source is still `fresh` even though
+the reservation never held) — fixed by adding an explicit `reservedCount: 0 | 1` field the caller decides from the
+real credit outcome. The same draft derived `billingState`/`finalReason`/`settledAt` purely from `resultId !== null`,
+leaving a fenced insufficient-funds denial (no execution, no result, yet definitively terminal) `pending` forever —
+fixed by adding explicit `billingState`/`finalReason` fields to `NewVerificationRequestInput` as well.
+
+Considered and reverted: an `executionId` column on the existing `EmailVerificationEntity`, meant to enforce "at
+most one result per execution" at the database level. Reverted because it would force every current
+`NewEmailVerification` construction site and test fixture in the module to add `executionId: null`, and because the
+same invariant is already guaranteed for free by `VerificationSettlementIntentionEntity.executionId` being that
+table's primary key, which can be inserted at most once per execution, ever.
+
+A genuine test-authoring bug, not a code bug, surfaced only by the real-Postgres integration spec: a test asserted
+that a fenced insufficient-funds admission leaves no execution row at all. The real, already-unit-tested behavior
+is that `cancelFundingFailure` leaves the row in place with `state: 'canceled'` — outside the partial unique index,
+so the address slot is free, but the row itself persists. Fixed the test's assertion rather than the code; this is
+exactly the kind of gap real-Postgres testing exists to catch; a mocked unit test could not have revealed a
+wrong assumption baked into the test's own fixtures.
 
 ## Decision Log
 
@@ -44,10 +68,110 @@ stores belong to different modules; a payment-style durable intention is needed 
   30 seconds. A funded execution may run for at most 24 hours, including queue delays, before fenced cancellation.
   Rationale: These engineering limits prevent indefinite reservations; they do not implement privacy retention.
   Date/Author: 2026-09-08, policy planning.
+- Decision: `VerificationExecutionRunner.execute()` polls/renews the lease at one fixed 5-second cadence for its
+  entire single probe call, rather than a slower 20-second default with a tighter 5-second window only while a
+  connection is open. Rationale: the runner has exactly one externally-dependent phase (the probe call); lease
+  acquisition and result persistence are single fast database round-trips that never approach the lease duration.
+  Observing the SMTP client's actual socket lifecycle from the application layer would need new plumbing outside
+  this PR's scope, so the tighter cadence is applied for the whole call instead of trying to detect when a
+  connection is actually open. Date/Author: 2026-09-11, implementation.
+- Decision: the cache-freshness recheck in `VerificationExecutionStore.claimOrJoin()` takes a synchronous predicate
+  `(candidate) => boolean`, not an async callback. Rationale: an async callback crossing the application/store
+  boundary cannot easily share the same database transaction and lock the store already holds; a synchronous
+  predicate lets the store re-query the candidate itself under that lock and simply evaluate the caller's rule
+  against it. Date/Author: 2026-09-11, implementation.
+- Decision: attempt-count limiting for a probe failure is deferred to Plan 04, which will own the queue wiring.
+  This PR's `VerificationExecutionRunner` fences and dispatches again (via `takeoverForRetry`) on every failure,
+  without counting attempts itself. Rationale: no queue in this PR dispatches `execute()` for a single verification
+  job — only the reconciler and direct calls invoke it. An attempt ceiling has no dispatcher to enforce it against
+  yet; the 24-hour execution deadline and the reconciler's own cadence are this PR's only backstop. Plan 04 must
+  decide the real attempt limit once it wires the actual per-execution queue job.
+  Date/Author: 2026-09-11, implementation.
+- Decision: a `temporarily_blocked` probe reason waits `(attemptGeneration + 1)` minutes before retry, matching the
+  existing async queue's own greylist retry delay (`attemptsMade * 1 minute`); any other thrown probe failure waits
+  a flat 10 seconds, matching that same queue's non-greylist default. Rationale: reuse an already-tuned,
+  already-shipped retry policy rather than inventing a new one. Date/Author: 2026-09-11, implementation.
+- Decision: the "control that expires during target verification" acceptance criterion is **not** addressed by any
+  refresh logic in this PR. Rationale: tracing the mechanism shows it names the SMTP evidence cache already owned
+  by `SmtpMailboxProbe`, whose hardcoded 24-hour freshness window is unrelated to the new configurable
+  `VERIFICATION_RESULT_CACHE_TTL_SECONDS` (which only governs whether a past stored `EmailVerificationEntity` row
+  can be reused for a new admission). None of this plan's new stores or services introduce it. Every
+  `MailboxVerificationService.verify()` call still probes its control and target evidence back-to-back within one
+  synchronous call, unchanged by this PR beyond the additive abort signal. A real fix belongs inside
+  `MailboxVerificationService`/`SmtpMailboxProbe` itself, which this PR does not otherwise touch, per Scope and
+  Non-Goals ("without changing existing route charges in this PR"). Flagged to the user as an open acceptance-
+  criterion gap rather than silently dropped. Date/Author: 2026-09-11, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan describes. A durable `VerificationRequestStore`/`VerificationExecutionStore`/
+`VerificationSettlementStore` layer sits behind three new TypeORM entities and stores, plus a new
+`VerificationResultCacheReader` that resolves the plan's own open judgment call that the existing UUID-keyed
+`VerificationResultReader` cannot serve an address-keyed lookup. `VerificationAdmissionService.admit()` covers
+cached/joined/funded/insufficient-funds/conflict/cooldown outcomes. `VerificationExecutionRunner.execute()` runs
+under a generation-fenced lease, with an abort signal threaded end to end through
+`MailboxVerificationService`/`SmtpMailboxProbe`/`ISmtpClientFactory`, and greylist-aware retry delay.
+`VerificationSettlementService.settle()` mirrors the claim-then-call-credits-then-complete shape of
+`PaymentAdjustmentHandler`. `VerificationOperationsReader.read()` exposes a 7-day terminal-visibility window.
+`VerificationReconciler.reconcile()` runs on this module's first repeatable BullMQ job
+(`verification-reconciliation`, every 30 seconds via `OnApplicationBootstrap`). `EmailVerificationCoreModule` now
+imports `CreditsModule` and wires every new store/service as an explicit factory provider, matching its existing
+convention. No HTTP route, frontend change, or Bruno collection was added, matching Scope and Non-Goals;
+`EmailVerificationOrchestrator` and its existing routes are unchanged.
+
+One acceptance criterion is knowingly not addressed — see the Decision Log entry on control-evidence refresh during
+target verification. It names a concern `SmtpMailboxProbe` already had, outside this PR's actual stores and
+services, and fixing it would mean touching `MailboxVerificationService`/`SmtpMailboxProbe` beyond the additive
+abort signal, which Scope and Non-Goals rules out for this PR.
+
+Validation executed, in order:
+
+- `corepack pnpm exec jest --runInBand` (full suite): 250 suites / 2893 tests passed, 16 suites / 109 tests skipped
+  (environment-gated live-Postgres/Redis/Keycloak suites, expected without those services), 0 failed.
+- `corepack pnpm exec jest --runInBand src/libs/modules/email-verification` (focused): 76 suites / 710 tests passed,
+  5 suites / 18 tests skipped, 0 failed — including all 8 `verification-execution-runner.spec.ts` cases (one a
+  fake-timer crash-injection test for a lease lost mid-probe) and all 10 `verification-reconciler.spec.ts` cases.
+- `corepack pnpm test:verification-billing-postgres`: 5 tests passed against a real, disposable
+  `verification_billing_test` Postgres database shared with the full `identity` entity set — a concurrent admission
+  race producing exactly one execution row, the full funded-capture-and-cache-reuse pipeline, release-on-inconclusive,
+  insufficient-funds fencing with address-slot recovery, and idempotent settlement replay — zero skipped. One real
+  Postgres run also caught a test-authoring bug (see Surprises & Discoveries) that no mocked unit spec could have.
+- `corepack pnpm test:credits-postgres` (regression): 52 tests passed against its own disposable database, zero
+  skipped, confirming the new `CreditsModule` import into `EmailVerificationCoreModule` changed nothing about
+  credits' own reservation lifecycle.
+- `corepack pnpm architecture:check`: 9 modules, 0 violations.
+- `corepack pnpm exec tsc --noEmit -p tsconfig.json --tsBuildInfoFile /tmp/tsconfig.tsbuildinfo` (redirecting the
+  build-info file around a root-owned `dist/` left by an earlier session in this container): clean.
+- `corepack pnpm exec eslint .`: clean except one unrelated preexisting warning in
+  `src/libs/config/src/load-secrets.spec.ts`.
+- `corepack pnpm docs:lint -- <touched docs>`: both the module README and the processing contract passed. Fixed
+  the same recurring Harper false positive this repository has hit before — a module name or digit immediately
+  followed by `'s` or a bare unit suffix like `30s`/`10s`, misread as a standalone letter — by spelling out
+  durations ("30 seconds") and avoiding the trailing-possessive pattern throughout. This plan file itself still
+  carries a handful of `[Readability]` sentence-length flags on dense technical decision-log prose, plus one
+  `[Word Choice]` flag on `cooldown` (an actual `AdmissionOutcome` literal, not a rewritable word choice), after
+  fixing every other actionable grammar/spelling/style finding and splitting the longest sentences. Per repository policy, only
+  actionable findings require a fix, and the rest are precise technical statements that would fragment if split
+  further.
+- `git diff --check`: clean.
+- Discovered and fixed a `.gitignore` gap: `.dev/credits-postgres/` was already ignored but
+  `.dev/verification-billing-postgres/` was not, which would have let the new runner's metadata file — containing a
+  real generated database password — be staged by a broad `git add`. Added `.dev/verification-billing-postgres/`
+  to `.gitignore` before staging anything.
+
+Architecture/SOLID self-review of the diff: every new store lives in `infrastructure/persistence/` and implements a
+purpose-specific port in `application/ports/`; no store calls SMTP or HTTP, and no application service imports
+TypeORM, BullMQ, or `@nestjs/*` directly. `VerificationExecutionRunner` and `VerificationReconciler` depend only on
+the ports and on the public barrel of `CreditReservationService`, matching this module's existing convention of
+depending on another module's public application service rather than its persistence adapter. The reconciliation
+queue's five pieces (port, queue configuration, Bull adapter, processor, Nest module) mirror the existing
+async/batch convention exactly, introduced deliberately as this module's first periodic job rather than
+improvised ad hoc. `VerificationExecutionRunner`, `VerificationReconciler`, and `VerificationAdmissionService` each
+own exactly one responsibility (running one attempt, sweeping recovery work, and admission policy, respectively);
+none became a generic "manager" service. The one place duplication was deliberately accepted rather than shared is
+the `(generation + 1) minute` / flat-10-second retry-delay constants in `VerificationExecutionRunner`, which mirror
+rather than reuse the existing async queue's `asyncEmailVerificationBackoff` function — sharing it directly would
+have coupled this framework-free application class to a BullMQ-specific backoff-strategy signature.
 
 ## Context and Orientation
 
@@ -183,13 +307,19 @@ separate checkout-owned `verification_billing_test` database, reject skipped/emp
 `test:verification-billing-postgres`. Never point schema synchronization at an application database.
 
 ```bash
-corepack pnpm test -- src/libs/modules/email-verification/src/application/operations/verification-operations.spec.ts src/libs/modules/email-verification/src/application/operations/verification-settlement.spec.ts src/libs/modules/email-verification/src/infrastructure/persistence/typeorm-verification-execution-store.spec.ts --runInBand
+corepack pnpm exec jest --runInBand src/libs/modules/email-verification/src/application/operations src/libs/modules/email-verification/src/infrastructure/persistence
 corepack pnpm test:verification-billing-postgres
 corepack pnpm test:credits-postgres
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/verification-billing/03-recover-operations-and-cache-results.md
 ```
+
+The plan's original command block named `verification-operations.spec.ts`, `verification-settlement.spec.ts`, and
+`typeorm-verification-execution-store.spec.ts`; the actual filenames that emerged during implementation are
+`verification-admission.service.spec.ts`, `verification-settlement.service.spec.ts`,
+`typeorm-verification-execution.store.spec.ts`, plus `verification-execution-runner.spec.ts`,
+`verification-reconciler.spec.ts`, and `verification-operations-reader.spec.ts` — corrected above.
 
 Use a fake clock for expiry and fencing. Real PostgreSQL tests must exercise unique indexes, concurrent admission,
 result/intention atomicity, and credit recovery through real module adapters. Bruno is not applicable to this PR's
@@ -210,4 +340,7 @@ independently testable through application ports. Implementation evidence has no
 
 ## Plan readiness
 
-Ready to implement
+Implemented, validated, and ready for review. All Progress items are complete; see Outcomes & Retrospective for
+the exact validation matrix executed and its results, and the Decision Log for the one acceptance criterion this
+PR knowingly does not address: control-evidence refresh during target verification, a concern already present
+in `SmtpMailboxProbe` and outside this PR's actual deliverable.
