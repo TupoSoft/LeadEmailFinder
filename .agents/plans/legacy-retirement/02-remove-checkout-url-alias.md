@@ -11,9 +11,9 @@ to pass the canonical URL to the selected payment provider.
 
 ## Progress
 
-- [ ] (2026-09-07) Reject the removed setting during environment normalization and remove its compatibility surface.
-- [ ] (2026-09-07) Update focused configuration coverage and the payments configuration documentation.
-- [ ] (2026-09-07) Run focused validation and available checkout regression coverage, then record the results.
+- [x] (2026-09-11) Reject the removed setting during environment normalization and remove its compatibility surface.
+- [x] (2026-09-11) Update focused configuration coverage and the payments configuration documentation.
+- [x] (2026-09-11) Run focused validation and record the unavailable Bruno regression prerequisites.
 
 ## Plan dependencies
 
@@ -21,7 +21,11 @@ to pass the canonical URL to the selected payment provider.
 
 ## Surprises & Discoveries
 
-None yet.
+- The updated rejection matrix failed all 15 cases against the previous implementation, while 79 existing and
+  canonical-configuration cases passed. The matrix crosses five alias values with an absent, valid, or invalid
+  canonical URL, including matching and conflicting URLs.
+- No local Compose projects were running when checked with `docker compose ls --format json`. The existing Bruno
+  regression requires a provisioned, owned disposable stack; it remains unverified.
 
 ## Decision Log
 
@@ -38,28 +42,41 @@ None yet.
 - Decision: Use the existing checkout Bruno collection only as regression coverage; add no alias-specific HTTP test.
   Rationale: The changed behavior occurs before application startup. The HTTP contract is unchanged.
   Date/Author: 2026-09-07, Codex planning.
+- Decision: Keep the dated maintenance inventory and completed payment plans as historical evidence.
+  Rationale: They explicitly describe the earlier audit and implementation; the current payments README documents
+  the supported configuration and recovery procedure.
+  Date/Author: 2026-09-11, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the configuration retirement. Environment normalization rejects every defined alias with the exact
+replacement message and returns canonical-only input unchanged. The compatibility helper and alias fields are
+removed; optional secret-file conflict checks and payment composition retain their existing behavior.
+
+All 105 focused tests passed, including 15 alias rejection cases. Architecture validation, type checking, build,
+focused ESLint, TypeScript formatting, and Harper passed. Independent diff review found no material SOLID or
+module-boundary concerns. No running local Compose stack was available, so the existing Bruno regression remains
+unverified. No new HTTP coverage is applicable because this change concerns configuration before initialization.
 
 ## Context and Orientation
 
-`src/lead-email-finder-api/src/lead-email-finder-api.module.ts` runs `normalizeEnvironmentConfiguration` before
+Before this change, `src/lead-email-finder-api/src/lead-email-finder-api.module.ts` ran `normalizeEnvironmentConfiguration` before
 validating `EnvironmentVariablesDto`. This normalization function is defined in
-`src/lead-email-finder-api/src/environment-variables.dto.ts` and delegates to
-`normalizePaymentCheckoutUrlConfiguration`. That helper copies `PAYMENTS_CHECKOUT_RETURN_URL` into
-`PAYMENTS_CHECKOUT_URL` when only the former is present, accepts matching values, and rejects conflicting values.
-The surrounding function also rejects duplicate inline and file sources for optional secrets.
+`src/lead-email-finder-api/src/environment-variables.dto.ts` and previously delegated to
+`normalizePaymentCheckoutUrlConfiguration`. That helper copied `PAYMENTS_CHECKOUT_RETURN_URL` into
+`PAYMENTS_CHECKOUT_URL` when only the former was present, accepted matching values, and rejected conflicting values.
+The host still normalizes before DTO validation. Normalization now rejects the removed setting directly and retains
+the existing rejection of duplicate inline and file sources for optional secrets.
 
-`EnvironmentVariablesDto` declares the alias as an optional URL. The exported `PaymentConfiguration` interface in
-`src/libs/modules/payments/src/domain/payment-configuration.ts` repeats that field. Payment composition in
+`EnvironmentVariablesDto` previously declared the alias as an optional URL. The exported `PaymentConfiguration`
+interface in `src/libs/modules/payments/src/domain/payment-configuration.ts` repeated that field; both declarations
+are now removed. Payment composition in
 `src/libs/modules/payments/src/payments.module.ts` already reads only `PAYMENTS_CHECKOUT_URL` when constructing
 `CreditPurchaseService`. The base Docker configuration, Paddle fixture, and OpenAPI preview environment already use
 the canonical name. The completed `payments/07` plan introduced the alias and its replacement.
 
-`src/lead-email-finder-api/src/environment-variables.dto.spec.ts` contains the alias acceptance matrix.
-`src/libs/modules/payments/README.md` documents the alias. The existing `bruno/credit-purchases` collection exercises
+`src/lead-email-finder-api/src/environment-variables.dto.spec.ts` now contains the alias rejection matrix.
+`src/libs/modules/payments/README.md` documents its removal. The existing `bruno/credit-purchases` collection exercises
 purchase creation and signed webhook processing with the local stub provider.
 
 ## Scope and Non-Goals
@@ -122,7 +139,7 @@ checkout setting.
 Run these commands from the repository root:
 
 ```bash
-corepack pnpm test -- src/lead-email-finder-api/src/environment-variables.dto.spec.ts src/libs/modules/payments/src/payments.module.spec.ts src/libs/modules/payments/src/application/credit-purchase.service.spec.ts --runInBand
+TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test src/lead-email-finder-api/src/environment-variables.dto.spec.ts src/libs/modules/payments/src/payments.module.spec.ts src/libs/modules/payments/src/application/credit-purchase.service.spec.ts --runInBand --silent --verbose=false
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm build
@@ -155,6 +172,21 @@ Record exact test results, the final reference search, and whether the existing 
 tokens, and checkout URLs out of diagnostic evidence. Report Bruno as not applicable to new coverage because the
 changed contract concerns configuration before initialization. Separately report the collection's regression result.
 Attach the synced issue to the pull request with a closing keyword and follow root assignment and title rules.
+
+Implementation evidence recorded on 2026-09-11:
+
+- Issue #557 was assigned to the requesting user and its Project 9 status set to `In Progress`.
+- The focused Jest command above passed 3 suites and 105 tests. The initial rejection matrix failed all 15 cases
+  before implementation, demonstrating that the tests detect the removed compatibility behavior.
+- `corepack pnpm architecture:check` passed with 9 modules and 0 violations; `corepack pnpm typecheck` passed.
+- `corepack pnpm build` passed: the type checker found 0 issues and SWC compiled 670 files.
+- The Harper command above passed both changed Markdown files. Its initial findings were corrected, including
+  splitting a long existing sentence about adjustment debits without changing its meaning.
+- Focused ESLint and Prettier checks passed for the three changed TypeScript files. `git diff --check` passed.
+- The reference search above found only the explicit rejection, its tests, and the removal explanation. No source,
+  script, Docker, or Bruno references to the deleted normalization helper remain.
+- Bruno: not applicable to new coverage because initialization configuration is below the HTTP boundary. Existing
+  checkout regression was not run: `docker compose ls --format json` returned no running local projects.
 
 ## Plan readiness
 

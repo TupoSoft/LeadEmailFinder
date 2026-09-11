@@ -31,6 +31,9 @@ describe('Proxy Swagger metadata', () => {
 
         expect(properties('ProxyDto')).not.toContain('auth')
         expect(properties('ProxyDto')).toContain('host')
+        expect(properties('ProxyDto')).toContain('blacklists')
+        expect(properties('ProxyDto')).not.toContain('user')
+        expect(properties('ProxyDto')).not.toContain('pass')
         expect(properties('CreateProxyDto')).toContain('auth')
         expect(properties('UpdateProxyDto')).toContain('auth')
     })

@@ -92,31 +92,18 @@ function isOptionalFileVariableConfigured(
         environment[property] !== undefined || environment[`${property}_FILE`] !== undefined
 }
 
-export function normalizePaymentCheckoutUrlConfiguration(config: Record<string, unknown>): Record<string, unknown> {
-    const checkoutUrl = config['PAYMENTS_CHECKOUT_URL']
-    const legacyCheckoutUrl = config['PAYMENTS_CHECKOUT_RETURN_URL']
-
-    if (checkoutUrl !== undefined && legacyCheckoutUrl !== undefined && checkoutUrl !== legacyCheckoutUrl) {
-        throw new Error('PAYMENTS_CHECKOUT_URL and PAYMENTS_CHECKOUT_RETURN_URL must match when both are set')
-    }
-
-    if (checkoutUrl === undefined && legacyCheckoutUrl !== undefined) {
-        return { ...config, PAYMENTS_CHECKOUT_URL: legacyCheckoutUrl }
-    }
-
-    return config
-}
-
 export function normalizeEnvironmentConfiguration(config: Record<string, unknown>): Record<string, unknown> {
-    const normalizedConfig = normalizePaymentCheckoutUrlConfiguration(config)
+    if (config['PAYMENTS_CHECKOUT_RETURN_URL'] !== undefined) {
+        throw new Error('PAYMENTS_CHECKOUT_RETURN_URL: removed; use PAYMENTS_CHECKOUT_URL')
+    }
 
     for (const property of OPTIONAL_FILE_VARIABLES) {
-        if (normalizedConfig[property] !== undefined && normalizedConfig[`${property}_FILE`] !== undefined) {
+        if (config[property] !== undefined && config[`${property}_FILE`] !== undefined) {
             throw new Error(`${property}: multiple-sources`)
         }
     }
 
-    return normalizedConfig
+    return config
 }
 
 @WithFileVars()
@@ -310,10 +297,6 @@ export class EnvironmentVariablesDto {
 
     @IsUrl({ require_protocol: true, require_tld: false })
     PAYMENTS_CHECKOUT_URL: string
-
-    @IsOptional()
-    @IsUrl({ require_protocol: true, require_tld: false })
-    PAYMENTS_CHECKOUT_RETURN_URL?: string
 
     @IsOptional()
     @IsString()

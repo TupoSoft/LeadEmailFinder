@@ -43,7 +43,10 @@
         "platformOrganizations": "apps/web/tests/e2e/platform-organizations-ui.spec.ts",
         "platformOrganizationRuntime": "apps/web/tests/e2e/platform-organizations.spec.ts",
         "platformCredits": "apps/web/tests/e2e/platform-credits-ui.spec.ts",
-        "platformCreditRuntime": "apps/web/tests/e2e/platform-credits.spec.ts"
+        "platformCreditRuntime": "apps/web/tests/e2e/platform-credits.spec.ts",
+        "platformProxies": "apps/web/tests/e2e/platform-proxies-ui.spec.ts",
+        "platformProxyRuntime": "apps/web/tests/e2e/platform-proxies.spec.ts",
+        "platformProxyPrivacy": "scripts/testing/proxy-browser-artifacts.spec.mjs"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",

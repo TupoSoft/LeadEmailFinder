@@ -95,6 +95,9 @@ test('exports the real app from an empty environment without provider constructi
         '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
         '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
         '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
+        '/v1/proxies',
+        '/v1/proxies/{id}',
+        '/v1/proxies/{id}/blacklists',
         '/verifyAsync',
         '/verifyAsync/{id}',
         '/verifyBatch/csv',
@@ -103,7 +106,7 @@ test('exports the real app from an empty environment without provider constructi
     ])
     assert.deepEqual(browser.servers, [{ url: '/' }])
     for (const path of [
-        '/verify', '/verifications/{id}', '/v1/proxies',
+        '/verify', '/verifications/{id}', '/v1/proxies/healthy',
     ]) {
         assert.ok(Object.hasOwn(runtime.paths, path), `Full runtime docs retain ${path}`)
         assert.equal(Object.hasOwn(browser.paths, path), false, `Browser docs exclude ${path}`)
@@ -186,7 +189,7 @@ test('async status exposes five discriminated outcomes and only safe result fiel
 
 test('batch publishes only multipart create, status and CSV download with safe browser contracts', () => {
     const operations = Object.entries(browser.paths)
-        .filter(([path]) => /verif|prox/i.test(path) && !path.startsWith('/verifyAsync'))
+        .filter(([path]) => /verif/i.test(path) && !path.startsWith('/verifyAsync'))
         .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
         .sort()
     assert.deepEqual(operations, ['GET /verifyBatch/{id}', 'GET /verifyBatch/{id}/results', 'POST /verifyBatch/csv'])
@@ -667,6 +670,104 @@ test('generated platform credits require the caller key and preserve exact reque
             Assert<Equal<Credit['put']['responses'][200]['content']['application/json'], { balance: number }>>,
             Assert<Equal<Detail, components['schemas']['OrganizationDirectoryEntryDto']>>,
             Assert<Equal<keyof Detail, 'id' | 'name' | 'createdAt' | 'updatedAt'>>
+        ]
+    `)
+    const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
+})
+
+test('proxy management exposes only reviewed routes, redacted records, and truthful cursor contracts', () => {
+    const expected = [
+        ['/v1/proxies', 'get', ['200', '400', '401', '403', '500']],
+        ['/v1/proxies', 'post', ['201', '400', '401', '403', '500']],
+        ['/v1/proxies/{id}', 'get', ['200', '401', '403', '404', '500']],
+        ['/v1/proxies/{id}', 'patch', ['200', '400', '401', '403', '404', '500']],
+        ['/v1/proxies/{id}', 'delete', ['200', '401', '403', '404', '500']],
+        ['/v1/proxies/{id}/blacklists', 'post', ['204', '400', '401', '403', '404', '500']],
+    ]
+    const operations = Object.entries(browser.paths).filter(([path]) => path.startsWith('/v1/proxies'))
+        .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`)).sort()
+    assert.deepEqual(operations, expected.map(([path, method]) => `${method.toUpperCase()} ${path}`).sort())
+    for (const [path, method, statuses] of expected) {
+        const operation = browser.paths[path][method]
+        assert.deepEqual(operation, runtime.paths[path][method])
+        assert.deepEqual(Object.keys(operation.responses).sort(), statuses)
+        assert.match(operation.description, /platform:admin/)
+        assert.deepEqual(operation.security, method === 'get'
+            ? [{ lef_session: [] }, { oidc: [] }]
+            : [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
+        if ((method === 'post' && path === '/v1/proxies') || method === 'patch') {
+            for (const response of Object.values(operation.responses)) {
+                assert.deepEqual(response.headers['Cache-Control'].schema.enum, ['no-store'])
+            }
+        }
+    }
+    const schemas = browser.components.schemas
+    const proxy = schemas.ProxyDto
+    assert.deepEqual(Object.keys(proxy.properties).sort(), [
+        'blacklists', 'createdAt', 'description', 'host', 'id', 'maxConcurrent', 'port', 'protocol',
+        'requestsPerMinute', 'state', 'updatedAt', 'weight',
+    ])
+    assert.deepEqual(proxy.properties.blacklists.items, { type: 'string' })
+    assert.ok(proxy.required.includes('blacklists'))
+    assert.deepEqual(proxy.properties.protocol.enum, [1, 2, 3, 4])
+    assert.deepEqual(proxy.properties.state.enum, ['active', 'draining', 'disabled'])
+    assert.equal(proxy.properties.createdAt.format, 'date-time')
+    assert.deepEqual(schemas.ProxyListDto.required, ['proxies', 'nextPageToken'])
+    assert.deepEqual(Object.keys(schemas.ProxyListDto.properties).sort(), ['nextPageToken', 'proxies'])
+    assert.equal(schemas.ProxyListDto.properties.nextPageToken.type, 'string')
+    assert.match(schemas.ProxyListDto.properties.nextPageToken.description, /empty string/)
+    assert.deepEqual(schemas.CreateProxyDto.required, ['protocol', 'host', 'port'])
+    assert.equal(schemas.CreateProxyDto.properties.state.default, 'disabled')
+    assert.equal(schemas.CreateProxyDto.properties.port.minimum, 1)
+    assert.equal(schemas.CreateProxyDto.properties.port.maximum, 65535)
+    assert.equal(schemas.CreateProxyDto.properties.weight.minimum, 0)
+    assert.equal(schemas.CreateProxyDto.properties.maxConcurrent.minimum, 1)
+    assert.equal(schemas.CreateProxyDto.properties.requestsPerMinute.minimum, 1)
+    assert.equal(schemas.UpdateProxyDto.required, undefined)
+    for (const dto of ['CreateProxyDto', 'UpdateProxyDto']) assert.equal(schemas[dto].properties.auth.writeOnly, true)
+    for (const field of ['user', 'pass']) assert.equal(schemas.ProxyAuthDto.properties[field].writeOnly, true)
+    assert.deepEqual(schemas.ProxyAuthDto.required, ['user', 'pass'])
+    assert.deepEqual(schemas.ReportBlacklistDto.required, ['mxHost'])
+    const page = browser.paths['/v1/proxies'].get.parameters
+    assert.deepEqual(page.find(parameter => parameter.name === 'pageSize').schema,
+        { type: 'integer', minimum: 1, maximum: 100, default: 100 })
+    assert.equal(page.find(parameter => parameter.name === 'pageToken').schema.format, 'uuid')
+    assert.deepEqual(runtime.paths['/v1/proxies/healthy'].get.responses['200'].content['application/json'].schema,
+        { $ref: '#/components/schemas/ProxyDto' })
+    assert.deepEqual(runtime.components.schemas.ProxyDto, proxy)
+})
+
+test('generated proxy responses cannot contain authentication and preserve request-only credentials', async () => {
+    const ts = require('typescript')
+    const file = resolve(directory, 'proxy-contract.ts')
+    await writeFile(file, `
+        import type { paths, components } from ${JSON.stringify(schemaPath)}
+        type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+        type Assert<T extends true> = T
+        type Registry = paths['/v1/proxies']
+        type Member = paths['/v1/proxies/{id}']
+        type List = Registry['get']['responses'][200]['content']['application/json']
+        type Created = Registry['post']['responses'][201]['content']['application/json']
+        type Get = Member['get']['responses'][200]['content']['application/json']
+        type Updated = Member['patch']['responses'][200]['content']['application/json']
+        type Deleted = Member['delete']['responses'][200]['content']['application/json']
+        type Proxy = components['schemas']['ProxyDto']
+        type Update = Member['patch']['requestBody']['content']['application/json']
+        type Query = NonNullable<Registry['get']['parameters']['query']>
+        type Responses = Created | Get | Updated | Deleted | List['proxies'][number]
+        type Assertions = [
+            Assert<Equal<Responses, Proxy>>,
+            Assert<Equal<Extract<'auth' | 'user' | 'pass', keyof Responses>, never>>,
+            Assert<Equal<Responses['blacklists'], string[]>>,
+            Assert<Equal<Responses['state'], 'active' | 'draining' | 'disabled'>>,
+            Assert<Equal<Responses['protocol'], 1 | 2 | 3 | 4>>,
+            Assert<Equal<keyof List, 'proxies' | 'nextPageToken'>>,
+            Assert<Equal<List['nextPageToken'], string>>,
+            Assert<Equal<Query['pageToken'], string | undefined>>,
+            Assert<Equal<Update['auth'], { user: string; pass: string } | undefined>>,
+            Assert<Equal<paths['/v1/proxies/{id}/blacklists']['post']['responses'][204]['content'], undefined>>,
+            Assert<Equal<Extract<'/v1/proxies/healthy', keyof paths>, never>>
         ]
     `)
     const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })

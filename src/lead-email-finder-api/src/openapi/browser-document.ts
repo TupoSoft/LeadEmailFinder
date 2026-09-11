@@ -3,6 +3,12 @@ import type { OpenAPIObject } from '@nestjs/swagger'
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
 export const BROWSER_OPERATIONS = [
+    { path: '/v1/proxies', method: 'get' },
+    { path: '/v1/proxies', method: 'post' },
+    { path: '/v1/proxies/{id}', method: 'get' },
+    { path: '/v1/proxies/{id}', method: 'patch' },
+    { path: '/v1/proxies/{id}', method: 'delete' },
+    { path: '/v1/proxies/{id}/blacklists', method: 'post' },
     { path: '/credits/{organizationId}', method: 'get' },
     { path: '/credits/{organizationId}', method: 'post' },
     { path: '/credits/{organizationId}', method: 'put' },

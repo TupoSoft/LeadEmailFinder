@@ -20,6 +20,7 @@
         "bruno:async-verification": "node scripts/bruno/run-collection.mjs async-verification",
         "bruno:batch-verification": "node scripts/bruno/run-collection.mjs batch-verification",
         "bruno:smtp-dev": "node scripts/bruno/run-collection.mjs smtp-dev",
+        "bruno:proxy-registry": "node scripts/bruno/run-collection.mjs proxy-registry",
         "bruno:credit-purchases": "node scripts/bruno/run-collection.mjs credit-purchases",
         "bruno:organization-onboarding": "node scripts/bruno/run-collection.mjs organization-onboarding",
         "test:credits-postgres": "ts-node scripts/testing/credits-postgres.ts",

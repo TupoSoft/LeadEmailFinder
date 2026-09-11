@@ -54,9 +54,23 @@ dependency `ProxyAllocatorService` has on `ProxyLeaseService` — but does not e
 | `DELETE` | `v1/proxies/:id`            | Delete                                    |
 | `POST`   | `v1/proxies/:id/blacklists` | Report a blacklist; `204 No Content`      |
 
-The full runtime OpenAPI document preserves these administrative operations. Response metadata explicitly excludes
-proxy credentials, matching response serialization; create and update request metadata still describe credentials.
-These operations remain outside the initial generated browser contract.
+The generated browser contract includes create, list, read, update, delete, and blacklist reporting for the platform
+console. `GET /v1/proxies/healthy` remains outside that contract and available in the full runtime OpenAPI document.
+All serialized proxy responses, including healthy selection and deletion, exclude authentication and include the
+stored nonsecret `blacklists` array, defaulting to an empty array. Request metadata marks authentication as
+write-only. Supplied authentication must be an object with a complete, nonempty username and password; null and
+arrays are rejected. An omitted `auth` on update preserves stored authentication; the API does not provide
+credential or blacklist removal.
+
+Create defaults to `disabled`; `active` opts into allocation, while `draining` and `disabled` exclude new allocation.
+Neither excluded state proves that existing leases have ended. List orders by ID, accepts `pageSize` from 1 to 100
+(default 100), and returns `nextPageToken` unchanged as the next request's `pageToken`. An empty string marks the end
+of the traversal. The API supplies no total.
+
+Every create and update response carries `Cache-Control: no-store`, including errors. API-host middleware applies
+this header before body parsing, authentication, and validation, so malformed JSON and rejected requests also
+prevent caching. A read cannot resolve the outcome of uncertain authentication replacement because responses
+always redact stored credentials.
 
 ## Persistence
 
@@ -73,12 +87,17 @@ adapter) — see Configuration below for the values that govern it.
 ## Validation
 
 Focused tests live in `src/`, organized by layer: `api/proxy.controller.spec.ts`,
-`api/proxy-response.mapper.spec.ts`, `api/proxy.swagger.spec.ts`, `application/proxy.service.spec.ts`,
+`api/proxy-response.mapper.spec.ts`, `api/proxy.swagger.spec.ts`, `api/proxy-http.integration.spec.ts`, `application/proxy.service.spec.ts`,
 `application/proxy-registry.service.spec.ts`, `application/proxy-allocator.service.spec.ts`,
 `application/proxy-lease.service.spec.ts`, `infrastructure/persistence/typeorm-proxy-repository.spec.ts`,
 `infrastructure/persistence/typeorm-proxy-candidate.repository.spec.ts`,
 `infrastructure/redis/redis-proxy-lease-store.spec.ts`,
 `infrastructure/observability/structured-logging-allocation-observer.spec.ts`, and `proxy.module.spec.ts`.
+
+The HTTP regression uses the real permission guard, validation, serialization, and application service with a mocked
+repository. It verifies response redaction, blacklist visibility, disabled defaults, partial updates, cursor behavior,
+customer denial, and cache headers on success and failure. `scripts/openapi/contracts.test.mjs` checks the browser
+route allow list and generated response types, including the absence of stored authentication and healthy selection.
 
 [`bruno/proxy-registry`](../../../../bruno/proxy-registry/README.md) exercises the secured CRUD life cycle above
 end to end and removes the proxy it creates. In addition,

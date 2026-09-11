@@ -1,0 +1,37 @@
+info:
+  name: 02-unauthorized-create
+  type: http
+  seq: 2
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/proxies"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "protocol": 1,
+        "host": "proxy.bruno.example.test",
+        "port": 8080,
+        "auth": {
+          "user": "{{proxyUser}}",
+          "pass": "{{proxyPassword}}"
+        },
+        "maxConcurrent": 1,
+        "requestsPerMinute": 10,
+        "description": "{{proxyFixtureDescription}}"
+      }
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('unauthenticated credential-bearing create is not cached', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(401);
+          expect(res.headers['cache-control']).to.equal('no-store');
+        });

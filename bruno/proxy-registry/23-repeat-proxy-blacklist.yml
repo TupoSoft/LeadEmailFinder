@@ -1,0 +1,29 @@
+info:
+  name: 23-repeat-proxy-blacklist
+  type: http
+  seq: 23
+http:
+  method: POST
+  url: "{{baseUrl}}/v1/proxies/{{proxyId}}/blacklists"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{serviceClientToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "mxHost": "mx.bruno.example.test"
+      }
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('accepts the repeated identical report', async function() {
+          expect(JSON.stringify(res.body ?? '')).not.to.match(/"(?:auth|user|pass)"\s*:/);
+          for (const key of ['proxyUser', 'proxyPassword', 'replacementUser', 'replacementPassword']) {
+            expect(JSON.stringify(res.body ?? '')).not.to.include(bru.getVar(key));
+          }
+          expect(res.status).to.equal(204);
+        });

@@ -372,6 +372,9 @@ jobs:
       - name: Verify service-client browser artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-client-artifacts
         if: needs.changes.outputs.browser == 'true'
+      - name: Verify proxy browser artifact suppression
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts
+        if: needs.changes.outputs.browser == 'true'
       - name: Test service-client secret handling and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients
         if: needs.changes.outputs.browser == 'true'
@@ -383,6 +386,9 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test platform credit adjustment and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test proxy fleet management and credential recovery
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies
         if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
@@ -413,6 +419,12 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test live platform credit adjustment and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test proxy registry HTTP contracts with Bruno
+        run: corepack pnpm bruno:proxy-registry
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test live proxy fleet lifecycle
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live
         if: needs.changes.outputs.browser == 'true'
       - name: Test live team management and invitation acceptance
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live
