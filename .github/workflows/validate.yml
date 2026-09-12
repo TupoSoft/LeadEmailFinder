@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -31,7 +31,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -90,7 +90,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -179,7 +179,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -236,7 +236,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -278,7 +278,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 35
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -317,7 +317,7 @@ jobs:
     needs:
       - changes
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 35
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -473,7 +473,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     steps:
       - uses: actions/checkout@v4
         with:

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { isMap, parseAllDocuments } from 'yaml'
@@ -29,6 +29,7 @@ interface Step {
 
 interface Job {
     name?: string
+    'runs-on': string | string[]
     if?: string
     needs?: string | string[]
     env?: Record<string, string>
@@ -62,7 +63,13 @@ function parseWorkflow(text: string): Workflow {
         if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(id) || !isRecord(job) || !Array.isArray(job.steps)) {
             throw new Error('Expected valid job IDs and step arrays.')
         }
-        if (typeof job['runs-on'] !== 'string' || job.steps.length === 0) {
+        const runners = typeof job['runs-on'] === 'string' ? [job['runs-on']] : job['runs-on']
+        if (
+            !Array.isArray(runners) ||
+            runners.length === 0 ||
+            runners.some((runner: unknown) => typeof runner !== 'string' || runner.trim() === '') ||
+            job.steps.length === 0
+        ) {
             throw new Error('Every job must declare a runner and at least one step.')
         }
         if (job.if !== undefined && typeof job.if !== 'string') {
@@ -209,6 +216,58 @@ describe('Validate workflow syntax and structure', () => {
         expect(workflow.permissions).toEqual({ contents: 'read' })
         expect(Object.keys(workflow.jobs).sort()).toEqual([...dependencies, 'validate'].sort())
     })
+
+    it.each([
+        { name: 'a runner string', runner: 'ubuntu-latest' },
+        { name: 'one runner label', runner: ['self-hosted'] },
+        { name: 'multiple runner labels', runner: ['self-hosted', 'swarm', 'ubuntu-22', 'docker-isolated'] },
+    ])('accepts $name', ({ runner }) => {
+        const parsed = parseWorkflow(`jobs:\n  check:\n    runs-on: ${JSON.stringify(runner)}\n    steps:\n      - run: echo check`)
+        expect(parsed.jobs.check['runs-on']).toEqual(runner)
+    })
+
+    it.each([
+        { name: 'a missing runner', runner: undefined },
+        { name: 'a null runner', runner: null },
+        { name: 'a numeric runner', runner: 42 },
+        { name: 'a boolean runner', runner: true },
+        { name: 'an empty runner string', runner: '' },
+        { name: 'a blank runner string', runner: '  ' },
+        { name: 'an empty runner array', runner: [] },
+        { name: 'an empty runner label', runner: ['self-hosted', ''] },
+        { name: 'a blank runner label', runner: ['self-hosted', '  '] },
+        { name: 'a non-string runner label', runner: ['self-hosted', 42] },
+        { name: 'a nested runner array', runner: [['self-hosted']] },
+        { name: 'a runner mapping', runner: { label: 'self-hosted' } },
+    ])('rejects $name', ({ runner }) => {
+        const declaration = runner === undefined ? '' : `    runs-on: ${JSON.stringify(runner)}\n`
+        expect(() => parseWorkflow(`jobs:\n  check:\n${declaration}    steps:\n      - run: echo check`)).toThrow(
+            'Every job must declare a runner and at least one step.',
+        )
+    })
+
+    it.each(readdirSync(resolve(root, '.github/workflows')).filter((file) => /\.ya?ml$/.test(file)).sort())(
+        '%s routes every local job to the configured self-hosted runners',
+        (file) => {
+            const documents = parseAllDocuments(readFileSync(resolve(root, '.github/workflows', file), 'utf8'), { uniqueKeys: true })
+            expect(documents).toHaveLength(1)
+            expect(documents[0].errors).toEqual([])
+            const configured: unknown = documents[0].toJS()
+            if (!isRecord(configured) || !isRecord(configured.jobs)) {
+                throw new Error('Expected a workflow jobs mapping.')
+            }
+            for (const [id, job] of Object.entries(configured.jobs)) {
+                if (!isRecord(job)) {
+                    throw new Error(`Expected job ${id} to be a mapping.`)
+                }
+                if (typeof job.uses === 'string') continue
+                expect({ job: id, runner: job['runs-on'] }).toEqual({
+                    job: id,
+                    runner: ['self-hosted', 'swarm', 'ubuntu-22', 'docker-isolated'],
+                })
+            }
+        },
+    )
 
     it.each([
         ['multiple documents', `${source}\n---\nname: Other`],
