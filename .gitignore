@@ -146,6 +146,7 @@ tmp
 .dev/keycloak/
 .dev/paddle/
 .dev/credits-postgres/
+.dev/verification-billing-postgres/
 
 # Protobuf
 **/*.proto

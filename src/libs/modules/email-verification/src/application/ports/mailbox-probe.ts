@@ -9,5 +9,8 @@ export interface MailboxProbeResult extends ISmtpVerificationResponse {
 }
 
 export interface MailboxProbe {
-    probe(organizationId: string, email: string): Promise<MailboxProbeResult>
+    /** `signal`, when supplied, aborts an in-flight connection or command — the caller's lease was lost or its
+     *  generation superseded. The financial fence remains authoritative even if an unresponsive process misses
+     *  the abort; this only closes the socket promptly when the process is responsive. */
+    probe(organizationId: string, email: string, signal?: AbortSignal): Promise<MailboxProbeResult>
 }

@@ -17,12 +17,23 @@ import {
     SynchronousVerificationCore,
 } from './application/delivery/synchronous/run-synchronous-verification'
 import { VerificationResultsController } from './api/verification-results.controller'
-import { VERIFICATION_RESULT_READER } from './application/verification-result-reader'
+import { VERIFICATION_RESULT_READER, VerificationResultReader } from './application/verification-result-reader'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
+import { VERIFICATION_CLOCK, VerificationClock } from './application/ports/verification-clock'
+import { VERIFICATION_REQUEST_STORE, VerificationRequestStore } from './application/ports/verification-request-store'
+import { VERIFICATION_EXECUTION_STORE, VerificationExecutionStore } from './application/ports/verification-execution-store'
+import { VerificationOperationsReader } from './application/operations/verification-operations-reader'
+import { VerificationReconciliationModule } from './infrastructure/queues/verification-reconciliation/verification-reconciliation.module'
 
 @Module({
-    imports: [EmailVerificationCoreModule, AsyncEmailVerificationModule, BatchEmailVerificationModule, CreditsModule],
+    imports: [
+        EmailVerificationCoreModule,
+        AsyncEmailVerificationModule,
+        BatchEmailVerificationModule,
+        CreditsModule,
+        VerificationReconciliationModule,
+    ],
     controllers: [
         AsyncEmailVerificationController,
         BatchEmailVerificationController,
@@ -44,6 +55,17 @@ import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/em
             useFactory: (repository: Repository<EmailVerificationEntity>) =>
                 new TypeOrmVerificationResultReader(repository),
         },
+        {
+            provide: VerificationOperationsReader,
+            inject: [VERIFICATION_REQUEST_STORE, VERIFICATION_EXECUTION_STORE, VERIFICATION_RESULT_READER, VERIFICATION_CLOCK],
+            useFactory: (
+                requests: VerificationRequestStore,
+                executions: VerificationExecutionStore,
+                results: VerificationResultReader,
+                clock: VerificationClock,
+            ) => new VerificationOperationsReader(requests, executions, results, clock),
+        },
     ],
+    exports: [VerificationOperationsReader],
 })
 export class EmailVerificationModule {}
