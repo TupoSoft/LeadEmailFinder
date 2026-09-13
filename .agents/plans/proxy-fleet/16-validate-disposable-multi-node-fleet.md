@@ -25,6 +25,7 @@ behavior, repeat the workflow without drift, reset application and guest state, 
 - `proxy-fleet/12`
 - `proxy-fleet/13`
 - `proxy-fleet/17`
+- `proxy-fleet/19`
 
 ## Surprises & Discoveries
 
@@ -147,6 +148,10 @@ migrate the application to Swarm, add high availability, store plaintext secrets
 backfills, production rollout, production recovery, Internet deliverability, or public-egress claims.
 
 ## Plan of Work
+
+Read `deploy/proxy-fleet/validation-decisions.md` from plan 19 before selecting the execution models. It supplies
+repository evidence, proposed commands, and open owner questions. Its completion does not approve a proposal or
+resolve this plan's readiness condition; record the selected models and their exact procedures here before starting.
 
 Choose either provider whose full plan-17 lifecycle has passed. From `deploy/proxy-fleet/vagrant/`, run `vagrant
 validate` and a provider-selected `vagrant up`, inspect all four machines with `vagrant status`, and capture

@@ -17,7 +17,7 @@ controls are implemented.
 
 ## Progress
 
-- [ ] (2026-08-30) Inventory controller-data fields and flows across identity, sessions, organization administration, credits, payments, audit/security records, Keycloak, Redis, logs, and Paddle.
+- [ ] (2026-09-11) Review the plan-36 controller-data inventory, reconcile source changes, and enrich its evidence for the approved contract.
 - [ ] (2026-08-30) Obtain counsel decisions for purpose, legal basis, notice, retention, rights, exceptions, recipients, transfers, and response clocks.
 - [ ] (2026-08-30) Publish the approved controller-data contract, exact notice-placement matrix, status, owners, and implementation mapping.
 - [ ] (2026-08-30) Record the selected account-recovery receipt issuer/adapter and exact signed-claim, binding, validity, replay, revocation, and evidence contract.
@@ -27,6 +27,7 @@ controls are implemented.
 ## Plan dependencies
 
 - `privacy-compliance/01`
+- `privacy-compliance/36`
 
 ## Surprises & Discoveries
 
@@ -34,6 +35,10 @@ None yet.
 
 ## Decision Log
 
+- Decision: Consume the plan-36 inventory and question packet before obtaining this plan's approved decisions.
+  Rationale: Source inspection can finish independently; unanswered legal, notice, retention, rights, and recovery
+  questions continue to block this contract and cannot be approved by completing the preparation.
+  Date/Author: 2026-09-11, backlog preparation planning.
 - Decision: Keep controller data in a separate normative contract from customer-supplied addresses and verification
   inferences.
   Rationale: LeadEmailFinder determines the purposes of account, authentication, billing, fraud, security, and
@@ -130,10 +135,12 @@ retention instead.
 
 ## Plan of Work
 
-Trace controller data from HTTP/session/OIDC inputs through Keycloak, Redis, identity persistence, organization, and
-service-client workflows, credit operations, checkout/payment webhooks, audit entries, application logs, managed
-backups, and returned DTOs. Inventory fields from source and provider contracts rather than copying high-level module
-descriptions. Mark inferred, provider-owned, currently absent, and pending facts distinctly.
+Start by reviewing `docs/privacy/controller-data-decision-inputs.md` from plan 36. Reconcile its field, collection,
+browser-storage, and recovery-gap rows against source changes, then enrich them with actual provider evidence and the
+approved decisions below. Reuse its citations across HTTP/session/OIDC inputs, Keycloak, Redis, identity persistence,
+organization workflows, service-client workflows, credits, checkout/payment webhooks, audit entries, application
+logs, managed backups, and returned DTOs. Mark inferred, provider-owned, currently absent, and pending facts distinctly.
+The preparation packet is not the normative controller contract and does not approve a missing decision.
 
 Build a role boundary at the top of the contract. Customer-supplied target addresses, CSV rows, deliverability
 inferences, verification jobs/results, and verification artifacts remain governed by the processor/service-provider
@@ -219,7 +226,7 @@ No runtime API, persistence, configuration, package, or external service is adde
   no banner is implied absent a nonessential technology; an unknown or future technology remains pending/default-deny.
 - The recovery contract names one actual issuer and adapter owner; exact allowlisted signing/key rules and claims;
   issuer/subject binding; 15-minute maximum TTL; single-use/idempotent replay; revocation/status, outage, and key-
-  rotation behavior; and non-secret evidence fields.
+  rotation behavior; and nonsecret evidence fields.
 - Retention rules distinguish deletion, correction, detachment, pseudonymization, restriction, and required retention;
   they include sessions, invitations, memberships, Keycloak identities, credentials, ledgers, purchases/adjustments,
   audit/security evidence, logs, backups, holds, and restored data.

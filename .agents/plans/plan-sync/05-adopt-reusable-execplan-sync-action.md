@@ -12,7 +12,7 @@ operator procedure captures the first live run and immediate unchanged rerun out
 
 ## Progress
 
-- [ ] (2026-08-31) Record the approved private-repository credential boundary and immutable `v0.1.0` release SHA.
+- [ ] (2026-08-31) Review the plan-07 decision inputs and record the approved private-repository credential boundary and immutable `v0.1.0` release SHA.
 - [ ] (2026-08-31) Add tokenless, SHA-pinned ExecPlan validation for pull requests.
 - [ ] (2026-08-31) Replace the default-branch sync workflow with the reusable Action and selected token-minting path.
 - [ ] (2026-08-31) Add static consumer-workflow coverage for SHA pinning, permissions, triggers, and single-writer use.
@@ -26,6 +26,7 @@ operator procedure captures the first live run and immediate unchanged rerun out
 ## Plan dependencies
 
 - `plan-sync/04`
+- `plan-sync/07`
 
 ## Surprises & Discoveries
 
@@ -129,6 +130,9 @@ to this repository. Bruno coverage is not applicable because this work changes r
 observable HTTP API.
 
 ## Plan of Work
+
+Consume `docs/maintenance/execplan-sync-adoption-inputs.md` from plan 07 as preparation evidence. Its recommendations,
+missing evidence, or completion do not approve a credential model or satisfy the immutable release requirement.
 
 Before editing, record the approved `v0.1.0` full release SHA and the TupoSoft-selected credential-hosting model in the
 Decision Log and Artifacts. Inspect the release commit, its `action.yml`, bundled code, release checks, and security
