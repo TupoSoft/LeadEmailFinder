@@ -392,3 +392,4 @@ registrable
 rethrows
 reprobed
 Prettier
+Vitest
