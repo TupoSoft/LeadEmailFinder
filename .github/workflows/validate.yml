@@ -7,6 +7,9 @@ on:
   workflow_dispatch: null
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -30,7 +33,7 @@ jobs:
   repository-policy:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -104,7 +107,7 @@ jobs:
   backend:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -208,7 +211,7 @@ jobs:
   web:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -280,7 +283,7 @@ jobs:
   contract:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -337,7 +340,7 @@ jobs:
   images:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -411,7 +414,7 @@ jobs:
   browser:
     needs:
       - changes
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -594,7 +597,7 @@ jobs:
         run: docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans
   validate:
     name: validate
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - changes
       - repository-policy
