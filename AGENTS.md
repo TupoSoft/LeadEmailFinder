@@ -21,6 +21,11 @@
 - Before editing a business module under `src/libs/modules/` or importing one from elsewhere, read `src/libs/modules/AGENTS.md`, the canonical `src/libs/modules/README.md`, and the affected module's `README.md`.
 - Follow the scoped workflow and validate the result with the module architecture gate before finishing.
 
+## Frontend Architecture Workflow
+
+- Before changing or reviewing `apps/web` or its boundary with `packages/api-client`, read [the frontend architecture instructions](apps/web/AGENTS.md).
+- Apply their guidance to the affected feature and its dependencies. Keep unrelated architectural cleanup outside the current task.
+
 # Repository Skills
 
 - Use the relevant repository skills listed in `.agents/skills/README.md`. Read their `SKILL.md` instructions and only the supporting references needed for the task. Prefer these project adaptations when the same skill is also installed globally.

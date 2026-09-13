@@ -107,6 +107,10 @@ state. A later API-backed plan must define those states before adding the corres
 ## Navigation and Responsive Behavior
 
 - React Router owns `/`, `/auth/error`, `/app/**`, and the catch-all UI route. API path spaces remain reserved by the frontend road map.
+- Preserve documented shareable navigation state through reload and browser history. Feature contracts determine
+  which values belong in the URL. Email input, credentials, uploaded data, and one-time results must not become
+  navigation state; organization and proxy continuation cursors remain transient. Invitation bootstrap retains its
+  documented capture-and-clear behavior.
 - The public header exposes `How it works`, `Signals`, and `Principles`, each with a real matching target, plus
   `Sign in`, which starts the existing browser sign-in flow with `/app` as its destination.
 - The hero closes with `Continue to the principles` and a down cue targeting `#principles`. The principles section
@@ -120,6 +124,8 @@ state. A later API-backed plan must define those states before adding the corres
 - Wide layouts use an asymmetric thesis-and-diagram composition. Narrow layouts use one content column and a vertical
   signal path without changing the content tree, action set, or reading order.
 - Text and actions remain available at a width of 320 CSS pixels without unintended horizontal document scrolling.
+- At 200% zoom, text and controls remain readable and operable without clipping, overlap, or lost actions. Preserve
+  document scrolling and the existing content order.
 - Truncated essential copy is forbidden. Diagrams may simplify at narrow widths only when all text remains available.
 - The not-found route is visually distinguishable from `/`, states what happened without blame, and leaves a direct
   keyboard-operable path home.
@@ -134,6 +140,12 @@ Opening it focuses the first link; Escape and route selection close it and retur
 The public entry and not-found routes are static client content with no browser-to-API interface. They render without
 NestJS, Docker, authenticated state, network data, or browser storage. Unknown-route recovery remains available when
 optional decoration, animation, or an icon fails to render.
+
+For API-backed workflows, distinguish initial loading, empty results, background refresh, confirmed rejection, and
+an unconfirmed mutation outcome where applicable. Keep confirmed data visible during refresh only while the feature
+contract permits it, identify stale data, and provide the documented recovery action. Superseded responses must not
+replace newer results or restore content after authentication, permission, or lifecycle boundaries. Refreshes and
+repeated polls preserve focus and announce meaningful state changes according to the feature's flow.
 
 ## Validation
 
@@ -150,15 +162,20 @@ ship. Team invitations use the one-time clipboard behavior defined below.
 
 ## Accessibility and Motion
 
-- All navigation uses native links. Decorative graphics are hidden from assistive technology; meaningful icons have
-  adjacent visible text.
+- Use native links for navigation and native buttons for actions. Interactive controls have accessible names and
+  preserve standard keyboard behavior. Decorative graphics are hidden from assistive technology; meaningful
+  icons have adjacent visible text.
+- Form fields have associated labels and expose validation errors in text through the field's accessible description
+  and invalid state. Preserve the feature's first-error focus, duplicate-submit prevention, and sensitive-value cleanup.
 - Focus indicators use an ink or evergreen outline with at least 3:1 adjacent contrast. Orange may provide an optional
   halo but never carries the focus indication alone. Forced-colors mode uses the system highlight.
 - Color is never the only distinction between stages, principles, links, or focus state.
 - `prefers-reduced-motion: reduce` disables decorative transitions, transforms, and smooth scrolling without removing
   content or changing hierarchy.
 - Automated `axe` checks must report no serious or critical `WCAG 2.2 A` or `AA` violations.
-- Browser review covers keyboard-only navigation and visible focus at narrow and desktop viewports.
+- Browser review covers keyboard-only navigation, visible focus, and reachable controls at narrow and desktop
+  viewports, including the open state of changed dialogs or disclosures. Automated checks do not establish complete
+  accessibility; manually verify the affected keyboard and focus behavior.
 
 ## Verification
 

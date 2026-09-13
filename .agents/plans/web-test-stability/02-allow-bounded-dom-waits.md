@@ -13,7 +13,7 @@ and route transitions without changing application behavior or weakening their a
 - [x] (2026-09-13) Add the shared DOM wait budget and delayed authorization regression coverage.
 - [x] (2026-09-13) Validate the focused scenarios, full frontend suite, and bounded failure controls locally.
 - [x] (2026-09-13) Publish draft PR #611 and record its CI queue state separately from local results.
-- [ ] (2026-09-13) Verify the affected Actions job after an isolated runner starts the queued run.
+- [x] (2026-09-13) Record the user's request to skip CI for the conflict resolution; Actions execution remains unverified.
 
 ## Plan dependencies
 
@@ -44,6 +44,9 @@ None.
 - Decision: Target the implementation PR at `kk/self-hosted-runners` while #595 remains open. Copy this existing
   plan from master to keep its evidence with the implementation. Leave worker settings to the independent #609
   issue; local test commands explicitly use two workers. Date/Author: 2026-09-13, Codex implementation.
+- Decision: Skip CI for the conflict resolution as requested by the user. Cancel the prior queued runs and put
+  `[skip ci]` in the resolution commit message. Retain local validation and report CI as unverified.
+  Date/Author: 2026-09-13, user request.
 
 ## Outcomes & Retrospective
 
@@ -51,7 +54,7 @@ Implementation and local validation are complete. Application tests inherit the 
 and the delayed authorization regression verifies the access-denied heading, forbidden route, and exactly one
 members GET. The immediate authorization test and service-client assertions remain intact. Static review found
 no material architectural trade-off. Draft PR #611 is assigned to the requesting user and targets
-`kk/self-hosted-runners`. Actions validation is queued; its tests have not run.
+`kk/self-hosted-runners`. The user requested skipping CI for the conflict resolution; Actions tests have not run.
 
 ## Context and Orientation
 
@@ -145,8 +148,8 @@ query failure, then restore the test. Commit neither temporary mutation. Do not 
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --project application --maxWorkers=2 src/features/team/TeamPage.test.tsx --testNamePattern 'renders access denial after a delayed member-list response'
 ```
 
-Use a normal CI run of the implementation commit to verify the affected validation job, recording failure details
-if timing sensitivity persists. No browser, container, or live API claim follows from component tests.
+CI execution was originally planned, but the user's later request skips it for the conflict resolution. Any future
+CI run must be reported separately from local validation. No browser, container, or live API claim follows from component tests.
 Bruno: not applicable — test setup and mocked component coverage do not change externally observable HTTP behavior.
 
 ## Idempotence and Recovery
@@ -192,6 +195,16 @@ targets implementation commit `ea547c2b9b40b022e420010be06b96991c9f08bc`. At the
 `103754911867` was queued with no assigned runner and labels `self-hosted`, `swarm`, `ubuntu-22`, and
 `docker-isolated`. This confirms the requested runner selection, but provides no CI execution or timing result.
 The original checkout's unrelated changes remain untouched.
+
+The base branch later advanced to `3bccfc3d32b1e6b3c1864cd1bc9ae0150aca309a`, adding the original plan from master
+and the `jsdom` dictionary entry. Merging it into this branch produced conflicts only in this plan and the
+dictionary. Resolution retains the implementation evidence and both dictionary entries. The two application test
+files are unchanged from the validated implementation.
+
+After resolution, the focused Team and service-client command passed 51 tests in two files with two workers.
+The repository plan test and Harper command above also passed. Both previous Actions runs, `34768961053` and
+`34769055789`, are confirmed canceled. Normal cancellation did not clear their queued state; force cancellation
+completed both requests. The merge commit includes `[skip ci]` to honor the user's request for this update.
 
 ## Plan readiness
 

@@ -11,9 +11,9 @@ application and domain code.
 
 ## Progress
 
-- [ ] (2026-09-07) Remove the deleted library's TypeScript and Jest mappings and its obsolete ordering comment.
-- [ ] (2026-09-07) Verify current Keycloak and authentication resolution with existing focused tests.
-- [ ] (2026-09-07) Run architecture, type, build, and prose checks, review scope, and record results.
+- [x] (2026-09-13) Remove the deleted library's TypeScript and Jest mappings and its obsolete ordering comment.
+- [x] (2026-09-13) Verify current Keycloak and authentication resolution with existing focused tests: 92 tests passed.
+- [x] (2026-09-13) Run architecture, type, build, and prose checks, review scope, and record results.
 
 ## Plan dependencies
 
@@ -21,7 +21,9 @@ application and domain code.
 
 ## Surprises & Discoveries
 
-None yet.
+The implementation inventory confirmed that `src/libs/key` is absent and no TypeScript source import uses the
+retired alias. The architecture guide, scanner, and tests intentionally retain their prohibition. Issue #559 was
+assigned to `KyryloKupin` and moved to `In Progress` on Project 9 before implementation on 2026-09-13.
 
 ## Decision Log
 
@@ -40,7 +42,10 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The bare and wildcard mappings for the deleted API-key library have been removed from TypeScript and Jest,
+together with the obsolete Jest ordering comment. Both Keycloak mappings and the general wildcard ordering
+guidance remain unchanged. Existing focused tests, the architecture gate, type checking, and the build passed.
+The HTTP contract and architecture prohibition remain unchanged; no new behavior tests were needed.
 
 ## Context and Orientation
 
@@ -141,9 +146,26 @@ reverting, preserving unrelated user changes. Do not recreate API-key authentica
 
 ## Artifacts and Notes
 
-Record the negative resolver search, retained Keycloak and policy references, focused test results, and final diff
-scope. Attach the synced issue to the pull request with a closing keyword and follow root assignment and title rules.
-The retained architecture references are an intentional exclusion from a repository-wide search for old features.
+Validation on 2026-09-13 used the isolated branch `kk/559-remove-api-key-aliases`, based on master commit `fdb855a`.
+The existing installation of dependencies was reused through a temporary `node_modules` link. Its lockfile matches
+the implementation checkout. The focused test command above ran with `TMPDIR=/tmp TMP=/tmp TEMP=/tmp` and
+`NODE_PATH=/home/kyrylo/WebstormProjects/LeadEmailFinder/node_modules`.
+
+- The deleted directory remains absent. Searches for the retired resolver entries and TypeScript source imports
+  returned no matches; both Keycloak mappings and their active consumers remain present.
+- The canonical module guide, architecture scanner, and architecture tests retain the retired alias prohibition.
+- All six focused test suites passed: 92 tests total. Provider transport was mocked; no live Keycloak session was
+  exercised.
+- `corepack pnpm architecture:check` passed with nine modules and zero violations.
+- `corepack pnpm typecheck` passed. `corepack pnpm build` passed with zero type issues and 709 compiled files.
+- `corepack pnpm docs:lint -- .agents/plans/legacy-retirement/04-remove-api-key-resolution-aliases.md` passed.
+- `git -c lfs.storage=/tmp/lef-559-lfs diff --check` passed. The temporary cache avoids writes to the main
+  checkout's read-only Git metadata.
+- The final tracked diff contains only the two resolver files and this plan. Independent review found no SOLID
+  or module-boundary violations and no material architectural trade-offs.
+
+The retained architecture references are intentional. The pull request must include `Closes #559` and follow
+the assignment and title rules in `AGENTS.md`.
 
 ## Plan readiness
 
