@@ -153,7 +153,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-web lint',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck',
         'corepack pnpm --filter @tuposoft/lead-email-finder-api-client build',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
     ],
     contract: [
