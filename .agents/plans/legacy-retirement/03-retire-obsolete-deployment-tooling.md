@@ -339,6 +339,19 @@ If any run remains actionable, report its exact ID and state to the operator. Ca
 remote stack shutdown, secret removal, and log deletion still require a separate operator instruction. This
 implementation has performed none of those operations and has not yet supplied post-merge evidence.
 
+### PR Conflict Resolution: 2026-09-13
+
+PR #592 was updated with `master` at `fdb855aa4a283ebd938e07a24f824e32b5054711`. Both branches had added revision 4
+of the privacy contract. The resolution preserves the billing clarification as revision 4 and the deployment
+retirement as revision 5, dated 2026-09-13. All other upstream changes remain intact, and the retirement scope is
+unchanged. The original PR head `64f53c8` passed all eight GitHub validation jobs on 2026-09-12; that evidence
+predates this merge update.
+
+Focused merge validation passed: Harper on the two edited Markdown files, the repository ExecPlan fixture,
+the module architecture gate (9 modules, 0 violations), and the staged diff check. An independent static review
+confirmed that both privacy-history entries and all upstream changes remain intact. The runtime build and gateway
+evidence above belongs to the original implementation; this merge resolved only a documentation conflict.
+
 ## Plan readiness
 
 Ready to implement

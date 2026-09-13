@@ -24,6 +24,7 @@
         "bruno:credit-purchases": "node scripts/bruno/run-collection.mjs credit-purchases",
         "bruno:organization-onboarding": "node scripts/bruno/run-collection.mjs organization-onboarding",
         "test:credits-postgres": "ts-node scripts/testing/credits-postgres.ts",
+        "test:verification-billing-postgres": "ts-node scripts/testing/verification-billing-postgres.ts",
         "bruno:platform-credits": "ts-node scripts/bruno/run-platform-credits.ts",
         "architecture:check": "ts-node scripts/architecture/check-module-architecture.ts",
         "keycloak:provision": "ts-node scripts/keycloak/provision.ts",

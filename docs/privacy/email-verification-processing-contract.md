@@ -227,6 +227,17 @@ Until then, this contract does not invent a value or treat missing cleanup as pe
 The DNS record cache in EV-11 is not the SMTP probe cache in this table. Its current approximately 1,000-day Redis expiry is
 a unit mismatch and must not be described as a 24-hour control.
 
+The verification-request/execution/settlement-intention tables added for durable operation recovery and cached-result
+reuse carry their own short timers, none of which are retention or deletion controls. The 60-second execution
+lease, its 5-second renewal/liveness poll, and the matching 5-second shutdown grace before the reconciler reclaims
+an abandoned lease bound how long a crashed or stalled worker can block progress. So does the 24-hour execution
+deadline. All are engineering recovery-timing limits, not controls over how long customer data persists. Separately, once a
+request settles, `GET` access to it by its `requestId` handle remains available for **7 days** after settlement and
+reports `expired` afterward — an API-consumption window, not a deletion boundary. The underlying rows are not
+deleted at 7 days. They fall under the same "Email cache and verification records" retention line above, currently
+unenforced under Plan 07, and a future Plan 07 sweep must age them out by that line's rule rather than by this
+7-day read window.
+
 ## Rights and Instruction Routing
 
 This contract defines routing and safety requirements; it does not create an unauthenticated rights endpoint.
@@ -346,4 +357,5 @@ The inventory was checked against these repository areas:
 | 2026-08-31 | 1        | Initial source-backed processing inventory, role boundary, lifecycle defaults, rights routing, recipient matrix, and plans 02 through 33 follow-up map | Engineering inventory complete; Legal, DPO, Commercial, Security/vendor, Operations, controller-data, incident, and California approvals pending |
 | 2026-08-31 | 2        | Organization-owned Email, verification-result, SMTP, admin-cache, and batch-result state; append-only verification history and SMTP timestamps         | Engineering isolation complete; the same pending approvals and lifecycle controls remain                                                         |
 | 2026-09-03 | 3        | Empty fixed approval manifest, default-deny one-provider selection, and LinkedIn adapter/session-material removal from the working tree                | Engineering control complete; provider activation approvals and external Security validity, revocation, and history decisions remain pending     |
-| 2026-09-11 | 4 | Removed the obsolete application deployment workflow, descriptor, and exclusive log-forwarding dependency; current log evidence remains local `Pino` and standard output | Repository retirement only; remote service status, managed recipients, retention, and deletion of existing copies remain unresolved; existing approvals remain pending |
+| 2026-09-11 | 4        | Disambiguated the new verification-billing execution lease/deadline timers and 7-day operation read window from retention or deletion controls          | Engineering clarification complete; the same pending approvals and Plan 07 lifecycle controls remain                                             |
+| 2026-09-13 | 5 | Removed the obsolete application deployment workflow, descriptor, and exclusive log-forwarding dependency; current log evidence remains local `Pino` and standard output | Repository retirement only; remote service status, managed recipients, retention, and deletion of existing copies remain unresolved; existing approvals remain pending |

@@ -282,6 +282,13 @@ export class EnvironmentVariablesDto {
     @IsNotEmpty()
     SMTP_TLS_CA_FILE?: string
 
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(86400)
+    VERIFICATION_RESULT_CACHE_TTL_SECONDS?: number
+
     @IsEnum(PaymentsProviderName)
     PAYMENTS_PROVIDER: PaymentsProviderName
 
