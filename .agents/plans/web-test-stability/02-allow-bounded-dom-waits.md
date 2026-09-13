@@ -12,7 +12,8 @@ and route transitions without changing application behavior or weakening their a
 
 - [x] (2026-09-13) Add the shared DOM wait budget and delayed authorization regression coverage.
 - [x] (2026-09-13) Validate the focused scenarios, full frontend suite, and bounded failure controls locally.
-- [ ] (2026-09-13) Publish the implementation PR and record separate CI evidence.
+- [x] (2026-09-13) Publish draft PR #611 and record its CI queue state separately from local results.
+- [ ] (2026-09-13) Verify the affected Actions job after an isolated runner starts the queued run.
 
 ## Plan dependencies
 
@@ -49,7 +50,8 @@ None.
 Implementation and local validation are complete. Application tests inherit the shared three-second DOM wait,
 and the delayed authorization regression verifies the access-denied heading, forbidden route, and exactly one
 members GET. The immediate authorization test and service-client assertions remain intact. Static review found
-no material architectural trade-off. Publication and CI evidence remain pending.
+no material architectural trade-off. Draft PR #611 is assigned to the requesting user and targets
+`kk/self-hosted-runners`. Actions validation is queued; its tests have not run.
 
 ## Context and Orientation
 
@@ -160,7 +162,8 @@ remain explicit. The readiness review found no unresolved implementation choice,
 decision in this single-PR scope.
 
 Implementation validation on 2026-09-13 used an isolated checkout based on
-`f8426869a342b605b72940ba320cfe076fb50876`, with the setup and regression changes in this PR:
+`f8426869a342b605b72940ba320cfe076fb50876`. The validated setup and regression changes are committed as
+`ea547c2b9b40b022e420010be06b96991c9f08bc`:
 
 - The API client build passed.
 - The focused command above passed 51 tests across two files in 5.68 seconds with two workers.
@@ -175,10 +178,20 @@ Implementation validation on 2026-09-13 used an isolated checkout based on
 - `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- execplan-repository-fixture --runInBand` passed its
   repository plan validation test.
 - The implementation also copies the existing `Vitest` dictionary entry from master, which the older base lacked.
+- `corepack pnpm docs:lint -- .agents/plans/web-test-stability/02-allow-bounded-dom-waits.md` passed one file
+  after adding that dictionary entry. The commit hook's module architecture check passed nine modules with no
+  violations.
 
 The timer belongs to the mocked response and is canceled in `finally`. Assertions contain no fixed sleep or
 timeout override. Testing Library merges the partial configuration update, preserving the service-client
 suite's secret-safe `getElementError` overrides. The Node fixture project does not load the application setup.
+
+[Draft PR #611](https://github.com/TupoSoft/LeadEmailFinder/pull/611) contains `Closes #610` and is assigned to
+`KyryloKupin`. Its [initial Actions run](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34768961053)
+targets implementation commit `ea547c2b9b40b022e420010be06b96991c9f08bc`. At the handoff check, the discovery job
+`103754911867` was queued with no assigned runner and labels `self-hosted`, `swarm`, `ubuntu-22`, and
+`docker-isolated`. This confirms the requested runner selection, but provides no CI execution or timing result.
+The original checkout's unrelated changes remain untouched.
 
 ## Plan readiness
 
