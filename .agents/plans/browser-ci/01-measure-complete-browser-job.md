@@ -5,14 +5,14 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 ## Purpose / Big Picture
 
 Give the existing browser validation job time to expose its remaining results and record its actual runtime on
-the isolated Swarm runners. This is one LeadEmailFinder PR titled `ci(browser): allow a complete isolated-runner baseline`.
+the isolated Swarm runners. This is one LeadEmailFinder PR titled `ci(browser): allow a 90-minute browser baseline`.
 Developers can distinguish a test failure from exhaustion of the old job budget without changing test deadlines.
 
 ## Progress
 
 - [x] (2026-09-13) Raise the browser job budget and update its focused workflow contract.
 - [x] (2026-09-13) Validate the source change and record the terminal browser run, timings, and limitations.
-- [x] (2026-09-13) Change the PR base to master while retaining isolated runners and the recorded measurements.
+- [x] (2026-09-13) Target master and limit the PR to the browser budget, its assertion, and this plan.
 
 ## Plan dependencies
 
@@ -31,8 +31,6 @@ None.
   PR #595 head `626d67d7d4f44f2d4d0e74a97991fedba13f0070`. Its plan was copied from master commit
   `751fe7d89886b4383090a108eb101cf4fab41041`; the draft PR originally targeted `kk/self-hosted-runners`.
 - The new budget assertion fails against the original workflow with expected 90 and received 35.
-- The working checkout is older than PR #595. Its existing edits must be preserved; implementation must include
-  the newer proxy checks from the current PR or its merged successor.
 - Run `34754038140`, job `103715423385`, passed 120 main browser tests and six privileged artifact scenarios.
   The invitation artifact check started after 31 minutes and 26 seconds of job execution and was canceled.
 - The hosted comparison job `103711851593` completed in 21 minutes and 20 seconds. This comparison does not
@@ -40,10 +38,10 @@ None.
 
 ## Decision Log
 
-- Decision: Target `master` directly at the user's request, preserving the existing isolated-runner configuration.
-  Rationale: Master commit `cd321ea672132b380d0d2fd40aedd4eb41b7c98b` still selects hosted runners.
-  The direct master diff therefore includes the inherited runner migration from PR #595. Merging current master
-  resolves the duplicated plan file while preserving all recorded evidence. PR #595 does not need to merge first.
+- Decision: Target `master` and include only the browser timeout, its focused assertion, and this plan.
+  Rationale: The user requested removal of the inherited runner migration after changing the PR base.
+  Runner selection matches master commit `fdb855aa4a283ebd938e07a24f824e32b5054711`; PR #595 owns that migration.
+  The recorded isolated-runner measurements remain historical evidence from the original implementation.
   Date/Author: 2026-09-13, user direction implemented by Codex.
 - Decision: Set only `jobs.browser.timeout-minutes` to 90 for the baseline.
   Rationale: Substantial work remains unrun. Ninety minutes is a provisional ceiling, not a measured requirement
@@ -55,14 +53,17 @@ None.
 
 ## Outcomes & Retrospective
 
-The browser job now declares a 90-minute ceiling, and a focused workflow assertion protects it. All local
-checks passed: 223 tests across three suites, selection fixtures, ESLint, `actionlint`, Harper, and the diff check.
+The browser job now declares a 90-minute ceiling, and a focused workflow assertion protects it. The original
+implementation passed 223 tests across three suites, selection fixtures, ESLint, `actionlint`, Harper, and the diff check.
 The selected browser job executed beyond the former 35-minute deadline and terminated after 62 minutes
 and 7 seconds because stack provisioning failed. The budget change and measurement are complete; the full runtime
 baseline remains incomplete because later live and Bruno checks were skipped. No claim that the full suite
 fits within 90 minutes is supported. Detailed timing, runner, cache, and failure evidence follows below.
-The PR now targets master directly and includes the inherited runner migration. The base change preserves the
-measured workflow and test sources; the recorded Actions results belong to the specific historical commits below.
+The PR now targets master directly with only three changed files. Runner selection and its existing validation
+remain as declared by master. The recorded Actions results belong to the specific historical commits below;
+they do not validate the final revision or its execution environment. Local validation of the narrowed scope
+passed 204 tests across three suites, selection fixtures, ESLint, `actionlint`, Harper, and the diff check.
+An additional comparison confirmed that the workflow differs from master only in the browser timeout.
 
 ## Context and Orientation
 
@@ -71,7 +72,7 @@ places dependency installation, image construction, gateway checks, browser inst
 UI suites, and disposable live-stack validation inside one serial `browser` job with a 35-minute timeout.
 The outer `validate` job requires every validation consumer to succeed.
 
-`scripts/ci/validate-workflow.spec.ts` checks runner selection, command ownership, conditional execution,
+`scripts/ci/validate-workflow.spec.ts` checks workflow structure, command ownership, conditional execution,
 prerequisite ordering, cleanup, and the final summary. PR #597 separately covers pnpm stores and Docker build
 caches; preserve its changes if it has merged rather than duplicating that work.
 
@@ -81,15 +82,16 @@ Change the browser job timeout, its focused workflow assertion, and this plan's 
 application code, Playwright timeouts, retries, workers, resources, artifact policy, caches, APIs, fixtures, or any
 other job's budget. This PR does not claim to optimize runtime.
 
-The user-requested master target also includes the existing migration from PR #595. Its seven inherited files
-cover runner selection, the workflow contract, custom `actionlint` labels, and runner documentation. This retains
-the branch's execution behavior; it does not deploy infrastructure or import later changes from PR #595.
+Keep the diff against master limited to `.github/workflows/validate.yml`,
+`scripts/ci/validate-workflow.spec.ts`, and this plan. Runner migration, its validation, and its documentation
+belong to PR #595 and are outside this change.
 
 ## Plan of Work
 
 The original implementation started from PR #595 in an isolated checkout. The user subsequently requested a
-direct master target. Merge current master, preserve the isolated-runner configuration, and resolve the plan
-conflict by retaining its completed runtime evidence. Preserve unrelated edits and any merged PR #597 work.
+direct master target containing only this plan's changes. Use current master as the comparison base, retain
+its runner configuration, and preserve the original measurement evidence. Preserve unrelated edits and any
+merged PR #597 work.
 Follow root `AGENTS.md` for the synced issue and implementation PR.
 Do not require completion of `self-hosted-runners/01`: its outstanding successful-run criterion is one reason
 this corrective work is needed.
@@ -104,9 +106,9 @@ label the remaining baseline incomplete. Do not expand this PR into unrelated te
 
 ## Interfaces and Dependencies
 
-Relative to the original runner baseline, only the GitHub Actions job timeout changes. The master diff also
-routes jobs to the four existing labels: `self-hosted`, `swarm`, `ubuntu-22`, and `docker-isolated`.
-The pool already executed the diagnosed job; no infrastructure deployment is required.
+Only the GitHub Actions browser job timeout changes. Runner selection remains inherited from master;
+the recorded measurements used the isolated pool configured by PR #595. This PR makes no runner or
+infrastructure changes.
 This plan supplies timing evidence for `browser-ci/02` and `browser-ci/03`. Record cache state and runner image
 changes with each comparison so their effects are not attributed to the timeout change.
 
@@ -146,7 +148,8 @@ or unrun; this plan adds no collection or HTTP behavior.
 ## Idempotence and Recovery
 
 The source edit and timing collection are repeatable. Reverting the PR restores the old budget and may restore
-the observed cancellation. Existing cleanup and the private-daemon lifecycle own temporary resources. Do not
+the observed cancellation. Existing workflow cleanup owns temporary resources. The historical isolated runs
+also used a private daemon for each job. Do not
 add host-wide cleanup or reset development data.
 
 ## Artifacts and Notes

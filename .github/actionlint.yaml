@@ -1,5 +1,0 @@
-self-hosted-runner:
-  labels:
-    - swarm
-    - ubuntu-22
-    - docker-isolated
