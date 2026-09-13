@@ -44,6 +44,10 @@ interface Workflow {
     name: string
     on: Record<string, unknown>
     permissions: Record<string, string>
+    concurrency: {
+        group: string
+        'cancel-in-progress': boolean
+    }
     jobs: Record<string, Job>
 }
 
@@ -245,6 +249,13 @@ const preservedCommands: Record<string, string[]> = {
 }
 
 describe('Validate workflow syntax and structure', () => {
+    it('cancels superseded runs within the same workflow and ref', () => {
+        expect(workflow.concurrency).toEqual({
+            group: '${{ github.workflow }}-${{ github.ref }}',
+            'cancel-in-progress': true,
+        })
+    })
+
     it('has the stable workflow name, supported events, and exact job inventory', () => {
         expect(workflow.name).toBe('Validate')
         expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch'])
@@ -336,10 +347,10 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it.each(Object.entries(consumerFlags))('%s starts unconditionally and has exclusive selected/no-op branches', (id, flag) => {
+    it.each(Object.entries(consumerFlags))('%s handles discovery failures unless canceled and has exclusive selected/no-op branches', (id, flag) => {
         const job = workflow.jobs[id]
         expect(needsOf(job)).toEqual(['changes'])
-        expect(condition(job.if)).toBe('always()')
+        expect(condition(job.if)).toBe('!cancelled()')
         expect(job['continue-on-error']).not.toBe(true)
         const guard = job.steps[0]
         expect(guard.run).toBeDefined()
@@ -544,7 +555,7 @@ describe('Validate workflow syntax and structure', () => {
         expect(Object.entries(workflow.jobs).filter(([, job]) => job.services).map(([id]) => id)).toEqual(['backend'])
     })
 
-    it('keeps browser cleanup active after a selected check fails', () => {
+    it('keeps browser cleanup active after a selected check fails or is canceled', () => {
         for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans']) {
             expect(condition(workflow.jobs.browser.steps.find((step) => command(step.run) === run)?.if)).toBe(
                 "always() && needs.changes.outputs.browser == 'true'",
@@ -627,10 +638,10 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it('always emits the stable aggregate over discovery and every consumer', () => {
+    it('emits the stable aggregate over discovery and every consumer unless canceled', () => {
         const summary = workflow.jobs.validate
         expect(summary.name).toBe('validate')
-        expect(condition(summary.if)).toBe('always()')
+        expect(condition(summary.if)).toBe('!cancelled()')
         expect(summary['continue-on-error']).not.toBe(true)
         expect(needsOf(summary).sort()).toEqual([...dependencies].sort())
         const step = summary.steps.find((item) => command(item.run) === 'node scripts/ci/validation-summary.mjs')

@@ -19,6 +19,7 @@ work that starts or removes Docker resources. Developers retain the same validat
 - [x] (2026-09-12) Prepare the isolated draft pull request branch on current master and rerun focused validation.
 - [x] (2026-09-13) Resolve conflicts with master `0400e1ac`, preserving its cache settings and browser timeout.
 - [x] (2026-09-13) Pass all 230 focused tests, selection fixtures, ESLint, Actionlint, and workflow comparison checks.
+- [x] (2026-09-13) Resolve conflicts with master `49aa9442`, preserving cancellation behavior; all 241 focused tests passed.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -60,6 +61,10 @@ On 2026-09-13, the branch was updated with master `0400e1ac`. The conflict resol
 settings, limited web test concurrency, and 90-minute browser timeout while retaining all nine runner label arrays.
 All 230 focused tests passed. A structural comparison confirmed that runner selection is the only workflow
 difference from that master revision. The complete Actions result for this update remains unverified.
+
+A subsequent merge of master `49aa9442` retains workflow cancellation, cancellation-aware job conditions, and
+browser cleanup while preserving the isolated runner labels. All 241 focused tests, selection fixtures, ESLint,
+and Actionlint passed. A complete Actions run for this newer revision remains unverified.
 
 ## Context and Orientation
 
