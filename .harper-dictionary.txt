@@ -391,4 +391,8 @@ NFKD
 registrable
 rethrows
 reprobed
+actionlint
+BuildKit
+Buildx
+GHA
 Prettier
