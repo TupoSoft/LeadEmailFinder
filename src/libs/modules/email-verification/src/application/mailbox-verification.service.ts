@@ -28,7 +28,12 @@ export class MailboxVerificationService {
         private readonly accountDiscovery: AccountDiscovery,
     ) {}
 
-    async verify(organizationId: string, email: string, format?: EmailPatternEnum): Promise<NewEmailVerification> {
+    async verify(
+        organizationId: string,
+        email: string,
+        format?: EmailPatternEnum,
+        signal?: AbortSignal,
+    ): Promise<NewEmailVerification> {
         const [localPart, domain] = email.split('@')
 
         const result: NewEmailVerification = {
@@ -46,7 +51,7 @@ export class MailboxVerificationService {
         }
 
         const wrongEmail = `${MailboxVerificationService.CATCH_ALL_EMAIL_USERNAME}@${domain}`
-        const catchAllProbe = await this.probe(organizationId, wrongEmail)
+        const catchAllProbe = await this.probe(organizationId, wrongEmail, signal)
 
         result.targetExchange = catchAllProbe.targetExchange
         result.mxDomain = deriveMxDomain(catchAllProbe.targetExchange)
@@ -56,7 +61,7 @@ export class MailboxVerificationService {
         let targetEvidence: MailboxEvidence = NO_MAILBOX_EVIDENCE
 
         if (catchAllProbe.evidence.kind === 'smtp_recipient_missing') {
-            const realProbe = await this.probe(organizationId, email)
+            const realProbe = await this.probe(organizationId, email, signal)
 
             result.exists = realProbe.exists
             result.reason = realProbe.reason
@@ -100,8 +105,9 @@ export class MailboxVerificationService {
     private async probe(
         organizationId: string,
         email: string,
+        signal?: AbortSignal,
     ): Promise<Omit<MailboxProbeResult, 'reason'> & { reason: EmailVerificationReason }> {
-        const { reason: reasonString, ...rest } = await this.mailboxProbe.probe(organizationId, email)
+        const { reason: reasonString, ...rest } = await this.mailboxProbe.probe(organizationId, email, signal)
         const reason = fromStringToEnum(EmailVerificationReason, reasonString)
         ok(reason, 'email_verification_reason_unknown')
 

@@ -1,13 +1,14 @@
 import { HttpService } from '@nestjs/axios'
-import { Module } from '@nestjs/common'
+import { Global, Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { ModulesContainer } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
+import { DataSource } from 'typeorm'
 import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { AccountDiscoveryApproval, loadAccountDiscoveryApprovals } from '@tuposoft/lead-email-finder/config'
 import { DnsModule, DnsService } from '@tuposoft/lead-email-finder/dns'
-import { CreditGuard, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
+import { CreditGuard, CreditReservationService, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import {
     ALLOCATION_OBSERVER_TOKEN,
     PROXY_ALLOCATOR_TOKEN,
@@ -30,6 +31,19 @@ import { DomainPolicyEntity } from '../persistence/typeorm/domain-policy.entity'
 import { EmailVerificationEntity } from '../persistence/typeorm/email-verification.entity'
 import { EmailEntity } from '../persistence/typeorm/email.entity'
 import { SmtpVerificationEntity } from '../persistence/typeorm/smtp-verification.entity'
+import { VerificationRequestEntity } from '../persistence/typeorm/verification-request.entity'
+import { VerificationExecutionEntity } from '../persistence/typeorm/verification-execution.entity'
+import { VerificationSettlementIntentionEntity } from '../persistence/typeorm/verification-settlement-intention.entity'
+
+const CORE_MODULE_ENTITIES = [
+    EmailEntity,
+    DomainPolicyEntity,
+    EmailVerificationEntity,
+    SmtpVerificationEntity,
+    VerificationRequestEntity,
+    VerificationExecutionEntity,
+    VerificationSettlementIntentionEntity,
+]
 import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from './configured-account-discovery'
 import { AccountDiscoveryModule } from './account-discovery.module'
 import { MicrosoftGetCredentialType } from './providers/microsoft-get-credential-type'
@@ -90,6 +104,19 @@ function approval(): AccountDiscoveryApproval {
 @Module({})
 class UnusedBusinessDependenciesModule {}
 
+// Satisfies the raw DataSource/CreditReservationService constructor dependencies the verification-billing
+// factories in EmailVerificationCoreModule now require, independently of whichever module the test overrides
+// TypeORM's or credits' own providers with — global, so every branch of this isolated tree can see it.
+@Global()
+@Module({
+    providers: [
+        { provide: DataSource, useValue: {} },
+        { provide: CreditReservationService, useValue: {} },
+    ],
+    exports: [DataSource, CreditReservationService],
+})
+class FakeBillingInfrastructureModule {}
+
 interface WiringFixture {
     http: Record<'get' | 'post', jest.Mock>
     mailboxProbe: { probe: jest.Mock<Promise<MailboxProbeResult>, [string, string]> }
@@ -149,7 +176,7 @@ describe('Account discovery Nest composition', () => {
 
         // Preserve the core composition root and AccountDiscoveryModule. Only outbound adapters and
         // unrelated business capabilities are substituted.
-        const builder = Test.createTestingModule({ imports: [EmailVerificationCoreModule] })
+        const builder = Test.createTestingModule({ imports: [FakeBillingInfrastructureModule, EmailVerificationCoreModule] })
             .overrideModule(DnsModule)
             .useModule(FakeDnsModule)
             .overrideModule(ProxyModule)
@@ -167,7 +194,7 @@ describe('Account discovery Nest composition', () => {
             .overrideProvider(ACCOUNT_DISCOVERY_CLOCK_TOKEN)
             .useValue(clock)
 
-        for (const entity of [EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerificationEntity]) {
+        for (const entity of CORE_MODULE_ENTITIES) {
             builder.overrideProvider(getRepositoryToken(entity)).useValue({})
         }
 
@@ -227,17 +254,19 @@ describe('Account discovery Nest composition', () => {
         })
         class FakeProxyModule {}
 
-        const builder = Test.createTestingModule({ imports: [EmailVerificationCoreModule] })
+        const builder = Test.createTestingModule({ imports: [FakeBillingInfrastructureModule, EmailVerificationCoreModule] })
             .overrideModule(DnsModule)
             .useModule(FakeDnsModule)
             .overrideModule(ProxyModule)
             .useModule(FakeProxyModule)
+            .overrideModule(CreditsModule)
+            .useModule(UnusedBusinessDependenciesModule)
             .overrideProvider(ConfigService)
             .useValue({ get: jest.fn() })
             .overrideProvider(HttpService)
             .useValue(http)
 
-        for (const entity of [EmailEntity, DomainPolicyEntity, EmailVerificationEntity, SmtpVerificationEntity]) {
+        for (const entity of CORE_MODULE_ENTITIES) {
             builder.overrideProvider(getRepositoryToken(entity)).useValue(repository)
         }
 
@@ -302,6 +331,7 @@ describe('Account discovery Nest composition', () => {
         expect(dependencies.mailboxProbe.probe).toHaveBeenCalledWith(
             organizationId,
             'tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak@example.test',
+            undefined,
         )
         expect(dependencies.dns.resolve).not.toHaveBeenCalled()
     })

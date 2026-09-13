@@ -11,6 +11,7 @@ const VERIFICATION_QUALITIES = ['conclusive_positive', 'conclusive_negative', 'i
 @Entity('email_verifications')
 @Index(['organizationId', 'email', 'createdAt'])
 @Index(['organizationId', 'batchId'])
+@Index(['organizationId', 'email', 'verificationQuality', 'evidenceObservedAt'])
 export class EmailVerificationEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string

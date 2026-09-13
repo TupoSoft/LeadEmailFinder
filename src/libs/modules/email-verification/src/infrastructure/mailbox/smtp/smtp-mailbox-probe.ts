@@ -44,6 +44,7 @@ interface TryVerifyParams {
 interface GetSmtpClientParams {
     exchanges: string[]
     proxyId?: string
+    signal?: AbortSignal
 }
 
 interface LeasedSmtpClient {
@@ -181,11 +182,11 @@ export class SmtpMailboxProbe implements MailboxProbe {
         return NO_MAILBOX_EVIDENCE
     }
 
-    async probe(organizationId: string, email: string): Promise<MailboxProbeResult> {
+    async probe(organizationId: string, email: string, signal?: AbortSignal): Promise<MailboxProbeResult> {
         const [, domain] = email.split('@')
 
         const getExchangesParams: GetExchangesParams = { domain }
-        const getSmtpClientParams: GetSmtpClientParams = { exchanges: [] }
+        const getSmtpClientParams: GetSmtpClientParams = { exchanges: [], signal }
 
         const cachedResult = await this.smtpVerificationStore.findByAddress(organizationId, email)
         const cachedEvidence = SmtpMailboxProbe.deriveStoredEvidence(cachedResult, this.clock.now())
@@ -376,7 +377,7 @@ export class SmtpMailboxProbe implements MailboxProbe {
         }
     }
 
-    private async getSmtpClient({ exchanges, proxyId }: GetSmtpClientParams): Promise<SmtpClientAcquisition> {
+    private async getSmtpClient({ exchanges, proxyId, signal }: GetSmtpClientParams): Promise<SmtpClientAcquisition> {
         let attemptedConnection = false
 
         for (const exchange of exchanges) {
@@ -400,7 +401,7 @@ export class SmtpMailboxProbe implements MailboxProbe {
 
                 const connectStartedAt = Date.now()
                 try {
-                    const client = await this.tryConnect(exchange, allocation.proxy)
+                    const client = await this.tryConnect(exchange, allocation.proxy, signal)
                     this.observeConnectionOutcome({
                         outcome: 'connected',
                         mxHost: exchange,
@@ -453,13 +454,14 @@ export class SmtpMailboxProbe implements MailboxProbe {
         }
     }
 
-    private async tryConnect(exchange: string, proxy: IProxy): Promise<ISmtpClient> {
+    private async tryConnect(exchange: string, proxy: IProxy, signal?: AbortSignal): Promise<ISmtpClient> {
         let client: ISmtpClient | undefined
 
         try {
             client = this.smtpClientFactory.create({
                 host: exchange,
                 proxy,
+                signal,
             })
 
             await client.connect()
