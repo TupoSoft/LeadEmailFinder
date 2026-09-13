@@ -15,12 +15,12 @@ Record that distinction explicitly in the completion evidence and operator follo
 
 ## Progress
 
-- [ ] (2026-09-07) Recheck workflow references, queued-run state, dependency consumers, and HTTP client placeholders.
-- [ ] (2026-09-07) Delete the obsolete application workflow, stack descriptor, and matching Docker ignore entry.
-- [ ] (2026-09-07) Remove the unused log-forwarding package and obsolete HTTP client environment entries.
-- [ ] (2026-09-07) Update current development documentation and the privacy inventory with the repository boundary.
-- [ ] (2026-09-07) Complete static, dependency, build, Compose, gateway, and Harper validation.
-- [ ] (2026-09-07) Record the repository outcome and a concrete operator follow-up for previously queued deployment work.
+- [x] (2026-09-11) Recheck workflow references, queued-run state, dependency consumers, and HTTP client placeholders.
+- [x] (2026-09-11) Delete the obsolete application workflow, stack descriptor, and matching Docker ignore entry.
+- [x] (2026-09-11) Remove the unused log-forwarding package and obsolete HTTP client environment entries.
+- [x] (2026-09-11) Update current development documentation and the privacy inventory with the repository boundary.
+- [x] (2026-09-11) Complete static, dependency, build, Compose, gateway, and Harper validation.
+- [x] (2026-09-11) Record the repository outcome and a concrete operator follow-up for previously queued deployment work.
 
 ## Plan dependencies
 
@@ -28,6 +28,15 @@ None.
 
 ## Surprises & Discoveries
 
+- Implementation inspection on 2026-09-11 confirmed the same exclusive package consumer and retained editor
+  placeholders at base commit `c6d588620c8e0f8ed0b8bcfc467e494d78fa30ce`, verified against GitHub `master`.
+  Plan 01 has already removed the deprecated request example; the current request file needs no edits.
+- At 2026-09-11 14:51 UTC, workflow `133913669` was active and run `34557176870` was queued. The earlier
+  planning run `34078093218` had completed with conclusion `cancelled`. The reusable workflow still defaulted
+  `stack_file` to `swarm.yml`. These read-only observations do not establish remote stack or log-store state.
+- Dependency removal pruned ten package records and ten matching snapshots, including `pino-gelf` itself.
+  All retained dependency versions, importer entries, and package snapshots were unchanged. Shared `Pino` packages
+  and `split2` remain. Frozen installation succeeded with the existing notice about ignored build scripts for `protobufjs`.
 - The application workflow `.github/workflows/deploy.yml` is not inert documentation. It schedules a daily run and
   calls `TupoSoft/GitHubActions/.github/workflows/swarm-deploy.yml@master` with stack name `email` and inherited secrets.
 - A read-only check on 2026-09-07 found that the reusable workflow defaults its `stack_file` input to `swarm.yml`.
@@ -44,6 +53,11 @@ None.
 
 ## Decision Log
 
+- Decision: Keep the legacy feature inventory unchanged because it explicitly records the 2026-09-07 planning
+  audit, and update the current README and privacy contract instead.
+  Rationale: The dated inventory and completed ExecPlans remain historical evidence; their explanatory references
+  are not active deployment consumers.
+  Date/Author: 2026-09-11, Codex implementation.
 - Decision: Delete `.github/workflows/deploy.yml`, root `swarm.yml`, and the exact `.dockerignore` entry for
   `swarm.yml` in one pull request.
   Rationale: The reusable workflow defaults to that descriptor. Deleting only the descriptor would leave a scheduled
@@ -71,7 +85,23 @@ None.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the repository retirement from base `c6d588620c8e0f8ed0b8bcfc467e494d78fa30ce` in branch
+`kk/558-retire-deployment-tooling`. The obsolete application workflow, root descriptor, Docker ignore entry,
+`pino-gelf` dependency, and unused HTTP client profiles are removed. The editor retains only the exact local API
+environment and empty token. Current development and privacy documentation now describe the retained gateway
+and local logging evidence. Existing application code, Compose, gateway, image-build workflows, and proxy-fleet
+tooling are unchanged. No HTTP API, schema, data reset, or architecture boundary changes were needed.
+
+Frozen installation, type checking, application compilation, and both Docker image builds passed. All nine gateway
+tests and 74 focused logging and ExecPlan tests passed. JSON and lockfile assertions, Harper, and diff checks also
+passed. An independent static review found no actionable issues or material architectural trade-offs. Validation
+details appear below.
+
+Issue #558 is assigned to the requesting user and was moved to In Progress in Project 9. The implementation is
+ready for its single pull request. Remote retirement remains separate: at 2026-09-11 14:54:58 UTC, run
+`34557176870` was still queued, with no runs in progress. The operator must inspect that run and default-branch
+file removal after merge using the commands below. This change does not cancel a run, stop a remote stack,
+revoke credentials, or delete existing log copies.
 
 ## Context and Orientation
 
@@ -262,6 +292,65 @@ Record exact deleted paths, direct/transitive dependency changes, the JSON valid
 Harper results, and GitHub observation times. After merge, attach read-only default-branch and prior-run evidence to
 the operator follow-up. Keep remote shutdown and credential/log retirement explicitly unresolved unless a separately
 authorized operation supplies evidence. Never record secret values, private key material, or bearer tokens.
+
+### Implementation Evidence: 2026-09-11
+
+- Deleted `.github/workflows/deploy.yml` and root `swarm.yml`; removed only the descriptor's `.dockerignore` line.
+- `corepack pnpm remove pino-gelf --workspace-root` removed `pino-gelf@2.2.0` and nine exclusive transitive packages:
+  `abort-controller@3.0.0`, `commander@11.1.0`, `event-target-shim@5.0.1`, `fast-json-parse@1.0.3`,
+  `fast-json-stringify@1.21.0`, `pump@3.0.3`, `readable-stream@4.7.0`, `string-similarity@4.0.4`, and `through2@4.0.2`.
+  A parsed comparison against the base lockfile confirmed every retained package and snapshot was unchanged;
+  all importer entries except the removed direct dependency were identical. No dependency was upgraded.
+- `corepack pnpm install --frozen-lockfile` passed. Initial sandbox restrictions on shared cache writes were
+  resolved by running the package operation with the required filesystem access; no repository settings changed.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck` and
+  `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build` passed; the latter compiled 672 files with zero type issues.
+- The environment assertion under Validation passed. Additional assertions verified the retained API-address and
+  bearer-token placeholders, absence of retired executable references, and unchanged maintained source/configuration.
+- `docker compose -f docker/compose.yaml config --quiet` passed.
+- `docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .` and
+  `docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .` passed.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:gateway` passed all nine tests, including the built Nginx
+  image's routing, private logging, security headers, caching, and backend-failure behavior. No gateway fixture
+  containers or networks remained after cleanup.
+- `TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test --runInBand --runTestsByPath src/lead-email-finder-api/src/pii-safe-logger-options.spec.ts src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts scripts/plans/execplan-repository-fixture.spec.ts`
+  passed three suites and 74 tests. No new tests were needed for removed unused tooling; these existing tests verify
+  the retained logging and gateway behavior.
+- `corepack pnpm docs:lint -- README.md docs/privacy/email-verification-processing-contract.md .agents/plans/legacy-retirement/03-retire-obsolete-deployment-tooling.md`
+  passed all three files. `git diff --check` passed. No dictionary changes were needed.
+- Bruno: not applicable — the changes remove unused deployment/editor tooling without changing HTTP behavior.
+
+### Operator Follow-up After Merge
+
+The final read-only check at 2026-09-11 14:54:58 UTC found one queued deployment run, `34557176870`, and zero
+in-progress runs. The earlier planning run `34078093218` was completed with conclusion `cancelled`. Inspect
+[the unresolved run](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34557176870) after merge, together
+with any newer queued or executing runs. Each of the first two queries below must return HTTP 404 once the removal
+is on `master`; a terminal run status supplies workflow evidence only, not remote resource or log-deletion evidence.
+
+```bash
+gh api 'repos/TupoSoft/LeadEmailFinder/contents/.github/workflows/deploy.yml?ref=master'
+gh api 'repos/TupoSoft/LeadEmailFinder/contents/swarm.yml?ref=master'
+gh api repos/TupoSoft/LeadEmailFinder/actions/runs/34557176870 --jq '{id,status,conclusion}'
+gh api 'repos/TupoSoft/LeadEmailFinder/actions/workflows/133913669/runs?per_page=100' --paginate --jq '.workflow_runs[] | select(.status != "completed") | {id,status,conclusion}'
+```
+
+If any run remains actionable, report its exact ID and state to the operator. Cancellation, workflow disablement,
+remote stack shutdown, secret removal, and log deletion still require a separate operator instruction. This
+implementation has performed none of those operations and has not yet supplied post-merge evidence.
+
+### PR Conflict Resolution: 2026-09-13
+
+PR #592 was updated with `master` at `fdb855aa4a283ebd938e07a24f824e32b5054711`. Both branches had added revision 4
+of the privacy contract. The resolution preserves the billing clarification as revision 4 and the deployment
+retirement as revision 5, dated 2026-09-13. All other upstream changes remain intact, and the retirement scope is
+unchanged. The original PR head `64f53c8` passed all eight GitHub validation jobs on 2026-09-12; that evidence
+predates this merge update.
+
+Focused merge validation passed: Harper on the two edited Markdown files, the repository ExecPlan fixture,
+the module architecture gate (9 modules, 0 violations), and the staged diff check. An independent static review
+confirmed that both privacy-history entries and all upstream changes remain intact. The runtime build and gateway
+evidence above belongs to the original implementation; this merge resolved only a documentation conflict.
 
 ## Plan readiness
 

@@ -8,6 +8,12 @@ This road map makes the ExecPlans under `.agents/plans/` visible on the `TupoSof
 4. [Enforce truthful ExecPlan metadata](04-enforce-truthful-execplan-metadata.md)
 5. [Prepare reusable ExecPlan Sync adoption](05-adopt-reusable-execplan-sync-action.md)
 6. [Restore actionable frontend plans](06-restore-actionable-frontend-plans.md)
+7. [Prepare the sync adoption decision inputs](07-prepare-sync-adoption-decisions.md) — depends on plan 04 and
+   prepares the credential comparison and release evidence for plan 05.
+
+Plan 07 can complete with explicit evidence gaps and proposed decisions. Plan 05 depends on plans 04 and 07 and
+retains its separate credential approval and release requirements. Numeric prefixes are stable identities; the
+declared dependencies determine execution order. Preparing a decision does not approve it.
 
 Shared decisions:
 

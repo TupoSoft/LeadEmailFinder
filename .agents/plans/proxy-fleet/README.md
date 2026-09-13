@@ -2,9 +2,9 @@
 
 This road map scales SMTP verification by treating every 3proxy listener and egress IP as one independently limited proxy-registry member. Application allocation, capacity enforcement, local SMTP verification, and drain observability are already merged. New implementation starts with the fleet image and proceeds through disposable host provisioning to a Swarm reference deployment.
 
-Implement the remaining plans according to their declared dependencies and readiness. Plans 16 and 18 can proceed
-independently after plan 17. Each plan follows `.agents/PLANS.md` and represents exactly one pull request with its own
-acceptance criteria and validation.
+Implement the remaining plans according to their declared dependencies and readiness. Plan 19 prepares the execution
+decisions for plan 16; plan 18 remains independent of that preparation. Each plan follows `.agents/PLANS.md` and
+represents exactly one pull request with its own acceptance criteria and validation.
 
 Completed pull requests:
 
@@ -39,10 +39,15 @@ Native Linux provider validation, independently deliverable after plan 17:
 
 18. [Validate the Vagrant lab on native Linux with libvirt](18-validate-vagrant-libvirt-lab.md) — depends on plan 17
 
-Live-validation follow-up, dependent on the development lab from plan 17:
+Preparation for live validation, independently deliverable after plans 12, 13, and 17:
 
-16. [Validate the disposable proxy fleet end to end](16-validate-disposable-multi-node-fleet.md) — depends on plan 17;
-    its VirtualBox path does not wait for plan 18
+19. [Fleet validation decision preparation](19-prepare-fleet-validation-decisions.md) — documents proposed listener
+    reachability and fixture execution models; completion does not require a live lab or approve either model.
+
+Live-validation follow-up, dependent on plans 12, 13, 17, and 19:
+
+16. [Validate the disposable proxy fleet end to end](16-validate-disposable-multi-node-fleet.md) — consumes the plan-19
+    preparation and retains its execution-model decision requirement; its VirtualBox path does not wait for plan 18
 
 Shared decisions:
 
