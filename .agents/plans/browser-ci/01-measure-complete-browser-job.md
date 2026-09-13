@@ -12,6 +12,7 @@ Developers can distinguish a test failure from exhaustion of the old job budget 
 
 - [x] (2026-09-13) Raise the browser job budget and update its focused workflow contract.
 - [x] (2026-09-13) Validate the source change and record the terminal browser run, timings, and limitations.
+- [x] (2026-09-13) Change the PR base to master while retaining isolated runners and the recorded measurements.
 
 ## Plan dependencies
 
@@ -28,7 +29,7 @@ None.
   These failures are outside this PR; the logs do not prove whether rendering was late or state was wrong.
 - PRs #595 and #597 remain open at implementation start. The isolated implementation branch starts at
   PR #595 head `626d67d7d4f44f2d4d0e74a97991fedba13f0070`. Its plan was copied from master commit
-  `751fe7d89886b4383090a108eb101cf4fab41041`; the draft PR targets `kk/self-hosted-runners`.
+  `751fe7d89886b4383090a108eb101cf4fab41041`; the draft PR originally targeted `kk/self-hosted-runners`.
 - The new budget assertion fails against the original workflow with expected 90 and received 35.
 - The working checkout is older than PR #595. Its existing edits must be preserved; implementation must include
   the newer proxy checks from the current PR or its merged successor.
@@ -39,6 +40,11 @@ None.
 
 ## Decision Log
 
+- Decision: Target `master` directly at the user's request, preserving the existing isolated-runner configuration.
+  Rationale: Master commit `cd321ea672132b380d0d2fd40aedd4eb41b7c98b` still selects hosted runners.
+  The direct master diff therefore includes the inherited runner migration from PR #595. Merging current master
+  resolves the duplicated plan file while preserving all recorded evidence. PR #595 does not need to merge first.
+  Date/Author: 2026-09-13, user direction implemented by Codex.
 - Decision: Set only `jobs.browser.timeout-minutes` to 90 for the baseline.
   Rationale: Substantial work remains unrun. Ninety minutes is a provisional ceiling, not a measured requirement
   or a promise of success. The later split replaces this temporary budget.
@@ -55,6 +61,8 @@ The selected browser job executed beyond the former 35-minute deadline and termi
 and 7 seconds because stack provisioning failed. The budget change and measurement are complete; the full runtime
 baseline remains incomplete because later live and Bruno checks were skipped. No claim that the full suite
 fits within 90 minutes is supported. Detailed timing, runner, cache, and failure evidence follows below.
+The PR now targets master directly and includes the inherited runner migration. The base change preserves the
+measured workflow and test sources; the recorded Actions results belong to the specific historical commits below.
 
 ## Context and Orientation
 
@@ -73,10 +81,16 @@ Change the browser job timeout, its focused workflow assertion, and this plan's 
 application code, Playwright timeouts, retries, workers, resources, artifact policy, caches, APIs, fixtures, or any
 other job's budget. This PR does not claim to optimize runtime.
 
+The user-requested master target also includes the existing migration from PR #595. Its seven inherited files
+cover runner selection, the workflow contract, custom `actionlint` labels, and runner documentation. This retains
+the branch's execution behavior; it does not deploy infrastructure or import later changes from PR #595.
+
 ## Plan of Work
 
-Start from the latest PR #595 revision or its merged successor in an isolated implementation checkout. Preserve
-unrelated edits and any merged PR #597 work. Follow root `AGENTS.md` for the synced issue and implementation PR.
+The original implementation started from PR #595 in an isolated checkout. The user subsequently requested a
+direct master target. Merge current master, preserve the isolated-runner configuration, and resolve the plan
+conflict by retaining its completed runtime evidence. Preserve unrelated edits and any merged PR #597 work.
+Follow root `AGENTS.md` for the synced issue and implementation PR.
 Do not require completion of `self-hosted-runners/01`: its outstanding successful-run criterion is one reason
 this corrective work is needed.
 
@@ -90,8 +104,9 @@ label the remaining baseline incomplete. Do not expand this PR into unrelated te
 
 ## Interfaces and Dependencies
 
-Only the GitHub Actions job timeout changes. Keep the four runner labels: `self-hosted`, `swarm`, `ubuntu-22`,
-and `docker-isolated`. The pool already executed the diagnosed job; no infrastructure deployment is required.
+Relative to the original runner baseline, only the GitHub Actions job timeout changes. The master diff also
+routes jobs to the four existing labels: `self-hosted`, `swarm`, `ubuntu-22`, and `docker-isolated`.
+The pool already executed the diagnosed job; no infrastructure deployment is required.
 This plan supplies timing evidence for `browser-ci/02` and `browser-ci/03`. Record cache state and runner image
 changes with each comparison so their effects are not attributed to the timeout change.
 
