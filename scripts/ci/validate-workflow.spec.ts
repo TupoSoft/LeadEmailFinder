@@ -129,6 +129,43 @@ function needsOf(job: Job): string[] {
 }
 
 const workflow = parseWorkflow(source)
+const webPackage: unknown = JSON.parse(readFileSync(resolve(root, 'apps/web/package.json'), 'utf8'))
+if (!isRecord(webPackage) || !isRecord(webPackage.scripts)) {
+    throw new Error('Expected web package scripts to be a mapping.')
+}
+const webScripts = webPackage.scripts
+const webCommand = 'corepack pnpm --filter @tuposoft/lead-email-finder-web'
+const workspaceWebBuild = `${webCommand} build`
+const previewSuites = [
+    'test:e2e:prebuilt',
+    'test:service-clients',
+    'test:invitations',
+    'test:platform-organizations',
+    'test:platform-credits',
+    'test:platform-proxies',
+    'test:a11y:prebuilt',
+    'test:visual:prebuilt',
+]
+
+function expectWorkspaceBuildPrerequisite(steps: Step[]): void {
+    const builds = steps.filter((step) => command(step.run) === workspaceWebBuild)
+    expect(builds).toHaveLength(1)
+    const [build] = builds
+    expect(condition(build.if)).toBe("needs.changes.outputs.browser == 'true'")
+    expect(build['continue-on-error']).not.toBe(true)
+    for (const suite of ['test:e2e', 'test:a11y', 'test:visual']) {
+        expect(steps.some((step) => command(step.run) === `${webCommand} ${suite}`)).toBe(false)
+    }
+    for (const suite of previewSuites) {
+        const consumers = steps.filter((step) => command(step.run) === `${webCommand} ${suite}`)
+        expect(consumers).toHaveLength(1)
+        const [consumer] = consumers
+        expect(steps.indexOf(consumer)).toBeGreaterThan(steps.indexOf(build))
+        // The selection-only condition retains GitHub's implicit success() guard.
+        expect(condition(consumer.if)).toBe("needs.changes.outputs.browser == 'true'")
+        expect(consumer['continue-on-error']).not.toBe(true)
+    }
+}
 
 // These are the commands established by the prerequisite plans. Keep complete commands
 // here so reorganizing the workflow cannot silently remove a validation or narrow its arguments.
@@ -184,9 +221,10 @@ const preservedCommands: Record<string, string[]> = {
     ],
     browser: [
         'corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
         'corepack pnpm bruno:platform-credits',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
@@ -556,9 +594,9 @@ describe('Validate workflow syntax and structure', () => {
         expect(webBuildIndex).toBeGreaterThanOrEqual(0)
         expect(commands.indexOf('corepack pnpm test:gateway')).toBeGreaterThan(webBuildIndex)
         for (const run of [
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts',
@@ -580,10 +618,7 @@ describe('Validate workflow syntax and structure', () => {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
             before('corepack pnpm --filter @tuposoft/lead-email-finder-web browser-fixtures:bootstrap', run)
         }
-        before(
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
-        )
+        expectWorkspaceBuildPrerequisite(steps)
         for (const run of [
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
@@ -603,6 +638,75 @@ describe('Validate workflow syntax and structure', () => {
         expect(step?.if).toBeUndefined()
         expect(step?.['continue-on-error']).not.toBe(true)
         expect(step?.env?.VALIDATION_NEEDS_JSON).toBe('${{ toJSON(needs) }}')
+    })
+})
+
+describe('browser workspace build reuse', () => {
+    it.each([
+        'missing build',
+        'late build',
+        'duplicate build',
+        'standalone suite rebuild',
+        'ignored build failure',
+        'unconditional build',
+        'consumer after failure',
+    ])('rejects the prerequisite regression: %s', (regression) => {
+        const steps = workflow.jobs.browser.steps.map((step) => ({ ...step }))
+        const buildIndex = steps.findIndex((step) => command(step.run) === workspaceWebBuild)
+        const build = steps[buildIndex]
+        switch (regression) {
+            case 'missing build':
+                steps.splice(buildIndex, 1)
+                break
+            case 'late build':
+                steps.push(...steps.splice(buildIndex, 1))
+                break
+            case 'duplicate build':
+                steps.push({ ...build })
+                break
+            case 'standalone suite rebuild':
+                steps.push({ ...build, run: `${webCommand} test:e2e` })
+                break
+            case 'ignored build failure':
+                build['continue-on-error'] = true
+                break
+            case 'unconditional build':
+                build.if = "always() && needs.changes.outputs.browser == 'true'"
+                break
+            case 'consumer after failure':
+                steps.find((step) => command(step.run) === `${webCommand} test:e2e:prebuilt`)!.if =
+                    "always() && needs.changes.outputs.browser == 'true'"
+                break
+        }
+        expect(() => expectWorkspaceBuildPrerequisite(steps)).toThrow()
+    })
+
+    it.each([
+        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts'],
+        ['test:a11y', 'playwright test tests/e2e/accessibility.spec.ts'],
+        ['test:visual', 'playwright test tests/e2e/visual.spec.ts'],
+    ])('%s retains its selectors and builds before delegating to the prebuilt suite', (suite, selector) => {
+        expect(webScripts[`${suite}:prebuilt`]).toBe(selector)
+        expect(webScripts[suite]).toBe(`pnpm build && pnpm ${suite}:prebuilt`)
+        for (const [buildExit, suiteExit, expectedExit] of [[0, 0, 0], [23, 0, 23], [0, 17, 17]]) {
+            const execution = spawnSync('bash', ['--noprofile', '--norc', '-c', `
+                pnpm() {
+                    printf '%s\\n' "$*"
+                    if [ "$1" = build ]; then return "$BUILD_EXIT"; fi
+                    return "$SUITE_EXIT"
+                }
+                ${String(webScripts[suite])}
+            `], {
+                cwd: root,
+                encoding: 'utf8',
+                timeout: 5000,
+                env: { ...process.env, BUILD_EXIT: String(buildExit), SUITE_EXIT: String(suiteExit) },
+            })
+            expect(execution.error).toBeUndefined()
+            expect(execution.status).toBe(expectedExit)
+            expect(execution.stderr).toBe('')
+            expect(execution.stdout).toBe(buildExit === 0 ? `build\n${suite}:prebuilt\n` : 'build\n')
+        }
     })
 })
 

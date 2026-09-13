@@ -484,8 +484,11 @@ jobs:
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
         if: needs.changes.outputs.browser == 'true'
+      - name: Build web application for browser suites
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
+        if: needs.changes.outputs.browser == 'true'
       - name: Test web browser workflows
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt
         if: needs.changes.outputs.browser == 'true'
       - name: Verify privileged authentication artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
@@ -518,10 +521,10 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies
         if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt
         if: needs.changes.outputs.browser == 'true'
       - name: Test web visual baselines
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt
         if: needs.changes.outputs.browser == 'true'
       - name: Reset, provision, and check disposable development stack
         run: corepack pnpm dev:reset -- --confirm-project=LEF
