@@ -1,6 +1,6 @@
 ---
 name: react-best-practices
-description: React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.
+description: LeadEmailFinder React guidance for state ownership, rendering, Effects, data fetching, and measured performance. Use when writing, reviewing, or refactoring apps/web components and hooks. Adapts Vercel guidance to the repository's React, Vite, React Router, and TanStack Query stack.
 metadata:
   author: vercel
   version: "1.0.0"
@@ -14,7 +14,65 @@ This copy is adapted for LeadEmailFinder. Apply the relevant React and JavaScrip
 
 Read root `DESIGN.md`, `UX-CONTRACT.md`, and `premium-ui.json` before UI changes; approved design decisions take precedence over generic aesthetic advice. Routine features extend that system without new concept generation. Root `corepack pnpm ui:audit` remains the audit owner. Use the current package test scripts for browser validation when plugin tools are unavailable. Provenance and adaptations are recorded in `SOURCE.local.json`.
 
-Comprehensive performance optimization guide for React and `Next.js` applications, maintained by Vercel. Contains 64 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
+## Repository React Practices
+
+Apply these rules to the affected feature. The [frontend architecture instructions](../../../apps/web/AGENTS.md)
+own application boundaries and data lifetimes; the [UX contract](../../../UX-CONTRACT.md) owns observable behavior.
+
+### State Ownership
+
+| State | Owner and decision |
+| --- | --- |
+| Server data | Existing TanStack Query adapters or the feature's documented direct-request boundary; avoid a second copy in component or global state. |
+| Shareable navigation | React Router URL state for permitted filters, sort, or paging; follow the UX contract's sensitive and transient state exceptions. |
+| Editable drafts and temporary UI | The nearest component or feature hook shared by their consumers, within the feature's cleanup contract. |
+| Workflow coordination | The owner and lifetime required by the feature contract, including coordination that survives route changes. |
+| Calculated values | Derive from authoritative inputs during render; do not synchronize another state value with an Effect. |
+
+- Distinguish an editable draft from its server snapshot. Define when editing starts, resets, and reconciles with a
+  refresh; background reads must not silently overwrite unsaved input. Sensitive values retain their stricter owners.
+- Use explicit states or a discriminated union when independent flags would allow impossible workflow combinations.
+  Simple independent UI toggles do not need a state machine.
+- Include every changing input that determines query results in the established query-key scheme, including the
+  required principal or organization scope and applicable filters or paging. Pass the query's abort signal through
+  its adapter where supported; keep authentication generation checks and the established retry policy.
+
+### Rendering and Effects
+
+- Keep rendering pure: do not start requests, mutate shared data, or write browser storage during render. Keep Hooks
+  unconditional and preserve stable item identity with data-derived keys for lists whose items can move or change.
+- Handle user-triggered submissions and workflow actions in event handlers. Use Effects to synchronize external
+  systems such as subscriptions, timers, or browser APIs. Use existing query adapters for ordinary server reads;
+  preserve documented direct-request exceptions, including invitations and one-time secrets.
+- Declare all reactive Effect dependencies. Restructure the work when dependencies cause unnecessary repetition;
+  do not suppress dependency checks or use a ref to hide a stale dependency.
+- Pair setup with cleanup for listeners, timers, and requests owned by the Effect. Setup, cleanup, and setup again
+  must preserve behavior under the route's lifecycle contract. Preserve the documented one-time invitation exception
+  to development Strict Mode remounts; ordinary routes retain those checks. Do not use a run-once ref to conceal
+  missing cleanup or let component cleanup cancel coordination whose contract outlives that component.
+
+See the React guidance on [state structure](https://react.dev/learn/choosing-the-state-structure) and
+[when an Effect is needed](https://react.dev/learn/you-might-not-need-an-effect).
+
+### Measured Performance
+
+- For performance work, identify an affected route or interaction and capture a baseline with representative data
+  and device or network conditions. Choose evidence for the problem: a production bundle report, browser performance
+  trace, React Profiler recording, or relevant Core Web Vitals. State the conditions and compare after the change;
+  distinguish local measurements from field evidence and report when measurement is unavailable.
+- Use existing React and Vite loading boundaries to split substantial optional code when load evidence justifies it.
+  Preserve useful loading and failure recovery. Memoization, deferred rendering, and virtualization require a
+  concrete cost or measured benefit; they must preserve focus, input responsiveness, and workflow semantics.
+- Apply upstream rules selectively. Their impact labels are priorities for investigation, not measured defects in
+  this application. Do not add dependencies, caching, or memoization solely to satisfy the catalog. Performance work
+  does not relax authentication, data retention, or accessibility contracts.
+
+The [Core Web Vitals guide](https://web.dev/articles/vitals) explains loading, responsiveness, and layout metrics.
+
+## Upstream Performance Reference
+
+The Vercel guide below contains 64 rules across 8 categories for React and `Next.js`. Use only examples supported by
+the repository scope and the evidence for the current task.
 
 ## When to Apply
 
