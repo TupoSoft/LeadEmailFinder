@@ -185,17 +185,17 @@ test('current-account rejection removes account details and renders account unav
     await expectAccessible(page)
 })
 
-test('callback failures use stable safe copy and a fresh login without replaying provider parameters', async ({
-    page,
-    context,
-}) => {
-    await mockSession(context)
-    for (const code of [
-        'login_state_invalid',
-        'authorization_code_exchange_failed',
-        'active_membership_required',
-        'raw-provider-secret',
-    ]) {
+for (const code of [
+    'login_state_invalid',
+    'authorization_code_exchange_failed',
+    'active_membership_required',
+    'raw-provider-secret',
+]) {
+    test(`callback failure ${code} uses stable safe copy and a fresh login without replaying provider parameters`, async ({
+        page,
+        context,
+    }) => {
+        await mockSession(context)
         await page.goto(`/auth/error?code=${code}&state=private-state&error_description=private-provider-message`)
         await expect(page.getByRole('heading', { name: 'Sign-in did not complete' })).toBeVisible()
         await expect(page).toHaveTitle('Sign-in did not complete | Lead Email Finder')
@@ -204,8 +204,8 @@ test('callback failures use stable safe copy and a fresh login without replaying
         const login = page.getByRole('link', { name: /sign in/i })
         await expect(login).toHaveAttribute('href', /^\/v1\/auth\/login(?:\?destination=%2Fapp)?$/)
         await expectAccessible(page)
-    }
-})
+    })
+}
 
 test('session-expired and access-denied routes have distinct accessible recovery states', async ({ page, context }) => {
     await mockSession(context)
