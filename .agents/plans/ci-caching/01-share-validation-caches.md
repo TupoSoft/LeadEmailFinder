@@ -15,7 +15,7 @@ validation command. Developers can observe cache restoration and cached Docker s
 - [x] (2026-09-13) Implement explicit pnpm store restoration and cached Docker builds in an isolated checkout.
 - [x] (2026-09-13) Pass 211 focused tests, 67 selection fixtures, ESLint, actionlint, and Harper for three files.
 - [x] (2026-09-13) Review the diff independently and prepare the single cache pull request.
-- [ ] (2026-09-13) Record cold and warm GitHub Actions results, including cache hits and elapsed build times.
+- [x] (2026-09-13) Record initial hosted cache exports and Docker cache reuse in this plan and PR #597.
 
 ## Plan dependencies
 
@@ -61,8 +61,11 @@ None.
 The workflow, tests, and documentation are implemented. All 211 focused tests and 67 selection fixtures passed.
 Focused ESLint, actionlint 1.7.12, the diff whitespace check, and Harper for all three changed Markdown files passed.
 Independent review found no concrete defect or material architecture concern. Business-module boundaries and
-application behavior remain unchanged. Live cache sharing, cache-hit rates, and elapsed-time improvements have
-not been measured. The later browser Compose rebuild remains outside this cache configuration.
+application behavior remain unchanged. The first hosted CI run created pnpm caches and reused the web image cache
+across two runner machines: the initial build took 101 seconds and the later build took 8 seconds. At that checkpoint,
+all consumers except browser had passed, and browser was still running. Further run results and measurements are
+recorded in PR #597. Swarm execution remains unverified until the separate runner migration is available. The later
+browser Compose rebuild remains outside this cache configuration.
 
 ## Context and Orientation
 
@@ -153,6 +156,20 @@ The implementation checkout preserves the original development checkout. Workflo
 selection and repository-plan suites passed another 100. The official actionlint 1.7.12 release was downloaded to
 `/tmp/lef-ci-caching-tools/actionlint` and verified against its published checksum before execution. Harper required
 four legitimate tool names in `.harper-dictionary.txt` and prose corrections before passing.
+
+Initial live evidence comes from [Actions run 34749443337](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34749443337)
+at workflow commit `c7aa21853670e07f386272b9c9bbff35c4f6cdf8`. The repository-policy log records an API-store cache miss
+followed by a successful save. GitHub's cache inventory also confirmed the API and web stores and the production
+and web Docker cache indexes.
+
+The browser web-image step ran from 09:25:15 to 09:26:56 UTC. On a different runner, the image job's web-image step
+ran from 09:29:22 to 09:29:30 UTC, imported the GitHub cache manifest, and reported cached build stages. These step
+times include cache transfer and image loading and come from one workflow run. The images job passed, including
+the packaged manifest and Compose configuration checks. The browser gateway check passed before its test suite.
+
+The initial validation checkpoint establishes Docker cache sharing on hosted runners. It does not establish a
+stable speedup for pnpm or execution on the Swarm pool. The [pull request](https://github.com/TupoSoft/LeadEmailFinder/pull/597)
+records subsequent CI results without requiring a workflow change for every measurement update.
 
 No application services need to run for the local checks. Upstream behavior is documented in [GitHub dependency caching](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
 and [Docker's GitHub Actions cache guide](https://docs.docker.com/build/ci/github-actions/cache/).
