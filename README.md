@@ -62,7 +62,8 @@ skipped, or missing dependency fails the summary. Branch protection continues to
 Validation and ExecPlan synchronization target the upgraded Swarm runner pool with the labels `self-hosted`, `swarm`,
 `ubuntu-22`, and `docker-isolated`. Each job uses a private Docker daemon and a fresh workspace. Deploy the Swarm
 runner infrastructure before enabling these workflow changes; the `docker-isolated` label prevents the previous
-pool, which shares a Docker daemon, from accepting these jobs. Live execution on the upgraded pool remains unverified.
+pool, which shares a Docker daemon, from accepting these jobs. A complete successful validation run on the upgraded
+pool remains unverified.
 
 Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
 account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
