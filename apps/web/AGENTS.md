@@ -47,6 +47,16 @@ new features, a redesign, or unrelated refactoring.
   independent policy or presentation requirements justify it; do not copy every response type mechanically. Change generated
   contracts through the repository's existing OpenAPI workflow.
 
+## Apply Frontend Practices at Their Owner
+
+- Give each state value one authoritative owner and an explicit lifetime. Keep state close to its consumers unless
+  the feature contract requires a longer lifetime; derive values that can be calculated from existing state.
+- Use the repository [React practices](../../.agents/skills/react-best-practices/SKILL.md#repository-react-practices)
+  for state placement, pure rendering, Effects, query dependencies, and performance work supported by measurements.
+- Use the [UX contract](../../UX-CONTRACT.md#navigation-and-responsive-behavior) for URL behavior and responsive
+  layouts, and its [accessibility rules](../../UX-CONTRACT.md#accessibility-and-motion) for controls and feedback.
+  Evaluate these rules within the affected workflow; report observed gaps without expanding an unrelated task.
+
 ## Keep Shared Infrastructure Free of Feature Policy
 
 - Do not add product-feature imports or feature endpoint lists to shared authentication and transport code. Express
