@@ -7,10 +7,11 @@
   "declared_license": "MIT",
   "license_evidence": ".codex-plugin/plugin.json in the source package",
   "adapted_for": "LeadEmailFinder",
-  "adapted_on": "2026-09-06",
+  "adapted_on": "2026-09-13",
   "adaptations": [
     "Added repository scope and local skill links; preserve approved project design and current frontend stack.",
-    "Corrected English prose, formatted technical identifiers, updated table-of-contents anchors, and clarified upstream contributor tooling."
+    "Corrected English prose, formatted technical identifiers, updated table-of-contents anchors, and clarified upstream contributor tooling.",
+    "Added repository React practices for state ownership, pure rendering, Effect cleanup, query dependencies, and measured performance; narrowed skill discovery to the current stack."
   ],
   "license_text_status": "The cached source package declares MIT but supplies no LICENSE or NOTICE file. The public source repository did not expose a LICENSE file during verification. No copyright holder or license text has been invented.",
   "adapted_files": [

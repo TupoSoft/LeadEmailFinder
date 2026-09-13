@@ -17,7 +17,6 @@ const config: Config = {
     // silently discarding the rest of the specifier.
     moduleNameMapper: {
         '@tuposoft/lead-email-finder/redis/(.*)': '<rootDir>/src/libs/redis/src/$1',
-        '@tuposoft/lead-email-finder/key/(.*)': '<rootDir>/src/libs/key/src/$1',
         '@tuposoft/lead-email-finder/keycloak-admin-http/(.*)': '<rootDir>/src/libs/keycloak-admin-http/src/$1',
         '@tuposoft/lead-email-finder/socket/(.*)': '<rootDir>/src/libs/socket/src/$1',
         '@tuposoft/lead-email-finder/dns/(.*)': '<rootDir>/src/libs/dns/src/$1',
@@ -34,10 +33,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/proxy/(.*)': '<rootDir>/src/libs/modules/proxy/src/$1',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
         '@tuposoft/lead-email-finder/redis': '<rootDir>/src/libs/redis/src',
-        // Must precede the bare "key" entry below: an unanchored regex match means "key" would otherwise
-        // match this specifier too, since it is a literal prefix of "keycloak-admin-http".
         '@tuposoft/lead-email-finder/keycloak-admin-http': '<rootDir>/src/libs/keycloak-admin-http/src',
-        '@tuposoft/lead-email-finder/key': '<rootDir>/src/libs/key/src',
         '@tuposoft/lead-email-finder/socket': '<rootDir>/src/libs/socket/src',
         '@tuposoft/lead-email-finder/dns': '<rootDir>/src/libs/dns/src',
         '@tuposoft/lead-email-finder/common': '<rootDir>/src/libs/common/src',

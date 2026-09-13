@@ -164,7 +164,8 @@
       ],
       "adaptations": [
         "Repository scope and portable companion/helper references.",
-        "English prose corrections; operational command and path examples adapted where needed. Application examples and helper scripts retained."
+        "English prose corrections; operational command and path examples adapted where needed. Application examples and helper scripts retained.",
+        "Added repository React practices for state ownership, pure rendering, Effect cleanup, query dependencies, and measured performance; narrowed skill discovery to the current stack (2026-09-13)."
       ],
       "licenseNote": "The installed package declares MIT but contains no full license notice. Retained declaration and source attribution; no copyright holder invented."
     },
