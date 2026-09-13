@@ -34,6 +34,15 @@ new features, a redesign, or unrelated refactoring.
   unknown outcome. Its adapter translates the existing server contract; the UI decides how to present the result.
 - Keep each such contract with the consuming feature or application module. Inject its implementation where the
   application or feature is assembled. Avoid requiring the workflow to import its concrete adapter.
+- For each extracted port, state the accepted inputs and relevant promises about outcomes, errors, side effects,
+  cancellation, and retries. Every implementation must accept inputs permitted by the port without stronger
+  preconditions and preserve its promises without weaker guarantees.
+- Keep adapters interchangeable through observable behavior; their internal implementations need not match. Do not
+  make application code inspect adapter identity or invent success, retry, or cancellation guarantees to satisfy a
+  contract. Preserve the documented distinction between an aborted request and a confirmed server outcome.
+- Return semantic data and outcome codes from application rules. Keep user-facing wording, translations, styling,
+  focus, and navigation in the UI. For example, return `insufficient-credits`; the UI chooses its message and any
+  permitted billing link. Adapters translate transport details; application code owns workflow decisions.
 - Retain generated API types for direct API presentation. Introduce a separate application model and mapping when
   independent policy or presentation requirements justify it; do not copy every response type mechanically. Change generated
   contracts through the repository's existing OpenAPI workflow.
@@ -77,6 +86,10 @@ new features, a redesign, or unrelated refactoring.
 - Test extracted decisions with ordinary inputs and explicit outcomes. Test adapters at the HTTP boundary and use
   component or integration tests for lifecycle, navigation, cache, and authentication behavior. Avoid tests that only
   assert internal helper calls or repeat the implementation.
+- When multiple adapters implement the same port, reuse focused contract tests for the observable guarantees that
+  consumers rely on, including relevant input, failure, side-effect, and cancellation cases. Add adapter-specific
+  checks where needed. Fakes must preserve the semantics exercised by their tests; they need not reproduce unrelated
+  infrastructure. A focused stub does not prove that an adapter satisfies the full contract.
 - For changes to submission, session, or recovery logic, select relevant cases such as duplicate activation,
   uncertain completion, route departure, logout with a late response, principal replacement, or cached-page
   restoration. Preserve existing behavior tests when extracting code; do not rewrite their expected outcomes just
