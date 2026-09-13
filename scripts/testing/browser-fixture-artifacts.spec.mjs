@@ -13,11 +13,12 @@ const require = createRequire(join(webRoot, 'package.json'))
 const scenarios = [
     { name: 'authentication-failure', timeoutGuard: false },
     { name: 'runner-timeout', timeoutGuard: true },
+    { name: 'runner-timeout-slow-setup', timeoutGuard: true, setupDelay: 1_200 },
     ...['trace', 'screenshot', 'video'].map(override => ({ name: `${override}-override`, override })),
 ]
 
 // Run explicitly after installing Chromium; this is not a browser-free unit-test suite.
-for (const { name, timeoutGuard, override } of scenarios) test(`shared-fixture ${name} protection prevents auth capture`, { timeout: 60_000 }, () => {
+for (const { name, timeoutGuard, override, setupDelay = 0 } of scenarios) test(`shared-fixture ${name} protection prevents auth capture`, { timeout: 60_000 }, () => {
     const directory = mkdtempSync(join(tmpdir(), 'lef-browser-artifact-guard-'))
     const outputDirectory = join(directory, 'results')
     const syntheticMaterial = 'SYNTHETIC_AUTH_MATERIAL_MUST_NEVER_REACH_OUTPUT'
@@ -40,6 +41,7 @@ export default {
         writeFileSync(join(directory, 'auth-failure.spec.ts'), `
 import { writeFileSync } from 'node:fs'
 import { test } from ${JSON.stringify(fixtureModule)}
+${timeoutGuard ? 'const moduleLoadedAt = performance.now()' : ''}
 ${override ? `test.use(${JSON.stringify({ [override]: 'on' })})` : ''}
 test('owner guarded authentication failure', async ({ page, loginAs }) => {
     writeFileSync(${JSON.stringify(bodyMarker)}, 'body-ran', { mode: 0o600 })
@@ -48,14 +50,18 @@ test('owner guarded authentication failure', async ({ page, loginAs }) => {
     // Rejection happens before any Docker lookup or mutation of development fixture metadata.
     process.env.COMPOSE_PROJECT_NAME = 'invalid fixture project'
     ${timeoutGuard ? `
+    ${setupDelay ? `await new Promise(resolve => setTimeout(resolve, ${setupDelay}))` : ''}
+    // Module loading precedes fixture setup, leaving at least one second on the test clock.
+    const timeout = Math.ceil(performance.now() - moduleLoadedAt) + 1_000
     const context = page.context()
     const close = context.close.bind(context)
     context.close = async (...options) => {
-        await new Promise(resolve => setTimeout(resolve, 1_200))
+        // Exceed the entire budget so a missing timeout suspension still fails this guard.
+        await new Promise(resolve => setTimeout(resolve, timeout + 200))
         return close(...options)
     }
     // The fixture must replace this framework deadline with its bounded, sanitized auth deadline.
-    test.setTimeout(1_000)
+    test.setTimeout(timeout)
     ` : ''}
     await loginAs('owner')
 })
