@@ -29,6 +29,7 @@ interface Step {
 
 interface Job {
     name?: string
+    'timeout-minutes'?: number
     if?: string
     needs?: string | string[]
     env?: Record<string, string>
@@ -204,6 +205,10 @@ describe('Validate workflow syntax and structure', () => {
         expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch'])
         expect(workflow.permissions).toEqual({ contents: 'read' })
         expect(Object.keys(workflow.jobs).sort()).toEqual([...dependencies, 'validate'].sort())
+    })
+
+    it('allows 90 minutes for the browser baseline', () => {
+        expect(workflow.jobs.browser['timeout-minutes']).toBe(90)
     })
 
     it.each([

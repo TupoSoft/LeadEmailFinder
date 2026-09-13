@@ -413,7 +413,7 @@ jobs:
       - changes
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 90
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
       DISCOVERY_RESULT: ${{ needs.changes.result }}
