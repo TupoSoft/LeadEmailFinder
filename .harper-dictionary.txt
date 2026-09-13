@@ -392,5 +392,3 @@ registrable
 rethrows
 reprobed
 Prettier
-Vitest
-jsdom
