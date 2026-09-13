@@ -10,8 +10,10 @@ and route transitions without changing application behavior or weakening their a
 
 ## Progress
 
-- [ ] (2026-09-13) Add the shared DOM wait budget and delayed authorization regression coverage.
-- [ ] (2026-09-13) Validate the focused scenarios and full frontend suite, then record separate CI evidence.
+- [x] (2026-09-13) Add the shared DOM wait budget and delayed authorization regression coverage.
+- [x] (2026-09-13) Validate the focused scenarios, full frontend suite, and bounded failure controls locally.
+- [x] (2026-09-13) Publish draft PR #611 and record its CI queue state separately from local results.
+- [x] (2026-09-13) Record the user's request to skip CI for the conflict resolution; Actions execution remains unverified.
 
 ## Plan dependencies
 
@@ -19,7 +21,12 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- Master at `fdb855aa4a283ebd938e07a24f824e32b5054711` still used hosted runners. PR #595 remained open at
+  `f8426869a342b605b72940ba320cfe076fb50876`; all nine direct jobs there used the four required isolated runner
+  labels. That branch lacked this plan, so implementation copied only this plan from master into its isolated
+  checkout. The application sources matched master; unrelated planning and architecture documents were not copied.
+- The delayed response failed with a 1,000-millisecond query budget and passed with 3,000 milliseconds. A missing
+  heading failed through Testing Library after the finite query wait rather than reaching the whole-test deadline.
 
 ## Decision Log
 
@@ -34,10 +41,20 @@ None yet.
 - Decision: Keep this plan in a separate planning PR targeting master and allow local implementation from master.
   Rationale: The DOM wait change has no code dependency on PR #595. Its isolated runner configuration remains
   required before publishing a revision that runs Actions. Date/Author: 2026-09-13, user-requested plan separation.
+- Decision: Target the implementation PR at `kk/self-hosted-runners` while #595 remains open. Copy this existing
+  plan from master to keep its evidence with the implementation. Leave worker settings to the independent #609
+  issue; local test commands explicitly use two workers. Date/Author: 2026-09-13, Codex implementation.
+- Decision: Skip CI for the conflict resolution as requested by the user. Cancel the prior queued runs and put
+  `[skip ci]` in the resolution commit message. Retain local validation and report CI as unverified.
+  Date/Author: 2026-09-13, user request.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implementation and local validation are complete. Application tests inherit the shared three-second DOM wait,
+and the delayed authorization regression verifies the access-denied heading, forbidden route, and exactly one
+members GET. The immediate authorization test and service-client assertions remain intact. Static review found
+no material architectural trade-off. Draft PR #611 is assigned to the requesting user and targets
+`kk/self-hosted-runners`. The user requested skipping CI for the conflict resolution; Actions tests have not run.
 
 ## Context and Orientation
 
@@ -131,8 +148,8 @@ query failure, then restore the test. Commit neither temporary mutation. Do not 
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --project application --maxWorkers=2 src/features/team/TeamPage.test.tsx --testNamePattern 'renders access denial after a delayed member-list response'
 ```
 
-Use a normal CI run of the implementation commit to verify the affected validation job, recording failure details
-if timing sensitivity persists. No browser, container, or live API claim follows from component tests.
+CI execution was originally planned, but the user's later request skips it for the conflict resolution. Any future
+CI run must be reported separately from local validation. No browser, container, or live API claim follows from component tests.
 Bruno: not applicable — test setup and mocked component coverage do not change externally observable HTTP behavior.
 
 ## Idempotence and Recovery
@@ -144,8 +161,50 @@ output. Revert only this plan's setup and test changes to restore the prior budg
 
 Original evidence: [failed validation job](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34754038140/job/103715423416).
 The prior local full-suite command was the same two-worker command listed above; its smaller test inventory must
-remain explicit. Implementation validation has not run. The readiness review found no unresolved implementation
-choice, external dependency, or product decision in this single-PR scope.
+remain explicit. The readiness review found no unresolved implementation choice, external dependency, or product
+decision in this single-PR scope.
+
+Implementation validation on 2026-09-13 used an isolated checkout based on
+`f8426869a342b605b72940ba320cfe076fb50876`. The validated setup and regression changes are committed as
+`ea547c2b9b40b022e420010be06b96991c9f08bc`:
+
+- The API client build passed.
+- The focused command above passed 51 tests across two files in 5.68 seconds with two workers.
+- The complete frontend command above passed 628 tests across 30 files in 28.50 seconds with two workers.
+- Frontend lint and type checking passed. `corepack pnpm ui:audit` found no violations, and
+  `corepack pnpm design:lint` reported no errors or warnings.
+- The single-test command above failed as expected with `asyncUtilTimeout: 1000`, passed with `3000`, and failed
+  as expected when the heading was temporarily replaced with a nonexistent name. Both failures were missing-role
+  query errors. Each run selected one test and skipped the other 21; all temporary mutations were restored.
+- `corepack pnpm exec prettier --check apps/web/src/test/setup.ts apps/web/src/features/team/TeamPage.test.tsx`
+  and `git diff --check` passed.
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- execplan-repository-fixture --runInBand` passed its
+  repository plan validation test.
+- The implementation also copies the existing `Vitest` dictionary entry from master, which the older base lacked.
+- `corepack pnpm docs:lint -- .agents/plans/web-test-stability/02-allow-bounded-dom-waits.md` passed one file
+  after adding that dictionary entry. The commit hook's module architecture check passed nine modules with no
+  violations.
+
+The timer belongs to the mocked response and is canceled in `finally`. Assertions contain no fixed sleep or
+timeout override. Testing Library merges the partial configuration update, preserving the service-client
+suite's secret-safe `getElementError` overrides. The Node fixture project does not load the application setup.
+
+[Draft PR #611](https://github.com/TupoSoft/LeadEmailFinder/pull/611) contains `Closes #610` and is assigned to
+`KyryloKupin`. Its [initial Actions run](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34768961053)
+targets implementation commit `ea547c2b9b40b022e420010be06b96991c9f08bc`. At the handoff check, the discovery job
+`103754911867` was queued with no assigned runner and labels `self-hosted`, `swarm`, `ubuntu-22`, and
+`docker-isolated`. This confirms the requested runner selection, but provides no CI execution or timing result.
+The original checkout's unrelated changes remain untouched.
+
+The base branch later advanced to `3bccfc3d32b1e6b3c1864cd1bc9ae0150aca309a`, adding the original plan from master
+and the `jsdom` dictionary entry. Merging it into this branch produced conflicts only in this plan and the
+dictionary. Resolution retains the implementation evidence and both dictionary entries. The two application test
+files are unchanged from the validated implementation.
+
+After resolution, the focused Team and service-client command passed 51 tests in two files with two workers.
+The repository plan test and Harper command above also passed. Both previous Actions runs, `34768961053` and
+`34769055789`, are confirmed canceled. Normal cancellation did not clear their queued state; force cancellation
+completed both requests. The merge commit includes `[skip ci]` to honor the user's request for this update.
 
 ## Plan readiness
 
