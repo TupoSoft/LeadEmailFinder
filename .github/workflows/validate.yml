@@ -227,7 +227,7 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
         if: needs.changes.outputs.web == 'true'
       - name: Test web application
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
         if: needs.changes.outputs.web == 'true'
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
