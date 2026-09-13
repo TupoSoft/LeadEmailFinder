@@ -57,6 +57,21 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
         if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
+        if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.repositoryPolicy == 'true'
@@ -125,6 +140,21 @@ jobs:
         if: needs.changes.outputs.backend == 'true'
       - name: Enable Corepack
         run: corepack enable
+        if: needs.changes.outputs.backend == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.backend == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
         if: needs.changes.outputs.backend == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
@@ -205,6 +235,21 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
         if: needs.changes.outputs.web == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.web == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-
+        if: needs.changes.outputs.web == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
         if: needs.changes.outputs.web == 'true'
@@ -262,6 +307,21 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
         if: needs.changes.outputs.contract == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.contract == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
+        if: needs.changes.outputs.contract == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.contract == 'true'
@@ -281,6 +341,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.images }}
     steps:
@@ -298,17 +359,51 @@ jobs:
         with:
           fetch-depth: 0
         if: needs.changes.outputs.images == 'true'
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          use: false
+        if: needs.changes.outputs.images == 'true'
       - name: Build production image
-        run: docker build --tag lead-email-finder:ci .
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: Dockerfile
+          tags: lead-email-finder:ci
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-production
+          cache-to: type=gha,version=2,scope=lef-production,mode=max,ignore-error=true
         if: needs.changes.outputs.images == 'true'
       - name: Test packaged account-discovery manifest
         run: docker run --rm --entrypoint node lead-email-finder:ci -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs'); const { parse } = require('yaml'); const path = '/app/config/privacy/account-discovery-approvals.yaml'; const manifest = parse(readFileSync(path, 'utf8')); if (manifest.schemaVersion !== 1 || manifest.revision !== 'initial-empty' || manifest.approvals.length !== 0) process.exit(1); const stat = statSync(path); if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1); try { accessSync(path, constants.W_OK); process.exit(1); } catch (error) { if (error.code !== 'EACCES') throw error; }"
         if: needs.changes.outputs.images == 'true'
       - name: Build independent development API image
-        run: docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/Dockerfile
+          tags: lead-email-finder-api:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-api
+          cache-to: type=gha,version=2,scope=lef-api,mode=max,ignore-error=true
         if: needs.changes.outputs.images == 'true'
       - name: Build independent static web image
-        run: docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/web.Dockerfile
+          tags: lead-email-finder-web:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-web
+          cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
         if: needs.changes.outputs.images == 'true'
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
@@ -320,6 +415,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
       API_START_COMMAND: pnpm exec nest start
@@ -345,11 +441,42 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
         if: needs.changes.outputs.browser == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.browser == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
+        if: needs.changes.outputs.browser == 'true'
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
         if: needs.changes.outputs.browser == 'true'
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          use: false
+        if: needs.changes.outputs.browser == 'true'
       - name: Build independent static web image
-        run: docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/web.Dockerfile
+          tags: lead-email-finder-web:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-web
+          cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
         if: needs.changes.outputs.browser == 'true'
       - name: Test Vite and Nginx route ownership and privacy
         run: corepack pnpm test:gateway
