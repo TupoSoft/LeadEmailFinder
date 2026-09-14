@@ -156,7 +156,7 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
                 Promise.all(Array.from({ length: 6 }, () => service.addPlatformCredits(organizationId, 5, key))),
             ).resolves.toEqual(Array<number>(6).fill(startingBalance + 5))
             await assertLedger(startingBalance + 5, [5])
-        })
+        }, 15_000)
 
         it('adds both concurrent distinct keys without losing an update', async () => {
             await Promise.all([

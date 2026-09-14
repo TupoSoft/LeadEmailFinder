@@ -19,8 +19,8 @@ billing workflows.
   a ledger reference on both the first application and replay; a clamped zero debit is persisted so later top-ups are
   never charged by an old adjustment. Both consume only credit currently available (`balance - reserved`).
 - `CreditReservationService` — hold-then-settle credits for an operation before its outcome is known: `reserve`/
-  `reserveMany` admit a hold that reduces available credit without reducing the balance; `capture` charges the
-  balance once and releases the hold; `release` drops the hold with no charge; `closeAdmissionMany` durably fences
+  `reserveMany` admit a hold that reduces available credit without reducing the balance. `capture` charges the
+  balance once and releases the hold. `release` drops the hold with no charge. `closeAdmissionMany` durably fences
   a denied or canceled admission (including one never actually reserved) so a later delayed reserve cannot
   resurrect it. Every method validates its input (unique operation IDs, positive integer amounts) before touching
   the store and maps typed outcomes to typed exceptions.
@@ -29,7 +29,7 @@ billing workflows.
 
 - No ledger or reservation persistence, locking, or transaction mechanics — the credit account, debit/grant rows,
   and reservation rows, and the atomic operations against them, are owned by [`identity`](../identity/README.md)
-  behind its `CreditLedgerStore` and `CreditReservationStore` ports; this module only decides which operation to
+  behind its `CreditLedgerStore` and `CreditReservationStore` ports. This module only decides which operation to
   call and how to interpret the outcome.
 - No payment processing, adjustment accounting, shortfall policy, or credit-pack pricing (owned by
   [`payments`](../payments/README.md)); credits applies the ledger operation that payments has already authorized.
@@ -140,10 +140,12 @@ Focused tests live in `src/`:
 The integration tests cover clamped debit results, zero-result replay after replenishment, one-time
 restoration, and concurrent ledger idempotency against real PostgreSQL. Platform addition coverage includes sequential
 replay, amount conflicts, and concurrent grants with matching and different keys, including organizations without a
-credit account. Reservation coverage includes the full reserve-then-capture-or-release lifecycle and concurrent
+credit account. The duplicate-grant concurrency cases use a bounded 15-second timeout so six database transactions
+can serialize on slow validation workers. Other test cases retain Jest's default timeout.
+Reservation coverage includes the full reserve-then-capture-or-release lifecycle and concurrent
 reserve-versus-close races in both lock orders. It also covers batch closure over mixed missing/reserved/released
-IDs, atomic rollback when any ID in a closure batch is already captured or amount-mismatched, and a delayed
-duplicate reserve after an insufficient-funds denial, a confirmed closure, and replenishment — proving the fenced
+IDs and atomic rollback when any ID in a closure batch is already captured or amount-mismatched. A delayed
+duplicate reserve after an insufficient-funds denial, a confirmed closure, and replenishment proves the fenced
 denial never resurrects as a funded hold. `corepack pnpm test:credits-postgres` runs both the credits and payment-webhook
 PostgreSQL suites serially against one disposable database, and fails if either suite's name is missing from the
 report.
@@ -164,8 +166,8 @@ organization's reservation hold through the real `CreditReservationService` (nev
 below-held `409` and unchanged balance. Run it with `corepack pnpm bruno:platform-credits` against the developer
 sandbox.
 [`bruno/credit-purchases`](../../../../bruno/credit-purchases/README.md) reads the customer billing summary and
-verifies the resulting balance, reserved, and available fields after a webhook grant, and — using the same isolated
-customer fixture organization `async-verification` restores afterward — proves an active hold's accounting and its
+verifies the resulting balance, reserved, and available fields after a webhook grant. Using the same isolated
+customer fixture organization `async-verification` restores afterward, it also proves an active hold's accounting and
 isolation from the unrelated platform organization the rest of the collection exercises. Both
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) and
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) exercise the one-credit debit and
