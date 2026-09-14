@@ -411,17 +411,15 @@ jobs:
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
         if: needs.changes.outputs.images == 'true'
-  browser:
+  browser-artifacts:
     needs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
-    timeout-minutes: 90
+    timeout-minutes: 15
     env:
-      DOCKER_BUILD_RECORD_UPLOAD: "false"
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
-      API_START_COMMAND: pnpm exec nest start
     steps:
       - name: Validate discovery result
         run: |
@@ -432,7 +430,7 @@ jobs:
           esac
       - name: No validation needed
         if: needs.changes.outputs.browser == 'false'
-        run: 'echo "browser: selected=$VALIDATION_SELECTED; checks were not run."'
+        run: 'echo "browser-artifacts: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -462,36 +460,8 @@ jobs:
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
         if: needs.changes.outputs.browser == 'true'
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver: docker-container
-          use: false
-        if: needs.changes.outputs.browser == 'true'
-      - name: Build independent static web image
-        uses: docker/build-push-action@v7
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: docker/web.Dockerfile
-          tags: lead-email-finder-web:frontend-06
-          load: true
-          push: false
-          cache-from: type=gha,version=2,scope=lef-web
-          cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test Vite and Nginx route ownership and privacy
-        run: corepack pnpm test:gateway
-        if: needs.changes.outputs.browser == 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-        if: needs.changes.outputs.browser == 'true'
-      - name: Build web application for browser suites
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test web browser workflows
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt
         if: needs.changes.outputs.browser == 'true'
       - name: Verify privileged authentication artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
@@ -507,6 +477,68 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Verify proxy browser artifact suppression
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts
+        if: needs.changes.outputs.browser == 'true'
+  browser-ui:
+    needs:
+      - changes
+      - browser-artifacts
+    if: ${{ !cancelled() }}
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
+    timeout-minutes: 20
+    env:
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
+      BROWSER_ARTIFACTS_RESULT: ${{ needs.browser-artifacts.result }}
+    steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: Require browser artifact guards to succeed
+        run: test "$BROWSER_ARTIFACTS_RESULT" = success
+      - name: No validation needed
+        if: needs.changes.outputs.browser == 'false'
+        run: 'echo "browser-ui: selected=$VALIDATION_SELECTED; checks were not run."'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.browser == 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+        if: needs.changes.outputs.browser == 'true'
+      - name: Enable Corepack
+        run: corepack enable
+        if: needs.changes.outputs.browser == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.browser == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
+        if: needs.changes.outputs.browser == 'true'
+      - name: Install workspace dependencies
+        run: corepack pnpm install --frozen-lockfile
+        if: needs.changes.outputs.browser == 'true'
+      - name: Install Chromium
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
+        if: needs.changes.outputs.browser == 'true'
+      - name: Build web application for browser suites
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test web browser workflows
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt
         if: needs.changes.outputs.browser == 'true'
       - name: Test service-client secret handling and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients
@@ -528,6 +560,87 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Test web visual baselines
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt
+        if: needs.changes.outputs.browser == 'true'
+  browser-live:
+    needs:
+      - changes
+      - browser-artifacts
+    if: ${{ !cancelled() }}
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
+    timeout-minutes: 25
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
+      API_START_COMMAND: pnpm exec nest start
+      DISCOVERY_RESULT: ${{ needs.changes.result }}
+      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
+      BROWSER_ARTIFACTS_RESULT: ${{ needs.browser-artifacts.result }}
+    steps:
+      - name: Validate discovery result
+        run: |
+          test "$DISCOVERY_RESULT" = success
+          case "$VALIDATION_SELECTED" in
+            true|false) ;;
+            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
+          esac
+      - name: Require browser artifact guards to succeed
+        run: test "$BROWSER_ARTIFACTS_RESULT" = success
+      - name: No validation needed
+        if: needs.changes.outputs.browser == 'false'
+        run: 'echo "browser-live: selected=$VALIDATION_SELECTED; checks were not run."'
+      - uses: actions/checkout@v4
+        id: browser-live-checkout
+        with:
+          fetch-depth: 0
+        if: needs.changes.outputs.browser == 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+        if: needs.changes.outputs.browser == 'true'
+      - name: Enable Corepack
+        run: corepack enable
+        if: needs.changes.outputs.browser == 'true'
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: |
+          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
+        if: needs.changes.outputs.browser == 'true'
+      - name: Restore pnpm store
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
+        if: needs.changes.outputs.browser == 'true'
+      - name: Install workspace dependencies
+        run: corepack pnpm install --frozen-lockfile
+        if: needs.changes.outputs.browser == 'true'
+      - name: Install Chromium
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
+        if: needs.changes.outputs.browser == 'true'
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+          use: false
+        if: needs.changes.outputs.browser == 'true'
+      - name: Build independent static web image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/web.Dockerfile
+          tags: lead-email-finder-web:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-web
+          cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
+        if: needs.changes.outputs.browser == 'true'
+      - name: Test Vite and Nginx route ownership and privacy
+        run: corepack pnpm test:gateway
         if: needs.changes.outputs.browser == 'true'
       - name: Reset, provision, and check disposable development stack
         run: corepack pnpm dev:reset -- --confirm-project=LEF
@@ -590,11 +703,33 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:batch-verification-live
         if: needs.changes.outputs.browser == 'true'
       - name: Report service health
-        if: always() && needs.changes.outputs.browser == 'true'
+        if: always() && needs.changes.outputs.browser == 'true' && steps.browser-live-checkout.outcome == 'success'
+        timeout-minutes: 5
         run: docker compose -f docker/compose.yaml ps
       - name: Stop this runner's disposable stack
-        if: always() && needs.changes.outputs.browser == 'true'
+        if: always() && needs.changes.outputs.browser == 'true' && steps.browser-live-checkout.outcome == 'success'
+        timeout-minutes: 5
         run: docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans
+  browser:
+    needs:
+      - changes
+      - browser-artifacts
+      - browser-ui
+      - browser-live
+    if: ${{ !cancelled() }}
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require every browser worker to succeed
+        env:
+          BROWSER_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/browser-summary.mjs
   validate:
     name: validate
     if: ${{ !cancelled() }}

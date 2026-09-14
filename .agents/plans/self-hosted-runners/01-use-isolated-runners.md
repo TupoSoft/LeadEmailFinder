@@ -20,6 +20,8 @@ work that starts or removes Docker resources. Developers retain the same validat
 - [x] (2026-09-13) Resolve conflicts with master `0400e1ac`, preserving its cache settings and browser timeout.
 - [x] (2026-09-13) Pass all 230 focused tests, selection fixtures, ESLint, Actionlint, and workflow comparison checks.
 - [x] (2026-09-13) Resolve conflicts with master `49aa9442`, preserving cancellation behavior; all 241 focused tests passed.
+- [x] (2026-09-14) Resolve conflicts with master `2ac6ea3`, preserving separate browser workers and their aggregate.
+- [x] (2026-09-14) Pass 326 focused tests, selection fixtures, ESLint, architecture checks, Actionlint, and Harper.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -36,6 +38,8 @@ None.
   shared containers and volumes to existing CI cleanup commands.
 - (2026-09-12) Searching synced issues for `self-hosted-runners/01` found no issue. Assignment and Project 9 status
   cannot be updated until the synchronizer creates that issue.
+- (2026-09-14) Master split browser validation into three workers and an aggregate, increasing the direct job
+  inventory from nine to twelve. The runner assertion for those jobs also needed the approved label array.
 
 ## Decision Log
 
@@ -66,10 +70,19 @@ A subsequent merge of master `49aa9442` retains workflow cancellation, cancellat
 browser cleanup while preserving the isolated runner labels. All 241 focused tests, selection fixtures, ESLint,
 and Actionlint passed. A complete Actions run for this newer revision remains unverified.
 
+On 2026-09-14, the branch was updated with master `2ac6ea3`. The resolution preserves its three browser workers,
+their 15-, 20-, and 25-minute timeouts, and the 10-minute browser aggregate. Every direct job retains the four
+isolated runner labels. A comparison with that master revision confirms that runner selection is the only
+workflow difference. All 326 focused tests, selection fixtures, ESLint, architecture checks, Actionlint with
+ShellCheck, Harper, and diff checks passed. The test subprocesses required execution outside the local sandbox;
+the initial sandboxed attempt failed with `EPERM`. The previous Actions run `34782151912` failed its browser
+job and required validation check; a complete successful Actions run for this resolution remains unverified.
+
 ## Context and Orientation
 
-`.github/workflows/validate.yml` owns eight jobs: change discovery, six validation consumers, and the stable
-`Validate / validate` summary. `.github/workflows/sync-execplans.yml` owns the direct synchronization job.
+`.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
+workers, the browser aggregate, and the stable `Validate / validate` summary.
+`.github/workflows/sync-execplans.yml` owns the direct synchronization job.
 The build and deployment workflows call reusable workflows; their runner selection remains with those calls.
 
 `scripts/ci/validate-workflow.spec.ts` parses validation YAML, preserves command ownership and conditional
@@ -91,7 +104,7 @@ infrastructure. No development reset, migration, or seed operation is required f
 
 ## Plan of Work
 
-Replace the nine direct `runs-on` values in the validation and synchronization workflows with the exact four-label
+Replace the twelve direct `runs-on` values in the validation and synchronization workflows with the exact four-label
 array. Keep job dependencies, conditions, commands, permissions, and reusable workflow calls unchanged.
 
 Extend the existing YAML parser to accept a string containing visible characters or a nonempty array of such strings. Add fixtures
@@ -121,7 +134,7 @@ tests can proceed independently. New workflow jobs must not become active before
 
 ## Acceptance Criteria
 
-- All nine direct jobs require the four configured labels; reusable workflow calls remain unchanged.
+- All twelve direct jobs require the four configured labels; reusable workflow calls remain unchanged.
 - The YAML parser accepts scalar labels containing visible characters and nonempty arrays of such labels and rejects malformed values.
 - The inventory test fails if any direct job selects a different pool, including a newly added workflow.
 - Existing workflow command, selection, no-op, PostgreSQL, cleanup, and summary assertions continue to pass.
@@ -149,6 +162,10 @@ The broader three-suite command above passed 222 tests, including the real ExecP
 `.agents/plans/self-hosted-runners` and the Swarm implementation plan. After the compatible infrastructure is deployed, inspect a complete workflow run and distinguish
 successful checks from jobs that are queued, skipped, canceled, or unrun. Do not run local browser reset commands
 against the existing developer Docker daemon as a substitute for that evidence.
+
+For the 2026-09-14 conflict resolution, the three-suite command passed 326 tests. Selection fixtures, focused
+ESLint, `corepack pnpm architecture:check`, and Actionlint 1.7.12 with ShellCheck 0.11.0 passed.
+`corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md` passed one file.
 
 Bruno: not applicable — only CI scheduling and tests change; HTTP behavior remains unchanged.
 
