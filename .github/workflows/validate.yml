@@ -416,7 +416,7 @@ jobs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 15
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
@@ -484,7 +484,7 @@ jobs:
       - browser-artifacts
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
@@ -567,7 +567,7 @@ jobs:
       - browser-artifacts
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
       API_START_COMMAND: pnpm exec nest start

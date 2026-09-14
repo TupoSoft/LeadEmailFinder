@@ -313,8 +313,8 @@ describe('Validate workflow syntax and structure', () => {
     })
 
     it('declares bounded independent browser workers and a lightweight aggregate', () => {
-        for (const id of browserWorkers) {
-            expect(workflow.jobs[id]['timeout-minutes']).toBe(90)
+        for (const [id, budget] of [['browser-artifacts', 15], ['browser-ui', 20], ['browser-live', 25]] as const) {
+            expect(workflow.jobs[id]['timeout-minutes']).toBe(budget)
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {

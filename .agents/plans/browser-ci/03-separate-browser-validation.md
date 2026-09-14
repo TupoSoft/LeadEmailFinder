@@ -11,8 +11,8 @@ Browser validation will report artifact guards, mocked browser workflows, and li
 - [x] (2026-09-14) Implement the three worker jobs and preserve every existing browser validation command.
 - [x] (2026-09-14) Add the browser result validator and update workflow structure, execution, prerequisite, and failure fixtures.
 - [x] (2026-09-14) Run focused checks and the documentation-only selector, worker-guard, and aggregate fixtures.
-- [ ] (2026-09-14) Collect two complete successful selected GitHub workflow runs and their timing evidence.
-- [ ] (2026-09-13) Record measured worker budgets, the results of resource removal, and the delivered outcome.
+- [x] (2026-09-14) Collect two complete successful selected GitHub workflow runs and their timing evidence.
+- [x] (2026-09-14) Record measured worker budgets, successful resource removal, and the delivered outcome.
 
 ## Plan dependencies
 
@@ -36,6 +36,10 @@ Browser validation will report artifact guards, mocked browser workflows, and li
 
 ## Decision Log
 
+- Decision: Set final artifact, UI, and live worker budgets to 15, 20, and 25 minutes.
+  Rationale: Two successful runs at the same head observed maxima of 208, 533, and 669 seconds.
+  Applying the documented formula yields these limits. Date: 2026-09-14. Author: Codex.
+
 - Decision: Preserve `ubuntu-latest` and job conditions using `!cancelled()` from the implementation base.
   Rationale: Runner migration remains in PR #595, and PR #621 deliberately made obsolete runs cancelable.
   Failure and skipped-result fixtures still reject unsuccessful prerequisites; workflow cancellation cannot
@@ -54,9 +58,11 @@ Browser validation will report artifact guards, mocked browser workflows, and li
 ## Outcomes & Retrospective
 
 The workflow split, strict browser result validator, and focused regression fixtures are implemented.
-All local checks listed below passed. Review found no material SOLID trade-off; repeated dependency
-installation preserves job isolation. Selected Actions execution and measured final worker budgets
-remain pending, so this implementation does not yet establish the complete runtime acceptance criterion.
+All local checks listed below and both complete selected calibration runs passed. Review found no material
+SOLID trade-off; repeated dependency installation preserves job isolation. Final worker budgets are 15,
+20, and 25 minutes for artifacts, UI, and live execution. Every existing suite remains present, both
+aggregates succeeded, and both live workers removed their disposable stacks. Normal PR validation
+checks the final budget revision; it is separate from the two completed calibration measurements.
 
 ## Context and Orientation
 
@@ -200,7 +206,7 @@ Scoped cleanup remains limited to the live worker's isolated Docker daemon and c
 
 Implementation branch: `kk/issue-605-separate-browser-validation`, based on
 `49aa9442d0355846ea5d760f06d4cb0b1ea35138`. Issue #605 was assigned to the requesting user and moved
-to Project 9 In Progress before implementation. The worker budgets remain provisional at 90 minutes;
+to Project 9 In Progress before implementation. The measured worker budgets are 15, 20, and 25 minutes;
 `browser` has 10 minutes, and live health reporting and cleanup each have five minutes.
 
 A frozen workspace install with scripts disabled completed successfully. Local validation on 2026-09-14:
@@ -224,8 +230,64 @@ No live stack or Bruno collection has been executed locally. The first selected
 head `6f3bd2b86c37c4a3b8949e225e2b27da11bf23a7`, passed repository policy, web, and contract checks.
 The backend type check found `TS2322` in the new browser fixture: TypeScript inferred optional undefined
 properties for its empty output object. An explicit `Record<string, string>` local variable corrected
-that type without changing behavior; the full local type check then passed. The replacement run in
-[draft PR #624](https://github.com/TupoSoft/LeadEmailFinder/pull/624) must provide the runtime measurements.
+that type without changing behavior; the full local type check then passed. The replacement runs below supply the runtime measurements for
+[draft PR #624](https://github.com/TupoSoft/LeadEmailFinder/pull/624).
+
+Two complete selected runs passed all 11 jobs at head `1f5f76ae877e363cf7cfc64e7810b0e2deae3149`:
+[PR run 34843874744](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34843874744) and
+[manual run 34844000408](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34844000408).
+The manual event selects all consumers. Both `browser` and `validate` concluded `success` in both runs.
+The following durations exclude queue time. Runner IDs identify separate GitHub Actions hosts.
+
+| Worker | PR execution / queue | Manual execution / queue | PR / manual runner IDs | Final budget |
+| --- | --- | --- | --- | --- |
+| Artifacts | 3:28 / 3 seconds | 3:13 / 4 seconds | 1000005561 / 1000005572 | 15 minutes |
+| UI | 8:53 / 3 seconds | 7:07 / 2 seconds | 1000005583 / 1000005584 | 20 minutes |
+| Live | 11:09 / 5 seconds | 11:02 / 2 seconds | 1000005582 / 1000005585 | 25 minutes |
+
+Use `max(15, ceil((1.5 * maximum_minutes + 5) / 5) * 5)` for each final budget. Artifact maxima
+produce the 15-minute minimum; UI and live maxima produce 20 and 25 minutes. The aggregate keeps its
+10-minute budget. Health reporting and stack removal each keep their five-minute step limits.
+
+| Component | PR run | Manual run |
+| --- | --- | --- |
+| Artifact preparation / tests / final actions | 0:51 / 2:33 / 0:04 | 0:47 / 2:23 / 0:03 |
+| UI preparation / single build / tests | 0:49 / 0:10 / 7:52 | 0:56 / 0:08 / 6:01 |
+| UI final actions / timing gaps | 0:01 / 0:01 | 0:01 / 0:01 |
+| Live preparation / image / gateway tests | 0:57 / 0:12 / 0:19 | 1:04 / 0:06 / 0:18 |
+| Stack provisioning / identity bootstrap / SMTP attachment | 4:01 / 0:07 / 1:31 | 4:00 / 0:06 / 1:31 |
+| Live browser tests / Bruno collections | 3:09 / 0:34 | 3:13 / 0:28 |
+| Health reporting / stack removal | 0:00 / 0:13 | 0:01 / 0:12 |
+| Live final actions / timing gaps | 0:03 / 0:03 | 0:02 / 0:01 |
+
+All five artifact commands passed 50 scenarios in each run: 6 privileged, 24 invitation, 2 verification,
+8 service-client, and 10 proxy scenarios. Each UI worker passed 252 tests: 120 main browser tests,
+24 service-client tests, 16 invitation tests, 16 organization tests, 24 credit tests, 44 proxy tests,
+4 accessibility tests, and 4 visual tests. These counts match every available prerequisite baseline.
+Each live worker passed nine gateway tests, six same-origin session tests, two successful identity-bootstrap
+identities, and the organization/credit/proxy/team/service-client/single-verification/batch scenarios
+with counts 2/2/2/1/1/1/2. The historical baseline had not reached those live scenarios.
+
+| Existing Bruno collection | Requests passed in each run | Tests passed in each run |
+| --- | --- | --- |
+| BFF sessions | 15 | 16 |
+| Organization onboarding | 23 | 23 |
+| Platform credits | 34 | 34 |
+| Proxy registry | 27 | 27 |
+| Service-client rejections | 6 | 6 |
+| Async verification | 15 | 15 |
+| Batch verification | 9 | 15 |
+
+No Bruno requests were skipped. Each complete live run passed all seven collection steps and both
+final resource checks. Setup, cache, and action steps also succeeded; the expected no-op branch was skipped.
+PR UI/live execution overlapped for 8:51, from `12:35:42Z` to `12:44:33Z`; manual execution overlapped
+for 7:07, from `12:36:15Z` to `12:43:22Z`. Total workflow wall time, from creation to the final job's
+completion, was 15:52 and 15:34. These are observed hosted-run durations, not a controlled speedup
+comparison with the failed 62:07 Swarm baseline, which used a different runner and repeated builds.
+
+Final local checks after budget calibration passed the same 308 tests, ESLint, full type checking,
+workflow linting, and Harper. The final budget revision receives normal PR validation. Calibration
+logs and API snapshots were kept under `/tmp/issue605-ci`; no private reports or credentials are committed.
 
 GitHub's [job dependency documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds) describes dependency ordering and `always()`. Its [job condition documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions) explains skipped required jobs, which is why explicit successful no-ops and aggregate result validation remain part of the contract.
 
