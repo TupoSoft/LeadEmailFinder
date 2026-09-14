@@ -29,6 +29,7 @@ interface Step {
 
 interface Job {
     name?: string
+    'timeout-minutes'?: number
     if?: string
     needs?: string | string[]
     env?: Record<string, string>
@@ -42,6 +43,10 @@ interface Workflow {
     name: string
     on: Record<string, unknown>
     permissions: Record<string, string>
+    concurrency: {
+        group: string
+        'cancel-in-progress': boolean
+    }
     jobs: Record<string, Job>
 }
 
@@ -121,6 +126,43 @@ function needsOf(job: Job): string[] {
 }
 
 const workflow = parseWorkflow(source)
+const webPackage: unknown = JSON.parse(readFileSync(resolve(root, 'apps/web/package.json'), 'utf8'))
+if (!isRecord(webPackage) || !isRecord(webPackage.scripts)) {
+    throw new Error('Expected web package scripts to be a mapping.')
+}
+const webScripts = webPackage.scripts
+const webCommand = 'corepack pnpm --filter @tuposoft/lead-email-finder-web'
+const workspaceWebBuild = `${webCommand} build`
+const previewSuites = [
+    'test:e2e:prebuilt',
+    'test:service-clients',
+    'test:invitations',
+    'test:platform-organizations',
+    'test:platform-credits',
+    'test:platform-proxies',
+    'test:a11y:prebuilt',
+    'test:visual:prebuilt',
+]
+
+function expectWorkspaceBuildPrerequisite(steps: Step[]): void {
+    const builds = steps.filter((step) => command(step.run) === workspaceWebBuild)
+    expect(builds).toHaveLength(1)
+    const [build] = builds
+    expect(condition(build.if)).toBe("needs.changes.outputs.browser == 'true'")
+    expect(build['continue-on-error']).not.toBe(true)
+    for (const suite of ['test:e2e', 'test:a11y', 'test:visual']) {
+        expect(steps.some((step) => command(step.run) === `${webCommand} ${suite}`)).toBe(false)
+    }
+    for (const suite of previewSuites) {
+        const consumers = steps.filter((step) => command(step.run) === `${webCommand} ${suite}`)
+        expect(consumers).toHaveLength(1)
+        const [consumer] = consumers
+        expect(steps.indexOf(consumer)).toBeGreaterThan(steps.indexOf(build))
+        // The selection-only condition retains GitHub's implicit success() guard.
+        expect(condition(consumer.if)).toBe("needs.changes.outputs.browser == 'true'")
+        expect(consumer['continue-on-error']).not.toBe(true)
+    }
+}
 
 // These are the commands established by the prerequisite plans. Keep complete commands
 // here so reorganizing the workflow cannot silently remove a validation or narrow its arguments.
@@ -152,7 +194,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-web lint',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck',
         'corepack pnpm --filter @tuposoft/lead-email-finder-api-client build',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
     ],
     contract: [
@@ -161,7 +203,6 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-api-client build',
     ],
     images: [
-        'docker build --tag lead-email-finder:ci .',
         `docker run --rm --entrypoint node lead-email-finder:ci
           -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs');
           const { parse } = require('yaml');
@@ -173,16 +214,14 @@ const preservedCommands: Record<string, string[]> = {
           if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1);
           try { accessSync(path, constants.W_OK); process.exit(1); }
           catch (error) { if (error.code !== 'EACCES') throw error; }"`,
-        'docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .',
-        'docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .',
         'docker compose -f docker/compose.yaml config --quiet',
     ],
     browser: [
-        'docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
         'corepack pnpm bruno:platform-credits',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
@@ -203,11 +242,22 @@ const preservedCommands: Record<string, string[]> = {
 }
 
 describe('Validate workflow syntax and structure', () => {
+    it('cancels superseded runs within the same workflow and ref', () => {
+        expect(workflow.concurrency).toEqual({
+            group: '${{ github.workflow }}-${{ github.ref }}',
+            'cancel-in-progress': true,
+        })
+    })
+
     it('has the stable workflow name, supported events, and exact job inventory', () => {
         expect(workflow.name).toBe('Validate')
         expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch'])
         expect(workflow.permissions).toEqual({ contents: 'read' })
         expect(Object.keys(workflow.jobs).sort()).toEqual([...dependencies, 'validate'].sort())
+    })
+
+    it('allows 90 minutes for the browser baseline', () => {
+        expect(workflow.jobs.browser['timeout-minutes']).toBe(90)
     })
 
     it.each([
@@ -238,10 +288,10 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it.each(Object.entries(consumerFlags))('%s starts unconditionally and has exclusive selected/no-op branches', (id, flag) => {
+    it.each(Object.entries(consumerFlags))('%s handles discovery failures unless canceled and has exclusive selected/no-op branches', (id, flag) => {
         const job = workflow.jobs[id]
         expect(needsOf(job)).toEqual(['changes'])
-        expect(condition(job.if)).toBe('always()')
+        expect(condition(job.if)).toBe('!cancelled()')
         expect(job['continue-on-error']).not.toBe(true)
         const guard = job.steps[0]
         expect(guard.run).toBeDefined()
@@ -257,7 +307,7 @@ describe('Validate workflow syntax and structure', () => {
         for (const step of job.steps.slice(1).filter((step) => step !== noOps[0])) {
             const selected = `needs.changes.outputs.${flag} == 'true'`
             expect([selected, `always() && ${selected}`]).toContain(condition(step.if))
-            if (command(step.run) !== 'corepack pnpm docs:lint:changed') {
+            if (command(step.run) !== 'corepack pnpm docs:lint:changed' && step.uses !== 'actions/cache@v4') {
                 expect(step['continue-on-error']).not.toBe(true)
             }
         }
@@ -321,6 +371,110 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
+    it.each([
+        ['repository-policy', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
+        ['backend', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
+        ['contract', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
+        ['web', 'web', 'corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile'],
+        ['browser', 'workspace', 'corepack pnpm install --frozen-lockfile'],
+    ] as const)('%s restores a compatible pnpm store and installs even after a cache miss or restore failure', (id, group, installCommand) => {
+        const job = workflow.jobs[id]
+        const stores = job.steps.filter((step) => step.id === 'pnpm-store')
+        const caches = job.steps.filter((step) => step.uses === 'actions/cache@v4')
+        const installs = job.steps.filter((step) => command(step.run) === installCommand)
+        expect(stores).toHaveLength(1)
+        expect(caches).toHaveLength(1)
+        expect(installs).toHaveLength(1)
+        const [store] = stores
+        const [cache] = caches
+        const [install] = installs
+        const corepackIndex = job.steps.findIndex((step) => command(step.run) === 'corepack enable')
+        const nodeIndex = job.steps.findIndex((step) => step.uses === 'actions/setup-node@v4')
+        expect(nodeIndex).toBeGreaterThanOrEqual(0)
+        expect(corepackIndex).toBeGreaterThan(nodeIndex)
+        expect(job.steps.indexOf(store)).toBeGreaterThan(corepackIndex)
+        expect(job.steps.indexOf(cache)).toBeGreaterThan(job.steps.indexOf(store))
+        expect(job.steps.indexOf(install)).toBeGreaterThan(job.steps.indexOf(cache))
+        const prefix = `\${{ runner.os }}-\${{ runner.arch }}-node24-pnpm\${{ steps.pnpm-store.outputs.version }}-${group}-`
+        expect(cache.with?.path).toBe('${{ steps.pnpm-store.outputs.path }}')
+        expect(cache.with?.key).toBe(`${prefix}\${{ hashFiles('pnpm-lock.yaml') }}`)
+        expect(String(cache.with?.['restore-keys']).trim().split('\n')).toEqual([prefix])
+        expect(cache.with?.['fail-on-cache-miss']).not.toBe(true)
+        expect(cache['continue-on-error']).toBe(true)
+        expect(install['continue-on-error']).not.toBe(true)
+        // Neither a successful restore nor a miss may bypass the authoritative install.
+        expect(condition(install.if)).toBe(`needs.changes.outputs.${consumerFlags[id]} == 'true'`)
+
+        const execution = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', `
+            GITHUB_OUTPUT="$(mktemp)"
+            trap 'rm -f "$GITHUB_OUTPUT"' EXIT
+            corepack() {
+                case "$*" in
+                    'pnpm store path --silent') printf '%s\\n' '/tmp/custom pnpm/store/v10' ;;
+                    'pnpm --version') printf '%s\\n' '10.33.0' ;;
+                    *) return 1 ;;
+                esac
+            }
+            ${store.run}
+            cat "$GITHUB_OUTPUT"
+        `], { cwd: root, encoding: 'utf8', timeout: 5000, env: { ...process.env, GITHUB_OUTPUT: undefined } })
+        expect(execution.error).toBeUndefined()
+        expect(execution.stderr).toBe('')
+        expect(execution.status).toBe(0)
+        expect(execution.stdout).toBe('path=/tmp/custom pnpm/store/v10\nversion=10.33.0\n')
+    })
+
+    it('does not cache dependencies in jobs that do not install them', () => {
+        for (const id of ['changes', 'images', 'validate']) {
+            expect(workflow.jobs[id].steps.some((step) => step.uses === 'actions/cache@v4' || step.id === 'pnpm-store')).toBe(false)
+        }
+    })
+
+    it.each(['images', 'browser'] as const)('%s loads each image locally with an independent shared cache and mandatory build', (id) => {
+        const job = workflow.jobs[id]
+        const setups = job.steps.filter((step) => step.uses === 'docker/setup-buildx-action@v4')
+        const builds = job.steps.filter((step) => step.uses === 'docker/build-push-action@v7')
+        const expected = id === 'images'
+            ? [
+                ['Dockerfile', 'lead-email-finder:ci', 'lef-production'],
+                ['docker/Dockerfile', 'lead-email-finder-api:frontend-06', 'lef-api'],
+                ['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web'],
+            ]
+            : [['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web']]
+        expect(setups).toHaveLength(1)
+        const [setup] = setups
+        expect(setup.id).toBe('buildx')
+        expect(setup.with?.driver).toBe('docker-container')
+        // Nested Compose builds retain their existing Docker builder.
+        expect(setup.with?.use).toBe(false)
+        expect(job.steps.indexOf(setup)).toBeGreaterThan(job.steps.findIndex((step) => step.uses === 'actions/checkout@v4'))
+        expect(builds).toHaveLength(expected.length)
+        expect(job.env?.DOCKER_BUILD_RECORD_UPLOAD).toBe('false')
+        for (const [file, tags, scope] of expected) {
+            const matching = builds.filter((step) => step.with?.file === file)
+            expect(matching).toHaveLength(1)
+            const [build] = matching
+            expect(job.steps.indexOf(build)).toBeGreaterThan(job.steps.indexOf(setup))
+            expect(build.with).toEqual(expect.objectContaining({
+                builder: '${{ steps.buildx.outputs.name }}',
+                context: '.',
+                tags,
+                load: true,
+                push: false,
+                'cache-from': `type=gha,version=2,scope=${scope}`,
+                'cache-to': `type=gha,version=2,scope=${scope},mode=max,ignore-error=true`,
+            }))
+            expect(condition(build.if)).toBe(`needs.changes.outputs.${id} == 'true'`)
+            expect(build['continue-on-error']).not.toBe(true)
+            expect(build.with?.['no-cache']).not.toBe(true)
+        }
+        if (id === 'images') {
+            const productionIndex = job.steps.findIndex((step) => step.with?.tags === 'lead-email-finder:ci')
+            expect(job.steps.findIndex((step) => step.run?.startsWith('docker run --rm --entrypoint node lead-email-finder:ci')))
+                .toBeGreaterThan(productionIndex)
+        }
+    })
+
     it('retains selected PostgreSQL integration wiring without starting PostgreSQL for no-ops', () => {
         const backend = workflow.jobs.backend
         expect(condition(backend.services?.postgres.image)).toBe("needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || ''")
@@ -342,7 +496,7 @@ describe('Validate workflow syntax and structure', () => {
         expect(Object.entries(workflow.jobs).filter(([, job]) => job.services).map(([id]) => id)).toEqual(['backend'])
     })
 
-    it('keeps browser cleanup active after a selected check fails', () => {
+    it('keeps browser cleanup active after a selected check fails or is canceled', () => {
         for (const run of ['docker compose -f docker/compose.yaml ps', 'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans']) {
             expect(condition(workflow.jobs.browser.steps.find((step) => command(step.run) === run)?.if)).toBe(
                 "always() && needs.changes.outputs.browser == 'true'",
@@ -380,20 +534,21 @@ describe('Validate workflow syntax and structure', () => {
     })
 
     it('builds and provisions browser prerequisites on the same runner before using them', () => {
-        const commands = workflow.jobs.browser.steps.map((step) => command(step.run))
+        const steps = workflow.jobs.browser.steps
+        const commands = steps.map((step) => command(step.run))
         const before = (prerequisite: string, consumer: string): void => {
             const setupIndex = commands.indexOf(prerequisite)
             expect(setupIndex).toBeGreaterThanOrEqual(0)
             expect(commands.indexOf(consumer)).toBeGreaterThan(setupIndex)
         }
-        before(
-            'docker build --file docker/web.Dockerfile --tag lead-email-finder-web:frontend-06 .',
-            'corepack pnpm test:gateway',
-        )
+        const webBuildIndex = steps.findIndex((step) => step.uses === 'docker/build-push-action@v7'
+            && step.with?.tags === 'lead-email-finder-web:frontend-06')
+        expect(webBuildIndex).toBeGreaterThanOrEqual(0)
+        expect(commands.indexOf('corepack pnpm test:gateway')).toBeGreaterThan(webBuildIndex)
         for (const run of [
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt',
+            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts',
@@ -415,10 +570,7 @@ describe('Validate workflow syntax and structure', () => {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
             before('corepack pnpm --filter @tuposoft/lead-email-finder-web browser-fixtures:bootstrap', run)
         }
-        before(
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e',
-            'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
-        )
+        expectWorkspaceBuildPrerequisite(steps)
         for (const run of [
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies',
             'corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live',
@@ -427,10 +579,10 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it('always emits the stable aggregate over discovery and every consumer', () => {
+    it('emits the stable aggregate over discovery and every consumer unless canceled', () => {
         const summary = workflow.jobs.validate
         expect(summary.name).toBe('validate')
-        expect(condition(summary.if)).toBe('always()')
+        expect(condition(summary.if)).toBe('!cancelled()')
         expect(summary['continue-on-error']).not.toBe(true)
         expect(needsOf(summary).sort()).toEqual([...dependencies].sort())
         const step = summary.steps.find((item) => command(item.run) === 'node scripts/ci/validation-summary.mjs')
@@ -438,6 +590,75 @@ describe('Validate workflow syntax and structure', () => {
         expect(step?.if).toBeUndefined()
         expect(step?.['continue-on-error']).not.toBe(true)
         expect(step?.env?.VALIDATION_NEEDS_JSON).toBe('${{ toJSON(needs) }}')
+    })
+})
+
+describe('browser workspace build reuse', () => {
+    it.each([
+        'missing build',
+        'late build',
+        'duplicate build',
+        'standalone suite rebuild',
+        'ignored build failure',
+        'unconditional build',
+        'consumer after failure',
+    ])('rejects the prerequisite regression: %s', (regression) => {
+        const steps = workflow.jobs.browser.steps.map((step) => ({ ...step }))
+        const buildIndex = steps.findIndex((step) => command(step.run) === workspaceWebBuild)
+        const build = steps[buildIndex]
+        switch (regression) {
+            case 'missing build':
+                steps.splice(buildIndex, 1)
+                break
+            case 'late build':
+                steps.push(...steps.splice(buildIndex, 1))
+                break
+            case 'duplicate build':
+                steps.push({ ...build })
+                break
+            case 'standalone suite rebuild':
+                steps.push({ ...build, run: `${webCommand} test:e2e` })
+                break
+            case 'ignored build failure':
+                build['continue-on-error'] = true
+                break
+            case 'unconditional build':
+                build.if = "always() && needs.changes.outputs.browser == 'true'"
+                break
+            case 'consumer after failure':
+                steps.find((step) => command(step.run) === `${webCommand} test:e2e:prebuilt`)!.if =
+                    "always() && needs.changes.outputs.browser == 'true'"
+                break
+        }
+        expect(() => expectWorkspaceBuildPrerequisite(steps)).toThrow()
+    })
+
+    it.each([
+        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts'],
+        ['test:a11y', 'playwright test tests/e2e/accessibility.spec.ts'],
+        ['test:visual', 'playwright test tests/e2e/visual.spec.ts'],
+    ])('%s retains its selectors and builds before delegating to the prebuilt suite', (suite, selector) => {
+        expect(webScripts[`${suite}:prebuilt`]).toBe(selector)
+        expect(webScripts[suite]).toBe(`pnpm build && pnpm ${suite}:prebuilt`)
+        for (const [buildExit, suiteExit, expectedExit] of [[0, 0, 0], [23, 0, 23], [0, 17, 17]]) {
+            const execution = spawnSync('bash', ['--noprofile', '--norc', '-c', `
+                pnpm() {
+                    printf '%s\\n' "$*"
+                    if [ "$1" = build ]; then return "$BUILD_EXIT"; fi
+                    return "$SUITE_EXIT"
+                }
+                ${String(webScripts[suite])}
+            `], {
+                cwd: root,
+                encoding: 'utf8',
+                timeout: 5000,
+                env: { ...process.env, BUILD_EXIT: String(buildExit), SUITE_EXIT: String(suiteExit) },
+            })
+            expect(execution.error).toBeUndefined()
+            expect(execution.status).toBe(expectedExit)
+            expect(execution.stderr).toBe('')
+            expect(execution.stdout).toBe(buildExit === 0 ? `build\n${suite}:prebuilt\n` : 'build\n')
+        }
     })
 })
 

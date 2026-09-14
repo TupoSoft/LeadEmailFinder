@@ -13,8 +13,6 @@
             "@tuposoft/lead-email-finder/config/*": ["src/libs/config/src/*"],
             "@tuposoft/lead-email-finder/dns": ["src/libs/dns/src"],
             "@tuposoft/lead-email-finder/dns/*": ["src/libs/dns/src/*"],
-            "@tuposoft/lead-email-finder/key": ["src/libs/key/src"],
-            "@tuposoft/lead-email-finder/key/*": ["src/libs/key/src/*"],
             "@tuposoft/lead-email-finder/keycloak-admin-http": ["src/libs/keycloak-admin-http/src"],
             "@tuposoft/lead-email-finder/keycloak-admin-http/*": ["src/libs/keycloak-admin-http/src/*"],
             "@tuposoft/lead-email-finder/redis": ["src/libs/redis/src"],

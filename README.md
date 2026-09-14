@@ -102,6 +102,28 @@ The first command prints all six boolean flags. The fixture command verifies the
 The Jest checks parse workflow YAML, preserve command ownership, and exercise discovery, no-op guards, and summary
 failure handling. Live Actions runs remain separate evidence for GitHub's job and expression semantics.
 
+### Shared CI Caches
+
+Validation restores the pnpm store from GitHub Actions before each dependency install. Cache keys include the
+operating system, architecture, Node major version, pnpm version, dependency group, and lockfile hash. Repository
+policy, backend, and contract jobs share the API dependency group. Web and browser jobs use separate groups because
+their filtered installs need different packages. A fallback can restore an older lockfile within the same group.
+Every job still runs its frozen-lockfile install, including after a cache hit or a failed cache restore.
+
+The image job imports and exports Docker build layers through GitHub Actions using separate production, API, and
+web scopes. The browser job reuses the web scope. Each build loads its original image tag into the job's Docker
+daemon so the existing container checks can run. Validation publishes no container images or build-record artifacts.
+Cache export errors are advisory; build and container-check failures still fail validation.
+
+The cache data lives on GitHub and can be reused across runner machines within GitHub's repository and branch
+access rules. Runs on `master` can populate caches for pull requests. Cache entries can expire, so a cache miss
+must remain a supported path. Runner workspaces and Docker daemons remain independent.
+
+This configuration covers the workflow's explicit image builds. It does not configure the browser live-stack
+rebuild performed by `pnpm dev:reset`. BuildKit cache mounts in Dockerfiles are also separate from exported image
+layers; their pnpm stores are not restored by this change. Confirm the benefit using cache restoration logs,
+Docker's cached build steps, and elapsed times from repeated Actions runs with the same lockfile and source.
+
 ### Browser API Contracts
 
 The API serves its full Swagger UI at `/docs` and a normalized browser contract at `/openapi.json`.
@@ -250,6 +272,10 @@ When both web and API health checks pass, use:
 The web gateway publishes `53000:8080`. The API listens on `api:3000` inside Compose and has no default host port.
 Unknown API descendants return JSON errors; unknown UI routes render the product's not-found page. Swagger uses the
 relative server URL `/`, so its requests stay on the origin that served the documentation.
+
+The editor HTTP client's `dev` environment in `http-client.env.json` uses this Compose gateway at
+`http://localhost:53000`. This repository no longer schedules application deployment. Previously queued deployment
+runs and remote resources require separate operator follow-up.
 
 Use the built gateway for authenticated browser flows. To work on UI code with Vite while the gateway owns port
 53000, run `corepack pnpm --filter @tuposoft/lead-email-finder-web dev` on Vite's default port. Its explicit API proxy

@@ -11,10 +11,10 @@ the input and generation contract for later finding work without contacting a ma
 
 ## Progress
 
-- [ ] (2026-09-08) Add the normalized input, candidate, and validation-error contracts.
-- [ ] (2026-09-08) Implement deterministic normalization, domain validation, expansion, and deduplication.
-- [ ] (2026-09-08) Cover accepted, unsupported, colliding, and boundary inputs with focused tests.
-- [ ] (2026-09-08) Update the module documentation and record validation evidence.
+- [x] (2026-09-13) Add the normalized input, candidate, and validation-error contracts.
+- [x] (2026-09-13) Implement deterministic normalization, domain validation, expansion, and deduplication.
+- [x] (2026-09-13) Cover accepted, unsupported, colliding, and boundary inputs with focused tests.
+- [x] (2026-09-13) Update the module documentation and record validation evidence.
 
 ## Plan dependencies
 
@@ -26,6 +26,10 @@ None.
   store optional `format` metadata; none expands a person's names into addresses.
 - The single and batch verification request contracts accept complete addresses. They provide no name contract
   to reuse, so this plan establishes one without changing those requests.
+- Node's `domainToASCII` accepts URL percent escapes: `foo%2ecom` becomes `foo.com`. Rejecting percent signs before
+  conversion keeps URL encoding outside the hostname input contract.
+- The implementation worktree starts at `fdb855a`. Its validation workflows still select GitHub-hosted runners;
+  local checks provide the validation evidence for this change.
 
 ## Decision Log
 
@@ -41,10 +45,24 @@ None.
   versioned array. Remove duplicates while retaining every contributing pattern.
   Rationale: A credit budget makes order observable, and extending a shared enum must not silently change a search.
   Date/Author: 2026-09-08, Codex.
+- Decision: Import the shared pattern enum directly from its common-library file and retain a private, fixed list.
+  Rationale: The pure generator needs only that vocabulary; importing the full common barrel could load unrelated
+  runtime dependencies. No business-module boundary or public export changes.
+  Date/Author: 2026-09-13, Codex.
+- Decision: Reject raw name symbols and unlisted punctuation before compatibility normalization. Only Unicode
+  letters, marks, space separators, and the listed punctuation may proceed after trimming.
+  Rationale: NFKD can otherwise disguise unsupported symbols as letters, such as the trademark sign becoming `TM`.
+  Mathematical and full width letters still normalize to their ASCII equivalents.
+  Date/Author: 2026-09-13, Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+The pure version 1 generator and field-specific validation contracts are implemented. All 207 focused tests pass,
+covering literal outputs, normalization, collisions, length boundaries, and input immutability. The architecture
+gate reports nine modules and zero violations; semantic type checking, focused ESLint, and the repository ExecPlan
+fixture pass. Harper passes for both changed Markdown files. Module documentation describes the private capability
+and its limitations. Final review found no material architectural trade-offs. No runtime adapter, public export,
+or HTTP contract changed.
 
 ## Context and Orientation
 
@@ -73,7 +91,8 @@ and `isIP` utilities are allowed; no network adapter is needed. Reuse the existi
 do not dynamically enumerate that enum to define version 1.
 
 Validate both names as strings of at most 100 Unicode code points before normalization. Reject control characters
-and require nonempty values after trimming. Apply NFKD normalization, lowercase, remove combining marks, Unicode
+and require nonempty values after trimming. Reject raw symbols and unlisted punctuation before applying NFKD
+normalization; then lowercase, remove combining marks, Unicode
 space separators, straight apostrophes, the right single quotation mark, and ASCII hyphens. The remaining token
 must contain 1 through 64 characters matching `[a-z]+`. Thus, `José` becomes `jose`, `O’Neil` becomes `oneil`, and
 `Mary-Jane` becomes `maryjane`. Non-Latin names, symbols, digits, punctuation not listed here, and characters such
@@ -144,12 +163,14 @@ public barrel. No dependency or package installation is required.
 
 ## Validation
 
-The following test files are new implementation deliverables, not existing validation evidence:
+Run these focused checks from the implementation worktree:
 
 ```bash
 corepack pnpm test -- src/libs/modules/email-verification/src/application/finding/generate-email-candidates.spec.ts src/libs/modules/email-verification/src/application/finding/normalize-finding-input.spec.ts --runInBand
 corepack pnpm architecture:check
 corepack pnpm typecheck
+corepack pnpm exec eslint src/libs/modules/email-verification/src/domain/finding-input.ts src/libs/modules/email-verification/src/application/finding/*.ts
+corepack pnpm test -- scripts/plans/execplan-repository-fixture.spec.ts --runInBand
 corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/email-finding/01-generate-email-candidates.md
 ```
 
@@ -165,8 +186,13 @@ do not mutate a persisted version 1 candidate list during later workflow recover
 
 ## Artifacts and Notes
 
-The source enum is a useful vocabulary, not evidence that finding already works. All implementation progress is
-unchecked at authoring time. Generation only suggests addresses; verification and person attribution are distinct.
+Issue #581 is assigned to the requesting user and marked In Progress in project 9. Generation only suggests
+addresses; verification and person attribution are distinct. The implementation adds no persisted state or HTTP
+behavior.
+
+Branch `kk/581-email-candidates` uses an isolated worktree and the existing local dependencies. The commit includes
+`[skip ci]` to prevent inherited workflows from scheduling GitHub-hosted runners. Hosted CI provides no validation
+evidence; run CI on approved self-hosted capacity before merging.
 
 ## Plan readiness
 

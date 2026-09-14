@@ -17,6 +17,8 @@ Synchronous verification uses `POST /verify`; the retired `GET /verify` returns 
 - Default-deny account-discovery enrichment, including one-provider selection and approval checks performed during
   startup and immediately before every outbound disclosure.
 - An internal, admin-only cache of stored `Email` records (`/emails`), not itself a verification endpoint.
+- Private, deterministic generation of bounded email candidates from a person's first name, last name, and company
+  domain, with a fixed generation version and pattern identities.
 
 ## Non-Responsibilities
 
@@ -329,6 +331,32 @@ configuration factories, and `RUN_SYNCHRONOUS_VERIFICATION`) can resolve once th
 instantiated end to end, since `ConfigModule.forRoot()` is called once at the API composition root and is not
 `isGlobal`.
 
+## Email Candidate Generation
+
+The private `generateEmailCandidates` function in
+[`src/application/finding/generate-email-candidates.ts`](src/application/finding/generate-email-candidates.ts) returns
+at most 16 unique addresses in the fixed version 1 template order. It returns normalized input, contiguous candidate
+indexes, pattern identities from `EmailPatternEnum`, and an omission record for each template that exceeds the
+64-byte local-part or 254-byte address limit. Collisions retain their first position and merge patterns in order.
+When every template is too long, generation fails with the typed `no_candidates` code.
+
+[`normalizeFindingInput`](src/application/finding/normalize-finding-input.ts) limits each supplied name to 100 Unicode
+code points and its normalized token to 64 ASCII letters. It rejects raw symbols and unlisted punctuation before
+applying NFKD normalization, lowercases letters, removes
+combining marks and space separators, and removes straight apostrophes, right single quotation marks, and ASCII
+hyphens. Unsupported characters produce a field-specific error rather than a guessed transliteration. Domain
+validation accepts a complete hostname, including subdomains and one final ASCII root dot, converts it through IDNA,
+and preserves the resulting lowercase hostname. It rejects URL syntax, percent escapes, IP addresses, malformed
+labels, single-label hosts, numeric final labels, and oversized domains. It does not determine DNS existence or
+the separately owned domain policy.
+
+The plain contracts and `FindingInputError` live in
+[`src/domain/finding-input.ts`](src/domain/finding-input.ts). Errors contain a fixed message, field, and closed code;
+they retain no submitted values. The functions perform no logging, network access, persistence, billing, or queue
+dispatch. They leave the caller's input unchanged and return fresh reports. This capability has no HTTP route,
+configuration, or public barrel export. Candidates are spelling suggestions, with no claim of mailbox existence or
+person attribution; verification and durable finding workflows remain separate work.
+
 ## Dependencies
 
 - [`credits`](../credits/README.md) — `CreditsService.debit()` called directly by the batch workflow (one credit
@@ -420,6 +448,12 @@ are limited to `us` and `uk`.
 
 Focused tests are grouped by behavior:
 
+- **Email candidate generation**:
+  [`application/finding/generate-email-candidates.spec.ts`](src/application/finding/generate-email-candidates.spec.ts)
+  and [`application/finding/normalize-finding-input.spec.ts`](src/application/finding/normalize-finding-input.spec.ts)
+  cover literal address sequences, collisions, equivalent inputs, Unicode and IDNA normalization, rejection codes,
+  length limits, and unchanged inputs. Bruno is not applicable to this private capability because it changes no HTTP
+  behavior.
 - **Operational tracing**: `infrastructure/verification-trace/logging-verification-trace-observer.spec.ts` covers
   the observer's own logic; the API composition root's request logging tests cover generic HTTP correlation. The
   durable admission/execution/settlement stack that now backs both single-verification routes emits no

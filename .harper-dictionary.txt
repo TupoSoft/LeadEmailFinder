@@ -391,8 +391,14 @@ NFKD
 registrable
 rethrows
 reprobed
+actionlint
+BuildKit
+Buildx
+GHA
 Prettier
 redispatched
 redispatch
 backoff
 cooldown
+Vitest
+jsdom

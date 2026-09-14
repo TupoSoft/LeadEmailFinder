@@ -10,9 +10,9 @@ commands convenient: invoking a normal suite command still builds first. This is
 
 ## Progress
 
-- [ ] (2026-09-13) Add scripts that use an existing build and compose the standalone scripts from them.
-- [ ] (2026-09-13) Build once in the browser job and update command and ordering contracts.
-- [ ] (2026-09-13) Validate unchanged test selection and record CI results and build counts.
+- [x] (2026-09-13) Add scripts that use an existing build and compose the standalone scripts from them.
+- [x] (2026-09-13) Build once in the browser job and update command and ordering contracts.
+- [x] (2026-09-13) Validate unchanged test selection and local contracts; record the requested CI skip.
 
 ## Plan dependencies
 
@@ -20,12 +20,25 @@ commands convenient: invoking a normal suite command still builds first. This is
 
 ## Surprises & Discoveries
 
+- Current master includes the completed `browser-ci/01` budget change, proxy coverage, and PR #597 caches.
+  PR #595 still owns the separate runner migration; master retains its existing runner selection.
+- The user requested `[skip ci]` during implementation. Actions execution and timing measurements are
+  therefore unavailable for this revision. Local checks must not be presented as Actions results.
+
 - `test:e2e`, `test:a11y`, and `test:visual` each invoke `pnpm build`, which runs `tsc -b && vite build`.
 - Mocked invitation, service-client, platform-organization, platform-credit, and proxy suites start a preview
   server on port 4173 and already rely on a previous suite having built `apps/web/dist`.
 - Building the Docker web image does not populate the host workspace's `apps/web/dist`.
 
 ## Decision Log
+
+- Decision: Base this narrow change on master commit `a5bb8af48fd968898c7ed9fcbef7b376a71c8aa2`.
+  Rationale: Its merged prerequisite and cache work supply the current browser inventory. Runner migration
+  remains in PR #595, consistent with the completed prerequisite plan.
+  Date/Author: 2026-09-13, Codex implementation.
+- Decision: Include `[skip ci]` in the implementation commit and validate locally only.
+  Rationale: The user explicitly requested the CI skip. Do not dispatch or rerun Actions for this change.
+  Date/Author: 2026-09-13, user direction implemented by Codex.
 
 - Decision: Add explicit `:prebuilt` scripts and use them in CI after an explicit build.
   Rationale: Local commands preserve their behavior without hidden environment switches. Each suite's selectors
@@ -37,18 +50,25 @@ commands convenient: invoking a normal suite command still builds first. This is
 
 ## Outcomes & Retrospective
 
-Not started. No scripts or workflows have been changed for this plan.
+The package now exposes three commands that reuse an existing build. Each original suite command builds
+first and delegates to its corresponding new command. The browser job builds the workspace application
+once before its first preview consumer. All 122 focused Jest tests, selection fixtures, ESLint, `actionlint`,
+Harper, and the clean local web build passed. Test listings match the base exactly: 120 main browser tests,
+four accessibility tests, and four visual tests. Browser execution and Actions timing remain unverified
+because the user requested `[skip ci]`. No application architecture boundary changed, and review found
+no material SOLID trade-off.
 
 ## Context and Orientation
 
-The baseline is PR #595 head `626d67d7d4f44f2d4d0e74a97991fedba13f0070`. The older local checkout
-must not define the implementation's complete test inventory. `apps/web/package.json` owns the three scripts.
+The implementation base is master commit `a5bb8af48fd968898c7ed9fcbef7b376a71c8aa2`. It includes the
+90-minute browser budget, shared caches, and current proxy coverage. The planning baseline was PR #595
+head `626d67d7d4f44f2d4d0e74a97991fedba13f0070`. `apps/web/package.json` owns the three scripts.
 `apps/web/playwright.config.ts` runs Chromium at desktop and narrow viewports and starts
 `pnpm preview --host 127.0.0.1 --port 4173`. Sensitive configurations keep their own reporters, artifact
 restrictions, and one-worker execution.
 
-`.github/workflows/validate.yml` currently reaches the first preview consumer through `test:e2e` and later calls
-the other suites. `scripts/ci/validate-workflow.spec.ts` enforces same-job build prerequisites and command order.
+`.github/workflows/validate.yml` previously built through `test:e2e` before reaching the other preview consumers.
+It now declares the workspace build explicitly and invokes the three commands that reuse that build. `scripts/ci/validate-workflow.spec.ts` enforces same-job build prerequisites and command order.
 The later workflow split must carry the explicit workspace build into the UI worker.
 
 ## Scope and Non-Goals
@@ -95,15 +115,17 @@ browser image is not required for these source changes.
 
 ## Validation
 
-Run from the implementation checkout after dependency installation:
+Run from the implementation checkout with dependencies available:
 
 ```sh
 corepack pnpm test -- validate-workflow execplan-repository-fixture --runInBand
+corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 actionlint .github/workflows/validate.yml
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt --list
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt --list
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt --list
+corepack pnpm --filter @tuposoft/lead-email-finder-web build
 corepack pnpm docs:lint -- .agents/plans/browser-ci/02-reuse-web-build.md
 git diff --check
 ```
@@ -121,8 +143,31 @@ change, or application rollback is needed.
 
 ## Artifacts and Notes
 
-Record the implementation SHA, test-list comparison, workspace build count, selected run URL, and observed
-durations. Fewer build invocations are observable; runtime improvement must be measured.
+Implementation branch: `kk/604-reuse-web-build`, based on
+`a5bb8af48fd968898c7ed9fcbef7b376a71c8aa2`. The isolated checkout preserves the existing developer checkout.
+Issue #604 was assigned to the requesting user and moved to In Progress before implementation.
+
+Local validation on 2026-09-13 used installed dependency entries linked into this checkout, with
+`TMPDIR=/tmp TMP=/tmp TEMP=/tmp`. The workspace API client resolves to this checkout. The first build
+attempt exposed an incorrect dependency link to the older developer checkout; fixing that local link
+resolved the TypeScript errors without source changes. Build caches and `apps/web/dist` remain local
+to this checkout. A frozen offline install was unavailable because the shared pnpm store is read-only.
+
+The focused Jest command passed 122 tests across two suites. Its regressions reject missing, late,
+duplicate, or ignored builds, an extra standalone CI suite, and consumers configured to run after failure.
+Shell checks verify wrapper ordering and propagation of build and suite failures. Selection fixtures,
+ESLint, `actionlint` 1.7.12 at `/tmp/worker-ci-tools/actionlint`, Harper, and `git diff --check` passed.
+The clean workspace build passed with existing Vite configuration and chunk-size warnings.
+
+All three new commands and the original Playwright selectors produced identical test lists, including
+both desktop and narrow Chromium projects. The accessibility and visual lists each contain four tests
+in one file; the main browser list contains 120 tests in seven files. `apps/web/dist` was absent before
+and after all six listing commands. The subsequent explicit workspace build created it successfully.
+These checks do not execute browsers or establish an elapsed-time improvement.
+
+Actions: intentionally skipped at the user's request. There is no selected run URL, observed CI build count,
+suite result, or timing comparison for this revision. The workflow declares one workspace build; Docker
+image builds are separate. Runtime improvement remains unmeasured.
 
 Bruno: not applicable — package and CI orchestration change without changing HTTP behavior or collections.
 
