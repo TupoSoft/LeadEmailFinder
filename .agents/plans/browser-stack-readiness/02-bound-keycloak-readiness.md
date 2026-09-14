@@ -13,7 +13,7 @@ provisioning and an authenticated smoke test, or a bounded failure that stops de
 
 - [x] (2026-09-14) Make the Keycloak readiness deadline configurable and bound health polling.
 - [x] (2026-09-14) Test delayed readiness, deadline expiry, invalid settings, and reset safety.
-- [ ] (2026-09-14) Run focused checks and record a reset result on an isolated Docker daemon.
+- [x] (2026-09-14) Run focused checks and record a reset result on an isolated Docker daemon.
 - [ ] (2026-09-14) Record CI results at the implementation revision and any remaining failures.
 
 ## Plan dependencies
@@ -22,9 +22,11 @@ None.
 
 ## Surprises & Discoveries
 
-- (2026-09-14) PR #595 remains open at `c6d444f43c5f5667e427b3ecc1b84532e7814a14`. The implementation
-  branch starts there and merges current master `adf0e719f508b851d56629547a0a221fba4d21da`, which adds
-  the readiness plans. The approved runner labels are present before publication.
+- (2026-09-14) The initial implementation branch started at commit
+  `c6d444f43c5f5667e427b3ecc1b84532e7814a14` from PR #595 and merged master
+  `adf0e719f508b851d56629547a0a221fba4d21da`. Changing the PR target to master also included inherited
+  runner configuration and frontend test changes. The user requested their removal, so only the two
+  readiness commits were replayed onto master `2ac6ea303e40e78efca92da8baf82d838a337a6d`.
 - (2026-09-14) The local sandbox rejects synthetic child processes in workflow tests with `EPERM`.
   The same checks pass with child-process execution enabled; this is separate from application readiness.
 
@@ -41,6 +43,9 @@ None.
 - Decision: Keep the process adapter and polling function in one dependency-free Node module with injected
   timing and inspection functions. Rationale: this separates process control from readiness decisions without
   introducing a general process abstraction or changing shell orchestration. Date/Author: 2026-09-14, Codex implementation.
+- Decision: Target current master and limit the PR to this plan's six files. Rationale: the user's explicit
+  scope correction excludes inherited runner and frontend test changes. Workflow configuration comes from
+  master and is not modified by this PR. Date/Author: 2026-09-14, user-directed scope correction.
 
 ## Outcomes & Retrospective
 
@@ -48,7 +53,9 @@ The reset now validates its Keycloak allowance before any Docker command or fixt
 300 seconds, and preserves every other service's 120-second allowance. The Node helper uses one monotonic
 deadline, bounded inspection output, forced child termination, and normalized readiness results. Synthetic
 tests cover delayed recovery, late health, unavailable or malformed inspection, transient lifecycle states,
-dead containers, and failure propagation through the reset. Runtime and Actions results are still pending.
+dead containers, and failure propagation through the reset. The isolated reset passed provisioning and both
+smoke tests. At evidence collection time, Actions had passed repository policy but reported an unrelated
+socket timing assertion failure; image and browser results were still pending.
 
 ## Context and Orientation
 
@@ -82,9 +89,9 @@ belong to `browser-stack-readiness/01`. Additional waiting does not guarantee re
 
 ## Plan of Work
 
-Use an isolated checkout with current changes and the approved runner configuration before publishing
-Actions execution. Find the synced issue by `browser-stack-readiness/02`, then follow root `AGENTS.md`
-for assignment, Project 9 status, and PR linkage. PR #595 or its merged successor supplies runner routing.
+Use an isolated checkout based directly on current master and keep the PR limited to the files named in
+Scope and Non-Goals. Preserve master's workflow configuration. Find the synced issue by
+`browser-stack-readiness/02`, then follow root `AGENTS.md` for assignment, Project 9 status, and PR linkage.
 
 Move only health polling into a small Node helper using built-in modules. Keep the shell responsible for
 confirmation, ownership, destructive operations, provisioning, and sequence. The helper CLI accepts a
@@ -194,9 +201,39 @@ Focused evidence on 2026-09-14:
 - `corepack pnpm docs:lint -- docker/README.md .agents/plans/browser-stack-readiness` passes all four files.
 
 An empty, separate rootless Docker daemon was created with its socket, data, configuration, and execution
-directories under `/tmp/lef-issue-626-docker.CHmj4p`. The live reset is running against only that daemon,
-with `API_START_COMMAND='pnpm exec nest start'` and the timeout override unset. Runtime and selected Actions
-evidence remain pending; no successful live or Bruno result is claimed.
+directories under `/tmp/lef-issue-626-docker.CHmj4p`. The live reset targeted only that daemon,
+with `API_START_COMMAND='pnpm exec nest start'` and the timeout override unset. It completed with exit zero
+from 12:54:03 through 12:57:44 UTC on 2026-09-14: 221 seconds including fresh pulls and builds. Keycloak
+became healthy after 30.444 seconds of its 300-second wait. Other services retained 120-second budgets.
+Provisioning and all three bootstrap and seed commands completed successfully. The Keycloak and authenticated
+API smoke tests also passed. Every service with a health check was healthy; `bullboard` was running without one.
+Cleanup removed only the disposable daemon's Compose containers and volumes, verified both inventories empty,
+and stopped that daemon. The normal developer daemon was not used. The safe local evidence is recorded in
+`/tmp/lef-issue-626-docker.CHmj4p/safe-evidence.json`; exact first-health event timestamps were unavailable,
+so the Keycloak timing above measures only the helper's wait.
+
+[Draft PR #627](https://github.com/TupoSoft/LeadEmailFinder/pull/627) originally published implementation
+`62e9d7246e771c06fb480ba6be788d6b5bc6b230` against `kk/self-hosted-runners`.
+[Selected Actions run 34846443312](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34846443312)
+tested merge `d81d090b5bd27b2e6e97450234cc890f784a5e1e` on the approved pool. At last inspection it was
+in progress; its live suites, Bruno suites, and required aggregate were unverified. This is a snapshot of
+the implementation run, not a claim about later runs triggered by documentation updates.
+Repository policy passed on `swarm-gh-actions-runner-352303464ead0dfb`. Backend lint and type checking
+passed on `swarm-gh-actions-runner-938c7c1e4efc12d1`, but the Jest step failed one unchanged assertion in
+`src/libs/socket/src/connect.spec.ts:52`: a silent HTTP CONNECT proxy timed out in 597 milliseconds,
+exceeding the test's 500-millisecond bound. Jest reported 3,196 passes, one failure, and 109 skips.
+That failure prevented the subsequent Node runner suite, database checks, and backend build from executing.
+The socket test and implementation are unchanged from the PR base; this separate timing failure is outside scope.
+The focused local command `corepack pnpm test -- src/libs/socket/src/connect.spec.ts --runInBand`
+passed all five tests, including that HTTP CONNECT case in 61 milliseconds.
+
+After the user's scope correction, PR #627 targets master and contains only the six files named in this plan.
+Its replayed implementation is `d55bf8d`, based on master `2ac6ea303e40e78efca92da8baf82d838a337a6d`.
+The readiness code, tests, and Docker guide are identical to the original implementation; the ExecPlan
+records the new base and scope. The earlier runtime evidence remains historical, and CI on the cleaned
+branch is unverified.
+After this cleanup, the focused readiness and reset command passed all 74 tests. The workflow and ExecPlan
+command passed 209 tests against the updated master workflow. Node and shell syntax checks also passed.
 
 Diagnosis used PR head `c6d444f43c5f5667e427b3ecc1b84532e7814a14`; Actions tested merge commit
 `9b8acee4aaad9e062837ef39e35199221b03fa1d` into `49aa9442d0355846ea5d760f06d4cb0b1ea35138`.
