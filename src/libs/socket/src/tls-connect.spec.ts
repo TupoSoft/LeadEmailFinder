@@ -94,18 +94,26 @@ describe('tlsConnectAsync', () => {
     })
 
     it('rejects and destroys the socket when the peer never completes the TLS handshake', async () => {
-        server = createNetServer(socket => {
-            peerConnection = socket
+        const handshakeStarted = new Promise<Buffer>(resolveHandshake => {
+            server = createNetServer(socket => {
+                peerConnection = socket
+                socket.once('data', resolveHandshake)
+            })
         })
         await listen()
         connection = await connectRawSocket()
 
         const controller = new AbortController()
-        setTimeout(() => controller.abort(new Error('deadline')), 30)
+        const reason = new Error('deadline')
+        const rejected = expect(tlsConnectAsync({ socket: connection }, controller.signal)).rejects.toMatchObject({
+            name: 'AbortError',
+            cause: reason,
+        })
 
-        const start = Date.now()
-        await expect(tlsConnectAsync({ socket: connection }, controller.signal)).rejects.toThrow()
-        expect(Date.now() - start).toBeLessThan(500)
+        const clientHello = await handshakeStarted
+        expect(clientHello[0]).toBe(0x16)
+        controller.abort(reason)
+        await rejected
         expect(connection.destroyed).toBe(true)
     })
 })

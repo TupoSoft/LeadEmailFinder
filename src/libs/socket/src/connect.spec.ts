@@ -9,6 +9,8 @@ describe('connect', () => {
     let proxyConnection: Socket | undefined
 
     beforeEach(async () => {
+        connection = undefined
+        proxyConnection = undefined
         server = createServer()
         await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
         const address = server.address()
@@ -19,10 +21,19 @@ describe('connect', () => {
     })
 
     afterEach(async () => {
+        jest.useRealTimers()
         connection?.destroy()
         proxyConnection?.destroy()
         await new Promise<void>((resolve, reject) => server.close(error => (error != null ? reject(error) : resolve())))
     })
+
+    function waitForProxyClose(): Promise<void> {
+        return new Promise(resolve => {
+            server.once('connection', socket => {
+                socket.once('close', () => resolve())
+            })
+        })
+    }
 
     it('connects directly to a responsive server, unaffected by a configured deadline', async () => {
         server.once('connection', socket => {
@@ -35,13 +46,17 @@ describe('connect', () => {
     })
 
     it('rejects with a typed timeout and destroys the socket when an HTTP CONNECT proxy never responds', async () => {
-        server.once('connection', socket => {
-            proxyConnection = socket
-            // Accept the TCP connection and read the CONNECT request, but never answer it.
+        const proxyClosed = waitForProxyClose()
+        const requestReceived = new Promise<void>(resolve => {
+            server.once('connection', socket => {
+                proxyConnection = socket
+                // Read the CONNECT request, but never answer it.
+                socket.once('data', () => resolve())
+            })
         })
 
-        const start = Date.now()
-        await expect(
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'clearImmediate'] })
+        const timedOut = expect(
             connect({
                 host: 'smtp.lef.test',
                 port: 2525,
@@ -49,20 +64,34 @@ describe('connect', () => {
                 proxy: { type: 'http', host: '127.0.0.1', port },
             }),
         ).rejects.toBeInstanceOf(ConnectionTimeoutError)
-        expect(Date.now() - start).toBeLessThan(500)
+        const settled = jest.fn()
+        void timedOut.then(settled, settled)
+
+        await requestReceived
+        await jest.advanceTimersByTimeAsync(49)
+        expect(settled).not.toHaveBeenCalled()
+        expect(proxyConnection?.destroyed).toBe(false)
+        await jest.advanceTimersByTimeAsync(1)
+        await timedOut
+        await proxyClosed
+        expect(proxyConnection?.destroyed).toBe(true)
     })
 
     it('rejects with a typed timeout when a SOCKS5 proxy stalls mid-negotiation', async () => {
-        server.once('connection', socket => {
-            proxyConnection = socket
-            // Accept the TCP connection and reply to the auth-method negotiation, then stall forever.
-            socket.once('data', () => {
-                socket.write(Buffer.from([0x05, 0x02]))
+        const proxyClosed = waitForProxyClose()
+        const credentialsReceived = new Promise<void>(resolve => {
+            server.once('connection', socket => {
+                proxyConnection = socket
+                // Choose password authentication, read the credentials, then stall.
+                socket.once('data', () => {
+                    socket.once('data', () => resolve())
+                    socket.write(Buffer.from([0x05, 0x02]))
+                })
             })
         })
 
-        const start = Date.now()
-        await expect(
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'clearImmediate'] })
+        const timedOut = expect(
             connect({
                 host: 'smtp.lef.test',
                 port: 2525,
@@ -70,16 +99,30 @@ describe('connect', () => {
                 proxy: { type: 'socks5', host: '127.0.0.1', port, user: 'user', password: 'pass' },
             }),
         ).rejects.toBeInstanceOf(ConnectionTimeoutError)
-        expect(Date.now() - start).toBeLessThan(500)
+        const settled = jest.fn()
+        void timedOut.then(settled, settled)
+
+        await credentialsReceived
+        await jest.advanceTimersByTimeAsync(49)
+        expect(settled).not.toHaveBeenCalled()
+        expect(proxyConnection?.destroyed).toBe(false)
+        await jest.advanceTimersByTimeAsync(1)
+        await timedOut
+        await proxyClosed
+        expect(proxyConnection?.destroyed).toBe(true)
     })
 
     it('rejects with a typed timeout when a SOCKS4 proxy accepts TCP but never responds', async () => {
-        server.once('connection', socket => {
-            proxyConnection = socket
+        const proxyClosed = waitForProxyClose()
+        const requestReceived = new Promise<void>(resolve => {
+            server.once('connection', socket => {
+                proxyConnection = socket
+                socket.once('data', () => resolve())
+            })
         })
 
-        const start = Date.now()
-        await expect(
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate', 'clearImmediate'] })
+        const timedOut = expect(
             connect({
                 host: '127.0.0.1',
                 port: 2525,
@@ -87,7 +130,17 @@ describe('connect', () => {
                 proxy: { type: 'socks4', host: '127.0.0.1', port },
             }),
         ).rejects.toBeInstanceOf(ConnectionTimeoutError)
-        expect(Date.now() - start).toBeLessThan(500)
+        const settled = jest.fn()
+        void timedOut.then(settled, settled)
+
+        await requestReceived
+        await jest.advanceTimersByTimeAsync(49)
+        expect(settled).not.toHaveBeenCalled()
+        expect(proxyConnection?.destroyed).toBe(false)
+        await jest.advanceTimersByTimeAsync(1)
+        await timedOut
+        await proxyClosed
+        expect(proxyConnection?.destroyed).toBe(true)
     })
 
     it('keeps a caller abort distinguishable from deadline expiry', async () => {

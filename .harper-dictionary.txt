@@ -81,6 +81,7 @@ SameSite
 ShellCheck
 SMTP
 SOCKS5
+SOCKS4
 Startup
 sshuttle
 swc

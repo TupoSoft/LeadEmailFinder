@@ -38,6 +38,10 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-14) Add conservative selection of affected unit tests in GitHub Actions and local validation.
 - [x] (2026-09-14) Validate dependency discovery, fallback coverage, and failure propagation locally.
 - [x] (2026-09-14) Prepare the validated selection follow-up for publication in PR #595.
+- [x] (2026-09-14) Diagnose backend job `104085084575`: its typed socket timeout passed, but elapsed time exceeded 500 milliseconds.
+- [x] (2026-09-14) Replace proxy elapsed-time assertions with a controlled deadline clock and real connection closure checks.
+- [x] (2026-09-14) Trigger TLS cancellation after observing handshake data and verify its error and socket cleanup.
+- [x] (2026-09-14) Validate the socket follow-up on Node 24.21.0, exercise negative controls, and prepare publication.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -46,6 +50,11 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-14) Backend job `104085084575` passed 3,287 tests and failed one assertion after 625 seconds of testing.
+  The HTTP proxy test correctly rejected with `ConnectionTimeoutError`, but measured 2,595 milliseconds against
+  a 500-millisecond elapsed-time limit. That limit includes runner scheduling delays and cannot establish the
+  configured 50-millisecond timer.
+  The SOCKS4, SOCKS5, and TLS tests used the same fragile elapsed-time assumption.
 - (2026-09-12) The existing YAML parser accepted only a scalar `runs-on` value. Valid label arrays failed before
   any workflow assertions could execute.
 - (2026-09-12) Browser validation uses a fixed `lef` Compose project, fixed public ports, and destructive cleanup.
@@ -75,6 +84,11 @@ None.
 
 ## Decision Log
 
+- Decision: Fix socket timing assertions in this PR without changing runtime deadlines or application behavior.
+  Rationale: Wait for real HTTP or SOCKS handshake progress, leave native socket scheduling active, and advance
+  only the test clock. Require the operation to remain pending at 49 milliseconds, reject at 50 milliseconds, and close the peer
+  connection. For TLS, observe handshake bytes, abort explicitly, and check the abort reason and socket cleanup.
+  Date/Author: 2026-09-14, user-authorized backend job follow-up.
 - Decision: Apply selection of affected unit tests to GitHub Actions and local validation in this existing PR.
   Rationale: The user explicitly requested both. Reuse the existing consumer selection and Git comparison logic.
   For ordinary existing source files, ask Jest or Vitest for related tests separately for each changed file. Run
@@ -186,6 +200,18 @@ Focused ESLint, Actionlint with ShellCheck, selection fixtures, and the architec
 There is no HTTP behavior change and no material application architecture trade-off. A complete successful
 Actions run remains unverified; queued or running jobs are not evidence of success.
 
+The socket follow-up passed all 14 focused socket tests on Node 24.21.0, matching the failed Actions job, with
+zero skipped tests. The official Node archive checksum was verified before execution. Local affected validation
+selected the two edited test files: all nine tests and all 92 retained backend Node runner tests passed.
+Focused ESLint and the architecture gate passed with zero violations; runtime socket code remains unchanged.
+
+Both deadline negative controls failed as expected: expiry at 49 milliseconds fails the pending-operation assertion,
+and expiry at 51 milliseconds fails within the temporary fixture's bounded test deadline. A controlled comparison
+blocked the JavaScript thread for 600 milliseconds after creating the deadline. The original HTTP test failed its
+500-millisecond elapsed-time assertion at 615 milliseconds; the corrected test passed under the same block.
+These fixtures demonstrate independence from scheduling delay, not a performance improvement on CI. Temporary
+fixture trees were removed. A complete successful Actions run for the published follow-up remains unverified.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -215,8 +241,12 @@ The selection follow-up adds `scripts/ci/test-affected.mjs`, its dependency disc
 tests. It updates the root package scripts, README, workflow commands, and workflow contracts. It narrows only
 unit test files for known source changes; existing job selection still governs integration and browser validation.
 
+The socket follow-up changes `src/libs/socket/src/connect.spec.ts`, `src/libs/socket/src/tls-connect.spec.ts`,
+this plan, and the prose dictionary for the SOCKS4 protocol name. It replaces scheduling-sensitive assertions with
+controlled deadline and cancellation checks while preserving real socket communication and cleanup coverage.
+
 It does not alter HTTP APIs, Bruno collections, business modules, database schemas, application images, workflow
-triggers, permissions, required check names, or test assertions. It does not implement or deploy Swarm
+triggers, permissions, or required check names. It does not implement or deploy Swarm
 infrastructure. No development reset, migration, or seed operation is required for these source changes.
 
 ## Plan of Work
@@ -277,6 +307,11 @@ tests can proceed independently. New workflow jobs must not become active before
 
 ## Acceptance Criteria
 
+- HTTP CONNECT, SOCKS4, and SOCKS5 tests wait for protocol progress, remain pending at 49 milliseconds, and reject with
+  `ConnectionTimeoutError` at 50 milliseconds while closing the peer connection. Changing expiry to 49 or 51 milliseconds makes
+  the focused regression fail. TLS cancellation preserves its abort error, cause, and raw socket destruction.
+- Focused socket suites pass on Node 24.21.0, the exact version used by the failed Actions job. Runtime socket
+  code, configured deadlines, and workflow requirements remain unchanged.
 - A source change runs its direct and transitive test dependents; a changed test selects itself.
 - Every changed source must have related tests. An uncovered source, failed graph discovery, deleted file, shared
   fixture, configuration change, or untrusted comparison runs the full relevant suite.
@@ -303,6 +338,20 @@ tests can proceed independently. New workflow jobs must not become active before
   `Validate / validate` result. That runtime criterion remains unverified until actual execution.
 
 ## Validation
+
+Socket follow-up validation:
+
+```sh
+corepack pnpm test:affected --base HEAD --suite backend
+/tmp/lef-pr595-node24/node-v24.21.0-linux-x64/bin/node node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/libs/socket/src/connect.spec.ts src/libs/socket/src/tls-connect.spec.ts src/libs/socket/src/connection-deadline.spec.ts
+corepack pnpm exec eslint src/libs/socket/src/connect.spec.ts src/libs/socket/src/tls-connect.spec.ts
+corepack pnpm architecture:check
+corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+Verify the temporary Node runtime against the official archive checksum before use. For negative controls, copy
+the socket sources to a temporary fixture and change only the deadline expiry to 49 or 51 milliseconds; the HTTP timeout
+test must fail in each case. Keep the repository sources unchanged and remove the owned temporary fixtures.
 
 Run from the LeadEmailFinder repository root:
 
