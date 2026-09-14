@@ -18,7 +18,7 @@ const scenarios = [
 ]
 
 // Run explicitly after installing Chromium; this is not a browser-free unit-test suite.
-for (const { name, timeoutGuard, override, setupDelay = 0 } of scenarios) test(`shared-fixture ${name} protection prevents auth capture`, { timeout: 60_000 }, () => {
+for (const { name, timeoutGuard, override, setupDelay = 0 } of scenarios) test(`shared-fixture ${name} protection prevents auth capture`, { timeout: 120_000 }, () => {
     const directory = mkdtempSync(join(tmpdir(), 'lef-browser-artifact-guard-'))
     const outputDirectory = join(directory, 'results')
     const syntheticMaterial = 'SYNTHETIC_AUTH_MATERIAL_MUST_NEVER_REACH_OUTPUT'
@@ -56,6 +56,8 @@ test('owner guarded authentication failure', async ({ page, loginAs }) => {
     const context = page.context()
     const close = context.close.bind(context)
     context.close = async (...options) => {
+        // Delay authentication cleanup once; Playwright also closes the context during teardown.
+        context.close = close
         // Exceed the entire budget so a missing timeout suspension still fails this guard.
         await new Promise(resolve => setTimeout(resolve, timeout + 200))
         return close(...options)
@@ -72,11 +74,16 @@ test('owner guarded authentication failure', async ({ page, loginAs }) => {
             cwd: webRoot,
             env: environment,
             encoding: 'utf8',
-            timeout: 45_000,
+            // Include process startup, browser setup, the deliberate slow close, and teardown.
+            timeout: 90_000,
             maxBuffer: 1_000_000,
         })
-        assert.equal(Boolean(result.error), false, 'The artifact guard must execute Playwright successfully')
-        assert.equal(result.status, 1, 'The intentional authentication rejection must fail its child test')
+        // Keep child output private while distinguishing timeouts from other execution failures.
+        const executionDetails = `code=${result.error?.code ?? 'none'}, signal=${result.signal ?? 'none'}, status=${result.status ?? 'none'}`
+        assert.equal(Boolean(result.error), false,
+            `The artifact guard must execute Playwright successfully (${executionDetails})`)
+        assert.equal(result.status, 1,
+            `The intentional authentication rejection must fail its child test (${executionDetails})`)
         const output = `${result.stdout}\n${result.stderr}`
         assert.equal(output.includes('owner: FAIL'), true, 'The dedicated reporter must report the failed identity')
         assert.equal(output.includes('Confirm stack ownership'), true, 'The failure must include static recovery guidance')

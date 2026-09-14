@@ -29,7 +29,10 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-14) Allow 30 seconds for credits initialization, run one web test worker, and save installed dependencies before tests.
 - [x] (2026-09-14) Allow 30 minutes for browser artifacts and 60 minutes for image validation; preserve required checks.
 - [x] (2026-09-14) Pass 628 web tests, 52 real database tests, 327 workflow and plan tests, and static checks.
-- [ ] (2026-09-14) Publish the fix and inspect the fresh Actions run.
+- [x] (2026-09-14) Publish commit `a3f0b17` and inspect run `34867835332`; the artifact guard still fails.
+- [x] (2026-09-14) Apply the deliberate browser shutdown delay once and allow bounded subprocess headroom.
+- [x] (2026-09-14) Pass all 50 artifact guards, both negative controls, and the comparison with delayed browser initialization.
+- [ ] (2026-09-14) Publish the artifact guard follow-up and inspect its fresh Actions result.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -54,6 +57,10 @@ None.
 - (2026-09-14) The browser workspace dependency cache was missing. The combined cache action saves only after
   job success, so later test failures or job timeouts prevented the installed dependencies from being saved.
 - (2026-09-14) A fresh issue search still found no synced `self-hosted-runners/01` issue.
+- (2026-09-14) Job `104056594425` passed installation and cache saving, then failed one of six privileged
+  artifact guards after 47.1 seconds. Its subprocess deadline was 45 seconds, but the assertion hid the error code.
+  The guard delayed every context close based on the setup duration. Authentication cleanup and Playwright
+  teardown both close the context, so slow setup increased the artificial delay twice.
 
 ## Decision Log
 
@@ -76,6 +83,12 @@ None.
   Rationale: Later failures must not discard a usable dependency cache. An exact cache hit avoids a redundant
   save; a restore or save failure remains nonfatal, and an installation failure still stops the job.
   Date/Author: 2026-09-14, implementation.
+- Decision: Apply the privileged guard's deliberate shutdown delay once, with a 90-second child process budget
+  and a 120-second outer test budget. Include only the subprocess error code, signal, and exit status in diagnostics.
+  Rationale: Browser startup and deliberate deadline crossing need bounded headroom on isolated workers. Repeated
+  teardown must not repeat the artificial delay, and failure diagnostics must not expose captured child output.
+  Preserve the artifact assertions and verify that removing timeout suspension still makes both timeout guards fail.
+  Date/Author: 2026-09-14, user-authorized artifact job follow-up.
 
 ## Outcomes & Retrospective
 
@@ -108,6 +121,21 @@ All 327 workflow, selection, and plan tests passed. Focused ESLint, TypeScript, 
 violations, Actionlint with ShellCheck, and selection fixtures passed. The web suite ran locally on Node 22.18.0
 in 66.73 seconds; this larger host does not establish timing recovery on the two-CPU Actions workers.
 
+The artifact guard follow-up passed all six privileged scenarios on Node 22.18.0 with Playwright 1.63.0 and
+Chromium 153. Both negative controls rejected forbidden `error-context.md` artifacts when timeout suspension
+was temporarily removed. The production fixture was restored exactly, and all six scenarios passed again in
+15.8 seconds. This validates the artifact protection assertions locally; a fresh Actions result remains pending.
+
+A controlled comparison used temporary copies with 15 seconds of synthetic setup and the same 45-second child
+budget. The original guard failed after 45.066 seconds; the updated guard passed in 33.617 seconds. This reproduces
+the timing failure and validates the single shutdown delay independently of the larger budget. A separate one-millisecond
+child deadline produced `code=ETIMEDOUT, signal=SIGTERM, status=none`, with no synthetic authentication marker in
+the parent output. The production fixture remained unchanged after validation.
+
+All five artifact suites passed locally: 6 privileged, 24 invitation, 2 verification, 8 service-client, and 10 proxy
+guards, with no failures or skips. Focused ESLint, JavaScript syntax, and the real ExecPlan repository fixture passed.
+The diff keeps application behavior and artifact protection unchanged; no material architectural trade-off was found.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -126,8 +154,9 @@ Swarm change supplies that boundary through one ephemeral worker and one private
 
 This plan corresponds to one LeadEmailFinder pull request containing the two workflow target changes,
 `scripts/ci/validate-workflow.spec.ts`, the custom labels in `.github/actionlint.yaml`, the root README CI paragraph,
-and this plan with its road map. The authorized follow-up also adjusts only the shared setup timeout in
-`src/libs/modules/credits/src/application/credits.service.integration.spec.ts` and the CI worker count.
+and this plan with its road map. The authorized follow-up also adjusts the shared setup timeout in
+`src/libs/modules/credits/src/application/credits.service.integration.spec.ts`, the CI worker count, and the timing
+and subprocess diagnostics in `scripts/testing/browser-fixture-artifacts.spec.mjs`.
 
 It does not alter HTTP APIs, Bruno collections, business modules, database schemas, application images, workflow
 triggers, permissions, required check names, or test assertions. It does not implement or deploy Swarm
@@ -143,6 +172,13 @@ suite with `--maxWorkers=1`, retain its existing DOM and whole-test deadlines, a
 hook a 30-second timeout. Set the artifact worker to 30 minutes and image validation to 60 minutes. Replace the
 combined dependency cache actions with separate restore and immediate save steps. Keep cache keys, paths,
 installation commands, and their selection guards compatible with existing caches.
+
+For the artifact guard follow-up, restore the original context close method before awaiting the deliberate delay.
+Keep the delay longer than the entire synthetic test deadline so missing timeout suspension remains detectable.
+Allow 90 seconds for the child process and 120 seconds for its parent test; report execution metadata without child
+output. Run the guard scenarios and a temporary negative control with timeout suspension removed, then restore
+the production fixture before committing. The existing Playwright CLI scripts are required because this check
+tests subprocess termination, a dedicated reporter, and filesystem artifacts that an interactive browser cannot verify.
 
 Extend the existing YAML parser to accept a string containing visible characters or a nonempty array of such strings. Add fixtures
 for both valid forms and reject missing, null, numeric, boolean, blank, empty, mixed, nested, and mapping values.
@@ -181,6 +217,9 @@ tests can proceed independently. New workflow jobs must not become active before
 - Web CI runs one test worker; existing authorization assertions, DOM waits, and whole-test deadlines remain intact.
 - Credits database setup has a 30-second deadline; assertion and teardown deadlines remain unchanged.
 - Browser artifacts and image validation have finite 30- and 60-minute job budgets, respectively.
+- All six privileged artifact guards pass; both timeout scenarios still fail if authentication timeout suspension
+  is removed. The deliberate close delay runs once, and subprocess failures identify their code, signal, and status
+  without exposing captured output.
 - After the external deployment, a complete Actions run uses the upgraded pool and preserves the required
   `Validate / validate` result. That runtime criterion remains unverified until actual execution.
 
@@ -207,6 +246,24 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
 ```
+
+Artifact guard follow-up validation uses Chromium matching the lockfile, installed outside the checkout:
+
+```sh
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install chromium
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitation-artifacts
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-client-artifacts
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts
+corepack pnpm exec eslint scripts/testing/browser-fixture-artifacts.spec.mjs
+```
+
+For the negative control, temporarily remove only `info.setTimeout(0)` from
+`apps/web/tests/support/privileged-login.ts`. Run
+`PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright node --test --test-name-pattern=runner-timeout scripts/testing/browser-fixture-artifacts.spec.mjs`.
+Require both selected guards to fail their protection assertions, then restore the fixture exactly and rerun the
+positive suite. Never print the child's captured output while diagnosing these checks.
 
 The database helper owns a separate disposable PostgreSQL container for this checkout. Verify its ownership
 before cleanup. A local pass does not prove recovery on the isolated Actions workers; inspect a fresh run of the
