@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { consumers } from './select-validation.mjs'
-import { compileWorkflow, executeShell, main, readWorkflow, runChecks, selectLocalValidation } from './run-local-checks.mjs'
+import { compileLocalWorkflow, compileWorkflow, executeShell, main, readWorkflow, runChecks } from './run-local-checks.mjs'
 
 const workflow = readWorkflow()
 const allSelected = Object.fromEntries(consumers.map(name => [name, true]))
@@ -91,15 +91,96 @@ test('fails closed for invalid selection outputs', () => {
     assert.throws(() => compileWorkflow(workflow, { backend: true }), /selection keys/)
 })
 
-test('uses existing selector for trustworthy comparisons and selects everything on discovery failure', () => {
-    const expected = selection('repositoryPolicy')
-    const actual = selectLocalValidation({ base: 'a'.repeat(40), commit: 'b'.repeat(40), repository: '/repo', discover: (...args) => {
+test('local planning uses the exact comparison and scopes nested documentation to Harper', () => {
+    const actual = compileLocalWorkflow(workflow, { base: 'a'.repeat(40), commit: 'b'.repeat(40), repository: '/repo', discover: (...args) => {
         assert.deepEqual(args, ['push', { before: 'a'.repeat(40), after: 'b'.repeat(40) }, '/repo'])
-        return ['docs/readme.md']
+        return ['apps/web/README.md']
     } })
-    assert.deepEqual(actual, expected)
-    assert.deepEqual(selectLocalValidation({ discover: () => { throw new Error('Missing base') } }), allSelected)
-    assert.deepEqual(selectLocalValidation({ discover: () => ['../untrusted'] }), allSelected)
+    assert.deepEqual(actual.jobs.filter(job => job.selected).flatMap(job => job.steps.map(step => step.command)), ['corepack pnpm docs:lint:changed'])
+})
+
+test('uncertain local comparisons fail instead of silently validating the entire repository', () => {
+    assert.throws(() => compileLocalWorkflow(workflow), /comparison base is required/)
+    assert.throws(() => compileLocalWorkflow(workflow, { base: 'a'.repeat(40), discover: () => { throw new Error('Missing history') } }), /Missing history/)
+    assert.throws(() => compileLocalWorkflow(workflow, { base: 'a'.repeat(40), discover: () => ['../untrusted'] }), /path/i)
+    assert.throws(() => compileLocalWorkflow(workflow, { base: 'a'.repeat(40), all: true }), /not both/)
+})
+
+test('an explicit full local run retains every check without discovering a comparison', () => {
+    const plan = compileLocalWorkflow(workflow, { all: true, discover: () => { throw new Error('Must not discover') } })
+    assert(plan.jobs.every(job => job.selected))
+    assert.deepEqual(plan.accounted, compileWorkflow(workflow, allSelected).accounted)
+    assert.equal(plan.jobs[0].steps.find(step => step.advisory).command, 'corepack pnpm docs:lint')
+})
+
+test('an empty local comparison executes no checks, database services, or cleanup commands', async () => {
+    const fake = record()
+    const plan = compileLocalWorkflow(workflow, { base: 'a'.repeat(40), commit: 'b'.repeat(40), discover: () => [] })
+    await runChecks(plan, fake)
+    assert.deepEqual(fake.calls, [])
+})
+
+test('incremental tooling validation continues after Harper and stops at its first required failure', async () => {
+    const plan = compileLocalWorkflow(workflow, {
+        base: 'a'.repeat(40), commit: 'b'.repeat(40),
+        discover: () => ['README.md', 'scripts/ci/run-local-checks.mjs'],
+    })
+    const harper = 'repository-policy/Lint changed documentation with Harper'
+    const required = 'repository-policy/Test local validation and Git hooks'
+    const messages = []
+    const fake = record(step => [harper, required].includes(step.label))
+    await assert.rejects(runChecks(plan, { ...fake, log: message => messages.push(message) }), /Test local validation and Git hooks/)
+    assert(messages.some(message => message.startsWith(`Advisory check failed: ${harper}:`)))
+    assert.equal(fake.calls.at(-1).label, required)
+    assert(!fake.calls.some(step => /docker|playwright|pnpm build/.test(step.command)))
+})
+
+test('an application dependency selects only its related database suite with the dedicated environment', async () => {
+    const path = 'src/libs/modules/credits/src/application/credits.service.ts'
+    const plan = compileLocalWorkflow(workflow, {
+        base: 'a'.repeat(40), commit: 'b'.repeat(40), discover: () => [path],
+        relatedJestTests: paths => {
+            assert.deepEqual(paths, [path])
+            return ['/repo/src/credits.service.integration.spec.ts', '/repo/src/credits.service.spec.ts']
+        },
+    })
+    const fake = record()
+    await runChecks(plan, fake)
+    assert(fake.calls.some(step => step.label === 'backend/Start PostgreSQL'))
+    const database = fake.calls.filter(step => Object.keys(step.env).some(key => key.startsWith('TEST_')))
+    assert.deepEqual(database.map(step => step.label), ['backend/Test credit account debits against a real database'])
+    assert.equal(database[0].env.TEST_CREDITS_POSTGRES_URL, 'postgresql://postgres:postgres@localhost:5432/lef_identity_test')
+    assert.match(fake.calls.find(step => step.label === 'backend/Test').command, /--findRelatedTests/)
+    assert.equal(fake.calls.at(-1).label, 'backend/Stop PostgreSQL')
+})
+
+test('ordinary source with no related integration tests starts no database or unrelated checks', async () => {
+    const plan = compileLocalWorkflow(workflow, {
+        base: 'a'.repeat(40), commit: 'b'.repeat(40),
+        discover: () => ['src/libs/modules/email-verification/src/application/finding/normalize-finding-input.ts'],
+        relatedJestTests: () => ['/repo/src/normalize-finding-input.spec.ts'],
+    })
+    const fake = record()
+    await runChecks(plan, fake)
+    assert.deepEqual(fake.calls.map(step => step.label), ['repository-policy/Check module architecture', 'backend/Lint', 'backend/Test'])
+})
+
+test('deleted backend dependencies retain all database coverage without trusting an incomplete graph', () => {
+    const plan = compileLocalWorkflow(workflow, {
+        base: 'a'.repeat(40), commit: 'b'.repeat(40), discover: () => ['src/deleted-incremental-fixture.ts'],
+        relatedJestTests: () => assert.fail('Deleted source requires a full target test run'),
+    })
+    const backend = plan.jobs.find(job => job.id === 'backend')
+    assert(backend.service)
+    assert.equal(backend.steps.filter(step => Object.keys(step.env).some(key => key.startsWith('TEST_'))).length, 5)
+    assert(!plan.jobs.filter(job => job.id !== 'backend').some(job => job.selected))
+})
+
+test('related-test discovery failure stops local planning rather than silently skipping integration coverage', () => {
+    assert.throws(() => compileLocalWorkflow(workflow, {
+        base: 'a'.repeat(40), commit: 'b'.repeat(40), discover: () => ['src/libs/modules/credits/src/application/credits.service.ts'],
+        relatedJestTests: () => { throw new Error('Dependency graph is unavailable') },
+    }), /Dependency graph is unavailable/)
 })
 
 test('runs only selected consumers and forwards base revisions to their checks', async () => {
@@ -110,9 +191,11 @@ test('runs only selected consumers and forwards base revisions to their checks',
     assert(fake.calls.some(step => step.env.ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA === 'a'.repeat(40)))
 })
 
-test('a missing remote comparison lints all tracked documentation', async () => {
+test('an explicit full run lints all tracked documentation', async () => {
     const fake = record()
-    await runChecks(compileWorkflow(workflow, selection('repositoryPolicy')), fake)
+    const plan = compileLocalWorkflow(workflow, { all: true })
+    plan.jobs = plan.jobs.filter(job => job.id === 'repository-policy')
+    await runChecks(plan, fake)
     const harper = fake.calls.find(step => step.label.endsWith('/Lint changed documentation with Harper'))
     assert.equal(harper.command, 'corepack pnpm docs:lint')
     assert.equal(harper.env.HARPER_BASE_SHA, '')

@@ -30,6 +30,9 @@ async function fixture() {
     git(source, 'add', '.')
     git(source, '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '-m', 'second')
     const commit = git(source, 'rev-parse', 'HEAD')
+    git(source, 'remote', 'add', 'origin', source)
+    git(source, 'update-ref', 'refs/remotes/origin/master', base)
+    git(source, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master')
     return { root, source, base, commit }
 }
 after(async () => {
@@ -39,7 +42,10 @@ after(async () => {
 test('CLI rejects unknown options and option injection', () => {
     assert.deepEqual(parseArguments([]), { commit: 'HEAD' })
     assert.deepEqual(parseArguments(['--commit', 'main~2', '--base', 'a'.repeat(40)]), { commit: 'main~2', base: 'a'.repeat(40) })
-    for (const args of [['--all'], ['--commit'], ['--commit', '--help'], ['--base', 'HEAD'], ['--base', 'bad\ninput']]) {
+    assert.deepEqual(parseArguments(['--all', '--commit', 'main']), { commit: 'main', all: true })
+    assert.deepEqual(parseArguments(['--remote', 'upstream']), { commit: 'HEAD', remote: 'upstream' })
+    for (const args of [['--commit'], ['--commit', '--help'], ['--base', 'HEAD'], ['--base', 'bad\ninput'],
+        ['--all', '--base', 'a'.repeat(40)], ['--remote'], ['--all', '--all'], ['--base', 'a'.repeat(40), '--base', 'b'.repeat(40)]]) {
         assert.throws(() => parseArguments(args))
     }
 })
@@ -63,6 +69,10 @@ test('isolated container has no host sockets, mounts, ports, or shared Docker da
     assert.ok(args.includes('--privileged'))
     assert.ok(args.includes('LEF_VALIDATION_COMMIT=' + 'a'.repeat(40)))
     assert.ok(args.includes('LEF_VALIDATION_BASE=' + 'b'.repeat(40)))
+    assert.ok(!args.includes('LEF_VALIDATION_ALL=1'))
+    const full = containerArguments('owned-run', 'runner:version', 'a'.repeat(40), undefined, true)
+    assert.ok(full.includes('LEF_VALIDATION_ALL=1'))
+    assert.ok(!full.some(argument => argument.startsWith('LEF_VALIDATION_BASE=')))
     for (const forbidden of ['--mount', '--volume', '-v', '--publish', '-p', '--network', '--pid', '--volumes-from']) {
         assert.ok(!args.includes(forbidden))
     }
@@ -134,6 +144,79 @@ test('a remote Docker context fails before snapshot creation or image build', as
     }
     await assert.rejects(validateLocally({ commit }, { repository: source, run, environment: {} }), /local Docker Unix socket/)
     assert.equal(calls.length, 1)
+})
+
+test('missing comparison history fails before any Docker call instead of selecting all checks', async () => {
+    const { source, commit } = await fixture()
+    const calls = []
+    const run = (command, args, options) => {
+        calls.push({ command, args })
+        return execute(command, args, options)
+    }
+    await assert.rejects(validateLocally({ commit, base: 'f'.repeat(40) }, { repository: source, run }), /comparison commit is unavailable/)
+    assert.ok(calls.every(call => call.command === 'git'))
+})
+
+test('manual validation resolves the remote default merge base before Docker starts', async () => {
+    const { source, commit, base } = await fixture()
+    let resolved
+    const run = (command, args, options) => {
+        if (command !== 'docker') return execute(command, args, options)
+        throw new Error('Stop before Docker starts')
+    }
+    const { resolveComparisonBase } = await import('./comparison-base.mjs')
+    await assert.rejects(validateLocally({ commit }, {
+        repository: source,
+        run,
+        resolveBase: (options, context) => { resolved = resolveComparisonBase(options, context); return resolved },
+    }), /Stop before Docker starts/)
+    assert.equal(resolved, base)
+})
+
+test('verified empty tree comparisons skip Docker even for distinct commits', async () => {
+    const { source, commit } = await fixture()
+    git(source, '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'Same tree')
+    const sameTreeCommit = git(source, 'rev-parse', 'HEAD')
+    for (const target of [commit, sameTreeCommit]) {
+        const calls = []
+        await validateLocally({ commit: target, base: commit }, {
+            repository: source,
+            run: (command, args, options) => {
+                calls.push({ command, args })
+                assert.notEqual(command, 'docker', 'An empty comparison needs no Docker prerequisites')
+                return execute(command, args, options)
+            },
+        })
+        assert(calls.some(call => call.args[0] === 'diff' && call.args.includes('-z')))
+    }
+})
+
+test('an incomplete changed-file response cannot silently skip validation', async () => {
+    const { source, commit, base } = await fixture()
+    await assert.rejects(validateLocally({ commit, base }, {
+        repository: source,
+        run: (command, args, options) => {
+            assert.notEqual(command, 'docker')
+            if (args[0] === 'diff') return Promise.resolve('partial-file-name')
+            return execute(command, args, options)
+        },
+    }), /complete changed-file list/)
+})
+
+test('explicit all mode reaches the owned container without comparison history', async () => {
+    const { source, commit } = await fixture()
+    git(source, 'remote', 'remove', 'origin')
+    let created
+    const run = (command, args, options) => {
+        if (command !== 'docker') return execute(command, args, options)
+        if (args[0] === 'context') return Promise.resolve('unix:///local/docker.sock')
+        if (args[0] === 'info') return Promise.resolve('linux')
+        if (args[0] === 'create') { created = args; return Promise.reject(new Error('Stop at create')) }
+        return Promise.resolve('')
+    }
+    await assert.rejects(validateLocally({ commit, all: true }, { repository: source, run }), /Stop at create/)
+    assert.ok(created.includes('LEF_VALIDATION_ALL=1'))
+    assert.ok(!created.some(argument => argument.startsWith('LEF_VALIDATION_BASE=')))
 })
 
 test('an interrupted create still cleans up the container whose creation was attempted', async () => {

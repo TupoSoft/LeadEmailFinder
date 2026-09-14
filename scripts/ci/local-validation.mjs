@@ -5,21 +5,31 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { resolveComparisonBase } from './comparison-base.mjs'
+
 const toolingRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const shaPattern = /^(?:[a-f\d]{40}|[a-f\d]{64})$/i
 
 export function parseArguments(args) {
     const options = { commit: 'HEAD' }
-    for (let i = 0; i < args.length; i += 2) {
-        const key = { '--commit': 'commit', '--base': 'base' }[args[i]]
+    const seen = new Set()
+    for (let i = 0; i < args.length; i++) {
+        if (seen.has(args[i])) throw new Error('Each local validation option may be supplied only once.')
+        seen.add(args[i])
+        if (args[i] === '--all') {
+            options.all = true
+            continue
+        }
+        const key = { '--commit': 'commit', '--base': 'base', '--remote': 'remote' }[args[i]]
         if (!key || !args[i + 1] || (key === 'base' && !shaPattern.test(args[i + 1]))) {
-            throw new Error('Usage: pnpm ci:local [--commit <revision>] [--base <commit SHA>]')
+            throw new Error('Usage: pnpm ci:local [--commit <revision>] [--base <commit SHA> | --all] [--remote <name>]')
         }
-        if (key === 'commit' && (args[i + 1].startsWith('-') || /[\r\n\0]/.test(args[i + 1]))) {
-            throw new Error('Invalid commit revision')
+        if (args[i + 1].startsWith('-') || /[\r\n\0]/.test(args[i + 1])) {
+            throw new Error('Invalid local validation option value')
         }
-        options[key] = args[i + 1]
+        options[key] = args[++i]
     }
+    if (options.all && options.base !== undefined) throw new Error('--all and --base cannot be used together.')
     return options
 }
 
@@ -33,17 +43,18 @@ export function assertLocalDockerEndpoint(endpoint) {
     }
 }
 
-export function containerArguments(name, image, commit, base) {
+export function containerArguments(name, image, commit, base, all = false) {
     return [
         'create', '--name', name, '--privileged', '--init', '--shm-size=1g',
         '--label', 'com.tuposoft.lef.local-validation=true',
         '--env', `LEF_VALIDATION_COMMIT=${commit}`,
         ...(base ? ['--env', `LEF_VALIDATION_BASE=${base}`] : []),
+        ...(all ? ['--env', 'LEF_VALIDATION_ALL=1'] : []),
         image,
     ]
 }
 
-export function execute(command, args, { cwd, env, capture = false, signal, timeoutMs } = {}) {
+export function execute(command, args, { cwd, env, capture = false, signal, timeoutMs, trimOutput = true } = {}) {
     return new Promise((accept, reject) => {
         const child = spawn(command, args, {
             cwd, env, signal, timeout: timeoutMs, stdio: ['ignore', capture ? 'pipe' : 'inherit', capture ? 'pipe' : 'inherit'],
@@ -57,7 +68,7 @@ export function execute(command, args, { cwd, env, capture = false, signal, time
         child.on('error', error => { spawnError = error })
         child.on('close', (code, killedBy) => {
             if (spawnError) reject(spawnError)
-            else if (code === 0) accept(stdout.trim())
+            else if (code === 0) accept(trimOutput ? stdout.trim() : stdout)
             else reject(new Error(`${command} failed (${killedBy ?? code})${capture ? `: ${stderr.trim()}` : ''}`))
         })
     })
@@ -103,19 +114,22 @@ export async function prepareSnapshot(repository, destination, commit, base, run
     }
 }
 
-export async function validateLocally(options = {}, { run = execute, repository = process.cwd(), signal, environment = process.env } = {}) {
+export async function validateLocally(options = {}, {
+    run = execute, repository = process.cwd(), signal, environment = process.env, resolveBase = resolveComparisonBase,
+} = {}) {
     const env = cleanGitEnvironment(environment)
-    const git = args => run('git', args, { cwd: repository, env, capture: true, signal })
+    const git = (args, extra = {}) => run('git', args, { cwd: repository, env, capture: true, signal, ...extra })
     repository = await git(['rev-parse', '--show-toplevel'])
     const commit = await git(['rev-parse', '--verify', '--end-of-options', `${options.commit ?? 'HEAD'}^{commit}`])
     if (!shaPattern.test(commit)) throw new Error('Cannot resolve the commit to validate')
-    let base = options.base
+    const base = resolveBase({ commit, base: options.base, remote: options.remote, all: options.all }, { repository, environment: env })
     if (base) {
-        if (!shaPattern.test(base)) throw new Error('Invalid validation base SHA')
-        try { await git(['cat-file', '-e', `${base}^{commit}`]) } catch {
-            console.log('Comparison history is unavailable; running every validation consumer.')
-            base = undefined
+        const changed = await git(['diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '-z', base, commit, '--'], { trimOutput: false })
+        if (changed === '') {
+            console.log(`No committed files changed between ${base} and ${commit}; local validation has no checks to run.`)
+            return
         }
+        if (!changed.endsWith('\0')) throw new Error('Git did not return a complete changed-file list; local validation cannot continue.')
     }
     const docker = (args, extra = {}) => run('docker', args, { cwd: repository, env, signal, ...extra })
     const endpoint = env.DOCKER_CONTEXT
@@ -135,15 +149,16 @@ export async function validateLocally(options = {}, { run = execute, repository 
         await prepareSnapshot(repository, snapshot, commit, base, (command, args, extra) => run(command, args, { ...extra, signal }))
         const context = join(temporary, 'runner')
         await cp(join(toolingRoot, 'docker/ci-local'), context, { recursive: true })
-        for (const script of ['run-local-checks.mjs', 'select-validation.mjs']) {
+        const runtimeScripts = ['run-local-checks.mjs', 'select-validation.mjs', 'incremental-checks.mjs']
+        for (const script of runtimeScripts) {
             await copyFile(join(toolingRoot, 'scripts/ci', script), join(context, script))
         }
         const hash = createHash('sha256')
-        for (const file of ['Dockerfile', 'entrypoint.sh', 'run-local-checks.mjs', 'select-validation.mjs']) hash.update(await readFile(join(context, file)))
+        for (const file of ['Dockerfile', 'entrypoint.sh', ...runtimeScripts]) hash.update(await readFile(join(context, file)))
         const image = `lef-local-validation:${hash.digest('hex').slice(0, 16)}`
         await docker(['build', '--tag', image, context])
         createAttempted = true
-        await docker(containerArguments(name, image, commit, base), { capture: true })
+        await docker(containerArguments(name, image, commit, base, options.all), { capture: true })
         await docker(['cp', `${snapshot}/.`, `${name}:/workspace`])
         // Attaching returns the validation entrypoint's exit status; there is no success cache.
         await docker(['start', '--attach', name])

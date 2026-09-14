@@ -25,9 +25,13 @@ function harness(overrides = {}) {
     const invoke = (command, args, options) => {
         calls.push({ command, args, options })
         if (command === 'git' && args[0] === 'rev-parse') {
-            const revision = args[2].replace(/\^\{commit\}$/, '')
+            const revision = args.at(-1).replace(/\^\{commit\}$/, '')
+            if (revision === 'refs/remotes/origin/main') return { status: 0, stdout: `${first}\n` }
             return revision === missing ? { status: 128, stdout: '' } : { status: 0, stdout: `${revision}\n` }
         }
+        if (command === 'git' && args[0] === 'remote') return { status: 0, stdout: 'origin\n' }
+        if (command === 'git' && args[0] === 'symbolic-ref') return { status: 0, stdout: 'refs/remotes/origin/main\n' }
+        if (command === 'git' && args[0] === 'merge-base') return { status: 0, stdout: `${first}\n` }
         return { status: 0 }
     }
     return {
@@ -96,25 +100,46 @@ test('deletion-only and empty updates reach LFS without validation', () => {
     }
 })
 
-test('new branches and unavailable remote objects omit the baseline for full validation', () => {
-    for (const remoteSha of [zeros, missing]) {
-        const fixture = harness()
-        assert.equal(fixture.run(update(second, remoteSha)), 0)
-        const validation = fixture.calls.find(call => call.command === process.execPath)
-        assert.deepEqual(validation.args, [resolve(root, 'scripts/ci/local-validation.mjs'), '--commit', second])
-    }
+test('new branches pass the remote default merge base to incremental validation', () => {
+    const fixture = harness()
+    assert.equal(fixture.run(update(second, zeros)), 0)
+    const validation = fixture.calls.find(call => call.command === process.execPath)
+    assert.deepEqual(validation.args, [resolve(root, 'scripts/ci/local-validation.mjs'), '--commit', second, '--base', first])
+    assert(fixture.calls.some(call => call.args[0] === 'merge-base'))
+    assert(!fixture.calls.some(call => ['fetch', 'update-ref', 'config'].includes(call.args[0])))
+})
+
+test('unavailable advertised history fails before validation or LFS without choosing another base', () => {
+    const fixture = harness()
+    assert.equal(fixture.run(update(second, missing)), 1)
+    assert(fixture.calls.every(call => call.args[0] === 'rev-parse'))
+    assert.match(fixture.messages.join(''), /comparison commit is unavailable/)
+})
+
+test('a first push without a fetched remote default stops before validation or LFS', () => {
+    const calls = []
+    const fixture = harness({ invoke: (command, args) => {
+        calls.push({ command, args })
+        if (args[0] === 'rev-parse') return { status: 0, stdout: second }
+        if (args[0] === 'remote') return { status: 0, stdout: 'origin\n' }
+        return { status: 128, stdout: '' }
+    } })
+    assert.equal(fixture.run(update(second, zeros)), 1)
+    assert(calls.every(call => call.command === 'git' && ['rev-parse', 'remote', 'symbolic-ref'].includes(call.args[0])))
+    assert.match(fixture.messages.join(''), /default tracking branch is unavailable/)
+    assert.doesNotMatch(fixture.messages.join(''), /credential-sentinel/)
 })
 
 test('deduplicates identical comparisons and validates every distinct commit/base pair', () => {
     const fixture = harness()
-    const input = update() + update(second, first, 'refs/heads/other') + update(first, second) + update(second, zeros)
+    const input = update() + update(second, first, 'refs/heads/other') + update(first, second) + update(first, zeros) + update(second, zeros)
     assert.equal(fixture.run(input), 0)
     const validations = fixture.calls.filter(call => call.command === process.execPath)
     assert.equal(validations.length, 3)
     assert.deepEqual(validations.map(call => call.args.slice(1)), [
         ['--commit', second, '--base', first],
         ['--commit', first, '--base', second],
-        ['--commit', second],
+        ['--commit', first, '--base', first],
     ])
     assert.equal(fixture.calls.filter(call => call.args[0] === 'lfs').length, 1)
 })
@@ -132,7 +157,7 @@ test('validation failures stop subsequent comparisons and LFS while preserving t
     const fixture = harness({ invoke: (command, args) => {
         calls.push({ command, args })
         return command === 'git'
-            ? { status: 0, stdout: args[2].replace(/\^\{commit\}$/, '') }
+            ? { status: 0, stdout: args.at(-1).replace(/\^\{commit\}$/, '') }
             : { status: 17 }
     } })
     assert.equal(fixture.run(update() + update(first, second)), 17)
@@ -144,7 +169,7 @@ test('validation failures stop subsequent comparisons and LFS while preserving t
 test('missing or terminated validation processes fail the push', () => {
     for (const result of [{ status: null, error: new Error('credential-sentinel') }, { status: null, signal: 'SIGTERM' }]) {
         const fixture = harness({ invoke: (command, args) => command === 'git'
-            ? { status: 0, stdout: args[2].replace(/\^\{commit\}$/, '') }
+            ? { status: 0, stdout: args.at(-1).replace(/\^\{commit\}$/, '') }
             : result })
         assert.equal(fixture.run(update()), 1)
         assert.doesNotMatch(fixture.messages.join(''), /credential-sentinel/)

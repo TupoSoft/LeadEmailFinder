@@ -17,6 +17,6 @@ ENV CI=true HUSKY=0 LEF_LOCAL_CI_CONTAINER=1 DOCKER_HOST=unix:///var/run/docker.
 WORKDIR /workspace
 # Each run owns an anonymous volume; never nest the daemon's data in the outer overlay layer.
 VOLUME /var/lib/docker
-COPY run-local-checks.mjs select-validation.mjs /opt/lef-ci/
+COPY run-local-checks.mjs select-validation.mjs incremental-checks.mjs /opt/lef-ci/
 COPY --chmod=755 entrypoint.sh /opt/lef-ci/entrypoint.sh
 ENTRYPOINT ["/opt/lef-ci/entrypoint.sh"]

@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { consumers, discoverChangedPaths, selectValidation } from './select-validation.mjs'
+import { consumers, discoverChangedPaths } from './select-validation.mjs'
+import { adaptIncrementalPlan } from './incremental-checks.mjs'
 
 const jobConsumers = {
     'repository-policy': 'repositoryPolicy', backend: 'backend', web: 'web', contract: 'contract',
@@ -27,6 +28,13 @@ const databaseVariables = [
     'TEST_POSTGRES_URL', 'TEST_CREDITS_POSTGRES_URL', 'TEST_PAYMENT_WEBHOOK_POSTGRES_URL',
     'TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL', 'TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL',
 ]
+const databaseTests = {
+    TEST_POSTGRES_URL: 'identity-schema.integration.spec.ts',
+    TEST_CREDITS_POSTGRES_URL: 'credits.service.integration.spec.ts',
+    TEST_PAYMENT_WEBHOOK_POSTGRES_URL: 'payment-event.handler.integration.spec.ts',
+    TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL: 'typeorm-stores-organization-isolation.integration.spec.ts',
+    TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL: 'organization-directory.integration.spec.ts',
+}
 
 function assert(condition, message) {
     if (!condition) throw new Error(`Local validation: ${message}`)
@@ -181,7 +189,7 @@ export function compileWorkflow(workflow, selection, { base } = {}) {
             else {
                 assert(step.with === undefined, `${label} run command cannot have action options`)
                 command = ignoredRun(step, id) ? null : plain(step.run, label)
-                // A new remote branch has no before commit. Do not silently lint only HEAD^ in that case.
+                // A full run is explicit; incremental plans always have a verified comparison base.
                 if (!base && command?.trim() === 'corepack pnpm docs:lint:changed') command = 'corepack pnpm docs:lint'
             }
             const aggregateEnv = id === 'browser' ? { BROWSER_NEEDS_JSON: '${{ toJSON(needs) }}' }
@@ -207,12 +215,49 @@ export function compileWorkflow(workflow, selection, { base } = {}) {
     return { jobs, accounted }
 }
 
-export function selectLocalValidation({ base, commit, repository = process.cwd(), discover = discoverChangedPaths }) {
-    try {
-        return selectValidation(discover('push', { before: base, after: commit }, repository), { comparisonTrusted: true })
-    } catch {
-        return selectValidation(null)
+export function discoverRelatedJestTests(paths, repository = process.cwd()) {
+    const result = spawnSync('corepack', ['pnpm', 'exec', 'jest', '--runInBand', '--findRelatedTests', '--listTests', '--json', ...paths.map(path => `./${path}`)], {
+        cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024, timeout: 60_000,
+    })
+    assert(!result.error && result.status === 0, `cannot discover related Jest tests: ${result.error?.message ?? result.stderr?.trim() ?? result.status}`)
+    let tests
+    try { tests = JSON.parse(result.stdout) } catch {
+        throw new Error('Local validation: Jest did not return a valid related-test list')
     }
+    assert(Array.isArray(tests) && tests.every(test => typeof test === 'string'), 'Jest did not return a related-test path list')
+    return tests
+}
+
+export function compileLocalWorkflow(workflow, {
+    base, commit, all = false, repository = process.cwd(), discover = discoverChangedPaths,
+    relatedJestTests = discoverRelatedJestTests,
+} = {}) {
+    assert(!(all && base), 'choose a comparison base or an explicit full run, not both')
+    assert(all || base, 'a comparison base is required; provide --base or explicitly request --all')
+    // Validate the complete workflow before reducing its checks. New workflow features must be accounted for.
+    const plan = compileWorkflow(workflow, Object.fromEntries(consumers.map(name => [name, true])), { base })
+    if (all) return { ...plan, reasons: ['Explicit --all: running the complete workflow.'] }
+    const paths = discover('push', { before: base, after: commit }, repository)
+    const incremental = adaptIncrementalPlan(plan, { paths, repository })
+    // Generic Jest skips database suites without their dedicated environment. Select those suites through
+    // the same dependency graph and retain their original workflow environment and private PostgreSQL service.
+    const related = new Set(!incremental.backendFullTests && incremental.backendRelatedPaths?.length
+        ? relatedJestTests(incremental.backendRelatedPaths, repository).map(path => basename(path)) : [])
+    const backend = incremental.jobs.find(job => job.id === 'backend')
+    const originalBackend = plan.jobs.find(job => job.id === 'backend')
+    const steps = new Map(backend.steps.map(step => [step.label, step]))
+    for (const step of originalBackend.steps) {
+        const variable = Object.keys(step.env).find(key => Object.hasOwn(databaseTests, key))
+        if (variable && (incremental.backendFullTests || related.has(databaseTests[variable]))) {
+            assert(step.command.includes(databaseTests[variable]), `database test command changed for ${step.label}; its dependency adapter needs review`)
+            steps.set(step.label, step)
+            backend.service = originalBackend.service
+        }
+    }
+    backend.steps = originalBackend.steps.filter(step => steps.has(step.label)).map(step => steps.get(step.label))
+    backend.selected = backend.steps.length > 0
+    backend.env.VALIDATION_SELECTED = String(backend.selected)
+    return incremental
 }
 
 export function executeShell({ command, env, timeoutMs, label }) {
@@ -286,10 +331,14 @@ export function readWorkflow(repository = process.cwd()) {
 
 export async function main(env = process.env) {
     assert(env.LEF_LOCAL_CI_CONTAINER === '1', 'this command must run inside the isolated local CI container')
-    const selection = selectLocalValidation({ base: env.LEF_VALIDATION_BASE, commit: env.LEF_VALIDATION_COMMIT })
-    console.log(`Local validation selection: ${JSON.stringify(selection)}`)
-    if (!env.LEF_VALIDATION_BASE) console.log('No push comparison is available: Harper checks every tracked Markdown file; the approval checker uses its existing HEAD^ revision baseline.')
-    const plan = compileWorkflow(readWorkflow(), selection, { base: env.LEF_VALIDATION_BASE })
+    const plan = compileLocalWorkflow(readWorkflow(), {
+        base: env.LEF_VALIDATION_BASE, commit: env.LEF_VALIDATION_COMMIT, all: env.LEF_VALIDATION_ALL === '1',
+    })
+    if (plan.changes) console.log(`Local validation: ${plan.changes.length} changed paths in the committed comparison.`)
+    for (const reason of plan.reasons ?? []) console.log(`Local validation scope: ${reason}`)
+    for (const job of plan.jobs.filter(job => job.selected)) {
+        console.log(`Local validation plan: ${job.steps.map(step => step.label).join(', ')}`)
+    }
     await runChecks(plan, { env })
 }
 

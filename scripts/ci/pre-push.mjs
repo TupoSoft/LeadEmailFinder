@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { resolveComparisonBase } from './comparison-base.mjs'
+
 const objectId = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i
 const zeroId = /^0+$/
 
@@ -68,7 +70,17 @@ export function runPrePush({
             stderr.write('A pushed object does not resolve to an available commit; validation cannot run.\n')
             return 1
         }
-        const base = zeroId.test(update.remoteSha) ? undefined : resolveCommit(update.remoteSha)
+        let base
+        try {
+            base = resolveComparisonBase({
+                commit,
+                base: zeroId.test(update.remoteSha) ? undefined : update.remoteSha,
+                remote: remoteArgs[0],
+            }, { repository, invoke })
+        } catch (error) {
+            stderr.write(`${error.message}\n`)
+            return 1
+        }
         comparisons.set(`${commit}:${base ?? ''}`, { commit, base })
     }
     for (const { commit, base } of comparisons.values()) {

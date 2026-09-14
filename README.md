@@ -69,14 +69,16 @@ pushed in a fresh container; uncommitted application files are excluded from its
 validation stops at the first failed check and blocks the push, with one exception: Harper failures are reported
 and validation continues. Every other check is blocking even when the hosted workflow marks it with
 `continue-on-error: true`. The runner still reports health and removes disposable resources while preserving the
-original blocking failure. Each test command retains its existing suite and retry behavior. The hosted workflow's
+original blocking failure. Test runners retain their failure and retry behavior within the selected tests. The hosted workflow's
 advisory settings remain unchanged.
 
-Run the same checks directly for the current committed `HEAD`, or provide a commit and a known comparison base:
+Run incremental checks for committed `HEAD`, choose a remote or an explicit comparison, or request all checks:
 
 ```sh
 corepack pnpm ci:local
+corepack pnpm ci:local --remote origin
 corepack pnpm ci:local --commit <commit-sha> --base <base-sha>
+corepack pnpm ci:local --all
 corepack pnpm ci:local:test
 ```
 
@@ -99,44 +101,63 @@ To restore hosted validation after runner recovery, restore the `pull_request` a
 
 ### Path-Aware Validation
 
-Local validation reuses the workflow's six consumers and existing path classifier. A push compares the outgoing
-commit with the remote revision supplied by Git. A new branch, missing comparison history, or a direct run without
-a base selects all consumers. Each distinct outgoing revision is checked before the push proceeds; deleting a
-remote ref needs no validation.
+Local validation checks changed files and their related tests. It prints the selected checks and explains any
+broader run. Ordinary application source changes do not select full builds, application images, or browser
+suites solely because the source changed.
 
-Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
-account-discovery approval validation, the module architecture ratchet, the ExecPlan
-repository test, and CI selection tests. Without a comparison base, Harper checks all tracked Markdown files;
-the approval checker uses the existing `HEAD^` baseline, matching the workflow. The remaining consumers follow
-this matrix; multiple changed paths select the union of their consumers:
+Project-wide TypeScript checks and full builds run for changes to their shared configuration or dependencies, or
+with `--all`. Ordinary source-only local runs provide changed-file lint and related-test results; they do not
+provide full-project type-checking or build evidence.
 
-| Changed paths | Additional consumers |
+| Changed paths | Local checks |
 | --- | --- |
-| Backend services, workers, tests, deployment files, configuration, and backend scripts | Backend, images, browser |
-| API controllers, DTOs, module wiring, bootstrap code, domain sources, and shared contract types or policies | Backend, web, contract, images, browser |
-| `packages/api-client/**`, `scripts/openapi/**` | Backend, web, contract, images, browser |
-| `apps/web/**`, `scripts/frontend/**`, `DESIGN.md`, `UX-CONTRACT.md`, `premium-ui.json` | Web, images, browser |
-| `docker/**`, `Dockerfile`, `.dockerignore` | Backend, images, browser |
-| Root package, lockfile, workspace, TypeScript, ESLint, Jest, Nest, and SWC configuration | Backend, web, contract, images, browser |
-| `.github/workflows/**`, `scripts/ci/**`, unknown source or configuration paths | Backend, web, contract, images, browser |
-| Other Markdown, documentation, ExecPlans, and repository guidance | None |
-| A trustworthy empty comparison | None |
+| Ordinary backend source or tests | Lint existing changed files and run Jest related tests |
+| Ordinary web source or tests | Lint existing changed files and run Vitest related tests |
+| Ordinary Markdown prose, including documentation under `apps/web` | Harper for changed Markdown files |
+| Business-module source or a module README | Architecture gate plus applicable changed-file checks |
+| Web source covered by `sourceRoots` in `premium-ui.json` | UI contract audit plus applicable changed-file checks |
+| Shared `.css` or `.scss` files, including style tokens | UI contract audit and design lint |
+| Tooling or database inputs | Relevant tooling or database tests |
+| Browser specifications | The matching Playwright files with their required fixtures |
+| Shared configuration, dependencies, or a changed dependency graph such as deleted source | Broader checks with a printed reason |
+| An input without a local selection rule | An actionable error; add a rule or explicitly use `--all` |
+| An empty comparison | No checks or Docker setup |
 
-The [classifier](scripts/ci/select-validation.mjs) and its [fixtures](scripts/ci/validation-fixtures.json) define the
-exact path rules, including precedence for design contracts and web-local documentation. Backend owns lint, types,
-unit tests, Vagrant checks, four PostgreSQL integration suites, and application compilation. Web owns design audits,
-lint, types, unit tests, and the static build. Contract owns OpenAPI drift, exporter tests, and client compilation.
-Images owns all three image builds, the packaged approval manifest check, and Compose configuration. Browser owns
-route ownership, browser workflows, accessibility, visual baselines, and the disposable same-origin stack with Bruno.
-The hosted browser job builds its own gateway image because its runner is separate from the image job's runner.
-An unselected backend consumer starts no PostgreSQL service. A successful no-op is selection evidence only.
+Jest's related-test dependency discovery also identifies affected PostgreSQL integration suites. Those suites
+run separately with their dedicated database environment so their integration cases execute.
+
+Module source and module README changes also run the architecture gate because they define cross-module
+dependency contracts. Web source read by the shared UI contract also runs its audit; stylesheet inputs add design
+lint. These related contract checks do not select every browser suite.
+
+The [local planner](scripts/ci/incremental-checks.mjs) owns this selection. Each distinct outgoing revision is
+checked before the push proceeds; deleting a remote ref needs no validation. Existing branches compare the pushed
+commit with the remote revision advertised by Git. A first push or a manual run without `--base` uses the unique
+merge base between the chosen commit and `refs/remotes/<remote>/HEAD`. `--remote` selects the remote for a manual
+run. Missing or ambiguous history produces an actionable error; it never silently selects every check. Refresh
+the remote references or supply `--base` to resolve the comparison, or use `--all` to explicitly request full
+validation.
 
 Git supplies paths separated by null bytes with rename detection disabled, so deletions and both sides of a
-rename remain visible. Filenames are never evaluated as shell code. The retained hosted workflow selects all
-consumers on manual dispatch. Its final `Validate / validate` check succeeds only when discovery and every
-consumer succeed; a failed, canceled, skipped, or missing dependency fails the summary.
+rename remain visible. Filenames are never evaluated as shell code. The local planner keeps the hosted workflow's
+full commands available for broader validation and `--all`.
 
-Run these commands to inspect selection and validate the workflow without starting application services:
+### Hosted Validation
+
+The manually dispatched hosted workflow runs all six consumers: repository policy, backend, web, contract,
+images, and browser. Its retained [classifier](scripts/ci/select-validation.mjs) and
+[fixtures](scripts/ci/validation-fixtures.json) describe the broader selection rules used when automatic hosted
+triggers are restored; they do not govern incremental local checks.
+
+Repository policy includes documentation tooling, approval validation, architecture, and ExecPlan checks.
+Backend includes lint, types, unit tests, Ruby checks, PostgreSQL fixtures, and compilation. Web includes design
+audits, lint, types, unit tests, and the static build. Contract includes OpenAPI drift, exporter tests, and client
+compilation. Images includes the three application images, approval manifest, and Compose checks. Browser includes
+artifact guards, browser UI, accessibility, visual baselines, gateway checks, live fixtures, and Bruno.
+
+The final `Validate / validate` check succeeds only when discovery and every consumer succeed; a failed,
+canceled, skipped, or missing dependency fails the summary. Run these commands to inspect the retained hosted
+classifier and workflow without starting application services:
 
 ```sh
 node scripts/ci/select-validation.mjs --paths-json '["apps/web/src/App.tsx"]'
