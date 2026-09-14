@@ -112,6 +112,12 @@ jobs:
       - name: Check validation fixtures
         run: corepack pnpm test:ci-paths
         if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Test affected unit selection
+        run: corepack pnpm test:affected-selection
+        if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Test backend dependency selection
+        run: node --test --test-name-pattern=backend scripts/ci/related-tests.test.mjs
+        if: needs.changes.outputs.repositoryPolicy == 'true'
   backend:
     needs:
       - changes
@@ -194,7 +200,7 @@ jobs:
         run: corepack pnpm typecheck
         if: needs.changes.outputs.backend == 'true'
       - name: Test
-        run: corepack pnpm test:ci
+        run: corepack pnpm test:affected --suite backend --event
         if: needs.changes.outputs.backend == 'true'
       - name: Test empty-database synchronization
         env:
@@ -298,8 +304,11 @@ jobs:
       - name: Build generated API client
         run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
         if: needs.changes.outputs.web == 'true'
+      - name: Test web dependency selection
+        run: node --test --test-name-pattern=web scripts/ci/related-tests.test.mjs
+        if: needs.changes.outputs.web == 'true'
       - name: Test web application
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
+        run: corepack pnpm test:affected --suite web --event
         if: needs.changes.outputs.web == 'true'
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build

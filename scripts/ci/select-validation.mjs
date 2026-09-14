@@ -13,7 +13,7 @@ function allConsumers() {
     return flags(consumers)
 }
 
-function isRepositoryPath(path) {
+export function isRepositoryPath(path) {
     return typeof path === 'string'
         && path.length > 0
         && !path.includes('\\')

@@ -253,12 +253,14 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm architecture:check',
         'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',
         'corepack pnpm test:ci-paths',
+        'corepack pnpm test:affected-selection',
+        'node --test --test-name-pattern=backend scripts/ci/related-tests.test.mjs',
     ],
     backend: [
         'ruby -c deploy/proxy-fleet/vagrant/Vagrantfile ruby scripts/testing/proxy-fleet-vagrant-config.test.rb',
         'corepack pnpm lint',
         'corepack pnpm typecheck',
-        'corepack pnpm test:ci',
+        'corepack pnpm test:affected --suite backend --event',
         'corepack pnpm test -- identity-schema.integration.spec.ts --runInBand',
         'corepack pnpm test -- credits.service.integration.spec.ts --runInBand',
         'corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand',
@@ -272,7 +274,8 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-web lint',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck',
         'corepack pnpm --filter @tuposoft/lead-email-finder-api-client build',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1',
+        'node --test --test-name-pattern=web scripts/ci/related-tests.test.mjs',
+        'corepack pnpm test:affected --suite web --event',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
     ],
     contract: [
@@ -454,6 +457,54 @@ describe('Validate workflow syntax and structure', () => {
         const actual = workflow.jobs[id].steps.filter((step) => step.run).map((step) => command(step.run))
         for (const expected of commands) {
             expect(actual).toContain(command(expected))
+        }
+    })
+
+    it.each(['backend', 'web'])('%s selects affected unit tests from the full event comparison without ignoring failures', (suite) => {
+        const job = workflow.jobs[suite]
+        const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v4')
+        expect(checkout?.with?.['fetch-depth']).toBe(0)
+        const selectors = job.steps.filter((step) => command(step.run) === `corepack pnpm test:affected --suite ${suite} --event`)
+        expect(selectors).toHaveLength(1)
+        const [selector] = selectors
+        expect(job.steps.indexOf(selector)).toBeGreaterThan(job.steps.indexOf(checkout!))
+        expect(condition(selector.if)).toBe(`needs.changes.outputs.${suite} == 'true'`)
+        expect(selector['continue-on-error']).not.toBe(true)
+    })
+
+    it('keeps affected selection tests mandatory and exposes the same runner for local validation', () => {
+        const policy = workflow.jobs['repository-policy']
+        const checks = policy.steps.filter((step) => command(step.run) === 'corepack pnpm test:affected-selection')
+        expect(checks).toHaveLength(1)
+        expect(condition(checks[0].if)).toBe("needs.changes.outputs.repositoryPolicy == 'true'")
+        expect(checks[0]['continue-on-error']).not.toBe(true)
+        const packageJson: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+        if (!isRecord(packageJson) || !isRecord(packageJson.scripts)) {
+            throw new Error('Expected package scripts to be a mapping.')
+        }
+        expect(packageJson.scripts['test:affected']).toBe('node scripts/ci/test-affected.mjs')
+        expect(packageJson.scripts['test:affected-selection']).toBe('node --test scripts/ci/test-affected.test.mjs')
+        expect(packageJson.scripts['test:ci']).toBe('jest --runInBand && pnpm test:oidc-runners')
+        expect(webScripts['test:ci']).toBe('vitest run')
+    })
+
+    it.each([
+        ['repository-policy', 'repositoryPolicy', 'backend'],
+        ['web', 'web', 'web'],
+    ])('%s verifies dependency discovery with its installed test runner', (id, flag, suite) => {
+        const job = workflow.jobs[id]
+        const graphChecks = job.steps.filter((step) => command(step.run) === `node --test --test-name-pattern=${suite} scripts/ci/related-tests.test.mjs`)
+        expect(graphChecks).toHaveLength(1)
+        const [graphCheck] = graphChecks
+        const install = job.steps.find((step) => command(step.run).endsWith('install --frozen-lockfile'))
+        expect(install).toBeDefined()
+        expect(job.steps.indexOf(graphCheck)).toBeGreaterThan(job.steps.indexOf(install!))
+        expect(condition(graphCheck.if)).toBe(`needs.changes.outputs.${flag} == 'true'`)
+        expect(graphCheck['continue-on-error']).not.toBe(true)
+        if (suite === 'web') {
+            const unitTests = job.steps.find((step) => command(step.run) === 'corepack pnpm test:affected --suite web --event')
+            expect(unitTests).toBeDefined()
+            expect(job.steps.indexOf(unitTests!)).toBeGreaterThan(job.steps.indexOf(graphCheck))
         }
     })
 

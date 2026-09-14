@@ -32,9 +32,12 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-14) Publish commit `a3f0b17` and inspect run `34867835332`; the artifact guard still fails.
 - [x] (2026-09-14) Apply the deliberate browser shutdown delay once and allow bounded subprocess headroom.
 - [x] (2026-09-14) Pass all 50 artifact guards, both negative controls, and the comparison with delayed browser initialization.
-- [ ] (2026-09-14) Publish the artifact guard follow-up and inspect its fresh Actions result.
+- [x] (2026-09-14) Publish the artifact guard follow-up; its complete Actions result remains unverified.
 - [x] (2026-09-14) Switch Vite and Vitest to the standard React plugin with Oxc; pass 628 tests, build, and development refresh.
-- [ ] (2026-09-14) Publish the Oxc follow-up and inspect its fresh Actions result.
+- [x] (2026-09-14) Publish the Oxc follow-up; run `34873940809` still has queued and running jobs.
+- [x] (2026-09-14) Add conservative selection of affected unit tests in GitHub Actions and local validation.
+- [x] (2026-09-14) Validate dependency discovery, fallback coverage, and failure propagation locally.
+- [x] (2026-09-14) Prepare the validated selection follow-up for publication in PR #595.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -59,6 +62,12 @@ None.
 - (2026-09-14) The browser workspace dependency cache was missing. The combined cache action saves only after
   job success, so later test failures or job timeouts prevented the installed dependencies from being saved.
 - (2026-09-14) A fresh issue search still found no synced `self-hosted-runners/01` issue.
+- (2026-09-14) Jest cannot discover subprocess imports, and Vitest cannot infer the web guard's filesystem scan.
+  Scripts use full-suite fallback; reduced web selections always include that guard. Checking only the union of
+  related tests would miss a changed source without tests, so discovery checks each source separately.
+- (2026-09-14) Vitest ignores file filters after `--`. A real execution exposed this by running all 628 tests;
+  passing absolute file paths without that separator ran only the expected 37 tests in two files. The installed
+  CLI parser now has a regression test. Backend discovery has a cumulative 30-second budget before full fallback.
 - (2026-09-14) Job `104056594425` passed installation and cache saving, then failed one of six privileged
   artifact guards after 47.1 seconds. Its subprocess deadline was 45 seconds, but the assertion hid the error code.
   The guard delayed every context close based on the setup duration. Authentication cleanup and Playwright
@@ -66,6 +75,13 @@ None.
 
 ## Decision Log
 
+- Decision: Apply selection of affected unit tests to GitHub Actions and local validation in this existing PR.
+  Rationale: The user explicitly requested both. Reuse the existing consumer selection and Git comparison logic.
+  For ordinary existing source files, ask Jest or Vitest for related tests separately for each changed file. Run
+  the full relevant suite for uncertain comparisons, configuration, fixtures, shared packages, deletions, or
+  missing dependencies in the test graph. Always retain the web source guard with reduced web selections.
+  Keep existing integration and browser checks, and preserve backend Node runner tests whenever backend is selected.
+  Date/Author: 2026-09-14, user-authorized selection follow-up.
 - Decision: Require `self-hosted`, `swarm`, `ubuntu-22`, and `docker-isolated` on every direct job.
   Rationale: The extra capability label excludes old workers while preserving the intended operating system.
   Date/Author: 2026-09-12, user-authorized implementation.
@@ -158,6 +174,18 @@ All 12 existing public-entry browser tests passed against the production build a
 viewports. Web ESLint, the design contract, and the UI audit passed, with zero UI violations. Review found no
 material architectural trade-off; the change remains confined to the web compiler configuration and its dependencies.
 
+The selection follow-up passed 20 selection and Git fixtures, 332 workflow and plan tests, and an actual failing
+Jest fixture that preserved exit status 1. All three real dependency and CLI parser fixtures passed, including
+restoration of environment variables changed by Vitest discovery. A representative socket change selected eight Jest files: seven passed
+with 36 tests, and one existing integration test remained skipped because its external dependencies were absent.
+All 92 backend Node runner tests passed. The reduced web example passed 37 tests in two files, including the
+mandatory filesystem guard. A change to the destination helper selected 320 passing tests in 14 files through
+direct and indirect imports. Integration tests in CI retain their existing separately provisioned database steps.
+The full PR comparison correctly selects both complete unit suites because this PR changes CI and compiler inputs.
+Focused ESLint, Actionlint with ShellCheck, selection fixtures, and the architecture gate passed with zero violations.
+There is no HTTP behavior change and no material application architecture trade-off. A complete successful
+Actions run remains unverified; queued or running jobs are not evidence of success.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -182,6 +210,10 @@ and subprocess diagnostics in `scripts/testing/browser-fixture-artifacts.spec.mj
 The Oxc follow-up updates `apps/web/package.json`, `apps/web/vite.config.ts`, `apps/web/vitest.config.ts`, and
 `pnpm-lock.yaml`. The prose dictionary recognizes Oxc as the compiler's name. The change does not enable
 experimental React Compiler transforms or change the backend compiler.
+
+The selection follow-up adds `scripts/ci/test-affected.mjs`, its dependency discovery adapter, and focused Node
+tests. It updates the root package scripts, README, workflow commands, and workflow contracts. It narrows only
+unit test files for known source changes; existing job selection still governs integration and browser validation.
 
 It does not alter HTTP APIs, Bruno collections, business modules, database schemas, application images, workflow
 triggers, permissions, required check names, or test assertions. It does not implement or deploy Swarm
@@ -222,6 +254,13 @@ status according to root `AGENTS.md`. Link the issue with a closing keyword when
 
 ## Interfaces and Dependencies
 
+`corepack pnpm test:affected --base origin/master` runs affected backend and web unit tests against the merge base
+with that local reference, including staged, unstaged, and untracked changes. Fetch the reference before using it
+to match the current remote base. Use `--base HEAD` for changes in the working tree, `--suite backend` or `--suite web`
+to choose one suite, and `--dry-run` to inspect selection without executing tests. GitHub Actions uses `--event`
+and the complete event comparison. Unsupported events and missing history select full suites. Existing full test
+commands remain available. The new adapter uses the installed Jest CLI and public Vitest API, with no new dependency.
+
 The changed interface is GitHub Actions runner selection:
 
 ```yaml
@@ -238,6 +277,13 @@ tests can proceed independently. New workflow jobs must not become active before
 
 ## Acceptance Criteria
 
+- A source change runs its direct and transitive test dependents; a changed test selects itself.
+- Every changed source must have related tests. An uncovered source, failed graph discovery, deleted file, shared
+  fixture, configuration change, or untrusted comparison runs the full relevant suite.
+- Local selection includes committed changes since the merge base and all three layers of uncommitted changes.
+  PR selection includes the entire PR while excluding changes present only on the base branch.
+- Reduced web runs include the filesystem source guard. Backend runs retain Node runner tests, and failures
+  remain failures without retrying a smaller selection. Required integration and browser checks remain intact.
 - All twelve direct jobs require the four configured labels; reusable workflow calls remain unchanged.
 - The YAML parser accepts scalar labels containing visible characters and nonempty arrays of such labels and rejects malformed values.
 - The inventory test fails if any direct job selects a different pool, including a newly added workflow.
@@ -279,6 +325,20 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
 ```
+
+Selection follow-up validation:
+
+```sh
+corepack pnpm test:affected-selection
+node --test scripts/ci/related-tests.test.mjs
+corepack pnpm test:affected --base origin/master --dry-run
+corepack pnpm exec eslint scripts/ci/*.mjs scripts/ci/validate-workflow.spec.ts
+corepack pnpm docs:lint -- README.md .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+Also execute representative reduced backend and web selections and confirm a failing selected test preserves
+its exit status. The Git and graph fixtures exercise deletions, renames, missing comparisons, mixed covered and
+uncovered sources, aliases, and direct and transitive imports. Full-suite validation remains the fallback in CI.
 
 Artifact guard follow-up validation uses Chromium matching the lockfile, installed outside the checkout:
 

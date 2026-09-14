@@ -107,6 +107,31 @@ The first command prints all six boolean flags. The fixture command verifies the
 The Jest checks parse workflow YAML, preserve command ownership, and exercise discovery, no-op guards, and summary
 failure handling. Live Actions runs remain separate evidence for GitHub's job and expression semantics.
 
+### Affected Unit Tests
+
+GitHub Actions narrows Jest and Vitest runs to tests that import changed source files, including indirect imports.
+It checks each changed file separately and runs the full relevant suite if any file has no discovered tests. Changes
+to dependencies, configuration, fixtures, scripts, shared packages, or deleted files also require full suites.
+Reduced web runs always include the source-scanning browser fixture guard. Existing consumer selection still
+governs PostgreSQL integration checks, Node runner tests, builds, and browser suites because import graphs do
+not describe all of their dependencies.
+
+Use the same unit test selection locally:
+
+```sh
+git fetch origin master
+corepack pnpm test:affected --base origin/master
+corepack pnpm test:affected --base HEAD --suite web
+corepack pnpm test:affected --base origin/master --dry-run
+```
+
+The default base is `origin/master`. Selection includes committed changes since the merge base plus staged,
+unstaged, and untracked files. `--base HEAD` limits the comparison to uncommitted changes. `--suite backend`
+or `--suite web` chooses one suite; `--dry-run` prints the selection and reason without executing tests. Missing
+history and failed dependency discovery run full suites. Test failures retain their exit status. The existing
+`test:ci` commands remain available for explicit full runs. This command covers unit tests; other local validation
+commands remain necessary when their consumers are affected.
+
 ### Shared CI Caches
 
 Validation restores the pnpm store from GitHub Actions before each dependency install. Cache keys include the
