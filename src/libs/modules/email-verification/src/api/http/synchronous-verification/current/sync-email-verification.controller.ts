@@ -135,9 +135,6 @@ export class SyncEmailVerificationController {
                 HttpStatus.BAD_REQUEST,
             )
         }
-        if (header.kind === 'expired') {
-            throw new HttpException('idempotency_key_expired', HttpStatus.GONE)
-        }
 
         const outcome = await this.synchronousVerification.execute({
             organizationId: principal.organizationId,

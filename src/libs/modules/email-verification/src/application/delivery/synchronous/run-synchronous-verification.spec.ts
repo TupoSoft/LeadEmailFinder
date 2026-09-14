@@ -147,6 +147,19 @@ describe('RunSynchronousVerification', () => {
             expect(outcome.kind).toBe('completed')
         })
 
+        it('falls back to accepted at the deadline even while a single attempt is still in flight', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            // A probe attempt that outlives the whole budget (an individual SMTP stage can take minutes) must
+            // never keep the caller waiting past the deadline — the attempt itself is left to resolve in the
+            // background, backstopped by its own lease/permit machinery.
+            runner.execute.mockImplementation(() => new Promise(() => {}))
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS * 2)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+
         it('waits out a retry-scheduled attempt that fits the budget, then settles', async () => {
             admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
             runner.execute

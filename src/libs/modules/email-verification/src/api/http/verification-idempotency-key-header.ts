@@ -5,12 +5,17 @@ export type IdempotencyKeyHeaderOutcome =
     | { readonly kind: 'valid'; readonly key: string }
     | { readonly kind: 'malformed' }
     | { readonly kind: 'too-far-ahead' }
-    | { readonly kind: 'expired' }
 
 /** Parses an optional `Idempotency-Key` header from Express's `req.rawHeaders` (not `req.headers`, which would
- *  silently merge a repeated header) into a canonical lowercase UUIDv7, aged against `now`. Never imports
- *  credits' own private parser — this module owns its own idempotency-key vocabulary (UUIDv7-specific, unlike
- *  credits' any-version-UUID check). */
+ *  silently merge a repeated header) into a canonical lowercase UUIDv7. Never imports credits' own private
+ *  parser — this module owns its own idempotency-key vocabulary (UUIDv7-specific, unlike credits' any-version-UUID
+ *  check).
+ *
+ *  Deliberately does not reject an old key as expired here: an existing stored request must be looked up and
+ *  replayed by its own fields first (never re-aged), and only admission's `VerificationAdmissionService.admit()`
+ *  knows whether a matching request already exists. A future-dated key can never have an existing stored request
+ *  (admission always ages a first-seen key against its own current time), so rejecting it immediately as
+ *  `too-far-ahead` loses no legitimate replay. */
 export function parseVerificationIdempotencyKeyHeader(
     rawHeaders: readonly string[],
     now: Date = new Date(),
@@ -29,6 +34,5 @@ export function parseVerificationIdempotencyKeyHeader(
     const age = checkVerificationIdempotencyKeyAge(key, now)
     if (age === 'malformed') return { kind: 'malformed' }
     if (age === 'too-far-ahead') return { kind: 'too-far-ahead' }
-    if (age === 'expired') return { kind: 'expired' }
     return { kind: 'valid', key }
 }

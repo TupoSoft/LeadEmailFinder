@@ -55,7 +55,13 @@ export class VerificationExecutionRunner {
         )
         if (!permitAcquired) return { kind: 'permit-unavailable' }
 
-        const leased = await this.executions.acquireLease(executionId, organizationId, leaseOwnerId, this.leaseExpiry())
+        const leased = await this.executions.acquireLease(
+            executionId,
+            organizationId,
+            leaseOwnerId,
+            this.leaseExpiry(),
+            this.clock.now(),
+        )
         if (!leased) {
             await this.permits.release(leaseOwnerId)
             return { kind: 'not-runnable' }
@@ -80,8 +86,10 @@ export class VerificationExecutionRunner {
                     controller.abort()
                 })
             // Best-effort: a failed permit renewal does not by itself abort the in-flight probe, unlike lease
-            // renewal failure — see the plan's Decision Log for the accepted trade-off.
-            void this.permits.renew(leaseOwnerId, nextExpiry)
+            // renewal failure — see the plan's Decision Log for the accepted trade-off. The rejection must still
+            // be handled explicitly: an unhandled rejection here would otherwise crash the process under Node's
+            // default behavior.
+            this.permits.renew(leaseOwnerId, nextExpiry).catch(() => {})
         }, this.leaseLivenessPollMs)
 
         try {

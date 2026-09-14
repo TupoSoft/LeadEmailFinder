@@ -44,9 +44,9 @@ describe('parseVerificationIdempotencyKeyHeader', () => {
         })
     })
 
-    it('rejects a key older than 24 hours', () => {
+    it('passes an old key through as valid, deferring the expiry decision to admission\'s own stored-request lookup', () => {
         const key = buildUuidV7(now.getTime() - 24 * 60 * 60 * 1000 - 1)
-        expect(parseVerificationIdempotencyKeyHeader(['Idempotency-Key', key], now)).toEqual({ kind: 'expired' })
+        expect(parseVerificationIdempotencyKeyHeader(['Idempotency-Key', key], now)).toEqual({ kind: 'valid', key })
     })
 
     it('matches the header name case-insensitively', () => {

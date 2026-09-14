@@ -293,6 +293,29 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         expect(retried.kind).toBe('funded')
     })
 
+    it('pages a canceled execution whose linked request cleanup never completed, until settleCanceled runs', async () => {
+        const funded = await admission.admit({ organizationId, email: 'stuck-cleanup@example.test', deliveryMode: 'sync' })
+        if (funded.kind !== 'funded') throw new Error('unreachable')
+
+        // Models the reconciler's own recovery scenario: the row is already terminal `canceled` (as if
+        // `cancelIfNoCaptureIntention` had already run), but the credit release / request settlement that must
+        // follow never completed — the linked request is still `pending`.
+        const canceled = await executions.cancelIfNoCaptureIntention(funded.executionId, organizationId)
+        expect(canceled.state).toBe('canceled')
+
+        const pending = await executions.pageCanceledPendingCleanup(100)
+        expect(pending.map(execution => execution.executionId)).toContain(funded.executionId)
+
+        await credits.release(organizationId, funded.executionId)
+        await requests.settleCanceled(funded.executionId, organizationId)
+
+        const afterCleanup = await executions.pageCanceledPendingCleanup(100)
+        expect(afterCleanup.map(execution => execution.executionId)).not.toContain(funded.executionId)
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+        const payerRequest = await requests.findById(funded.requestId, organizationId)
+        expect(payerRequest).toEqual(expect.objectContaining({ billingState: 'settled', finalReason: 'failed', chargedCount: 0 }))
+    })
+
     it('replays settlement confirmation idempotently without a second credit call', async () => {
         const funded = await admission.admit({ organizationId, email: 'replay@example.test', deliveryMode: 'sync' })
         if (funded.kind !== 'funded') throw new Error('unreachable')

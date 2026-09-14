@@ -86,6 +86,7 @@ describe('VerificationAdmissionService', () => {
             takeoverForRetry: jest.fn(),
             cancelIfNoCaptureIntention: jest.fn(),
             pageNonterminal: jest.fn(),
+            pageCanceledPendingCleanup: jest.fn(),
         }
         cacheReader = { findLatestCandidate: jest.fn().mockResolvedValue(null) }
         cooldownReader = { findLatestOutcome: jest.fn().mockResolvedValue(null) }

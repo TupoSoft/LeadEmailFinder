@@ -115,7 +115,10 @@ describe('AsyncEmailVerificationController', () => {
             expect(service.verifyAsync).not.toHaveBeenCalled()
         })
 
-        it('rejects an expired Idempotency-Key with 410 before calling the service', async () => {
+        it('forwards an old Idempotency-Key to the service instead of rejecting it before a stored-request lookup', async () => {
+            // An old key might still match an existing stored request within its seven-day replay window —
+            // only admission's own lookup can tell. Only the service's own `conflict/key-expired` outcome (see
+            // below) may produce 410 for a key admission determines has genuinely expired with no match.
             const expiredKey = (() => {
                 const timestampMs = Date.now() - 25 * 60 * 60 * 1000
                 const timestampHex = timestampMs.toString(16).padStart(12, '0')
@@ -123,15 +126,15 @@ describe('AsyncEmailVerificationController', () => {
             })()
             const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
 
-            await expect(
-                controller.verifyAsync(
-                    { email: 'sentinel@private.example' },
-                    principal,
-                    buildRequest(['Idempotency-Key', expiredKey]),
-                    buildResponse() as unknown as Response,
-                ),
-            ).rejects.toMatchObject({ status: HttpStatus.GONE, message: 'idempotency_key_expired' })
-            expect(service.verifyAsync).not.toHaveBeenCalled()
+            await controller.verifyAsync(
+                { email: 'sentinel@private.example' },
+                principal,
+                buildRequest(['Idempotency-Key', expiredKey]),
+                buildResponse() as unknown as Response,
+            )
+            expect(service.verifyAsync).toHaveBeenCalledWith(
+                expect.objectContaining({ clientRequestKey: expiredKey }),
+            )
         })
 
         it('maps insufficient-funds to 402', async () => {

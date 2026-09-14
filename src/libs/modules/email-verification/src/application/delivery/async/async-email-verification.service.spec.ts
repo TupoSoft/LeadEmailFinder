@@ -62,6 +62,12 @@ describe('AsyncEmailVerificationService', () => {
             expect(dispatcher.dispatch).toHaveBeenCalledWith('execution-1', organizationId)
         })
 
+        it('still accepts the admitted operation when the queue dispatch itself fails', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId: 'request-1', executionId: 'execution-1' })
+            dispatcher.dispatch.mockRejectedValue(new Error('queue unavailable'))
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })
+        })
+
         it('accepts a mid-flight cooldown join without dispatching', async () => {
             admission.admit.mockResolvedValue({ kind: 'cooldown', requestId: 'request-1', retryAfterMs: 5_000 })
             await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })

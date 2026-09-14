@@ -47,7 +47,10 @@ export class AsyncEmailVerificationService {
                 return { kind: 'accepted', id: outcome.requestId }
             case 'funded':
             case 'joined':
-                await this.dispatcher.dispatch(outcome.executionId, input.organizationId)
+                // Durable admission already succeeded, so a dispatch failure must not fail the request — the
+                // reconciler's own sweep still picks up the queued execution. Losing the fast path here only
+                // costs latency, never a lost or double-charged operation.
+                await this.dispatcher.dispatch(outcome.executionId, input.organizationId).catch(() => {})
                 return { kind: 'accepted', id: outcome.requestId }
             case 'cooldown':
                 return { kind: 'accepted', id: outcome.requestId }

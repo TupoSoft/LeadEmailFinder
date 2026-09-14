@@ -59,6 +59,7 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
         takeoverForRetry: jest.fn().mockResolvedValue(execution({ state: 'queued' })),
         cancelIfNoCaptureIntention: jest.fn().mockResolvedValue(execution({ state: 'canceled' })),
         pageNonterminal: jest.fn().mockResolvedValue([]),
+        pageCanceledPendingCleanup: jest.fn().mockResolvedValue([]),
         ...overrides,
     }
 }
@@ -146,7 +147,7 @@ describe('VerificationReconciler', () => {
         expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(executions.markQueued).toHaveBeenCalledWith('execution-1', organizationId)
         expect(executions.cancelFundingFailure).not.toHaveBeenCalled()
-        expect(report).toEqual({ executionsChecked: 1, intentionsSettled: 0 })
+        expect(report).toEqual({ executionsChecked: 1, intentionsSettled: 0, cancellationsCleanedUp: 0 })
     })
 
     it('cancels a funding_pending execution with no reservation on record', async () => {
@@ -291,6 +292,32 @@ describe('VerificationReconciler', () => {
 
         expect(settlementService.settle).toHaveBeenCalledWith('execution-1', organizationId)
         expect(settlementService.settle).toHaveBeenCalledWith('execution-2', organizationId)
-        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 2 })
+        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 2, cancellationsCleanedUp: 0 })
+    })
+
+    it('retries cleanup for a canceled execution a prior sweep left with a pending linked request', async () => {
+        const { reconciler, requests, credits } = reconcilerFixture({
+            pageCanceledPendingCleanup: jest.fn().mockResolvedValue([execution({ state: 'canceled' })]),
+        })
+        credits.getReservation.mockResolvedValue(reservation())
+
+        const report = await reconciler.reconcile(100)
+
+        expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
+        expect(credits.release).toHaveBeenCalledWith(organizationId, 'execution-1')
+        expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
+        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 0, cancellationsCleanedUp: 1 })
+    })
+
+    it('skips releasing credits during a retried cleanup once the reservation is already gone', async () => {
+        const { reconciler, requests, credits } = reconcilerFixture({
+            pageCanceledPendingCleanup: jest.fn().mockResolvedValue([execution({ state: 'canceled' })]),
+        })
+        credits.getReservation.mockResolvedValue(null)
+
+        await reconciler.reconcile(100)
+
+        expect(credits.release).not.toHaveBeenCalled()
+        expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
     })
 })

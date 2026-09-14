@@ -172,9 +172,6 @@ export class AsyncEmailVerificationController {
                 HttpStatus.BAD_REQUEST,
             )
         }
-        if (header.kind === 'expired') {
-            throw new HttpException('idempotency_key_expired', HttpStatus.GONE)
-        }
 
         const outcome = await this.asyncEmailVerificationService.verifyAsync({
             email: body.email,

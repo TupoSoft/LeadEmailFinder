@@ -156,13 +156,15 @@ describe('asynchronous verification HTTP contracts', () => {
             expect(service.verifyAsync).not.toHaveBeenCalled()
         })
 
-        it('rejects an expired Idempotency-Key with 410 before calling the service', async () => {
+        it('forwards an old Idempotency-Key to the service instead of rejecting it before a stored-request lookup', async () => {
+            // An old key might still match an existing stored request within its seven-day replay window — only
+            // admission's own lookup can tell. Only the service's own `conflict/key-expired` outcome (see below)
+            // may produce 410 for a key admission determines has genuinely expired with no match.
             const expiredKey = buildUuidV7(Date.now() - 25 * 60 * 60 * 1000)
 
-            const response = await verify().set('Idempotency-Key', expiredKey).expect(410)
+            await verify().set('Idempotency-Key', expiredKey).expect(202)
 
-            expect(response.body).toMatchObject({ message: 'idempotency_key_expired' })
-            expect(service.verifyAsync).not.toHaveBeenCalled()
+            expect(service.verifyAsync).toHaveBeenCalledWith(expect.objectContaining({ clientRequestKey: expiredKey }))
         })
 
         it('admits with the caller organization and forwards a valid Idempotency-Key', async () => {

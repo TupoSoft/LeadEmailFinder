@@ -25,6 +25,8 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+const DEADLINE_EXCEEDED = Symbol('deadline-exceeded')
+
 /**
  * Admits one email through the same durable stack the async route uses, then drives it to a result inline
  * whenever it is this call's own execution to drive — never someone else's. A `funded` admission runs
@@ -79,7 +81,15 @@ export class RunSynchronousVerification {
         const deadlineMs = this.clock.now().getTime() + this.budgetMs
 
         while (this.clock.now().getTime() < deadlineMs) {
-            const executionOutcome = await this.runner.execute(executionId, organizationId)
+            // An individual SMTP stage can take far longer than the remaining budget — a single probe attempt
+            // must never be awaited past the deadline. The abandoned execution keeps running in the background
+            // regardless (its own lease/permit machinery and the reconciler own its eventual outcome), matching
+            // the same "connection close never affects billing" guarantee documented above.
+            const executionOutcome = await this.raceAgainstDeadline(
+                this.runner.execute(executionId, organizationId),
+                deadlineMs,
+            )
+            if (executionOutcome === DEADLINE_EXCEEDED) break
 
             if (executionOutcome.kind === 'settled') {
                 return this.readSettledOrFallBack(requestId, organizationId)
@@ -113,6 +123,12 @@ export class RunSynchronousVerification {
         }
 
         return { kind: 'accepted', id: requestId }
+    }
+
+    private raceAgainstDeadline<T>(promise: Promise<T>, deadlineMs: number): Promise<T | typeof DEADLINE_EXCEEDED> {
+        const remainingMs = deadlineMs - this.clock.now().getTime()
+        if (remainingMs <= 0) return Promise.resolve(DEADLINE_EXCEEDED)
+        return Promise.race<T | typeof DEADLINE_EXCEEDED>([promise, sleep(remainingMs).then(() => DEADLINE_EXCEEDED)])
     }
 
     private async readSettledOrFallBack(requestId: string, organizationId: string): Promise<SynchronousVerificationOutcome> {
