@@ -1,6 +1,6 @@
 import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import react from '@vitejs/plugin-react'
 import { isApiRequest, isInvitationDocument, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
 import { resolveCheckoutAllowedOrigins } from '../../src/libs/common/src/checkout-redirect.ts'
 

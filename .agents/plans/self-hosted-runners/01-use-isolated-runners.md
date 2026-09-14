@@ -33,6 +33,8 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-14) Apply the deliberate browser shutdown delay once and allow bounded subprocess headroom.
 - [x] (2026-09-14) Pass all 50 artifact guards, both negative controls, and the comparison with delayed browser initialization.
 - [ ] (2026-09-14) Publish the artifact guard follow-up and inspect its fresh Actions result.
+- [x] (2026-09-14) Switch Vite and Vitest to the standard React plugin with Oxc; pass 628 tests, build, and development refresh.
+- [ ] (2026-09-14) Publish the Oxc follow-up and inspect its fresh Actions result.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -89,6 +91,12 @@ None.
   teardown must not repeat the artificial delay, and failure diagnostics must not expose captured child output.
   Preserve the artifact assertions and verify that removing timeout suspension still makes both timeout guards fail.
   Date/Author: 2026-09-14, user-authorized artifact job follow-up.
+- Decision: Replace `@vitejs/plugin-react-swc` with `@vitejs/plugin-react` 6.1.1 in the web package and both compiler
+  configurations, using Oxc through Vite 8. Update the lockfile through pnpm and retain backend SWC dependencies.
+  Rationale: The web configurations use no custom SWC transformations, and the current plugin recommends this
+  supported path. Keep the standard `react()` options and validate tests, the production build, and development
+  refresh behavior. Treat timing observations as local measurements rather than a promise of faster CI.
+  Date/Author: 2026-09-14, user-authorized Oxc follow-up.
 
 ## Outcomes & Retrospective
 
@@ -136,6 +144,20 @@ All five artifact suites passed locally: 6 privileged, 24 invitation, 2 verifica
 guards, with no failures or skips. Focused ESLint, JavaScript syntax, and the real ExecPlan repository fixture passed.
 The diff keeps application behavior and artifact protection unchanged; no material architectural trade-off was found.
 
+The Oxc follow-up uses `@vitejs/plugin-react` 6.1.1 in both web configurations. The lockfile removes only the old
+frontend plugin and its unused SWC 1.16.2 dependency tree; backend SWC 1.13.5 and Jest integration remain intact.
+A frozen install, API client build, all 628 web tests, and the production web build passed without the SWC
+recommendation. The build retains its chunk-size advisory. Local test duration was 66.36 seconds before and
+68.39 seconds after the switch, with transform time changing from 1.40 to 1.29 seconds. These single runs are not
+a controlled performance benchmark; the latter overlapped other validation and does not establish a speedup.
+
+The in-app Chromium browser verified development rendering at `http://127.0.0.1:4175/` and navigation to the
+principles section. A temporary counter fixture retained count 1 after its heading changed through Fast Refresh.
+Neither page reported browser errors or warnings. The temporary tab, files, and owned dev server were removed.
+All 12 existing public-entry browser tests passed against the production build across desktop and narrow
+viewports. Web ESLint, the design contract, and the UI audit passed, with zero UI violations. Review found no
+material architectural trade-off; the change remains confined to the web compiler configuration and its dependencies.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -157,6 +179,9 @@ This plan corresponds to one LeadEmailFinder pull request containing the two wor
 and this plan with its road map. The authorized follow-up also adjusts the shared setup timeout in
 `src/libs/modules/credits/src/application/credits.service.integration.spec.ts`, the CI worker count, and the timing
 and subprocess diagnostics in `scripts/testing/browser-fixture-artifacts.spec.mjs`.
+The Oxc follow-up updates `apps/web/package.json`, `apps/web/vite.config.ts`, `apps/web/vitest.config.ts`, and
+`pnpm-lock.yaml`. The prose dictionary recognizes Oxc as the compiler's name. The change does not enable
+experimental React Compiler transforms or change the backend compiler.
 
 It does not alter HTTP APIs, Bruno collections, business modules, database schemas, application images, workflow
 triggers, permissions, required check names, or test assertions. It does not implement or deploy Swarm
@@ -179,6 +204,12 @@ Allow 90 seconds for the child process and 120 seconds for its parent test; repo
 output. Run the guard scenarios and a temporary negative control with timeout suspension removed, then restore
 the production fixture before committing. The existing Playwright CLI scripts are required because this check
 tests subprocess termination, a dedicated reporter, and filesystem artifacts that an interactive browser cannot verify.
+
+For the Oxc follow-up, measure the existing web suite before changing dependencies. Replace the web React plugin
+dependency and both imports, preserving their options and the static security header plugin. Regenerate the lockfile
+with pnpm, inspect the dependency diff, and verify a frozen install. Build the API client, run the full web suite with
+one worker, and build the web application. Verify development rendering and React Fast Refresh with a temporary
+local fixture, then remove it. Record the validation results and any limitations in timing comparisons.
 
 Extend the existing YAML parser to accept a string containing visible characters or a nonempty array of such strings. Add fixtures
 for both valid forms and reject missing, null, numeric, boolean, blank, empty, mixed, nested, and mapping values.
@@ -220,6 +251,8 @@ tests can proceed independently. New workflow jobs must not become active before
 - All six privileged artifact guards pass; both timeout scenarios still fail if authentication timeout suspension
   is removed. The deliberate close delay runs once, and subprocess failures identify their code, signal, and status
   without exposing captured output.
+- Vite and Vitest use `@vitejs/plugin-react` with Oxc. All web tests and the production build pass without the SWC
+  recommendation, and development refresh preserves component state. Backend SWC dependencies remain available.
 - After the external deployment, a complete Actions run uses the upgraded pool and preserves the required
   `Validate / validate` result. That runtime criterion remains unverified until actual execution.
 
@@ -264,6 +297,25 @@ For the negative control, temporarily remove only `info.setTimeout(0)` from
 `PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright node --test --test-name-pattern=runner-timeout scripts/testing/browser-fixture-artifacts.spec.mjs`.
 Require both selected guards to fail their protection assertions, then restore the fixture exactly and rerun the
 positive suite. Never print the child's captured output while diagnosing these checks.
+
+Oxc follow-up validation:
+
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
+corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
+corepack pnpm --filter @tuposoft/lead-email-finder-web build
+corepack pnpm --filter @tuposoft/lead-email-finder-web lint
+CI=true PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright test tests/e2e/public-entry.spec.ts --workers=1 --output=/tmp/lef-pr595-oxc-public-entry-results
+corepack pnpm design:lint
+corepack pnpm ui:audit
+corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+For development refresh, start the Vite dev server on an unused loopback port. Open a temporary React counter
+fixture in Chromium, increment it, edit its label, and require the updated label with the existing count and no
+runtime error. Restore or remove all temporary files and stop the owned server afterward. Also open the application
+entry and verify its normal rendering and navigation without a framework error overlay.
 
 The database helper owns a separate disposable PostgreSQL container for this checkout. Verify its ownership
 before cleanup. A local pass does not prove recovery on the isolated Actions workers; inspect a fresh run of the
