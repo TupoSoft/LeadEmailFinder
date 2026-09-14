@@ -1,4 +1,5 @@
 import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
+import { EmailAdministrationService } from '../email-administration.service'
 import { VerificationSettlementStore } from '../ports/verification-settlement-store'
 
 /**
@@ -6,12 +7,16 @@ import { VerificationSettlementStore } from '../ports/verification-settlement-st
  * ID as the stable opaque reference on every attempt. Mirrors `PaymentAdjustmentHandler`'s
  * claim-then-call-credits-then-complete shape: replaying an already-confirmed intention is a no-op, and
  * `CreditReservationService.capture()`/`release()` are themselves replay-safe, so a crash between a successful
- * credit call and this confirmation can never cause a second debit on retry.
+ * credit call and this confirmation can never cause a second debit on retry. Also advances the email cache's
+ * `lastVerificationId` link once settlement is confirmed — the one place in the new durable stack that mirrors
+ * `EmailVerificationOrchestrator`'s old unconditional cache-finalize step, gated at exactly the point where the
+ * result becomes visible.
  */
 export class VerificationSettlementService {
     constructor(
         private readonly settlements: VerificationSettlementStore,
         private readonly credits: CreditReservationService,
+        private readonly emailAdministration: EmailAdministrationService,
     ) {}
 
     async settle(executionId: string, organizationId: string): Promise<void> {
@@ -25,6 +30,10 @@ export class VerificationSettlementService {
             await this.credits.release(organizationId, executionId)
         }
 
-        await this.settlements.confirmSettlement(executionId, organizationId)
+        const { normalizedAddress, exists } = await this.settlements.confirmSettlement(executionId, organizationId)
+        await this.emailAdministration.upsertEmail(organizationId, normalizedAddress, {
+            exists,
+            lastVerificationId: intention.resultId,
+        })
     }
 }

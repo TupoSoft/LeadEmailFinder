@@ -25,6 +25,8 @@ import { SmtpVerificationEntity } from './persistence/typeorm/smtp-verification.
 import { VerificationRequestEntity } from './persistence/typeorm/verification-request.entity'
 import { VerificationExecutionEntity } from './persistence/typeorm/verification-execution.entity'
 import { VerificationSettlementIntentionEntity } from './persistence/typeorm/verification-settlement-intention.entity'
+import { VerificationExecutionPermitEntity } from './persistence/typeorm/verification-execution-permit.entity'
+import { VerificationExecutionPermitLockEntity } from './persistence/typeorm/verification-execution-permit-lock.entity'
 import { TypeOrmEmailStore } from './persistence/typeorm-email.store'
 import { TypeOrmDomainStore } from './persistence/typeorm-domain.store'
 import { TypeOrmVerificationStore } from './persistence/typeorm-verification.store'
@@ -33,6 +35,7 @@ import { TypeOrmVerificationRequestStore } from './persistence/typeorm-verificat
 import { TypeOrmVerificationExecutionStore } from './persistence/typeorm-verification-execution.store'
 import { TypeOrmVerificationSettlementStore } from './persistence/typeorm-verification-settlement.store'
 import { TypeOrmVerificationResultCacheReader } from './persistence/typeorm-verification-result-cache-reader'
+import { TypeOrmVerificationExecutionPermitStore } from './persistence/typeorm-verification-execution-permit.store'
 import { DnsMxResolver } from './discovery/dns/dns-mx-resolver'
 import { HttpDomainSynonymDiscovery } from './discovery/http/http-domain-synonym-discovery'
 import { SmtpClientFactory } from './mailbox/smtp/smtp-client.factory'
@@ -52,11 +55,14 @@ import {
     VERIFICATION_RESULT_CACHE_READER,
     VerificationResultCacheReader,
 } from '../application/ports/verification-result-cache-reader'
+import { VERIFICATION_COOLDOWN_READER, VerificationCooldownReader } from '../application/ports/verification-cooldown-reader'
+import { VERIFICATION_EXECUTION_PERMITS, VerificationExecutionPermits } from '../application/ports/verification-execution-permits'
 import { VerificationAdmissionService } from '../application/operations/verification-admission.service'
 import { VerificationSettlementService } from '../application/operations/verification-settlement.service'
 import { VerificationExecutionRunner } from '../application/operations/verification-execution-runner'
 import { VerificationReconciler } from '../application/operations/verification-reconciler'
 import {
+    VERIFICATION_ADDRESS_COOLDOWN_MS,
     VERIFICATION_EXECUTION_DEADLINE_MS,
     VERIFICATION_LEASE_DURATION_MS,
     VERIFICATION_LEASE_LIVENESS_POLL_MS,
@@ -68,6 +74,7 @@ import {
 } from '../application/verification-trace/verification-trace-observer'
 
 const DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS = 86_400
+const DEFAULT_VERIFICATION_EXECUTION_MAX_CONCURRENT = 5
 
 class SystemVerificationClock implements VerificationClock {
     now(): Date {
@@ -86,6 +93,8 @@ class SystemVerificationClock implements VerificationClock {
             VerificationRequestEntity,
             VerificationExecutionEntity,
             VerificationSettlementIntentionEntity,
+            VerificationExecutionPermitEntity,
+            VerificationExecutionPermitLockEntity,
         ]),
         ConfigModule,
         DnsModule,
@@ -206,11 +215,21 @@ class SystemVerificationClock implements VerificationClock {
             useFactory: (dataSource: DataSource) => new TypeOrmVerificationResultCacheReader(dataSource.manager),
         },
         {
+            provide: VERIFICATION_COOLDOWN_READER,
+            useExisting: VERIFICATION_RESULT_CACHE_READER,
+        },
+        {
+            provide: VERIFICATION_EXECUTION_PERMITS,
+            inject: [DataSource],
+            useFactory: (dataSource: DataSource) => new TypeOrmVerificationExecutionPermitStore(dataSource),
+        },
+        {
             provide: VerificationAdmissionService,
             inject: [
                 VERIFICATION_REQUEST_STORE,
                 VERIFICATION_EXECUTION_STORE,
                 VERIFICATION_RESULT_CACHE_READER,
+                VERIFICATION_COOLDOWN_READER,
                 CreditReservationService,
                 VERIFICATION_CLOCK,
                 ConfigService,
@@ -219,6 +238,7 @@ class SystemVerificationClock implements VerificationClock {
                 requests: VerificationRequestStore,
                 executions: VerificationExecutionStore,
                 cacheReader: VerificationResultCacheReader,
+                cooldownReader: VerificationCooldownReader,
                 credits: CreditReservationService,
                 clock: VerificationClock,
                 configService: ConfigService,
@@ -227,28 +247,43 @@ class SystemVerificationClock implements VerificationClock {
                     requests,
                     executions,
                     cacheReader,
+                    cooldownReader,
                     credits,
                     clock,
                     (configService.get<number>('VERIFICATION_RESULT_CACHE_TTL_SECONDS') ??
                         DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS) * 1000,
                     VERIFICATION_EXECUTION_DEADLINE_MS,
+                    VERIFICATION_ADDRESS_COOLDOWN_MS,
                 ),
         },
         {
             provide: VerificationSettlementService,
-            inject: [VERIFICATION_SETTLEMENT_STORE, CreditReservationService],
-            useFactory: (settlements: VerificationSettlementStore, credits: CreditReservationService) =>
-                new VerificationSettlementService(settlements, credits),
+            inject: [VERIFICATION_SETTLEMENT_STORE, CreditReservationService, EmailAdministrationService],
+            useFactory: (
+                settlements: VerificationSettlementStore,
+                credits: CreditReservationService,
+                emailAdministration: EmailAdministrationService,
+            ) => new VerificationSettlementService(settlements, credits, emailAdministration),
         },
         {
             provide: VerificationExecutionRunner,
-            inject: [VERIFICATION_EXECUTION_STORE, VERIFICATION_SETTLEMENT_STORE, VerificationSettlementService, MailboxVerificationService, VERIFICATION_CLOCK],
+            inject: [
+                VERIFICATION_EXECUTION_STORE,
+                VERIFICATION_SETTLEMENT_STORE,
+                VerificationSettlementService,
+                MailboxVerificationService,
+                VERIFICATION_CLOCK,
+                VERIFICATION_EXECUTION_PERMITS,
+                ConfigService,
+            ],
             useFactory: (
                 executions: VerificationExecutionStore,
                 settlements: VerificationSettlementStore,
                 settlementService: VerificationSettlementService,
                 mailboxVerification: MailboxVerificationService,
                 clock: VerificationClock,
+                permits: VerificationExecutionPermits,
+                configService: ConfigService,
             ) =>
                 new VerificationExecutionRunner(
                     executions,
@@ -256,14 +291,18 @@ class SystemVerificationClock implements VerificationClock {
                     settlementService,
                     mailboxVerification,
                     clock,
+                    permits,
                     VERIFICATION_LEASE_DURATION_MS,
                     VERIFICATION_LEASE_LIVENESS_POLL_MS,
+                    configService.get<number>('VERIFICATION_EXECUTION_MAX_CONCURRENT') ??
+                        DEFAULT_VERIFICATION_EXECUTION_MAX_CONCURRENT,
                 ),
         },
         {
             provide: VerificationReconciler,
             inject: [
                 VERIFICATION_EXECUTION_STORE,
+                VERIFICATION_REQUEST_STORE,
                 VERIFICATION_SETTLEMENT_STORE,
                 VerificationSettlementService,
                 VerificationExecutionRunner,
@@ -272,6 +311,7 @@ class SystemVerificationClock implements VerificationClock {
             ],
             useFactory: (
                 executions: VerificationExecutionStore,
+                requests: VerificationRequestStore,
                 settlements: VerificationSettlementStore,
                 settlementService: VerificationSettlementService,
                 runner: VerificationExecutionRunner,
@@ -280,6 +320,7 @@ class SystemVerificationClock implements VerificationClock {
             ) =>
                 new VerificationReconciler(
                     executions,
+                    requests,
                     settlements,
                     settlementService,
                     runner,

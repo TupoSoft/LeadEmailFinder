@@ -1,299 +1,273 @@
 import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
-import { Email } from '../../../domain/email'
-import { EmailVerification, OwnedEmailVerification } from '../../../domain/email-verification'
-import { DomainVerificationForbiddenError } from '../../../domain/errors'
-import { MailboxEvidence, NO_MAILBOX_EVIDENCE } from '../../../domain/verification-evidence'
-import { DomainPolicyService } from '../../domain-policy.service'
-import { EmailAdministrationService } from '../../email-administration.service'
-import { EmailVerificationOrchestrator } from '../../email-verification.service'
-import { MailboxVerificationService } from '../../mailbox-verification.service'
-import { AccountDiscovery } from '../../ports/account-discovery'
-import { DomainStore } from '../../ports/domain-store'
-import { EmailStore } from '../../ports/email-store'
-import { MailboxProbe } from '../../ports/mailbox-probe'
-import { VerificationStore } from '../../ports/verification-store'
-import { VerificationTraceObserver } from '../../verification-trace/verification-trace-observer'
-import { RunSynchronousVerification, SynchronousVerificationCore } from './run-synchronous-verification'
+import { AdmissionOutcome, VerificationAdmissionService } from '../../operations/verification-admission.service'
+import { ExecutionOutcome, VerificationExecutionRunner } from '../../operations/verification-execution-runner'
+import { ReadOutcome, VerificationOperationsReader } from '../../operations/verification-operations-reader'
+import { VerificationClock } from '../../ports/verification-clock'
+import { VerificationRequestRecord } from '../../ports/verification-request-store'
+import { RunSynchronousVerification } from './run-synchronous-verification'
 
-const organizationId = '10000000-0000-4000-8000-000000000001'
-const otherOrganizationId = '10000000-0000-4000-8000-000000000002'
-const email = 'person@example.test'
-const date = new Date('2026-09-07T00:00:00.000Z')
+const organizationId = 'org-1'
+const email = 'person@lef.test'
+const requestId = 'request-1'
+const executionId = 'execution-1'
+const BUDGET_MS = 5_000
+const POLL_INTERVAL_MS = 100
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
-function evidenceFor(accepted: boolean): MailboxEvidence {
-    return accepted
-        ? {
-              kind: 'smtp_recipient_accepted',
-              observedAt: date,
-              policyVersion: 1,
-              origin: 'fresh',
-              stage: 'rcpt_to',
-              code: 250,
-              verifiedTransport: true,
-              senderAccepted: true,
-          }
-        : {
-              kind: 'smtp_recipient_missing',
-              observedAt: date,
-              policyVersion: 1,
-              origin: 'fresh',
-              stage: 'rcpt_to',
-              code: 550,
-              enhancedCode: '5.1.1',
-              verifiedTransport: true,
-              senderAccepted: true,
-          }
-}
-
-interface Fixture {
-    command: RunSynchronousVerification
-    domainStore: jest.Mocked<DomainStore>
-    emailStore: jest.Mocked<EmailStore>
-    verificationStore: jest.Mocked<VerificationStore>
-    mailboxProbe: jest.Mocked<MailboxProbe>
-    accountDiscovery: jest.Mocked<AccountDiscovery>
-    observer: jest.Mocked<VerificationTraceObserver>
-    emails: Map<string, Email>
-    verifications: EmailVerification[]
-}
-
-function fixture(): Fixture {
-    const emails = new Map<string, Email>()
-    const verifications: EmailVerification[] = []
-    const domainStore: jest.Mocked<DomainStore> = { findByName: jest.fn().mockResolvedValue(null) }
-    const emailStore: jest.Mocked<EmailStore> = {
-        findByAddress: jest.fn(),
-        findAllForOrganization: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        upsert: jest.fn(),
-    }
-    emailStore.upsert.mockImplementation((owner, address, changes) => {
-        const key = `${owner}:${address}`
-        const [username, domain] = address.split('@')
-        const record: Email = {
-            organizationId: owner,
-            id: address,
-            username,
-            domain,
-            exists: null,
-            createdAt: date,
-            updatedAt: date,
-            ...emails.get(key),
-            ...changes,
-        }
-        emails.set(key, record)
-        return Promise.resolve(record)
-    })
-    const verificationStore: jest.Mocked<VerificationStore> = { create: jest.fn() }
-    verificationStore.create.mockImplementation((owner, result) => {
-        const record: EmailVerification = {
-            ...result,
-            organizationId: owner,
-            id: `20000000-0000-4000-8000-${String(verifications.length + 1).padStart(12, '0')}`,
-            createdAt: date,
-        }
-        verifications.push(record)
-        return Promise.resolve(record)
-    })
-    const mailboxProbe: jest.Mocked<MailboxProbe> = { probe: jest.fn() }
-    mailboxProbe.probe.mockImplementation((_owner, address) =>
-        Promise.resolve({
-            email: address,
-            exists: address === email,
-            reason: address === email ? EmailVerificationReason.AcceptedEmail : EmailVerificationReason.RejectedEmail,
-            targetExchange: 'mx.example.test',
-            evidence: evidenceFor(address === email),
-        }),
-    )
-    const accountDiscovery: jest.Mocked<AccountDiscovery> = { discover: jest.fn().mockResolvedValue([]) }
-    const observer: jest.Mocked<VerificationTraceObserver> = {
-        enqueued: jest.fn(),
-        completed: jest.fn(),
-        failed: jest.fn(),
-        batchCompleted: jest.fn(),
-    }
-    const core = new EmailVerificationOrchestrator(
-        new MailboxVerificationService(mailboxProbe, accountDiscovery),
-        verificationStore,
-        new EmailAdministrationService(emailStore),
-        new DomainPolicyService(domainStore),
-        observer,
-    )
-
+function request(overrides: Partial<VerificationRequestRecord> = {}): VerificationRequestRecord {
     return {
-        command: new RunSynchronousVerification(core),
-        domainStore,
-        emailStore,
-        verificationStore,
-        mailboxProbe,
-        accountDiscovery,
-        observer,
-        emails,
-        verifications,
+        requestId,
+        organizationId,
+        normalizedAddress: email,
+        deliveryMode: 'sync',
+        clientRequestKey: null,
+        executionId,
+        resultId: null,
+        source: 'fresh',
+        billingState: 'settled',
+        reservedCount: 1,
+        chargedCount: 1,
+        finalReason: 'conclusive',
+        createdAt: new Date(),
+        settledAt: new Date(),
+        ...overrides,
+    }
+}
+
+function settledResult(overrides: Partial<ReadOutcome & { kind: 'settled' }> = {}): ReadOutcome {
+    return {
+        kind: 'settled',
+        request: request(),
+        result: {
+            id: 'result-1',
+            email,
+            localPart: 'person',
+            domain: 'lef.test',
+            exists: true,
+            catchAll: false,
+            reason: EmailVerificationReason.AcceptedEmail,
+            sources: [EmailVerificationSource.MX],
+            createdAt: new Date(),
+            evidenceObservedAt: new Date(),
+        },
+        ...overrides,
     }
 }
 
 describe('RunSynchronousVerification', () => {
-    it('normalizes the email and preserves the core result and sync trace', async () => {
-        const result: OwnedEmailVerification = {
-            id: '20000000-0000-4000-8000-000000000001',
-            email,
-            domain: 'example.test',
-            localPart: 'person',
-            exists: true,
-            catchAll: false,
-            reason: EmailVerificationReason.AcceptedEmail,
-            sources: [EmailVerificationSource.MX],
-            createdAt: date,
-            verificationQuality: 'conclusive_positive',
-            evidenceObservedAt: date,
-            evidencePolicyVersion: 1,
-        }
-        const core: jest.Mocked<SynchronousVerificationCore> = { verify: jest.fn().mockResolvedValue(result) }
-        const command = new RunSynchronousVerification(core)
-        const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode: 'sync' as const }
+    let admission: jest.Mocked<Pick<VerificationAdmissionService, 'admit'>>
+    let runner: jest.Mocked<Pick<VerificationExecutionRunner, 'execute'>>
+    let operations: jest.Mocked<Pick<VerificationOperationsReader, 'read'>>
+    let clock: VerificationClock
+    let command: RunSynchronousVerification
 
-        await expect(command.execute({ organizationId, email: 'Person@Example.Test', trace })).resolves.toBe(result)
+    const input = { organizationId, email }
 
-        expect(core.verify).toHaveBeenCalledTimes(1)
-        expect(core.verify).toHaveBeenCalledWith({ organizationId, email, trace })
-    })
-
-    it('returns a successful owned result through the real core and finalizes its email cache', async () => {
-        const { command, domainStore, emailStore, verificationStore, mailboxProbe, accountDiscovery, observer } =
-            fixture()
-
-        const result = await command.execute({ organizationId, email: 'Person@Example.Test' })
-
-        expect(result).toMatchObject({
-            email,
-            domain: 'example.test',
-            localPart: 'person',
-            exists: true,
-            catchAll: false,
-            reason: EmailVerificationReason.AcceptedEmail,
-            sources: [EmailVerificationSource.MX],
-        })
-        expect(result).not.toHaveProperty('organizationId')
-        expect(domainStore.findByName).toHaveBeenCalledWith('example.test')
-        expect(mailboxProbe.probe).toHaveBeenCalledTimes(2)
-        expect(mailboxProbe.probe).toHaveBeenLastCalledWith(organizationId, email, undefined)
-        expect(verificationStore.create).toHaveBeenCalledTimes(1)
-        expect(emailStore.upsert).toHaveBeenLastCalledWith(organizationId, email, {
-            exists: true,
-            lastVerificationId: result.id,
-        })
-        expect(accountDiscovery.discover).not.toHaveBeenCalled()
-        expect(observer.completed).toHaveBeenCalledWith(
-            expect.objectContaining({ mode: 'sync', operationId: expect.any(String), verificationId: result.id }),
+    beforeEach(() => {
+        jest.useFakeTimers()
+        admission = { admit: jest.fn() }
+        runner = { execute: jest.fn() }
+        operations = { read: jest.fn() }
+        clock = { now: () => new Date() }
+        command = new RunSynchronousVerification(
+            admission as unknown as VerificationAdmissionService,
+            runner as unknown as VerificationExecutionRunner,
+            operations as unknown as VerificationOperationsReader,
+            clock,
+            BUDGET_MS,
+            POLL_INTERVAL_MS,
+            CACHE_TTL_MS,
         )
     })
 
-    it('preserves a prohibited-domain failure without preparing a cache or probing a mailbox', async () => {
-        const { command, domainStore, emailStore, mailboxProbe, verificationStore } = fixture()
-        domainStore.findByName.mockResolvedValue({
-            name: 'example.test',
-            isVerificationForbidden: true,
-            catchAllEnabled: null,
-            isFree: false,
-            isDisposable: false,
-            createdAt: date,
-            updatedAt: date,
-        })
-
-        await expect(command.execute({ organizationId, email })).rejects.toBeInstanceOf(
-            DomainVerificationForbiddenError,
-        )
-
-        expect(emailStore.upsert).not.toHaveBeenCalled()
-        expect(mailboxProbe.probe).not.toHaveBeenCalled()
-        expect(verificationStore.create).not.toHaveBeenCalled()
+    afterEach(() => {
+        jest.useRealTimers()
     })
 
-    it('returns and persists an indeterminate result without converting it into a rejection', async () => {
-        const { command, mailboxProbe, accountDiscovery, verificationStore, emails } = fixture()
-        mailboxProbe.probe.mockResolvedValue({
-            email,
-            exists: null,
-            reason: EmailVerificationReason.SecureTransportUnavailable,
-            targetExchange: 'mx.example.test',
-            evidence: NO_MAILBOX_EVIDENCE,
-        })
-
-        const result = await command.execute({ organizationId, email })
-
-        expect(result).toMatchObject({
-            exists: null,
-            catchAll: null,
-            reason: EmailVerificationReason.SecureTransportUnavailable,
-            sources: [],
-        })
-        expect(mailboxProbe.probe).toHaveBeenCalledTimes(1)
-        expect(accountDiscovery.discover).not.toHaveBeenCalled()
-        expect(verificationStore.create).toHaveBeenCalledTimes(1)
-        expect(emails.get(`${organizationId}:${email}`)).toMatchObject({
-            exists: null,
-            lastVerificationId: result.id,
-        })
+    it('reports insufficient-funds without touching the runner or operations reader', async () => {
+        admission.admit.mockResolvedValue({ kind: 'insufficient-funds', requestId })
+        await expect(command.execute(input)).resolves.toEqual({ kind: 'insufficient-funds' })
+        expect(runner.execute).not.toHaveBeenCalled()
+        expect(operations.read).not.toHaveBeenCalled()
     })
 
-    it('propagates the original adapter failure and reports the supplied sync trace', async () => {
-        const { command, mailboxProbe, verificationStore, emailStore, observer } = fixture()
-        const error = new Error('mailbox_adapter_failed')
-        const trace = { operationId: '30000000-0000-4000-8000-000000000001', mode: 'sync' as const }
-        mailboxProbe.probe.mockRejectedValue(error)
-
-        await expect(command.execute({ organizationId, email, trace })).rejects.toBe(error)
-
-        expect(emailStore.upsert).toHaveBeenCalledTimes(1)
-        expect(emailStore.upsert).toHaveBeenCalledWith(organizationId, email, {
-            format: undefined,
-            exists: null,
-        })
-        expect(verificationStore.create).not.toHaveBeenCalled()
-        expect(observer.completed).not.toHaveBeenCalled()
-        expect(observer.failed).toHaveBeenCalledWith(
-            expect.objectContaining({ ...trace, stage: 'verification_probe', errorType: 'Error' }),
-        )
+    it.each(['key-mismatch', 'key-expired'] as const)('reports a %s conflict', async reason => {
+        admission.admit.mockResolvedValue({ kind: 'conflict', reason })
+        await expect(command.execute(input)).resolves.toEqual({ kind: 'conflict', reason })
     })
 
-    it('keeps probes, results, and latest-result links separate for two organizations verifying the same address', async () => {
-        const { command, mailboxProbe, emails, verifications } = fixture()
-        mailboxProbe.probe.mockImplementation((owner, address) => {
-            const accepted = owner === organizationId && address === email
-            return Promise.resolve({
-                email: address,
-                exists: accepted,
-                reason: accepted ? EmailVerificationReason.AcceptedEmail : EmailVerificationReason.RejectedEmail,
-                targetExchange: 'mx.example.test',
-                evidence: evidenceFor(accepted),
-            })
-        })
+    it('reports address-cooldown for a recent terminal inconclusive verdict', async () => {
+        admission.admit.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 45_000 } as AdmissionOutcome)
+        await expect(command.execute(input)).resolves.toEqual({ kind: 'address-cooldown', retryAfterMs: 45_000 })
+    })
 
-        const firstResult = await command.execute({ organizationId, email: 'Person@Example.Test' })
-        const secondResult = await command.execute({ organizationId: otherOrganizationId, email })
-
-        expect(firstResult.exists).toBe(true)
-        expect(secondResult.exists).toBe(false)
-        expect(firstResult.id).not.toBe(secondResult.id)
-        expect(mailboxProbe.probe).toHaveBeenCalledWith(organizationId, email, undefined)
-        expect(mailboxProbe.probe).toHaveBeenCalledWith(otherOrganizationId, email, undefined)
-        expect(verifications).toEqual([
-            { ...firstResult, organizationId },
-            { ...secondResult, organizationId: otherOrganizationId },
-        ])
-        expect(emails.get(`${organizationId}:${email}`)).toMatchObject({
+    it('forwards the client request key to admission', async () => {
+        admission.admit.mockResolvedValue({ kind: 'insufficient-funds', requestId })
+        await command.execute({ ...input, clientRequestKey: 'key-1' })
+        expect(admission.admit).toHaveBeenCalledWith({
             organizationId,
-            exists: true,
-            lastVerificationId: firstResult.id,
+            email,
+            deliveryMode: 'sync',
+            clientRequestKey: 'key-1',
         })
-        expect(emails.get(`${otherOrganizationId}:${email}`)).toMatchObject({
-            organizationId: otherOrganizationId,
-            exists: false,
-            lastVerificationId: secondResult.id,
+    })
+
+    describe('cached admission', () => {
+        it('reads the already-settled result and reports it as completed with operation metadata', async () => {
+            admission.admit.mockResolvedValue({ kind: 'cached', requestId, resultId: 'result-1' })
+            operations.read.mockResolvedValue(settledResult({ request: request({ source: 'cache', finalReason: 'cached' }) }))
+
+            const outcome = await command.execute(input)
+
+            expect(outcome.kind).toBe('completed')
+            expect(runner.execute).not.toHaveBeenCalled()
+            if (outcome.kind === 'completed') {
+                expect(outcome.result.id).toBe('result-1')
+                expect(outcome.operation).toMatchObject({ id: requestId, source: 'cache' })
+            }
         })
-        expect(firstResult).not.toHaveProperty('organizationId')
-        expect(secondResult).not.toHaveProperty('organizationId')
+
+        it('falls back to accepted if the cached request is defensively not yet settled', async () => {
+            admission.admit.mockResolvedValue({ kind: 'cached', requestId, resultId: 'result-1' })
+            operations.read.mockResolvedValue({ kind: 'pending', executionState: 'running' })
+
+            await expect(command.execute(input)).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+    })
+
+    describe('funded admission', () => {
+        it('settles on the first inline attempt', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute.mockResolvedValue({ kind: 'settled' })
+            operations.read.mockResolvedValue(settledResult())
+
+            const outcome = await command.execute(input)
+
+            expect(runner.execute).toHaveBeenCalledWith(executionId, organizationId)
+            expect(outcome.kind).toBe('completed')
+        })
+
+        it('falls back to accepted at the deadline even while a single attempt is still in flight', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            // A probe attempt that outlives the whole budget (an individual SMTP stage can take minutes) must
+            // never keep the caller waiting past the deadline — the attempt itself is left to resolve in the
+            // background, backstopped by its own lease/permit machinery.
+            runner.execute.mockImplementation(() => new Promise(() => {}))
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS * 2)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+
+        it('waits out a retry-scheduled attempt that fits the budget, then settles', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute
+                .mockResolvedValueOnce({ kind: 'retry-scheduled', retryAt: new Date(Date.now() + 500) })
+                .mockResolvedValueOnce({ kind: 'settled' })
+            operations.read.mockResolvedValue(settledResult())
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(1_000)
+
+            await expect(outcomePromise).resolves.toMatchObject({ kind: 'completed' })
+            expect(runner.execute).toHaveBeenCalledTimes(2)
+        })
+
+        it('falls back to accepted when a retry-scheduled wait would not fit the budget', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute.mockResolvedValue({ kind: 'retry-scheduled', retryAt: new Date(Date.now() + BUDGET_MS * 10) })
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS * 2)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'accepted', id: requestId })
+            expect(runner.execute).toHaveBeenCalledTimes(1)
+        })
+
+        it.each(['lease-lost', 'not-runnable'] as const)('falls back to accepted on %s', async kind => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute.mockResolvedValue({ kind } as ExecutionOutcome)
+
+            await expect(command.execute(input)).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+
+        it('waits through permit-unavailable before eventually settling', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute
+                .mockResolvedValueOnce({ kind: 'permit-unavailable' })
+                .mockResolvedValueOnce({ kind: 'permit-unavailable' })
+                .mockResolvedValueOnce({ kind: 'settled' })
+            operations.read.mockResolvedValue(settledResult())
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS)
+
+            await expect(outcomePromise).resolves.toMatchObject({ kind: 'completed' })
+            expect(runner.execute).toHaveBeenCalledTimes(3)
+        })
+
+        it('falls back to accepted once the budget is exhausted under sustained permit-unavailable', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute.mockResolvedValue({ kind: 'permit-unavailable' })
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS * 2)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+
+        it('reports failed with operation metadata for a canceled execution settled with no result', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId, executionId })
+            runner.execute.mockResolvedValue({ kind: 'settled' })
+            operations.read.mockResolvedValue({
+                kind: 'settled',
+                request: request({ resultId: null, finalReason: 'failed', chargedCount: 0 }),
+                result: null,
+            })
+
+            const outcome = await command.execute(input)
+
+            expect(outcome).toMatchObject({ kind: 'failed', operation: { id: requestId } })
+        })
+    })
+
+    describe('joined/cooldown admission', () => {
+        it.each(['joined', 'cooldown'] as const)(
+            'polls read-only status until settled without driving the execution for a %s outcome',
+            async kind => {
+                admission.admit.mockResolvedValue(
+                    kind === 'joined'
+                        ? { kind, requestId, executionId }
+                        : { kind, requestId, retryAfterMs: 200 },
+                )
+                operations.read
+                    .mockResolvedValueOnce({ kind: 'pending', executionState: 'running' })
+                    .mockResolvedValueOnce(settledResult())
+
+                const outcomePromise = command.execute(input)
+                await jest.advanceTimersByTimeAsync(BUDGET_MS)
+
+                await expect(outcomePromise).resolves.toMatchObject({ kind: 'completed' })
+                expect(runner.execute).not.toHaveBeenCalled()
+            },
+        )
+
+        it('falls back to accepted once the budget is exhausted while still pending', async () => {
+            admission.admit.mockResolvedValue({ kind: 'joined', requestId, executionId })
+            operations.read.mockResolvedValue({ kind: 'pending', executionState: 'running' })
+
+            const outcomePromise = command.execute(input)
+            await jest.advanceTimersByTimeAsync(BUDGET_MS * 2)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
+
+        it('falls back to accepted if the request unexpectedly disappears mid-poll', async () => {
+            admission.admit.mockResolvedValue({ kind: 'joined', requestId, executionId })
+            operations.read.mockResolvedValue({ kind: 'not-found' })
+
+            await expect(command.execute(input)).resolves.toEqual({ kind: 'accepted', id: requestId })
+        })
     })
 })

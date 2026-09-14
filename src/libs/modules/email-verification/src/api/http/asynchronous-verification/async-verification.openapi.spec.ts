@@ -3,8 +3,8 @@ import { Test } from '@nestjs/testing'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import type { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../../application/delivery/async/async-email-verification.service'
+import { VerificationRateLimitGuard } from '../verification-rate-limit.guard'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
 
 // Explicit annotations must remain useful even without Nest's generated plugin metadata.
@@ -19,7 +19,7 @@ describe('asynchronous verification OpenAPI contract', () => {
         })
             .overrideGuard(PermissionsGuard)
             .useValue({ canActivate: () => true })
-            .overrideGuard(CreditGuard)
+            .overrideGuard(VerificationRateLimitGuard)
             .useValue({ canActivate: () => true })
             .compile()
         app = module.createNestApplication({ logger: false })
@@ -49,7 +49,13 @@ describe('asynchronous verification OpenAPI contract', () => {
             expect(component.required).toEqual(
                 state === 'completed' ? ['state', 'result'] : state === 'failed' ? ['state', 'failureCode'] : ['state'],
             )
-            expect(Object.keys(component.properties!)).toEqual(component.required)
+            expect(Object.keys(component.properties!)).toEqual(
+                state === 'completed'
+                    ? ['state', 'result', 'operation']
+                    : state === 'failed'
+                      ? ['state', 'failureCode', 'operation']
+                      : ['state'],
+            )
             expect(content.examples![state]).toBeDefined()
         }
         expect(JSON.stringify(content)).not.toMatch(/failedReason|stacktrace|provider diagnostics|attemptsMade/)
@@ -90,7 +96,16 @@ describe('asynchronous verification OpenAPI contract', () => {
     it('documents the unchanged request, accepted ID, authorization, credit, and concealed lookup errors', () => {
         const create = document.paths['/verifyAsync'].post!
         expect(create.operationId).toBe('AsyncEmailVerificationController_verifyAsync')
-        expect(Object.keys(create.responses).sort()).toEqual(['202', '400', '401', '402', '403'])
+        expect(Object.keys(create.responses).sort()).toEqual([
+            '202',
+            '400',
+            '401',
+            '402',
+            '403',
+            '409',
+            '410',
+            '429',
+        ])
         expect(Object.keys(document.paths['/verifyAsync/{id}'].get!.responses).sort()).toEqual([
             '200',
             '400',

@@ -15,7 +15,7 @@ http:
     type: json
     data: |-
       {
-        "email": "person@lef.test"
+        "email": "sync-credit-check@lef.test"
       }
 
 runtime:

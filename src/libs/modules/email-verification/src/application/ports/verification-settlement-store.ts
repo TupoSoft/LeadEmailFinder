@@ -42,8 +42,13 @@ export interface VerificationSettlementStore {
 
     findIntention(executionId: string, organizationId: string): Promise<VerificationSettlementIntentionRecord | null>
 
-    /** Idempotent: replaying an already-confirmed intention returns the (unchanged) execution record. */
-    confirmSettlement(executionId: string, organizationId: string): Promise<{ readonly resultId: string }>
+    /** Idempotent: replaying an already-confirmed intention returns the (unchanged) execution record. Returns
+     *  the settled address and result-existence flag too, so the caller can advance the email cache's
+     *  last-verification link without a second lookup outside this transaction. */
+    confirmSettlement(
+        executionId: string,
+        organizationId: string,
+    ): Promise<{ readonly resultId: string; readonly normalizedAddress: string; readonly exists: boolean | null }>
 
     pagePendingIntentions(limit: number): Promise<readonly VerificationSettlementIntentionRecord[]>
 }

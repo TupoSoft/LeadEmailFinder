@@ -4,27 +4,30 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { Test } from '@nestjs/testing'
 import { NextFunction, Request, Response } from 'express'
 import request from 'supertest'
-import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard, CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import {
     RUN_SYNCHRONOUS_VERIFICATION,
     RunSynchronousVerification,
-    SynchronousVerificationCore,
+    SynchronousVerificationOutcome,
 } from '../../../application/delivery/synchronous/run-synchronous-verification'
-import { OwnedEmailVerification } from '../../../domain/email-verification'
-import { DomainVerificationForbiddenError } from '../../../domain/errors'
+import {
+    VERIFICATION_SUBMISSION_LIMITER,
+    VerificationSubmissionLimiter,
+    VerificationSubmissionLimiterUnavailableError,
+} from '../../../application/ports/verification-submission-limiter'
+import {
+    VerificationRateLimitGuard,
+    VERIFICATION_SUBMISSION_RATE_CAPACITY,
+    VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND,
+} from '../verification-rate-limit.guard'
 import { SyncEmailVerificationController } from './current/sync-email-verification.controller'
 
 const organizationId = '00000000-0000-4000-8000-000000000001'
-const otherOrganizationId = '00000000-0000-4000-8000-000000000002'
-const verificationId = '00000000-0000-4000-8000-000000000003'
-const operationId = '00000000-0000-4000-8000-000000000004'
+const requestId = '00000000-0000-4000-8000-000000000004'
 const email = 'test@example.com'
-const createdAt = new Date('2026-01-01T00:00:00.000Z')
-const core: jest.Mocked<SynchronousVerificationCore> = { verify: jest.fn() }
-const credits: jest.Mocked<Pick<CreditsService, 'debit'>> = { debit: jest.fn() }
+const synchronousVerification: jest.Mocked<Pick<RunSynchronousVerification, 'execute'>> = { execute: jest.fn() }
+const limiter: jest.Mocked<VerificationSubmissionLimiter> = { tryConsume: jest.fn() }
 const runPrincipal: AuthPrincipal = {
     credentialKind: 'service_client',
     issuer: 'https://issuer.example.test',
@@ -35,51 +38,32 @@ const runPrincipal: AuthPrincipal = {
     credentialId: 'credential-1',
 }
 
-function successfulVerification(): OwnedEmailVerification {
-    return {
-        id: verificationId,
-        email,
-        localPart: 'test',
-        domain: 'example.com',
-        format: EmailPatternEnum.First,
-        exists: true,
-        catchAll: false,
-        reason: EmailVerificationReason.AcceptedEmail,
-        sources: [EmailVerificationSource.MX, 'linkedin'],
-        mxDomain: 'mx.example.com',
-        targetExchange: 'mail.example.com',
-        createdAt,
-        batchId: '00000000-0000-4000-8000-000000000005',
-        verificationQuality: 'conclusive_positive',
-        evidenceObservedAt: createdAt,
-        evidencePolicyVersion: 1,
-    }
+function buildUuidV7(timestampMs: number): string {
+    const timestampHex = timestampMs.toString(16).padStart(12, '0')
+    return `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`
 }
 
 describe('synchronous verification HTTP contracts', () => {
     let app: INestApplication
     let principal: AuthPrincipal | undefined
-    let requestId: string | undefined
-    let execute: jest.SpyInstance
 
     beforeAll(async () => {
-        const command = new RunSynchronousVerification(core)
-        execute = jest.spyOn(command, 'execute')
         const moduleRef = await Test.createTestingModule({
             controllers: [SyncEmailVerificationController],
             providers: [
                 RolePermissionPolicy,
                 PermissionsGuard,
-                CreditGuard,
-                { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: command },
-                { provide: CreditsService, useValue: credits },
+                VerificationRateLimitGuard,
+                { provide: RUN_SYNCHRONOUS_VERIFICATION, useValue: synchronousVerification },
+                { provide: VERIFICATION_SUBMISSION_LIMITER, useValue: limiter },
+                { provide: VERIFICATION_SUBMISSION_RATE_CAPACITY, useValue: 60 },
+                { provide: VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND, useValue: 1 },
             ],
         }).compile()
 
         app = moduleRef.createNestApplication({ logger: false })
         app.use((incoming: Request, _response: Response, next: NextFunction) => {
             if (principal) setAuthPrincipal(incoming, principal)
-            if (requestId) incoming.id = requestId
             next()
         })
         app.useGlobalPipes(new ValidationPipe())
@@ -93,11 +77,30 @@ describe('synchronous verification HTTP contracts', () => {
     })
 
     beforeEach(() => {
-        execute.mockClear()
+        jest.clearAllMocks()
         principal = runPrincipal
-        requestId = undefined
-        core.verify.mockReset().mockResolvedValue(successfulVerification())
-        credits.debit.mockReset().mockResolvedValue(undefined)
+        limiter.tryConsume.mockResolvedValue({ allowed: true })
+        synchronousVerification.execute.mockResolvedValue({
+            kind: 'completed',
+            result: {
+                id: requestId,
+                email,
+                localPart: 'test',
+                domain: 'example.com',
+                exists: true,
+                catchAll: false,
+                reason: 'accepted_email',
+                sources: ['mx'],
+                evidenceObservedAt: new Date('2026-01-01T00:00:00.000Z'),
+            } as never,
+            operation: {
+                id: requestId,
+                source: 'fresh',
+                observedAt: '2026-01-01T00:00:00.000Z',
+                cacheExpiresAt: '2026-01-02T00:00:00.000Z',
+                billing: { state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' },
+            },
+        } satisfies SynchronousVerificationOutcome)
     })
 
     afterAll(async () => {
@@ -109,39 +112,23 @@ describe('synchronous verification HTTP contracts', () => {
             return request(app.getHttpServer()).post('/verify').send(input)
         }
 
-        function expectOneDebit(owner = organizationId): void {
-            expect(credits.debit).toHaveBeenCalledTimes(1)
-            expect(credits.debit).toHaveBeenCalledWith(owner, 1, expect.any(String))
-        }
-
-        it('requires authentication before debiting or verifying', async () => {
+        it('requires authentication before rate limiting or admission', async () => {
             principal = undefined
 
             const response = await verify().expect(401)
 
             expect(response.body).toMatchObject({ message: 'Authentication principal is missing' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(core.verify).not.toHaveBeenCalled()
+            expect(limiter.tryConsume).not.toHaveBeenCalled()
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
         })
 
-        it('requires verification:run before debiting or verifying', async () => {
+        it('requires verification:run before rate limiting or admission', async () => {
             principal = { ...runPrincipal, permissions: ['verification:read'] }
 
             const response = await verify().expect(403)
 
             expect(response.body).toMatchObject({ message: 'Missing required permission' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(core.verify).not.toHaveBeenCalled()
-        })
-
-        it('rejects zero credits with one debit attempt and no verification', async () => {
-            credits.debit.mockRejectedValue(new InsufficientCreditsException(organizationId))
-
-            const response = await verify().expect(402)
-
-            expect(response.body).toEqual({ statusCode: 402, message: 'Insufficient credits' })
-            expectOneDebit()
-            expect(core.verify).not.toHaveBeenCalled()
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
         })
 
         it.each([
@@ -150,126 +137,139 @@ describe('synchronous verification HTTP contracts', () => {
             ['localhost', { email: 'test@localhost' }],
             ['blocked company domain', { email: 'test@tuposoft.com' }],
             ['blocked product domain', { email: 'test@leademailfinder.com' }],
-        ])('preserves validation for %s after the credit guard', async (_description, input) => {
+        ])('preserves validation for %s after counting the submission', async (_description, input) => {
             const response = await verify(input as Record<string, unknown>).expect(400)
 
             expect(response.body).toMatchObject({ message: ['email must be an email'] })
-            expectOneDebit()
-            expect(core.verify).not.toHaveBeenCalled()
+            expect(limiter.tryConsume).toHaveBeenCalledTimes(1)
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
         })
 
-        it('uses the principal organization and server trace while normalizing the email', async () => {
-            principal = { ...runPrincipal, organizationId: otherOrganizationId }
-            requestId = operationId
+        it('rejects an over-limit organization with 429 and an integer Retry-After before admission', async () => {
+            limiter.tryConsume.mockResolvedValue({ allowed: false, retryAfterMs: 2_500 })
 
-            await verify({
+            const response = await verify().expect(429)
+
+            expect(response.body).toMatchObject({ message: 'rate_limited' })
+            expect(response.headers['retry-after']).toBe('3')
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
+        })
+
+        it('fails safe with 503 when the limiter cannot respond in time', async () => {
+            limiter.tryConsume.mockRejectedValue(new VerificationSubmissionLimiterUnavailableError('tryConsume'))
+
+            const response = await verify().expect(503)
+
+            expect(response.body).toMatchObject({ message: 'rate_limit_unavailable' })
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
+        })
+
+        it('rejects a malformed Idempotency-Key with 400 before calling the driver', async () => {
+            const response = await verify().set('Idempotency-Key', 'not-a-uuid').expect(400)
+
+            expect(response.body).toMatchObject({ message: 'invalid_idempotency_key' })
+            expect(synchronousVerification.execute).not.toHaveBeenCalled()
+        })
+
+        it('forwards an old Idempotency-Key to the driver instead of rejecting it before a stored-request lookup', async () => {
+            // An old key might still match an existing stored request within its seven-day replay window — only
+            // admission's own lookup can tell. Only the driver's own `conflict/key-expired` outcome (see below)
+            // may produce 410 for a key admission determines has genuinely expired with no match.
+            const expiredKey = buildUuidV7(Date.now() - 25 * 60 * 60 * 1000)
+
+            await verify().set('Idempotency-Key', expiredKey).expect(201)
+
+            expect(synchronousVerification.execute).toHaveBeenCalledWith(
+                expect.objectContaining({ clientRequestKey: expiredKey }),
+            )
+        })
+
+        it('admits with the caller organization and forwards a valid Idempotency-Key', async () => {
+            principal = { ...runPrincipal, organizationId: 'other-organization' }
+            const key = buildUuidV7(Date.now())
+
+            await verify({ email: 'TEST@EXAMPLE.COM', organizationId: 'untrusted-organization' })
+                .set('Idempotency-Key', key)
+                .expect(201)
+
+            expect(synchronousVerification.execute).toHaveBeenCalledWith({
+                organizationId: 'other-organization',
                 email: 'TEST@EXAMPLE.COM',
-                organizationId: 'untrusted-organization',
-                trace: { operationId: 'untrusted-operation', mode: 'batch' },
-            }).expect(201)
-
-            expectOneDebit(otherOrganizationId)
-            expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(core.verify).toHaveBeenCalledWith({
-                organizationId: otherOrganizationId,
-                email,
-                trace: { operationId, mode: 'sync' },
+                clientRequestKey: key,
             })
         })
 
-        it('debits exactly once and retains its response schema without a request trace', async () => {
+        it('returns 201 with the completed result and operation metadata', async () => {
             const response = await verify().expect(201)
 
-            expectOneDebit()
-            expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(core.verify).toHaveBeenCalledWith({ organizationId, email, trace: undefined })
-            const commonFields = {
+            expect(response.body).toEqual({
+                id: requestId,
                 email,
                 localPart: 'test',
                 domain: 'example.com',
-                format: EmailPatternEnum.First,
-                reason: EmailVerificationReason.AcceptedEmail,
-                mxDomain: 'mx.example.com',
-                targetExchange: 'mail.example.com',
-            }
-            expect(execute).toHaveBeenCalledTimes(1)
-            expect(response.body).toEqual({
-                ...commonFields,
-                id: verificationId,
                 exists: true,
                 catchAll: false,
-                sources: [EmailVerificationSource.MX, 'linkedin'],
+                reason: 'accepted_email',
+                sources: ['mx'],
+                evidenceObservedAt: '2026-01-01T00:00:00.000Z',
+                operation: {
+                    id: requestId,
+                    source: 'fresh',
+                    observedAt: '2026-01-01T00:00:00.000Z',
+                    cacheExpiresAt: '2026-01-02T00:00:00.000Z',
+                    billing: { state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' },
+                },
             })
         })
 
-        it.each([
-            {
-                exists: true,
-                catchAll: true,
-                reason: EmailVerificationReason.AcceptedEmail,
-            },
-            {
-                exists: false,
-                catchAll: false,
-                reason: EmailVerificationReason.RejectedEmail,
-            },
-            {
-                exists: null,
-                catchAll: null,
-                reason: EmailVerificationReason.SecureTransportUnavailable,
-            },
-        ])('preserves exists=$exists and catchAll=$catchAll outcomes', async outcome => {
-            core.verify.mockResolvedValue({
-                ...successfulVerification(),
-                exists: outcome.exists,
-                catchAll: outcome.catchAll,
-                reason: outcome.reason,
-            })
+        it('returns 202 with a Location header when the budget is exhausted', async () => {
+            synchronousVerification.execute.mockResolvedValue({ kind: 'accepted', id: requestId })
 
-            const response = await verify().expect(201)
+            const response = await verify().expect(202)
 
-            expectOneDebit()
-            expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(response.body).toMatchObject({
-                exists: outcome.exists,
-                catchAll: outcome.catchAll,
-                reason: outcome.reason,
-            })
+            expect(response.body).toEqual({ id: requestId })
+            expect(response.headers.location).toBe(`/verifyAsync/${requestId}`)
         })
 
-        it.each([
-            ['prohibited domain', new DomainVerificationForbiddenError('example.com')],
-            ['verification adapter failure', new Error('private provider diagnostics')],
-        ])('retains the existing HTTP 500 response for %s after one debit', async (_description, error) => {
-            core.verify.mockRejectedValue(error)
+        it('maps insufficient-funds to 402', async () => {
+            synchronousVerification.execute.mockResolvedValue({ kind: 'insufficient-funds' })
+
+            const response = await verify().expect(402)
+
+            expect(response.body).toMatchObject({ message: 'insufficient_credits' })
+        })
+
+        it('maps a key-mismatch conflict to 409', async () => {
+            synchronousVerification.execute.mockResolvedValue({ kind: 'conflict', reason: 'key-mismatch' })
+
+            const response = await verify().expect(409)
+
+            expect(response.body).toMatchObject({ message: 'idempotency_key_conflict' })
+        })
+
+        it('maps address-cooldown to 429 with an integer Retry-After', async () => {
+            synchronousVerification.execute.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 30_500 })
+
+            const response = await verify().expect(429)
+
+            expect(response.body).toMatchObject({ message: 'verification_cooldown' })
+            expect(response.headers['retry-after']).toBe('31')
+        })
+
+        it('preserves an unexpected driver failure as a generic 500', async () => {
+            synchronousVerification.execute.mockRejectedValue(new Error('private diagnostics'))
 
             const response = await verify().expect(500)
 
             expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expectOneDebit()
-            expect(core.verify).toHaveBeenCalledTimes(1)
-        })
-
-        it('does not verify when the credit adapter fails unexpectedly', async () => {
-            credits.debit.mockRejectedValue(new Error('private ledger diagnostics'))
-
-            const response = await verify().expect(500)
-
-            expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expectOneDebit()
-            expect(core.verify).not.toHaveBeenCalled()
         })
     })
 
-    it.each([1, 0])('returns 404 for authenticated GET /verify with %i credits and performs no work', async balance => {
-        if (balance === 0) credits.debit.mockRejectedValue(new InsufficientCreditsException(organizationId))
-
+    it.each([1, 0])('returns 404 for authenticated GET /verify with %i credits and performs no work', async () => {
         const response = await request(app.getHttpServer()).get('/verify').query({ email }).expect(404)
 
         expect(response.body).toMatchObject({ statusCode: 404, error: 'Not Found' })
-        expect(execute).not.toHaveBeenCalled()
-        expect(core.verify).not.toHaveBeenCalled()
-        expect(credits.debit).not.toHaveBeenCalled()
+        expect(synchronousVerification.execute).not.toHaveBeenCalled()
     })
 
     it('omits GET /verify from Swagger and preserves the current POST success metadata', () => {

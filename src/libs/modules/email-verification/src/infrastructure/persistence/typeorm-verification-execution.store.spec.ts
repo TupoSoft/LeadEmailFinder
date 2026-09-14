@@ -37,6 +37,8 @@ describe('TypeOrmVerificationExecutionStore', () => {
         create: jest.Mock
         save: jest.Mock
         delete: jest.Mock
+        transaction: jest.Mock
+        createQueryBuilder: jest.Mock
     }
     let store: TypeOrmVerificationExecutionStore
 
@@ -49,7 +51,12 @@ describe('TypeOrmVerificationExecutionStore', () => {
             create: jest.fn((_entityClass: unknown, value: unknown) => value),
             save: jest.fn((_entityClass: unknown, value: unknown) => Promise.resolve(value)),
             delete: jest.fn(),
+            transaction: jest.fn(),
+            createQueryBuilder: jest.fn(),
         }
+        manager.transaction.mockImplementation(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
+            callback(manager as unknown as EntityManager),
+        )
         const transaction = jest.fn(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
             callback(manager as unknown as EntityManager),
         )
@@ -171,13 +178,33 @@ describe('TypeOrmVerificationExecutionStore', () => {
     describe('lease lifecycle', () => {
         it('acquires a lease only from queued or awaiting_retry', async () => {
             manager.findOne.mockResolvedValue(execution({ state: 'queued' }))
-            const leased = await store.acquireLease('execution-1', organizationId, 'worker-1', new Date())
+            const leased = await store.acquireLease('execution-1', organizationId, 'worker-1', new Date(), new Date())
             expect(leased?.state).toBe('running')
         })
 
         it('refuses to acquire a lease on a running execution', async () => {
             manager.findOne.mockResolvedValue(execution({ state: 'running' }))
-            await expect(store.acquireLease('execution-1', organizationId, 'worker-1', new Date())).resolves.toBeNull()
+            await expect(
+                store.acquireLease('execution-1', organizationId, 'worker-1', new Date(), new Date()),
+            ).resolves.toBeNull()
+        })
+
+        it('acquires a lease from awaiting_retry once its retryAt has passed', async () => {
+            const now = new Date('2026-09-14T00:01:00.000Z')
+            const retryAt = new Date('2026-09-14T00:00:00.000Z')
+            manager.findOne.mockResolvedValue(execution({ state: 'awaiting_retry', retryAt }))
+            const leased = await store.acquireLease('execution-1', organizationId, 'worker-1', new Date(), now)
+            expect(leased?.state).toBe('running')
+        })
+
+        it('refuses to shorten a scheduled retry backoff for a caller racing the clock', async () => {
+            const now = new Date('2026-09-14T00:00:30.000Z')
+            const retryAt = new Date('2026-09-14T00:01:00.000Z')
+            manager.findOne.mockResolvedValue(execution({ state: 'awaiting_retry', retryAt }))
+            await expect(
+                store.acquireLease('execution-1', organizationId, 'worker-1', new Date(), now),
+            ).resolves.toBeNull()
+            expect(manager.save).not.toHaveBeenCalled()
         })
 
         it('renews only with a matching generation and lease owner', async () => {
@@ -223,5 +250,45 @@ describe('TypeOrmVerificationExecutionStore', () => {
             VerificationExecutionEntity,
             expect.objectContaining({ where: expect.objectContaining({ fundingOwnerType: 'single' }) }),
         )
+    })
+
+    it('pages canceled executions still holding a pending linked request', async () => {
+        const subQuery = {
+            select: jest.fn().mockReturnThis(),
+            from: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getQuery: jest.fn().mockReturnValue('SELECT 1'),
+        }
+        const queryBuilder: {
+            where: jest.Mock
+            andWhere: jest.Mock
+            subQuery: jest.Mock
+            orderBy: jest.Mock
+            take: jest.Mock
+            getMany: jest.Mock
+        } = {
+            where: jest.fn(),
+            andWhere: jest.fn(),
+            subQuery: jest.fn().mockReturnValue(subQuery),
+            orderBy: jest.fn(),
+            take: jest.fn(),
+            getMany: jest.fn().mockResolvedValue([execution({ state: 'canceled' })]),
+        }
+        queryBuilder.where.mockReturnValue(queryBuilder)
+        queryBuilder.andWhere.mockImplementation((arg: unknown) => {
+            if (typeof arg === 'function') arg(queryBuilder)
+            return queryBuilder
+        })
+        queryBuilder.orderBy.mockReturnValue(queryBuilder)
+        queryBuilder.take.mockReturnValue(queryBuilder)
+        manager.createQueryBuilder.mockReturnValue(queryBuilder)
+
+        const page = await store.pageCanceledPendingCleanup(50)
+
+        expect(page).toHaveLength(1)
+        expect(queryBuilder.where).toHaveBeenCalledWith('execution.state = :state', { state: 'canceled' })
+        expect(queryBuilder.take).toHaveBeenCalledWith(50)
+        expect(subQuery.getQuery).toHaveBeenCalled()
     })
 })

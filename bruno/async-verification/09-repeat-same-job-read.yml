@@ -14,5 +14,9 @@ runtime:
           code: |-
               test('repeat-same-job-read', function() {
                 expect(res.status).to.equal(200);
-                expect(res.body).to.deep.equal({ state: 'completed', result: bru.getVar('completedResult') });
+                expect(res.body).to.deep.equal({
+                  state: 'completed',
+                  result: bru.getVar('completedResult'),
+                  operation: bru.getVar('completedOperation'),
+                });
               });

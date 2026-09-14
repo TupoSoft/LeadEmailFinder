@@ -289,6 +289,24 @@ export class EnvironmentVariablesDto {
     @Max(86400)
     VERIFICATION_RESULT_CACHE_TTL_SECONDS?: number
 
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    VERIFICATION_SUBMISSION_RATE_CAPACITY?: number
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND?: number
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    VERIFICATION_EXECUTION_MAX_CONCURRENT?: number
+
     @IsEnum(PaymentsProviderName)
     PAYMENTS_PROVIDER: PaymentsProviderName
 

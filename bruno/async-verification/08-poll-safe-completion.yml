@@ -18,7 +18,7 @@ runtime:
                 if (!response.ok) throw new Error('Async status read failed');
                 const payload = await response.json();
                 if (!['queued', 'running', 'completed', 'failed', 'unavailable'].includes(payload.state)) throw new Error('Unexpected public state');
-                const allowedKeys = payload.state === 'completed' ? ['result', 'state'] : payload.state === 'failed' ? ['failureCode', 'state'] : ['state'];
+                const allowedKeys = payload.state === 'completed' ? ['operation', 'result', 'state'] : payload.state === 'failed' ? ['failureCode', 'operation', 'state'] : ['state'];
                 if (JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(allowedKeys)) throw new Error('Unsafe public status fields');
                 if (payload.state === 'failed' && payload.failureCode !== 'verification_failed') throw new Error('Unsafe failure code');
                 if (payload.state === 'completed') break;
@@ -29,7 +29,7 @@ runtime:
           code: |-
               test('poll-safe-completion', function() {
                 expect(res.status).to.equal(200);
-                expect(Object.keys(res.body).sort()).to.deep.equal(['result', 'state']);
+                expect(Object.keys(res.body).sort()).to.deep.equal(['operation', 'result', 'state']);
                 expect(res.body.state).to.equal('completed');
                 const result = res.body.result;
                 const allowed = ['id', 'email', 'localPart', 'domain', 'format', 'exists', 'catchAll', 'reason', 'sources', 'mxDomain', 'targetExchange'];
@@ -44,4 +44,16 @@ runtime:
                 expect(result.sources.every(source => ['mx', 'microsoft_1', 'microsoft_2', 'microsoft_4', 'mimecast', 'linkedin'].includes(source))).to.equal(true);
                 expect(result.id).to.match(/^[0-9a-f-]{36}$/i);
                 bru.setVar('completedResult', result);
+
+                // person@lef.test's fixture domain accepts every recipient (including the catch-all control probe),
+                // so this is always classified inconclusive: the reservation is released, never captured.
+                const operation = res.body.operation;
+                expect(Object.keys(operation).sort()).to.deep.equal(['billing', 'cacheExpiresAt', 'id', 'observedAt', 'source']);
+                expect(operation.id).to.equal(bru.getVar('asyncJobId'));
+                expect(operation.source).to.equal('fresh');
+                expect(operation.observedAt).to.equal(null);
+                expect(operation.cacheExpiresAt).to.equal(null);
+                expect(Object.keys(operation.billing).sort()).to.deep.equal(['charged', 'reason', 'reserved', 'state']);
+                expect(operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' });
+                bru.setVar('completedOperation', operation);
               });

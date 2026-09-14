@@ -43,13 +43,21 @@ function entity(overrides: Partial<VerificationRequestEntity> = {}): Verificatio
 }
 
 describe('TypeOrmVerificationRequestStore', () => {
-    let manager: { findOne: jest.Mock; findOneBy: jest.Mock; save: jest.Mock; create: jest.Mock; update: jest.Mock }
+    let manager: {
+        findOne: jest.Mock
+        findOneBy: jest.Mock
+        find: jest.Mock
+        save: jest.Mock
+        create: jest.Mock
+        update: jest.Mock
+    }
     let store: TypeOrmVerificationRequestStore
 
     beforeEach(() => {
         manager = {
             findOne: jest.fn(),
             findOneBy: jest.fn(),
+            find: jest.fn().mockResolvedValue([]),
             create: jest.fn((_entityClass: unknown, value: unknown) => value),
             save: jest.fn((_entityClass: unknown, value: unknown) => Promise.resolve(entity(value as object))),
             update: jest.fn(),
@@ -134,5 +142,44 @@ describe('TypeOrmVerificationRequestStore', () => {
         manager.findOneBy.mockResolvedValue(null)
         await expect(store.findById('unknown', organizationId)).resolves.toBeNull()
         await expect(store.findByClientKey(organizationId, 'unknown')).resolves.toBeNull()
+    })
+
+    describe('settleCanceled', () => {
+        it('settles every unsettled linked request as a zero-charge failure with no result', async () => {
+            manager.find.mockResolvedValue([
+                entity({ requestId: 'request-1', executionId: 'execution-1', billingState: 'pending' }),
+                entity({ requestId: 'request-2', executionId: 'execution-1', billingState: 'pending' }),
+            ])
+
+            await store.settleCanceled('execution-1', organizationId)
+
+            expect(manager.find).toHaveBeenCalledWith(
+                VerificationRequestEntity,
+                expect.objectContaining({ where: { executionId: 'execution-1', organizationId } }),
+            )
+            expect(manager.save).toHaveBeenCalledWith(
+                VerificationRequestEntity,
+                [
+                    expect.objectContaining({ requestId: 'request-1', billingState: 'settled', finalReason: 'failed', chargedCount: 0, resultId: null }),
+                    expect.objectContaining({ requestId: 'request-2', billingState: 'settled', finalReason: 'failed', chargedCount: 0, resultId: null }),
+                ],
+            )
+        })
+
+        it('is a no-op when no linked requests exist', async () => {
+            manager.find.mockResolvedValue([])
+            await store.settleCanceled('execution-1', organizationId)
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('skips a request that is already settled, replaying idempotently', async () => {
+            manager.find.mockResolvedValue([
+                entity({ requestId: 'request-1', executionId: 'execution-1', billingState: 'settled', finalReason: 'conclusive' }),
+            ])
+
+            await store.settleCanceled('execution-1', organizationId)
+
+            expect(manager.save).not.toHaveBeenCalled()
+        })
     })
 })

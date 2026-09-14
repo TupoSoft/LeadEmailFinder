@@ -21,10 +21,13 @@ import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/cr
 import { VerificationClock } from '../../application/ports/verification-clock'
 import { VerificationAdmissionService } from '../../application/operations/verification-admission.service'
 import { VerificationSettlementService } from '../../application/operations/verification-settlement.service'
+import { EmailAdministrationService } from '../../application/email-administration.service'
 import { TypeOrmVerificationRequestStore } from './typeorm-verification-request.store'
 import { TypeOrmVerificationExecutionStore } from './typeorm-verification-execution.store'
 import { TypeOrmVerificationSettlementStore } from './typeorm-verification-settlement.store'
 import { TypeOrmVerificationResultCacheReader } from './typeorm-verification-result-cache-reader'
+import { TypeOrmEmailStore } from './typeorm-email.store'
+import { EmailEntity } from './typeorm/email.entity'
 import { EmailVerificationEntity } from './typeorm/email-verification.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
@@ -47,6 +50,7 @@ const entities = [
     CreditReservation,
     OrganizationInvitation,
     AuditLogEntry,
+    EmailEntity,
     EmailVerificationEntity,
     VerificationRequestEntity,
     VerificationExecutionEntity,
@@ -55,6 +59,7 @@ const entities = [
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const EXECUTION_DEADLINE_MS = 24 * 60 * 60 * 1000
+const ADDRESS_COOLDOWN_MS = 60_000
 
 function conclusiveResult(overrides: Partial<NewEmailVerification> = {}): NewEmailVerification {
     return {
@@ -128,16 +133,21 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         executions = new TypeOrmVerificationExecutionStore(schemaDataSource)
         settlements = new TypeOrmVerificationSettlementStore(schemaDataSource)
         cacheReader = new TypeOrmVerificationResultCacheReader(schemaDataSource.manager)
-        settlementService = new VerificationSettlementService(settlements, credits)
+        const emailAdministration = new EmailAdministrationService(
+            new TypeOrmEmailStore(schemaDataSource.getRepository(EmailEntity)),
+        )
+        settlementService = new VerificationSettlementService(settlements, credits, emailAdministration)
         clock = { now: () => new Date('2026-09-11T00:00:00.000Z') }
         admission = new VerificationAdmissionService(
             requests,
             executions,
             cacheReader,
+            cacheReader,
             credits,
             clock,
             CACHE_TTL_MS,
             EXECUTION_DEADLINE_MS,
+            ADDRESS_COOLDOWN_MS,
         )
     })
 
@@ -162,6 +172,52 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
     })
 
+    it('recovers via the catch branch when a genuine uncommitted concurrent insert forces a real unique violation', async () => {
+        const executions = new TypeOrmVerificationExecutionStore(schemaDataSource)
+        const address = 'genuine-race@example.test'
+        const holderExecutionId = randomUUID()
+        const holderQueryRunner = schemaDataSource.createQueryRunner()
+        await holderQueryRunner.connect()
+        await holderQueryRunner.startTransaction()
+        await holderQueryRunner.manager.save(VerificationExecutionEntity, {
+            executionId: holderExecutionId,
+            organizationId,
+            normalizedAddress: address,
+            payerRequestId: randomUUID(),
+            state: 'funding_pending',
+            fundingOwnerType: 'single',
+            fundingOwnerId: holderExecutionId,
+            attemptGeneration: 0,
+            leaseOwnerId: null,
+            leaseExpiresAt: null,
+            resultId: null,
+            retryAt: null,
+            deadlineAt: new Date(Date.now() + 60_000),
+        })
+
+        try {
+            // The holder's insert is uncommitted, so claimOrJoin's own findOne sees nothing and proceeds to
+            // insert a competing row; that insert blocks on the partial unique index until the holder resolves.
+            const claimPromise = executions.claimOrJoin(
+                organizationId,
+                address,
+                randomUUID(),
+                randomUUID(),
+                new Date(Date.now() + 60_000),
+                () => false,
+            )
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await holderQueryRunner.commitTransaction()
+
+            await expect(claimPromise).resolves.toEqual({
+                kind: 'joined',
+                execution: expect.objectContaining({ executionId: holderExecutionId }),
+            })
+        } finally {
+            await holderQueryRunner.release()
+        }
+    })
+
     it('runs the full funded execution through capture and reuses the cached result for free afterward', async () => {
         const funded = await admission.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
         expect(funded.kind).toBe('funded')
@@ -178,6 +234,7 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             finalReason: 'conclusive',
         })
         expect(persisted.kind).toBe('persisted')
+        if (persisted.kind !== 'persisted') throw new Error('unreachable')
 
         await settlementService.settle(funded.executionId, organizationId)
 
@@ -186,6 +243,10 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         expect(payerRequest).toEqual(
             expect.objectContaining({ billingState: 'settled', finalReason: 'conclusive', chargedCount: 1 }),
         )
+        const emailCacheRow = await schemaDataSource
+            .getRepository(EmailEntity)
+            .findOneByOrFail({ organizationId, id: 'person@example.test' })
+        expect(emailCacheRow).toEqual(expect.objectContaining({ exists: true, lastVerificationId: persisted.resultId }))
 
         const cached = await admission.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
         expect(cached.kind).toBe('cached')
@@ -230,6 +291,29 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 10 })
         const retried = await admission.admit({ organizationId, email: 'broke@example.test', deliveryMode: 'sync' })
         expect(retried.kind).toBe('funded')
+    })
+
+    it('pages a canceled execution whose linked request cleanup never completed, until settleCanceled runs', async () => {
+        const funded = await admission.admit({ organizationId, email: 'stuck-cleanup@example.test', deliveryMode: 'sync' })
+        if (funded.kind !== 'funded') throw new Error('unreachable')
+
+        // Models the reconciler's own recovery scenario: the row is already terminal `canceled` (as if
+        // `cancelIfNoCaptureIntention` had already run), but the credit release / request settlement that must
+        // follow never completed — the linked request is still `pending`.
+        const canceled = await executions.cancelIfNoCaptureIntention(funded.executionId, organizationId)
+        expect(canceled.state).toBe('canceled')
+
+        const pending = await executions.pageCanceledPendingCleanup(100)
+        expect(pending.map(execution => execution.executionId)).toContain(funded.executionId)
+
+        await credits.release(organizationId, funded.executionId)
+        await requests.settleCanceled(funded.executionId, organizationId)
+
+        const afterCleanup = await executions.pageCanceledPendingCleanup(100)
+        expect(afterCleanup.map(execution => execution.executionId)).not.toContain(funded.executionId)
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+        const payerRequest = await requests.findById(funded.requestId, organizationId)
+        expect(payerRequest).toEqual(expect.objectContaining({ billingState: 'settled', finalReason: 'failed', chargedCount: 0 }))
     })
 
     it('replays settlement confirmation idempotently without a second credit call', async () => {

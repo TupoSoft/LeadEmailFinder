@@ -1,7 +1,7 @@
 info:
-    name: reject-insufficient-credit
+    name: reject-conflicting-idempotency-key
     type: http
-    seq: 13
+    seq: 20
 http:
     method: POST
     url: '{{baseUrl}}/verifyAsync'
@@ -10,15 +10,16 @@ http:
           value: 'Bearer {{customerToken}}'
         - name: Content-Type
           value: application/json
+        - name: Idempotency-Key
+          value: '{{freshIdempotencyKey}}'
     body:
         type: json
         data: |-
-            {"email": "person@lef.test"}
+            {"email": "keyed-conflict@lef.test"}
 runtime:
     scripts:
         - type: tests
           code: |-
-              test('reject-insufficient-credit', function() {
-                expect(res.status).to.equal(402);
-
+              test('reject-conflicting-idempotency-key', function() {
+                expect(res.status).to.equal(409);
               });

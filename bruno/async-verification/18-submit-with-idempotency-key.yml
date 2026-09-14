@@ -1,0 +1,32 @@
+info:
+    name: submit-with-idempotency-key
+    type: http
+    seq: 18
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+        - name: Idempotency-Key
+          value: '{{freshIdempotencyKey}}'
+    body:
+        type: json
+        data: |-
+            {"email": "keyed@lef.test"}
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const timestampHex = Date.now().toString(16).padStart(12, '0');
+              const key = `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`;
+              bru.setVar('freshIdempotencyKey', key);
+        - type: tests
+          code: |-
+              test('submit-with-idempotency-key', function() {
+                expect(res.status).to.equal(202);
+                expect(Object.keys(res.body)).to.deep.equal(['id']);
+                bru.setVar('idempotentJobId', res.body.id);
+              });

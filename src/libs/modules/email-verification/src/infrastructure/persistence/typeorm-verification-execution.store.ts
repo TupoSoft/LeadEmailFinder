@@ -7,6 +7,7 @@ import {
 } from '../../application/ports/verification-execution-store'
 import { queryLatestCacheCandidate } from './verification-result-cache-query'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
+import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
 
 const NONTERMINAL_STATES = ['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling'] as const
@@ -66,23 +67,29 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
 
             let inserted: VerificationExecutionEntity
             try {
-                inserted = await manager.save(
-                    VerificationExecutionEntity,
-                    manager.create(VerificationExecutionEntity, {
-                        executionId: newExecutionId,
-                        organizationId,
-                        normalizedAddress,
-                        payerRequestId,
-                        state: 'funding_pending',
-                        fundingOwnerType: 'single',
-                        fundingOwnerId: newExecutionId,
-                        attemptGeneration: 0,
-                        leaseOwnerId: null,
-                        leaseExpiresAt: null,
-                        resultId: null,
-                        retryAt: null,
-                        deadlineAt,
-                    }),
+                // A caught unique-violation otherwise leaves the whole transaction unusable in Postgres (any
+                // further statement fails with "current transaction is aborted"); nesting the risky insert in its
+                // own `manager.transaction()` makes TypeORM issue a savepoint, so catching the violation here
+                // rolls back only the insert and leaves the outer transaction free to keep reading/locking.
+                inserted = await manager.transaction(async nested =>
+                    nested.save(
+                        VerificationExecutionEntity,
+                        nested.create(VerificationExecutionEntity, {
+                            executionId: newExecutionId,
+                            organizationId,
+                            normalizedAddress,
+                            payerRequestId,
+                            state: 'funding_pending',
+                            fundingOwnerType: 'single',
+                            fundingOwnerId: newExecutionId,
+                            attemptGeneration: 0,
+                            leaseOwnerId: null,
+                            leaseExpiresAt: null,
+                            resultId: null,
+                            retryAt: null,
+                            deadlineAt,
+                        }),
+                    ),
                 )
             } catch (error) {
                 if (!isUniqueViolation(error)) throw error
@@ -147,6 +154,7 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         organizationId: string,
         leaseOwnerId: string,
         leaseExpiresAt: Date,
+        now: Date,
     ): Promise<VerificationExecutionRecord | null> {
         return this.dataSource.transaction(async manager => {
             const execution = await manager.findOne(VerificationExecutionEntity, {
@@ -155,6 +163,8 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
             })
             if (!execution) return null
             if (execution.state !== 'queued' && execution.state !== 'awaiting_retry') return null
+            if (execution.state === 'awaiting_retry' && execution.retryAt !== null && execution.retryAt.getTime() > now.getTime())
+                return null
 
             execution.state = 'running'
             execution.leaseOwnerId = leaseOwnerId
@@ -239,6 +249,27 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
             order: { updatedAt: 'ASC' },
             take: limit,
         })
+        return rows.map(toRecord)
+    }
+
+    async pageCanceledPendingCleanup(limit: number): Promise<readonly VerificationExecutionRecord[]> {
+        const rows = await this.dataSource.manager
+            .createQueryBuilder(VerificationExecutionEntity, 'execution')
+            .where('execution.state = :state', { state: 'canceled' })
+            .andWhere('execution.fundingOwnerType = :fundingOwnerType', { fundingOwnerType: 'single' })
+            .andWhere(qb => {
+                const subQuery = qb
+                    .subQuery()
+                    .select('1')
+                    .from(VerificationRequestEntity, 'request')
+                    .where('request.executionId = execution.executionId')
+                    .andWhere("request.billingState = 'pending'")
+                    .getQuery()
+                return `EXISTS (${subQuery})`
+            })
+            .orderBy('execution.updatedAt', 'ASC')
+            .take(limit)
+            .getMany()
         return rows.map(toRecord)
     }
 }

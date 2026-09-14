@@ -1,190 +1,155 @@
-import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
-import { VerificationTraceObserver } from '../../verification-trace/verification-trace-observer'
+import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
+import { AdmissionOutcome, VerificationAdmissionService } from '../../operations/verification-admission.service'
+import { ReadOutcome, VerificationOperationsReader } from '../../operations/verification-operations-reader'
+import { VerificationExecutionDispatcher } from '../../ports/verification-execution-dispatcher'
+import { VerificationRequestRecord } from '../../ports/verification-request-store'
 import { AsyncEmailVerificationService } from './async-email-verification.service'
-import { AsyncVerificationJobs } from './async-verification-jobs'
 import { AsyncEmailVerificationJobNotFoundException } from './job-not-found.exception'
 
-describe('AsyncEmailVerificationService', () => {
-    let traceObserver: jest.Mocked<VerificationTraceObserver>
-    let service: AsyncEmailVerificationService
-    let jobs: jest.Mocked<AsyncVerificationJobs>
+const organizationId = 'org-1'
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
-    const command = { email: 'person@lef.test', organizationId: 'org-1', credentialId: 'cred-1' }
-    const result = {
-        id: '00000000-0000-4000-8000-000000000005',
-        email: command.email,
-        localPart: 'person',
-        domain: 'lef.test',
-        exists: true,
-        catchAll: null,
-        reason: EmailVerificationReason.AcceptedEmail,
-        sources: [],
+function request(overrides: Partial<VerificationRequestRecord> = {}): VerificationRequestRecord {
+    return {
+        requestId: 'request-1',
+        organizationId,
+        normalizedAddress: 'person@lef.test',
+        deliveryMode: 'async',
+        clientRequestKey: null,
+        executionId: null,
+        resultId: null,
+        source: 'fresh',
+        billingState: 'pending',
+        reservedCount: 1,
+        chargedCount: 0,
+        finalReason: null,
+        createdAt: new Date(),
+        settledAt: null,
+        ...overrides,
     }
+}
+
+describe('AsyncEmailVerificationService', () => {
+    let admission: jest.Mocked<Pick<VerificationAdmissionService, 'admit'>>
+    let dispatcher: jest.Mocked<VerificationExecutionDispatcher>
+    let operations: jest.Mocked<Pick<VerificationOperationsReader, 'read'>>
+    let service: AsyncEmailVerificationService
+
+    const input = { email: 'person@lef.test', organizationId }
 
     beforeEach(() => {
-        traceObserver = {
-            enqueued: jest.fn(),
-            completed: jest.fn(),
-            failed: jest.fn(),
-            batchCompleted: jest.fn(),
-        }
-        jobs = { enqueue: jest.fn(), find: jest.fn() }
-        service = new AsyncEmailVerificationService(jobs, traceObserver)
-    })
-
-    it('enqueues the unchanged email and scalar identity with a generated UUID', async () => {
-        jobs.enqueue.mockResolvedValue({ id: 'returned-job-id' })
-
-        await expect(service.verifyAsync({ ...command, email: 'PERSON@LEF.TEST' })).resolves.toEqual({
-            id: 'returned-job-id',
-        })
-
-        expect(jobs.enqueue).toHaveBeenCalledTimes(1)
-        expect(jobs.enqueue).toHaveBeenCalledWith(
-            { ...command, email: 'PERSON@LEF.TEST' },
-            expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
-        )
-        expect(jobs.find).not.toHaveBeenCalled()
-    })
-
-    it('throws a stable error when the queue returns no job ID', async () => {
-        jobs.enqueue.mockResolvedValue({ id: undefined })
-
-        await expect(service.verifyAsync(command)).rejects.toMatchObject({
-            name: 'AssertionError',
-            message: 'async_email_verification_job_id_missing',
-        })
-        expect(traceObserver.enqueued).not.toHaveBeenCalled()
-        expect(traceObserver.failed).toHaveBeenCalledTimes(1)
-    })
-
-    it('links the request to the returned job without adding request data to the queue', async () => {
-        jobs.enqueue.mockResolvedValue({ id: 'returned-job-id' })
-
-        await service.verifyAsync({ ...command, requestId: 'server-request-id' })
-
-        expect(traceObserver.enqueued).toHaveBeenCalledWith({
-            requestId: 'server-request-id',
-            mode: 'async',
-            jobId: 'returned-job-id',
-        })
-        expect(jobs.enqueue.mock.calls[0][0]).toEqual(command)
-    })
-
-    it('generates an independent request UUID when the HTTP adapter supplies none', async () => {
-        jobs.enqueue.mockResolvedValue({ id: 'returned-job-id' })
-
-        await service.verifyAsync(command)
-
-        expect(traceObserver.enqueued).toHaveBeenCalledWith({
-            requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
-            mode: 'async',
-            jobId: 'returned-job-id',
-        })
-        expect(traceObserver.enqueued.mock.calls[0][0].requestId).not.toBe(jobs.enqueue.mock.calls[0][1])
-    })
-
-    it('preserves successful queue submission when its observer throws', async () => {
-        jobs.enqueue.mockResolvedValue({ id: 'job-1' })
-        traceObserver.enqueued.mockImplementation(() => {
-            throw new Error('observer unavailable')
-        })
-
-        await expect(service.verifyAsync(command)).resolves.toEqual({ id: 'job-1' })
-        expect(jobs.enqueue).toHaveBeenCalledTimes(1)
-        expect(traceObserver.failed).not.toHaveBeenCalled()
-    })
-
-    it('emits safe dispatch failure fields and rethrows the same error despite observer failure', async () => {
-        const error = new Error('sentinel@private.example queue diagnostics')
-        jobs.enqueue.mockRejectedValue(error)
-        traceObserver.failed.mockImplementation(() => {
-            throw new Error('observer unavailable')
-        })
-
-        await expect(service.verifyAsync({ ...command, requestId: 'request-id' })).rejects.toBe(error)
-        expect(traceObserver.enqueued).not.toHaveBeenCalled()
-        expect(traceObserver.failed).toHaveBeenCalledWith({
-            operationId: 'request-id',
-            mode: 'async',
-            jobId: jobs.enqueue.mock.calls[0][1],
-            stage: 'queue_dispatch',
-            errorType: 'Error',
-            durationMs: expect.any(Number),
-        })
-        expect(JSON.stringify(traceObserver.failed.mock.calls)).not.toContain('sentinel')
-    })
-
-    it('throws not-found when no job matches the ID', async () => {
-        jobs.find.mockResolvedValue(undefined)
-
-        await expect(service.getAsyncVerificationState('missing-id', command.organizationId)).rejects.toEqual(
-            new AsyncEmailVerificationJobNotFoundException('missing-id'),
+        admission = { admit: jest.fn() }
+        dispatcher = { dispatch: jest.fn().mockResolvedValue(undefined) }
+        operations = { read: jest.fn() }
+        service = new AsyncEmailVerificationService(
+            admission as unknown as VerificationAdmissionService,
+            dispatcher,
+            operations as unknown as VerificationOperationsReader,
+            CACHE_TTL_MS,
         )
     })
 
-    it('conceals a foreign job before reading its status', async () => {
-        const readStatus = jest.fn()
-        jobs.find.mockResolvedValue({ organizationId: 'other-org', readStatus })
-
-        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).rejects.toEqual(
-            new AsyncEmailVerificationJobNotFoundException('job-id'),
-        )
-        expect(readStatus).not.toHaveBeenCalled()
-    })
-
-    it.each(['queued', 'running', 'unavailable'])('returns only the state for an owned %s job', async state => {
-        jobs.find.mockResolvedValue({
-            organizationId: command.organizationId,
-            readStatus: jest.fn().mockResolvedValue({ state, result }),
+    describe('verifyAsync', () => {
+        it('accepts a cache hit without dispatching', async () => {
+            admission.admit.mockResolvedValue({ kind: 'cached', requestId: 'request-1', resultId: 'result-1' })
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })
+            expect(dispatcher.dispatch).not.toHaveBeenCalled()
         })
 
-        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
-            state,
+        it.each(['funded', 'joined'] as const)('dispatches and accepts a %s outcome', async kind => {
+            admission.admit.mockResolvedValue({ kind, requestId: 'request-1', executionId: 'execution-1' })
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })
+            expect(dispatcher.dispatch).toHaveBeenCalledWith('execution-1', organizationId)
         })
-        expect(jobs.find).toHaveBeenCalledWith('job-id')
-        expect(jobs.enqueue).not.toHaveBeenCalled()
-    })
 
-    it('returns the unchanged completed result on repeated status reads without enqueuing', async () => {
-        const readStatus = jest.fn().mockResolvedValue({ state: 'completed', result })
-        jobs.find.mockResolvedValue({ organizationId: command.organizationId, readStatus })
+        it('still accepts the admitted operation when the queue dispatch itself fails', async () => {
+            admission.admit.mockResolvedValue({ kind: 'funded', requestId: 'request-1', executionId: 'execution-1' })
+            dispatcher.dispatch.mockRejectedValue(new Error('queue unavailable'))
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })
+        })
 
-        for (let attempt = 0; attempt < 2; attempt++) {
-            await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
-                state: 'completed',
-                result,
+        it('accepts a mid-flight cooldown join without dispatching', async () => {
+            admission.admit.mockResolvedValue({ kind: 'cooldown', requestId: 'request-1', retryAfterMs: 5_000 })
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'accepted', id: 'request-1' })
+            expect(dispatcher.dispatch).not.toHaveBeenCalled()
+        })
+
+        it('reports address-cooldown for a recent terminal inconclusive verdict', async () => {
+            admission.admit.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 45_000 } as AdmissionOutcome)
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'address-cooldown', retryAfterMs: 45_000 })
+        })
+
+        it('reports insufficient-funds', async () => {
+            admission.admit.mockResolvedValue({ kind: 'insufficient-funds', requestId: 'request-1' })
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'insufficient-funds', id: 'request-1' })
+        })
+
+        it.each(['key-mismatch', 'key-expired'] as const)('reports a %s conflict', async reason => {
+            admission.admit.mockResolvedValue({ kind: 'conflict', reason })
+            await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'conflict', reason })
+        })
+
+        it('passes the client request key through to admission', async () => {
+            admission.admit.mockResolvedValue({ kind: 'cached', requestId: 'request-1', resultId: 'result-1' })
+            await service.verifyAsync({ ...input, clientRequestKey: 'key-1' })
+            expect(admission.admit).toHaveBeenCalledWith({
+                organizationId,
+                email: input.email,
+                deliveryMode: 'async',
+                clientRequestKey: 'key-1',
             })
-        }
-
-        expect(readStatus).toHaveBeenCalledTimes(2)
-        expect(jobs.enqueue).not.toHaveBeenCalled()
-        expect(traceObserver.enqueued).not.toHaveBeenCalled()
-    })
-
-    it('reports an unsupported state as unavailable without copying diagnostics', async () => {
-        jobs.find.mockResolvedValue({
-            organizationId: command.organizationId,
-            readStatus: jest.fn().mockResolvedValue({ state: 'unexpected-sentinel@private.example' }),
-        })
-
-        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).resolves.toEqual({
-            state: 'unavailable',
         })
     })
 
-    it.each(['find', 'readStatus'])('preserves a %s adapter failure', async operation => {
-        const error = new Error('queue unavailable')
-        if (operation === 'find') {
-            jobs.find.mockRejectedValue(error)
-        } else {
-            jobs.find.mockResolvedValue({
-                organizationId: command.organizationId,
-                readStatus: jest.fn().mockRejectedValue(error),
+    describe('getAsyncVerificationState', () => {
+        it('throws not-found for an unknown or foreign request', async () => {
+            operations.read.mockResolvedValue({ kind: 'not-found' })
+            await expect(service.getAsyncVerificationState('request-1', organizationId)).rejects.toEqual(
+                new AsyncEmailVerificationJobNotFoundException('request-1'),
+            )
+        })
+
+        it('throws not-found for an expired request, concealing it exactly like a missing one', async () => {
+            operations.read.mockResolvedValue({ kind: 'expired' })
+            await expect(service.getAsyncVerificationState('request-1', organizationId)).rejects.toEqual(
+                new AsyncEmailVerificationJobNotFoundException('request-1'),
+            )
+        })
+
+        it('maps a pending outcome to its public state', async () => {
+            operations.read.mockResolvedValue({ kind: 'pending', executionState: 'running' } as ReadOutcome)
+            await expect(service.getAsyncVerificationState('request-1', organizationId)).resolves.toEqual({
+                state: 'running',
             })
-        }
+        })
 
-        await expect(service.getAsyncVerificationState('job-id', command.organizationId)).rejects.toBe(error)
-        expect(jobs.enqueue).not.toHaveBeenCalled()
+        it('maps a settled outcome to completed with operation metadata', async () => {
+            const settledRequest = request({ billingState: 'settled', finalReason: 'conclusive', chargedCount: 1 })
+            operations.read.mockResolvedValue({
+                kind: 'settled',
+                request: settledRequest,
+                result: {
+                    id: 'result-1',
+                    email: 'person@lef.test',
+                    localPart: 'person',
+                    domain: 'lef.test',
+                    exists: true,
+                    catchAll: false,
+                    reason: EmailVerificationReason.AcceptedEmail,
+                    sources: [EmailVerificationSource.MX],
+                    createdAt: new Date(),
+                    evidenceObservedAt: new Date(),
+                },
+            } as ReadOutcome)
+
+            const status = await service.getAsyncVerificationState('request-1', organizationId)
+            expect(status.state).toBe('completed')
+        })
+
+        it('preserves a persistence failure', async () => {
+            const error = new Error('store unavailable')
+            operations.read.mockRejectedValue(error)
+            await expect(service.getAsyncVerificationState('request-1', organizationId)).rejects.toBe(error)
+        })
     })
 })

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { CreditReservationService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../ports/verification-clock'
+import { VerificationCooldownReader } from '../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../ports/verification-result-cache-reader'
 import { VerificationDeliveryMode, VerificationRequestRecord, VerificationRequestStore } from '../ports/verification-request-store'
 import { VerificationExecutionStore } from '../ports/verification-execution-store'
@@ -21,6 +22,7 @@ export type AdmissionOutcome =
     | { readonly kind: 'insufficient-funds'; readonly requestId: string }
     | { readonly kind: 'conflict'; readonly reason: 'key-mismatch' | 'key-expired' }
     | { readonly kind: 'cooldown'; readonly requestId: string; readonly retryAfterMs: number }
+    | { readonly kind: 'address-cooldown'; readonly retryAfterMs: number }
 
 const RESERVATION_AMOUNT = 1
 
@@ -29,10 +31,12 @@ export class VerificationAdmissionService {
         private readonly requests: VerificationRequestStore,
         private readonly executions: VerificationExecutionStore,
         private readonly cacheReader: VerificationResultCacheReader,
+        private readonly cooldownReader: VerificationCooldownReader,
         private readonly credits: CreditReservationService,
         private readonly clock: VerificationClock,
         private readonly cacheTtlMs: number,
         private readonly executionDeadlineMs: number,
+        private readonly addressCooldownMs: number,
     ) {}
 
     async admit(input: AdmitInput): Promise<AdmissionOutcome> {
@@ -59,6 +63,12 @@ export class VerificationAdmissionService {
         const candidate = await this.cacheReader.findLatestCandidate(input.organizationId, normalizedAddress)
         if (candidate && isUsable(candidate)) {
             return this.admitCached(input, normalizedAddress, clientRequestKey, candidate.resultId)
+        }
+
+        const cooldown = await this.cooldownReader.findLatestOutcome(input.organizationId, normalizedAddress)
+        if (cooldown && cooldown.verificationQuality === 'inconclusive') {
+            const retryAfterMs = cooldown.createdAt.getTime() + this.addressCooldownMs - now.getTime()
+            if (retryAfterMs > 0) return { kind: 'address-cooldown', retryAfterMs }
         }
 
         const requestId = randomUUID()

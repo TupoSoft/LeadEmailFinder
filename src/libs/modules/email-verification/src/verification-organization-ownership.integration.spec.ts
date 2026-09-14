@@ -8,6 +8,7 @@ import { EmailEntity } from './infrastructure/persistence/typeorm/email.entity'
 import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
 import { TypeOrmVerificationStore } from './infrastructure/persistence/typeorm-verification.store'
 import { SmtpVerificationEntity } from './infrastructure/persistence/typeorm/smtp-verification.entity'
+import { VerificationSettlementIntentionEntity } from './infrastructure/persistence/typeorm/verification-settlement-intention.entity'
 import { TypeOrmSmtpVerificationStore } from './infrastructure/persistence/typeorm-smtp-verification.store'
 import { SmtpMailboxProbe } from './infrastructure/mailbox/smtp/smtp-mailbox-probe'
 import { SmtpVerificationReason } from './infrastructure/mailbox/smtp/smtp.enums'
@@ -22,7 +23,13 @@ jest.mock('@aws-sdk/lib-storage')
 const postgresUrl = process.env['TEST_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 const schema = `verification_ownership_${process.pid}`
-const entities = [DomainPolicyEntity, EmailEntity, EmailVerificationEntity, SmtpVerificationEntity]
+const entities = [
+    DomainPolicyEntity,
+    EmailEntity,
+    EmailVerificationEntity,
+    SmtpVerificationEntity,
+    VerificationSettlementIntentionEntity,
+]
 
 interface UploadParams {
     Body: NodeJS.ReadableStream
@@ -191,7 +198,7 @@ describeWithPostgres('verification organization ownership', () => {
             verificationRepository.findOneBy({ organizationId: organizationAId, id: verificationB.id }),
         ).resolves.toBeNull()
 
-        const resultReader = new TypeOrmVerificationResultReader(verificationRepository)
+        const resultReader = new TypeOrmVerificationResultReader(dataSource.manager)
         await expect(
             resultReader.findOwned({ organizationId: organizationAId, id: verificationA.id }),
         ).resolves.toEqual(expect.objectContaining({ id: verificationA.id, email: address, exists: true }))

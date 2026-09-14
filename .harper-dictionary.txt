@@ -397,6 +397,11 @@ BuildKit
 Buildx
 GHA
 Prettier
+redispatched
+redispatch
+backoff
+cooldown
+selectable
 Vitest
 jsdom
 Oxc

@@ -12,6 +12,7 @@ import {
     AsyncVerificationResult,
     AsyncVerificationStatus,
 } from '../../../application/delivery/async/async-verification-status'
+import { VerificationOperationMetadataDto } from '../../verification-operation-metadata.dto'
 
 export class VerifyAsyncRequestBodyDto {
     @ApiProperty({ type: String, format: 'email', example: 'person@lef.test' })
@@ -89,6 +90,10 @@ export class GetAsyncVerificationStatusResponseDto {
 
     @Expose()
     failureCode?: 'verification_failed'
+
+    @Expose()
+    @Type(() => VerificationOperationMetadataDto)
+    operation?: VerificationOperationMetadataDto
 }
 
 export class AsyncVerificationQueuedResponseDto {
@@ -107,6 +112,11 @@ export class AsyncVerificationCompletedResponseDto {
 
     @ApiProperty({ type: AsyncVerificationResultDto })
     result: AsyncVerificationResultDto
+
+    /** Optional in the public contract so existing clients written before this field existed keep building —
+     *  a real settled response always includes it. */
+    @ApiPropertyOptional({ type: VerificationOperationMetadataDto })
+    operation?: VerificationOperationMetadataDto
 }
 
 export class AsyncVerificationFailedResponseDto {
@@ -115,6 +125,11 @@ export class AsyncVerificationFailedResponseDto {
 
     @ApiProperty({ type: String, enum: ['verification_failed'] })
     failureCode: 'verification_failed'
+
+    /** Optional in the public contract so existing clients written before this field existed keep building —
+     *  a real settled response always includes it. */
+    @ApiPropertyOptional({ type: VerificationOperationMetadataDto })
+    operation?: VerificationOperationMetadataDto
 }
 
 export class AsyncVerificationUnavailableResponseDto {

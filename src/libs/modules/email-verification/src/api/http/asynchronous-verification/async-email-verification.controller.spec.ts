@@ -1,48 +1,237 @@
-import { Request } from 'express'
+import type { Request, Response } from 'express'
+import { HttpStatus, NotFoundException } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { instanceToPlain, plainToInstance } from 'class-transformer'
 import { GetAsyncVerificationStatusResponseDto } from './async-email-verification.dto'
-import { AsyncEmailVerificationService } from '../../../application/delivery/async/async-email-verification.service'
+import { AsyncEmailVerificationService, VerifyAsyncOutcome } from '../../../application/delivery/async/async-email-verification.service'
+import { AsyncEmailVerificationJobNotFoundException } from '../../../application/delivery/async/job-not-found.exception'
 import { GUARDS_METADATA } from '@nestjs/common/constants'
 import { PermissionsGuard, REQUIRED_PERMISSIONS_METADATA_KEY } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard } from '@tuposoft/lead-email-finder/modules/credits'
+import { VerificationRateLimitGuard } from '../verification-rate-limit.guard'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
+
+function buildRequest(rawHeaders: readonly string[] = ['host', 'example.test']): Request {
+    return { rawHeaders } as unknown as Request
+}
+
+function buildResponse(): jest.Mocked<Pick<Response, 'setHeader'>> {
+    return { setHeader: jest.fn() }
+}
 
 describe('AsyncEmailVerificationController', () => {
     it('runs every route through the permissions guard', () => {
         expect(Reflect.getMetadata(GUARDS_METADATA, AsyncEmailVerificationController)).toEqual([PermissionsGuard])
     })
 
-    it('requires verification:run for POST /verifyAsync and still deducts a credit after authorization passes', () => {
+    it('requires verification:run and the rate limit guard for POST /verifyAsync', () => {
         const handler = AsyncEmailVerificationController.prototype.verifyAsync
         expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, handler)).toEqual(['verification:run'])
-        expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([CreditGuard])
+        expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([VerificationRateLimitGuard])
     })
 
     it('requires verification:read for GET /verifyAsync/:id', () => {
         const handler = AsyncEmailVerificationController.prototype.getAsyncVerificationState
         expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA_KEY, handler)).toEqual(['verification:read'])
     })
-    it('passes the generated request ID to dispatch while preserving the submission body', async () => {
-        const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
-            verifyAsync: jest.fn().mockResolvedValue({ id: 'job-id' }),
-            getAsyncVerificationState: jest.fn(),
-        }
-        const principal = { organizationId: 'organization-id', credentialId: 'credential-id' } as AuthPrincipal
-        const controller = new AsyncEmailVerificationController(service)
-        const request = {
-            id: 'server-generated-id',
-            headers: { 'x-request-id': 'attacker-controlled-id' },
-        } as unknown as Request
 
-        await expect(
-            controller.verifyAsync({ email: 'sentinel@private.example' }, principal, request),
-        ).resolves.toEqual({ id: 'job-id' })
-        expect(service.verifyAsync).toHaveBeenCalledWith({
-            email: 'sentinel@private.example',
-            organizationId: 'organization-id',
-            credentialId: 'credential-id',
-            requestId: 'server-generated-id',
+    describe('verifyAsync', () => {
+        const principal = { organizationId: 'organization-id', credentialId: 'credential-id' } as AuthPrincipal
+
+        function buildController(
+            outcome: VerifyAsyncOutcome,
+        ): { controller: AsyncEmailVerificationController; service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> } {
+            const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
+                verifyAsync: jest.fn().mockResolvedValue(outcome),
+                getAsyncVerificationState: jest.fn(),
+            }
+            return { controller: new AsyncEmailVerificationController(service), service }
+        }
+
+        it('admits without an Idempotency-Key header and returns the accepted ID', async () => {
+            const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
+            const response = buildResponse()
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(),
+                    response as unknown as Response,
+                ),
+            ).resolves.toEqual({ id: 'operation-id' })
+            expect(service.verifyAsync).toHaveBeenCalledWith({
+                email: 'sentinel@private.example',
+                organizationId: 'organization-id',
+                clientRequestKey: undefined,
+            })
+        })
+
+        it('forwards a canonical lowercase UUIDv7 Idempotency-Key as the client request key', async () => {
+            const timestampHex = Date.now().toString(16).padStart(12, '0')
+            const key = `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`
+            const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
+
+            await controller.verifyAsync(
+                { email: 'sentinel@private.example' },
+                principal,
+                buildRequest(['Idempotency-Key', key]),
+                buildResponse() as unknown as Response,
+            )
+            expect(service.verifyAsync).toHaveBeenCalledWith(
+                expect.objectContaining({ clientRequestKey: key }),
+            )
+        })
+
+        it('rejects a malformed Idempotency-Key with 400 before calling the service', async () => {
+            const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(['Idempotency-Key', 'not-a-uuid']),
+                    buildResponse() as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST, message: 'invalid_idempotency_key' })
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('rejects a too-far-ahead Idempotency-Key with 400', async () => {
+            const farFutureKey = (() => {
+                const timestampMs = Date.now() + 60 * 60 * 1000
+                const timestampHex = timestampMs.toString(16).padStart(12, '0')
+                return `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`
+            })()
+            const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(['Idempotency-Key', farFutureKey]),
+                    buildResponse() as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST, message: 'idempotency_key_too_far_ahead' })
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('forwards an old Idempotency-Key to the service instead of rejecting it before a stored-request lookup', async () => {
+            // An old key might still match an existing stored request within its seven-day replay window —
+            // only admission's own lookup can tell. Only the service's own `conflict/key-expired` outcome (see
+            // below) may produce 410 for a key admission determines has genuinely expired with no match.
+            const expiredKey = (() => {
+                const timestampMs = Date.now() - 25 * 60 * 60 * 1000
+                const timestampHex = timestampMs.toString(16).padStart(12, '0')
+                return `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`
+            })()
+            const { controller, service } = buildController({ kind: 'accepted', id: 'operation-id' })
+
+            await controller.verifyAsync(
+                { email: 'sentinel@private.example' },
+                principal,
+                buildRequest(['Idempotency-Key', expiredKey]),
+                buildResponse() as unknown as Response,
+            )
+            expect(service.verifyAsync).toHaveBeenCalledWith(
+                expect.objectContaining({ clientRequestKey: expiredKey }),
+            )
+        })
+
+        it('maps insufficient-funds to 402', async () => {
+            const { controller } = buildController({ kind: 'insufficient-funds', id: 'operation-id' })
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(),
+                    buildResponse() as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.PAYMENT_REQUIRED, message: 'insufficient_credits' })
+        })
+
+        it('maps a key-mismatch conflict to 409', async () => {
+            const { controller } = buildController({ kind: 'conflict', reason: 'key-mismatch' })
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(),
+                    buildResponse() as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.CONFLICT, message: 'idempotency_key_conflict' })
+        })
+
+        it('maps a key-expired conflict to 410', async () => {
+            const { controller } = buildController({ kind: 'conflict', reason: 'key-expired' })
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(),
+                    buildResponse() as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.GONE, message: 'idempotency_key_expired' })
+        })
+
+        it('maps address-cooldown to 429 with an integer Retry-After header', async () => {
+            const { controller } = buildController({ kind: 'address-cooldown', retryAfterMs: 45_500 })
+            const response = buildResponse()
+
+            await expect(
+                controller.verifyAsync(
+                    { email: 'sentinel@private.example' },
+                    principal,
+                    buildRequest(),
+                    response as unknown as Response,
+                ),
+            ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS, message: 'verification_cooldown' })
+            expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '46')
+        })
+    })
+
+    describe('getAsyncVerificationState', () => {
+        it('delegates to the service with the route ID and the caller organization', async () => {
+            const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
+                verifyAsync: jest.fn(),
+                getAsyncVerificationState: jest.fn().mockResolvedValue({ state: 'queued' }),
+            }
+            const controller = new AsyncEmailVerificationController(service)
+            const principal = { organizationId: 'organization-id' } as AuthPrincipal
+
+            await expect(
+                controller.getAsyncVerificationState({ id: 'operation-id' }, principal),
+            ).resolves.toEqual({ state: 'queued' })
+            expect(service.getAsyncVerificationState).toHaveBeenCalledWith('operation-id', 'organization-id')
+        })
+
+        it('translates a not-found operation into a 404 NotFoundException', async () => {
+            const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
+                verifyAsync: jest.fn(),
+                getAsyncVerificationState: jest
+                    .fn()
+                    .mockRejectedValue(new AsyncEmailVerificationJobNotFoundException('operation-id')),
+            }
+            const controller = new AsyncEmailVerificationController(service)
+            const principal = { organizationId: 'organization-id' } as AuthPrincipal
+
+            await expect(controller.getAsyncVerificationState({ id: 'operation-id' }, principal)).rejects.toBeInstanceOf(
+                NotFoundException,
+            )
+        })
+
+        it('lets any other error propagate unchanged', async () => {
+            const failure = new Error('unexpected')
+            const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
+                verifyAsync: jest.fn(),
+                getAsyncVerificationState: jest.fn().mockRejectedValue(failure),
+            }
+            const controller = new AsyncEmailVerificationController(service)
+            const principal = { organizationId: 'organization-id' } as AuthPrincipal
+
+            await expect(controller.getAsyncVerificationState({ id: 'operation-id' }, principal)).rejects.toBe(failure)
         })
     })
 

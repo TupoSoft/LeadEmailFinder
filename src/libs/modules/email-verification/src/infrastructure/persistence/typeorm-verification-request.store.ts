@@ -87,4 +87,24 @@ export class TypeOrmVerificationRequestStore implements VerificationRequestStore
     async attachExecution(requestId: string, organizationId: string, executionId: string): Promise<void> {
         await this.dataSource.manager.update(VerificationRequestEntity, { requestId, organizationId }, { executionId })
     }
+
+    async settleCanceled(executionId: string, organizationId: string): Promise<void> {
+        await this.dataSource.transaction(async manager => {
+            const linkedRequests = await manager.find(VerificationRequestEntity, {
+                where: { executionId, organizationId },
+            })
+            const now = new Date()
+            const unsettled = linkedRequests.filter(request => request.billingState !== 'settled')
+            for (const request of unsettled) {
+                request.billingState = 'settled'
+                request.resultId = null
+                request.finalReason = 'failed'
+                request.chargedCount = 0
+                request.settledAt = now
+            }
+            if (unsettled.length > 0) {
+                await manager.save(VerificationRequestEntity, unsettled)
+            }
+        })
+    }
 }

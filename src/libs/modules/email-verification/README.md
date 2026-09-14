@@ -171,33 +171,59 @@ persistence entities with TypeORM, builds every application service and port thr
 The async module retains its `EmailVerificationServiceToken` binding to that orchestrator; the batch module
 continues to consume the same core composition.
 
-The synchronous controller and body DTO live under `api/http/synchronous-verification/current/`.
-The controller invokes the private `RUN_SYNCHRONOUS_VERIFICATION` token. Its framework-free `RunSynchronousVerification` implementation under
-`application/delivery/synchronous/` normalizes the address and passes the organization and optional trace to a
-narrow verification port. The root binds that port to the existing orchestrator. HTTP permission and credit guards
-remain on POST; the command performs no credit operations. Validation still follows the credit guard, so an
-authorized invalid request consumes one credit. Domain-policy rejection and unexpected adapter failures retain
-their generic `500` response. The `/emails` administration API remains at `api/http/email-administration/`, wired
-by the root to `EmailAdministrationService`.
+Neither single-verification route uses `CreditGuard` any more; both drive the durable admission/execution/
+settlement stack described below directly, and both accept an optional canonical lowercase UUIDv7
+`Idempotency-Key` header, parsed by the shared, framework-light `parseVerificationIdempotencyKeyHeader` in
+`api/http/verification-idempotency-key-header.ts` (reads `req.rawHeaders`, not `req.headers`, since the latter
+would silently merge a repeated header). Both POST methods also run a `VerificationRateLimitGuard`
+(`api/http/verification-rate-limit.guard.ts`) after `PermissionsGuard`, backed by
+`VerificationSubmissionLimiter` — a Redis token-bucket counting every submission, including free ones, per
+organization; a limiter timeout fails safe with `503 rate_limit_unavailable`, never unlimited free admission.
+
+The synchronous controller and body DTO live under `api/http/synchronous-verification/current/`. The controller
+invokes the private `RUN_SYNCHRONOUS_VERIFICATION` token. Its framework-free `RunSynchronousVerification`
+implementation under `application/delivery/synchronous/` admits through `VerificationAdmissionService` exactly like
+the async route, then drives its own funded execution inline via `VerificationExecutionRunner.execute()` in a
+bounded loop against a 30-second budget — waiting out a scheduled retry only if it still fits, and never driving
+someone else's execution inline. `joined`/`cooldown` admissions instead poll `VerificationOperationsReader.read()`
+read-only. Exhausting the budget, or losing the race entirely (`lease-lost`/`not-runnable`), falls back to
+`202 { id } + Location: /verifyAsync/<id>` — the in-flight execution keeps running, backstopped by its own lease
+machinery and the reconciler, exactly like the async path; a closed HTTP connection never affects billing, since
+only durable state drives it. A settled result adds an additive `operation` metadata block (see below) to the
+existing `EmailVerificationResponseDto`, which `GET /verifications/:id` also uses but never populates that field,
+since that route reads by result ID with no single billing operation to describe. Domain-policy rejection and
+unexpected adapter failures retain their generic `500` response. The `/emails` administration API remains at
+`api/http/email-administration/`, wired by the root to `EmailAdministrationService`.
 
 Async HTTP controllers and DTOs live under `api/http/asynchronous-verification/`. The framework-independent
-`AsyncEmailVerificationService` under `application/delivery/async/` accepts scalar organization and credential
-identity, dispatches through `AsyncVerificationJobs`, and checks ownership before reading job state. Missing and
-foreign jobs produce the same application error, which the controller maps to the existing `404`. The application
-maps the transport-neutral snapshot to `queued`, `running`, `completed`, `failed`, or `unavailable`. Completed
-jobs expose only validated public result fields; nullable database values for optional pattern/MX fields are omitted.
-Failed jobs expose only `failureCode: verification_failed`. Unknown queue states or invalid completed results are
-`unavailable`, which makes no claim about success, failure, or credit adjustment. Status reads perform no credit
-debit or queue submission. The API documents five discriminated response variants and includes only the async
-create/status operations in the generated browser contract.
+`AsyncEmailVerificationService` under `application/delivery/async/` composes `VerificationAdmissionService`, a new
+`VerificationExecutionDispatcher` port, and `VerificationOperationsReader` — it no longer touches
+`AsyncVerificationJobs` at all (that port and its Bull adapter were deleted; single submission never enqueues
+through them). A `funded`/`joined` admission dispatches onto the new `verification-execution` queue (idempotent —
+the same execution ID is reused as the job ID); a `cooldown` join (an execution already `awaiting_retry`) is
+deliberately not redispatched, relying on the reconciler's own ~30-second sweep instead. `mapAsyncVerificationStatus`
+in `application/delivery/async/async-verification-status.ts` maps durable request/execution state — not a BullMQ
+job snapshot — onto the same five public states as before (`queued`, `running`, `completed`, `failed`,
+`unavailable`; nonterminal execution states fold down onto `queued`/`running` so the browser frontend's fixed
+5-value status vocabulary never gains a sixth value) and now also attaches the `operation` metadata block once
+settled. Missing, foreign, and expired (past a 7-day terminal-visibility window) operations produce the same
+`AsyncEmailVerificationJobNotFoundException`, which the controller maps to the existing `404`.
 
-`infrastructure/queues/async-verification/` owns `BullAsyncVerificationJobs`, the serialized job contract,
-queue defaults, custom backoff, and `AsyncEmailVerificationProcessor`. Its private composition module exports the
-application service token to the root and binds `EmailVerificationServiceToken` to the existing orchestrator.
-The adapter maps waiting, delayed, prioritized, waiting-children, and paused work to `queued`, and active work to
-`running`; queue state names and raw failure diagnostics never cross the application boundary.
-The worker maps one existing payload to one organization-scoped verification command per attempt, excluding the
-credential ID, and preserves the greylist exception and trace context. There is one async worker.
+`infrastructure/queues/verification-execution/` is the new queue both single-verification routes drive execution
+through: `BullVerificationExecutionDispatcher` enqueues by execution ID (`removeOnComplete`/`removeOnFail: true`,
+since durable state lives in Postgres, not the BullMQ job record, and the same ID is safely reused across
+dispatch attempts); `VerificationExecutionProcessor` calls `VerificationExecutionRunner.execute()` and, on a
+`retry-scheduled` outcome, calls `job.moveToDelayed(retryAt, token)` followed by `throw new DelayedError()` to move
+the *same* job into the delayed state — re-adding a new job with that same ID while the current attempt is still
+`active` is a silent BullMQ no-op that would drop the retry entirely (proved against real Redis; see the plan's
+Decision Log). A `permit-unavailable` outcome throws a plain exception to trigger the queue's own fixed
+250-millisecond backoff retry instead.
+
+`infrastructure/queues/async-verification/` now owns only the `async-email-verification` queue's continued role in
+batch's child-verification dispatch (`BullBatchChildFlow` enqueues directly into it by name); its
+`AsyncEmailVerificationProcessor` worker and job contract are unchanged, and its module still binds
+`EmailVerificationServiceToken` to the existing orchestrator for that one remaining caller. The `AsyncVerificationJobs`
+port, `BullAsyncVerificationJobs` adapter, and the single-submission-through-this-queue flow they backed are gone.
 
 Batch HTTP controllers and DTOs live under `api/http/batch-verification/`. `application/delivery/batch/` holds the
 transport-neutral `BatchEmailVerificationService` (upload registration, owned status, and owned result retrieval)
@@ -223,24 +249,30 @@ failure marker. Missing or unrecognized markers use `processing_failed`, and suc
 code. This generic failure makes no claim about whether credits were charged.
 
 Durable verification operations and billing recovery live under `application/ports/` (`VerificationRequestStore`,
-`VerificationExecutionStore`, `VerificationSettlementStore`, `VerificationResultCacheReader`) and
-`application/operations/` (`VerificationAdmissionService`, `VerificationExecutionRunner`,
-`VerificationSettlementService`, `VerificationOperationsReader`, `VerificationReconciler`), backed by
-`infrastructure/persistence/typeorm-verification-request.store.ts`,
-`typeorm-verification-execution.store.ts`, `typeorm-verification-settlement.store.ts`, and
-`typeorm-verification-result-cache-reader.ts` over three new TypeORM entities under
-`infrastructure/persistence/typeorm/`. This stack is additive in this revision: it is fully wired and tested but not
-yet invoked from any HTTP route, and `EmailVerificationOrchestrator` and its existing routes are unchanged. It gives
-three guarantees. A fresh, conclusive cached result is reused for free. Concurrent admissions for one
-organization/address share a single execution. A crash between reserving a credit and confirming settlement always
-recovers to exactly one terminal outcome with at most one debit.
+`VerificationExecutionStore`, `VerificationSettlementStore`, `VerificationResultCacheReader`,
+`VerificationCooldownReader`, `VerificationExecutionPermits`, `VerificationSubmissionLimiter`,
+`VerificationExecutionDispatcher`) and `application/operations/` (`VerificationAdmissionService`,
+`VerificationExecutionRunner`, `VerificationSettlementService`, `VerificationOperationsReader`,
+`VerificationReconciler`), backed by `infrastructure/persistence/typeorm-verification-request.store.ts`,
+`typeorm-verification-execution.store.ts`, `typeorm-verification-settlement.store.ts`,
+`typeorm-verification-result-cache-reader.ts`, and `typeorm-verification-execution-permit.store.ts` over five
+TypeORM entities under `infrastructure/persistence/typeorm/`. Both single-verification HTTP routes now drive this
+stack directly (see above); `EmailVerificationOrchestrator` keeps its existing routes-free role backing batch's
+per-child verification only. The stack gives four guarantees. A fresh, conclusive cached result is reused for
+free. Concurrent admissions for one organization/address share a single execution. A crash between reserving a
+credit and confirming settlement always recovers to exactly one terminal outcome with at most one debit. Global
+outbound execution concurrency and per-organization submission rate stay bounded regardless of how many callers
+admit for free.
 
 `VerificationAdmissionService.admit()` first replays or rejects a caller-supplied idempotency key — a canonical
 lowercase UUIDv7, checked at first admission for an age under 24 hours and a lookahead under 5 minutes via
 `application/verification-idempotency-key.ts`. It then checks `VerificationResultCacheReader` for a fresh,
 conclusive, policy-current result through the pure `isCachedResultUsable` in
-`application/verification-result-cache.ts`. Absent a usable cache hit, `VerificationExecutionStore.claimOrJoin()`
-locks the `(organizationId, normalizedAddress)` slot and rechecks that same freshness predicate under the lock,
+`application/verification-result-cache.ts`. Absent a usable cache hit, it checks `VerificationCooldownReader` (the
+same adapter class as the result-cache reader, implementing a second, quality-filter-free interface) for a
+terminal-inconclusive verdict for that address within the last 60 seconds; if found, it reports `address-cooldown`
+without creating any request/execution row or reserving a credit. Otherwise, `VerificationExecutionStore.claimOrJoin()`
+locks the `(organizationId, normalizedAddress)` slot and rechecks the cache-freshness predicate under the lock,
 closing the race between the caller's own check and the claim. It then either reports the fresh result, joins the
 nonterminal execution already claiming that slot, or inserts a new `funding_pending` row. A newly created execution reserves one
 credit through `CreditReservationService.reserve()` (from [`credits`](../credits/README.md)). An
@@ -248,35 +280,56 @@ credit through `CreditReservationService.reserve()` (from [`credits`](../credits
 reporting `insufficient-funds` — the canceled row still exists, outside the partial unique index that covers only
 nonterminal states, so the address slot is free for a later retry.
 
-`VerificationExecutionRunner.execute()` acquires a generation-fenced lease, 60 seconds long and renewed/polled every
-5 seconds for the whole probe call, since the application layer cannot observe the underlying SMTP socket's
-lifecycle more precisely without new plumbing. It threads an `AbortSignal` tied to lease loss through
-`MailboxVerificationService.verify()` down to `SmtpMailboxProbe` and its `ISmtpClientFactory`, then calls
-`VerificationSettlementStore.persistResultAndIntention()` guarded by the expected attempt generation. A
+`VerificationExecutionRunner.execute()` acquires a global `VerificationExecutionPermits` slot (Postgres, bounded by
+`VERIFICATION_EXECUTION_MAX_CONCURRENT`, renewed alongside the lease on a best-effort basis — a failed permit
+renewal alone never aborts the probe, unlike lease-renewal failure) before a generation-fenced lease, 60 seconds
+long and renewed/polled every 5 seconds for the whole probe call, since the application layer cannot observe the
+underlying SMTP socket's lifecycle more precisely without new plumbing. It threads an `AbortSignal` tied to lease
+loss through `MailboxVerificationService.verify()` down to `SmtpMailboxProbe` and its `ISmtpClientFactory`, then
+calls `VerificationSettlementStore.persistResultAndIntention()` guarded by the expected attempt generation. A
 `temporarily_blocked` reason schedules a retry instead of persisting a result, waiting `(generation + 1)` minutes to
 match the existing async queue's own greylist delay. Any other thrown probe failure schedules a flat 10-second
-retry instead. `VerificationSettlementService.settle()` then captures or releases the reservation, using the execution ID as
-the stable reference, and confirms settlement — mirroring `PaymentAdjustmentHandler`, whose claim-then-call-credits-
-then-complete shape stays replay-safe at every step. `confirmSettlement` flips the execution and every linked
-request row terminal in one transaction, crediting only the payer request's `chargedCount` and marking every other
-joined or shared request `shared`.
+retry instead. An unavailable permit reports `permit-unavailable` before ever acquiring a lease.
+`VerificationSettlementService.settle()` then captures or releases the reservation, using the execution ID as
+the stable reference, confirms settlement, and calls `EmailAdministrationService.upsertEmail()` — mirroring
+`PaymentAdjustmentHandler`, whose claim-then-call-credits-then-complete shape stays replay-safe at every step, and
+mirroring `EmailVerificationOrchestrator`'s own old unconditional cache-finalize step, gated at exactly the point
+the result becomes visible. `confirmSettlement` flips the execution and every linked request row terminal in one
+transaction, crediting only the payer request's `chargedCount` and marking every other joined or shared request
+`shared`.
 
-`VerificationReconciler.reconcile(limit)` is the only dispatcher for `queued` and due `awaiting_retry` executions in
-this revision, since no HTTP route enqueues a queue job for a single execution yet. It pages nonterminal executions
-and either drives each one forward or recovers it. Recovery confirms a `funding_pending` row against
-`CreditReservationService.getReservation()`, reclaims a `running` lease abandoned past a 5-second shutdown grace
-through `takeoverForRetry`, or cancels anything past its 24-hour deadline — unless a capture intention already
-exists, since capture always wins. It then confirms every pending settlement intention through
-`VerificationSettlementService.settle()`. It runs on its own repeatable BullMQ job, this module's first periodic
-queue, under `infrastructure/queues/verification-reconciliation/`. `OnApplicationBootstrap` schedules it every 30
-seconds through the `VerificationReconciliationScheduler` port and its `BullVerificationReconciliationScheduler`
-adapter, which calls `Queue.upsertJobScheduler`.
+`VerificationReconciler.reconcile(limit)` is the only dispatcher for due `awaiting_retry` executions and the
+crash-recovery backstop for `queued` ones the `verification-execution` queue failed to pick up; it pages
+nonterminal executions and either drives each one forward or recovers it. Recovery confirms a `funding_pending` row
+against `CreditReservationService.getReservation()`, reclaims a `running` lease abandoned past a 5-second shutdown
+grace through `takeoverForRetry`, or cancels anything past its 24-hour deadline — unless a capture intention
+already exists, since capture always wins. A deadline cancellation that actually transitions the row also releases
+its credit reservation and settles every linked request as a zero-charge `failed` outcome through
+`VerificationRequestStore.settleCanceled()`, mirroring what `confirmSettlement` does for the normal path — a
+cancellation the reconciler replays as a no-op does neither, since the reservation was already released the first
+time. The reconciler then confirms every pending settlement intention through `VerificationSettlementService.settle()`.
+It runs on its own repeatable BullMQ job, this module's first periodic queue, under
+`infrastructure/queues/verification-reconciliation/`. `OnApplicationBootstrap` schedules it every 30 seconds
+through the `VerificationReconciliationScheduler` port and its `BullVerificationReconciliationScheduler` adapter,
+which calls `Queue.upsertJobScheduler`.
 
-`VerificationOperationsReader.read()` looks up one operation by its `requestId` handle: `settled` (with the result,
-final reason, and charged count once past a 7-day terminal-visibility window it reports `expired` instead),
-`pending` with the execution's current state, or `not-found`. `EmailVerificationCoreModule` wires every store and
-service above as explicit factory providers (matching its existing convention of instantiating concrete stores
-inline rather than giving them their own DI token) and now imports `CreditsModule`.
+`VerificationOperationsReader.read()` looks up one operation by its `requestId` handle: `settled` (with the full
+request record and, unless the execution was canceled past its deadline with no result ever produced, the result
+too — a settled request past a 7-day terminal-visibility window reports `expired` instead), `pending` with the
+execution's current state, or `not-found`. The full request record — not a few cherry-picked fields — lets the
+HTTP layer build its `operation` metadata block from one place: `application/operations/verification-operation-metadata.ts`'s
+framework-free `buildOperationMetadata()` derives `{id, source, observedAt, cacheExpiresAt, billing}` from a
+`VerificationRequestRecord` and the settled result's evidence-observation time; `api/verification-operation-metadata.dto.ts`
+holds only the matching decorated, `@ApiProperty()`-annotated DTO classes `VerificationOperationMetadataDto`/
+`VerificationOperationBillingDto` that `@SerializeOptions({type: ...})` coerces the plain value into — the logic
+stays framework-free and lives in the application layer; only the decorated shape lives in the API layer.
+`EmailVerificationCoreModule` wires every store and service above as explicit factory providers (matching its
+existing convention of instantiating concrete stores inline rather than giving them their own DI token) and now
+imports `CreditsModule`. `EmailVerificationModule` (the root, one level up) imports bare `ConfigModule` directly —
+without it, none of its own `ConfigService`-injecting factories (the async-service composition, both rate-limit
+configuration factories, and `RUN_SYNCHRONOUS_VERIFICATION`) can resolve once the real application module tree is
+instantiated end to end, since `ConfigModule.forRoot()` is called once at the API composition root and is not
+`isGlobal`.
 
 ## Email Candidate Generation
 
@@ -306,9 +359,9 @@ person attribution; verification and durable finding workflows remain separate w
 
 ## Dependencies
 
-- [`credits`](../credits/README.md) — `CreditGuard` on every billed route, `CreditsService.debit()` called
-  directly by the batch workflow (one credit per validated CSV row), and `CreditReservationService` used by the
-  durable admission/settlement/reconciliation stack above.
+- [`credits`](../credits/README.md) — `CreditsService.debit()` called directly by the batch workflow (one credit
+  per validated CSV row), and `CreditReservationService` used by the durable admission/settlement/reconciliation
+  stack that now backs both single-verification HTTP routes. Neither route uses `CreditGuard` any more.
 - [`proxy`](../proxy/README.md) — the `IProxyService`/`IProxyAllocator` contracts and DI tokens, through its
   public barrel; SMTP verification acquires and releases leases through these contracts, not through any deep
   import into the implementation of `proxy` itself.
@@ -380,6 +433,11 @@ failures retain the existing generic error response.
 - `SMTP_TLS_CA_FILE` (optional path to an SMTP-only PEM root; default Node trust remains active)
 - `VERIFICATION_RESULT_CACHE_TTL_SECONDS` (optional, default 86400, range 1–86400; how long a fresh conclusive
   result stays reusable for free by `VerificationAdmissionService`)
+- `VERIFICATION_SUBMISSION_RATE_CAPACITY` (optional positive integer, default 60; token-bucket capacity per
+  organization in `RedisVerificationSubmissionLimiter`)
+- `VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND` (optional positive integer, default 1; token-bucket refill rate)
+- `VERIFICATION_EXECUTION_MAX_CONCURRENT` (optional positive integer, default 5; global outbound execution permit
+  cap in `TypeOrmVerificationExecutionPermitStore`, shared by sync, async, and future batch execution)
 
 The runtime always reads `config/privacy/account-discovery-approvals.yaml`; no environment variable can redirect that
 path. The committed manifest is empty, so the default development and SMTP workflows select no external provider.
@@ -396,27 +454,42 @@ Focused tests are grouped by behavior:
   cover literal address sequences, collisions, equivalent inputs, Unicode and IDNA normalization, rejection codes,
   length limits, and unchanged inputs. Bruno is not applicable to this private capability because it changes no HTTP
   behavior.
-- **Operational tracing**: `infrastructure/verification-trace/logging-verification-trace-observer.spec.ts`,
-  `infrastructure/verification-trace/verification-trace.integration.spec.ts`, the synchronous service and queue
-  specifications, and the API composition root's request logging tests
+- **Operational tracing**: `infrastructure/verification-trace/logging-verification-trace-observer.spec.ts` covers
+  the observer's own logic; the API composition root's request logging tests cover generic HTTP correlation. The
+  durable admission/execution/settlement stack that now backs both single-verification routes emits no
+  `VerificationTraceObserver` events at all — a recorded, deliberate gap; see the Decision Log in the
+  `verification-billing/04` ExecPlan. `EmailVerificationOrchestrator` still emits them for batch's per-child verification.
 - **Result lookup**: `api/verification-result-http.integration.spec.ts`,
   `infrastructure/typeorm-verification-result-reader.spec.ts`, and the PostgreSQL ownership integration test
 
-- **Synchronous application command**: `application/delivery/synchronous/run-synchronous-verification.spec.ts`
+- **Synchronous driver**: `application/delivery/synchronous/run-synchronous-verification.spec.ts` covers cached/
+  funded/joined/cooldown admission outcomes, waiting out a retry-scheduled attempt within budget, and every
+  fallback-to-`accepted` path (budget exhaustion, lease-lost, not-runnable, a canceled execution settled with no
+  result)
 - **Synchronous POST behavior and retired GET rejection**: `api/http/synchronous-verification/synchronous-verification-http.integration.spec.ts`
 - **Current synchronous controller**: `api/http/synchronous-verification/current/sync-email-verification.controller.spec.ts`
+  covers Idempotency-Key parsing, every outcome-to-status-code mapping, and the `201`/`202` response shapes
 - **Async application and HTTP**: `application/delivery/async/async-email-verification.service.spec.ts`,
   `application/delivery/async/async-verification-status.spec.ts`,
   `api/http/asynchronous-verification/async-email-verification.controller.spec.ts`,
   `api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts`, and
   `api/http/asynchronous-verification/async-verification.openapi.spec.ts`
-- **Async queues and composition**: `infrastructure/queues/async-verification/` contains producer, worker, backoff,
-  Redis compatibility, and production Nest composition specifications. Set `TEST_REDIS_URL` to a disposable Redis
-  instance to run the Redis suites; each suite uses its own queue prefix.
-- **Async runtime workflow**: `bruno/async-verification` covers the browser-facing async workflow and sanitized
-  result contract. The existing `bruno/smtp-dev` collection covers submission, completed and repeated polling, one-credit debit,
-  missing jobs, malformed IDs, authentication, and insufficient credits. Its launcher requires an SMTP stack owned
-  by the current checkout.
+- **Shared idempotency/rate-limit transport**: `api/http/verification-idempotency-key-header.spec.ts` and
+  `api/http/verification-rate-limit.guard.spec.ts`
+- **Verification-execution queue**: `infrastructure/queues/verification-execution/` contains dispatcher, processor
+  (including the `moveToDelayed`/`DelayedError` retry-scheduling behavior), and configuration specifications, plus a
+  real-Redis `verification-execution-queue.integration.spec.ts` proving dispatch, delayed-retry, and
+  permit-unavailable backoff against a real BullMQ worker
+- **Submission rate limiting**: `infrastructure/redis/redis-verification-submission-limiter.spec.ts` and its
+  real-Redis `.integration.spec.ts`
+- **Async queue (batch child dispatch only)**: `infrastructure/queues/async-verification/` contains the worker,
+  backoff, and Redis compatibility specifications for the `async-email-verification` queue's remaining role in
+  batch's child-verification dispatch. Set `TEST_REDIS_URL` to a disposable Redis instance to run the Redis
+  suites; each suite uses its own queue prefix.
+- **Async runtime workflow**: `bruno/async-verification` covers the browser-facing async workflow, cache-reuse at
+  zero cost, and Idempotency-Key replay/conflict/expiry. The existing `bruno/smtp-dev` collection covers
+  submission, completed and repeated polling, single-credit reservation and capture, missing jobs, malformed IDs,
+  authentication, and insufficient credits. Its launcher requires an SMTP stack owned by the current checkout.
 - **Batch application**: `application/delivery/batch/batch-email-verification.service.spec.ts` and
   `application/delivery/batch/batch-email-verification-workflow.spec.ts` cover upload/status/results and every
   state/effect/replay transition — including the `WaitForChildren` signal, invalid-row and child-dispatch failure
@@ -474,31 +547,41 @@ Focused tests are grouped by behavior:
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
 - **Verification operations and billing recovery**: `application/verification-idempotency-key.spec.ts`,
-  `application/verification-result-cache.spec.ts`,
-  `application/operations/verification-admission.service.spec.ts`,
+  `application/verification-result-cache.spec.ts`, `application/operations/verification-operation-metadata.spec.ts`,
+  `application/operations/verification-admission.service.spec.ts` (including the address-cooldown outcome),
   `application/operations/verification-execution-runner.spec.ts` (including a fake-timer crash-injection test for
-  a lease lost mid-probe), `application/operations/verification-settlement.service.spec.ts`,
+  a lease lost mid-probe, and the permit-acquire/release/renew paths), `application/operations/verification-settlement.service.spec.ts`,
   `application/operations/verification-operations-reader.spec.ts`,
-  `application/operations/verification-reconciler.spec.ts`,
-  `infrastructure/persistence/typeorm-verification-request.store.spec.ts`,
+  `application/operations/verification-reconciler.spec.ts` (including the deadline-cancellation credit-release and
+  request-settlement path), `infrastructure/persistence/typeorm-verification-request.store.spec.ts`,
   `infrastructure/persistence/typeorm-verification-execution.store.spec.ts` (covers the optimistic-insert/unique-
-  violation address-claim race), `infrastructure/persistence/typeorm-verification-settlement.store.spec.ts`, and
-  `infrastructure/persistence/typeorm-verification-result-cache-reader.spec.ts`. The real-Postgres
+  violation address-claim race), `infrastructure/persistence/typeorm-verification-settlement.store.spec.ts`,
+  `infrastructure/persistence/typeorm-verification-result-cache-reader.spec.ts`, and
+  `infrastructure/persistence/typeorm-verification-execution-permit.store.spec.ts`. The real-Postgres
   `infrastructure/persistence/verification-billing.integration.spec.ts` covers a concurrent admission race, the full
-  funded-capture-and-cache-reuse pipeline, insufficient-funds fencing, and settlement replay against a real,
-  freshly-synced schema shared with the full `identity` entity set. Run
+  funded-capture-and-cache-reuse pipeline, insufficient-funds fencing, settlement replay, permit concurrency, and a
+  deterministic regression test for the transaction-poisoning race in `claimOrJoin()`'s catch branch, against a
+  real, freshly-synced schema shared with the full `identity` entity set. Run
   `corepack pnpm test:verification-billing-postgres` for the disposable real-Postgres stack — its own
   `verification_billing_test` database, modeled on `test:credits-postgres`.
 
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted, deterministic STARTTLS fixture (`docker/smtp-dev/evidence-server.mjs`) and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. Its fixture-only HTTP control endpoint selects a closed scenario enum so the same collection also proves target
 acceptance, exact `5.1.1` recipient rejection, and an identical `MAIL FROM`-stage rejection staying ineligible.
 Further scenarios cover a bare rejection, an ambiguous `5.7.1` rejection, a temporary rejection, and an accepted
-answer surviving a connection close before `QUIT` completes — one credit each, using independent
-`evidence.lef.test` target addresses. It also
-drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that
-`POST /verify` consumes one credit and rejects a zero balance with `402`. The retired `GET /verify` returns `404`
-while one credit is available, leaves that balance unchanged, and returns a server request UUID. The collection
-retains the asynchronous checks and requires all 47 requests to execute.
+answer surviving a connection close before `QUIT` completes, using independent `evidence.lef.test` target
+addresses. The temporary rejection schedules a durable retry instead of settling immediately — its first backoff
+does not fit the synchronous route's 30-second budget, so it falls back to the same `202` handle the async route
+would return, leaving its own reservation pending rather than captured; the other six scenarios each capture
+exactly one credit immediately. It also
+drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that `POST /verify`
+rejects a zero balance with `402` and, for a successful `201` request against its catch-all default fixture
+domain, reserves then releases one credit rather than capturing it — the plain `@lef.test` MX always accepts its
+catch-all control probe too, so it is never classified conclusive; only the scenario-selectable
+`evidence.lef.test` fixture can produce a chargeable result. Both checks use their own dedicated address, never
+reused elsewhere in the collection, since a just-settled address would still carry the 60-second address cooldown.
+The retired `GET /verify` returns `404` while one credit is available, leaves that balance unchanged, and returns
+a server request UUID. The collection retains the asynchronous checks, including its own dedicated zero-balance
+and single-credit addresses, and requires all 47 requests to execute.
 Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the
 authenticated organization's cache.
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) uploads a fixture CSV, polls to
