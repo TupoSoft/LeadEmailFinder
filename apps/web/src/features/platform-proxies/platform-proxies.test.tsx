@@ -157,8 +157,11 @@ function cacheIsSafe(session: AuthSession) {
 
 describe('platform-proxies', () => {
     it('rejects a customer route without reading registry data', async () => {
-        const { fetch } = renderProxies({ capabilities: ['team.manage'] })
+        const { fetch, session, router } = renderProxies({ capabilities: ['team.manage'] })
+        await act(() => session.bootstrap())
         expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
+        expect(router.state.location.pathname).toBe('/app/forbidden')
+        expect(fetch).toHaveBeenCalledOnce()
         expect(requests(fetch)).toHaveLength(0)
         expect(screen.queryByRole('link', { name: copy.title })).not.toBeInTheDocument()
     })
