@@ -205,12 +205,13 @@ to Project 9 In Progress before implementation. The worker budgets remain provis
 
 A frozen workspace install with scripts disabled completed successfully. Local validation on 2026-09-14:
 
-- `corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand`: 208 tests passed across three suites.
+- `corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand`: 308 tests passed across three suites.
 - `corepack pnpm test:ci-paths`: all selection fixtures passed, including documentation-only selection.
 - `node --check scripts/ci/browser-summary.mjs`: passed.
 - `corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts scripts/ci/browser-summary.mjs`: passed.
 - `/tmp/issue-605-tools/actionlint .github/workflows/validate.yml`: passed with version 1.7.12.
 - `corepack pnpm architecture:check`: passed for nine modules with zero violations.
+- `corepack pnpm typecheck`: passed after correcting the fixture type described below.
 - `corepack pnpm docs:lint -- .agents/plans/browser-ci/03-separate-browser-validation.md`: passed.
 - `git diff --check`: passed.
 
@@ -218,7 +219,13 @@ The sandbox initially blocked Node subprocess fixtures with `EPERM`; the permitt
 Independent comparison with the base confirmed that all 37 named browser workload, setup, and cleanup
 steps retain their original commands or actions exactly once. No unrelated job changed structurally.
 The documentation-only fixture executes all three worker no-op paths and both result helpers successfully.
-No live stack or Bruno collection has been executed locally. Selected Actions evidence is pending.
+No live stack or Bruno collection has been executed locally. The first selected
+[Actions run](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34843401081), on implementation
+head `6f3bd2b86c37c4a3b8949e225e2b27da11bf23a7`, passed repository policy, web, and contract checks.
+The backend type check found `TS2322` in the new browser fixture: TypeScript inferred optional undefined
+properties for its empty output object. An explicit `Record<string, string>` local variable corrected
+that type without changing behavior; the full local type check then passed. The replacement run in
+[draft PR #624](https://github.com/TupoSoft/LeadEmailFinder/pull/624) must provide the runtime measurements.
 
 GitHub's [job dependency documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds) describes dependency ordering and `always()`. Its [job condition documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions) explains skipped required jobs, which is why explicit successful no-ops and aggregate result validation remain part of the contract.
 

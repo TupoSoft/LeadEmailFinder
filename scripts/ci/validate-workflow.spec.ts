@@ -947,10 +947,10 @@ function runBrowserSummary(needs: unknown): ReturnType<typeof spawnSync> {
 }
 
 function successfulBrowserNeeds(selected = 'true'): Record<string, { result: string; outputs: Record<string, string> }> {
-    return Object.fromEntries(browserDependencies.map((id) => [id, {
-        result: 'success',
-        outputs: id === 'changes' ? { browser: selected, backend: 'false' } : {},
-    }]))
+    return Object.fromEntries(browserDependencies.map((id) => {
+        const outputs: Record<string, string> = id === 'changes' ? { browser: selected, backend: 'false' } : {}
+        return [id, { result: 'success', outputs }]
+    }))
 }
 
 describe('browser aggregate fixtures', () => {
