@@ -17,7 +17,7 @@ http:
     type: json
     data: |-
       {
-        "email": "person@lef.test"
+        "email": "sync-credit-check@lef.test"
       }
 
 runtime:
@@ -27,11 +27,16 @@ runtime:
         test('verifies the local address through the POST route and debits a credit', function() {
           expect(res.status).to.equal(201);
           expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-          expect(res.body.email).to.equal('person@lef.test');
+          expect(res.body.email).to.equal('sync-credit-check@lef.test');
           expect(res.body.catchAll).to.equal(true);
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
           expect(res.body.sources).to.deep.equal([]);
+          expect(res.body.operation.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+          expect(res.body.operation.source).to.equal('fresh');
+          expect(res.body.operation.observedAt).to.be.a('string');
+          expect(res.body.operation.cacheExpiresAt).to.be.a('string');
+          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' });
         });
 
         test('returns a server-generated request UUID', function() {

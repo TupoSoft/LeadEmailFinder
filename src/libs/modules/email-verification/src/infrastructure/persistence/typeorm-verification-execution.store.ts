@@ -66,23 +66,29 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
 
             let inserted: VerificationExecutionEntity
             try {
-                inserted = await manager.save(
-                    VerificationExecutionEntity,
-                    manager.create(VerificationExecutionEntity, {
-                        executionId: newExecutionId,
-                        organizationId,
-                        normalizedAddress,
-                        payerRequestId,
-                        state: 'funding_pending',
-                        fundingOwnerType: 'single',
-                        fundingOwnerId: newExecutionId,
-                        attemptGeneration: 0,
-                        leaseOwnerId: null,
-                        leaseExpiresAt: null,
-                        resultId: null,
-                        retryAt: null,
-                        deadlineAt,
-                    }),
+                // A caught unique-violation otherwise leaves the whole transaction unusable in Postgres (any
+                // further statement fails with "current transaction is aborted"); nesting the risky insert in its
+                // own `manager.transaction()` makes TypeORM issue a savepoint, so catching the violation here
+                // rolls back only the insert and leaves the outer transaction free to keep reading/locking.
+                inserted = await manager.transaction(async nested =>
+                    nested.save(
+                        VerificationExecutionEntity,
+                        nested.create(VerificationExecutionEntity, {
+                            executionId: newExecutionId,
+                            organizationId,
+                            normalizedAddress,
+                            payerRequestId,
+                            state: 'funding_pending',
+                            fundingOwnerType: 'single',
+                            fundingOwnerId: newExecutionId,
+                            attemptGeneration: 0,
+                            leaseOwnerId: null,
+                            leaseExpiresAt: null,
+                            resultId: null,
+                            retryAt: null,
+                            deadlineAt,
+                        }),
+                    ),
                 )
             } catch (error) {
                 if (!isUniqueViolation(error)) throw error

@@ -33,6 +33,8 @@ runtime:
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
           expect(res.body.sources).to.deep.equal([]);
+          expect(res.body.operation.source).to.equal('fresh');
+          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' });
         });
 
         test('returns a server-generated request UUID', function() {

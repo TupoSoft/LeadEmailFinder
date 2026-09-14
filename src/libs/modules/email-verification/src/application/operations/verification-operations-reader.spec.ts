@@ -43,6 +43,7 @@ describe('VerificationOperationsReader', () => {
             insert: jest.fn(),
             findById: jest.fn(),
             attachExecution: jest.fn(),
+            settleCanceled: jest.fn(),
         }
         executions = {
             claimOrJoin: jest.fn(),
@@ -101,28 +102,30 @@ describe('VerificationOperationsReader', () => {
         await expect(reader.read(requestId, organizationId)).resolves.toEqual({ kind: 'not-found' })
     })
 
-    it('returns the settled result with its billing metadata', async () => {
-        requests.findById.mockResolvedValue(
-            request({ billingState: 'settled', resultId: 'result-1', finalReason: 'conclusive', chargedCount: 1, settledAt: now }),
-        )
+    it('returns the settled result with the full request record', async () => {
+        const settledRequest = request({
+            billingState: 'settled',
+            resultId: 'result-1',
+            finalReason: 'conclusive',
+            chargedCount: 1,
+            settledAt: now,
+        })
+        requests.findById.mockResolvedValue(settledRequest)
         results.findOwned.mockResolvedValue({ id: 'result-1' } as never)
         await expect(reader.read(requestId, organizationId)).resolves.toEqual({
             kind: 'settled',
+            request: settledRequest,
             result: { id: 'result-1' },
-            finalReason: 'conclusive',
-            chargedCount: 1,
         })
     })
 
     it('returns a settled outcome with no result for a fenced insufficient-funds denial', async () => {
-        requests.findById.mockResolvedValue(
-            request({ billingState: 'settled', resultId: null, finalReason: 'failed', settledAt: now }),
-        )
+        const settledRequest = request({ billingState: 'settled', resultId: null, finalReason: 'failed', settledAt: now })
+        requests.findById.mockResolvedValue(settledRequest)
         await expect(reader.read(requestId, organizationId)).resolves.toEqual({
             kind: 'settled',
+            request: settledRequest,
             result: null,
-            finalReason: 'failed',
-            chargedCount: 0,
         })
         expect(results.findOwned).not.toHaveBeenCalled()
     })

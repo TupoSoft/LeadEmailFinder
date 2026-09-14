@@ -1,0 +1,25 @@
+info:
+    name: reject-conflicting-idempotency-key
+    type: http
+    seq: 21
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+        - name: Idempotency-Key
+          value: '{{freshIdempotencyKey}}'
+    body:
+        type: json
+        data: |-
+            {"email": "keyed-conflict@lef.test"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reject-conflicting-idempotency-key', function() {
+                expect(res.status).to.equal(409);
+              });

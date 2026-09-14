@@ -1,16 +1,10 @@
-import { IEmailVerificationResponseDto } from '@tuposoft/lead-email-finder/common'
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationExecutionState, VerificationExecutionStore } from '../ports/verification-execution-store'
-import { VerificationFinalReason, VerificationRequestStore } from '../ports/verification-request-store'
-import { VerificationResultReader } from '../verification-result-reader'
+import { VerificationRequestRecord, VerificationRequestStore } from '../ports/verification-request-store'
+import { VerificationResultDetail, VerificationResultReader } from '../verification-result-reader'
 
 export type ReadOutcome =
-    | {
-          readonly kind: 'settled'
-          readonly result: IEmailVerificationResponseDto | null
-          readonly finalReason: VerificationFinalReason | null
-          readonly chargedCount: 0 | 1
-      }
+    | { readonly kind: 'settled'; readonly request: VerificationRequestRecord; readonly result: VerificationResultDetail | null }
     | { readonly kind: 'pending'; readonly executionState: VerificationExecutionState }
     | { readonly kind: 'not-found' }
     | { readonly kind: 'expired' }
@@ -20,7 +14,9 @@ const REQUEST_VISIBILITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 /** Reads one operation's current status by its public `requestId` handle. Settled requests stay visible and
  *  replayable for seven days after settlement; past that window the same identifiers report `expired` rather
  *  than being physically pruned immediately. A pending request without its own execution row (defensive: should
- *  not occur outside a data inconsistency) reports `funding_pending` rather than throwing. */
+ *  not occur outside a data inconsistency) reports `funding_pending` rather than throwing. The full request
+ *  record is returned on settlement (not just a few cherry-picked fields) so the HTTP layer can build its
+ *  `operation` metadata block — source, billing state, reserved/charged counts, final reason — from one place. */
 export class VerificationOperationsReader {
     constructor(
         private readonly requests: VerificationRequestStore,
@@ -45,12 +41,7 @@ export class VerificationOperationsReader {
                     : await this.results.findOwned({ id: request.resultId, organizationId })
             if (request.resultId !== null && result === null) return { kind: 'expired' }
 
-            return {
-                kind: 'settled',
-                result,
-                finalReason: request.finalReason,
-                chargedCount: request.chargedCount,
-            }
+            return { kind: 'settled', request, result }
         }
 
         if (request.executionId === null) {

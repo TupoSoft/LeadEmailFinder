@@ -39,8 +39,11 @@ runtime:
           expect(res.body.state).to.equal('completed');
           expect(res.body.result.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
           expect(res.body.result.id).not.to.equal(bru.getVar('asyncJobId'));
-          expect(res.body.result.email).to.equal('person@lef.test');
+          expect(res.body.result.email).to.equal('async-credit-check@lef.test');
           expect(res.body.result.reason).to.equal('accepted_email');
+          expect(res.body.operation.id).to.equal(bru.getVar('asyncJobId'));
+          expect(res.body.operation.source).to.equal('fresh');
+          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' });
         });
 
         test('repeated status reads preserve the completed result', function() {

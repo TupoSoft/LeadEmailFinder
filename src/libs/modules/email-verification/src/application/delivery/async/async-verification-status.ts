@@ -1,54 +1,33 @@
-import {
-    EmailPatternEnum,
-    EmailVerificationReason,
-    EmailVerificationSource,
-    IEmailVerificationResponseDto,
-} from '@tuposoft/lead-email-finder/common'
-import { AsyncVerificationSnapshot } from './async-verification-jobs'
+import { IEmailVerificationResponseDto } from '@tuposoft/lead-email-finder/common'
+import { ReadOutcome } from '../../operations/verification-operations-reader'
+import { buildOperationMetadata, VerificationOperationMetadata } from '../../operations/verification-operation-metadata'
+import { VerificationExecutionState } from '../../ports/verification-execution-store'
+import { VerificationResultDetail } from '../../verification-result-reader'
 
 export type AsyncVerificationResult = Omit<IEmailVerificationResponseDto, 'createdAt'>
 
 export type AsyncVerificationStatus =
     | { state: 'queued' }
     | { state: 'running' }
-    | { state: 'completed'; result: AsyncVerificationResult }
-    | { state: 'failed'; failureCode: 'verification_failed' }
+    | { state: 'completed'; result: AsyncVerificationResult; operation: VerificationOperationMetadata }
+    | { state: 'failed'; failureCode: 'verification_failed'; operation: VerificationOperationMetadata }
     | { state: 'unavailable' }
 
-const reasons = new Set<string>(Object.values(EmailVerificationReason))
-const patterns = new Set<string>(Object.values(EmailPatternEnum))
-const sources = new Set<string>([...Object.values(EmailVerificationSource), 'linkedin'])
-
-function nonemptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.trim().length > 0
+/** Nonterminal execution states never surface as a sixth public status value — the browser frontend's status
+ *  vocabulary is fixed at `queued|running|completed|failed|unavailable` and adding a new value would break its
+ *  type-checked per-state copy. `settling` (result already persisted, settlement not yet confirmed) still reads
+ *  as `running`, since the operation is not yet actually done from the caller's perspective. */
+const EXECUTION_STATE_TO_PUBLIC_STATE: Record<VerificationExecutionState, 'queued' | 'running'> = {
+    funding_pending: 'queued',
+    queued: 'queued',
+    awaiting_retry: 'queued',
+    running: 'running',
+    settling: 'running',
+    completed: 'running',
+    canceled: 'running',
 }
 
-function nullableBoolean(value: unknown): value is boolean | null {
-    return value === null || typeof value === 'boolean'
-}
-
-/** Queue return values can outlive code changes; validate before exposing an allowlisted result. */
-function sanitizeResult(value: unknown): AsyncVerificationResult | undefined {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
-    const result = value as Record<string, unknown>
-    if (
-        !nonemptyString(result.id) ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.id) ||
-        !nonemptyString(result.email) ||
-        !nonemptyString(result.localPart) ||
-        !nonemptyString(result.domain) ||
-        !nullableBoolean(result.exists) ||
-        !nullableBoolean(result.catchAll) ||
-        typeof result.reason !== 'string' ||
-        !reasons.has(result.reason) ||
-        !Array.isArray(result.sources) ||
-        !result.sources.every(source => typeof source === 'string' && sources.has(source)) ||
-        (result.format != null && (typeof result.format !== 'string' || !patterns.has(result.format))) ||
-        (result.mxDomain != null && !nonemptyString(result.mxDomain)) ||
-        (result.targetExchange != null && !nonemptyString(result.targetExchange))
-    )
-        return undefined
-
+function toAsyncResult(result: VerificationResultDetail): AsyncVerificationResult {
     return {
         id: result.id,
         email: result.email,
@@ -56,26 +35,30 @@ function sanitizeResult(value: unknown): AsyncVerificationResult | undefined {
         domain: result.domain,
         exists: result.exists,
         catchAll: result.catchAll,
-        reason: result.reason as EmailVerificationReason,
-        sources: [...(result.sources as AsyncVerificationResult['sources'])],
-        ...(result.format != null ? { format: result.format as EmailPatternEnum } : {}),
-        ...(result.mxDomain != null ? { mxDomain: result.mxDomain } : {}),
-        ...(result.targetExchange != null ? { targetExchange: result.targetExchange } : {}),
+        reason: result.reason,
+        sources: result.sources,
+        ...(result.format !== undefined ? { format: result.format } : {}),
+        ...(result.mxDomain !== undefined ? { mxDomain: result.mxDomain } : {}),
+        ...(result.targetExchange !== undefined ? { targetExchange: result.targetExchange } : {}),
     }
 }
 
-export function mapAsyncVerificationStatus(snapshot: AsyncVerificationSnapshot): AsyncVerificationStatus {
-    switch (snapshot.state) {
-        case 'queued':
-        case 'running':
-            return { state: snapshot.state }
-        case 'failed':
-            return { state: 'failed', failureCode: 'verification_failed' }
-        case 'completed': {
-            const result = sanitizeResult(snapshot.result)
-            return result ? { state: 'completed', result } : { state: 'unavailable' }
+/** Maps durable request/execution state (not a BullMQ job snapshot) to the existing five-value public status
+ *  vocabulary, now also carrying the additive `operation` metadata block once settled. `not-found`/`expired`
+ *  outcomes are the caller's responsibility (a 404), never mapped here. */
+export function mapAsyncVerificationStatus(outcome: ReadOutcome, cacheTtlMs: number): AsyncVerificationStatus {
+    switch (outcome.kind) {
+        case 'pending':
+            return { state: EXECUTION_STATE_TO_PUBLIC_STATE[outcome.executionState] }
+        case 'settled': {
+            const evidenceObservedAt = outcome.result?.evidenceObservedAt ?? null
+            const operation = buildOperationMetadata(outcome.request, evidenceObservedAt, cacheTtlMs)
+            return outcome.result
+                ? { state: 'completed', result: toAsyncResult(outcome.result), operation }
+                : { state: 'failed', failureCode: 'verification_failed', operation }
         }
-        default:
+        case 'not-found':
+        case 'expired':
             return { state: 'unavailable' }
     }
 }

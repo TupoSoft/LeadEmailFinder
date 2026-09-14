@@ -1,5 +1,6 @@
 import { CreditReservationService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../ports/verification-clock'
+import { VerificationCooldownReader } from '../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../ports/verification-result-cache-reader'
 import { InsertRequestOutcome, VerificationRequestStore } from '../ports/verification-request-store'
 import { VerificationExecutionRecord, VerificationExecutionStore } from '../ports/verification-execution-store'
@@ -9,6 +10,7 @@ const organizationId = '10000000-0000-4000-8000-000000000001'
 const now = new Date('2026-09-08T00:00:00.000Z')
 const cacheTtlMs = 24 * 60 * 60 * 1000
 const executionDeadlineMs = 24 * 60 * 60 * 1000
+const addressCooldownMs = 60_000
 
 function buildUuidV7(timestampMs: number): string {
     const timestampHex = timestampMs.toString(16).padStart(12, '0')
@@ -40,6 +42,7 @@ describe('VerificationAdmissionService', () => {
     let requests: jest.Mocked<VerificationRequestStore>
     let executions: jest.Mocked<VerificationExecutionStore>
     let cacheReader: jest.Mocked<VerificationResultCacheReader>
+    let cooldownReader: jest.Mocked<VerificationCooldownReader>
     let credits: jest.Mocked<Pick<CreditReservationService, 'reserve' | 'closeAdmissionMany'>>
     let clock: VerificationClock
     let service: VerificationAdmissionService
@@ -71,6 +74,7 @@ describe('VerificationAdmissionService', () => {
             ),
             findById: jest.fn(),
             attachExecution: jest.fn(),
+            settleCanceled: jest.fn(),
         }
         executions = {
             claimOrJoin: jest.fn(),
@@ -84,16 +88,19 @@ describe('VerificationAdmissionService', () => {
             pageNonterminal: jest.fn(),
         }
         cacheReader = { findLatestCandidate: jest.fn().mockResolvedValue(null) }
+        cooldownReader = { findLatestOutcome: jest.fn().mockResolvedValue(null) }
         credits = { reserve: jest.fn(), closeAdmissionMany: jest.fn() }
         clock = { now: () => now }
         service = new VerificationAdmissionService(
             requests,
             executions,
             cacheReader,
+            cooldownReader,
             credits as unknown as CreditReservationService,
             clock,
             cacheTtlMs,
             executionDeadlineMs,
+            addressCooldownMs,
         )
     })
 
@@ -138,6 +145,40 @@ describe('VerificationAdmissionService', () => {
         })
         const outcome = await service.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
         expect(outcome).toEqual({ kind: 'cooldown', requestId: expect.any(String), retryAfterMs: 5_000 })
+    })
+
+    it('reports address-cooldown for a recent inconclusive outcome, creating no request or execution', async () => {
+        cooldownReader.findLatestOutcome.mockResolvedValue({
+            verificationQuality: 'inconclusive',
+            createdAt: new Date(now.getTime() - 10_000),
+        })
+        const outcome = await service.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
+        expect(outcome).toEqual({ kind: 'address-cooldown', retryAfterMs: 50_000 })
+        expect(executions.claimOrJoin).not.toHaveBeenCalled()
+        expect(requests.insert).not.toHaveBeenCalled()
+        expect(credits.reserve).not.toHaveBeenCalled()
+    })
+
+    it('does not apply a cooldown once it has fully elapsed', async () => {
+        cooldownReader.findLatestOutcome.mockResolvedValue({
+            verificationQuality: 'inconclusive',
+            createdAt: new Date(now.getTime() - addressCooldownMs),
+        })
+        executions.claimOrJoin.mockResolvedValue({ kind: 'created', execution: execution() })
+        credits.reserve.mockResolvedValue({} as never)
+        const outcome = await service.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
+        expect(outcome).toEqual({ kind: 'funded', requestId: expect.any(String), executionId: expect.any(String) })
+    })
+
+    it('does not apply a cooldown for a conclusive outcome', async () => {
+        cooldownReader.findLatestOutcome.mockResolvedValue({
+            verificationQuality: 'conclusive_negative',
+            createdAt: new Date(now.getTime() - 1_000),
+        })
+        executions.claimOrJoin.mockResolvedValue({ kind: 'created', execution: execution() })
+        credits.reserve.mockResolvedValue({} as never)
+        const outcome = await service.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
+        expect(outcome).toEqual({ kind: 'funded', requestId: expect.any(String), executionId: expect.any(String) })
     })
 
     it('funds a new execution after a successful reservation', async () => {

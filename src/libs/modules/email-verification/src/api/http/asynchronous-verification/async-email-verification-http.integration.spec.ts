@@ -3,32 +3,34 @@ import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import { NextFunction, Request, Response } from 'express'
 import request from 'supertest'
-import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditGuard, CreditsService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import {
     ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
     AsyncEmailVerificationService,
+    VerifyAsyncOutcome,
 } from '../../../application/delivery/async/async-email-verification.service'
-import { AsyncVerificationJobs } from '../../../application/delivery/async/async-verification-jobs'
-import { VerificationTraceObserver } from '../../../application/verification-trace/verification-trace-observer'
+import { AsyncEmailVerificationJobNotFoundException } from '../../../application/delivery/async/job-not-found.exception'
+import {
+    VERIFICATION_SUBMISSION_LIMITER,
+    VerificationSubmissionLimiter,
+    VerificationSubmissionLimiterUnavailableError,
+} from '../../../application/ports/verification-submission-limiter'
+import {
+    VerificationRateLimitGuard,
+    VERIFICATION_SUBMISSION_RATE_CAPACITY,
+    VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND,
+} from '../verification-rate-limit.guard'
 import { AsyncEmailVerificationController } from './async-email-verification.controller'
 
 const organizationId = '00000000-0000-4000-8000-000000000001'
-const otherOrganizationId = '00000000-0000-4000-8000-000000000002'
-const jobId = '00000000-0000-4000-8000-000000000003'
-const requestId = '00000000-0000-4000-8000-000000000004'
-const verificationId = '00000000-0000-4000-8000-000000000005'
+const operationId = '00000000-0000-4000-8000-000000000003'
 const email = 'test@example.com'
-const jobs: jest.Mocked<AsyncVerificationJobs> = { enqueue: jest.fn(), find: jest.fn() }
-const credits: jest.Mocked<Pick<CreditsService, 'debit'>> = { debit: jest.fn() }
-const traceObserver: jest.Mocked<VerificationTraceObserver> = {
-    enqueued: jest.fn(),
-    completed: jest.fn(),
-    failed: jest.fn(),
-    batchCompleted: jest.fn(),
+const service: jest.Mocked<Pick<AsyncEmailVerificationService, 'verifyAsync' | 'getAsyncVerificationState'>> = {
+    verifyAsync: jest.fn(),
+    getAsyncVerificationState: jest.fn(),
 }
+const limiter: jest.Mocked<VerificationSubmissionLimiter> = { tryConsume: jest.fn() }
 const runPrincipal: AuthPrincipal = {
     credentialKind: 'service_client',
     issuer: 'https://issuer.example.test',
@@ -37,6 +39,11 @@ const runPrincipal: AuthPrincipal = {
     membershipRole: 'member',
     permissions: ['verification:run', 'verification:read'],
     credentialId: 'credential-1',
+}
+
+function buildUuidV7(timestampMs: number): string {
+    const timestampHex = timestampMs.toString(16).padStart(12, '0')
+    return `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`
 }
 
 describe('asynchronous verification HTTP contracts', () => {
@@ -49,19 +56,17 @@ describe('asynchronous verification HTTP contracts', () => {
             providers: [
                 RolePermissionPolicy,
                 PermissionsGuard,
-                CreditGuard,
-                {
-                    provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN,
-                    useValue: new AsyncEmailVerificationService(jobs, traceObserver),
-                },
-                { provide: CreditsService, useValue: credits },
+                VerificationRateLimitGuard,
+                { provide: ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN, useValue: service },
+                { provide: VERIFICATION_SUBMISSION_LIMITER, useValue: limiter },
+                { provide: VERIFICATION_SUBMISSION_RATE_CAPACITY, useValue: 60 },
+                { provide: VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND, useValue: 1 },
             ],
         }).compile()
 
         app = moduleRef.createNestApplication({ logger: false })
         app.use((incoming: Request, _response: Response, next: NextFunction) => {
             if (principal) setAuthPrincipal(incoming, principal)
-            incoming.id = requestId
             next()
         })
         app.useGlobalPipes(new ValidationPipe())
@@ -77,12 +82,9 @@ describe('asynchronous verification HTTP contracts', () => {
     beforeEach(() => {
         jest.clearAllMocks()
         principal = runPrincipal
-        jobs.enqueue.mockReset().mockResolvedValue({ id: jobId })
-        jobs.find.mockReset().mockResolvedValue({
-            organizationId,
-            readStatus: jest.fn().mockResolvedValue({ state: 'queued' }),
-        })
-        credits.debit.mockReset().mockResolvedValue(undefined)
+        limiter.tryConsume.mockResolvedValue({ allowed: true })
+        service.verifyAsync.mockResolvedValue({ kind: 'accepted', id: operationId })
+        service.getAsyncVerificationState.mockResolvedValue({ state: 'queued' })
     })
 
     afterAll(async () => {
@@ -93,40 +95,25 @@ describe('asynchronous verification HTTP contracts', () => {
         return request(app.getHttpServer()).post('/verifyAsync').send(input)
     }
 
-    function expectOneDebit(owner = organizationId): void {
-        expect(credits.debit).toHaveBeenCalledTimes(1)
-        expect(credits.debit).toHaveBeenCalledWith(owner, 1, expect.any(String))
-    }
-
     describe('POST /verifyAsync', () => {
-        it('requires authentication before debit or dispatch', async () => {
+        it('requires authentication before rate limiting or admission', async () => {
             principal = undefined
 
             const response = await verify().expect(401)
 
             expect(response.body).toMatchObject({ message: 'Authentication principal is missing' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
+            expect(limiter.tryConsume).not.toHaveBeenCalled()
+            expect(service.verifyAsync).not.toHaveBeenCalled()
         })
 
-        it('requires verification:run before debit or dispatch', async () => {
+        it('requires verification:run before rate limiting or admission', async () => {
             principal = { ...runPrincipal, permissions: ['verification:read'] }
 
             const response = await verify().expect(403)
 
             expect(response.body).toMatchObject({ message: 'Missing required permission' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
-        })
-
-        it('rejects zero credits with one debit attempt and no dispatch', async () => {
-            credits.debit.mockRejectedValue(new InsufficientCreditsException(organizationId))
-
-            const response = await verify().expect(402)
-
-            expect(response.body).toEqual({ statusCode: 402, message: 'Insufficient credits' })
-            expectOneDebit()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
+            expect(limiter.tryConsume).not.toHaveBeenCalled()
+            expect(service.verifyAsync).not.toHaveBeenCalled()
         })
 
         it.each([
@@ -135,234 +122,206 @@ describe('asynchronous verification HTTP contracts', () => {
             ['localhost', { email: 'test@localhost' }],
             ['blocked company domain', { email: 'test@tuposoft.com' }],
             ['blocked product domain', { email: 'test@leademailfinder.com' }],
-        ])('preserves validation for %s after one debit', async (_description, input) => {
+        ])('preserves validation for %s after counting the submission', async (_description, input) => {
             const response = await verify(input as Record<string, unknown>).expect(400)
 
             expect(response.body).toMatchObject({ message: ['email must be an email'] })
-            expectOneDebit()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
+            expect(limiter.tryConsume).toHaveBeenCalledTimes(1)
+            expect(service.verifyAsync).not.toHaveBeenCalled()
         })
 
-        it('accepts one unchanged email with principal identity and a server trace', async () => {
-            principal = { ...runPrincipal, organizationId: otherOrganizationId }
+        it('rejects an over-limit organization with 429 and an integer Retry-After before admission', async () => {
+            limiter.tryConsume.mockResolvedValue({ allowed: false, retryAfterMs: 2_500 })
 
-            const response = await verify({
-                email: 'TEST@EXAMPLE.COM',
-                organizationId: 'untrusted-organization',
-                credentialId: 'untrusted-credential',
-                requestId: 'untrusted-request',
-            })
-                .set('x-request-id', 'untrusted-header')
+            const response = await verify().expect(429)
+
+            expect(response.body).toMatchObject({ message: 'rate_limited' })
+            expect(response.headers['retry-after']).toBe('3')
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('fails safe with 503 when the limiter cannot respond in time', async () => {
+            limiter.tryConsume.mockRejectedValue(new VerificationSubmissionLimiterUnavailableError('tryConsume'))
+
+            const response = await verify().expect(503)
+
+            expect(response.body).toMatchObject({ message: 'rate_limit_unavailable' })
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('rejects a malformed Idempotency-Key with 400 before calling the service', async () => {
+            const response = await verify().set('Idempotency-Key', 'not-a-uuid').expect(400)
+
+            expect(response.body).toMatchObject({ message: 'invalid_idempotency_key' })
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('rejects an expired Idempotency-Key with 410 before calling the service', async () => {
+            const expiredKey = buildUuidV7(Date.now() - 25 * 60 * 60 * 1000)
+
+            const response = await verify().set('Idempotency-Key', expiredKey).expect(410)
+
+            expect(response.body).toMatchObject({ message: 'idempotency_key_expired' })
+            expect(service.verifyAsync).not.toHaveBeenCalled()
+        })
+
+        it('admits with the caller organization and forwards a valid Idempotency-Key', async () => {
+            principal = { ...runPrincipal, organizationId: 'other-organization' }
+            const key = buildUuidV7(Date.now())
+
+            const response = await verify({ email: 'TEST@EXAMPLE.COM', organizationId: 'untrusted-organization' })
+                .set('Idempotency-Key', key)
                 .expect(202)
 
-            expect(response.body).toEqual({ id: jobId })
-            expectOneDebit(otherOrganizationId)
-            expect(jobs.enqueue).toHaveBeenCalledTimes(1)
-            expect(jobs.enqueue).toHaveBeenCalledWith(
-                { email: 'TEST@EXAMPLE.COM', organizationId: otherOrganizationId, credentialId: 'credential-1' },
-                expect.stringMatching(/^[0-9a-f-]{36}$/),
-            )
-            expect(traceObserver.enqueued).toHaveBeenCalledWith({ requestId, jobId, mode: 'async' })
-            expect(jobs.find).not.toHaveBeenCalled()
+            expect(response.body).toEqual({ id: operationId })
+            expect(service.verifyAsync).toHaveBeenCalledWith({
+                email: 'TEST@EXAMPLE.COM',
+                organizationId: 'other-organization',
+                clientRequestKey: key,
+            })
         })
 
-        it('preserves dispatch failures as a generic 500 after one debit and dispatch attempt', async () => {
-            jobs.enqueue.mockRejectedValue(new Error('private queue diagnostics'))
+        it('maps insufficient-funds to 402', async () => {
+            service.verifyAsync.mockResolvedValue({ kind: 'insufficient-funds', id: operationId })
+
+            const response = await verify().expect(402)
+
+            expect(response.body).toMatchObject({ message: 'insufficient_credits' })
+        })
+
+        it('maps a key-mismatch conflict to 409', async () => {
+            service.verifyAsync.mockResolvedValue({ kind: 'conflict', reason: 'key-mismatch' })
+
+            const response = await verify().expect(409)
+
+            expect(response.body).toMatchObject({ message: 'idempotency_key_conflict' })
+        })
+
+        it('maps a key-expired conflict to 410', async () => {
+            service.verifyAsync.mockResolvedValue({ kind: 'conflict', reason: 'key-expired' })
+
+            const response = await verify().expect(410)
+
+            expect(response.body).toMatchObject({ message: 'idempotency_key_expired' })
+        })
+
+        it('maps address-cooldown to 429 with an integer Retry-After', async () => {
+            service.verifyAsync.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 30_500 } satisfies VerifyAsyncOutcome)
+
+            const response = await verify().expect(429)
+
+            expect(response.body).toMatchObject({ message: 'verification_cooldown' })
+            expect(response.headers['retry-after']).toBe('31')
+        })
+
+        it('preserves an unexpected service failure as a generic 500', async () => {
+            service.verifyAsync.mockRejectedValue(new Error('private diagnostics'))
 
             const response = await verify().expect(500)
 
             expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expectOneDebit()
-            expect(jobs.enqueue).toHaveBeenCalledTimes(1)
-        })
-
-        it('preserves a missing queue ID as a generic 500 after one debit', async () => {
-            jobs.enqueue.mockResolvedValue({ id: undefined })
-
-            const response = await verify().expect(500)
-
-            expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expectOneDebit()
-            expect(jobs.enqueue).toHaveBeenCalledTimes(1)
-        })
-
-        it('does not dispatch when the credit adapter fails unexpectedly', async () => {
-            credits.debit.mockRejectedValue(new Error('private ledger diagnostics'))
-
-            const response = await verify().expect(500)
-
-            expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expectOneDebit()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
         })
     })
 
     describe('GET /verifyAsync/:id', () => {
-        it('requires authentication before queue lookup', async () => {
+        it('requires authentication before reading state', async () => {
             principal = undefined
 
-            await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(401)
+            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(401)
 
-            expect(jobs.find).not.toHaveBeenCalled()
-            expect(credits.debit).not.toHaveBeenCalled()
+            expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
 
-        it('requires verification:read before queue lookup', async () => {
+        it('requires verification:read before reading state', async () => {
             principal = { ...runPrincipal, permissions: ['verification:run'] }
 
-            await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(403)
+            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(403)
 
-            expect(jobs.find).not.toHaveBeenCalled()
-            expect(credits.debit).not.toHaveBeenCalled()
+            expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
 
-        it('requires a UUID before queue lookup', async () => {
+        it('requires a UUID before reading state', async () => {
             const response = await request(app.getHttpServer()).get('/verifyAsync/not-a-uuid').expect(400)
 
             expect(response.body).toMatchObject({ message: ['id must be a UUID'] })
-            expect(jobs.find).not.toHaveBeenCalled()
-            expect(credits.debit).not.toHaveBeenCalled()
+            expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
 
-        it('conceals a foreign job exactly like a missing job before reading state', async () => {
-            jobs.find.mockResolvedValueOnce(undefined)
-            const missing = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(404)
-            const readStatus = jest.fn()
-            jobs.find.mockResolvedValueOnce({ organizationId: otherOrganizationId, readStatus })
+        it('reads with the route ID and caller organization', async () => {
+            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(200)
 
-            const foreign = await request(app.getHttpServer())
-                .get(`/verifyAsync/${jobId}`)
-                .query({ organizationId: otherOrganizationId })
-                .expect(404)
+            expect(service.getAsyncVerificationState).toHaveBeenCalledWith(operationId, organizationId)
+        })
 
-            expect(foreign.body).toEqual(missing.body)
-            expect(foreign.body).toEqual({
+        it('conceals a missing or foreign operation as 404', async () => {
+            service.getAsyncVerificationState.mockRejectedValue(
+                new AsyncEmailVerificationJobNotFoundException(operationId),
+            )
+
+            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(404)
+
+            expect(response.body).toEqual({
                 statusCode: 404,
-                message: `Job with id "${jobId}" not found.`,
+                message: `Job with id "${operationId}" not found.`,
                 error: 'Not Found',
             })
-            expect(readStatus).not.toHaveBeenCalled()
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
         })
 
-        it.each(['queued', 'running', 'unavailable'])(
-            'returns only %s for an owned job without debit or dispatch',
-            async state => {
-                principal = { ...runPrincipal, permissions: ['verification:read'] }
-                jobs.find.mockResolvedValue({
-                    organizationId,
-                    readStatus: jest.fn().mockResolvedValue({ state, result: { email } }),
-                })
-
-                const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
-
-                expect(response.body).toEqual({ state })
-                expect(jobs.find).toHaveBeenCalledWith(jobId)
-                expect(credits.debit).not.toHaveBeenCalled()
-                expect(jobs.enqueue).not.toHaveBeenCalled()
-            },
-        )
-
-        it('exposes the completed verification ID and strips internal result fields on repeated reads', async () => {
-            const readStatus = jest.fn().mockResolvedValue({
+        it('strips internal result fields and keeps operation metadata on a completed read', async () => {
+            service.getAsyncVerificationState.mockResolvedValue({
                 state: 'completed',
                 result: {
-                    id: verificationId,
+                    id: '00000000-0000-4000-8000-000000000005',
                     email,
-                    reason: EmailVerificationReason.AcceptedEmail,
+                    reason: 'accepted_email',
                     localPart: 'test',
                     domain: 'example.com',
                     exists: true,
                     catchAll: null,
                     sources: ['mx'],
-                    createdAt: '2026-09-07T00:00:00.000Z',
                     organizationId,
                     credentialId: 'private-credential',
                     internalDiagnostic: 'private queue diagnostics',
                 },
+                operation: {
+                    id: operationId,
+                    source: 'fresh',
+                    observedAt: new Date('2026-09-13T00:00:00.000Z'),
+                    cacheExpiresAt: new Date('2026-09-14T00:00:00.000Z'),
+                    billing: { state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' },
+                },
+            } as never)
+
+            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(200)
+
+            expect(response.body).toEqual({
+                state: 'completed',
+                result: {
+                    id: '00000000-0000-4000-8000-000000000005',
+                    email,
+                    reason: 'accepted_email',
+                    localPart: 'test',
+                    domain: 'example.com',
+                    exists: true,
+                    catchAll: null,
+                    sources: ['mx'],
+                },
+                operation: {
+                    id: operationId,
+                    source: 'fresh',
+                    observedAt: '2026-09-13T00:00:00.000Z',
+                    cacheExpiresAt: '2026-09-14T00:00:00.000Z',
+                    billing: { state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' },
+                },
             })
-            jobs.find.mockResolvedValue({ organizationId, readStatus })
-
-            for (let attempt = 0; attempt < 2; attempt++) {
-                const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
-
-                expect(response.body).toEqual({
-                    state: 'completed',
-                    result: {
-                        id: verificationId,
-                        email,
-                        reason: EmailVerificationReason.AcceptedEmail,
-                        localPart: 'test',
-                        domain: 'example.com',
-                        exists: true,
-                        catchAll: null,
-                        sources: ['mx'],
-                    },
-                })
-            }
-
-            expect(readStatus).toHaveBeenCalledTimes(2)
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
         })
 
-        it('returns the safe failure code without reading diagnostics or returning a result', async () => {
-            jobs.find.mockResolvedValue({
-                organizationId,
-                readStatus: jest.fn().mockResolvedValue({
-                    state: 'failed',
-                    result: { email },
-                    failedReason: 'private SMTP and proxy diagnostics',
-                    stacktrace: ['private stack'],
-                    failureCode: 'private-provider-code',
-                }),
-            })
+        it('preserves an unexpected read failure as a generic 500', async () => {
+            service.getAsyncVerificationState.mockRejectedValue(new Error('private diagnostics'))
 
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
-
-            expect(response.body).toEqual({ state: 'failed', failureCode: 'verification_failed' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
-        })
-
-        it.each([undefined, null, {}, { email }, { email, exists: 'true' }])(
-            'reports unavailable for an incomplete or invalid completion %#',
-            async result => {
-                jobs.find.mockResolvedValue({
-                    organizationId,
-                    readStatus: jest.fn().mockResolvedValue({ state: 'completed', result }),
-                })
-
-                const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
-
-                expect(response.body).toEqual({ state: 'unavailable' })
-                expect(credits.debit).not.toHaveBeenCalled()
-                expect(jobs.enqueue).not.toHaveBeenCalled()
-            },
-        )
-
-        it('maps unsupported states to unavailable without revealing the state', async () => {
-            jobs.find.mockResolvedValue({
-                organizationId,
-                readStatus: jest.fn().mockResolvedValue({ state: 'unexpected-private-diagnostics' }),
-            })
-
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(200)
-
-            expect(response.body).toEqual({ state: 'unavailable' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
-        })
-
-        it('preserves a queue lookup failure as a generic 500', async () => {
-            jobs.find.mockRejectedValue(new Error('private queue diagnostics'))
-
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${jobId}`).expect(500)
+            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(500)
 
             expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
-            expect(credits.debit).not.toHaveBeenCalled()
-            expect(jobs.enqueue).not.toHaveBeenCalled()
         })
     })
 })

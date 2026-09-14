@@ -1,6 +1,7 @@
 import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationExecutionRecord, VerificationExecutionStore } from '../ports/verification-execution-store'
+import { VerificationRequestStore } from '../ports/verification-request-store'
 import { VerificationSettlementStore } from '../ports/verification-settlement-store'
 import { VerificationExecutionRunner } from './verification-execution-runner'
 import { VerificationSettlementService } from './verification-settlement.service'
@@ -18,11 +19,14 @@ export interface VerificationReconcileReport {
  * forward every `queued`/due `awaiting_retry` row (this PR wires no other dispatcher for those), reclaims a
  * `running` lease abandoned past its shutdown grace, cancels any non-`settling` row past its execution deadline
  * (never overriding a capture already decided), and confirms settlement for an intention persisted but never
- * confirmed.
+ * confirmed. A deadline cancellation that actually transitions the row (not a no-op replay) also releases any
+ * held reservation and settles every linked request as a zero-charge failure — otherwise a deadline-canceled
+ * execution would hold its reservation and leave its requests `pending` forever.
  */
 export class VerificationReconciler {
     constructor(
         private readonly executions: VerificationExecutionStore,
+        private readonly requests: VerificationRequestStore,
         private readonly settlements: VerificationSettlementStore,
         private readonly settlementService: VerificationSettlementService,
         private readonly runner: VerificationExecutionRunner,
@@ -50,7 +54,14 @@ export class VerificationReconciler {
 
         const now = this.clock.now()
         if (execution.deadlineAt.getTime() <= now.getTime()) {
-            await this.executions.cancelIfNoCaptureIntention(execution.executionId, execution.organizationId)
+            const canceled = await this.executions.cancelIfNoCaptureIntention(execution.executionId, execution.organizationId)
+            if (canceled.state === 'canceled') {
+                const reservation = await this.credits.getReservation(execution.organizationId, execution.executionId)
+                if (reservation) {
+                    await this.credits.release(execution.organizationId, execution.executionId)
+                }
+                await this.requests.settleCanceled(execution.executionId, execution.organizationId)
+            }
             return
         }
 

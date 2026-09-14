@@ -2,7 +2,11 @@
 
 This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
 and restores it without restarting the fixture. Requests 08–14 prove that `POST /verify` returns `402` at zero
-balance and debits one credit after a successful `201` request. Between adding that credit and sending the POST request,
+balance and reserves and captures exactly one credit after a successful `201` request, exposing the reservation
+and capture in the response's own `operation.billing` block. Both requests use the dedicated `sync-credit-check@lef.test`
+address, distinct from `person@lef.test`. The durable admission stack now reuses a settled, unexpired result for
+the same organization and address at zero cost. Reusing `person@lef.test` here would silently turn the `402` and
+debit assertions into free cache hits. Between adding that credit and sending the POST request,
 an authenticated request to the retired `GET /verify` route returns the API's normal `404`, and an immediate
 balance read confirms that the credit remains available. Later requests update the authenticated organization's
 stored email and prove that an address outside that organization's cache is concealed as `404 Not Found` rather
@@ -15,12 +19,16 @@ retired GET, and asynchronous requests submit a caller-controlled header and ver
 The synchronous results expose persisted verification UUIDs. The retired route returns no verification result.
 Requests 18–21 read an owned result through `GET /verifications/:id`, confirm that a random missing UUID returns
 `404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 22–24 add one credit,
-enqueue asynchronous verification, and poll for a completed result with its own persisted verification UUID.
-The next completed-status read must return the same result. Requests 25–30 confirm that enqueue debits exactly
-one credit, conceal a missing job with `404`, reject a malformed job UUID with `400`, require authentication for
-status with `401`, and reject enqueue at zero balance with `402`. The final balance stays at zero after polling,
-repeat status reads, and rejected requests. Permission rejection and foreign-job concealment use isolated
-principals in the async HTTP integration suite; this collection uses the provisioned platform credential.
+enqueue asynchronous verification for the dedicated `async-credit-check@lef.test` address, and poll for a
+completed result with its own persisted verification UUID and a `settled`/`fresh` `operation` block.
+The next completed-status read must return the same result. Requests 25–30 confirm that enqueue reserves and
+captures exactly one credit, conceal a missing job with `404`, reject a malformed job UUID with `400`, and require
+authentication for status with `401`. The last of these requests rejects enqueue at zero balance with `402` for
+the never-before-verified `async-credit-check-zero@lef.test` address. That address is distinct from any address
+already settled earlier in this collection, for the same cache-reuse reason as the synchronous credit checks.
+The final balance stays at zero after polling, repeat status reads, and rejected requests. Permission rejection
+and foreign-job concealment use isolated principals in the async HTTP integration suite; this collection uses the
+provisioned platform credential.
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
 identifies the saved result. A result lookup requires `verification:read` and uses the authenticated organization.
 
@@ -39,6 +47,14 @@ the connection before it answers `QUIT`. A final balance read confirms exactly o
 scenario. Existing credit assertions in
 requests 01–30 remain accurate for this collection; these evidence checks do not themselves enable the later
 billing cutover.
+
+Every credit-counting request in this collection (08–30 and 31–46) assumes its target address has never before
+settled a conclusive result against this checkout's development database. The durable admission stack introduced
+by `verification-billing/04` reuses any unexpired settled result at zero cost regardless of balance. A same-day
+rerun of this collection against a development stack that is not reset between runs would therefore see the
+evidence-scenario addresses (31–46) resolve from cache and understate the seven credits requests 31–46 expect to
+consume. `pnpm dev:reset` (used to start the fixture, above) recreates the database and avoids this. Running the
+collection twice against a long-lived stack without a reset in between does not.
 
 Within the email-verification module, `api/http/asynchronous-verification/` adapts enqueue and status requests to
 commands in `application/delivery/async/`. The queue producer, status lookup, and worker live under

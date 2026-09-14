@@ -14,7 +14,7 @@ http:
   body:
     type: json
     data: |-
-      { "email": "person@lef.test" }
+      { "email": "async-credit-check-zero@lef.test" }
 
 runtime:
   scripts:

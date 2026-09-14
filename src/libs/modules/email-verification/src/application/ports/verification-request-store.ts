@@ -62,4 +62,11 @@ export interface VerificationRequestStore {
     findById(requestId: string, organizationId: string): Promise<VerificationRequestRecord | null>
 
     attachExecution(requestId: string, organizationId: string, executionId: string): Promise<void>
+
+    /** Settles every request linked to a canceled execution as a zero-charge failure, with no result ever
+     *  produced. Used only for an execution the reconciler cancels past its deadline (or otherwise without a
+     *  capture intention) — never for the normal capture/release settlement path, which flows through
+     *  `VerificationSettlementStore.confirmSettlement` instead. Idempotent: settling an already-settled request
+     *  again is a no-op for that row. */
+    settleCanceled(executionId: string, organizationId: string): Promise<void>
 }

@@ -16,12 +16,16 @@ Compose-internal API and token endpoint while requiring the public issuer to rem
 the process environment and container standard input; neither command arguments nor reports contain credentials.
 The developer sandbox is required for token requests and bounded status polling.
 
-The fifteen requests cover unauthenticated calls, invalid email and job identifiers, and one real `person@lef.test`
-job with safe public status fields and repeated reads. They also check cross-organization concealment, a single credit
-debit, insufficient credits, and rejection of customer credit administration. Status polling permits only
-`queued`, `running`, `completed`, `failed`, and `unavailable`. The SMTP fixture must complete with a sanitized result;
-failed and unavailable responses stop the run. Rare terminal states are covered with deterministic browser and API
-fixtures without changing live queue data.
+The twenty-three requests cover unauthenticated calls, invalid email and operation identifiers, and one real
+`person@lef.test` operation with safe public status fields, an `operation` billing block, and repeated reads. A
+second submission of the same address reuses the cached result at zero cost, proving the durable admission stack
+charges only a fresh, uncached outcome. A dedicated Idempotency-Key sequence proves a replayed key returns the same
+operation ID without a second charge, a key reused for a different address is rejected as a conflict, and a
+key older than 24 hours is rejected as expired. The suite also checks cross-organization concealment, a single
+credit reservation, insufficient credits, and rejection of customer credit administration. Status polling permits
+only `queued`, `running`, `completed`, `failed`, and `unavailable`. The SMTP fixture must complete with a sanitized
+result; failed and unavailable responses stop the run. Rare terminal states are covered with deterministic browser
+and API fixtures without changing live queue data.
 
 Credit setup applies only to the separately seeded customer organization. The launcher saves its starting balance,
 uses an exclusive local fixture lock, and restores and verifies that balance after success or failure. Run this

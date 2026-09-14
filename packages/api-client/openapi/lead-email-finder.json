@@ -55,6 +55,9 @@
       },
       "AsyncVerificationCompletedResponseDto": {
         "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+          },
           "result": {
             "$ref": "#/components/schemas/AsyncVerificationResultDto"
           },
@@ -67,7 +70,8 @@
         },
         "required": [
           "state",
-          "result"
+          "result",
+          "operation"
         ],
         "type": "object"
       },
@@ -79,6 +83,9 @@
             ],
             "type": "string"
           },
+          "operation": {
+            "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+          },
           "state": {
             "enum": [
               "failed"
@@ -88,7 +95,8 @@
         },
         "required": [
           "state",
-          "failureCode"
+          "failureCode",
+          "operation"
         ],
         "type": "object"
       },
@@ -1282,6 +1290,84 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "VerificationOperationBillingDto": {
+        "properties": {
+          "charged": {
+            "enum": [
+              0,
+              1
+            ],
+            "type": "number"
+          },
+          "reason": {
+            "enum": [
+              "conclusive",
+              "cached",
+              "shared",
+              "inconclusive",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "reserved": {
+            "enum": [
+              0,
+              1
+            ],
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "settled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "reserved",
+          "charged"
+        ],
+        "type": "object"
+      },
+      "VerificationOperationMetadataDto": {
+        "properties": {
+          "billing": {
+            "$ref": "#/components/schemas/VerificationOperationBillingDto"
+          },
+          "cacheExpiresAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "fresh",
+              "cache",
+              "shared"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "observedAt",
+          "cacheExpiresAt",
+          "billing"
         ],
         "type": "object"
       },
@@ -4001,7 +4087,7 @@
     },
     "/verifyAsync": {
       "post": {
-        "description": "Enqueues one email for the authenticated organization. A request may consume one credit, including validation or dispatch failures. Do not automatically retry an uncertain submission. Browser sessions require same-origin mutation protection.",
+        "description": "Admits one email for the authenticated organization through the durable admission stack. A fresh, uncached submission reserves one credit; a cached or shared result costs nothing. An optional canonical lowercase UUIDv7 Idempotency-Key header lets a caller safely retry an uncertain submission. Browser sessions require same-origin mutation protection.",
         "operationId": "AsyncEmailVerificationController_verifyAsync",
         "parameters": [],
         "requestBody": {
@@ -4023,7 +4109,7 @@
                 }
               }
             },
-            "description": "The job was accepted. Use its ID to read status."
+            "description": "The operation was admitted. Use its ID to read status."
           },
           "400": {
             "content": {
@@ -4031,9 +4117,7 @@
                 "schema": {
                   "example": {
                     "error": "Bad Request",
-                    "message": [
-                      "email must be an email"
-                    ],
+                    "message": "invalid_idempotency_key",
                     "statusCode": 400
                   },
                   "properties": {
@@ -4041,10 +4125,7 @@
                       "type": "string"
                     },
                     "message": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": "array"
+                      "type": "string"
                     },
                     "statusCode": {
                       "enum": [
@@ -4061,7 +4142,7 @@
                 }
               }
             },
-            "description": "The email is missing or invalid. Validation runs after the credit guard."
+            "description": "The email is missing/invalid, or the Idempotency-Key header is malformed or repeated."
           },
           "401": {
             "content": {
@@ -4092,13 +4173,13 @@
               "application/json": {
                 "schema": {
                   "example": {
-                    "message": "Insufficient credits",
+                    "message": "insufficient_credits",
                     "statusCode": 402
                   },
                   "properties": {
                     "message": {
                       "enum": [
-                        "Insufficient credits"
+                        "insufficient_credits"
                       ],
                       "type": "string"
                     },
@@ -4117,7 +4198,7 @@
                 }
               }
             },
-            "description": "The organization has insufficient credits; no job was submitted."
+            "description": "The organization has insufficient credits; no execution was funded."
           },
           "403": {
             "content": {
@@ -4148,6 +4229,81 @@
               }
             },
             "description": "The required verification permission or browser mutation protection is missing."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "idempotency_key_conflict",
+                    "statusCode": 409
+                  },
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        409
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The supplied Idempotency-Key was already used for a different address or delivery mode."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "idempotency_key_expired",
+                    "statusCode": 410
+                  },
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        410
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The supplied Idempotency-Key is more than 24 hours old."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "rate_limited",
+                    "statusCode": 429
+                  },
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "enum": [
+                        429
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded."
           }
         },
         "security": [
@@ -4167,7 +4323,7 @@
     },
     "/verifyAsync/{id}": {
       "get": {
-        "description": "Reads an organization-owned job without debit or submission. Missing, expired, and foreign jobs are concealed with the same 404 response.",
+        "description": "Reads an organization-owned operation without debit or submission. Missing, expired, and foreign operations are concealed with the same 404 response.",
         "operationId": "AsyncEmailVerificationController_getAsyncVerificationState",
         "parameters": [
           {
@@ -4187,6 +4343,18 @@
                 "examples": {
                   "completed": {
                     "value": {
+                      "operation": {
+                        "billing": {
+                          "charged": 1,
+                          "reason": "conclusive",
+                          "reserved": 1,
+                          "state": "settled"
+                        },
+                        "cacheExpiresAt": "2026-09-14T00:00:00.000Z",
+                        "id": "00000000-0000-4000-8000-000000000003",
+                        "observedAt": "2026-09-13T00:00:00.000Z",
+                        "source": "fresh"
+                      },
                       "result": {
                         "catchAll": null,
                         "domain": "lef.test",
@@ -4205,6 +4373,18 @@
                   "failed": {
                     "value": {
                       "failureCode": "verification_failed",
+                      "operation": {
+                        "billing": {
+                          "charged": 0,
+                          "reason": "inconclusive",
+                          "reserved": 1,
+                          "state": "settled"
+                        },
+                        "cacheExpiresAt": null,
+                        "id": "00000000-0000-4000-8000-000000000003",
+                        "observedAt": null,
+                        "source": "fresh"
+                      },
                       "state": "failed"
                     }
                   },
@@ -4255,7 +4435,7 @@
                 }
               }
             },
-            "description": "A sanitized job outcome. Unavailable means a trustworthy outcome cannot be reported."
+            "description": "A sanitized operation status. Unavailable means a trustworthy outcome cannot be reported."
           },
           "400": {
             "content": {
@@ -4293,7 +4473,7 @@
                 }
               }
             },
-            "description": "The job ID is not a UUID."
+            "description": "The operation ID is not a UUID."
           },
           "401": {
             "content": {
@@ -4380,7 +4560,7 @@
                 }
               }
             },
-            "description": "No accessible job matches the ID."
+            "description": "No accessible operation matches the ID."
           }
         },
         "security": [

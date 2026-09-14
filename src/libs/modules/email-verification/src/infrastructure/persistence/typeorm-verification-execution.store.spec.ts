@@ -37,6 +37,7 @@ describe('TypeOrmVerificationExecutionStore', () => {
         create: jest.Mock
         save: jest.Mock
         delete: jest.Mock
+        transaction: jest.Mock
     }
     let store: TypeOrmVerificationExecutionStore
 
@@ -49,7 +50,11 @@ describe('TypeOrmVerificationExecutionStore', () => {
             create: jest.fn((_entityClass: unknown, value: unknown) => value),
             save: jest.fn((_entityClass: unknown, value: unknown) => Promise.resolve(value)),
             delete: jest.fn(),
+            transaction: jest.fn(),
         }
+        manager.transaction.mockImplementation(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
+            callback(manager as unknown as EntityManager),
+        )
         const transaction = jest.fn(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
             callback(manager as unknown as EntityManager),
         )

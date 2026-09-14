@@ -6,8 +6,6 @@ import {
     IEmailVerificationResponseDto,
     IEmailVerificationService,
 } from '@tuposoft/lead-email-finder/common'
-import { AsyncEmailVerificationService } from '../../../application/delivery/async/async-email-verification.service'
-import { AsyncEmailVerificationJobNotFoundException } from '../../../application/delivery/async/job-not-found.exception'
 import { AsyncEmailVerificationJobData } from './async-email-verification-job-data.interface'
 import { AsyncEmailVerificationProcessor } from './async-email-verification.processor'
 import {
@@ -16,7 +14,6 @@ import {
     ASYNC_EMAIL_VERIFICATION_QUEUE_NAME,
     asyncEmailVerificationBackoff,
 } from './async-email-verification-queue.config'
-import { BullAsyncVerificationJobs } from './bull-async-verification-jobs'
 
 const redisUrl = process.env['TEST_REDIS_URL']
 const describeWithRedis = redisUrl === undefined ? describe.skip : describe
@@ -33,6 +30,12 @@ type VerificationQueue = Queue<
     typeof ASYNC_EMAIL_VERIFICATION_JOB_NAME
 >
 
+/**
+ * This queue and its worker now serve only batch's child-verification dispatch (`BullBatchChildFlow` enqueues
+ * directly into it by name); the single-submission async route no longer enqueues here at all — see
+ * `email-verification.module.ts`'s durable-stack composition instead. This suite exercises the worker/backoff
+ * behavior real batch children still depend on.
+ */
 describeWithRedis('async verification queue compatibility with Redis and BullMQ', () => {
     let connection: Redis
     let prefix: string
@@ -41,8 +44,6 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
     let parentQueue: Queue
     let queueEvents: QueueEvents
     let worker: Worker<AsyncEmailVerificationJobData, IEmailVerificationResponseDto> | undefined
-    let jobs: BullAsyncVerificationJobs
-    let service: AsyncEmailVerificationService
     let core: jest.Mocked<IEmailVerificationService>
     let productionDelays: number[]
     let workerErrors: Error[]
@@ -72,8 +73,6 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         parentQueue = new Queue('batch-email-verification', { connection, prefix })
         queueEvents = new QueueEvents(ASYNC_EMAIL_VERIFICATION_QUEUE_NAME, { connection, prefix })
         await Promise.all([queue.waitUntilReady(), parentQueue.waitUntilReady(), queueEvents.waitUntilReady()])
-        jobs = new BullAsyncVerificationJobs(queue)
-        service = new AsyncEmailVerificationService(jobs)
         core = { verify: jest.fn().mockResolvedValue(result) }
         productionDelays = []
         workerErrors = []
@@ -114,74 +113,11 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         id: string,
     ): Promise<Job<AsyncEmailVerificationJobData, IEmailVerificationResponseDto>> {
         const data = JSON.parse(DIRECT_JOB_DATA_V1) as AsyncEmailVerificationJobData
-        await expect(jobs.enqueue(data, id)).resolves.toEqual({ id })
+        await queue.add(ASYNC_EMAIL_VERIFICATION_JOB_NAME, data, { jobId: id })
         const job = await queue.getJob(id)
         expect(job).toBeDefined()
         return job!
     }
-
-    it.each([true, false])(
-        'isolates owned status in either lookup order (owner first: %s) without duplicate work',
-        async ownerFirst => {
-            const enqueue = jest.spyOn(jobs, 'enqueue')
-            const { id } = await service.verifyAsync(JSON.parse(DIRECT_JOB_DATA_V1) as AsyncEmailVerificationJobData)
-            const job = (await queue.getJob(id))!
-            expect(id).toMatch(/^[0-9a-f-]{36}$/)
-            expect(await connection.hget(queue.toKey(id), 'data')).toBe(DIRECT_JOB_DATA_V1)
-            expect(job.name).toBe('async-email-verification')
-            expect(job.opts).toMatchObject({ attempts: 5, backoff: { type: 'async-email-verification' }, jobId: id })
-
-            const readOwnedStatus = async (state: 'queued' | 'completed'): Promise<void> => {
-                const owner = async (): Promise<void> => {
-                    const status = await service.getAsyncVerificationState(id, 'owner-organization')
-                    expect(status.state).toBe(state)
-                    if (status.state === 'completed') {
-                        const safeResult = JSON.parse(JSON.stringify(result)) as Record<string, unknown>
-                        delete safeResult.createdAt
-                        expect(status.result).toEqual(safeResult)
-                    } else {
-                        expect(status).toEqual({ state })
-                    }
-                }
-                const foreign = async (): Promise<void> => {
-                    await expect(service.getAsyncVerificationState(id, 'foreign-organization')).rejects.toBeInstanceOf(
-                        AsyncEmailVerificationJobNotFoundException,
-                    )
-                }
-                for (const read of ownerFirst ? [owner, foreign, owner] : [foreign, owner, foreign]) {
-                    await read()
-                }
-            }
-
-            await readOwnedStatus('queued')
-            await expect(service.getAsyncVerificationState(randomUUID(), 'owner-organization')).rejects.toBeInstanceOf(
-                AsyncEmailVerificationJobNotFoundException,
-            )
-            expect(core.verify).not.toHaveBeenCalled()
-            const completed = job.waitUntilFinished(queueEvents, 10_000)
-            await startWorker()
-            await expect(completed).resolves.toEqual(JSON.parse(JSON.stringify(result)))
-            await readOwnedStatus('completed')
-            expect(enqueue).toHaveBeenCalledTimes(1)
-            expect(core.verify).toHaveBeenCalledTimes(1)
-            expect(core.verify).toHaveBeenCalledWith({
-                organizationId: 'owner-organization',
-                email: 'person@example.test',
-                format: undefined,
-                batchId: undefined,
-                trace: { operationId: id, mode: 'async', jobId: id, attempt: 1 },
-            })
-            expect(await queue.getJobCounts('completed', 'failed', 'waiting', 'active', 'delayed')).toEqual({
-                completed: 1,
-                failed: 0,
-                waiting: 0,
-                active: 0,
-                delayed: 0,
-                paused: 0,
-            })
-        },
-        15_000,
-    )
 
     it('deserializes an existing batch child and records one completion on its real parent dependency', async () => {
         const data = JSON.parse(BATCH_CHILD_JOB_DATA_V1) as AsyncEmailVerificationJobData
@@ -245,9 +181,6 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
             { operationId: id, mode: 'async', jobId: id, attempt: 2 },
         ])
         expect((await queue.getJob(id))?.attemptsMade).toBe(2)
-        await expect(service.getAsyncVerificationState(id, 'owner-organization')).resolves.toMatchObject({
-            state: 'completed',
-        })
         expect(await queue.getJobCounts('completed', 'failed')).toEqual({ completed: 1, failed: 0 })
     }, 15_000)
 
@@ -276,10 +209,6 @@ describeWithRedis('async verification queue compatibility with Redis and BullMQ'
         expect(failed.failedReason).toBe('Email verification is temporarily greylisted.')
         expect(JSON.stringify(failed.stacktrace)).not.toContain(result.email)
         expect(JSON.stringify(failed.stacktrace)).not.toContain('owner-credential')
-        await expect(service.getAsyncVerificationState(id, 'owner-organization')).resolves.toEqual({
-            state: 'failed',
-            failureCode: 'verification_failed',
-        })
         expect(await queue.getJobCounts('completed', 'failed')).toEqual({ completed: 0, failed: 1 })
     }, 15_000)
 

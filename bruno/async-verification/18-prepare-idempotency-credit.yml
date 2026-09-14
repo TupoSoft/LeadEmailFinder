@@ -1,0 +1,24 @@
+info:
+    name: prepare-idempotency-credit
+    type: http
+    seq: 18
+http:
+    method: PUT
+    url: '{{baseUrl}}/credits/{{organizationId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{platformToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"amount": 2}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('prepare-idempotency-credit', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.balance).to.equal(2);
+              });

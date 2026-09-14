@@ -1,6 +1,7 @@
 import { CreditReservationService, ReservationRecord } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationExecutionRecord, VerificationExecutionStore } from '../ports/verification-execution-store'
+import { VerificationRequestStore } from '../ports/verification-request-store'
 import {
     VerificationSettlementIntentionRecord,
     VerificationSettlementStore,
@@ -88,24 +89,41 @@ function clock(): VerificationClock {
     return { now: () => now }
 }
 
+function requestsStore(overrides: Partial<jest.Mocked<VerificationRequestStore>> = {}): jest.Mocked<VerificationRequestStore> {
+    return {
+        findByClientKey: jest.fn(),
+        insert: jest.fn(),
+        findById: jest.fn(),
+        attachExecution: jest.fn(),
+        settleCanceled: jest.fn().mockResolvedValue(undefined),
+        ...overrides,
+    }
+}
+
 function reconcilerFixture(
     executionsOverrides: Partial<jest.Mocked<VerificationExecutionStore>> = {},
     settlementsOverrides: Partial<jest.Mocked<VerificationSettlementStore>> = {},
 ): {
     reconciler: VerificationReconciler
     executions: jest.Mocked<VerificationExecutionStore>
+    requests: jest.Mocked<VerificationRequestStore>
     settlements: jest.Mocked<VerificationSettlementStore>
     settlementService: jest.Mocked<VerificationSettlementService>
     runner: jest.Mocked<VerificationExecutionRunner>
     credits: jest.Mocked<CreditReservationService>
 } {
     const executions = executionsStore(executionsOverrides)
+    const requests = requestsStore()
     const settlements = settlementsStore(settlementsOverrides)
     const settlementService = { settle: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<VerificationSettlementService>
     const runner = { execute: jest.fn().mockResolvedValue({ kind: 'settled' }) } as unknown as jest.Mocked<VerificationExecutionRunner>
-    const credits = { getReservation: jest.fn().mockResolvedValue(null) } as unknown as jest.Mocked<CreditReservationService>
+    const credits = {
+        getReservation: jest.fn().mockResolvedValue(null),
+        release: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<CreditReservationService>
     const reconciler = new VerificationReconciler(
         executions,
+        requests,
         settlements,
         settlementService,
         runner,
@@ -113,7 +131,7 @@ function reconcilerFixture(
         clock(),
         LEASE_TAKEOVER_GRACE_MS,
     )
-    return { reconciler, executions, settlements, settlementService, runner, credits }
+    return { reconciler, executions, requests, settlements, settlementService, runner, credits }
 }
 
 describe('VerificationReconciler', () => {
@@ -218,17 +236,49 @@ describe('VerificationReconciler', () => {
         expect(runner.execute).not.toHaveBeenCalled()
     })
 
-    it('cancels a queued execution once its deadline has passed, without driving it through the runner', async () => {
-        const { reconciler, executions, runner } = reconcilerFixture({
+    it('cancels a queued execution once its deadline has passed, releasing its reservation and settling its requests', async () => {
+        const { reconciler, executions, requests, runner, credits } = reconcilerFixture({
             pageNonterminal: jest.fn().mockResolvedValue([
                 execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) }),
             ]),
         })
+        credits.getReservation.mockResolvedValue(reservation())
 
         await reconciler.reconcile(100)
 
         expect(executions.cancelIfNoCaptureIntention).toHaveBeenCalledWith('execution-1', organizationId)
         expect(runner.execute).not.toHaveBeenCalled()
+        expect(credits.release).toHaveBeenCalledWith(organizationId, 'execution-1')
+        expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
+    })
+
+    it('skips releasing credits for a deadline-canceled execution that never held a reservation', async () => {
+        const { reconciler, requests, credits } = reconcilerFixture({
+            pageNonterminal: jest.fn().mockResolvedValue([
+                execution({ state: 'funding_pending', deadlineAt: new Date(now.getTime() - 1) }),
+            ]),
+        })
+        credits.getReservation.mockResolvedValue(null)
+
+        await reconciler.reconcile(100)
+
+        expect(credits.release).not.toHaveBeenCalled()
+        expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
+    })
+
+    it('does not release credits or settle requests when the deadline cancellation is a no-op replay', async () => {
+        const { reconciler, requests, credits } = reconcilerFixture({
+            pageNonterminal: jest.fn().mockResolvedValue([
+                execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) }),
+            ]),
+            cancelIfNoCaptureIntention: jest.fn().mockResolvedValue(execution({ state: 'settling' })),
+        })
+
+        await reconciler.reconcile(100)
+
+        expect(credits.getReservation).not.toHaveBeenCalled()
+        expect(credits.release).not.toHaveBeenCalled()
+        expect(requests.settleCanceled).not.toHaveBeenCalled()
     })
 
     it('settles every pending intention it pages', async () => {

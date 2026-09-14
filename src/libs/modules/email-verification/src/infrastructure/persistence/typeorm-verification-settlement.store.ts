@@ -90,21 +90,24 @@ export class TypeOrmVerificationSettlementStore implements VerificationSettlemen
         return existing ? toIntentionRecord(existing) : null
     }
 
-    async confirmSettlement(executionId: string, organizationId: string): Promise<{ readonly resultId: string }> {
+    async confirmSettlement(
+        executionId: string,
+        organizationId: string,
+    ): Promise<{ readonly resultId: string; readonly normalizedAddress: string; readonly exists: boolean | null }> {
         return this.dataSource.transaction(async manager => {
             const intention = await manager.findOneOrFail(VerificationSettlementIntentionEntity, {
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
-
-            if (intention.state === 'confirmed') {
-                return { resultId: intention.resultId }
-            }
-
             const execution = await manager.findOneOrFail(VerificationExecutionEntity, {
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
+            const result = await manager.findOneByOrFail(EmailVerificationEntity, { id: intention.resultId })
+
+            if (intention.state === 'confirmed') {
+                return { resultId: intention.resultId, normalizedAddress: execution.normalizedAddress, exists: result.exists }
+            }
 
             intention.state = 'confirmed'
             intention.confirmedAt = new Date()
@@ -129,7 +132,7 @@ export class TypeOrmVerificationSettlementStore implements VerificationSettlemen
                 await manager.save(VerificationRequestEntity, linkedRequests)
             }
 
-            return { resultId: intention.resultId }
+            return { resultId: intention.resultId, normalizedAddress: execution.normalizedAddress, exists: result.exists }
         })
     }
 
