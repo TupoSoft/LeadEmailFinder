@@ -88,7 +88,7 @@ describeWithPostgres('CreditsService against a real, freshly-synced Postgres sch
 
         service = moduleRef.get(CreditsService)
         reservations = moduleRef.get(CreditReservationService)
-    })
+    }, 30_000)
 
     afterAll(async () => {
         await moduleRef?.close()

@@ -272,7 +272,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm --filter @tuposoft/lead-email-finder-web lint',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck',
         'corepack pnpm --filter @tuposoft/lead-email-finder-api-client build',
-        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2',
+        'corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1',
         'corepack pnpm --filter @tuposoft/lead-email-finder-web build',
     ],
     contract: [
@@ -312,13 +312,17 @@ describe('Validate workflow syntax and structure', () => {
     })
 
     it('declares bounded independent browser workers and a lightweight aggregate', () => {
-        for (const [id, budget] of [['browser-artifacts', 15], ['browser-ui', 20], ['browser-live', 25]] as const) {
+        for (const [id, budget] of [['browser-artifacts', 30], ['browser-ui', 20], ['browser-live', 25]] as const) {
             expect(workflow.jobs[id]['timeout-minutes']).toBe(budget)
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
             expect(workflow.jobs[id]['runs-on']).toEqual(['self-hosted', 'swarm', 'ubuntu-22', 'docker-isolated'])
         }
+    })
+
+    it('bounds image validation while allowing slow layer downloads on isolated workers', () => {
+        expect(workflow.jobs.images['timeout-minutes']).toBe(60)
     })
 
     it.each([
@@ -436,10 +440,11 @@ describe('Validate workflow syntax and structure', () => {
         for (const step of job.steps.slice(1).filter((step) => step !== noOps[0] && step !== prerequisite)) {
             const selected = `needs.changes.outputs.${flag} == 'true'`
             const cleanup = id === 'browser-live' && [healthReport, stackCleanup].includes(command(step.run))
+            const save = step.uses === 'actions/cache/save@v4'
             expect(condition(step.if)).toBe(cleanup
                 ? `always() && ${selected} && steps.browser-live-checkout.outcome == 'success'`
-                : selected)
-            if (command(step.run) !== 'corepack pnpm docs:lint:changed' && step.uses !== 'actions/cache@v4') {
+                : save ? `${selected} && steps.pnpm-cache.outputs.cache-hit != 'true'` : selected)
+            if (command(step.run) !== 'corepack pnpm docs:lint:changed' && !step.uses?.startsWith('actions/cache/')) {
                 expect(step['continue-on-error']).not.toBe(true)
             }
         }
@@ -509,16 +514,20 @@ describe('Validate workflow syntax and structure', () => {
         ['contract', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
         ['web', 'web', 'corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile'],
         ...browserWorkers.map((id) => [id, 'workspace', 'corepack pnpm install --frozen-lockfile'] as const),
-    ] as const)('%s restores a compatible pnpm store and installs even after a cache miss or restore failure', (id, group, installCommand) => {
+    ] as const)('%s restores dependencies and saves the mandatory install before later validation can fail', (id, group, installCommand) => {
         const job = workflow.jobs[id]
         const stores = job.steps.filter((step) => step.id === 'pnpm-store')
-        const caches = job.steps.filter((step) => step.uses === 'actions/cache@v4')
+        const caches = job.steps.filter((step) => step.uses === 'actions/cache/restore@v4')
+        const saves = job.steps.filter((step) => step.uses === 'actions/cache/save@v4')
         const installs = job.steps.filter((step) => command(step.run) === installCommand)
         expect(stores).toHaveLength(1)
         expect(caches).toHaveLength(1)
+        expect(saves).toHaveLength(1)
         expect(installs).toHaveLength(1)
+        expect(job.steps.some((step) => step.uses === 'actions/cache@v4')).toBe(false)
         const [store] = stores
         const [cache] = caches
+        const [save] = saves
         const [install] = installs
         const corepackIndex = job.steps.findIndex((step) => command(step.run) === 'corepack enable')
         const nodeIndex = job.steps.findIndex((step) => step.uses === 'actions/setup-node@v4')
@@ -527,12 +536,21 @@ describe('Validate workflow syntax and structure', () => {
         expect(job.steps.indexOf(store)).toBeGreaterThan(corepackIndex)
         expect(job.steps.indexOf(cache)).toBeGreaterThan(job.steps.indexOf(store))
         expect(job.steps.indexOf(install)).toBeGreaterThan(job.steps.indexOf(cache))
+        // Save before any tests or build can fail; the implicit success() guard
+        // prevents caching an unsuccessful installation.
+        expect(job.steps.indexOf(save)).toBe(job.steps.indexOf(install) + 1)
         const prefix = `\${{ runner.os }}-\${{ runner.arch }}-node24-pnpm\${{ steps.pnpm-store.outputs.version }}-${group}-`
+        expect(cache.id).toBe('pnpm-cache')
         expect(cache.with?.path).toBe('${{ steps.pnpm-store.outputs.path }}')
         expect(cache.with?.key).toBe(`${prefix}\${{ hashFiles('pnpm-lock.yaml') }}`)
         expect(String(cache.with?.['restore-keys']).trim().split('\n')).toEqual([prefix])
         expect(cache.with?.['fail-on-cache-miss']).not.toBe(true)
         expect(cache['continue-on-error']).toBe(true)
+        expect(save['continue-on-error']).toBe(true)
+        expect(save.with).toEqual({ path: cache.with?.path, key: cache.with?.key })
+        expect(condition(save.if)).toBe(
+            `needs.changes.outputs.${executableFlags[id]} == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'`,
+        )
         expect(install['continue-on-error']).not.toBe(true)
         // Neither a successful restore nor a miss may bypass the authoritative install.
         expect(condition(install.if)).toBe(`needs.changes.outputs.${executableFlags[id]} == 'true'`)
@@ -558,7 +576,7 @@ describe('Validate workflow syntax and structure', () => {
 
     it('does not cache dependencies in jobs that do not install them', () => {
         for (const id of ['changes', 'images', 'browser', 'validate']) {
-            expect(workflow.jobs[id].steps.some((step) => step.uses === 'actions/cache@v4' || step.id === 'pnpm-store')).toBe(false)
+            expect(workflow.jobs[id].steps.some((step) => step.uses?.startsWith('actions/cache') || step.id === 'pnpm-store')).toBe(false)
         }
     })
 

@@ -67,7 +67,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -78,6 +79,13 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.repositoryPolicy == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Test documentation linter
         run: corepack pnpm test:docs-lint
         if: needs.changes.outputs.repositoryPolicy == 'true'
@@ -151,7 +159,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.backend == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -162,6 +171,13 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.backend == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.backend == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
@@ -245,7 +261,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.web == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -256,6 +273,13 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
         if: needs.changes.outputs.web == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.web == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Test premium UI audit
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ui-audit
         if: needs.changes.outputs.web == 'true'
@@ -275,7 +299,7 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
         if: needs.changes.outputs.web == 'true'
       - name: Test web application
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
         if: needs.changes.outputs.web == 'true'
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
@@ -317,7 +341,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.contract == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -328,6 +353,13 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.contract == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.contract == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Check browser API contract drift
         run: corepack pnpm openapi:check
         if: needs.changes.outputs.contract == 'true'
@@ -342,7 +374,7 @@ jobs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
-    timeout-minutes: 35
+    timeout-minutes: 60
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -416,7 +448,7 @@ jobs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
@@ -449,7 +481,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.browser == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -460,6 +493,13 @@ jobs:
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
         if: needs.changes.outputs.browser == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.browser == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
         if: needs.changes.outputs.browser == 'true'
@@ -520,7 +560,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.browser == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -531,6 +572,13 @@ jobs:
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
         if: needs.changes.outputs.browser == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.browser == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
         if: needs.changes.outputs.browser == 'true'
@@ -606,7 +654,8 @@ jobs:
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
         if: needs.changes.outputs.browser == 'true'
       - name: Restore pnpm store
-        uses: actions/cache@v4
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -617,6 +666,13 @@ jobs:
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
         if: needs.changes.outputs.browser == 'true'
+      - name: Save pnpm store after installation
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
+        if: needs.changes.outputs.browser == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
         if: needs.changes.outputs.browser == 'true'
