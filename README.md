@@ -380,6 +380,30 @@ pnpm dev:reset -- --confirm-project=LEF
 
 Any other value is rejected outright, never falls back to a prompt.
 
+If startup fails, collect a read-only diagnostic summary before removing the disposable stack:
+
+```shell
+node scripts/testing/dev-stack-diagnostics.mjs
+```
+
+The collector accepts no arguments and targets only the fixed `lef` project owned by this checkout. It checks
+Keycloak and the API first, followed by their supporting services. Its version-1 JSON includes collection results
+and process and health states. Valid restart counts, exit codes, the Docker memory-termination flag, and the latest
+five health-probe timestamps and exit codes provide more detail. Missing, ambiguous, foreign, and unavailable
+services remain explicit.
+The summary excludes container IDs, paths, labels, credentials, probe output, and raw logs, and creates no files.
+
+For Keycloak and the API, up to 200 recent log lines become only a sampled line count and six event counters:
+`connection-refused`, `connection-timeout`, `name-resolution`, `memory-error`, `database-retry`, and `startup-failed`.
+These counters count lines containing known markers. Zero means no marker appeared in the bounded sample;
+neither a marker nor a readiness timeout establishes the cause of a startup failure. If log collection fails,
+the summary retains safe inspection metadata and becomes partial.
+
+Collection has a 45-second total budget, a five-second limit and 65,536-byte output limit per Docker command,
+and a 32,768-byte JSON limit. Commands that fail, time out, or exceed the output limit discard their raw output.
+Browser validation runs this advisory step immediately after a selected reset fails. The original reset failure
+still fails validation, and final service reporting and cleanup still run even if collection fails.
+
 Each run seeds:
 
 | Fixture                   | Identity                                       | Notes                                                                                                |

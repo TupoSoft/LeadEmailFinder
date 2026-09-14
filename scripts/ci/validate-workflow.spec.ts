@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { isMap, parseAllDocuments } from 'yaml'
@@ -154,6 +155,8 @@ if (!isRecord(webPackage) || !isRecord(webPackage.scripts)) {
 const webScripts = webPackage.scripts
 const webCommand = 'corepack pnpm --filter @tuposoft/lead-email-finder-web'
 const workspaceWebBuild = `${webCommand} build`
+const resetCommand = 'corepack pnpm dev:reset -- --confirm-project=LEF'
+const diagnosticsCommand = 'node scripts/testing/dev-stack-diagnostics.mjs'
 const previewSuites = [
     'test:e2e:prebuilt',
     'test:service-clients',
@@ -184,7 +187,8 @@ const browserCommands: Record<(typeof browserWorkers)[number], string[]> = {
     'browser-ui': [workspaceWebBuild, ...previewSuites.map((suite) => `${webCommand} ${suite}`)],
     'browser-live': [
         'corepack pnpm test:gateway',
-        'corepack pnpm dev:reset -- --confirm-project=LEF',
+        resetCommand,
+        diagnosticsCommand,
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
         `${webCommand} browser-fixtures:bootstrap`,
@@ -215,7 +219,11 @@ function expectBrowserInventory(jobs: Record<string, Job>, id: (typeof browserWo
     expect(actual.map((step) => command(step.run))).toEqual(browserCommands[id].map(command))
     for (const step of actual) {
         expect(step.name).toEqual(expect.any(String))
-        expect(step['continue-on-error']).not.toBe(true)
+        if (id === 'browser-live' && command(step.run) === diagnosticsCommand) {
+            expect(step['continue-on-error']).toBe(true)
+        } else {
+            expect(step['continue-on-error']).not.toBe(true)
+        }
     }
     const allCommands = [...browserWorkers, 'browser'].flatMap((worker) => jobs[worker].steps.map((step) => command(step.run)))
     for (const expected of browserCommands[id]) {
@@ -240,6 +248,32 @@ function expectWorkspaceBuildPrerequisite(steps: Step[]): void {
         // The selection-only condition retains GitHub's implicit success() guard.
         expect(condition(consumer.if)).toBe("needs.changes.outputs.browser == 'true'")
         expect(consumer['continue-on-error']).not.toBe(true)
+    }
+}
+
+function expectStartupDiagnosticsFlow(steps: Step[]): void {
+    const resets = steps.filter((step) => command(step.run) === resetCommand)
+    const collectors = steps.filter((step) => command(step.run) === diagnosticsCommand)
+    const reports = steps.filter((step) => command(step.run) === healthReport)
+    const cleanups = steps.filter((step) => command(step.run) === stackCleanup)
+    for (const matches of [resets, collectors, reports, cleanups]) expect(matches).toHaveLength(1)
+    const [reset] = resets
+    const [collector] = collectors
+    expect(reset.id).toBe('dev-reset')
+    expect(condition(reset.if)).toBe("needs.changes.outputs.browser == 'true'")
+    expect(reset['continue-on-error']).not.toBe(true)
+    expect(steps.indexOf(collector)).toBe(steps.indexOf(reset) + 1)
+    expect(condition(collector.if)).toBe("always() && needs.changes.outputs.browser == 'true' && steps.dev-reset.outcome == 'failure'")
+    expect(collector['continue-on-error']).toBe(true)
+    expect(collector['timeout-minutes']).toBe(1)
+    expect(steps.indexOf(reports[0])).toBeGreaterThan(steps.indexOf(collector))
+    expect(steps.indexOf(cleanups[0])).toBe(steps.length - 1)
+    for (const step of [...reports, ...cleanups]) {
+        expect(condition(step.if)).toBe(
+            "always() && needs.changes.outputs.browser == 'true' && steps.browser-live-checkout.outcome == 'success'",
+        )
+        expect(step['timeout-minutes']).toBe(5)
+        expect(step['continue-on-error']).not.toBe(true)
     }
 }
 
@@ -383,6 +417,8 @@ describe('Validate workflow syntax and structure', () => {
             expect({ ...job.env, ...prerequisite.env }.BROWSER_ARTIFACTS_RESULT).toBe('${{ needs.browser-artifacts.result }}')
         }
         for (const step of job.steps.slice(1).filter((step) => step !== noOps[0] && step !== prerequisite)) {
+            // The failure-only advisory collector has a separate exact contract below.
+            if (id === 'browser-live' && command(step.run) === diagnosticsCommand) continue
             const selected = `needs.changes.outputs.${flag} == 'true'`
             const cleanup = id === 'browser-live' && [healthReport, stackCleanup].includes(command(step.run))
             expect(condition(step.if)).toBe(cleanup
@@ -674,7 +710,8 @@ describe('Validate workflow syntax and structure', () => {
         for (const run of browserCommands['browser-live'].slice(2)) {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
         }
-        for (const run of browserCommands['browser-live'].slice(5)) {
+        const bootstrapIndex = browserCommands['browser-live'].indexOf(`${webCommand} browser-fixtures:bootstrap`)
+        for (const run of browserCommands['browser-live'].slice(bootstrapIndex + 1)) {
             before(`${webCommand} browser-fixtures:bootstrap`, run)
         }
         for (const run of [
@@ -814,6 +851,172 @@ describe('browser workspace build reuse', () => {
             expect(execution.status).toBe(expectedExit)
             expect(execution.stderr).toBe('')
             expect(execution.stdout).toBe(buildExit === 0 ? `build\n${suite}:prebuilt\n` : 'build\n')
+        }
+    })
+})
+
+describe('browser startup diagnostics', () => {
+    it('collects only immediately after a selected reset fails and preserves cleanup after checkout', () => {
+        expectStartupDiagnosticsFlow(workflow.jobs['browser-live'].steps)
+    })
+
+    it.each([
+        'missing reset ID',
+        'ignored reset failure',
+        'missing collector',
+        'duplicate collector',
+        'late collector',
+        'collection after success',
+        'collection when unselected',
+        'collection after any failure',
+        'implicit success guard',
+        'mandatory collector',
+        'unbounded collector',
+        'early cleanup',
+        'conditional cleanup',
+    ])('rejects the startup diagnostics regression: %s', (regression) => {
+        const steps = workflow.jobs['browser-live'].steps.map((step) => ({ ...step }))
+        const reset = steps.find((step) => command(step.run) === resetCommand)!
+        const collectorIndex = steps.findIndex((step) => command(step.run) === diagnosticsCommand)
+        const collector = steps[collectorIndex]
+        const cleanupIndex = steps.findIndex((step) => command(step.run) === stackCleanup)
+        switch (regression) {
+            case 'missing reset ID':
+                delete reset.id
+                break
+            case 'ignored reset failure':
+                reset['continue-on-error'] = true
+                break
+            case 'missing collector':
+                steps.splice(collectorIndex, 1)
+                break
+            case 'duplicate collector':
+                steps.push({ ...collector })
+                break
+            case 'late collector':
+                steps.splice(collectorIndex + 1, 0, ...steps.splice(collectorIndex, 1))
+                break
+            case 'collection after success':
+                collector.if = "always() && needs.changes.outputs.browser == 'true'"
+                break
+            case 'collection when unselected':
+                collector.if = "always() && steps.dev-reset.outcome == 'failure'"
+                break
+            case 'collection after any failure':
+                collector.if = "failure() && needs.changes.outputs.browser == 'true'"
+                break
+            case 'implicit success guard':
+                collector.if = "needs.changes.outputs.browser == 'true' && steps.dev-reset.outcome == 'failure'"
+                break
+            case 'mandatory collector':
+                delete collector['continue-on-error']
+                break
+            case 'unbounded collector':
+                delete collector['timeout-minutes']
+                break
+            case 'early cleanup':
+                steps.splice(collectorIndex, 0, ...steps.splice(cleanupIndex, 1))
+                break
+            case 'conditional cleanup':
+                steps[cleanupIndex].if = "needs.changes.outputs.browser == 'true'"
+                break
+        }
+        expect(() => expectStartupDiagnosticsFlow(steps)).toThrow()
+    })
+
+    it.each([
+        { resetExit: 0, collectorExit: 0 },
+        { resetExit: 17, collectorExit: 0 },
+        { resetExit: 17, collectorExit: 29 },
+    ])('simulates reset exit $resetExit and collector exit $collectorExit while retaining cleanup and aggregate status', ({ resetExit, collectorExit }) => {
+        const steps = workflow.jobs['browser-live'].steps
+        expectStartupDiagnosticsFlow(steps)
+        const fixture = mkdtempSync(resolve(tmpdir(), 'lef-startup-workflow-'))
+        const resource = resolve(fixture, 'disposable-stack')
+        const summary = {
+            schemaVersion: 1,
+            collectionStatus: 'partial',
+            services: Object.fromEntries(
+                ['keycloak', 'api', 'keycloak-postgres', 'postgres', 'redis', 'garage', 'web', 'bullboard']
+                    .map((service) => [service, { result: 'missing' }]),
+            ),
+        }
+        const run = (expected: string): string => steps.find((step) => command(step.run) === expected)!.run!
+        try {
+            // Run the configured commands against shell fixtures. This models the
+            // asserted failure/always contracts; it does not evaluate Actions expressions.
+            const execution = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', `
+                corepack() {
+                    test "$*" = 'pnpm dev:reset -- --confirm-project=LEF' || return 98
+                    mkdir "$STACK_RESOURCE"
+                    printf 'reset\\n'
+                    return "$RESET_EXIT"
+                }
+                node() {
+                    test "$*" = 'scripts/testing/dev-stack-diagnostics.mjs' || return 98
+                    test -d "$STACK_RESOURCE" || return 98
+                    printf '%s\\n' "$DIAGNOSTIC_SUMMARY"
+                    return "$COLLECTOR_EXIT"
+                }
+                docker() {
+                    case "$*" in
+                        'compose -f docker/compose.yaml ps')
+                            test -d "$STACK_RESOURCE"
+                            printf 'health\\n'
+                            ;;
+                        'compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans')
+                            rmdir "$STACK_RESOURCE"
+                            printf 'cleanup\\n'
+                            ;;
+                        *) return 98 ;;
+                    esac
+                }
+                cleanup() {
+                    ${run(healthReport)}
+                    ${run(stackCleanup)}
+                }
+                trap cleanup EXIT
+                reset_status=0
+                ${run(resetCommand)} || reset_status=$?
+                if [ "$reset_status" -ne 0 ]; then
+                    ${run(diagnosticsCommand)} || true
+                fi
+                exit "$reset_status"
+            `], {
+                cwd: root,
+                encoding: 'utf8',
+                timeout: 5000,
+                env: {
+                    ...process.env,
+                    STACK_RESOURCE: resource,
+                    RESET_EXIT: String(resetExit),
+                    COLLECTOR_EXIT: String(collectorExit),
+                    DIAGNOSTIC_SUMMARY: JSON.stringify(summary),
+                },
+            })
+            expect(execution.error).toBeUndefined()
+            expect(execution.stderr).toBe('')
+            expect(execution.status).toBe(resetExit)
+            expect(existsSync(resource)).toBe(false)
+            const lines = execution.stdout.trim().split('\n')
+            expect(lines).toEqual(resetExit === 0
+                ? ['reset', 'health', 'cleanup']
+                : ['reset', JSON.stringify(summary), 'health', 'cleanup'])
+            if (resetExit !== 0) expect(JSON.parse(lines[1])).toEqual(summary)
+            const browserNeeds = successfulBrowserNeeds()
+            browserNeeds['browser-live'].result = execution.status === 0 ? 'success' : 'failure'
+            const browser = runBrowserSummary(browserNeeds)
+            expect(browser.error).toBeUndefined()
+            expect(browser.status).toBe(resetExit === 0 ? 0 : 1)
+            if (resetExit !== 0) expect(browser.stderr).toContain('browser-live')
+            const needs = successfulNeeds()
+            needs.browser.result = browser.status === 0 ? 'success' : 'failure'
+            const aggregate = runSummary(needs)
+            expect(aggregate.error).toBeUndefined()
+            expect(aggregate.status).toBe(resetExit === 0 ? 0 : 1)
+            if (resetExit !== 0) expect(aggregate.stderr).toContain('browser')
+        } finally {
+            rmSync(fixture, { recursive: true, force: true })
         }
     })
 })

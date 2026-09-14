@@ -643,8 +643,14 @@ jobs:
         run: corepack pnpm test:gateway
         if: needs.changes.outputs.browser == 'true'
       - name: Reset, provision, and check disposable development stack
+        id: dev-reset
         run: corepack pnpm dev:reset -- --confirm-project=LEF
         if: needs.changes.outputs.browser == 'true'
+      - name: Collect safe stack startup diagnostics
+        if: always() && needs.changes.outputs.browser == 'true' && steps.dev-reset.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 1
+        run: node scripts/testing/dev-stack-diagnostics.mjs
       - name: Test genuine same-origin browser session and log privacy
         run: corepack pnpm test:web-live
         if: needs.changes.outputs.browser == 'true'
