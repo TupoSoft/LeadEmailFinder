@@ -123,6 +123,7 @@ describe('invitation authority and acceptance', () => {
         api.accept = vi.fn().mockReturnValue(pending.promise)
         mount(api)
         const password = await screen.findByLabelText<HTMLInputElement>('Password', { exact: true })
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Accept invitation' })).toHaveFocus())
         fireEvent.change(password, { target: { value: 'short' } })
         fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }))
         expect(password).toHaveFocus()

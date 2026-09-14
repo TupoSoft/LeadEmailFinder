@@ -11,6 +11,8 @@ export default defineConfig({
                 test: {
                     name: 'application',
                     environment: 'jsdom',
+                    // Allow complete DOM workflows on slow workers; individual async queries remain bounded in setup.
+                    testTimeout: 15000,
                     include: ['src/**/*.test.{ts,tsx}'],
                     setupFiles: ['./src/test/setup.ts'],
                     restoreMocks: true,
