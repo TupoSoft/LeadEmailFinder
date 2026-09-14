@@ -31,6 +31,20 @@ authenticated credit balance. Reset refuses another checkout's containers or an 
 and validates the project labels and exact allowlisted volume names before deletion. Stop overlays before reset.
 The command removes development data; inspect its printed targets before confirming it.
 
+Reset allows Keycloak up to 300 seconds to become healthy. Set `DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS` to a
+decimal integer from 1 through 600 to override that deadline. Empty values, signs, spaces, leading zeros,
+fractions, and exponents are rejected before any Docker operation or fixture deletion. For example:
+
+```sh
+DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS=450 corepack pnpm dev:reset -- --confirm-project=LEF
+```
+
+Other services retain their 120-second readiness budgets. Each budget includes inspection time and polling
+delays; each Docker inspection is limited to five seconds or the remaining budget. Reset stops if a container
+is dead or does not become healthy before its deadline, so failed infrastructure readiness prevents provisioning
+and seeds. Readiness messages contain only the container name, budget, elapsed time, and normalized result.
+This setting leaves service health probes and CI job deadlines unchanged; a longer wait cannot fix a startup error.
+
 ## Route Ownership
 
 | Public path | Owner and result |

@@ -23,6 +23,10 @@ CONTAINERS="lef-postgres-1 lef-redis-1 lef-garage-1 lef-keycloak-postgres-1 lef-
 VOLUME_PATTERN="^lef_(postgres-data|redis-data|keycloak-postgres-data)\$"
 EXPECTED_VOLUME_COUNT=3
 
+# An explicitly empty override must fail just like any other invalid value, before Docker or deletion.
+KEYCLOAK_TIMEOUT_SECONDS="${DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS-300}"
+node scripts/testing/wait-container-healthy.mjs --validate-timeout "${KEYCLOAK_TIMEOUT_SECONDS}"
+
 print_targets() {
     printf '\nThis will stop and recreate the following %s development containers:\n' "${PROJECT_NAME}"
     # shellcheck disable=SC2086 -- deliberate word-splitting of a fixed, literal space-separated list.
@@ -126,19 +130,7 @@ remove_browser_fixture_state() {
 }
 
 wait_healthy() {
-    container="$1"
-    timeout="${2:-120}"
-    elapsed=0
-    while :; do
-        status="$(docker inspect --format='{{.State.Health.Status}}' "${container}" 2>/dev/null || echo missing)"
-        [ "${status}" = healthy ] && return 0
-        if [ "${elapsed}" -ge "${timeout}" ]; then
-            printf 'Timed out waiting for %s to become healthy (last status: %s)\n' "${container}" "${status}" >&2
-            exit 1
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
+    node scripts/testing/wait-container-healthy.mjs "$1" "${2:-120}"
 }
 
 run_api_smoke_test() {
@@ -206,7 +198,7 @@ wait_healthy lef-postgres-1
 wait_healthy lef-redis-1
 wait_healthy lef-garage-1
 wait_healthy lef-keycloak-postgres-1
-wait_healthy lef-keycloak-1
+wait_healthy lef-keycloak-1 "${KEYCLOAK_TIMEOUT_SECONDS}"
 
 # Every provisioning command must target the same fixed project and public endpoints as this reset.
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_ID}"

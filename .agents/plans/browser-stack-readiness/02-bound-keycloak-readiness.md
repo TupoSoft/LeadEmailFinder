@@ -11,8 +11,8 @@ provisioning and an authenticated smoke test, or a bounded failure that stops de
 
 ## Progress
 
-- [ ] (2026-09-14) Make the Keycloak readiness deadline configurable and bound health polling.
-- [ ] (2026-09-14) Test delayed readiness, deadline expiry, invalid settings, and reset safety.
+- [x] (2026-09-14) Make the Keycloak readiness deadline configurable and bound health polling.
+- [x] (2026-09-14) Test delayed readiness, deadline expiry, invalid settings, and reset safety.
 - [ ] (2026-09-14) Run focused checks and record a reset result on an isolated Docker daemon.
 - [ ] (2026-09-14) Record CI results at the implementation revision and any remaining failures.
 
@@ -22,7 +22,11 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- (2026-09-14) PR #595 remains open at `c6d444f43c5f5667e427b3ecc1b84532e7814a14`. The implementation
+  branch starts there and merges current master `adf0e719f508b851d56629547a0a221fba4d21da`, which adds
+  the readiness plans. The approved runner labels are present before publication.
+- (2026-09-14) The local sandbox rejects synthetic child processes in workflow tests with `EPERM`.
+  The same checks pass with child-process execution enabled; this is separate from application readiness.
 
 ## Decision Log
 
@@ -34,10 +38,17 @@ None yet.
   polling counter excludes inspection time, so a stalled Docker command has no deadline. Date/Author: 2026-09-14, Codex planning.
 - Decision: Retain other services' 120-second defaults, existing health probes, and the job deadline.
   Rationale: the evidence identifies the polling deadline for Keycloak. Date/Author: 2026-09-14, Codex planning.
+- Decision: Keep the process adapter and polling function in one dependency-free Node module with injected
+  timing and inspection functions. Rationale: this separates process control from readiness decisions without
+  introducing a general process abstraction or changing shell orchestration. Date/Author: 2026-09-14, Codex implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+The reset now validates its Keycloak allowance before any Docker command or fixture deletion, defaults to
+300 seconds, and preserves every other service's 120-second allowance. The Node helper uses one monotonic
+deadline, bounded inspection output, forced child termination, and normalized readiness results. Synthetic
+tests cover delayed recovery, late health, unavailable or malformed inspection, transient lifecycle states,
+dead containers, and failure propagation through the reset. Runtime and Actions results are still pending.
 
 ## Context and Orientation
 
@@ -168,12 +179,30 @@ the helper, shell integration, tests, and setting documentation together, preser
 
 ## Artifacts and Notes
 
+Implementation began on 2026-09-14 in the isolated checkout branch `kk/626-bound-keycloak-readiness`.
+Issue #626 was found by its `browser-stack-readiness/02` marker, assigned to `KyryloKupin`, and moved to
+the `In Progress` status in Project 9.
+
+Focused evidence on 2026-09-14:
+
+- The helper's 46 tests and reset harness's 28 tests pass, including actual synthetic child termination.
+- `corepack pnpm test -- validate-workflow execplan-repository-fixture --runInBand`: 142 tests pass.
+- Node and shell syntax checks, focused ESLint, new helper Prettier checks, `corepack pnpm architecture:check`
+  (nine modules, zero violations), `corepack pnpm test:ci-paths`, and `git diff --check` pass.
+- Temporary negative controls fail as expected: reducing the shell default to 120 breaks the default-budget
+  assertion; restarting the deadline on every retry incorrectly allows delayed health with a 120-second budget.
+- `corepack pnpm docs:lint -- docker/README.md .agents/plans/browser-stack-readiness` passes all four files.
+
+An empty, separate rootless Docker daemon was created with its socket, data, configuration, and execution
+directories under `/tmp/lef-issue-626-docker.CHmj4p`. The live reset is running against only that daemon,
+with `API_START_COMMAND='pnpm exec nest start'` and the timeout override unset. Runtime and selected Actions
+evidence remain pending; no successful live or Bruno result is claimed.
+
 Diagnosis used PR head `c6d444f43c5f5667e427b3ecc1b84532e7814a14`; Actions tested merge commit
 `9b8acee4aaad9e062837ef39e35199221b03fa1d` into `49aa9442d0355846ea5d760f06d4cb0b1ea35138`.
 The [failed browser job](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34782151912/job/103812948004)
 and [dependent validation failure](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34782151912/job/103824792241)
-are historical evidence, not validation of this plan. Record implementation commit IDs, commands, results,
-runner identity, and links here when work begins. No runtime checks have executed for this planned change.
+are historical evidence, not validation of this implementation.
 
 ## Plan readiness
 

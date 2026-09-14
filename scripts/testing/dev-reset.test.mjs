@@ -16,6 +16,16 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 
 const checkoutRoot = resolve(import.meta.dirname, '../..')
+const readinessHelper = 'scripts/testing/wait-container-healthy.mjs'
+
+function readEvents(file) {
+    return existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : []
+}
+
+function readinessCalls(result) {
+    return result.tail.filter(event => event.tool === 'node' && event.args[0] === readinessHelper)
+        .map(event => event.args.slice(1))
+}
 
 function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheritedEnvironment = {}) {
     const directory = mkdtempSync(resolve(tmpdir(), 'lef-reset-test-'))
@@ -26,6 +36,8 @@ function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheri
         resolve(checkoutRoot, 'docker/scripts/dev-reset.sh'),
         resolve(testCheckout, 'docker/scripts/dev-reset.sh'),
     )
+    mkdirSync(resolve(testCheckout, 'scripts/testing'), { recursive: true })
+    copyFileSync(resolve(checkoutRoot, readinessHelper), resolve(testCheckout, readinessHelper))
     const browserUsers = resolve(testCheckout, '.dev/keycloak/browser-users.json')
     const seedMetadata = resolve(testCheckout, '.dev/keycloak/browser-seed.json')
     writeFileSync(browserUsers, 'synthetic enrollment metadata')
@@ -41,8 +53,16 @@ function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheri
     const log = resolve(directory, 'calls.jsonl')
     const tailLog = resolve(directory, 'tail.jsonl')
     const developmentStackFile = resolve(testCheckout, '.dev/keycloak/development-stack.json')
-    if (scenario === 'complete') {
-        mkdirSync(resolve(testCheckout, 'scripts/testing'), { recursive: true })
+    const startsStack = ['complete', 'postgres-dead', 'keycloak-dead', 'keycloak-starting'].includes(scenario)
+    writeFileSync(resolve(directory, 'node'), `#!${process.execPath}
+import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({ tool: 'node', args }) + '\\n');
+const result = spawnSync(${JSON.stringify(process.execPath)}, args, { stdio: 'inherit' });
+process.exit(result.status ?? 1);
+`, { mode: 0o700 })
+    if (startsStack) {
         for (const script of ['development-stack.mjs', 'refresh-development-stack.mjs']) {
             copyFileSync(resolve(checkoutRoot, 'scripts/testing', script), resolve(testCheckout, 'scripts/testing', script))
         }
@@ -74,6 +94,8 @@ if (command === 'keycloak:bootstrap-credential') writeFileSync(process.env.RESET
 if (command === 'keycloak:seed-customer-fixture') writeFileSync(process.env.RESET_TEST_ROOT + '/.dev/keycloak/customer-fixture.json', JSON.stringify({ organizationId: 'synthetic-organization' }));
 `, { mode: 0o700 })
         writeFileSync(resolve(directory, 'curl'), `#!${process.execPath}
+import { appendFileSync } from 'node:fs';
+appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({ tool: 'curl', args: process.argv.slice(2) }) + '\\n');
 const url = process.argv.at(-1);
 if (url.endsWith('/protocol/openid-connect/token')) process.stdout.write(JSON.stringify({ access_token: 'synthetic-token' }));
 else if (url.includes('/credits/')) process.stdout.write(JSON.stringify({ balance: 1000 }));
@@ -88,7 +110,8 @@ import { appendFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 appendFileSync(process.env.RESET_TEST_LOG, JSON.stringify(args) + '\\n');
 const scenario = process.env.RESET_TEST_SCENARIO;
-if (scenario === 'complete') appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({ tool: 'docker', args }) + '\\n');
+const startsStack = process.env.RESET_TEST_STARTS_STACK === 'true';
+appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({ tool: 'docker', args }) + '\\n');
 const services = ['api', 'web', 'postgres', 'redis', 'keycloak'];
 function ownedContainer(service) {
     const root = process.env.RESET_TEST_ROOT;
@@ -120,12 +143,18 @@ if (args.includes('config')) console.log(JSON.stringify({ name: 'lef', services:
 } }));
 else if (args[0] === 'ps') {
     const serviceFilter = args.find(arg => arg.startsWith('label=com.docker.compose.service='));
-    if (scenario === 'complete' && serviceFilter) {
+    if (startsStack && serviceFilter) {
         if (args.includes('label=com.docker.compose.project=lef')) console.log(String(services.indexOf(serviceFilter.split('=').at(-1)) + 1).repeat(64));
     } else if (scenario !== 'orphan-volumes') console.log('synthetic-container');
 }
-else if (scenario === 'complete' && args[0] === 'inspect' && args.some(arg => arg.startsWith('--format'))) console.log('healthy');
-else if (scenario === 'complete' && args[0] === 'inspect' && /^[1-5]{64}$/.test(args[1])) console.log(JSON.stringify([ownedContainer(services[Number(args[1][0]) - 1])]));
+else if (startsStack && args[0] === 'inspect' && args.some(arg => arg.startsWith('--format'))) {
+    const container = args.at(-1);
+    const dead = (scenario === 'postgres-dead' && container === 'lef-postgres-1') ||
+        (scenario === 'keycloak-dead' && container === 'lef-keycloak-1');
+    const starting = scenario === 'keycloak-starting' && container === 'lef-keycloak-1';
+    console.log(dead ? 'dead\\tnone' : starting ? 'running\\tstarting' : 'running\\thealthy');
+}
+else if (startsStack && args[0] === 'inspect' && /^[1-5]{64}$/.test(args[1])) console.log(JSON.stringify([ownedContainer(services[Number(args[1][0]) - 1])]));
 else if (args[0] === 'inspect') console.log(JSON.stringify([{ Config: { Labels: {
     'com.docker.compose.project': 'lef',
     'com.docker.compose.project.working_dir': scenario === 'foreign-checkout' ? '/another/checkout' : process.env.RESET_TEST_ROOT + '/docker',
@@ -133,33 +162,33 @@ else if (args[0] === 'inspect') console.log(JSON.stringify([{ Config: { Labels: 
 } } }]));
 else if (args[0] === 'volume' && args[1] === 'ls') { if (scenario !== 'fresh') console.log(scenario === 'partial-volumes' ? 'lef_postgres-data' : 'lef_postgres-data\\nlef_redis-data\\nlef_keycloak-postgres-data'); }
 else if (args[0] === 'volume' && args[1] === 'inspect') console.log(JSON.stringify([{ Labels: { 'com.docker.compose.project': scenario === 'foreign-volume' ? 'other' : 'lef' } }]));
-else if (args.includes('up') && scenario !== 'complete') process.exit(77);
+else if (args.includes('up') && !startsStack) process.exit(77);
 `,
     )
     chmodSync(docker, 0o700)
     try {
+        const environment = { ...process.env }
+        delete environment.DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS
         const result = spawnSync('sh', ['docker/scripts/dev-reset.sh', ...args], {
             cwd: testCheckout,
             encoding: 'utf8',
             input,
+            timeout: 30000,
             env: {
-                ...process.env,
+                ...environment,
                 PATH: `${directory}:${process.env.PATH}`,
                 RESET_TEST_ROOT: testCheckout,
                 RESET_TEST_LOG: log,
                 RESET_TEST_TAIL_LOG: tailLog,
                 RESET_TEST_SCENARIO: scenario,
+                RESET_TEST_STARTS_STACK: String(startsStack),
                 ...inheritedEnvironment,
             },
         })
-        const calls = readFileSync(log, 'utf8')
-            .trim()
-            .split('\n')
-            .map(line => JSON.parse(line))
         return {
             ...result,
-            calls,
-            tail: existsSync(tailLog) ? readFileSync(tailLog, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [],
+            calls: readEvents(log),
+            tail: readEvents(tailLog),
             developmentStack: existsSync(developmentStackFile) ? JSON.parse(readFileSync(developmentStackFile, 'utf8')) : undefined,
             browserUsersPreserved: existsSync(browserUsers),
             seedMetadataPreserved: existsSync(seedMetadata),
@@ -216,6 +245,63 @@ test('a confirmed first reset removes only the browser enrollment file before re
     assert.ok(result.seedMetadataPreserved)
 })
 
+for (const timeout of ['', '0', '-1', '601', '1.5', '1e2', ' 300', '300 ', '0300', '+300', 'invalid', '\n', '300\n']) {
+    test(`reset rejects Keycloak timeout ${JSON.stringify(timeout)} before Docker calls or fixture deletion`, () => {
+        const result = runReset('complete', ['--confirm-project=LEF'], '', {
+            DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS: timeout,
+        })
+        assert.equal(result.status, 1, result.stderr)
+        assert.deepEqual(result.calls, [])
+        assert.deepEqual(readinessCalls(result), [['--validate-timeout', timeout]])
+        assert.ok(result.browserUsersPreserved)
+        assert.ok(result.seedMetadataPreserved)
+        assert.equal(result.developmentStack.composeProject, 'lef5048fb9')
+        assert.ok(!result.tail.some(event => event.tool === 'pnpm' || event.tool === 'curl'))
+    })
+}
+
+test('reset passes an explicit Keycloak timeout to the real helper and preserves other budgets', () => {
+    const result = runReset('complete', ['--confirm-project=LEF'], '', {
+        DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS: '120',
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(readinessCalls(result), [
+        ['--validate-timeout', '120'],
+        ['lef-postgres-1', '120'],
+        ['lef-redis-1', '120'],
+        ['lef-garage-1', '120'],
+        ['lef-keycloak-postgres-1', '120'],
+        ['lef-keycloak-1', '120'],
+        ['lef-api-1', '120'],
+        ['lef-web-1', '120'],
+    ])
+    assert.match(result.stdout, /Container lef-keycloak-1: budget=120s .* status=healthy outcome=healthy/)
+    assert.match(result.stdout, /Authenticated API smoke test passed:/)
+})
+
+for (const scenario of ['postgres-dead', 'keycloak-dead', 'keycloak-starting']) {
+    test(`reset stops before provisioning and seeds when infrastructure is ${scenario}`, () => {
+        const result = runReset(scenario, ['--confirm-project=LEF'], '', {
+            DEV_RESET_KEYCLOAK_TIMEOUT_SECONDS: '1',
+        })
+        assert.equal(result.status, 1, result.stderr)
+        assert.ok(result.calls.some(args => args.includes('up')))
+        assert.ok(!result.tail.some(event => event.tool === 'pnpm' || event.tool === 'curl'))
+        assert.ok(!readinessCalls(result).some(args => ['lef-api-1', 'lef-web-1'].includes(args[0])))
+        assert.equal(result.developmentStack.composeProject, 'lef5048fb9')
+        assert.ok(result.seedMetadataPreserved)
+        if (scenario === 'postgres-dead') {
+            assert.deepEqual(readinessCalls(result), [['--validate-timeout', '1'], ['lef-postgres-1', '120']])
+            assert.match(result.stderr, /Container lef-postgres-1: budget=120s .* status=dead outcome=dead/)
+        } else {
+            assert.deepEqual(readinessCalls(result).at(-1), ['lef-keycloak-1', '1'])
+            assert.match(result.stderr, scenario === 'keycloak-dead'
+                ? /Container lef-keycloak-1: budget=1s .* status=dead outcome=dead/
+                : /Container lef-keycloak-1: budget=1s .* status=starting outcome=timeout/)
+        }
+    })
+}
+
 test('a successful default reset replaces stale isolated metadata before human seeds and overrides inherited endpoints', () => {
     const result = runReset('complete', ['--confirm-project=LEF'], '', {
         COMPOSE_PROJECT_NAME: 'lef5048fb9',
@@ -228,6 +314,21 @@ test('a successful default reset replaces stale isolated metadata before human s
     })
     assert.equal(result.status, 0, result.stderr)
     assert.match(result.stdout, /Development stack reset complete\./)
+    assert.match(result.stdout, /Authenticated API smoke test passed: organization synthetic-organization has balance 1000/)
+    assert.deepEqual(readinessCalls(result), [
+        ['--validate-timeout', '300'],
+        ['lef-postgres-1', '120'],
+        ['lef-redis-1', '120'],
+        ['lef-garage-1', '120'],
+        ['lef-keycloak-postgres-1', '120'],
+        ['lef-keycloak-1', '300'],
+        ['lef-api-1', '120'],
+        ['lef-web-1', '120'],
+    ])
+    assert.match(result.stdout, /Container lef-keycloak-1: budget=300s .* status=healthy outcome=healthy/)
+    for (const container of ['postgres', 'redis', 'garage', 'keycloak-postgres', 'api', 'web']) {
+        assert.match(result.stdout, new RegExp(`Container lef-${container}-1: budget=120s .* status=healthy outcome=healthy`))
+    }
     assert.equal(result.browserUsersPreserved, false)
     assert.ok(result.seedMetadataPreserved)
     const expectedEnvironment = {
@@ -256,10 +357,24 @@ test('a successful default reset replaces stale isolated metadata before human s
     }
     const webReady = result.tail.findIndex(event => event.tool === 'docker' &&
         event.args[0] === 'inspect' && event.args.includes('lef-web-1'))
+    const keycloakReady = result.tail.findIndex(event => event.tool === 'docker' &&
+        event.args[0] === 'inspect' && event.args.includes('lef-keycloak-1'))
+    const provision = result.tail.findIndex(event => event.command === 'keycloak:provision')
+    const apiReady = result.tail.findIndex(event => event.tool === 'docker' &&
+        event.args[0] === 'inspect' && event.args.includes('lef-api-1'))
     const discovery = result.tail.findIndex(event => event.tool === 'docker' &&
         event.args.some(arg => arg.startsWith('label=com.docker.compose.service=')))
     const firstSeed = result.tail.findIndex(event => event.command === 'keycloak:bootstrap-credential')
+    const customerSeed = result.tail.findIndex(event => event.command === 'keycloak:seed-customer-fixture')
+    const smoke = result.tail.findIndex(event => event.command === 'keycloak:smoke')
+    const tokenRequest = result.tail.findIndex(event => event.tool === 'curl' &&
+        event.args.at(-1).endsWith('/protocol/openid-connect/token'))
+    const creditRequest = result.tail.findIndex(event => event.tool === 'curl' &&
+        event.args.at(-1).endsWith('/credits/synthetic-organization'))
+    assert.ok(keycloakReady >= 0 && provision > keycloakReady && apiReady > provision && webReady > apiReady)
     assert.ok(webReady >= 0 && discovery > webReady && firstSeed > discovery)
+    assert.ok(customerSeed > firstSeed && smoke > customerSeed && tokenRequest > smoke && creditRequest > tokenRequest)
+    assert.ok(result.tail[creditRequest].args.includes('Authorization: Bearer synthetic-token'))
     assert.equal(result.developmentStack.composeProject, 'lef')
     assert.equal(result.developmentStack.apiUrl, expectedEnvironment.API_URL)
     assert.equal(result.developmentStack.keycloakUrl, expectedEnvironment.KEYCLOAK_URL)
