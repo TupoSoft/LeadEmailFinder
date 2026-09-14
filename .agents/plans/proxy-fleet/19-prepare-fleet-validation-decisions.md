@@ -11,9 +11,12 @@ without a running fleet or an installed VM provider. Choosing and proving the ex
 
 ## Progress
 
-- [ ] (2026-09-11) Trace the listener, registry, application, and SMTP fixture paths against the current repository.
-- [ ] (2026-09-11) Write the proposed execution models, lifecycle commands, evidence requirements, and owner questions.
-- [ ] (2026-09-11) Complete static documentation and plan validation; record limitations and hand off the proposal.
+- [x] (2026-09-14) Traced the listener, registry, application, and SMTP fixture paths at revision
+      `2ac6ea303e40e78efca92da8baf82d838a337a6d`.
+- [x] (2026-09-14) Wrote `deploy/proxy-fleet/validation-decisions.md` with execution comparisons, proposed lifecycle
+      commands, evidence requirements, and questions assigned to responsible roles.
+- [x] (2026-09-14) Completed Harper, the repository ExecPlan test, source/link review, shell syntax checks, and
+      whitespace validation. Recorded limitations and prepared the proposal for one documentation pull request.
 
 ## Plan dependencies
 
@@ -23,7 +26,18 @@ without a running fleet or an installed VM provider. Choosing and proving the ex
 
 ## Surprises & Discoveries
 
-None yet.
+- The effective lab worker allow list is currently `172.29.10.0/28`, inherited from
+  `deploy/proxy-fleet/ansible/inventory/group_vars/all.yml`; `vagrant-lab.yml` does not override it. The `.4/32`
+  restriction described in plan 16 is an intended correction, not current source behavior. The proposal records
+  this discrepancy without changing inventory or weakening worker-only acceptance.
+- The full SMTP evidence fixture can supply the required STARTTLS conversation, but it has neither `/last-peer`
+  nor explicit private control binding. Its existing DNS zone points to a Docker-only address. Reusing it on the
+  verifier therefore requires a future fixture entry point, trusted TLS, and temporary DNS for both application
+  MX lookup and proxy target resolution.
+- Fresh-host firewall application writes into a directory before it is created, and reset stops WireGuard before
+  later Swarm operations. These source findings are recorded as plan-16 prerequisites rather than fixed here.
+- The isolated worktree initially had no dependencies. Static validation reuses the existing checkout's ignored
+  `node_modules` through local dependency links; no package or lockfile changes are needed.
 
 ## Decision Log
 
@@ -38,16 +52,27 @@ None yet.
   Rationale: Native Linux/libvirt validation is separate work and does not block a repository-based proposal.
   Date/Author: 2026-09-11, Codex planning.
 
+- Decision: Recommend a temporary controller tunnel through the verifier and a staged Node runtime as candidates.
+  Rationale: They preserve advertised endpoints and reuse the existing peer probe. The proposal makes namespace,
+  privilege, fixture, DNS, and cleanup prerequisites explicit. Guest execution remains an alternative; the project
+  owner and plan-16 implementer retain their execution decisions.
+  Date/Author: 2026-09-14, Codex implementation.
+
 ## Outcomes & Retrospective
 
-Not started.
+The proposal maps all three advertised listeners through health checking, registry reconciliation, allocation, and
+SMTP connection. It compares a temporary controller tunnel, guest-side execution, and an unsuitable endpoint
+override. It recommends a candidate while retaining owner decisions and explicitly labeling procedures that have not run
+and future fixture/application assertions. Static validation and source review passed. No fleet, registry,
+VM provider, guest runtime, or controller network was changed; plan 16 remains conditionally ready.
 
 ## Context and Orientation
 
 `deploy/proxy-fleet/ansible/inventory/vagrant-lab.yml` declares a manager, two proxy nodes, and `verifier-1`. The proxy
 listeners advertise `172.29.10.2:13001`, `172.29.10.2:13002`, and `172.29.10.3:13001`; their egress identities are
-`198.18.0.21`, `.22`, and `.23`. The verifier uses `172.29.10.4` on the WireGuard overlay. The Vagrant guide documents
-direct lifecycle commands. Captured SSH aliases belong in the ignored `.vagrant/proxy-fleet/` directory.
+`198.18.0.21`, `.22`, and `.23`. The verifier uses `172.29.10.4` on the WireGuard overlay. The current worker allow
+list is the whole overlay; the required verifier-only restriction remains a plan-16 correction. The Vagrant guide
+documents direct lifecycle commands. Captured SSH aliases belong in the ignored `.vagrant/proxy-fleet/` directory.
 
 The health check in `scripts/proxy-fleet-swarm/listener-health-check.ts` authenticates through the listener endpoint.
 Reconciliation in `reconcile.ts` publishes the same `bindIp` to the registry for the application to consume. Forwarding a listener to a
@@ -146,6 +171,25 @@ After interruption, resume from the unchecked progress item. Recovery requires c
 pull request's documentation; no guest, service, registry, credential, or controller state is changed.
 
 ## Artifacts and Notes
+
+Inspected revision: `2ac6ea303e40e78efca92da8baf82d838a337a6d`. Issue #619 is assigned to the requesting user and marked
+In Progress on project 9. The documentation handoff preserves plan 16 unchanged, including its conditional readiness.
+External syntax references in the proposal cover OpenSSH, sshuttle, systemd, Node binary verification, and Docker
+remote access. Their inspection is not live execution evidence.
+
+Validation completed on 2026-09-14:
+
+- `corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md`:
+  Harper passed both Markdown files after actionable prose corrections.
+- `corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`:
+  one suite and one test passed; repository plan parsing and dependency resolution succeeded.
+- `bash -n` passed for all 14 proposed shell blocks, without executing their commands. Local Markdown links and
+  complete repository source paths were checked for existence; two independent source reviews were incorporated.
+- `git diff --check` passed. The final scope is this plan and the proposal document, with no runtime or architectural
+  changes. Bruno: not applicable — documentation changes no HTTP behavior.
+
+Live Vagrant, Ansible, Docker, tunnel, registry, fixture, and application scenarios were not run. The future fixture
+and application runner interfaces are proposals, not delivered code. No owner decision is marked resolved.
 
 The handoff is `deploy/proxy-fleet/validation-decisions.md`. Record the inspected revision and sanitized source
 references. Do not include captured SSH files, absolute controller paths, credentials, private keys, or machine IDs.
