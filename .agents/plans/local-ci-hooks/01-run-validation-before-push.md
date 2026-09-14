@@ -27,7 +27,7 @@ developer's running application stack. The same validation is available through 
 - [x] (2026-09-15) Add incremental local selection and explicit full validation while retaining the hosted classifier.
 - [x] (2026-09-15) Pass 85 local Node tests, 308 focused Jest tests, and changed-script ESLint; verify scoped database selection and Playwright listing.
 - [x] (2026-09-15) Pass incremental backend smoke coverage with 207 tests across two files and web smoke coverage with 59 tests across five files.
-- [ ] (2026-09-15) Complete a normal incremental push through the installed hook and record its selected checks and result.
+- [x] (2026-09-15) Pass a normal incremental push through the installed hook without a bypass and verify container removal.
 
 ## Plan dependencies
 
@@ -144,8 +144,11 @@ and `corepack pnpm prepare` installed the hook.
 The user's latest refinement implements incremental local selection within the same pull request. All 85 local
 Node tests, 308 focused Jest tests, and changed-script ESLint passed. Incremental smoke runs passed 207 backend
 tests across two files and 59 web tests across five files. Database dependency discovery and the list of selected
-Playwright cases were also verified. A normal incremental push remains pending; the current database
-evidence proves selection, not execution. Earlier full-selection results remain historical evidence.
+Playwright cases were also verified. A normal incremental push passed without a bypass for
+`ccf09b73bf831885d5d1047556f91697500b0716`, validating the 13 changed paths and removing its container afterward.
+That push ran the selected policy checks and changed-script lint; it did not run application tests, project-wide
+types or builds, or database fixtures. Current incremental database evidence proves selection, not execution.
+Earlier full-selection results remain historical evidence.
 
 Before the incremental refinement, full local CI passed through the normal push hook on 2026-09-15 for committed revision
 `6425e862f0d68c083a129b08adc434d0b64f9143`. All six consumers passed, including all nine gateway tests, every live
@@ -462,8 +465,15 @@ not full-project TypeScript or build validation.
 Playwright's `--list` output selected 12 cases from one public-entry specification; this was listing evidence,
 not browser execution. Actual Jest dependency discovery for `credits.service.ts` selected 39 related test files
 and the scoped credits and payment PostgreSQL commands. These database commands were selected but not executed
-during this refinement. A normal incremental push through the installed hook remains pending. The full
-validation result above belongs to the earlier selection behavior.
+during this refinement. The full validation result above belongs to the earlier selection behavior.
+
+The normal incremental push of `ccf09b73bf831885d5d1047556f91697500b0716` compared against the advertised remote
+revision `27838d63a43e3980bf1ebfd6793cab2139486c05` and exited zero without a hook bypass. Its 13 changed paths
+selected Harper for two Markdown files, all 308 policy Jest tests, selector fixtures, all 85 local Node tests,
+and changed-script backend lint; every selected check passed. Web, contract, image, and browser jobs were
+unselected. Backend application tests, project-wide type checking, builds, and database fixtures did not run.
+`/tmp/lef-incremental-push.log` records the passing local validation result. Docker inspection confirmed that
+the validation container was removed. A separate `ui:audit` run also passed with zero findings.
 
 The issue lookup at the start of implementation found no synced issue for this plan.
 
