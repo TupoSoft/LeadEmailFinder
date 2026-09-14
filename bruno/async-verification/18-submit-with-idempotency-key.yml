@@ -1,7 +1,7 @@
 info:
     name: submit-with-idempotency-key
     type: http
-    seq: 19
+    seq: 18
 http:
     method: POST
     url: '{{baseUrl}}/verifyAsync'

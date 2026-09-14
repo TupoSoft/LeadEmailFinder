@@ -56,7 +56,12 @@
       "AsyncVerificationCompletedResponseDto": {
         "properties": {
           "operation": {
-            "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+              }
+            ],
+            "description": "Optional in the public contract so existing clients written before this field existed keep building —\n a real settled response always includes it."
           },
           "result": {
             "$ref": "#/components/schemas/AsyncVerificationResultDto"
@@ -70,8 +75,7 @@
         },
         "required": [
           "state",
-          "result",
-          "operation"
+          "result"
         ],
         "type": "object"
       },
@@ -84,7 +88,12 @@
             "type": "string"
           },
           "operation": {
-            "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VerificationOperationMetadataDto"
+              }
+            ],
+            "description": "Optional in the public contract so existing clients written before this field existed keep building —\n a real settled response always includes it."
           },
           "state": {
             "enum": [
@@ -95,8 +104,7 @@
         },
         "required": [
           "state",
-          "failureCode",
-          "operation"
+          "failureCode"
         ],
         "type": "object"
       },

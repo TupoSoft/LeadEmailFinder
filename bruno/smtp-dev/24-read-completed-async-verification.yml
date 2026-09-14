@@ -41,9 +41,13 @@ runtime:
           expect(res.body.result.id).not.to.equal(bru.getVar('asyncJobId'));
           expect(res.body.result.email).to.equal('async-credit-check@lef.test');
           expect(res.body.result.reason).to.equal('accepted_email');
+          // This fixture domain accepts every recipient, including the catch-all control probe, so this is
+          // always classified inconclusive: the reservation is released, never captured.
           expect(res.body.operation.id).to.equal(bru.getVar('asyncJobId'));
           expect(res.body.operation.source).to.equal('fresh');
-          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' });
+          expect(res.body.operation.observedAt).to.equal(null);
+          expect(res.body.operation.cacheExpiresAt).to.equal(null);
+          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' });
         });
 
         test('repeated status reads preserve the completed result', function() {

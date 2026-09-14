@@ -400,5 +400,6 @@ redispatched
 redispatch
 backoff
 cooldown
+selectable
 Vitest
 jsdom

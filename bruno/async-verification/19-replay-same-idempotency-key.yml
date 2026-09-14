@@ -1,7 +1,7 @@
 info:
-    name: reject-conflicting-idempotency-key
+    name: replay-same-idempotency-key
     type: http
-    seq: 21
+    seq: 19
 http:
     method: POST
     url: '{{baseUrl}}/verifyAsync'
@@ -15,11 +15,12 @@ http:
     body:
         type: json
         data: |-
-            {"email": "keyed-conflict@lef.test"}
+            {"email": "keyed@lef.test"}
 runtime:
     scripts:
         - type: tests
           code: |-
-              test('reject-conflicting-idempotency-key', function() {
-                expect(res.status).to.equal(409);
+              test('replay-same-idempotency-key', function() {
+                expect(res.status).to.equal(202);
+                expect(res.body.id).to.equal(bru.getVar('idempotentJobId'));
               });

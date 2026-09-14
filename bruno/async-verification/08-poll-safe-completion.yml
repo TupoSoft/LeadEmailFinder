@@ -45,13 +45,15 @@ runtime:
                 expect(result.id).to.match(/^[0-9a-f-]{36}$/i);
                 bru.setVar('completedResult', result);
 
+                // person@lef.test's fixture domain accepts every recipient (including the catch-all control probe),
+                // so this is always classified inconclusive: the reservation is released, never captured.
                 const operation = res.body.operation;
                 expect(Object.keys(operation).sort()).to.deep.equal(['billing', 'cacheExpiresAt', 'id', 'observedAt', 'source']);
                 expect(operation.id).to.equal(bru.getVar('asyncJobId'));
                 expect(operation.source).to.equal('fresh');
-                expect(operation.observedAt).to.be.a('string');
-                expect(operation.cacheExpiresAt).to.be.a('string');
+                expect(operation.observedAt).to.equal(null);
+                expect(operation.cacheExpiresAt).to.equal(null);
                 expect(Object.keys(operation.billing).sort()).to.deep.equal(['charged', 'reason', 'reserved', 'state']);
-                expect(operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1, reason: 'conclusive' });
+                expect(operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' });
                 bru.setVar('completedOperation', operation);
               });

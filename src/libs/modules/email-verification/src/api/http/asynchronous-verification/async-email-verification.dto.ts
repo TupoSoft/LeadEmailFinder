@@ -113,8 +113,10 @@ export class AsyncVerificationCompletedResponseDto {
     @ApiProperty({ type: AsyncVerificationResultDto })
     result: AsyncVerificationResultDto
 
-    @ApiProperty({ type: VerificationOperationMetadataDto })
-    operation: VerificationOperationMetadataDto
+    /** Optional in the public contract so existing clients written before this field existed keep building —
+     *  a real settled response always includes it. */
+    @ApiPropertyOptional({ type: VerificationOperationMetadataDto })
+    operation?: VerificationOperationMetadataDto
 }
 
 export class AsyncVerificationFailedResponseDto {
@@ -124,8 +126,10 @@ export class AsyncVerificationFailedResponseDto {
     @ApiProperty({ type: String, enum: ['verification_failed'] })
     failureCode: 'verification_failed'
 
-    @ApiProperty({ type: VerificationOperationMetadataDto })
-    operation: VerificationOperationMetadataDto
+    /** Optional in the public contract so existing clients written before this field existed keep building —
+     *  a real settled response always includes it. */
+    @ApiPropertyOptional({ type: VerificationOperationMetadataDto })
+    operation?: VerificationOperationMetadataDto
 }
 
 export class AsyncVerificationUnavailableResponseDto {

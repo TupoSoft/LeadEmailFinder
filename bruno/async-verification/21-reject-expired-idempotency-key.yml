@@ -1,7 +1,7 @@
 info:
     name: reject-expired-idempotency-key
     type: http
-    seq: 22
+    seq: 21
 http:
     method: POST
     url: '{{baseUrl}}/verifyAsync'

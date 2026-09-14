@@ -584,7 +584,11 @@ export interface components {
             amount: number;
         };
         AsyncVerificationCompletedResponseDto: {
-            operation: components["schemas"]["VerificationOperationMetadataDto"];
+            /**
+             * @description Optional in the public contract so existing clients written before this field existed keep building —
+             *      a real settled response always includes it.
+             */
+            operation?: components["schemas"]["VerificationOperationMetadataDto"];
             result: components["schemas"]["AsyncVerificationResultDto"];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -595,7 +599,11 @@ export interface components {
         AsyncVerificationFailedResponseDto: {
             /** @enum {string} */
             failureCode: "verification_failed";
-            operation: components["schemas"]["VerificationOperationMetadataDto"];
+            /**
+             * @description Optional in the public contract so existing clients written before this field existed keep building —
+             *      a real settled response always includes it.
+             */
+            operation?: components["schemas"]["VerificationOperationMetadataDto"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}

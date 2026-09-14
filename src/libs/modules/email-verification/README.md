@@ -568,15 +568,20 @@ Focused tests are grouped by behavior:
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) drives real DNS/proxy/SMTP wiring against a trusted, deterministic STARTTLS fixture (`docker/smtp-dev/evidence-server.mjs`) and an intentionally plaintext fixture inside the local Docker network. It proves that the trusted path succeeds and that the plaintext path returns `secure_transport_unavailable` before `MAIL FROM` or `RCPT TO`, rather than testing real-world deliverability. Its fixture-only HTTP control endpoint selects a closed scenario enum so the same collection also proves target
 acceptance, exact `5.1.1` recipient rejection, and an identical `MAIL FROM`-stage rejection staying ineligible.
 Further scenarios cover a bare rejection, an ambiguous `5.7.1` rejection, a temporary rejection, and an accepted
-answer surviving a connection close before `QUIT` completes — one credit each, using independent
-`evidence.lef.test` target addresses. It also
-drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that
-`POST /verify` reserves and captures one credit and rejects a zero balance with `402`, each using its own dedicated
-address never reused elsewhere in the collection, since the durable admission stack now reuses any settled result
-for the same address at zero cost regardless of balance. The retired `GET /verify` returns `404` while one credit
-is available, leaves that balance unchanged, and returns a server request UUID. The collection retains the
-asynchronous checks, including its own dedicated zero-balance and single-credit addresses, and requires all 47
-requests to execute.
+answer surviving a connection close before `QUIT` completes, using independent `evidence.lef.test` target
+addresses. The temporary rejection schedules a durable retry instead of settling immediately — its first backoff
+does not fit the synchronous route's 30-second budget, so it falls back to the same `202` handle the async route
+would return, leaving its own reservation pending rather than captured; the other six scenarios each capture
+exactly one credit immediately. It also
+drains and restores the fixture proxy through [`proxy`](../proxy/README.md), and proves that `POST /verify`
+rejects a zero balance with `402` and, for a successful `201` request against its catch-all default fixture
+domain, reserves then releases one credit rather than capturing it — the plain `@lef.test` MX always accepts its
+catch-all control probe too, so it is never classified conclusive; only the scenario-selectable
+`evidence.lef.test` fixture can produce a chargeable result. Both checks use their own dedicated address, never
+reused elsewhere in the collection, since a just-settled address would still carry the 60-second address cooldown.
+The retired `GET /verify` returns `404` while one credit is available, leaves that balance unchanged, and returns
+a server request UUID. The collection retains the asynchronous checks, including its own dedicated zero-balance
+and single-credit addresses, and requires all 47 requests to execute.
 Its final admin-cache requests cover an owned update and the not-found concealment for an address outside the
 authenticated organization's cache.
 [`bruno/batch-verification`](../../../../bruno/batch-verification/README.md) uploads a fixture CSV, polls to

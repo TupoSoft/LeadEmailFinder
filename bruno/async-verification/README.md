@@ -16,14 +16,17 @@ Compose-internal API and token endpoint while requiring the public issuer to rem
 the process environment and container standard input; neither command arguments nor reports contain credentials.
 The developer sandbox is required for token requests and bounded status polling.
 
-The twenty-three requests cover unauthenticated calls, invalid email and operation identifiers, and one real
-`person@lef.test` operation with safe public status fields, an `operation` billing block, and repeated reads. A
-second submission of the same address reuses the cached result at zero cost, proving the durable admission stack
-charges only a fresh, uncached outcome. A dedicated Idempotency-Key sequence proves a replayed key returns the same
-operation ID without a second charge, a key reused for a different address is rejected as a conflict, and a
-key older than 24 hours is rejected as expired. The suite also checks cross-organization concealment, a single
-credit reservation, insufficient credits, and rejection of customer credit administration. Status polling permits
-only `queued`, `running`, `completed`, `failed`, and `unavailable`. The SMTP fixture must complete with a sanitized
+The twenty-two requests cover unauthenticated calls, invalid email and operation identifiers, and one real
+`person@lef.test` operation with safe public status fields, an `operation` billing block, and repeated reads.
+`person@lef.test`'s fixture domain accepts every recipient, including the catch-all control probe, so this always
+settles inconclusive: the reservation is released, never captured, and a second submission of the same address
+within 60 seconds is rejected with `429 verification_cooldown` before it can reserve another one — proving the
+durable admission stack never lets an inconclusive outcome be resubmitted for free credit exposure. A dedicated
+Idempotency-Key sequence against a distinct address proves a replayed key returns the same operation ID without a
+second charge, a key reused for a different address is rejected as a conflict, and a key older than 24 hours is
+rejected as expired. The suite also checks cross-organization concealment, insufficient credits for a
+never-before-submitted address, and rejection of customer credit administration. Status polling permits only
+`queued`, `running`, `completed`, `failed`, and `unavailable`. The SMTP fixture must complete with a sanitized
 result; failed and unavailable responses stop the run. Rare terminal states are covered with deterministic browser
 and API fixtures without changing live queue data.
 

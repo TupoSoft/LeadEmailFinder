@@ -47,13 +47,15 @@ describe('asynchronous verification OpenAPI contract', () => {
             const component = document.components!.schemas![name] as SchemaObject
             expect(component.properties!.state).toMatchObject({ enum: [state] })
             expect(component.required).toEqual(
+                state === 'completed' ? ['state', 'result'] : state === 'failed' ? ['state', 'failureCode'] : ['state'],
+            )
+            expect(Object.keys(component.properties!)).toEqual(
                 state === 'completed'
                     ? ['state', 'result', 'operation']
                     : state === 'failed'
                       ? ['state', 'failureCode', 'operation']
                       : ['state'],
             )
-            expect(Object.keys(component.properties!)).toEqual(component.required)
             expect(content.examples![state]).toBeDefined()
         }
         expect(JSON.stringify(content)).not.toMatch(/failedReason|stacktrace|provider diagnostics|attemptsMade/)

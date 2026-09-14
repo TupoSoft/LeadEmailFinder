@@ -1,24 +1,24 @@
 info:
-    name: prepare-idempotency-credit
+    name: customer-cannot-manage-credit
     type: http
-    seq: 18
+    seq: 22
 http:
     method: PUT
     url: '{{baseUrl}}/credits/{{organizationId}}'
     headers:
         - name: Authorization
-          value: 'Bearer {{platformToken}}'
+          value: 'Bearer {{customerToken}}'
         - name: Content-Type
           value: application/json
     body:
         type: json
         data: |-
-            {"amount": 2}
+            {"amount": 1000}
 runtime:
     scripts:
         - type: tests
           code: |-
-              test('prepare-idempotency-credit', function() {
-                expect(res.status).to.equal(200);
-                expect(res.body.balance).to.equal(2);
+              test('customer-cannot-manage-credit', function() {
+                expect(res.status).to.equal(403);
+
               });

@@ -2,13 +2,16 @@
 
 This collection verifies `person@lef.test` through an opt-in, Docker-network-only SMTP fixture that requires STARTTLS and uses the non-production root under `docker/smtp-dev/tls`. It then verifies `person@plaintext.lef.test` against an intentionally plaintext fixture and requires `secure_transport_unavailable`. These checks cover application, DNS, proxy, certificate trust, and SMTP wiring rather than real-world deliverability. Both verification assertions also prove that the default empty approval manifest produces no external account-discovery source. The plaintext request must stop after `EHLO`; PII-safe API logs must contain no `mail_from`, `rcpt_to`, or `DATA` command for that request. The collection then drains the fixture proxy, confirms that proxy selection excludes it,
 and restores it without restarting the fixture. Requests 08–14 prove that `POST /verify` returns `402` at zero
-balance and reserves and captures exactly one credit after a successful `201` request, exposing the reservation
-and capture in the response's own `operation.billing` block. Both requests use the dedicated `sync-credit-check@lef.test`
-address, distinct from `person@lef.test`. The durable admission stack now reuses a settled, unexpired result for
-the same organization and address at zero cost. Reusing `person@lef.test` here would silently turn the `402` and
-debit assertions into free cache hits. Between adding that credit and sending the POST request,
-an authenticated request to the retired `GET /verify` route returns the API's normal `404`, and an immediate
-balance read confirms that the credit remains available. Later requests update the authenticated organization's
+balance and, for a successful `201` request, exposes the reservation and its outcome in the response's own
+`operation.billing` block. Both requests use the dedicated `sync-credit-check@lef.test` address, distinct from
+`person@lef.test` and never resubmitted elsewhere in this collection. This fixture domain accepts every recipient,
+including the catch-all control probe used to detect it, so every verification of any `@lef.test` address (this
+one and `person@lef.test` alike) is classified inconclusive: the reservation is released, not captured, and the
+balance after a successful `201` is unchanged rather than debited. Only the scenario-selectable
+`@evidence.lef.test` fixture used by requests 31–46 can produce a genuinely conclusive, chargeable result. Between
+adding that credit and sending the POST request, an authenticated request to the retired `GET /verify` route
+returns the API's normal `404`, and an immediate balance read confirms that the credit remains available. Later
+requests update the authenticated organization's
 stored email and prove that an address outside that organization's cache is concealed as `404 Not Found` rather
 than created implicitly. Another request proves that creating a duplicate cache entry returns `409 Conflict`.
 Both rejection bodies use generic
@@ -21,12 +24,13 @@ Requests 18–21 read an owned result through `GET /verifications/:id`, confirm 
 `404`, reject a malformed UUID with `400`, and require authentication with `401`. Requests 22–24 add one credit,
 enqueue asynchronous verification for the dedicated `async-credit-check@lef.test` address, and poll for a
 completed result with its own persisted verification UUID and a `settled`/`fresh` `operation` block.
-The next completed-status read must return the same result. Requests 25–30 confirm that enqueue reserves and
-captures exactly one credit, conceal a missing job with `404`, reject a malformed job UUID with `400`, and require
-authentication for status with `401`. The last of these requests rejects enqueue at zero balance with `402` for
-the never-before-verified `async-credit-check-zero@lef.test` address. That address is distinct from any address
-already settled earlier in this collection, for the same cache-reuse reason as the synchronous credit checks.
-The final balance stays at zero after polling, repeat status reads, and rejected requests. Permission rejection
+The next completed-status read must return the same result. Requests 25–30 confirm that enqueue reserves one
+credit that the same inconclusive-by-construction result then releases, conceal a missing job with `404`, reject
+a malformed job UUID with `400`, and require authentication for status with `401`. The last of these requests
+resets the balance to zero explicitly, then rejects enqueue at zero balance with `402` for the
+never-before-verified `async-credit-check-zero@lef.test` address — a fresh address so the check exercises the
+zero-balance admission path rather than the 60-second address cooldown a just-settled address would still carry.
+The final balance stays at zero after that reset and the rejected request. Permission rejection
 and foreign-job concealment use isolated principals in the async HTTP integration suite; this collection uses the
 provisioned platform credential.
 The request UUID identifies an HTTP exchange, the job UUID identifies queued work, and the verification UUID
@@ -42,11 +46,17 @@ satisfy a later one. After setting the organization's balance to exactly seven c
 target `250` after a conclusively missing control produces `accepted_email`, and the target's own exact
 `550 5.1.1` produces `rejected_email`. They also prove the identical `550 5.1.1` at `MAIL FROM` instead produces
 `unexpected_error`, never a false negative; a bare `550` and a `554 5.7.1` both remain ineligible generic
-failures; a temporary `450` produces `temporarily_blocked`; and an accepted target survives the fixture closing
-the connection before it answers `QUIT`. A final balance read confirms exactly one credit was debited per
-scenario. Existing credit assertions in
-requests 01–30 remain accurate for this collection; these evidence checks do not themselves enable the later
-billing cutover.
+failures; and an accepted target survives the fixture closing the connection before it answers `QUIT`. A temporary
+`450` schedules a durable retry instead of settling immediately — its 60-second first backoff does not fit the
+synchronous route's 30-second budget, so it falls back to the same `202` handle the async route would return,
+leaving that one reservation pending rather than captured. Only the target's own exact missing-recipient proof and
+an accepted target with a conclusively missing control are ever conclusive; a bare rejection, an ambiguous
+rejection, and a `MAIL FROM` rejection are all inconclusive by the same policy that keeps `rejected_email` itself
+strict, so their reservations are released rather than captured. A final balance read confirms exactly one credit
+was captured for each of these three conclusive scenarios, with three more released as inconclusive and the
+temporary-rejection scenario still reserved and awaiting the reconciler's own retry cadence. Existing credit
+assertions in requests 01–30 remain accurate for this
+collection; these evidence checks do not themselves enable the later billing cutover.
 
 Every credit-counting request in this collection (08–30 and 31–46) assumes its target address has never before
 settled a conclusive result against this checkout's development database. The durable admission stack introduced

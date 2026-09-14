@@ -1,7 +1,7 @@
 info:
     name: rejections-preserve-zero-credit
     type: http
-    seq: 17
+    seq: 16
 http:
     method: GET
     url: '{{baseUrl}}/credits/{{organizationId}}'
