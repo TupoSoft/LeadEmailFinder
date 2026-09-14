@@ -1,0 +1,24 @@
+info:
+    name: customer-cannot-manage-credit
+    type: http
+    seq: 22
+http:
+    method: PUT
+    url: '{{baseUrl}}/credits/{{organizationId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"amount": 1000}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('customer-cannot-manage-credit', function() {
+                expect(res.status).to.equal(403);
+
+              });

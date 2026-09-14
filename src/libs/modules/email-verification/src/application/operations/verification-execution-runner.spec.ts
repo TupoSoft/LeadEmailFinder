@@ -2,6 +2,7 @@ import { EmailVerificationReason } from '@tuposoft/lead-email-finder/common'
 import { NewEmailVerification } from '../../domain/email-verification'
 import { MailboxVerificationService } from '../mailbox-verification.service'
 import { VerificationClock } from '../ports/verification-clock'
+import { VerificationExecutionPermits } from '../ports/verification-execution-permits'
 import {
     VerificationExecutionRecord,
     VerificationExecutionStore,
@@ -61,6 +62,7 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
         takeoverForRetry: jest.fn().mockResolvedValue(execution({ state: 'awaiting_retry' })),
         cancelIfNoCaptureIntention: jest.fn(),
         pageNonterminal: jest.fn(),
+        pageCanceledPendingCleanup: jest.fn(),
         ...overrides,
     }
 }
@@ -91,26 +93,94 @@ function clock(): VerificationClock {
     return { now: () => now }
 }
 
+function permitsStore(overrides: Partial<jest.Mocked<VerificationExecutionPermits>> = {}): jest.Mocked<VerificationExecutionPermits> {
+    return {
+        tryAcquire: jest.fn().mockResolvedValue(true),
+        renew: jest.fn().mockResolvedValue(true),
+        release: jest.fn().mockResolvedValue(undefined),
+        ...overrides,
+    }
+}
+
 describe('VerificationExecutionRunner', () => {
     it('reports not-runnable when a lease cannot be acquired', async () => {
         const executions = executionsStore({ acquireLease: jest.fn().mockResolvedValue(null) })
         const settlements = settlementsStore()
         const settlementService = { settle: jest.fn() } as unknown as jest.Mocked<VerificationSettlementService>
         const mailboxVerification = { verify: jest.fn() } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
 
         expect(outcome).toEqual({ kind: 'not-runnable' })
         expect(mailboxVerification.verify).not.toHaveBeenCalled()
+        expect(permits.release).toHaveBeenCalledWith(expect.any(String))
+    })
+
+    it('passes the current time to lease acquisition so a scheduled retry backoff cannot be shortened', async () => {
+        const executions = executionsStore({ acquireLease: jest.fn().mockResolvedValue(null) })
+        const settlements = settlementsStore()
+        const settlementService = { settle: jest.fn() } as unknown as jest.Mocked<VerificationSettlementService>
+        const mailboxVerification = { verify: jest.fn() } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
+        const runner = new VerificationExecutionRunner(
+            executions,
+            settlements,
+            settlementService,
+            mailboxVerification,
+            clock(),
+            permits,
+            60_000,
+            5_000,
+            5,
+        )
+
+        await runner.execute('execution-1', organizationId)
+
+        expect(executions.acquireLease).toHaveBeenCalledWith(
+            'execution-1',
+            organizationId,
+            expect.any(String),
+            expect.any(Date),
+            now,
+        )
+    })
+
+    it('reports permit-unavailable and never touches the execution row when the concurrency cap is reached', async () => {
+        const executions = executionsStore()
+        const settlements = settlementsStore()
+        const settlementService = { settle: jest.fn() } as unknown as jest.Mocked<VerificationSettlementService>
+        const mailboxVerification = { verify: jest.fn() } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore({ tryAcquire: jest.fn().mockResolvedValue(false) })
+        const runner = new VerificationExecutionRunner(
+            executions,
+            settlements,
+            settlementService,
+            mailboxVerification,
+            clock(),
+            permits,
+            60_000,
+            5_000,
+            5,
+        )
+
+        const outcome = await runner.execute('execution-1', organizationId)
+
+        expect(outcome).toEqual({ kind: 'permit-unavailable' })
+        expect(executions.acquireLease).not.toHaveBeenCalled()
+        expect(mailboxVerification.verify).not.toHaveBeenCalled()
+        expect(permits.release).not.toHaveBeenCalled()
     })
 
     it('captures a conclusive result and settles it', async () => {
@@ -120,14 +190,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockResolvedValue(verificationResult()),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
@@ -143,6 +216,14 @@ describe('VerificationExecutionRunner', () => {
             expect.objectContaining({ executionId: 'execution-1', expectedGeneration: 0, decision: 'capture', finalReason: 'conclusive' }),
         )
         expect(settlementService.settle).toHaveBeenCalledWith('execution-1', organizationId)
+        expect(permits.tryAcquire).toHaveBeenCalledWith(
+            expect.any(String),
+            organizationId,
+            now,
+            expect.any(Date),
+            5,
+        )
+        expect(permits.release).toHaveBeenCalledWith(expect.any(String))
     })
 
     it('releases an inconclusive result instead of capturing it', async () => {
@@ -152,14 +233,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockResolvedValue(verificationResult({ verificationQuality: 'inconclusive', exists: null })),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         await runner.execute('execution-1', organizationId)
@@ -176,14 +260,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockResolvedValue(verificationResult({ reason: EmailVerificationReason.TemporarilyBlocked, exists: null, verificationQuality: 'inconclusive' })),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
@@ -206,14 +293,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockRejectedValue(new Error('adapter_failed')),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
@@ -231,14 +321,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockResolvedValue(verificationResult()),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
@@ -254,14 +347,17 @@ describe('VerificationExecutionRunner', () => {
         const mailboxVerification = {
             verify: jest.fn().mockRejectedValue(new Error('adapter_failed')),
         } as unknown as jest.Mocked<MailboxVerificationService>
+        const permits = permitsStore()
         const runner = new VerificationExecutionRunner(
             executions,
             settlements,
             settlementService,
             mailboxVerification,
             clock(),
+            permits,
             60_000,
             5_000,
+            5,
         )
 
         const outcome = await runner.execute('execution-1', organizationId)
@@ -285,14 +381,17 @@ describe('VerificationExecutionRunner', () => {
                         }),
                 ),
             } as unknown as jest.Mocked<MailboxVerificationService>
+            const permits = permitsStore()
             const runner = new VerificationExecutionRunner(
                 executions,
                 settlements,
                 settlementService,
                 mailboxVerification,
                 clock(),
+                permits,
                 60_000,
                 5_000,
+                5,
             )
 
             const outcomePromise = runner.execute('execution-1', organizationId)
@@ -303,6 +402,44 @@ describe('VerificationExecutionRunner', () => {
             expect(outcome).toEqual({ kind: 'lease-lost' })
             expect(capturedSignal?.aborted).toBe(true)
             expect(executions.takeoverForRetry).not.toHaveBeenCalled()
+        } finally {
+            jest.useRealTimers()
+        }
+    })
+
+    it('tolerates a rejected permit renewal instead of crashing the process', async () => {
+        jest.useFakeTimers()
+        try {
+            const executions = executionsStore()
+            const settlements = settlementsStore()
+            const settlementService = { settle: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<VerificationSettlementService>
+            const mailboxVerification = {
+                verify: jest.fn(() => new Promise(resolve => setTimeout(() => resolve(verificationResult()), 6_000))),
+            } as unknown as jest.Mocked<MailboxVerificationService>
+            const permits = permitsStore({ renew: jest.fn().mockRejectedValue(new Error('transient db failure')) })
+            const runner = new VerificationExecutionRunner(
+                executions,
+                settlements,
+                settlementService,
+                mailboxVerification,
+                clock(),
+                permits,
+                60_000,
+                5_000,
+                5,
+            )
+
+            const outcomePromise = runner.execute('execution-1', organizationId)
+            const unhandledRejections: unknown[] = []
+            const onUnhandledRejection = (reason: unknown): void => {
+                unhandledRejections.push(reason)
+            }
+            process.on('unhandledRejection', onUnhandledRejection)
+            await jest.advanceTimersByTimeAsync(6_000)
+            process.off('unhandledRejection', onUnhandledRejection)
+
+            await expect(outcomePromise).resolves.toEqual({ kind: 'settled' })
+            expect(unhandledRejections).toEqual([])
         } finally {
             jest.useRealTimers()
         }

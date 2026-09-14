@@ -1,7 +1,7 @@
 info:
-    name: confirm-one-credit-consumed
+    name: rejections-preserve-zero-credit
     type: http
-    seq: 12
+    seq: 16
 http:
     method: GET
     url: '{{baseUrl}}/credits/{{organizationId}}'
@@ -12,7 +12,7 @@ runtime:
     scripts:
         - type: tests
           code: |-
-              test('confirm-one-credit-consumed', function() {
+              test('rejections-preserve-zero-credit', function() {
                 expect(res.status).to.equal(200);
                 expect(res.body.balance).to.equal(0);
               });

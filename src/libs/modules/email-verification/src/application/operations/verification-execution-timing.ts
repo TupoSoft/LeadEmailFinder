@@ -1,3 +1,5 @@
+import { parseTimeString } from '@tuposoft/lead-email-finder/common'
+
 /** Generation-fenced lease duration for one execution attempt. */
 export const VERIFICATION_LEASE_DURATION_MS = 60_000
 
@@ -19,3 +21,15 @@ export const VERIFICATION_RECONCILER_PAGE_LIMIT = 100
 
 /** Cadence at which the reconciliation queue re-schedules its own repeatable sweep job. */
 export const VERIFICATION_RECONCILER_INTERVAL_MS = 30_000
+
+/** How long a terminal inconclusive verdict blocks a brand-new submission for the same address before admission
+ *  will try again. Not independently configurable — a fixed engineering constant, unlike the cache TTL. */
+export const VERIFICATION_ADDRESS_COOLDOWN_MS = parseTimeString('60s')
+
+/** How long `RunSynchronousVerification` drives or polls its execution inline before falling back to `202` +
+ *  `Location`. The in-flight execution is never aborted at this deadline — it keeps running, backstopped by its
+ *  own lease machinery and the reconciler, exactly like the async path. */
+export const VERIFICATION_SYNC_EXECUTION_BUDGET_MS = parseTimeString('30s')
+
+/** Poll cadence while waiting out a retry-scheduled attempt or another caller's in-flight execution. */
+export const VERIFICATION_SYNC_POLL_INTERVAL_MS = 500

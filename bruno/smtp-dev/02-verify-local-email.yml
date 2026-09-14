@@ -33,6 +33,10 @@ runtime:
           expect(res.body.reason).to.equal('accepted_email');
           expect(res.body.targetExchange).to.equal('smtp.lef.test');
           expect(res.body.sources).to.deep.equal([]);
+          // This fixture domain accepts every recipient, including the catch-all control probe (catchAll: true
+          // above), so this is always classified inconclusive: the reservation is released, never captured.
+          expect(res.body.operation.source).to.equal('fresh');
+          expect(res.body.operation.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' });
         });
 
         test('returns a server-generated request UUID', function() {

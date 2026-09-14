@@ -14,9 +14,9 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('confirms the POST request debited exactly the one credit added for it', function() {
+        test('confirms the inconclusive POST result released the one credit added for it', function() {
           expect(res.status).to.equal(200);
-          expect(res.body.balance).to.equal(0);
+          expect(res.body.balance).to.equal(1);
         });
 
         test('returns a server-generated request UUID', function() {

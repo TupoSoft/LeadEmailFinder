@@ -14,10 +14,20 @@ http:
   body:
     type: json
     data: |-
-      { "email": "person@lef.test" }
+      { "email": "async-credit-check-zero@lef.test" }
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        // Request 25 left one credit available (the prior inconclusive completion released its reservation), so
+        // this genuinely zero-balance check must reset it explicitly first.
+        const response = await fetch(`${bru.getEnvVar('baseUrl')}/credits/${bru.getEnvVar('organizationId')}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${bru.getVar('serviceClientToken')}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: 0 }),
+        });
+        if (!response.ok) throw new Error('Fixture balance reset failed');
     - type: tests
       code: |-
         test('rejects asynchronous enqueue with 402 at zero balance', function() {

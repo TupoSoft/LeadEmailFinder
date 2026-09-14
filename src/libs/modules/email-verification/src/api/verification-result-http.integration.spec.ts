@@ -3,12 +3,14 @@ import { Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import { NextFunction, Request, Response } from 'express'
 import request from 'supertest'
+import { EntityManager } from 'typeorm'
 import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
 import { PermissionsGuard, RolePermissionPolicy, setAuthPrincipal } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { VERIFICATION_RESULT_READER, VerificationResultLookup } from '../application/verification-result-reader'
 import { TypeOrmVerificationResultReader } from '../infrastructure/typeorm-verification-result-reader'
 import { EmailVerificationEntity } from '../infrastructure/persistence/typeorm/email-verification.entity'
+import { VerificationSettlementIntentionEntity } from '../infrastructure/persistence/typeorm/verification-settlement-intention.entity'
 import { VerificationResultsController } from './verification-results.controller'
 
 const organizationId = '00000000-0000-4000-8000-000000000010'
@@ -51,11 +53,13 @@ const records: EmailVerificationEntity[] = [
     },
 ]
 const repository = {
-    findOneBy: jest.fn((lookup: VerificationResultLookup) =>
-        Promise.resolve(
+    findOneBy: jest.fn((entityClass: unknown, where: unknown) => {
+        if (entityClass === VerificationSettlementIntentionEntity) return Promise.resolve(null)
+        const lookup = where as VerificationResultLookup
+        return Promise.resolve(
             records.find(record => record.id === lookup.id && record.organizationId === lookup.organizationId) ?? null,
-        ),
-    ),
+        )
+    }),
 }
 const readPrincipal: AuthPrincipal = {
     credentialKind: 'service_client',
@@ -81,7 +85,10 @@ class FixturePrincipalMiddleware {
         Reflector,
         RolePermissionPolicy,
         PermissionsGuard,
-        { provide: VERIFICATION_RESULT_READER, useValue: new TypeOrmVerificationResultReader(repository) },
+        {
+            provide: VERIFICATION_RESULT_READER,
+            useValue: new TypeOrmVerificationResultReader(repository as unknown as Pick<EntityManager, 'findOneBy'>),
+        },
     ],
 })
 class VerificationResultHttpTestModule {
@@ -126,8 +133,9 @@ describe('GET /verifications/:id', () => {
             catchAll: false,
             reason: EmailVerificationReason.AcceptedEmail,
             sources: [EmailVerificationSource.MX],
+            evidenceObservedAt: createdAt.toISOString(),
         })
-        expect(repository.findOneBy).toHaveBeenCalledWith({ id: ownedId, organizationId })
+        expect(repository.findOneBy).toHaveBeenCalledWith(EmailVerificationEntity, { id: ownedId, organizationId })
     })
 
     it('conceals a foreign result exactly like a missing result', async () => {
@@ -140,8 +148,8 @@ describe('GET /verifications/:id', () => {
             message: 'Verification result not found',
             error: 'Not Found',
         })
-        expect(repository.findOneBy).toHaveBeenNthCalledWith(1, { id: foreignId, organizationId })
-        expect(repository.findOneBy).toHaveBeenNthCalledWith(2, { id: missingId, organizationId })
+        expect(repository.findOneBy).toHaveBeenNthCalledWith(1, EmailVerificationEntity, { id: foreignId, organizationId })
+        expect(repository.findOneBy).toHaveBeenNthCalledWith(2, EmailVerificationEntity, { id: missingId, organizationId })
     })
 
     it('requires authentication before reading persistence', async () => {
@@ -172,7 +180,7 @@ describe('GET /verifications/:id', () => {
             .query({ organizationId: foreignOrganizationId, email: 'foreign@example.test', requestId: ownedId })
             .expect(404)
 
-        expect(repository.findOneBy).toHaveBeenCalledWith({ id: foreignId, organizationId })
+        expect(repository.findOneBy).toHaveBeenCalledWith(EmailVerificationEntity, { id: foreignId, organizationId })
     })
 
     it('does not expose listing or lookup by email or request ID', async () => {

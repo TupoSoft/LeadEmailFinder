@@ -1,0 +1,31 @@
+info:
+    name: reject-expired-idempotency-key
+    type: http
+    seq: 21
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+        - name: Idempotency-Key
+          value: '{{expiredIdempotencyKey}}'
+    body:
+        type: json
+        data: |-
+            {"email": "keyed-expired@lef.test"}
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const timestampMs = Date.now() - 25 * 60 * 60 * 1000;
+              const timestampHex = timestampMs.toString(16).padStart(12, '0');
+              const key = `${timestampHex.slice(0, 8)}-${timestampHex.slice(8, 12)}-7000-8000-000000000000`;
+              bru.setVar('expiredIdempotencyKey', key);
+        - type: tests
+          code: |-
+              test('reject-expired-idempotency-key', function() {
+                expect(res.status).to.equal(410);
+              });

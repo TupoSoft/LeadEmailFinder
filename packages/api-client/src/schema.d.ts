@@ -488,7 +488,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Enqueues one email for the authenticated organization. A request may consume one credit, including validation or dispatch failures. Do not automatically retry an uncertain submission. Browser sessions require same-origin mutation protection. */
+        /** @description Admits one email for the authenticated organization through the durable admission stack. A fresh, uncached submission reserves one credit; a cached or shared result costs nothing. An optional canonical lowercase UUIDv7 Idempotency-Key header lets a caller safely retry an uncertain submission. Browser sessions require same-origin mutation protection. */
         post: operations["AsyncEmailVerificationController_verifyAsync"];
         delete?: never;
         options?: never;
@@ -503,7 +503,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reads an organization-owned job without debit or submission. Missing, expired, and foreign jobs are concealed with the same 404 response. */
+        /** @description Reads an organization-owned operation without debit or submission. Missing, expired, and foreign operations are concealed with the same 404 response. */
         get: operations["AsyncEmailVerificationController_getAsyncVerificationState"];
         put?: never;
         post?: never;
@@ -584,6 +584,11 @@ export interface components {
             amount: number;
         };
         AsyncVerificationCompletedResponseDto: {
+            /**
+             * @description Optional in the public contract so existing clients written before this field existed keep building —
+             *      a real settled response always includes it.
+             */
+            operation?: components["schemas"]["VerificationOperationMetadataDto"];
             result: components["schemas"]["AsyncVerificationResultDto"];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -594,6 +599,11 @@ export interface components {
         AsyncVerificationFailedResponseDto: {
             /** @enum {string} */
             failureCode: "verification_failed";
+            /**
+             * @description Optional in the public contract so existing clients written before this field existed keep building —
+             *      a real settled response always includes it.
+             */
+            operation?: components["schemas"]["VerificationOperationMetadataDto"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -976,6 +986,27 @@ export interface components {
         UploadFileResponseDto: {
             /** Format: uuid */
             id: string;
+        };
+        VerificationOperationBillingDto: {
+            /** @enum {number} */
+            charged: 0 | 1;
+            /** @enum {string} */
+            reason?: "conclusive" | "cached" | "shared" | "inconclusive" | "failed";
+            /** @enum {number} */
+            reserved: 0 | 1;
+            /** @enum {string} */
+            state: "pending" | "settled";
+        };
+        VerificationOperationMetadataDto: {
+            billing: components["schemas"]["VerificationOperationBillingDto"];
+            /** Format: date-time */
+            cacheExpiresAt: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            observedAt: string | null;
+            /** @enum {string} */
+            source: "fresh" | "cache" | "shared";
         };
         VerifyAsyncRequestBodyDto: {
             /**
@@ -2751,7 +2782,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The job was accepted. Use its ID to read status. */
+            /** @description The operation was admitted. Use its ID to read status. */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2760,7 +2791,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerifyAsyncResponseDto"];
                 };
             };
-            /** @description The email is missing or invalid. Validation runs after the credit guard. */
+            /** @description The email is missing/invalid, or the Idempotency-Key header is malformed or repeated. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2768,7 +2799,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         error?: string;
-                        message: string[];
+                        message: string;
                         /** @enum {integer} */
                         statusCode: 400;
                     };
@@ -2786,7 +2817,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description The organization has insufficient credits; no job was submitted. */
+            /** @description The organization has insufficient credits; no execution was funded. */
             402: {
                 headers: {
                     [name: string]: unknown;
@@ -2794,7 +2825,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        message: "Insufficient credits";
+                        message: "insufficient_credits";
                         /** @enum {integer} */
                         statusCode: 402;
                     };
@@ -2815,6 +2846,45 @@ export interface operations {
                     };
                 };
             };
+            /** @description The supplied Idempotency-Key was already used for a different address or delivery mode. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 409;
+                    };
+                };
+            };
+            /** @description The supplied Idempotency-Key is more than 24 hours old. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 410;
+                    };
+                };
+            };
+            /** @description The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 429;
+                    };
+                };
+            };
         };
     };
     AsyncEmailVerificationController_getAsyncVerificationState: {
@@ -2828,7 +2898,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A sanitized job outcome. Unavailable means a trustworthy outcome cannot be reported. */
+            /** @description A sanitized operation status. Unavailable means a trustworthy outcome cannot be reported. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2837,7 +2907,7 @@ export interface operations {
                     "application/json": components["schemas"]["AsyncVerificationQueuedResponseDto"] | components["schemas"]["AsyncVerificationRunningResponseDto"] | components["schemas"]["AsyncVerificationCompletedResponseDto"] | components["schemas"]["AsyncVerificationFailedResponseDto"] | components["schemas"]["AsyncVerificationUnavailableResponseDto"];
                 };
             };
-            /** @description The job ID is not a UUID. */
+            /** @description The operation ID is not a UUID. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2878,7 +2948,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description No accessible job matches the ID. */
+            /** @description No accessible operation matches the ID. */
             404: {
                 headers: {
                     [name: string]: unknown;

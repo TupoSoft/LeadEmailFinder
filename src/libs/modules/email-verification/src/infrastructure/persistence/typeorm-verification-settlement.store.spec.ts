@@ -57,6 +57,7 @@ describe('TypeOrmVerificationSettlementStore', () => {
         findOne: jest.Mock
         findOneOrFail: jest.Mock
         findOneBy: jest.Mock
+        findOneByOrFail: jest.Mock
         find: jest.Mock
         create: jest.Mock
         save: jest.Mock
@@ -68,6 +69,7 @@ describe('TypeOrmVerificationSettlementStore', () => {
             findOne: jest.fn(),
             findOneOrFail: jest.fn(),
             findOneBy: jest.fn(),
+            findOneByOrFail: jest.fn().mockResolvedValue({ id: 'result-1', exists: true }),
             find: jest.fn().mockResolvedValue([]),
             create: jest.fn((_entityClass: unknown, value: unknown) => value),
             save: jest.fn((_entityClass: unknown, value: object) => {
@@ -151,7 +153,7 @@ describe('TypeOrmVerificationSettlementStore', () => {
             ])
 
             const result = await store.confirmSettlement('execution-1', organizationId)
-            expect(result).toEqual({ resultId: 'result-1' })
+            expect(result).toEqual({ resultId: 'result-1', normalizedAddress: 'person@example.test', exists: true })
             const savedRequests = (
                 manager.save.mock.calls.find(([entityClass]) => entityClass === VerificationRequestEntity) as
                     | [unknown, unknown]
@@ -190,17 +192,22 @@ describe('TypeOrmVerificationSettlementStore', () => {
         })
 
         it('replays an already-confirmed intention without mutating anything again', async () => {
-            manager.findOneOrFail.mockResolvedValue({
-                executionId: 'execution-1',
-                organizationId,
-                decision: 'capture',
-                resultId: 'result-1',
-                state: 'confirmed',
-                createdAt: new Date(),
-                confirmedAt: new Date(),
+            manager.findOneOrFail.mockImplementation((entityClass: unknown) => {
+                if (entityClass === VerificationSettlementIntentionEntity) {
+                    return Promise.resolve({
+                        executionId: 'execution-1',
+                        organizationId,
+                        decision: 'capture',
+                        resultId: 'result-1',
+                        state: 'confirmed',
+                        createdAt: new Date(),
+                        confirmedAt: new Date(),
+                    })
+                }
+                return Promise.resolve(execution({ state: 'completed', normalizedAddress: 'person@example.test' }))
             })
             const result = await store.confirmSettlement('execution-1', organizationId)
-            expect(result).toEqual({ resultId: 'result-1' })
+            expect(result).toEqual({ resultId: 'result-1', normalizedAddress: 'person@example.test', exists: true })
             expect(manager.save).not.toHaveBeenCalled()
             expect(manager.find).not.toHaveBeenCalled()
         })

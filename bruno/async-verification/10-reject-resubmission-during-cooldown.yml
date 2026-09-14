@@ -1,0 +1,28 @@
+info:
+    name: reject-resubmission-during-cooldown
+    type: http
+    seq: 10
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email": "person@lef.test"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('reject-resubmission-during-cooldown', function() {
+                // The prior request settled inconclusive (a catch-all domain accepts its control probe too), which
+                // starts a 60-second address cooldown: a fresh submission for the same address is rejected before
+                // ever reserving a credit, regardless of balance.
+                expect(res.status).to.equal(429);
+                expect(res.body.message).to.equal('verification_cooldown');
+                expect(res.headers['retry-after']).to.match(/^[0-9]+$/);
+              });

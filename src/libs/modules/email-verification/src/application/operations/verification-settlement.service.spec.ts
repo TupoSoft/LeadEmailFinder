@@ -1,4 +1,5 @@
 import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
+import { EmailAdministrationService } from '../email-administration.service'
 import { VerificationSettlementStore } from '../ports/verification-settlement-store'
 import { VerificationSettlementService } from './verification-settlement.service'
 
@@ -23,17 +24,25 @@ function intention(
 describe('VerificationSettlementService', () => {
     let settlements: jest.Mocked<VerificationSettlementStore>
     let credits: jest.Mocked<Pick<CreditReservationService, 'capture' | 'release'>>
+    let emailAdministration: jest.Mocked<Pick<EmailAdministrationService, 'upsertEmail'>>
     let service: VerificationSettlementService
 
     beforeEach(() => {
         settlements = {
             persistResultAndIntention: jest.fn(),
             findIntention: jest.fn(),
-            confirmSettlement: jest.fn(),
+            confirmSettlement: jest
+                .fn()
+                .mockResolvedValue({ resultId: 'result-1', normalizedAddress: 'person@example.test', exists: true }),
             pagePendingIntentions: jest.fn(),
         }
         credits = { capture: jest.fn(), release: jest.fn() }
-        service = new VerificationSettlementService(settlements, credits as unknown as CreditReservationService)
+        emailAdministration = { upsertEmail: jest.fn() }
+        service = new VerificationSettlementService(
+            settlements,
+            credits as unknown as CreditReservationService,
+            emailAdministration as unknown as EmailAdministrationService,
+        )
     })
 
     it('captures and confirms for a capture intention', async () => {
@@ -57,6 +66,7 @@ describe('VerificationSettlementService', () => {
         expect(credits.capture).not.toHaveBeenCalled()
         expect(credits.release).not.toHaveBeenCalled()
         expect(settlements.confirmSettlement).not.toHaveBeenCalled()
+        expect(emailAdministration.upsertEmail).not.toHaveBeenCalled()
     })
 
     it('is a no-op replay when the intention is already confirmed', async () => {
@@ -64,6 +74,7 @@ describe('VerificationSettlementService', () => {
         await service.settle(executionId, organizationId)
         expect(credits.capture).not.toHaveBeenCalled()
         expect(settlements.confirmSettlement).not.toHaveBeenCalled()
+        expect(emailAdministration.upsertEmail).not.toHaveBeenCalled()
     })
 
     it('confirms after a replayed capture that already applied on a prior crash-interrupted attempt', async () => {
@@ -71,5 +82,19 @@ describe('VerificationSettlementService', () => {
         credits.capture.mockResolvedValue({ disposition: 'replayed' } as never)
         await service.settle(executionId, organizationId)
         expect(settlements.confirmSettlement).toHaveBeenCalledWith(executionId, organizationId)
+    })
+
+    it('advances the email cache last-verification link after settlement is confirmed', async () => {
+        settlements.findIntention.mockResolvedValue(intention())
+        settlements.confirmSettlement.mockResolvedValue({
+            resultId: 'result-1',
+            normalizedAddress: 'person@example.test',
+            exists: true,
+        })
+        await service.settle(executionId, organizationId)
+        expect(emailAdministration.upsertEmail).toHaveBeenCalledWith(organizationId, 'person@example.test', {
+            exists: true,
+            lastVerificationId: 'result-1',
+        })
     })
 })

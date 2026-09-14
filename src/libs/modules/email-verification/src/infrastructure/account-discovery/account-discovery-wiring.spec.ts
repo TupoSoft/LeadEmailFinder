@@ -34,6 +34,8 @@ import { SmtpVerificationEntity } from '../persistence/typeorm/smtp-verification
 import { VerificationRequestEntity } from '../persistence/typeorm/verification-request.entity'
 import { VerificationExecutionEntity } from '../persistence/typeorm/verification-execution.entity'
 import { VerificationSettlementIntentionEntity } from '../persistence/typeorm/verification-settlement-intention.entity'
+import { VerificationExecutionPermitEntity } from '../persistence/typeorm/verification-execution-permit.entity'
+import { VerificationExecutionPermitLockEntity } from '../persistence/typeorm/verification-execution-permit-lock.entity'
 
 const CORE_MODULE_ENTITIES = [
     EmailEntity,
@@ -43,6 +45,8 @@ const CORE_MODULE_ENTITIES = [
     VerificationRequestEntity,
     VerificationExecutionEntity,
     VerificationSettlementIntentionEntity,
+    VerificationExecutionPermitEntity,
+    VerificationExecutionPermitLockEntity,
 ]
 import { ACCOUNT_DISCOVERY_CLOCK_TOKEN } from './configured-account-discovery'
 import { AccountDiscoveryModule } from './account-discovery.module'

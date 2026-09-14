@@ -73,11 +73,15 @@ export interface VerificationExecutionStore {
     /** Fences a funding failure: `funding_pending` -> `canceled`, frees the address slot. Idempotent. */
     cancelFundingFailure(executionId: string, organizationId: string): Promise<VerificationExecutionRecord>
 
+    /** Rejects (returns null) for a `queued` execution missing entirely, a terminal one, or an `awaiting_retry`
+     *  one whose `retryAt` has not yet passed `now` — a scheduled backoff must not be shortened by an
+     *  immediately-driven caller (a synchronous replay, a redispatched queue message) racing the clock. */
     acquireLease(
         executionId: string,
         organizationId: string,
         leaseOwnerId: string,
         leaseExpiresAt: Date,
+        now: Date,
     ): Promise<VerificationExecutionRecord | null>
 
     renewLease(
@@ -105,4 +109,11 @@ export interface VerificationExecutionStore {
 
     /** Pages nonterminal rows oldest-`updatedAt`-first, excluding any `fundingOwnerType: 'batch_group'` row. */
     pageNonterminal(limit: number): Promise<readonly VerificationExecutionRecord[]>
+
+    /** Pages `canceled` rows (oldest-`updatedAt`-first, excluding `fundingOwnerType: 'batch_group'`) that still
+     *  have at least one linked request with `billingState: 'pending'` — a deadline cancellation whose credit
+     *  release and request settlement did not both complete before the process exited or one step failed.
+     *  `cancelIfNoCaptureIntention` alone leaves no discoverable trace of that gap, since `canceled` is terminal
+     *  and excluded from `pageNonterminal`; this is what lets the reconciler retry the cleanup on a later sweep. */
+    pageCanceledPendingCleanup(limit: number): Promise<readonly VerificationExecutionRecord[]>
 }

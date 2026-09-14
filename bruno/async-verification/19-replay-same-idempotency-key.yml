@@ -1,0 +1,26 @@
+info:
+    name: replay-same-idempotency-key
+    type: http
+    seq: 19
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyAsync'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{customerToken}}'
+        - name: Content-Type
+          value: application/json
+        - name: Idempotency-Key
+          value: '{{freshIdempotencyKey}}'
+    body:
+        type: json
+        data: |-
+            {"email": "keyed@lef.test"}
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('replay-same-idempotency-key', function() {
+                expect(res.status).to.equal(202);
+                expect(res.body.id).to.equal(bru.getVar('idempotentJobId'));
+              });
