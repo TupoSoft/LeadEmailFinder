@@ -307,9 +307,12 @@ describe('Validate workflow syntax and structure', () => {
 
     it('has the stable workflow name, supported events, and exact job inventory', () => {
         expect(workflow.name).toBe('Validate')
-        expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch'])
+        expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
         expect(workflow.permissions).toEqual({ contents: 'read' })
         expect(Object.keys(workflow.jobs).sort()).toEqual([...dependencies, ...browserWorkers, 'validate'].sort())
+        for (const job of Object.values(workflow.jobs)) {
+            expect(job['runs-on']).toEqual(['self-hosted', 'swarm', 'ubuntu-22', 'docker-isolated'])
+        }
     })
 
     it('declares bounded independent browser workers and a lightweight aggregate', () => {
@@ -318,7 +321,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('ubuntu-latest')
+            expect(workflow.jobs[id]['runs-on']).toEqual(['self-hosted', 'swarm', 'ubuntu-22', 'docker-isolated'])
         }
     })
 

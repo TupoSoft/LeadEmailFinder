@@ -1,9 +1,7 @@
 name: Validate
 on:
-  pull_request: null
-  push:
-    branches:
-      - master
+  # Temporarily run automatic validation through .husky/pre-push.
+  # Restore pull_request and master push triggers when the runners are reliable.
   workflow_dispatch: null
 permissions:
   contents: read
@@ -12,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -34,7 +32,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -104,11 +102,14 @@ jobs:
       - name: Check validation fixtures
         run: corepack pnpm test:ci-paths
         if: needs.changes.outputs.repositoryPolicy == 'true'
+      - name: Test local validation and Git hooks
+        run: corepack pnpm ci:local:test
+        if: needs.changes.outputs.repositoryPolicy == 'true'
   backend:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -212,7 +213,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -284,7 +285,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -341,7 +342,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -415,7 +416,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 15
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -483,7 +484,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -566,7 +567,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -717,7 +718,7 @@ jobs:
       - browser-ui
       - browser-live
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -741,7 +742,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
     steps:
       - uses: actions/checkout@v4
         with:

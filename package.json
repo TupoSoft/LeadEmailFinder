@@ -14,6 +14,8 @@
         "test": "jest",
         "test:ci": "jest --runInBand && pnpm test:oidc-runners",
         "test:ci-paths": "node scripts/ci/select-validation.mjs --fixtures",
+        "ci:local": "node scripts/ci/local-validation.mjs",
+        "ci:local:test": "node --test scripts/ci/*.test.mjs",
         "test:bff-live": "node scripts/testing/bff-live.mjs",
         "test:oidc-runners": "node --test scripts/testing/*.test.mjs scripts/bruno/*.test.mjs docker/smtp-dev/*.test.mjs",
         "bruno:bff-sessions": "node scripts/bruno/run-collection.mjs bff-sessions",

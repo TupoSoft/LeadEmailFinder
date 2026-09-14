@@ -1,0 +1,8 @@
+set -e
+
+command -v git-lfs >/dev/null 2>&1 || {
+    printf >&2 '%s\n' 'Git LFS is required to push this repository. Install git-lfs and try again.'
+    exit 2
+}
+
+exec node scripts/ci/pre-push.mjs "$@"

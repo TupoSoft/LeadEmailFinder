@@ -52,17 +52,63 @@ privacy notice.
 
 ## Development
 
+### Local Validation Before Pushing
+
+While the self-hosted runners are being repaired, Git's `pre-push` hook runs the validation checks locally. Install
+Node 24, Corepack, Git LFS, and Docker with support for privileged Linux containers, then run these commands in
+each clone:
+
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm prepare
+```
+
+The install normally runs `prepare` automatically. Run it explicitly after an install that skipped scripts, or to
+restore the hooks. The existing `pre-commit` checks still run. The new hook validates the committed revisions being
+pushed in a fresh container; uncommitted application files are excluded from its validation checkout. Local
+validation stops at the first failed check and blocks the push, with one exception: Harper failures are reported
+and validation continues. Every other check is blocking even when the hosted workflow marks it with
+`continue-on-error: true`. The runner still reports health and removes disposable resources while preserving the
+original blocking failure. Each test command retains its existing suite and retry behavior. The hosted workflow's
+advisory settings remain unchanged.
+
+Run the same checks directly for the current committed `HEAD`, or provide a commit and a known comparison base:
+
+```sh
+corepack pnpm ci:local
+corepack pnpm ci:local --commit <commit-sha> --base <base-sha>
+corepack pnpm ci:local:test
+```
+
+The first run builds the validation image and downloads its system dependencies, which can take several minutes.
+Docker can reuse that image on later runs, but every run installs workspace packages from the frozen lockfile in
+a fresh workspace. The image supplies Node 24, Ruby 3.3, Docker, and browser dependencies. Each run starts its own
+Docker daemon inside a disposable container. It does not mount the host Docker socket or publish ports on the
+host. This isolation keeps the browser checks' development-stack reset and volume removal inside the validation
+run, including when the developer already has a local `lef` stack running.
+
+Git hooks apply to clones where they are installed and can be bypassed; they do not cover edits made through the
+GitHub interface. A local success does not publish a GitHub check result. An existing required hosted check can
+therefore still block a merge until the repository's branch rules are updated. This change does not alter those
+rules.
+
+The `Validate` workflow is temporarily available only through manual dispatch on the approved self-hosted runner
+pool. Container publishing remains a separate manual workflow, and ExecPlan synchronization remains automatic.
+To restore hosted validation after runner recovery, restore the `pull_request` and `push` triggers in
+`.github/workflows/validate.yml`; keep the local hook if checks before pushing are still useful.
+
 ### Path-Aware Validation
 
-The `Validate` workflow always runs on pull requests, pushes to `master`, and manual dispatch. Its `changes` job
-selects six consumers. The final `Validate / validate` check succeeds only when discovery and every consumer succeed.
-Each consumer starts even when unselected and explicitly reports that its checks were not run. A failed, canceled,
-skipped, or missing dependency fails the summary. Branch protection continues to use the same required check.
+Local validation reuses the workflow's six consumers and existing path classifier. A push compares the outgoing
+commit with the remote revision supplied by Git. A new branch, missing comparison history, or a direct run without
+a base selects all consumers. Each distinct outgoing revision is checked before the push proceeds; deleting a
+remote ref needs no validation.
 
 Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
 account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
-repository test, and CI selection tests. Harper's existing advisory CI setting is preserved. The remaining consumers follow this matrix; multiple
-changed paths select the union of their consumers:
+repository test, and CI selection tests. Without a comparison base, Harper checks all tracked Markdown files;
+the approval checker uses the existing `HEAD^` baseline, matching the workflow. The remaining consumers follow
+this matrix; multiple changed paths select the union of their consumers:
 
 | Changed paths | Additional consumers |
 | --- | --- |
@@ -82,13 +128,13 @@ unit tests, Vagrant checks, four PostgreSQL integration suites, and application 
 lint, types, unit tests, and the static build. Contract owns OpenAPI drift, exporter tests, and client compilation.
 Images owns all three image builds, the packaged approval manifest check, and Compose configuration. Browser owns
 route ownership, browser workflows, accessibility, visual baselines, and the disposable same-origin stack with Bruno.
-The browser job builds its own gateway image because each consumer has an isolated runner. An unselected backend
-job starts no PostgreSQL service. A successful no-op is selection evidence only.
+The hosted browser job builds its own gateway image because its runner is separate from the image job's runner.
+An unselected backend consumer starts no PostgreSQL service. A successful no-op is selection evidence only.
 
-Pull requests compare their head with its merge base against the event's base SHA. Pushes compare the event's
-`before` and head commit IDs directly. Git supplies paths separated by null bytes with rename detection disabled, so deletions and
-both sides of a rename remain visible. Filenames are never evaluated as shell code. Manual dispatch, invalid input,
-an unsupported event, an all-zero revision, or unavailable comparison history selects every consumer.
+Git supplies paths separated by null bytes with rename detection disabled, so deletions and both sides of a
+rename remain visible. Filenames are never evaluated as shell code. The retained hosted workflow selects all
+consumers on manual dispatch. Its final `Validate / validate` check succeeds only when discovery and every
+consumer succeed; a failed, canceled, skipped, or missing dependency fails the summary.
 
 Run these commands to inspect selection and validate the workflow without starting application services:
 
@@ -104,7 +150,8 @@ failure handling. Live Actions runs remain separate evidence for GitHub's job an
 
 ### Shared CI Caches
 
-Validation restores the pnpm store from GitHub Actions before each dependency install. Cache keys include the
+The manually dispatched hosted workflow restores the pnpm store from GitHub Actions before each dependency
+install. These remote caches are separate from local hook execution. Cache keys include the
 operating system, architecture, Node major version, pnpm version, dependency group, and lockfile hash. Repository
 policy, backend, and contract jobs share the API dependency group. Web and browser jobs use separate groups because
 their filtered installs need different packages. A fallback can restore an older lockfile within the same group.
