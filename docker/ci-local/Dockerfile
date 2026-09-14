@@ -6,7 +6,7 @@ COPY --from=ruby /usr/local/ /usr/local/
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 /usr/local/bin/runc /usr/local/bin/docker-init /usr/local/bin/docker-proxy /usr/local/bin/
 COPY --from=docker /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git git-lfs iptables jq libyaml-0-2 libffi8 procps \
+    ca-certificates curl gettext-base git git-lfs iptables jq libyaml-0-2 libffi8 procps \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
     && git lfs install --system --skip-repo \

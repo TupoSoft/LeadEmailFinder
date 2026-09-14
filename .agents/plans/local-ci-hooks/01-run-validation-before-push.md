@@ -21,6 +21,8 @@ developer's running application stack. The same validation is available through 
 - [x] (2026-09-14) Preserve Harper as the sole advisory exception; pass all 41 local tests and focused ESLint.
 - [x] (2026-09-14) Exercise the real push hook with all consumers selected; record the existing backend test failure and verify fixture removal.
 - [x] (2026-09-14) Retire the session-material scanner; pass 41 local tests, 308 focused Jest tests, type checking, ESLint, and actionlint.
+- [x] (2026-09-14) Run the normal push hook after removal; diagnose missing `envsubst` and add `gettext-base` to the runner image.
+- [ ] (2026-09-14) Retry the full normal push hook after the runner dependency correction.
 
 ## Plan dependencies
 
@@ -51,6 +53,9 @@ None.
 - After that diagnosis, the user explicitly requested retiring the session-material scanner. Its CLI, focused
   tests, package command, and hosted validation step reused by local pre-push are removed. Earlier scanner results remain
   historical evidence, and approval validation, the architecture gate, and application behavior are preserved.
+- The normal push of `28fe5cd` reached the browser-live route ownership and privacy checks before failing at
+  `scripts/frontend/checkout-config.test.mjs:132` with `envsubst: not found`. The runner image lacked that command.
+  Adding `gettext-base` to `docker/ci-local/Dockerfile` supplies it; a full push retry remains pending.
 
 ## Decision Log
 
@@ -106,7 +111,10 @@ Current documentation and active plan commands reflect the removal; completed pl
 scanner evidence with a retirement note. Validation of the remaining checks is recorded separately below.
 All 41 local Node tests, 308 workflow, selector, and ExecPlan Jest tests, type checking, focused ESLint, and
 actionlint passed after removal. Independent review found no executable scanner references. A fresh full push
-validation remains pending.
+attempt for `28fe5cd` then passed repository policy, backend checks and database fixtures, web checks, generated
+contracts, application images, browser artifact guards, and browser UI, accessibility, and visual suites. It
+stopped in the browser-live gateway checks because the runner image lacked `envsubst`. The image now includes
+`gettext-base`; full validation after that correction remains pending.
 
 During the initial implementation, all 38 local Node tests and 308 existing Jest workflow, selection, and ExecPlan
 tests passed. Focused ESLint, actionlint, shell syntax, and whitespace checks passed. A real launcher smoke test validated the
@@ -120,9 +128,9 @@ passed after this clarification. The later real push attempt for `ddacb5d` selec
 repository policy, backend Ruby checks, lint, and type checking. It stopped at an existing backend scanner test
 failure, correctly preventing the push. Harper reported 780 findings across 380 files and continued as intended.
 
-Full local validation remains incomplete. The remaining backend database checks and build, web, generated-client
-contract, application image, browser, and Bruno checks were not reached after that failure. Their runtime results
-remain unverified. The validation container and PostgreSQL fixture were removed. Independent review left no material SOLID issue.
+Full local validation remains incomplete. The later `28fe5cd` run reached and passed the consumers that the first
+attempt had not reached, until its gateway test failed. Later live fixtures and Bruno checks did not run and remain
+unverified. Fixture and validation-container removal were verified after both attempts. Independent review left no material SOLID issue.
 The deliberate architecture trade-off is the strict workflow adapter, which needs explicit support for new
 Actions features. Application modules and HTTP behavior remain unchanged.
 
@@ -319,7 +327,23 @@ reused by local pre-push are retired; that removal does not establish success fo
 
 After removal, all 41 local Node tests and all 308 focused workflow, selector, and ExecPlan Jest tests passed.
 Type checking, focused ESLint, and actionlint passed. Independent review found no executable reference to the
-retired scanner. A fresh full push run is still pending; the earlier `ddacb5d` failure remains historical evidence.
+retired scanner. The earlier `ddacb5d` failure remains historical evidence; the first full run after removal is recorded below.
+
+The subsequent normal push of `28fe5cd` ran the actual hook and passed repository policy, including Harper for
+eight changed files, all 41 local Node tests, and all 308 focused Jest tests. Backend validation passed 3,256 Jest
+tests with 109 skipped, 92 runner tests, and five real PostgreSQL suites containing 1, 27, 25, 2, and 6 tests. The
+backend build passed. Web validation passed 627 tests, its build, and design audits. Contract checks passed all
+23 tests, drift validation, and the generated-client build. All three application images, approval-manifest
+validation, and Compose checks passed.
+
+All browser artifact guards passed. Browser UI passed 120 general cases plus the service, invitation,
+organization, credit, and proxy suites, followed by four accessibility and four visual tests. The browser-live
+step `Test Vite and Nginx route ownership and privacy` then reported eight passed tests and one failed test.
+`scripts/frontend/checkout-config.test.mjs:132` failed because `envsubst` was missing. The subsequent live
+fixtures and Bruno checks were not reached. Fixture and validation-container removal were verified.
+
+The runner Dockerfile now installs `gettext-base`, which provides `envsubst`. The full normal push retry is
+pending; the dependency correction is not evidence that the remaining live checks have passed.
 
 The issue lookup at the start of implementation found no synced issue for this plan.
 
