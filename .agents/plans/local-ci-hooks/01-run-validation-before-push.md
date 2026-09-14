@@ -20,6 +20,7 @@ developer's running application stack. The same validation is available through 
 - [x] (2026-09-14) Complete independent review and prepare the implementation for one draft pull request.
 - [x] (2026-09-14) Preserve Harper as the sole advisory exception; pass all 41 local tests and focused ESLint.
 - [x] (2026-09-14) Exercise the real push hook with all consumers selected; record the existing backend test failure and verify fixture removal.
+- [x] (2026-09-14) Retire the session-material scanner; pass 41 local tests, 308 focused Jest tests, type checking, ESLint, and actionlint.
 
 ## Plan dependencies
 
@@ -37,15 +38,19 @@ None.
   issue to assign or move on Project 9; normal plan synchronization can create one after the plan reaches `master`.
 - Copying the committed snapshot into the container preserves its user ownership. Git initially rejected the
   copied repository as having dubious ownership, which caused the session-material scanner to fail. The runner
-  now marks only `/workspace` as safe in Git's system configuration; the scanner remains unchanged.
+  now marks only `/workspace` as safe in Git's system configuration; that ownership fix did not change the scanner.
 - Nested Docker requires a separate anonymous volume at `/var/lib/docker`. A real nested image build and container
   run passed after adding that private volume. Container removal also removes the volume.
 - Independent review found a cancellation race during container creation. Container removal now waits for creation to
   settle before removing the validation container and its private volume.
 - The real push attempt for `ddacb5d` stopped at the reachable-history test in
   `scripts/security/scan-linkedin-session-material.spec.ts`: the expected exit code was 1, but the result was 0.
-  The test and scanner are unchanged from `master` revision `2ac6ea3`. The failure also reproduces with host Git
-  2.43: Git emits line-feed-separated output while the existing parser expects null-separated output.
+  The test and scanner were unchanged from `master` revision `2ac6ea3`. Further investigation established that
+  the scanner required Git 2.50 or later for its null-separated history output. Git 2.43 emitted line-feed-separated
+  output instead, causing the failure. All eight scanner tests passed with Git 2.50 before the scanner was removed.
+- After that diagnosis, the user explicitly requested retiring the session-material scanner. Its CLI, focused
+  tests, package command, and hosted validation step reused by local pre-push are removed. Earlier scanner results remain
+  historical evidence, and approval validation, the architecture gate, and application behavior are preserved.
 
 ## Decision Log
 
@@ -84,11 +89,24 @@ None.
   the workflow. Reusing a system image must not reuse an earlier workspace's installed dependency state.
   Date/Author: 2026-09-14, Codex.
 
+- Decision: Retire the session-material scanner, its focused tests, and its executable checks in response to the
+  user's explicit removal request. Preserve approval validation and the architecture gate.
+  Rationale: The user chose removal after the Git 2.50 dependency was confirmed. This supersedes the earlier
+  maintenance inventory's retention decision without changing runtime account-discovery policy.
+  Date/Author: 2026-09-14, Codex implementing the user's removal instruction.
+
 ## Outcomes & Retrospective
 
 The hook, launcher, isolated runner image, workflow adapter, manual validation trigger, and documentation are
 implemented and prepared for one draft pull request. The actual frozen workspace dependency install completed,
 and `corepack pnpm prepare` installed the hook.
+
+The user's later removal request retires the session-material scanner and every executable reference to it.
+Current documentation and active plan commands reflect the removal; completed plans retain their historical
+scanner evidence with a retirement note. Validation of the remaining checks is recorded separately below.
+All 41 local Node tests, 308 workflow, selector, and ExecPlan Jest tests, type checking, focused ESLint, and
+actionlint passed after removal. Independent review found no executable scanner references. A fresh full push
+validation remains pending.
 
 During the initial implementation, all 38 local Node tests and 308 existing Jest workflow, selection, and ExecPlan
 tests passed. Focused ESLint, actionlint, shell syntax, and whitespace checks passed. A real launcher smoke test validated the
@@ -127,8 +145,9 @@ module or public API is affected.
 ## Scope and Non-Goals
 
 This single pull request adds `.husky/pre-push`, local validation scripts and tests under `scripts/ci/`, a runner
-image under `docker/ci-local/`, package commands, workflow changes, and developer documentation. It preserves the
-existing consumer selection, check commands, and commit checks. Harper is the sole advisory local check, and all
+image under `docker/ci-local/`, package commands, workflow changes, and developer documentation. It also retires
+the session-material scanner at the user's request. It preserves consumer selection and all remaining check
+commands and commit checks. Harper is the sole advisory local check, and all
 other local checks are blocking. The hosted workflow retains its existing advisory settings.
 
 It does not repair or deploy the Swarm runners, add hosted runner capacity, publish images, synchronize issues
@@ -164,6 +183,12 @@ dispatch only, with every direct workflow job targeting the approved self-hosted
 publishing and plan synchronization behavior intact. Update `README.md` with setup, execution, limitations, and
 the reversal procedure.
 
+For the user's removal request, delete `scripts/security/scan-linkedin-session-material.ts` and its focused
+specification, remove the package command, and remove the hosted workflow scanner step reused by local pre-push.
+The existing `.husky/pre-commit` hook has no explicit scanner command and remains unchanged.
+Update current documentation and active plan commands, and add retirement notes to completed plans while
+preserving their historical evidence. Keep the approval checker and module architecture checks intact.
+
 ## Interfaces and Dependencies
 
 `corepack pnpm ci:local` validates committed `HEAD`. `corepack pnpm ci:local --commit <commit-sha> --base <base-sha>`
@@ -197,6 +222,8 @@ or publish registry artifacts. No new external service contract or application d
   publishing and automatic plan synchronization retain their existing triggers.
 - Documentation explains installation, manual execution, the cost of the initial run, the limits of hook
   enforcement, GitHub required-check behavior, and restoring hosted triggers. Focused tests and Harper pass.
+- The retired session-material scanner source, focused specification, package command, and workflow step reused
+  by local pre-push are absent. Current documentation no longer presents that scanner as an available check.
 
 ## Validation
 
@@ -284,8 +311,15 @@ type checking passed. Backend Jest then reported 1 failed, 3,263 passed, and 109
 Surprises & Discoveries. No later backend database or build check, web, contract, image, browser, or Bruno check
 ran. PostgreSQL and validation-container cleanup were verified.
 
-The draft publication uses a one-time `HUSKY=0` hook bypass to make this known failure reviewable. The scanner
-and its test remain unchanged, and the draft must disclose the failed gate and checks that were not reached.
+The original draft publication used a one-time `HUSKY=0` hook bypass to make that failed run reviewable. The
+scanner and its test were unchanged at that point. Later investigation confirmed their Git 2.50 dependency by
+passing all eight scanner tests with that version. The user subsequently requested removing the scanner instead
+of retaining the tool with a newer Git requirement. Its source, focused tests, package command, and workflow step
+reused by local pre-push are retired; that removal does not establish success for the consumers that did not run.
+
+After removal, all 41 local Node tests and all 308 focused workflow, selector, and ExecPlan Jest tests passed.
+Type checking, focused ESLint, and actionlint passed. Independent review found no executable reference to the
+retired scanner. A fresh full push run is still pending; the earlier `ddacb5d` failure remains historical evidence.
 
 The issue lookup at the start of implementation found no synced issue for this plan.
 

@@ -249,7 +249,6 @@ const preservedCommands: Record<string, string[]> = {
     'repository-policy': [
         'corepack pnpm test:docs-lint',
         'corepack pnpm privacy:account-discovery-approvals-check',
-        'corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree',
         'corepack pnpm docs:lint:changed',
         'corepack pnpm architecture:check',
         'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',

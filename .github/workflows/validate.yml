@@ -84,9 +84,6 @@ jobs:
           ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: corepack pnpm privacy:account-discovery-approvals-check
         if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Scan for LinkedIn session material
-        run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
-        if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Lint changed documentation with Harper
         continue-on-error: true
         env:

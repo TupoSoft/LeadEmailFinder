@@ -57,7 +57,7 @@ must not count those features as present or restart their implementation.
 | Match found during the audit | Disposition and reason |
 | --- | --- |
 | Historical `'linkedin'` result source | Keep `EmailVerificationReadSource` and the entity hydration regression test. This reads old development rows; no LinkedIn provider is active. Removing it would require a separate disposable-data reset decision. |
-| LinkedIn session-material scanner | Keep the working-tree and history scan. Removing an old provider does not remove the need to detect sensitive material. |
+| LinkedIn session-material scanner | Retired at the user's request on 2026-09-14 through `local-ci-hooks/01`, superseding this audit's original retention decision. |
 | `ExternalIdentityResolver` described as legacy in a comment | Keep the resolver: BFF session flow actively consumes it. Its stale transition comment is documentation maintenance, not evidence of a removable service. |
 | Completed-plan parsing compatibility | Keep support for completed historical plans that lack dependency sections. The current planning contract explicitly permits it. |
 | Key alias in architecture restrictions | Keep the prohibition against importing the retired technical alias. A restriction is not a resolution mapping or supported runtime feature. |

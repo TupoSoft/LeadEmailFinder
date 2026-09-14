@@ -35,7 +35,6 @@
         "keycloak:seed-customer-fixture": "ts-node scripts/keycloak/seed-customer-fixture.ts",
         "plans:sync": "ts-node scripts/plans/sync-project.ts",
         "privacy:account-discovery-approvals-check": "ts-node scripts/privacy/account-discovery-approvals.ts",
-        "security:scan-linkedin-session-material": "ts-node scripts/security/scan-linkedin-session-material.ts",
         "keycloak:smoke": "ts-node scripts/keycloak/smoke-test.ts",
         "proxy-fleet:render": "ts-node scripts/proxy-fleet-swarm/render-stack-cli.ts",
         "proxy-fleet:deploy": "ts-node scripts/proxy-fleet-swarm/deploy-cli.ts",

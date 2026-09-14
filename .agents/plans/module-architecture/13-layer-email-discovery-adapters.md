@@ -159,7 +159,6 @@ mailbox probing. Privacy plan 03 remains the logging contract for all infrastruc
 Run domain-discovery contracts and account-discovery regression coverage:
 
     corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/discovery src/libs/modules/email-verification/src/domain src/libs/modules/email-verification/src/infrastructure/account-discovery src/libs/modules/email-verification/src/application/account-discovery src/libs/dns/src --runInBand
-    corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
     corepack pnpm architecture:check
 
 Inspect the baseline diff and reject added or broadened entries. Run `corepack pnpm architecture:baseline` only when

@@ -105,7 +105,7 @@ a base selects all consumers. Each distinct outgoing revision is checked before 
 remote ref needs no validation.
 
 Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
-account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
+account-discovery approval validation, the module architecture ratchet, the ExecPlan
 repository test, and CI selection tests. Without a comparison base, Harper checks all tracked Markdown files;
 the approval checker uses the existing `HEAD^` baseline, matching the workflow. The remaining consumers follow
 this matrix; multiple changed paths select the union of their consumers:

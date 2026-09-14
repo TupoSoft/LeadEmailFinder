@@ -2,6 +2,9 @@
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
+The session-material scanner and its package command were retired at the user's request on 2026-09-14 through
+`local-ci-hooks/01`. Scanner commands and results below are historical evidence from this completed plan.
+
 ## Purpose / Big Picture
 
 Give email verification one internal interface for requesting account-discovery evidence. The active

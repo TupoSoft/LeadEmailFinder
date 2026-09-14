@@ -469,8 +469,7 @@ Focused tests are grouped by behavior:
   dependencies, covering positive evidence, disabled discovery, and approval expiry),
   `infrastructure/account-discovery/configured-account-discovery.spec.ts`,
   `infrastructure/account-discovery/http-module-options.factory.spec.ts`, the provider adapter specifications
-  under `infrastructure/account-discovery/providers/`, and `scripts/privacy/account-discovery-approvals.spec.ts` and
-  `scripts/security/scan-linkedin-session-material.spec.ts`
+  under `infrastructure/account-discovery/providers/`, and `scripts/privacy/account-discovery-approvals.spec.ts`
 - **Ownership schema and PostgreSQL isolation**: `verification-entities.spec.ts`,
   `verification-organization-ownership.integration.spec.ts`
 - **Verification operations and billing recovery**: `application/verification-idempotency-key.spec.ts`,
