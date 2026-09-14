@@ -22,7 +22,7 @@ developer's running application stack. The same validation is available through 
 - [x] (2026-09-14) Exercise the real push hook with all consumers selected; record the existing backend test failure and verify fixture removal.
 - [x] (2026-09-14) Retire the session-material scanner; pass 41 local tests, 308 focused Jest tests, type checking, ESLint, and actionlint.
 - [x] (2026-09-14) Run the normal push hook after removal; diagnose missing `envsubst` and add `gettext-base` to the runner image.
-- [ ] (2026-09-14) Retry the full normal push hook after the runner dependency correction.
+- [x] (2026-09-15) Pass all six consumers through the normal push hook after the runner dependency correction, including every preserved Bruno collection.
 
 ## Plan dependencies
 
@@ -55,7 +55,8 @@ None.
   historical evidence, and approval validation, the architecture gate, and application behavior are preserved.
 - The normal push of `28fe5cd` reached the browser-live route ownership and privacy checks before failing at
   `scripts/frontend/checkout-config.test.mjs:132` with `envsubst: not found`. The runner image lacked that command.
-  Adding `gettext-base` to `docker/ci-local/Dockerfile` supplies it; a full push retry remains pending.
+  Adding `gettext-base` to `docker/ci-local/Dockerfile` supplies it. The subsequent full retry passed all nine
+  gateway tests and every remaining live fixture and preserved Bruno collection.
 
 ## Decision Log
 
@@ -106,6 +107,11 @@ The hook, launcher, isolated runner image, workflow adapter, manual validation t
 implemented and prepared for one draft pull request. The actual frozen workspace dependency install completed,
 and `corepack pnpm prepare` installed the hook.
 
+Full local CI passed through the normal push hook on 2026-09-15 for committed revision
+`6425e862f0d68c083a129b08adc434d0b64f9143`. All six consumers passed, including all nine gateway tests, every live
+fixture, and every preserved Bruno collection through the final batch upload and download. No validation
+containers remained, and the private stack volumes were removed.
+
 The user's later removal request retires the session-material scanner and every executable reference to it.
 Current documentation and active plan commands reflect the removal; completed plans retain their historical
 scanner evidence with a retirement note. Validation of the remaining checks is recorded separately below.
@@ -114,7 +120,7 @@ actionlint passed after removal. Independent review found no executable scanner 
 attempt for `28fe5cd` then passed repository policy, backend checks and database fixtures, web checks, generated
 contracts, application images, browser artifact guards, and browser UI, accessibility, and visual suites. It
 stopped in the browser-live gateway checks because the runner image lacked `envsubst`. The image now includes
-`gettext-base`; full validation after that correction remains pending.
+`gettext-base`; the subsequent full validation result above confirms the correction.
 
 During the initial implementation, all 38 local Node tests and 308 existing Jest workflow, selection, and ExecPlan
 tests passed. Focused ESLint, actionlint, shell syntax, and whitespace checks passed. A real launcher smoke test validated the
@@ -128,9 +134,9 @@ passed after this clarification. The later real push attempt for `ddacb5d` selec
 repository policy, backend Ruby checks, lint, and type checking. It stopped at an existing backend scanner test
 failure, correctly preventing the push. Harper reported 780 findings across 380 files and continued as intended.
 
-Full local validation remains incomplete. The later `28fe5cd` run reached and passed the consumers that the first
-attempt had not reached, until its gateway test failed. Later live fixtures and Bruno checks did not run and remain
-unverified. Fixture and validation-container removal were verified after both attempts. Independent review left no material SOLID issue.
+The earlier `ddacb5d` and `28fe5cd` failures remain historical evidence. The final retry completed all consumers
+and live checks that those attempts had not reached. Fixture and validation-container removal were verified.
+Independent review left no material SOLID issue.
 The deliberate architecture trade-off is the strict workflow adapter, which needs explicit support for new
 Actions features. Application modules and HTTP behavior remain unchanged.
 
@@ -342,8 +348,13 @@ step `Test Vite and Nginx route ownership and privacy` then reported eight passe
 `scripts/frontend/checkout-config.test.mjs:132` failed because `envsubst` was missing. The subsequent live
 fixtures and Bruno checks were not reached. Fixture and validation-container removal were verified.
 
-The runner Dockerfile now installs `gettext-base`, which provides `envsubst`. The full normal push retry is
-pending; the dependency correction is not evidence that the remaining live checks have passed.
+The runner Dockerfile installs `gettext-base`, which provides `envsubst`. On 2026-09-15, the full normal push-hook
+retry for `6425e862f0d68c083a129b08adc434d0b64f9143` passed all six consumers. All nine gateway tests passed, then
+every remaining live fixture and preserved Bruno collection passed, including the final batch upload and
+download. `/tmp/lef-remove-scanner-push-retry.log` records
+`Local validation passed for 6425e862f0d68c083a129b08adc434d0b64f9143.` No validation containers remained, and the
+private stack volumes were removed. This result covers local validation; it does not claim a
+hosted GitHub Actions run.
 
 The issue lookup at the start of implementation found no synced issue for this plan.
 
