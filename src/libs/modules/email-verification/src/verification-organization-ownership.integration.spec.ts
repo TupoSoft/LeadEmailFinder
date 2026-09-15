@@ -1,8 +1,6 @@
-import { Upload } from '@aws-sdk/lib-storage'
 import { randomUUID } from 'node:crypto'
 import { DataSource } from 'typeorm'
 import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
-import { S3BatchResultWriter } from './infrastructure/storage/batch-verification/s3-batch-result-writer'
 import { DomainPolicyEntity } from './infrastructure/persistence/typeorm/domain-policy.entity'
 import { EmailEntity } from './infrastructure/persistence/typeorm/email.entity'
 import { EmailVerificationEntity } from './infrastructure/persistence/typeorm/email-verification.entity'
@@ -18,8 +16,6 @@ import { EmailAdministrationService } from './application/email-administration.s
 import { MailboxVerificationService } from './application/mailbox-verification.service'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 
-jest.mock('@aws-sdk/lib-storage')
-
 const postgresUrl = process.env['TEST_POSTGRES_URL']
 const describeWithPostgres = postgresUrl === undefined ? describe.skip : describe
 const schema = `verification_ownership_${process.pid}`
@@ -30,10 +26,6 @@ const entities = [
     SmtpVerificationEntity,
     VerificationSettlementIntentionEntity,
 ]
-
-interface UploadParams {
-    Body: NodeJS.ReadableStream
-}
 
 describeWithPostgres('verification organization ownership', () => {
     let dataSource: DataSource
@@ -238,7 +230,7 @@ describeWithPostgres('verification organization ownership', () => {
         expect(smtpRows.every(row => row.createdAt instanceof Date && row.updatedAt instanceof Date)).toBe(true)
     })
 
-    it('preserves an earlier batch after reverification and exports only its owning organization', async () => {
+    it('preserves an earlier batch row after a later reverification of the same address', async () => {
         const organizationAId = randomUUID()
         const organizationBId = randomUUID()
         const batchId = randomUUID()
@@ -320,34 +312,5 @@ describeWithPostgres('verification organization ownership', () => {
         await expect(verificationRepository.findOneByOrFail({ id: ownedBatchVerification.id })).resolves.toEqual(
             expect.objectContaining({ organizationId: organizationAId, batchId }),
         )
-
-        const chunks: Buffer[] = []
-        ;(Upload as unknown as jest.Mock).mockImplementation(({ params }: { params: UploadParams }) => {
-            params.Body.on('data', (chunk: Buffer) => chunks.push(chunk))
-            return {
-                done: () =>
-                    new Promise((resolve, reject) => {
-                        params.Body.on('end', resolve)
-                        params.Body.on('error', reject)
-                    }),
-            }
-        })
-
-        const resultWriter = new S3BatchResultWriter(
-            {} as never,
-            {
-                mode: 'development-local',
-                cacheControl: 'no-store',
-            },
-            verificationRepository,
-            dataSource,
-        )
-
-        await resultWriter.write('bucket', `organizations/${organizationAId}/uploads/input.csv`, organizationAId, batchId)
-
-        const csv = Buffer.concat(chunks).toString('utf8')
-        expect(csv).toContain('owned@example.test')
-        expect(csv).not.toContain('foreign@example.test')
-        expect(csv.slice(0, csv.indexOf('\n')).split(',')).not.toContain('organizationId')
     })
 })

@@ -2,7 +2,9 @@ export const VERIFICATION_REQUEST_STORE = Symbol('VERIFICATION_REQUEST_STORE')
 
 /** Matches the delivery-mode vocabulary already used by `VerificationTraceContext`/`logging-verification-trace-observer.ts`. */
 export type VerificationDeliveryMode = 'sync' | 'async' | 'batch' | 'batch_child'
-export type VerificationRequestSource = 'fresh' | 'cache' | 'shared'
+/** `'cooldown'` is written only by batch admission's free prior-inconclusive row path — single-verification's own
+ *  `admit()` returns `address-cooldown` before any request row exists, so it never produces this source. */
+export type VerificationRequestSource = 'fresh' | 'cache' | 'shared' | 'cooldown'
 export type VerificationBillingState = 'pending' | 'settled'
 export type VerificationFinalReason = 'conclusive' | 'cached' | 'shared' | 'inconclusive' | 'failed'
 

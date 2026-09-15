@@ -1,8 +1,9 @@
 import { InjectQueue } from '@nestjs/bullmq'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { Job, Queue } from 'bullmq'
 import { BatchJobData } from '../../../domain/batch-job'
 import { BatchJobHandle, BatchJobs, NewBatchJob } from '../../../application/delivery/batch/batch-jobs'
+import { BATCH_ADMISSION_STORE, BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification-queue.config'
 import { BatchTerminalFailureCode } from '../../../application/delivery/batch/batch-terminal-failure'
 import { normalizeVerificationJobState } from '../normalize-verification-job-state'
@@ -22,6 +23,7 @@ function retainedResultLocation(value: unknown): string | undefined {
 
 function toHandle(
     initialJob: Job<BatchQueueJobData, string>,
+    admissions: BatchAdmissionStore,
     // Worker handles already own their attempt's data. Public lookup always supplies a fresh queue read.
     reload: () => Promise<Job<BatchQueueJobData, string> | undefined> = () => Promise.resolve(initialJob),
 ): BatchJobHandle {
@@ -49,9 +51,13 @@ function toHandle(
             if (state === 'failed') return { state, failureCode: job.data.failureCode }
             return { state }
         },
+        // Cached/shared/cooldown addresses have no queue child of their own, so counts come from the durable
+        // admission manifest instead of a BullMQ parent/child dependency count.
         counts: async () => {
-            const { processed = 0, unprocessed = 0 } = await job.getDependenciesCount()
-            return { processed, unprocessed }
+            const admission = await admissions.findById(job.id as string, job.data.organizationId)
+            if (!admission) return { processed: 0, unprocessed: 0 }
+            const unsettled = await admissions.countUnsettledAddresses(job.id as string, job.data.organizationId)
+            return { processed: Math.max(0, admission.uniqueAddressCount - unsettled), unprocessed: unsettled }
         },
         updateStep: (next: BatchJobData) => job.updateData(next),
     }
@@ -62,6 +68,8 @@ export class BullBatchJobs implements BatchJobs {
     constructor(
         @InjectQueue(BATCH_EMAIL_VERIFICATION_QUEUE_NAME)
         private readonly queue: Queue<BatchJobData, string>,
+        @Inject(BATCH_ADMISSION_STORE)
+        private readonly admissions: BatchAdmissionStore,
     ) {}
 
     async enqueue(data: NewBatchJob, jobId: string): Promise<{ id?: string }> {
@@ -73,7 +81,7 @@ export class BullBatchJobs implements BatchJobs {
         const job = await this.queue.getJob(id)
         if (!job) return undefined
 
-        return toHandle(job, () => this.queue.getJob(id))
+        return toHandle(job, this.admissions, () => this.queue.getJob(id))
     }
 }
 

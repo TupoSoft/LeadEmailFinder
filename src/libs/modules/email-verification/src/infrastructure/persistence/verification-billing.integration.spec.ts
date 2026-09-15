@@ -17,21 +17,25 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
+import { CreditReservationService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../../application/ports/verification-clock'
 import { VerificationAdmissionService } from '../../application/operations/verification-admission.service'
 import { VerificationSettlementService } from '../../application/operations/verification-settlement.service'
 import { EmailAdministrationService } from '../../application/email-administration.service'
+import { BatchAdmissionService } from '../../application/delivery/batch/batch-admission.service'
 import { TypeOrmVerificationRequestStore } from './typeorm-verification-request.store'
 import { TypeOrmVerificationExecutionStore } from './typeorm-verification-execution.store'
 import { TypeOrmVerificationSettlementStore } from './typeorm-verification-settlement.store'
 import { TypeOrmVerificationResultCacheReader } from './typeorm-verification-result-cache-reader'
+import { TypeOrmBatchAdmissionStore } from './typeorm-batch-admission.store'
 import { TypeOrmEmailStore } from './typeorm-email.store'
 import { EmailEntity } from './typeorm/email.entity'
 import { EmailVerificationEntity } from './typeorm/email-verification.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
 import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
+import { BatchAdmissionEntity } from './typeorm/batch-admission.entity'
+import { BatchUniqueAddressEntity } from './typeorm/batch-unique-address.entity'
 import { NewEmailVerification } from '../../domain/email-verification'
 
 // Deliberately its own env var: this schema owns identity's full entity set (for a real CreditReservationService)
@@ -55,6 +59,8 @@ const entities = [
     VerificationRequestEntity,
     VerificationExecutionEntity,
     VerificationSettlementIntentionEntity,
+    BatchAdmissionEntity,
+    BatchUniqueAddressEntity,
 ]
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
@@ -87,6 +93,8 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
     let credits: CreditReservationService
     let admission: VerificationAdmissionService
     let settlementService: VerificationSettlementService
+    let batchAdmissions: TypeOrmBatchAdmissionStore
+    let batchAdmissionService: BatchAdmissionService
     let organizationId: string
     let clock: VerificationClock
 
@@ -141,6 +149,19 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         admission = new VerificationAdmissionService(
             requests,
             executions,
+            cacheReader,
+            cacheReader,
+            credits,
+            clock,
+            CACHE_TTL_MS,
+            EXECUTION_DEADLINE_MS,
+            ADDRESS_COOLDOWN_MS,
+        )
+        batchAdmissions = new TypeOrmBatchAdmissionStore(schemaDataSource)
+        batchAdmissionService = new BatchAdmissionService(
+            batchAdmissions,
+            executions,
+            requests,
             cacheReader,
             cacheReader,
             credits,
@@ -336,5 +357,107 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             .getRepository(CreditDebit)
             .findBy({ organizationId, reference: `verification-reservation:${funded.executionId}` })
         expect(debitRows).toHaveLength(1)
+    })
+
+    it('admits a batch of unique addresses with exactly one reservation per address, not per row', async () => {
+        const batchId = randomUUID()
+        await batchAdmissions.createOrReplay({
+            batchId,
+            organizationId,
+            totalRows: 5,
+            uniqueAddressCount: 3,
+            clientRequestKey: null,
+            contentDigest: null,
+        })
+        await batchAdmissions.insertUniqueAddresses(batchId, organizationId, [
+            { normalizedAddress: 'a@example.test', firstSeenRow: 1 },
+            { normalizedAddress: 'b@example.test', firstSeenRow: 2 },
+            { normalizedAddress: 'c@example.test', firstSeenRow: 3 },
+        ])
+
+        await batchAdmissionService.admit(batchId, organizationId)
+
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 3 }))
+        await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+            expect.objectContaining({ state: 'admitted' }),
+        )
+        const executionRows = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(executionRows).toHaveLength(3)
+        expect(executionRows.every(execution => execution.state === 'queued')).toBe(true)
+
+        const addresses = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+        expect(addresses.every(address => address.admissionKind === 'created' && address.payerRequestId !== null)).toBe(true)
+        for (const address of addresses) {
+            const payerRequest = await requests.findById(address.payerRequestId!, organizationId)
+            expect(payerRequest).toEqual(
+                expect.objectContaining({ source: 'fresh', billingState: 'pending', reservedCount: 1, deliveryMode: 'batch' }),
+            )
+        }
+    })
+
+    it('fences an insufficient-funds batch group, charging nothing and marking every address a free failure', async () => {
+        await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 2 })
+        const batchId = randomUUID()
+        await batchAdmissions.createOrReplay({
+            batchId,
+            organizationId,
+            totalRows: 3,
+            uniqueAddressCount: 3,
+            clientRequestKey: null,
+            contentDigest: null,
+        })
+        await batchAdmissions.insertUniqueAddresses(batchId, organizationId, [
+            { normalizedAddress: 'x@example.test', firstSeenRow: 1 },
+            { normalizedAddress: 'y@example.test', firstSeenRow: 2 },
+            { normalizedAddress: 'z@example.test', firstSeenRow: 3 },
+        ])
+
+        await batchAdmissionService.admit(batchId, organizationId)
+
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 2, reserved: 0 }))
+        await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+            expect.objectContaining({ state: 'insufficient_credits' }),
+        )
+        const executionRows = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(executionRows.every(execution => execution.state === 'canceled')).toBe(true)
+
+        const addresses = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+        for (const address of addresses) {
+            const payerRequest = await requests.findById(address.payerRequestId!, organizationId)
+            expect(payerRequest).toEqual(
+                expect.objectContaining({ billingState: 'settled', finalReason: 'failed', reservedCount: 0, chargedCount: 0 }),
+            )
+        }
+    })
+
+    it('shares a single reservation between a batch address and a concurrent single-verification submission', async () => {
+        const batchId = randomUUID()
+        await batchAdmissions.createOrReplay({
+            batchId,
+            organizationId,
+            totalRows: 1,
+            uniqueAddressCount: 1,
+            clientRequestKey: null,
+            contentDigest: null,
+        })
+        await batchAdmissions.insertUniqueAddresses(batchId, organizationId, [
+            { normalizedAddress: 'shared-race@example.test', firstSeenRow: 1 },
+        ])
+
+        const [, singleOutcome] = await Promise.all([
+            batchAdmissionService.admit(batchId, organizationId),
+            admission.admit({ organizationId, email: 'shared-race@example.test', deliveryMode: 'sync' }),
+        ])
+
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
+        const executionRows = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, normalizedAddress: 'shared-race@example.test' })
+        expect(executionRows).toHaveLength(1)
+        expect(['funded', 'joined']).toContain(singleOutcome.kind)
     })
 })

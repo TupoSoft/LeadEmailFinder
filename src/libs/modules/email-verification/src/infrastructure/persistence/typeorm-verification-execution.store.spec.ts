@@ -39,6 +39,7 @@ describe('TypeOrmVerificationExecutionStore', () => {
         delete: jest.Mock
         transaction: jest.Mock
         createQueryBuilder: jest.Mock
+        query: jest.Mock
     }
     let store: TypeOrmVerificationExecutionStore
 
@@ -53,6 +54,7 @@ describe('TypeOrmVerificationExecutionStore', () => {
             delete: jest.fn(),
             transaction: jest.fn(),
             createQueryBuilder: jest.fn(),
+            query: jest.fn().mockResolvedValue(undefined),
         }
         manager.transaction.mockImplementation(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
             callback(manager as unknown as EntityManager),
@@ -84,6 +86,33 @@ describe('TypeOrmVerificationExecutionStore', () => {
                 alwaysUsable,
             )
             expect(outcome.kind).toBe('created')
+        })
+
+        it('serializes admission with a transaction-scoped advisory lock keyed on the organization', async () => {
+            manager.findOne.mockResolvedValue(null)
+            await store.claimOrJoin(organizationId, address, 'request-1', 'execution-1', deadlineAt, alwaysUsable)
+            expect(manager.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId])
+        })
+
+        it('defaults the funding owner to single, owned by the new execution id', async () => {
+            manager.findOne.mockResolvedValue(null)
+            await store.claimOrJoin(organizationId, address, 'request-1', 'execution-1', deadlineAt, alwaysUsable)
+            expect(manager.create).toHaveBeenCalledWith(
+                VerificationExecutionEntity,
+                expect.objectContaining({ fundingOwnerType: 'single', fundingOwnerId: 'execution-1' }),
+            )
+        })
+
+        it('claims a new execution owned by a batch group when a funding owner is supplied', async () => {
+            manager.findOne.mockResolvedValue(null)
+            await store.claimOrJoin(organizationId, address, 'request-1', 'execution-1', deadlineAt, alwaysUsable, {
+                type: 'batch_group',
+                id: 'batch-1',
+            })
+            expect(manager.create).toHaveBeenCalledWith(
+                VerificationExecutionEntity,
+                expect.objectContaining({ fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+            )
         })
 
         it('reports cache-available and deletes its own optimistic insert when a fresh cache result appears under lock', async () => {
@@ -242,14 +271,42 @@ describe('TypeOrmVerificationExecutionStore', () => {
         })
     })
 
-    it('pages only single-owned nonterminal executions', async () => {
-        manager.find.mockResolvedValue([execution()])
+    it('pages nonterminal executions regardless of funding owner', async () => {
+        manager.find.mockResolvedValue([execution({ fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' })])
         const page = await store.pageNonterminal(100)
         expect(page).toHaveLength(1)
-        expect(manager.find).toHaveBeenCalledWith(
-            VerificationExecutionEntity,
-            expect.objectContaining({ where: expect.objectContaining({ fundingOwnerType: 'single' }) }),
-        )
+        const [, options] = manager.find.mock.calls[0] as [unknown, { where: Record<string, unknown> }]
+        expect(options.where).not.toHaveProperty('fundingOwnerType')
+    })
+
+    describe('cancelBatchGroupUnstarted', () => {
+        it('cancels every unstarted batch-owned row and returns it', async () => {
+            const rows = [
+                execution({ executionId: 'execution-1', state: 'queued', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+                execution({ executionId: 'execution-2', state: 'funding_pending', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+            ]
+            manager.find.mockResolvedValue(rows)
+
+            const result = await store.cancelBatchGroupUnstarted('batch-1', organizationId)
+
+            expect(manager.find).toHaveBeenCalledWith(
+                VerificationExecutionEntity,
+                expect.objectContaining({
+                    where: expect.objectContaining({ fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+                    lock: { mode: 'pessimistic_write' },
+                }),
+            )
+            expect(manager.save).toHaveBeenCalledWith(VerificationExecutionEntity, rows)
+            expect(result.every(row => row.state === 'canceled')).toBe(true)
+            expect(result).toHaveLength(2)
+        })
+
+        it('skips saving when no unstarted batch-owned row exists', async () => {
+            manager.find.mockResolvedValue([])
+            const result = await store.cancelBatchGroupUnstarted('batch-1', organizationId)
+            expect(result).toEqual([])
+            expect(manager.save).not.toHaveBeenCalled()
+        })
     })
 
     it('pages canceled executions still holding a pending linked request', async () => {

@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { EmailVerificationCoreModule } from './infrastructure/email-verification-core.module'
-import { AsyncEmailVerificationModule } from './infrastructure/queues/async-verification/async-email-verification.module'
 import { AsyncEmailVerificationController } from './api/http/asynchronous-verification/async-email-verification.controller'
 import { BatchEmailVerificationModule } from './infrastructure/queues/batch-verification/batch-email-verification.module'
 import { BatchEmailVerificationController } from './api/http/batch-verification/batch-email-verification.controller'
@@ -50,7 +49,6 @@ const DEFAULT_VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND = 1
     imports: [
         ConfigModule,
         EmailVerificationCoreModule,
-        AsyncEmailVerificationModule,
         BatchEmailVerificationModule,
         CreditsModule,
         VerificationReconciliationModule,

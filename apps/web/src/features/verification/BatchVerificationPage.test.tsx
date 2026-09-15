@@ -39,9 +39,51 @@ const statusPath = `/verifyBatch/${id}`
 const resultPath = `${statusPath}/results`
 const formRoute = '/app/verifications/batches/new'
 const jobRoute = `/app/verifications/batches/${id}`
-const queued = { id, status: 'queued', progress: 0, total: 0, processed: 0, unprocessed: 0 }
-const running = { id, status: 'running', progress: 37.5, total: 8, processed: 3, unprocessed: 5 }
-const completed = { ...running, status: 'completed', progress: 100, processed: 8, unprocessed: 0 }
+const zeroCounts = {
+    totalRows: 0,
+    uniqueAddresses: 0,
+    duplicateRows: 0,
+    cachedAddresses: 0,
+    sharedAddresses: 0,
+    cooldownAddresses: 0,
+    completedAddresses: 0,
+    conclusiveAddresses: 0,
+    inconclusiveAddresses: 0,
+    failedAddresses: 0,
+}
+const zeroBilling = { state: 'pending' as const, reserved: 0, charged: 0 }
+const queued = {
+    id,
+    status: 'queued',
+    progress: 0,
+    total: 0,
+    processed: 0,
+    unprocessed: 0,
+    resultsAvailable: false,
+    counts: zeroCounts,
+    billing: zeroBilling,
+}
+const running = {
+    id,
+    status: 'running',
+    progress: 37.5,
+    total: 8,
+    processed: 3,
+    unprocessed: 5,
+    resultsAvailable: false,
+    counts: { ...zeroCounts, totalRows: 8, uniqueAddresses: 8, completedAddresses: 3, conclusiveAddresses: 3 },
+    billing: { state: 'pending' as const, reserved: 3, charged: 3 },
+}
+const completed = {
+    ...running,
+    status: 'completed',
+    progress: 100,
+    processed: 8,
+    unprocessed: 0,
+    resultsAvailable: true,
+    counts: { ...running.counts, completedAddresses: 8, conclusiveAddresses: 8 },
+    billing: { state: 'settled' as const, reserved: 8, charged: 8 },
+}
 function deferred<T>() {
     let resolve!: (value: T) => void
     const promise = new Promise<T>(done => {

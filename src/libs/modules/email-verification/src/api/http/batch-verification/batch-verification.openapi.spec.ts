@@ -54,7 +54,17 @@ describe('batch verification OpenAPI contract', () => {
         expect(status.properties!.failureCode).toMatchObject({
             enum: ['invalid_csv', 'insufficient_credits', 'processing_failed'],
         })
-        expect(status.required).toEqual(['id', 'status', 'progress', 'total', 'processed', 'unprocessed'])
+        expect(status.required).toEqual([
+            'id',
+            'status',
+            'progress',
+            'total',
+            'processed',
+            'unprocessed',
+            'resultsAvailable',
+            'counts',
+            'billing',
+        ])
         expect(Object.keys(status.properties!)).toEqual([
             'id',
             'status',
@@ -63,8 +73,15 @@ describe('batch verification OpenAPI contract', () => {
             'total',
             'processed',
             'unprocessed',
+            'resultsAvailable',
+            'counts',
+            'billing',
         ])
         expect(status.properties!.progress).toMatchObject({ minimum: 0, maximum: 100 })
+        expect(status.properties!.counts).toMatchObject({ $ref: '#/components/schemas/BatchStatusAddressCountsDto' })
+        expect(status.properties!.billing).toMatchObject({ $ref: '#/components/schemas/BatchStatusBillingDto' })
+        expect(document.components!.schemas!.BatchStatusAddressCountsDto).toBeDefined()
+        expect(document.components!.schemas!.BatchStatusBillingDto).toBeDefined()
         expect(JSON.stringify(status)).not.toMatch(/failedReason|stacktrace|attemptsMade/)
         expect(Object.keys(document.paths['/verifyBatch/{id}'].get!.responses).sort()).toEqual([
             '200',

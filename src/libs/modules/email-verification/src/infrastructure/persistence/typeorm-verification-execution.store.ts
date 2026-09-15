@@ -2,6 +2,7 @@ import { DataSource, In } from 'typeorm'
 import {
     CachedResultCandidate,
     ClaimAddressOutcome,
+    ExecutionFundingOwner,
     VerificationExecutionRecord,
     VerificationExecutionStore,
 } from '../../application/ports/verification-execution-store'
@@ -47,8 +48,15 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         newExecutionId: string,
         deadlineAt: Date,
         isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+        fundingOwner: ExecutionFundingOwner = { type: 'single', id: newExecutionId },
     ): Promise<ClaimAddressOutcome> {
         return this.dataSource.transaction(async manager => {
+            // Serializes every admission (single or batch) for this organization against every other one, so a
+            // batch upload freezing its address manifest cannot race a concurrent single-verification submission
+            // for one of the same addresses. Transaction-scoped: released automatically at commit/rollback, even
+            // across the nested savepoint transaction below.
+            await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId])
+
             const existing = await manager.findOne(VerificationExecutionEntity, {
                 where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
             })
@@ -80,8 +88,8 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                             normalizedAddress,
                             payerRequestId,
                             state: 'funding_pending',
-                            fundingOwnerType: 'single',
-                            fundingOwnerId: newExecutionId,
+                            fundingOwnerType: fundingOwner.type,
+                            fundingOwnerId: fundingOwner.id,
                             attemptGeneration: 0,
                             leaseOwnerId: null,
                             leaseExpiresAt: null,
@@ -245,7 +253,7 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
 
     async pageNonterminal(limit: number): Promise<readonly VerificationExecutionRecord[]> {
         const rows = await this.dataSource.manager.find(VerificationExecutionEntity, {
-            where: { state: In(NONTERMINAL_STATES), fundingOwnerType: 'single' },
+            where: { state: In(NONTERMINAL_STATES) },
             order: { updatedAt: 'ASC' },
             take: limit,
         })
@@ -256,7 +264,6 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         const rows = await this.dataSource.manager
             .createQueryBuilder(VerificationExecutionEntity, 'execution')
             .where('execution.state = :state', { state: 'canceled' })
-            .andWhere('execution.fundingOwnerType = :fundingOwnerType', { fundingOwnerType: 'single' })
             .andWhere(qb => {
                 const subQuery = qb
                     .subQuery()
@@ -271,5 +278,28 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
             .take(limit)
             .getMany()
         return rows.map(toRecord)
+    }
+
+    async cancelBatchGroupUnstarted(batchId: string, organizationId: string): Promise<readonly VerificationExecutionRecord[]> {
+        return this.dataSource.transaction(async manager => {
+            const rows = await manager.find(VerificationExecutionEntity, {
+                where: {
+                    organizationId,
+                    fundingOwnerType: 'batch_group',
+                    fundingOwnerId: batchId,
+                    state: In(['funding_pending', 'queued', 'awaiting_retry'] as const),
+                },
+                lock: { mode: 'pessimistic_write' },
+            })
+            if (rows.length === 0) return []
+
+            for (const row of rows) {
+                row.state = 'canceled'
+                row.leaseOwnerId = null
+                row.leaseExpiresAt = null
+            }
+            await manager.save(VerificationExecutionEntity, rows)
+            return rows.map(toRecord)
+        })
     }
 }

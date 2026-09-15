@@ -19,7 +19,7 @@ runtime:
           code: |-
               test('exposes only the stable public status and safe terminal failure code', function() {
                 expect(['queued', 'running', 'completed', 'failed', 'unavailable']).to.include(res.body.status);
-                const keys = ['id', 'status', 'progress', 'total', 'processed', 'unprocessed'];
+                const keys = ['id', 'status', 'progress', 'total', 'processed', 'unprocessed', 'resultsAvailable', 'counts', 'billing'];
                 if (res.body.status === 'failed') {
                   keys.push('failureCode');
                   expect(['invalid_csv', 'insufficient_credits', 'processing_failed']).to.include(res.body.failureCode);
@@ -29,6 +29,8 @@ runtime:
                   expect(Number.isSafeInteger(res.body[field])).to.equal(true);
                   expect(res.body[field]).to.be.at.least(0);
                 }
+                expect(res.body.resultsAvailable).to.be.a('boolean');
+                expect(['pending', 'settled']).to.include(res.body.billing.state);
               });
 
               test('reports a finite, bounded progress value', function() {

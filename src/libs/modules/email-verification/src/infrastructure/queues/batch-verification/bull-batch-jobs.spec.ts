@@ -1,20 +1,35 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { getQueueToken } from '@nestjs/bullmq'
 import { BatchJobData, BatchJobStep } from '../../../domain/batch-job'
+import { BATCH_ADMISSION_STORE, BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification-queue.config'
 import { BullBatchJobs } from './bull-batch-jobs'
 
 describe('BullBatchJobs', () => {
     let queue: { add: jest.Mock; getJob: jest.Mock }
+    let admissions: jest.Mocked<BatchAdmissionStore>
     let jobs: BullBatchJobs
 
     beforeEach(async () => {
         queue = { add: jest.fn(), getJob: jest.fn() }
+        admissions = {
+            createOrReplay: jest.fn(),
+            findById: jest.fn().mockResolvedValue(null),
+            findByClientKey: jest.fn(),
+            updateState: jest.fn(),
+            insertUniqueAddresses: jest.fn(),
+            pageUniqueAddresses: jest.fn(),
+            recordAdmissionOutcome: jest.fn(),
+            recordPayerRequestId: jest.fn(),
+            countUnsettledAddresses: jest.fn().mockResolvedValue(0),
+            getStatusCounts: jest.fn(),
+        }
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 BullBatchJobs,
                 { provide: getQueueToken(BATCH_EMAIL_VERIFICATION_QUEUE_NAME), useValue: queue },
+                { provide: BATCH_ADMISSION_STORE, useValue: admissions },
             ],
         }).compile()
 
@@ -105,7 +120,7 @@ describe('BullBatchJobs', () => {
     it('refreshes terminal metadata when the worker completes between job lookup and state lookup', async () => {
         const initial = {
             id: 'job-1',
-            data: { organizationId: 'org-1', step: BatchJobStep.WaitForChildren },
+            data: { organizationId: 'org-1', step: BatchJobStep.AwaitSettlement },
             getState: jest.fn().mockResolvedValue('completed'),
             returnvalue: undefined,
         }
@@ -160,11 +175,22 @@ describe('BullBatchJobs', () => {
             queueQualifiedName: 'bull:batch-email-verification',
             attemptsMade: 2,
             getState: jest.fn().mockResolvedValue('active'),
-            getDependenciesCount: jest.fn().mockResolvedValue({ processed: 3, unprocessed: 1 }),
             returnvalue: 's3://bucket/results/file.csv',
             updateData,
         }
         queue.getJob.mockResolvedValueOnce(rawJob)
+        admissions.findById.mockResolvedValue({
+            batchId: 'job-1',
+            organizationId: 'org-1',
+            state: 'admitted',
+            totalRows: 4,
+            uniqueAddressCount: 4,
+            clientRequestKey: null,
+            contentDigest: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        admissions.countUnsettledAddresses.mockResolvedValue(1)
 
         const handle = await jobs.find('job-1')
 
@@ -175,9 +201,10 @@ describe('BullBatchJobs', () => {
         expect(handle?.data).toBe(rawJob.data)
         await expect(handle?.readStatus()).resolves.toEqual({ state: 'running' })
         await expect(handle?.counts()).resolves.toEqual({ processed: 3, unprocessed: 1 })
+        expect(admissions.findById).toHaveBeenCalledWith('job-1', 'org-1')
 
         const next: BatchJobData = {
-            step: BatchJobStep.Process,
+            step: BatchJobStep.Dispatch,
             bucket: 'bucket',
             key: 'key',
             organizationId: 'org-1',
@@ -185,5 +212,18 @@ describe('BullBatchJobs', () => {
         }
         await handle?.updateStep(next)
         expect(updateData).toHaveBeenCalledWith(next)
+    })
+
+    it('reports zero counts when no admission record exists yet', async () => {
+        queue.getJob.mockResolvedValueOnce({
+            id: 'job-1',
+            data: {},
+            getState: jest.fn().mockResolvedValue('active'),
+        })
+        admissions.findById.mockResolvedValue(null)
+
+        const handle = await jobs.find('job-1')
+
+        await expect(handle?.counts()).resolves.toEqual({ processed: 0, unprocessed: 0 })
     })
 })

@@ -4,6 +4,7 @@ import { VerificationTraceObserver } from '../../verification-trace/verification
 import { BatchJobStep } from '../../../domain/batch-job'
 import { BatchJobHandle, BatchJobs } from './batch-jobs'
 import { BatchResultReader } from './batch-result-reader'
+import { BatchAdmissionStore } from './batch-admission-store'
 import { BatchEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { BatchEmailVerificationService } from './batch-email-verification.service'
 
@@ -23,6 +24,7 @@ describe('BatchEmailVerificationService', () => {
     let traceObserver: jest.Mocked<VerificationTraceObserver>
     let jobs: jest.Mocked<BatchJobs>
     let resultReader: jest.Mocked<BatchResultReader>
+    let admissions: jest.Mocked<BatchAdmissionStore>
     let service: BatchEmailVerificationService
 
     const organizationId = 'org-1'
@@ -37,7 +39,19 @@ describe('BatchEmailVerificationService', () => {
         }
         jobs = { enqueue: jest.fn(), find: jest.fn() }
         resultReader = { read: jest.fn() }
-        service = new BatchEmailVerificationService(jobs, resultReader, traceObserver)
+        admissions = {
+            createOrReplay: jest.fn(),
+            findById: jest.fn().mockResolvedValue(null),
+            findByClientKey: jest.fn(),
+            updateState: jest.fn(),
+            insertUniqueAddresses: jest.fn(),
+            pageUniqueAddresses: jest.fn(),
+            recordAdmissionOutcome: jest.fn(),
+            recordPayerRequestId: jest.fn(),
+            countUnsettledAddresses: jest.fn(),
+            getStatusCounts: jest.fn(),
+        }
+        service = new BatchEmailVerificationService(jobs, resultReader, admissions, traceObserver)
     })
 
     describe('uploadFile', () => {
@@ -163,7 +177,7 @@ describe('BatchEmailVerificationService', () => {
                 handle({
                     data: {
                         organizationId,
-                        step: BatchJobStep.WaitForChildren,
+                        step: BatchJobStep.AwaitSettlement,
                         bucket: 'b',
                         key: 'k',
                         credentialId: 'c',
@@ -182,17 +196,17 @@ describe('BatchEmailVerificationService', () => {
 
         it.each([
             ['before children exist, Validate', BatchJobStep.Validate, 0, 0, 0],
-            ['before children exist, Process', BatchJobStep.Process, 0, 0, 0],
-            ['no children processed yet', BatchJobStep.WaitForChildren, 0, 10, 0],
-            ['some children processed', BatchJobStep.WaitForChildren, 8, 2, 80],
-            ['all children processed, not Infinity', BatchJobStep.WaitForChildren, 10, 0, 100],
+            ['before children exist, Dispatch', BatchJobStep.Dispatch, 0, 0, 0],
+            ['no children processed yet', BatchJobStep.AwaitSettlement, 0, 10, 0],
+            ['some children processed', BatchJobStep.AwaitSettlement, 8, 2, 80],
+            ['all children processed, not Infinity', BatchJobStep.AwaitSettlement, 10, 0, 100],
             ['empty batch at upload stage', BatchJobStep.UploadResults, 0, 0, 100],
             ['finish with no children', BatchJobStep.Finish, 0, 0, 100],
             ['finish always reports 100 regardless of counts', BatchJobStep.Finish, 5, 5, 100],
-            ['nonfinite counts remain finite', BatchJobStep.WaitForChildren, Number.POSITIVE_INFINITY, Number.NaN, 100],
+            ['nonfinite counts remain finite', BatchJobStep.AwaitSettlement, Number.POSITIVE_INFINITY, Number.NaN, 100],
             [
                 'defensive: inconsistent negative counts never escape as NaN/Infinity',
-                BatchJobStep.WaitForChildren,
+                BatchJobStep.AwaitSettlement,
                 -1,
                 -1,
                 100,
@@ -245,7 +259,7 @@ describe('BatchEmailVerificationService', () => {
         it('throws when the job is owned by the caller but not completed', async () => {
             jobs.find.mockResolvedValueOnce(
                 handle({
-                    data: { organizationId, step: BatchJobStep.Process, bucket: 'b', key: 'k', credentialId: 'c' },
+                    data: { organizationId, step: BatchJobStep.Dispatch, bucket: 'b', key: 'k', credentialId: 'c' },
                     readStatus: jest.fn().mockResolvedValue({ state: 'running' }),
                 }),
             )

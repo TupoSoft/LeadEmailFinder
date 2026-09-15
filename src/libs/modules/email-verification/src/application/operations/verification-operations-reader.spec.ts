@@ -56,6 +56,7 @@ describe('VerificationOperationsReader', () => {
             cancelIfNoCaptureIntention: jest.fn(),
             pageNonterminal: jest.fn(),
             pageCanceledPendingCleanup: jest.fn(),
+            cancelBatchGroupUnstarted: jest.fn(),
         }
         results = { findOwned: jest.fn() }
         clock = { now: () => now }
