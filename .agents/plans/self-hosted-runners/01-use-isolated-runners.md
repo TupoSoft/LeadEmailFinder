@@ -48,6 +48,8 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-15) Diagnose the Git history scanner test timeout and give that integration test a 15-second budget.
 - [x] (2026-09-15) Pass all eight scanner tests and the delayed-Git comparison using CI's Git 2.55.0.
 - [x] (2026-09-15) Align the synthetic Bruno server with the current async verification collection and pass all 92 runner tests.
+- [x] (2026-09-15) Split overloaded browser scenarios and pass all 138 main browser tests with retries disabled.
+- [x] (2026-09-15) Verify the auth and billing splits with delayed accessibility scans under the unchanged 30-second deadline.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -56,6 +58,10 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-15) Browser UI job `104343935099` completed its main suite in 26.6 minutes with three failed tests,
+  seven tests that passed on retry, and 110 immediate passes. The failures exhausted the 30-second test deadline
+  after combining several interactions or accessibility scans. The expanded job budget was not the failure.
+  Backend, web, contract, image, and artifact checks passed on commit `8cfa5e6`.
 - (2026-09-15) Backend job `104325391711` passed all 3,331 Jest tests, then failed its Bruno runner test at
   request eight. PR #629 expanded the collection from 15 to 22 requests, but its synthetic server still omitted
   operation metadata, credit settlement, cooldown, and idempotency responses.
@@ -102,6 +108,11 @@ None.
 
 ## Decision Log
 
+- Decision: Split independent auth, team, billing, and batch browser scenarios into separate tests.
+  Rationale: Each scenario retains the normal 30-second budget and all applicable assertions. Keep lifecycle
+  sequences together, including session recovery, role rejection, and upload followed by reload. Preserve the
+  accessibility scans, narrow layouts, keyboard behavior, screenshots, retry settings, and runner labels.
+  Date/Author: 2026-09-15, user-authorized CI monitoring follow-up.
 - Decision: Update only the synthetic server and its exact workflow assertions for the current Bruno collection.
   Rationale: Preserve all collection assertions, require two submissions and one remaining credit, and release
   the inconclusive reservation once. Reset fixture state before the unsafe queue response control so cooldown
@@ -266,6 +277,16 @@ and tests against the synthetic server. Its unsafe queue response control still 
 withheld private output. Focused ESLint and formatting checks passed. This validates the runner fixture; live
 API execution and the complete Actions result remain pending. No application architecture boundary changed.
 
+The browser scenario follow-up passed all 138 main browser tests with two workers and no retries. Focused
+auth, team, billing, and batch runs also passed across desktop and narrow viewports, including the explicit
+390-pixel auth case. Regular Playwright was used because the Browser plugin was unavailable. The production
+build, web type checking, focused ESLint, formatting, design lint, and strict UI audit passed.
+
+Temporary controls delayed each real accessibility scan by 16 seconds. The original combined auth-width and
+billing-recovery tests failed at 30.1 seconds; each separated case passed in 16.9 seconds under the same deadline.
+No delay or timeout override was committed. Browser-test organization changed; application behavior and
+architecture boundaries did not. The complete Actions result still requires validation on the published commit.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -426,6 +447,19 @@ corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
 corepack pnpm architecture:check
 corepack pnpm typecheck
+corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+Browser scenario follow-up validation:
+
+```sh
+corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
+corepack pnpm --filter @tuposoft/lead-email-finder-web build
+PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-pr595-playwright CI=true corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt --workers=2 --retries=0 --output=/tmp/lef-pr595-fix/main-browser-results
+corepack pnpm --filter @tuposoft/lead-email-finder-web exec eslint tests/e2e/auth-shell.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts
+corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
+corepack pnpm design:lint
+corepack pnpm ui:audit
 corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
 ```
 

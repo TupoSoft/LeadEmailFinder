@@ -99,23 +99,12 @@ for (const [failureCode, title] of [
     })
 }
 
-test('native picker validates, removes, uploads once, and reacquires the real job after reload', async ({
-    page,
-    context,
-}) => {
+test('native picker validates and removes a selected file with accessible geometry', async ({ page, context }) => {
     await account(context)
     let posts = 0
-    let release!: () => void
-    const pending = new Promise<void>(resolve => {
-        release = resolve
+    page.on('request', request => {
+        if (request.method() === 'POST') posts++
     })
-    await context.route('**/verifyBatch/csv', async route => {
-        posts++
-        expect(route.request().headers()['content-type']).toMatch(/^multipart\/form-data; boundary=/)
-        await pending
-        await route.fulfill({ status: 202, json: { id } })
-    })
-    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshot('running') }))
     await page.goto('/app/verifications/batches/new')
     const picker = page.getByLabel('CSV file', { exact: true })
     await picker.setInputFiles({
@@ -139,6 +128,34 @@ test('native picker validates, removes, uploads once, and reacquires the real jo
     })
     await page.getByRole('button', { name: 'Remove file', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Remove file', exact: true })).toHaveCount(0)
+    await expect(picker).toHaveValue('')
+    await expect(picker).toBeFocused()
+    await picker.setInputFiles({
+        name: 'replacement.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('email\nperson@lef.test'),
+    })
+    await expect(page.getByRole('button', { name: 'Remove file', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Upload and verify CSV', exact: true })).toBeEnabled()
+    expect(posts).toBe(0)
+})
+
+test('keyboard upload submits once and reacquires the real job after reload', async ({ page, context }) => {
+    await account(context)
+    let posts = 0
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+        release = resolve
+    })
+    await context.route('**/verifyBatch/csv', async route => {
+        posts++
+        expect(route.request().headers()['content-type']).toMatch(/^multipart\/form-data; boundary=/)
+        await pending
+        await route.fulfill({ status: 202, json: { id } })
+    })
+    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshot('running') }))
+    await page.goto('/app/verifications/batches/new')
+    const picker = page.getByLabel('CSV file', { exact: true })
     await picker.setInputFiles({
         name: 'synthetic.csv',
         mimeType: 'text/csv',
@@ -152,6 +169,7 @@ test('native picker validates, removes, uploads once, and reacquires the real jo
     await expect(page.getByRole('progressbar', { name: 'Uploading CSV', exact: true })).not.toHaveAttribute(
         'aria-valuenow',
     )
+    await expect.poll(() => posts).toBe(1)
     await page.keyboard.press('Enter')
     expect(posts).toBe(1)
     release()

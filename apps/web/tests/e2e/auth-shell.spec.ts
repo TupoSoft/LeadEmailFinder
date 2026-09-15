@@ -48,10 +48,26 @@ test('protected home bootstraps, refreshes, and remains accessible without stori
     expect(errors).toEqual([])
 })
 
-test('bootstrap preserves the frame while loading and a failed read offers accessible recovery', async ({
-    page,
-    context,
-}) => {
+test('bootstrap loading remains accessible while the session read is pending', async ({ page, context }) => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+        release = resolve
+    })
+    await context.route('**/v1/auth/session', async route => {
+        await pending
+        await route.fulfill({ status: 200, json: account })
+    })
+    try {
+        await page.goto('/app')
+        await expect(page.getByRole('heading', { name: 'Opening your workspace' })).toBeVisible()
+        await expectAccessible(page)
+    } finally {
+        release()
+    }
+    await expect(page.getByRole('heading', { name: 'Your workspace', exact: true })).toBeVisible()
+})
+
+test('bootstrap preserves the frame through loading, accessible failure, and retry', async ({ page, context }) => {
     let release!: () => void
     const pending = new Promise<void>(resolve => {
         release = resolve
@@ -63,7 +79,6 @@ test('bootstrap preserves the frame while loading and a failed read offers acces
     await page.goto('/app')
     await expect(page.getByRole('heading', { name: 'Opening your workspace' })).toBeVisible()
     const headerBefore = await page.getByRole('banner').boundingBox()
-    await expectAccessible(page)
     release()
     await expect(page.getByRole('heading', { name: 'Your workspace could not be opened' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible()
@@ -138,20 +153,20 @@ test('keyboard navigation has a skip link, visible focus, and a narrow menu with
     await expect(trigger).toBeFocused()
 })
 
-test('nullable email and long organization names reflow with reduced motion at 320 and 390 pixels', async ({
-    page,
-    context,
-}) => {
-    await mockSession(context, {
-        ...account,
-        email: null,
-        organization: { ...account.organization, name: 'International research and infrastructure operations' },
-    })
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    for (const viewport of [
-        { width: 320, height: 720 },
-        { width: 390, height: 844 },
-    ]) {
+for (const viewport of [
+    { width: 320, height: 720 },
+    { width: 390, height: 844 },
+]) {
+    test(`nullable email and long organization names reflow with reduced motion at ${viewport.width} pixels`, async ({
+        page,
+        context,
+    }) => {
+        await mockSession(context, {
+            ...account,
+            email: null,
+            organization: { ...account.organization, name: 'International research and infrastructure operations' },
+        })
+        await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.setViewportSize(viewport)
         await page.goto('/app')
         await expect(page.getByRole('heading', { name: 'Your workspace', exact: true })).toBeVisible()
@@ -163,8 +178,8 @@ test('nullable email and long organization names reflow with reduced motion at 3
         ).toBe(0)
         expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto')
         await expectAccessible(page)
-    }
-})
+    })
+}
 
 test('an unauthenticated protected URL starts login with its safe relative destination', async ({ page, context }) => {
     await mockSession(context, { code: 'authentication_required' }, 401)
@@ -207,18 +222,18 @@ for (const code of [
     })
 }
 
-test('session-expired and access-denied routes have distinct accessible recovery states', async ({ page, context }) => {
-    await mockSession(context)
-    for (const [route, heading, title] of [
-        ['/app/session-expired', 'Your session has expired', 'Your session has expired | Lead Email Finder'],
-        ['/app/forbidden', 'Access denied', 'Access denied | Lead Email Finder'],
-    ]) {
+for (const [route, heading, title] of [
+    ['/app/session-expired', 'Your session has expired', 'Your session has expired | Lead Email Finder'],
+    ['/app/forbidden', 'Access denied', 'Access denied | Lead Email Finder'],
+]) {
+    test(`${route} has its distinct accessible recovery state`, async ({ page, context }) => {
+        await mockSession(context)
         await page.goto(route)
         await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
         await expect(page).toHaveTitle(title)
         await expectAccessible(page)
-    }
-})
+    })
+}
 
 test('sign-out clears displayed account data immediately, sends CSRF once, and waits for confirmation', async ({
     page,

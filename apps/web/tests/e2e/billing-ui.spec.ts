@@ -115,10 +115,19 @@ test('read-only billing exposes prices, history, and empty recovery without purc
     await accessible(page)
 })
 
-test('unknown return and partial summary failure leave authoritative history readable with read recovery', async ({
-    page,
-    context,
-}) => {
+test('unknown return and partial summary failure leave authoritative history readable', async ({ page, context }) => {
+    await mockBilling(context, { status: 'failed' })
+    await context.route('**/v1/billing/summary', route => route.fulfill({ status: 503, json: {} }))
+    await page.goto('/billing/complete?purchaseId=00000000-0000-4000-8000-000000000001&status=paid')
+    await expect(page.getByRole('heading', { name: 'You returned from checkout', exact: true })).toBeVisible()
+    const summary = page.getByRole('region', { name: 'Credit balance', exact: true })
+    await expect(summary.getByRole('button', { name: 'Try again', exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Purchase history', exact: true })).toContainText('Failed')
+    await accessible(page)
+    await screenshot(page, 'billing-partial-error')
+})
+
+test('read recovery restores the authoritative balance after a partial summary failure', async ({ page, context }) => {
     await mockBilling(context, { status: 'failed' })
     let unavailable = true
     await context.route('**/v1/billing/summary', route =>
@@ -129,8 +138,6 @@ test('unknown return and partial summary failure leave authoritative history rea
     const summary = page.getByRole('region', { name: 'Credit balance', exact: true })
     await expect(summary.getByRole('button', { name: 'Try again', exact: true })).toBeVisible()
     await expect(page.getByRole('region', { name: 'Purchase history', exact: true })).toContainText('Failed')
-    await accessible(page)
-    await screenshot(page, 'billing-partial-error')
     unavailable = false
     await summary.getByRole('button', { name: 'Try again', exact: true }).click()
     await expect(summary).toContainText('125 credits')

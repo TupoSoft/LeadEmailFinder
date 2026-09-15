@@ -98,16 +98,20 @@ async function openNavigation(page: Page) {
     if (await trigger.isVisible()) await trigger.click()
 }
 
-test('team renders truthful states with responsive layout, usable native role selection, and accessible navigation', async ({
-    page,
-    context,
-}) => {
-    await mockTeam(context)
+function runtimeErrors(page: Page) {
     const errors: string[] = []
     page.on('pageerror', () => errors.push('pageerror'))
     page.on('console', message => {
         if (message.type() === 'error') errors.push('console error')
     })
+    return errors
+}
+
+// Keep independent interactions and full-page accessibility scans in separate scenarios so each
+// retains the normal test budget even when the browser worker is slow.
+test('team renders truthful states with responsive layout and working navigation', async ({ page, context }) => {
+    await mockTeam(context)
+    const errors = runtimeErrors(page)
     await page.goto('/app/team')
     await expect(page).toHaveTitle('Team | Lead Email Finder')
     await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible()
@@ -132,6 +136,22 @@ test('team renders truthful states with responsive layout, usable native role se
         expect(refreshBox.y).toBeGreaterThanOrEqual(descriptionBox.y + descriptionBox.height)
         expect(Math.abs(refreshBox.x - headingBox.x)).toBeLessThanOrEqual(1)
     }
+    const disabled = page.getByRole('row').filter({ hasText: 'Email unavailable' })
+    await expect(disabled).toContainText('Disabled')
+    await expect(disabled.getByRole('button')).toHaveCount(0)
+    await openNavigation(page)
+    await expect(page.getByRole('link', { name: 'Team', exact: true })).toHaveAttribute('href', '/app/team')
+    expect(errors).toEqual([])
+})
+
+test('member refresh is keyboard operable and restores the authoritative list', async ({ page, context }) => {
+    await mockTeam(context)
+    const errors = runtimeErrors(page)
+    await page.goto('/app/team')
+    await expect(page.getByText('Members 1–3 of 3')).toBeVisible()
+    const panel = page.getByRole('region', { name: teamCopy.members, exact: true })
+    const refresh = panel.getByRole('button', { name: teamCopy.refresh, exact: true })
+    await expect(refresh).toBeEnabled()
     const refreshed = page.waitForResponse(
         response =>
             response.request().method() === 'GET' &&
@@ -143,11 +163,17 @@ test('team renders truthful states with responsive layout, usable native role se
     expect((await refreshed).status()).toBe(200)
     await expect(refresh).toBeEnabled()
     await expect(page.getByText('Members 1–3 of 3')).toBeVisible()
-    const disabled = page.getByRole('row').filter({ hasText: 'Email unavailable' })
-    await expect(disabled).toContainText('Disabled')
-    await expect(disabled.getByRole('button')).toHaveCount(0)
+    expect(errors).toEqual([])
+})
+
+test('native role selection works by keyboard and keeps the team accessible', async ({ page, context }) => {
+    await mockTeam(context)
+    const errors = runtimeErrors(page)
+    await page.goto('/app/team')
     const role = page.getByRole('combobox', { name: `Role for ${memberEmail}` })
+    await expect(role).toBeEnabled()
     await role.focus()
+    await expect(role).toBeFocused()
     // Popup geometry and navigation are intentionally owned by the operating system.
     await page.keyboard.press('Alt+ArrowDown')
     await page.keyboard.press('ArrowDown')
@@ -156,8 +182,6 @@ test('team renders truthful states with responsive layout, usable native role se
     await expect(page.getByRole('button', { name: `Save role for ${memberEmail}` })).toBeEnabled()
     await accessible(page)
     await screenshot(page, 'team')
-    await openNavigation(page)
-    await expect(page.getByRole('link', { name: 'Team', exact: true })).toHaveAttribute('href', '/app/team')
     expect(errors).toEqual([])
 })
 
@@ -187,8 +211,6 @@ test('owner role change requires confirmation, traps focus, and preserves an aut
     await page.keyboard.press('Tab')
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
     expect(patches).toBe(0)
-    await accessible(page)
-    await screenshot(page, 'team-owner-confirmation')
     const before = reads
     await dialog.getByRole('button', { name: 'Save role', exact: true }).click()
     await expect(page.getByText(teamCopy.conflict)).toBeVisible()
@@ -197,10 +219,42 @@ test('owner role change requires confirmation, traps focus, and preserves an aut
     await expect(page).toHaveURL(/\/app\/team$/)
 })
 
-test('disabling access names the consequence, restores focus on Escape, and refreshes the disabled membership', async ({
+test('owner role confirmation remains accessible', async ({ page, context }) => {
+    await mockTeam(context)
+    await page.goto('/app/team')
+    await page.getByRole('combobox', { name: `Role for ${account.email}` }).selectOption('admin')
+    await page.getByRole('button', { name: `Save role for ${account.email}` }).click()
+    await expect(page.getByRole('dialog', { name: teamCopy.ownerConfirmation })).toBeVisible()
+    await accessible(page)
+    await screenshot(page, 'team-owner-confirmation')
+})
+
+test('disabling access names the consequence and restores focus on Escape without a mutation', async ({
     page,
     context,
 }) => {
+    await mockTeam(context)
+    let removed = false
+    await context.route('**/v1/organizations/organization-a/members/member-a', route => {
+        removed = true
+        return route.fulfill({ status: 204 })
+    })
+    await page.goto('/app/team')
+    const remove = page.getByRole('button', { name: `Disable access for ${memberEmail}` })
+    await remove.click()
+    const dialog = page.getByRole('dialog', { name: teamCopy.removalConfirmation })
+    await expect(dialog).toContainText('cannot be reactivated')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(remove).toBeFocused()
+    expect(removed).toBe(false)
+    await remove.click()
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Disable access', exact: true })).toBeEnabled()
+    expect(removed).toBe(false)
+})
+
+test('confirming disabled access refreshes the membership and keeps the team accessible', async ({ page, context }) => {
     await mockTeam(context)
     let removed = false
     await context.route('**/v1/organizations/organization-a/members', route =>
@@ -219,10 +273,7 @@ test('disabling access names the consequence, restores focus on Escape, and refr
     await remove.click()
     const dialog = page.getByRole('dialog', { name: teamCopy.removalConfirmation })
     await expect(dialog).toContainText('cannot be reactivated')
-    await page.keyboard.press('Escape')
-    await expect(remove).toBeFocused()
     expect(removed).toBe(false)
-    await remove.click()
     await dialog.getByRole('button', { name: 'Disable access', exact: true }).click()
     await expect(page.getByText(teamCopy.removed)).toBeVisible()
     await expect(remove).toHaveCount(0)
