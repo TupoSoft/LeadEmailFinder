@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync, readdirSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { isMap, parseAllDocuments } from 'yaml'
@@ -314,6 +315,40 @@ describe('Validate workflow syntax and structure', () => {
         const buildxIndex = steps.findIndex((step) => step.uses === 'docker/setup-buildx-action@v4')
         expect(composeIndex).toBeGreaterThanOrEqual(0)
         expect(buildxIndex).toBeGreaterThan(composeIndex)
+    })
+
+    it('prepares envsubst and uses the shared runner directory for live Docker fixtures', () => {
+        const steps = workflow.jobs['browser-live'].steps
+        const preparationIndex = steps.findIndex((step) => step.run?.includes('apt-get install --no-install-recommends -y gettext-base'))
+        expect(preparationIndex).toBeGreaterThanOrEqual(0)
+        expect(preparationIndex).toBeLessThan(steps.findIndex((step) => step.uses === 'actions/setup-node@v4'))
+        const preparation = steps[preparationIndex]
+        const directory = mkdtempSync(resolve(tmpdir(), 'lef-arc-bootstrap-'))
+        const shared = resolve(directory, 'shared temporary files')
+        const environment = resolve(directory, 'environment')
+        mkdirSync(shared)
+        try {
+            const execution = spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', `
+                sudo() {
+                    case "$*" in
+                        'apt-get update'|'apt-get install --no-install-recommends -y gettext-base') ;;
+                        *) return 1 ;;
+                    esac
+                }
+                ${preparation.run}
+            `], {
+                cwd: root,
+                encoding: 'utf8',
+                timeout: 5000,
+                env: { ...process.env, RUNNER_TEMP: shared, GITHUB_ENV: environment },
+            })
+            expect(execution.error).toBeUndefined()
+            expect(execution.status).toBe(0)
+            expect(execution.stderr).toBe('')
+            expect(readFileSync(environment, 'utf8')).toBe(`TMPDIR=${shared}\nTMP=${shared}\nTEMP=${shared}\n`)
+        } finally {
+            rmSync(directory, { recursive: true, force: true })
+        }
     })
 
     it('prepares the fixed Ruby cache and runtime libraries before setting up Ruby', () => {

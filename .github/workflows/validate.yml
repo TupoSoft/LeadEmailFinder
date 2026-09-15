@@ -601,6 +601,17 @@ jobs:
         with:
           fetch-depth: 0
         if: needs.changes.outputs.browser == 'true'
+      - name: Prepare live test tools and shared temporary directory
+        run: |
+          test -d "$RUNNER_TEMP" && test -w "$RUNNER_TEMP"
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gettext-base
+          {
+            printf 'TMPDIR=%s\n' "$RUNNER_TEMP"
+            printf 'TMP=%s\n' "$RUNNER_TEMP"
+            printf 'TEMP=%s\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+        if: needs.changes.outputs.browser == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
