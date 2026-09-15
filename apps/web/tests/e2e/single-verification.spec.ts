@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
+import type { components } from '@tuposoft/lead-email-finder-api-client'
 import { withAsyncVerificationFixture } from '../../../../scripts/bruno/async-verification-fixture.mjs'
 import { repositoryRoot } from '../support/browser-fixture-environment'
 import { test, expect } from '../support/privileged-login'
@@ -7,6 +9,8 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
     loginAs,
 }) => {
     await withAsyncVerificationFixture(repositoryRoot, async fixture => {
+        const verificationEmail = `browser-${randomUUID()}@lef.test`
+        const insufficientCreditEmail = `browser-credit-${randomUUID()}@lef.test`
         await fixture.setBalance(1)
         const page = await loginAs('owner')
         const errors: string[] = []
@@ -19,7 +23,7 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
         await expect(page.getByRole('heading', { name: 'Verify an email', exact: true })).toBeVisible()
         await expect(page).toHaveTitle('Verify an email | Lead Email Finder')
         const email = page.getByRole('textbox', { name: 'Email address', exact: true })
-        await email.fill('person@lef.test')
+        await email.fill(verificationEmail)
         const created = page.waitForResponse(
             response => new URL(response.url()).pathname === '/verifyAsync' && response.request().method() === 'POST',
         )
@@ -37,18 +41,26 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
             timeout: 70_000,
         })
         await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).toBeVisible()
-        await expect(page.getByText('person@lef.test', { exact: true })).toBeVisible()
+        await expect(page.getByText(verificationEmail, { exact: true })).toBeVisible()
         expect(postedPaths.filter(path => path === '/verifyAsync')).toHaveLength(1)
         expect(postedPaths).not.toContain('/verify')
         const status = await page.request.get(`${fixture.origin}/verifyAsync/${job.id}`)
         expect(status.status()).toBe(200)
-        const completed = (await status.json()) as { state: string; result: { email: string; reason: string } }
+        const completed = (await status.json()) as components['schemas']['AsyncVerificationCompletedResponseDto']
         expect(completed.state).toBe('completed')
-        expect(completed.result.email).toBe('person@lef.test')
+        expect(completed.result.email).toBe(verificationEmail)
         expect(completed.result.reason).toBe('accepted_email')
+        expect(completed.result.catchAll).toBe(true)
+        expect(completed.operation).toEqual({
+            id: job.id,
+            source: 'fresh',
+            observedAt: null,
+            cacheExpiresAt: null,
+            billing: { state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' },
+        })
         const balance = await page.request.get(`${fixture.origin}/v1/billing/summary`)
         expect(balance.status()).toBe(200)
-        expect(await balance.json()).toEqual({ balance: 0, reserved: 0, available: 0 })
+        expect(await balance.json()).toEqual({ balance: 1, reserved: 0, available: 1 })
 
         await page.setViewportSize({ width: 320, height: 720 })
         await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -59,13 +71,15 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
         await expect(email).toHaveAttribute('aria-invalid', 'true')
         await expect(email).toBeFocused()
         expect(postedPaths.filter(path => path === '/verifyAsync')).toHaveLength(1)
-        await email.fill('person@lef.test')
+        await fixture.setBalance(0)
+        await email.fill(insufficientCreditEmail)
         const insufficient = page.waitForResponse(
             response => new URL(response.url()).pathname === '/verifyAsync' && response.status() === 402,
         )
         await email.press('Enter')
         await insufficient
-        await expect(email).toHaveValue('person@lef.test')
+        await expect(email).toHaveValue(insufficientCreditEmail)
+        expect(postedPaths.filter(path => path === '/verifyAsync')).toHaveLength(2)
         const billing = page.locator('main a[href="/app/billing"]')
         await expect(billing).toBeVisible()
         const accessibility = await new AxeBuilder({ page })
@@ -84,7 +98,8 @@ test('owner submits one real SMTP job, reloads its URL, then sees credit and exp
         await page.context().clearCookies()
         await email.press('Enter')
         await expect(page.getByRole('heading', { name: 'Your session has expired', exact: true })).toBeVisible()
-        await expect(page.getByText('person@lef.test', { exact: true })).toHaveCount(0)
+        await expect(page.getByText(verificationEmail, { exact: true })).toHaveCount(0)
+        await expect(page.getByText(insufficientCreditEmail, { exact: true })).toHaveCount(0)
         expect(postedPaths).not.toContain('/verify')
     })
 })
