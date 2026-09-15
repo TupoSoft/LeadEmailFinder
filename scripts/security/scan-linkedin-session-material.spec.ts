@@ -189,6 +189,7 @@ describe('working-tree scan', (): void => {
 })
 
 describe('reachable-history scan', (): void => {
+    // Real commits and three scans need room for process startup on busy CI workers.
     it('finds deleted text blobs through batched object reads and emits only redacted metadata', async (): Promise<void> => {
         const root = createRepository()
         const material = syntheticSessionMaterial()
@@ -241,7 +242,7 @@ describe('reachable-history scan', (): void => {
         expect(
             findings.every(finding => Object.keys(finding).sort().join(',') === 'count,objectId,path,ruleId,scope'),
         ).toBe(true)
-    })
+    }, 15_000)
 })
 
 describe('CLI argument validation', (): void => {

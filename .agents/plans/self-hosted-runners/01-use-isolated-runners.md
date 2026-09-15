@@ -45,6 +45,8 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-15) Diagnose the HTTP fixture failures and browser job timeouts in run `34908555222`.
 - [x] (2026-09-15) Isolate HTTP fixtures and allow bounded request and browser job scheduling headroom.
 - [x] (2026-09-15) Pass 17 HTTP discovery tests, 332 workflow and plan tests, selection fixtures, ESLint, type checking, and the architecture gate.
+- [x] (2026-09-15) Diagnose the Git history scanner test timeout and give that integration test a 15-second budget.
+- [x] (2026-09-15) Pass all eight scanner tests and the delayed-Git comparison using CI's Git 2.55.0.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -53,6 +55,10 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-15) Backend job `104307858030` passed 3,330 tests, including the corrected HTTP fixtures, but its Git
+  history scanner test exceeded Jest's five-second limit. That test runs 16 Git processes, including real commits
+  and three scans. CI used Git 2.55.0; the local Git 2.43.0 produced different history output and cannot validate
+  this timing fix faithfully.
 - (2026-09-15) Backend job `104191388811` timed out a local homepage request with its 100-millisecond test
   transport deadline. That late request then appeared in the next test's shared server log. Browser UI setup
   consumed about 7 minutes and 49 seconds; its first suite passed 56 distinct tests before the 20-minute job limit.
@@ -92,6 +98,11 @@ None.
 
 ## Decision Log
 
+- Decision: Give only the Git history scanner integration test 15 seconds to complete its fixture and scans.
+  Rationale: Process startup contributes to its total runtime on busy isolated workers. Preserve deleted-blob
+  detection, binary exclusion, exact redacted metadata, repeatability, and every exit-code assertion. Validate
+  against Git 2.55.0, matching CI.
+  Date/Author: 2026-09-15, user-authorized CI monitoring follow-up.
 - Decision: Use a fresh HTTP integration fixture per test, a three-second request deadline, and ten-second test
   budgets. Allow 90 minutes for each complete UI and live browser job.
   Rationale: A temporary 200-millisecond homepage response reproduces the HTTP failure with the old deadline.
@@ -234,6 +245,12 @@ The 2026-09-15 follow-up passed 17 HTTP discovery tests and 332 workflow and pla
 The stalled homepage and child responses still timed out, with all exact request and privacy assertions intact.
 Selection fixtures, focused ESLint, type checking, and the architecture gate passed. Application behavior and
 module boundaries remain unchanged. The larger browser job budgets still require validation in GitHub Actions.
+
+The Git scanner follow-up passed all eight tests using Git 2.55.0, built from the official source archive after
+verifying its published checksum. A temporary wrapper delayed each Git process by 400 milliseconds. The original
+five-second test failed, while the corrected test passed in 7.344 seconds with every assertion intact. The
+working-tree security scan also passed with an empty report. Focused ESLint and type checking passed. The
+complete CI result remains unverified.
 
 ## Context and Orientation
 
