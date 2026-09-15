@@ -7,13 +7,14 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 Give the owner of `proxy-fleet/16` a reviewable proposal for reaching the lab's proxy listeners and running its SMTP
 fixture. One documentation pull request produces `deploy/proxy-fleet/validation-decisions.md`, with repository
 evidence, proposed lifecycle commands, trade-offs, and explicit questions. A developer can prepare this proposal
-without a running fleet or an installed VM provider. Choosing and proving the execution models remains in plan 16.
+without a running fleet or an installed VM provider. The owner has selected a tunnel through `verifier-1`; accepting
+the fixture proposal, finalizing the execution procedures, and proving both models remain in plan 16.
 
 ## Progress
 
-- [ ] (2026-09-11) Trace the listener, registry, application, and SMTP fixture paths against the current repository.
-- [ ] (2026-09-11) Write the proposed execution models, lifecycle commands, evidence requirements, and owner questions.
-- [ ] (2026-09-11) Complete static documentation and plan validation; record limitations and hand off the proposal.
+- [x] (2026-09-15) Trace the listener, registry, application, and SMTP fixture paths against the current repository.
+- [x] (2026-09-15) Write the proposed execution models, lifecycle commands, evidence requirements, and owner questions.
+- [x] (2026-09-15) Complete static documentation and plan validation; record limitations and hand off the proposal.
 
 ## Plan dependencies
 
@@ -23,10 +24,28 @@ without a running fleet or an installed VM provider. Choosing and proving the ex
 
 ## Surprises & Discoveries
 
-None yet.
+- The lab inventory does not override `proxy_fleet_worker_cidrs`. The effective default is the whole
+  `172.29.10.0/28` overlay, so the `.4/32` restriction stated in plan 16 needs a correction in both host firewall and
+  rendered proxy configuration before worker-only access can be claimed.
+- The existing full SMTP fixture exports a reusable server factory, but its CLI binds the control server to all
+  interfaces. Plan 16 needs a private fixture entry point and deterministic overlapping-session evidence; the
+  banner-only peer probe cannot provide full application or capacity proof.
+- A transient systemd service can run the proposed staged Node fixture with a named owner, a lifetime limit, and
+  bounded shutdown. This avoids assuming that an SSH disconnect terminates the fixture. Runtime behavior remains
+  unverified.
 
 ## Decision Log
 
+- Decision: Record the owner's explicit choice of a temporary subnet tunnel through `verifier-1`.
+  Rationale: The owner selected this model on 2026-09-15 and authorized the documentation PR. The proposed `sshuttle`
+  procedure retains the original listener endpoints. This selection does not accept the separate fixture proposal,
+  prove controller privileges or container reachability, or satisfy the live acceptance criteria in plan 16.
+  Date/Author: 2026-09-15, project owner and Codex implementation.
+- Decision: Propose a staged Node runtime and transient service for the existing peer fixture.
+  Rationale: The verifier lacks Node, Docker, and shared source. A verified runtime archive and locally compiled
+  fixture keep these additions temporary; status access through `127.0.0.1` uses the captured SSH configuration. The owner
+  may accept or revise this proposal before plan 16 begins.
+  Date/Author: 2026-09-15, Codex implementation.
 - Decision: Deliver one proposal document without selecting or validating the fleet execution models.
   Rationale: Gathering evidence and preparing commands can start now; plan 16 still requires an explicit execution
   choice before live work. A documented unresolved question does not prevent completion of this preparation.
@@ -40,7 +59,11 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The proposal document traces the current source contracts, records the selected tunnel, describes the temporary
+fixture lifecycle, and assigns unresolved execution details to the project owner or plan-16 implementer. Harper,
+the repository plan fixture, shell syntax checks, and local peer-fixture compilation passed. No guest, tunnel,
+registry, Docker, or application scenario ran for this preparation. The fixture choice and remaining execution
+procedures still need resolution in plan 16 before live validation begins.
 
 ## Context and Orientation
 
@@ -98,10 +121,11 @@ captured Vagrant SSH configuration for guest access and explicit remote-manager 
 mutation. Explain ownership, safe repetition, credential handling, and restoration of temporary processes, files, and
 network state. Check external command syntax against primary documentation when repository evidence is insufficient.
 
-Finish with a recommendation supported by the comparison and a decision table containing the question, repository
-evidence, missing external fact, and responsible role. Use the project owner for environment or privilege questions
+Finish with the owner's selected tunnel, a fixture recommendation supported by the comparison, and a decision table
+containing the question, repository evidence, missing external fact, and responsible role. Use the project owner for environment or privilege questions
 and the plan-16 implementer for execution details; do not assign a named collaborator. Each unresolved choice has a
-clear effect on plan 16. A recommendation is a proposal, and completion of this document does not approve it.
+clear effect on plan 16. Distinguish the owner's explicit tunnel selection from the unaccepted fixture proposal;
+completion of this document does not approve remaining choices.
 
 ## Interfaces and Dependencies
 
@@ -149,7 +173,24 @@ pull request's documentation; no guest, service, registry, credential, or contro
 
 The handoff is `deploy/proxy-fleet/validation-decisions.md`. Record the inspected revision and sanitized source
 references. Do not include captured SSH files, absolute controller paths, credentials, private keys, or machine IDs.
-Completion supplies a proposal for plan 16 to consume; it neither starts that plan nor marks its decisions resolved.
+Completion supplies a proposal for plan 16 to consume; it neither starts that plan nor marks its remaining decisions
+resolved. The document records revision `e3ae79e4e8eb5442930b29da1158b38efbb228e2` and the primary references checked.
+
+Static validation on 2026-09-15, from the repository root:
+
+- `corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md`
+  passed for both files after correcting the reported prose findings.
+- `corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts` passed one suite
+  and one test, covering repository-wide plan discovery and dependency resolution.
+- All sixteen Bash blocks passed `bash -n` without execution. Relative Markdown links and explicit repository
+  source paths were checked. `git diff --check` passed.
+- The proposed `corepack pnpm exec tsc` invocation compiled the two existing peer-probe files into a temporary local
+  directory. Both emitted JavaScript files passed `node --check`; neither fixture was started.
+- Dependencies were installed with the frozen lockfile and a temporary writable pnpm store after the default store
+  rejected a project-registration write. Validation used `TMPDIR=/tmp TMP=/tmp TEMP=/tmp`. No dependency files changed.
+
+Bruno: not applicable — this preparation changes documentation only. Review found no application architecture change;
+the temporary runtime and privileged tunnel remain explicit proposed operational trade-offs for plan 16.
 
 ## Plan readiness
 
