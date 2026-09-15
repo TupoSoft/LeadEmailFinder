@@ -14,7 +14,9 @@ describe('HttpDomainSynonymDiscovery HTTP contract', () => {
     const requests: string[] = []
     const logger = { error: jest.fn() }
 
-    beforeAll(async () => {
+    beforeEach(async () => {
+        requests.length = 0
+        logger.error.mockClear()
         server = createServer((request, response) => {
             const path = request.url ?? '/'
             requests.push(path)
@@ -43,19 +45,15 @@ describe('HttpDomainSynonymDiscovery HTTP contract', () => {
         moduleRef = await Test.createTestingModule({
             providers: [
                 HttpDomainSynonymDiscovery,
-                { provide: HttpService, useValue: new HttpService(axios.create({ timeout: 100, proxy: false })) },
+                // Keep real deadline coverage while allowing local requests to run on busy CI workers.
+                { provide: HttpService, useValue: new HttpService(axios.create({ timeout: 3000, proxy: false })) },
                 { provide: Logger, useValue: logger },
             ],
         }).compile()
         finder = moduleRef.get(HttpDomainSynonymDiscovery)
     })
 
-    beforeEach(() => {
-        requests.length = 0
-        logger.error.mockClear()
-    })
-
-    afterAll(async () => {
+    afterEach(async () => {
         server.closeAllConnections()
         await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
         await moduleRef.close()
@@ -68,7 +66,7 @@ describe('HttpDomainSynonymDiscovery HTTP contract', () => {
         // Child pages are fetched concurrently, so only their exact counts have a stable contract.
         expect(requests.slice(1).sort()).toEqual(['/contact', '/failure', '/slow'])
         expect(logger.error).not.toHaveBeenCalled()
-    })
+    }, 10_000)
 
     it.each(['/failure', '/malformed', '/slow'])(
         'returns no domains for homepage status, malformed-content, or configured-deadline failure: %s',
@@ -85,5 +83,6 @@ describe('HttpDomainSynonymDiscovery HTTP contract', () => {
             expect(serializedLogs).not.toContain(baseUrl)
             expect(serializedLogs).not.toContain('Remote failure')
         },
+        10_000,
     )
 })

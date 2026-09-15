@@ -42,6 +42,9 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-14) Replace proxy elapsed-time assertions with a controlled deadline clock and real connection closure checks.
 - [x] (2026-09-14) Trigger TLS cancellation after observing handshake data and verify its error and socket cleanup.
 - [x] (2026-09-14) Validate the socket follow-up on Node 24.21.0, exercise negative controls, and prepare publication.
+- [x] (2026-09-15) Diagnose the HTTP fixture failures and browser job timeouts in run `34908555222`.
+- [x] (2026-09-15) Isolate HTTP fixtures and allow bounded request and browser job scheduling headroom.
+- [x] (2026-09-15) Pass 17 HTTP discovery tests, 332 workflow and plan tests, selection fixtures, ESLint, type checking, and the architecture gate.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -50,6 +53,11 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-15) Backend job `104191388811` timed out a local homepage request with its 100-millisecond test
+  transport deadline. That late request then appeared in the next test's shared server log. Browser UI setup
+  consumed about 7 minutes and 49 seconds; its first suite passed 56 distinct tests before the 20-minute job limit.
+  The complete UI inventory contains 252 tests. Live setup consumed about 17 minutes and 46 seconds before
+  Compose began building the disposable stack; the 25-minute job limit stopped those builds before live tests ran.
 - (2026-09-14) Backend job `104085084575` passed 3,287 tests and failed one assertion after 625 seconds of testing.
   The HTTP proxy test correctly rejected with `ConnectionTimeoutError`, but measured 2,595 milliseconds against
   a 500-millisecond elapsed-time limit. That limit includes runner scheduling delays and cannot establish the
@@ -84,6 +92,15 @@ None.
 
 ## Decision Log
 
+- Decision: Use a fresh HTTP integration fixture per test, a three-second request deadline, and ten-second test
+  budgets. Allow 90 minutes for each complete UI and live browser job.
+  Rationale: A temporary 200-millisecond homepage response reproduces the HTTP failure with the old deadline.
+  The corrected fixture retains real stalled-response failures, exact request counts, and log privacy checks.
+  The UI job runs 252 tests, including 124 tests in serial feature suites. Observed throughput suggests about
+  75 minutes before its final accessibility and visual suites, but that estimate needs CI confirmation. Live
+  provisioning also needs time beyond its measured setup and interrupted builds. Preserve all validation steps,
+  individual test deadlines, worker counts, teardown limits, and aggregate failure handling.
+  Date/Author: 2026-09-15, user-authorized CI monitoring follow-up.
 - Decision: Fix socket timing assertions in this PR without changing runtime deadlines or application behavior.
   Rationale: Wait for real HTTP or SOCKS handshake progress, leave native socket scheduling active, and advance
   only the test clock. Require the operation to remain pending at 49 milliseconds, reject at 50 milliseconds, and close the peer
@@ -211,6 +228,12 @@ blocked the JavaScript thread for 600 milliseconds after creating the deadline. 
 500-millisecond elapsed-time assertion at 615 milliseconds; the corrected test passed under the same block.
 These fixtures demonstrate independence from scheduling delay, not a performance improvement on CI. Temporary
 fixture trees were removed. A complete successful Actions run for the published follow-up remains unverified.
+
+The 2026-09-15 follow-up passed 17 HTTP discovery tests and 332 workflow and plan tests. The temporary
+200-millisecond homepage control failed with the original request deadline and passed with the corrected fixture.
+The stalled homepage and child responses still timed out, with all exact request and privacy assertions intact.
+Selection fixtures, focused ESLint, type checking, and the architecture gate passed. Application behavior and
+module boundaries remain unchanged. The larger browser job budgets still require validation in GitHub Actions.
 
 ## Context and Orientation
 

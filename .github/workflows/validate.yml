@@ -533,7 +533,7 @@ jobs:
       - browser-artifacts
     if: ${{ !cancelled() }}
     runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
-    timeout-minutes: 20
+    timeout-minutes: 90
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
@@ -624,7 +624,7 @@ jobs:
       - browser-artifacts
     if: ${{ !cancelled() }}
     runs-on: [self-hosted, swarm, ubuntu-22, docker-isolated]
-    timeout-minutes: 25
+    timeout-minutes: 90
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
       API_START_COMMAND: pnpm exec nest start
