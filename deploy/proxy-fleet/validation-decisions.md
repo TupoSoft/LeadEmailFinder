@@ -2,7 +2,8 @@
 
 Prepared for [plan 16](../../.agents/plans/proxy-fleet/16-validate-disposable-multi-node-fleet.md)
 by [plan 19](../../.agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md).
-Repository evidence was inspected at `e3ae79e4e8eb5442930b29da1158b38efbb228e2` on 2026-09-15.
+Repository evidence was inspected at `e3ae79e4e8eb5442930b29da1158b38efbb228e2` on 2026-09-15 and checked again at
+`1b869d2607e709ee2570efcfbd213268603c54b3` when the fixture decision was updated that day.
 
 ## Decision and Evidence Status
 
@@ -11,9 +12,11 @@ uses `sshuttle` to carry only the three listener destinations over the existing 
 application and reconciler continue to dial the registered WireGuard addresses. The exact commands below are
 proposals for plan 16; they have not run against the lab.
 
-The proposed SMTP fixture uses a temporary, pinned Node runtime and copied fixture artifacts on `verifier-1`.
-The owner has not selected this fixture model. This document's completion neither accepts that proposal nor starts
-plan 16. Plan 16 still requires documented execution procedures, the known runtime corrections, and live evidence.
+The owner selected Mailpit for SMTP conversations, retaining the existing peer probe for sequential source-IP
+checks. Both run temporarily on `verifier-1`: the peer probe uses a staged Node runtime, and Mailpit uses a pinned
+standalone binary. Run them in separate phases on port `2525`. Capacity assertions require additional instrumentation.
+This choice does not start plan 16 or prove the proposed commands. Plan 16 still requires finalized execution
+procedures, the known runtime corrections, and live evidence.
 
 This is a documentation handoff. It installs no tool, creates no VM, changes no network or application state, and
 provides no public Internet egress or deliverability evidence. The existing VirtualBox lab remains the provider
@@ -36,7 +39,8 @@ All paths in this document are relative to the repository root unless a guest pa
 | SMTP connection | `src/libs/modules/email-verification/src/infrastructure/mailbox/smtp/smtp-mailbox-probe.ts`, `tryConnect`; `smtp-client.factory.ts`; `smtp-client.ts` | The real mailbox probe supplies the allocated proxy to the SMTP client. |
 | Socket transport | `src/libs/socket/src/connect.ts`, `connect`; `http-proxy-connect.ts`, `connectThroughHttpProxy` | Opens TCP to the proxy host and port, then authenticates an HTTP CONNECT to the SMTP destination. |
 | Peer fixture | `scripts/proxy-fleet-swarm/smtp-peer-probe.ts`, `startSmtpPeerProbe`; `smtp-peer-probe-cli.ts` | Reports only the last TCP peer. The CLI needs Node and defaults both listening hosts to `0.0.0.0`. |
-| Full SMTP fixture | `docker/smtp-dev/evidence-server.mjs`, `createEvidenceFixture` | Supports deterministic SMTP and STARTTLS scenarios. Its current CLI has no private control-host setting. |
+| Mailpit version precedent | `docker/compose.smtp-dev.yaml`, `plaintext-mailpit` | Pins Mailpit `v1.30.7` for a plaintext rejection scenario. The lab proposal uses that version's standalone binary with STARTTLS enabled. |
+| Detailed SMTP evidence fixture | `docker/smtp-dev/evidence-server.mjs`, `createEvidenceFixture`; `bruno/smtp-dev/README.md` | Existing precise SMTP classification tests retain this fixture. Mailpit supplies the fleet's ordinary SMTP phase. |
 
 | Proxy node | Registered listener | Expected SMTP source |
 | --- | --- | --- |
@@ -92,7 +96,8 @@ the 1.3.2 documentation. The `nat` method requires working Linux `iptables` redi
 
 Start a dedicated Bash scenario shell at the repository root. Run one validation scenario at a time. Keep the same `LEF_*` values in each terminal;
 the session directory and captured SSH configuration are private, ignored artifacts. Port `12300` is reserved for
-this proposal's local tunnel, and `19000` for its local status forward. Stop if either is already occupied.
+this proposal's local tunnel, `19000` for peer status, and `18025` for the later Mailpit UI/API forward.
+Stop if any of these ports is already occupied.
 
 ```bash
 set -euo pipefail
@@ -110,7 +115,7 @@ python3 --version
 ssh -F "$LEF_SSH_CONFIG" verifier-1 'python3 --version'
 ssh -F "$LEF_SSH_CONFIG" verifier-1 'ip -4 route get 172.29.10.2'
 ssh -F "$LEF_SSH_CONFIG" verifier-1 'ip -4 route get 172.29.10.3'
-ss -ltn 'sport = :12300 or sport = :19000'
+ss -ltn 'sport = :12300 or sport = :19000 or sport = :18025'
 sudo iptables-save -t nat > "$LEF_RUN_DIR/nat.before"
 ip -j route show > "$LEF_RUN_DIR/routes.before.json"
 ```
@@ -187,7 +192,7 @@ sudo iptables-save -t nat > "$LEF_RUN_DIR/nat.after"
 ip -j route show > "$LEF_RUN_DIR/routes.after.json"
 diff -u "$LEF_RUN_DIR/nat.before" "$LEF_RUN_DIR/nat.after"
 diff -u "$LEF_RUN_DIR/routes.before.json" "$LEF_RUN_DIR/routes.after.json"
-ss -ltn 'sport = :12300 or sport = :19000'
+ss -ltn 'sport = :12300 or sport = :19000 or sport = :18025'
 ```
 
 No new tunnel chain, jump, route, or listening socket may remain. Unrelated concurrent Docker activity can change
@@ -222,10 +227,11 @@ Repeat the snapshot and socket checks afterward. Plan 16 must test this proposed
 tool and firewall backend. This is not a whole-table restore or an unconditional recovery claim after a hard kill.
 Keep the private session directory until fixture cleanup, evidence inspection, and all local-state checks finish.
 
-## Proposed SMTP Fixture Lifecycle
+## Proposed Peer Probe Lifecycle
 
-This fixture model remains a recommendation for the project owner. These commands are proposals for plan 16;
-they have not been executed against the lab. They require the plan-16 firewall and WireGuard corrections first.
+The selected fixture model starts with this peer probe, followed by Mailpit for SMTP conversations. These commands
+are proposals for plan 16; they have not been executed against the lab. They require the plan-16 firewall and
+WireGuard corrections first. Mailpit does not implement the reconciler's `/last-peer` contract.
 
 The peer probe imports only `node:http` and `node:net`. Compile its two TypeScript files on the controller with
 repository dependencies, then copy the JavaScript and one verified official Node 24 Linux x64 distribution to
@@ -382,8 +388,176 @@ rm -- "$LEF_RUN_DIR/fixture-owned"
 ```
 
 The Node archive and verified manifest may be retained as explicitly recorded reusable prerequisites; remove their
-copies as well if downloaded only for this run. After the tunnel, fixture, status forward, and all private evidence
-checks finish, remove this scenario's local directory, including its captured SSH configuration and notes:
+copies as well if downloaded only for this run. Retain the scenario directory, captured SSH configuration, and
+tunnel for the Mailpit phase. If a later health or recovery scenario requires reconciliation, stop Mailpit first
+and prepare a fresh peer-probe session with a new identifier. Never point the reconciler's status URL at Mailpit.
+
+On `Ctrl+C` or SSH loss elsewhere, reconnect using the captured configuration and run the same stop-and-remove steps.
+Do not assume closing the original SSH session stops a systemd service. If the guest is unreachable, the cleanup procedure remains
+incomplete until access returns or the disposable VM is destroyed through the existing Vagrant procedure. Report
+that gap rather than claiming cleanup from the automatic two-hour process expiry.
+
+## Proposed Mailpit Lifecycle
+
+Use the standalone Mailpit `v1.30.7` binary for 64-bit Linux, matching the version already pinned in the development
+Compose file. Mailpit needs no Node runtime or Docker daemon. The following proposed commands reuse the captured
+SSH configuration and the temporary-service lifecycle; they have not run in the lab.
+
+### Mailpit Preparation
+
+Finish peer checks, pause reconciliation and verification callers, stop the peer service, and close its status
+forward using the preceding cleanup procedure. Confirm port `2525` is free before starting Mailpit. Keep the tunnel
+running. From the repository root, set `LEF_MAILPIT_ARCHIVE` to the absolute path of the release asset
+`mailpit-linux-amd64.tar.gz` from `v1.30.7`. The checksum below is that asset's SHA-256 digest from the GitHub release API;
+the release has no separate checksum manifest asset. Record all run variables in the private scenario notes.
+
+```bash
+: "${LEF_SSH_CONFIG:?Captured Vagrant SSH configuration is required}"
+: "${LEF_RUN_ID:?Unique lowercase scenario identifier is required}"
+: "${LEF_MAILPIT_ARCHIVE:?Absolute Mailpit v1.30.7 Linux amd64 archive path is required}"
+case "$LEF_RUN_ID" in ''|*[!a-z0-9-]*) exit 1 ;; esac
+LEF_MAILPIT_SHA256=a35c053509441b95fb96da6479b3a26b3eb309e223232aced28255c011d29efc
+printf '%s  %s\n' "$LEF_MAILPIT_SHA256" "$LEF_MAILPIT_ARCHIVE" | sha256sum --check -
+LEF_MAILPIT_LOCAL=$(mktemp -d /tmp/lef-mailpit-stage.XXXXXXXX)
+LEF_MAILPIT_REMOTE="/tmp/lef-mailpit-$LEF_RUN_ID"
+LEF_MAILPIT_UNIT="lef-mailpit-$LEF_RUN_ID.service"
+tar -xzf "$LEF_MAILPIT_ARCHIVE" -C "$LEF_MAILPIT_LOCAL" mailpit
+install -m 0600 docker/smtp-dev/tls/smtp.crt docker/smtp-dev/tls/smtp.key \
+  docker/smtp-dev/tls/ca.crt "$LEF_MAILPIT_LOCAL/"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 'test "$(uname -m)" = x86_64 && command -v systemd-run && sudo -n true'
+ssh -F "$LEF_SSH_CONFIG" verifier-1 \
+  "test \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p LoadState --value)\" = not-found"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
+```
+
+Require no listener on either guest port. Stop if the service or directory belongs to an unfinished run; recover
+that run first. Create the directory exclusively before copying files, then record ownership:
+
+```bash
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "mkdir -m 0700 '$LEF_MAILPIT_REMOTE'"
+printf '%s\n' "$LEF_MAILPIT_REMOTE" > "$LEF_RUN_DIR/mailpit-owned"
+tar -C "$LEF_MAILPIT_LOCAL" -cf - mailpit smtp.crt smtp.key ca.crt |
+  ssh -F "$LEF_SSH_CONFIG" verifier-1 "tar -C '$LEF_MAILPIT_REMOTE' -xf -"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "mkdir -m 0700 '$LEF_MAILPIT_REMOTE/tmp'"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "'$LEF_MAILPIT_REMOTE/mailpit' version --no-release-check"
+```
+
+Require version `1.30.7`. A failed preparation still requires removing the directories created by this run.
+
+### Mailpit Start and Readiness
+
+Start the service as the captured SSH user. Keep its database and verbose SMTP log inside the private directory so
+cleanup includes both. The test certificate enables STARTTLS; required STARTTLS preserves the verifier's secure
+transport contract. Leave SMTP authentication, forwarding, relay, and Chaos disabled for this acceptance phase.
+
+```bash
+ssh -F "$LEF_SSH_CONFIG" verifier-1 \
+  "sudo -n systemd-run --unit='$LEF_MAILPIT_UNIT' --collect \
+    --property=Type=exec --property=User=\$(id -un) \
+    --property=TimeoutStopSec=5s --property=RuntimeMaxSec=2h \
+    --property=KillMode=control-group \
+    --property=WorkingDirectory='$LEF_MAILPIT_REMOTE' \
+    --setenv=TMPDIR='$LEF_MAILPIT_REMOTE/tmp' \
+    '$LEF_MAILPIT_REMOTE/mailpit' \
+    --smtp=172.29.10.4:2525 --listen=127.0.0.1:8025 \
+    --smtp-tls-cert='$LEF_MAILPIT_REMOTE/smtp.crt' \
+    --smtp-tls-key='$LEF_MAILPIT_REMOTE/smtp.key' --smtp-require-starttls \
+    --smtp-disable-rdns --disable-version-check \
+    --database='$LEF_MAILPIT_REMOTE/mailpit.db' \
+    --verbose --log-file='$LEF_MAILPIT_REMOTE/smtp.log'"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "systemctl is-active '$LEF_MAILPIT_UNIT'"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
+```
+
+Repeat the read-only checks within five seconds while Mailpit starts. Require SMTP only on `172.29.10.4:2525`
+and HTTP only on `127.0.0.1:8025`; stop and clean up if the unit fails or either binding differs. Start a foreground
+SSH forward in a dedicated controller terminal with the same `LEF_SSH_CONFIG`:
+
+```bash
+ssh -F "$LEF_SSH_CONFIG" -N -T \
+  -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:18025:127.0.0.1:8025 verifier-1
+```
+
+From the scenario shell, check readiness through the private HTTP forward:
+
+```bash
+curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18025/readyz
+```
+
+Readiness proves the service reports itself ready. The real application phase below must separately prove SMTP,
+STARTTLS, and proxy use. Prove HTTP access from another guest is denied. Raw verbose logs include SMTP envelope
+addresses; extract only sanitized session, peer, and command-result evidence for the later validation report.
+
+### Mailpit Stop, Interruption, and Repetition
+
+Stop verification callers before stopping Mailpit. From the same controller shell:
+
+```bash
+ssh -F "$LEF_SSH_CONFIG" verifier-1 \
+  "if [ \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p LoadState --value)\" != not-found ]; then
+     sudo -n systemctl stop '$LEF_MAILPIT_UNIT'
+   fi"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 \
+  "case \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p ActiveState --value)\" in
+     inactive|failed) exit 0 ;;
+     *) exit 1 ;;
+   esac"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
+```
+
+Require no active unit or fixture listeners. Press `Ctrl+C` in the Mailpit HTTP-forward terminal and confirm that
+controller port `18025` has closed. After inspecting evidence, remove only this run's staged files, database, and log:
+
+```bash
+test "$(cat "$LEF_RUN_DIR/mailpit-owned")" = "$LEF_MAILPIT_REMOTE"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "rm -rf -- '$LEF_MAILPIT_REMOTE'"
+rm -rf -- "$LEF_MAILPIT_LOCAL"
+rm -- "$LEF_RUN_DIR/mailpit-owned"
+```
+
+The five-second shutdown bound and two-hour service lifetime also apply to Mailpit. After interruption or SSH loss,
+resume these steps using the recorded variables. Automatic expiry stops the process but does not remove its files.
+If the guest is unreachable, the cleanup procedure remains incomplete until access returns or the disposable VM is destroyed. A new run
+uses a fresh identifier and directory; retain the pinned archive only if recorded as a reusable prerequisite.
+
+## Real Application and Capacity Evidence
+
+The peer probe proves connection origin through `/last-peer`; Mailpit provides SMTP conversations. The health check
+closes its connection after CONNECT and reads the peer probe's JSON. Mailpit has no compatible endpoint, so pause
+reconciliation while Mailpit owns port `2525` and restore the peer phase for later health/recovery assertions.
+
+The verifier performs EHLO, STARTTLS, MAIL FROM, RCPT TO, and QUIT without DATA. An empty Mailpit inbox is therefore
+expected and cannot prove or disprove verification. Default recipient acceptance is suitable for the basic SMTP
+and catch-all scenario. With account discovery disabled, expect `catchAll=true` and
+`verificationQuality=inconclusive`; accepting the control recipient does not prove that the target mailbox exists.
+Mailpit recipient restrictions and Chaos can simulate other failures, but they do not
+replace the existing Node fixture's precise SMTP evidence-classification tests.
+
+Plan 16 must record how to invoke the application and which result to expect before this phase begins. The existing
+certificate covers `smtp.lef.test`; use that MX hostname with an A record of `172.29.10.4` in the disposable DNS
+environment. Both the application's MX resolver and the proxy nodes resolving the CONNECT destination need those
+records. The application also needs reverse-DNS records for listener hosts `172.29.10.2` and `172.29.10.3` returning valid
+lab hostnames, such as `proxy-a.lef.test` and `proxy-b.lef.test`: it derives its EHLO name and sender domain from
+the allocated proxy host. Use a disposable organization/domain with fresh SMTP evidence and reset the relevant
+test caches; changing only the recipient's local part can still reuse the domain's cached catch-all control result.
+Required inputs include the test CA trusted by `SMTP_TLS_CA_FILE`, `SMTP_PORT=2525`, seeded authorization
+and credits, and two verification processes sharing the same test Redis limits. Keep certificate verification
+enabled and use the current mailbox-verification services and registered proxies. A substituted socket probe or a
+health-check-only run does not meet the application acceptance criterion.
+
+The evidence must link an actual verification result to a reconciled proxy endpoint, show the corresponding fixture
+session, prove that overlapping processes obey the per-proxy and per-MX limits, and demonstrate failure and recovery.
+Mailpit does not supply deterministic session hold/release controls for this test. Define a tested synchronization
+barrier in the validation harness and capture the existing Redis lease/counter state during overlap in plan 16.
+Starting two processes together, Mailpit message totals, and sequential `/last-peer` checks do not establish that
+overlap. This instrumentation remains future validation work; no additional full SMTP server is proposed here.
+Keep credentials, recipient data, raw SMTP envelopes, and unrelated infrastructure details out of committed output.
+
+## Final Scenario Cleanup
+
+After both fixture phases, registry draining, tunnel cleanup, all SSH forwards, and private evidence checks finish,
+remove this scenario's local directory, including its captured SSH configuration and notes:
 
 ```bash
 case "$LEF_RUN_DIR" in
@@ -392,38 +566,8 @@ case "$LEF_RUN_DIR" in
 esac
 ```
 
-On `Ctrl+C` or SSH loss elsewhere, reconnect using the captured configuration and run the same stop-and-remove steps.
-Do not assume closing the original SSH session stops a systemd service. If the guest is unreachable, the cleanup procedure remains
-incomplete until access returns or the disposable VM is destroyed through the existing Vagrant procedure. Report
-that gap rather than claiming cleanup from the automatic two-hour process expiry.
-
-## Real Application and Capacity Evidence
-
-The peer fixture sends a greeting and closes the TCP connection. It cannot establish a completed SMTP verification
-or deterministically hold overlapping sessions for capacity assertions. Its `/last-peer` value is overwritten by
-the next connection. Test the three source identities sequentially and keep concurrent verification in a separate phase.
-
-Stop the peer service before the full SMTP phase; both use the already permitted port `2525`. For that phase,
-propose reusing `createEvidenceFixture` from `docker/smtp-dev/evidence-server.mjs` with the same
-temporary Node runtime. Its direct CLI binds both servers to wildcard addresses. Plan 16 must supply a small,
-fixture-specific entry point that binds SMTP to `172.29.10.4:2525`, control to `127.0.0.1:8025`, loads the staged test certificate,
-and shuts down both servers and accepted sockets. It must define a bounded hold/release scenario if needed to prove
-overlap between two real verification processes. This entry point is future code, not an existing command in this PR.
-
-Plan 16 must document its exact build, start, readiness, application invocation, and stop commands before this phase
-begins. Stage `docker/smtp-dev/evidence-server.mjs` and the existing `docker/smtp-dev/tls/` files (`smtp.crt`, `smtp.key`,
-and `ca.crt`). The certificate covers `smtp.lef.test`; use that MX hostname with an A record of `172.29.10.4` in the
-disposable DNS environment. A proposed SSH control forward maps controller `127.0.0.1:18025` to guest
-`127.0.0.1:8025`. Required inputs include the test CA trusted by
-`SMTP_TLS_CA_FILE`, `SMTP_PORT=2525`, seeded application authorization and credits, and two verification processes
-sharing the same test Redis limits. Use the current mailbox-verification services and registered proxies. A substituted
-socket probe or a health-check-only run does not meet the application acceptance criterion.
-
-The evidence must link an actual verification result to a reconciled proxy endpoint, show the corresponding fixture
-session, prove that overlapping processes obey the per-proxy and per-MX limits, and demonstrate failure and recovery.
-The current `/counters` response counts total connections only. Add sanitized session and peak-concurrency evidence
-or a tested Redis synchronization barrier in plan 16; total connections alone cannot establish the required overlap.
-Keep credentials, recipient data, raw SMTP envelopes, and unrelated infrastructure details out of committed output.
+Confirm that all recorded guest services, temporary directories, local forwards, and tunnel state are absent before
+reporting cleanup complete. Remove archive copies too if they were downloaded only for this run.
 
 ## Remote Docker Boundary
 
@@ -451,8 +595,8 @@ Guest reset and final `vagrant destroy -f` remain the direct procedures in plan 
 | Which listener-reachability model? | Owner selected the tunnel through `verifier-1` on 2026-09-15. | Prove the proposed lifecycle and original endpoints in plan 16. | Plan-16 implementer |
 | Can the controller support the exact tunnel? | WSL Vagrant access is documented; the method needs privileged local firewall redirection. | Confirm the selected host, compatible tool versions, port availability, and scoped privileges. The chosen model does not prove those prerequisites. | Project owner |
 | Where do real verification processes run? | A host process can use this proposal; the default command does not prove container traffic coverage. | Confirm direct WSL execution and reachable application dependencies, or document a tested container-network procedure. | Plan-16 implementer |
-| How should fixtures run on the verifier? | No Node, Docker, or shared source is installed by the lab. | Accept or revise temporary Node, copied artifacts, and a transient service. | Project owner |
-| How is full SMTP and capacity behavior exercised? | The peer probe is insufficient; the existing evidence server supplies SMTP scenarios. | Define and test the private fixture entry point, DNS/CA setup, two-process workload, and all lifecycle commands. | Plan-16 implementer |
+| How should fixtures run on the verifier? | Owner selected standalone Mailpit for SMTP and the existing peer probe for sequential egress checks. | Validate the proposed transient services, staged Node for the probe, pinned Mailpit binary, and phase transitions. | Plan-16 implementer |
+| How is full SMTP and capacity behavior exercised? | Mailpit supplies SMTP/STARTTLS; neither its inbox nor the peer probe proves concurrent leases. | Finalize DNS/CA setup, application invocation, synchronization barrier, Redis assertions, and failure/recovery evidence. | Plan-16 implementer |
 | Which disposable application environment is used? | Reconciliation needs an API and administrative M2M access; verification also needs seeded data and Redis. | Supply the isolated API, dependency endpoints, image digest, and credential files. | Project owner |
 | Are worker access, return paths, and cleanup correct? | Current templates have the gaps listed above. | Correct and prove them without changing the registry or application contracts. | Plan-16 implementer |
 
@@ -477,6 +621,13 @@ documentation only.
 - [TypeScript compiler options](https://www.typescriptlang.org/docs/handbook/compiler-options.html): explicit input
   files and compilation options.
 - [Node binary verification](https://github.com/nodejs/node#verifying-binaries): exact archives and signed manifests.
+- [Mailpit installation](https://mailpit.axllent.org/docs/install/) and
+  [release metadata for Mailpit 1.30.7](https://api.github.com/repos/axllent/mailpit/releases/tags/v1.30.7): standalone archive and digest.
+- [Mailpit SMTP configuration](https://mailpit.axllent.org/docs/configuration/smtp/) and
+  [command flags for Mailpit 1.30.7](https://github.com/axllent/mailpit/blob/v1.30.7/cmd/root.go): bindings, STARTTLS, database, and logging.
+- [Readiness for Mailpit 1.30.7](https://github.com/axllent/mailpit/blob/v1.30.7/cmd/readyz.go),
+  [API](https://mailpit.axllent.org/docs/api-v1/), and
+  [Chaos](https://mailpit.axllent.org/docs/integration/chaos/): readiness signals and fixture capability boundaries.
 - [systemd 255 transient services](https://github.com/systemd/systemd/blob/v255/man/systemd-run.xml),
   [service time limits](https://github.com/systemd/systemd/blob/v255/man/systemd.service.xml), and
   [termination](https://github.com/systemd/systemd/blob/v255/man/systemd.kill.xml): process ownership and bounded shutdown.
