@@ -37,8 +37,13 @@ counts and charges, including partial processing failure.
 - [x] (2026-09-15) Completed focused validation (`tsc --noEmit`, full `email-verification` Jest suite, full repo
   Jest suite, `architecture:check`, `apps/web` `tsc -b` + full Vitest suite, `openapi:export/generate/check`) and
   extended `test:verification-billing-postgres` with three new real-Postgres cases (batch dedup reservation,
-  insufficient-funds group fencing, batch/single address sharing) — see Outcomes & Retrospective for what
-  Redis/Bruno validation remains outstanding.
+  insufficient-funds group fencing, batch/single address sharing).
+- [x] (2026-09-15) Ran the live local dev stack end to end: `corepack pnpm bruno:batch-verification` (9 requests/
+  15 tests passing against a freshly reset stack) and the real-Redis
+  `batch-email-verification-queue.integration.spec.ts` (6/6 passing against real BullMQ/Redis, proving the new
+  `Validate → ... → Finish` step machine, `moveToDelayed`/`DelayedError`, and reservation-failure fencing live).
+  `bruno:smtp-dev` still fails at a preexisting, environmental fixture flake (not a regression — reproduced
+  identically on unmodified `master` against the same fresh stack; see Outcomes & Retrospective).
 
 ## Plan dependencies
 
@@ -124,9 +129,9 @@ passing against the richer contract; it does not yet render the new fields.
 - Decision: Deferred three pieces of the original Plan of Work rather than implementing them under time pressure:
   (1) the upload-level `Idempotency-Key`/content-digest replay binding and the `VerificationRateLimitGuard` on
   `POST /verifyBatch/csv`; (2) the `bruno/batch-verification` fixture rewrite (duplicate/mixed-cache/insufficient-
-  credit/replay scenarios) and a live run against the rewritten worker — the existing collection was kept
-  passing (its two status assertions updated for the new response fields) but does not yet exercise
-  deduplication; (3) the "stream the same ordered CSV projection from the database when a durable S3 object is
+  credit/replay scenarios) — the existing collection was kept passing (its two status assertions updated for the
+  new response fields) and was later confirmed passing live against a freshly reset stack, but still does not
+  exercise deduplication; (3) the "stream the same ordered CSV projection from the database when a durable S3 object is
   unavailable" fallback for `GET /verifyBatch/:id/results` — `resultsAvailable` is reported accurately, but the
   results route itself still requires a real S3 object exactly as before. Rationale: each is a substantial,
   separable, well-scoped unit of work in its own right, and the core billing-correctness engine (dedup admission,
@@ -157,13 +162,29 @@ further into a separate, debatable product decision — see the Decision Log and
 
 Deferred, and named explicitly rather than silently dropped (see Decision Log): the upload-level Idempotency-Key/
 content-digest replay binding and rate-limit guard on `POST /verifyBatch/csv`; the `bruno/batch-verification`
-fixture rewrite for deduplication scenarios and a live run against the rewritten worker (the existing collection's
-two status assertions were updated so it keeps passing, but no new fixture yet exercises dedup); and the
-database-fallback CSV read for `GET /verifyBatch/:id/results` when a durable S3 object is unavailable
-(`resultsAvailable` is reported correctly, but the download route itself is unchanged and still requires a real S3
-object). Real-Redis batch queue coverage (`batch-email-verification-queue.integration.spec.ts`) was rewritten for
-the new step machine but not rerun against a live Redis instance in this environment (no `TEST_REDIS_URL`
-available) — it was carefully hand-verified against the actual implementation instead.
+fixture rewrite for deduplication scenarios (the existing collection's two status assertions were updated so it
+keeps passing, but no new fixture yet exercises dedup); and the database-fallback CSV read for
+`GET /verifyBatch/:id/results` when a durable S3 object is unavailable (`resultsAvailable` is reported correctly,
+but the download route itself is unchanged and still requires a real S3 object).
+
+**Live validation, run afterward against the real local dev stack**: `corepack pnpm bruno:batch-verification`
+passed fully (9 requests / 15 tests) against a freshly `dev:reset` stack, both before and after rebuilding the API
+container from this branch. The real-Redis `batch-email-verification-queue.integration.spec.ts` passed 6/6 against
+real BullMQ/Redis (`TEST_REDIS_URL=redis://localhost:<published-port>`), proving the rewritten step machine,
+`moveToDelayed`/`DelayedError` scheduling, and reservation-failure fencing actually work over live infrastructure,
+not just against fakes. Running the rest of the module's real-Redis suites with the same `TEST_REDIS_URL` (87
+suites, up from 84) also stayed green.
+
+`corepack pnpm bruno:smtp-dev` still fails on a fresh reset, consistently at one of the two non-standard-
+termination scenarios (`target_temporary_reject` or `close_after_accept`, varying between runs) with the affected
+request settling `201` instead of the scenario's expected outcome. This was investigated directly (manual PUT to
+the fixture's `/scenario` control endpoint plus a raw `/verify` call reproduced the same wrong-classification
+symptom outside Bruno entirely) without finding a root cause within the fixture/proxy/SMTP-client boundary. To
+separate a real regression from a preexisting environmental issue, the exact same collection was then run against
+unmodified `master` on the identical freshly-reset stack (API container rebuilt from `master`, fixture reset) —
+**it failed identically** (`request 43`, `status 201`). This confirms the flakiness predates this plan and is not
+a regression it introduces; it was not root-caused further, matching the same unresolved class of issue flagged in
+`verification-billing/04`'s own retrospective.
 
 Full validation actually run and passing: `tsc --noEmit` (root), `apps/web` `tsc -b`, the full root Jest suite
 (259 suites / 3323 tests) and the full `apps/web` Vitest suite (30 files / 632 tests), `architecture:check` (0
@@ -326,13 +347,13 @@ section for the complete mapping): `application/delivery/batch/batch-admission.s
 `api/http/batch-verification/batch-verification.openapi.spec.ts`, and the real-Postgres
 `infrastructure/persistence/verification-billing.integration.spec.ts`.
 
-**Not run this session** (see the Outcomes & Retrospective and Decision Log for why): `corepack pnpm
-bruno:batch-verification` and `corepack pnpm bruno:smtp-dev` (no live local stack in this environment — the
-collection's own response-shape assertions were updated so it keeps passing when it is run, but no new
-deduplication fixture was added or exercised live); the real-Redis
-`infrastructure/queues/batch-verification/batch-email-verification-queue.integration.spec.ts` (no `TEST_REDIS_URL`
-in this environment — rewritten for the new step machine and carefully hand-verified against the actual
-implementation, but not run against live Redis).
+**Run afterward against the live local dev stack** (see Outcomes & Retrospective for full detail):
+`corepack pnpm bruno:batch-verification` — 9 requests / 15 tests passing against a freshly `dev:reset` stack;
+`infrastructure/queues/batch-verification/batch-email-verification-queue.integration.spec.ts` against real Redis
+(`TEST_REDIS_URL=redis://localhost:<published-port>`) — 6/6 passing, proving the new step machine over live
+BullMQ. `corepack pnpm bruno:smtp-dev` fails on a preexisting environmental fixture flake, reproduced identically
+against unmodified `master` on the same stack — not a regression from this plan; no new deduplication fixture was
+added to it.
 
 ## Idempotence and Recovery
 
