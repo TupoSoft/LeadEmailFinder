@@ -276,7 +276,7 @@ describe('TypeOrmVerificationExecutionStore', () => {
             getMany: jest.fn().mockResolvedValue([execution({ state: 'canceled' })]),
         }
         queryBuilder.where.mockReturnValue(queryBuilder)
-        queryBuilder.andWhere.mockImplementation((arg: unknown) => {
+        queryBuilder.andWhere.mockImplementation((arg: string | ((builder: typeof queryBuilder) => string)) => {
             if (typeof arg === 'function') arg(queryBuilder)
             return queryBuilder
         })

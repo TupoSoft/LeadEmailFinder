@@ -1,4 +1,5 @@
-import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
+import { EmailPatternEnum, EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
+import { mapAsyncVerificationStatus } from '../application/delivery/async/async-verification-status'
 import { EmailVerificationEntity } from './persistence/typeorm/email-verification.entity'
 import { VerificationSettlementIntentionEntity } from './persistence/typeorm/verification-settlement-intention.entity'
 import { TypeOrmVerificationResultReader } from './typeorm-verification-result-reader'
@@ -33,6 +34,7 @@ describe('TypeOrmVerificationResultReader', () => {
             email: 'person@example.test',
             localPart: 'person',
             domain: 'example.test',
+            format: EmailPatternEnum.First,
             mxDomain: 'mx.example.test',
             targetExchange: 'mx.example.test',
             exists: true,
@@ -54,10 +56,72 @@ describe('TypeOrmVerificationResultReader', () => {
 
         const response = await new TypeOrmVerificationResultReader(store).findOwned(lookup)
 
-        expect(response).toEqual({ ...result, format: undefined })
+        expect(response).toEqual(result)
         expect(response).not.toHaveProperty('organizationId')
         expect(response).not.toHaveProperty('batchId')
         expect(response).not.toHaveProperty('futurePrivateColumn')
+    })
+
+    it('omits SQL-null optional strings from async results while preserving nullable evidence', async () => {
+        const createdAt = new Date('2026-01-01T00:00:00.000Z')
+        const store = manager({
+            result: {
+                ...baseResult(),
+                format: null,
+                mxDomain: null,
+                targetExchange: null,
+                exists: null,
+                catchAll: null,
+                evidenceObservedAt: null,
+            },
+            intention: { executionId: 'execution-1', resultId: lookup.id, state: 'confirmed' },
+        })
+
+        const result = await new TypeOrmVerificationResultReader(store).findOwned(lookup)
+
+        expect(result).toMatchObject({
+            format: undefined,
+            mxDomain: undefined,
+            targetExchange: undefined,
+            exists: null,
+            catchAll: null,
+            evidenceObservedAt: null,
+        })
+        const status = mapAsyncVerificationStatus({
+            kind: 'settled',
+            request: {
+                requestId: '00000000-0000-4000-8000-000000000003',
+                organizationId: lookup.organizationId,
+                normalizedAddress: 'person@example.test',
+                deliveryMode: 'async',
+                clientRequestKey: null,
+                executionId: 'execution-1',
+                resultId: lookup.id,
+                source: 'fresh',
+                billingState: 'settled',
+                reservedCount: 1,
+                chargedCount: 0,
+                finalReason: 'inconclusive',
+                createdAt,
+                settledAt: createdAt,
+            },
+            result,
+        }, 24 * 60 * 60 * 1000)
+
+        expect(status).toMatchObject({
+            state: 'completed',
+            operation: { observedAt: null, cacheExpiresAt: null },
+        })
+        expect('result' in status ? status.result : undefined).toEqual({
+            id: lookup.id,
+            email: 'person@example.test',
+            localPart: 'person',
+            domain: 'example.test',
+            exists: null,
+            catchAll: null,
+            reason: EmailVerificationReason.AcceptedEmail,
+            sources: [EmailVerificationSource.MX],
+        })
     })
 
     it('hides a result whose settlement intention has not yet been confirmed', async () => {

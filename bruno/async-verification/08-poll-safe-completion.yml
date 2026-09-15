@@ -38,6 +38,12 @@ runtime:
                 expect(result.domain).to.equal('lef.test');
                 expect(result.localPart).to.equal('person');
                 expect(result.reason).to.equal('accepted_email');
+                if (Object.hasOwn(result, 'format')) {
+                  expect(['{first}', '{last}', '{first}.{last}', '{f}{last}', '{f}.{last}', '{first}{last}', '{first}{l}', '{first}.{l}', '{last}.{first}', '{first}_{last}', '{last}{f}', '{f}{l}', '{l}{first}', '{l}.{first}', '{last}{first}', '{first}-{last}']).to.include(result.format);
+                }
+                for (const field of ['mxDomain', 'targetExchange']) {
+                  if (Object.hasOwn(result, field)) expect(result[field]).to.be.a('string');
+                }
                 expect([true, false, null]).to.include(result.exists);
                 expect([true, false, null]).to.include(result.catchAll);
                 expect(result.sources).to.be.an('array');
