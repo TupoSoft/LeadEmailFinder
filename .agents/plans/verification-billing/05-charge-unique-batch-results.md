@@ -42,8 +42,15 @@ counts and charges, including partial processing failure.
   15 tests passing against a freshly reset stack) and the real-Redis
   `batch-email-verification-queue.integration.spec.ts` (6/6 passing against real BullMQ/Redis, proving the new
   `Validate → ... → Finish` step machine, `moveToDelayed`/`DelayedError`, and reservation-failure fencing live).
-  `bruno:smtp-dev` still fails at a preexisting, environmental fixture flake (not a regression — reproduced
-  identically on unmodified `master` against the same fresh stack; see Outcomes & Retrospective).
+  `bruno:smtp-dev` initially still failed at a preexisting environmental fixture flake (not a regression —
+  reproduced identically on unmodified `master` against the same fresh stack), root-caused and fixed in the
+  fixture itself; see Outcomes & Retrospective.
+- [x] (2026-09-15) Root-caused and fixed the `bruno:smtp-dev` flake: `docker/smtp-dev/evidence-server.mjs`'s
+  `target_temporary_reject` scenario now greylists a recipient per-address, independent of the fixture's shared
+  `scenario` toggle and surviving `/reset`, instead of relying solely on `scenario` staying selected while the
+  app's own delayed greylist retry is outstanding. Confirmed fixed with three independent fresh `dev:reset` +
+  single-collection-run cycles (all clean) plus direct log/DB-level tracing of the failure mechanism; see
+  Outcomes & Retrospective for the full root-cause write-up.
 
 ## Plan dependencies
 
@@ -175,16 +182,43 @@ real BullMQ/Redis (`TEST_REDIS_URL=redis://localhost:<published-port>`), proving
 not just against fakes. Running the rest of the module's real-Redis suites with the same `TEST_REDIS_URL` (87
 suites, up from 84) also stayed green.
 
-`corepack pnpm bruno:smtp-dev` still fails on a fresh reset, consistently at one of the two non-standard-
+`corepack pnpm bruno:smtp-dev` initially failed on a fresh reset, consistently at one of the two non-standard-
 termination scenarios (`target_temporary_reject` or `close_after_accept`, varying between runs) with the affected
-request settling `201` instead of the scenario's expected outcome. This was investigated directly (manual PUT to
-the fixture's `/scenario` control endpoint plus a raw `/verify` call reproduced the same wrong-classification
-symptom outside Bruno entirely) without finding a root cause within the fixture/proxy/SMTP-client boundary. To
-separate a real regression from a preexisting environmental issue, the exact same collection was then run against
-unmodified `master` on the identical freshly-reset stack (API container rebuilt from `master`, fixture reset) —
-**it failed identically** (`request 43`, `status 201`). This confirms the flakiness predates this plan and is not
-a regression it introduces; it was not root-caused further, matching the same unresolved class of issue flagged in
-`verification-billing/04`'s own retrospective.
+request settling `201` instead of the scenario's expected outcome. To separate a real regression from a
+preexisting environmental issue, the exact same collection was run against unmodified `master` on an identical
+freshly-reset stack (API container rebuilt from `master`, fixture reset) — **it failed identically**
+(`request 43`, `status 201`), confirming the flakiness predated this plan.
+
+It was then root-caused and fixed. `MailboxVerificationService.verify()` always probes the fixed catch-all/control
+address before the real target; once that control probe's evidence is conclusively "missing" it is cached for 24h
+and never reprobed. For `target_temporary_reject`, the app schedules a durable retry with a growing backoff
+(60s, 120s, and onward — `GREYLIST_BACKOFF_UNIT_MS` in `verification-execution-runner.ts`), well past both a
+single collection run's ~1-3-second wall-clock duration and its own final `POST {{evidenceControlUrl}}/reset` step
+(request 47, which restores the fixture's shared `scenario` toggle to `default`, accepting everyone).
+`docker/smtp-dev/evidence-server.mjs`'s `target_temporary_reject` behavior was keyed only on that single shared
+`scenario` value. The app's background retry fires tens of seconds after the run that scheduled it, by which time
+`scenario` had moved on to `default` (or a later run's own scenario); the fixture would then see the target as
+accepted, a genuinely fresh SMTP probe, and cache that "accepted" verdict for 24 hours.
+`deriveEvidenceObservedAt`'s `Math.min(target, control)` rule (`classify-verification-quality.ts`) then further
+attributes that wrongly-cached result's timestamp to the control probe's own long-lived cached timestamp, which is
+why unrelated addresses appeared to share an identical `evidenceObservedAt` when this was being traced. Every
+later run against the same organization then hit this same poisoned per-address cache at `request 43`,
+deterministically. Confirmed via direct Postgres inspection of
+`smtp_verifications`/`verification_executions` and temporary `console.error` instrumentation in the fixture,
+correlating the exact retry timestamp with the exact moment `scenario` (and, before the fix, the in-fixture
+greylist) had already reverted.
+
+The fix makes `target_temporary_reject` greylist the specific recipient address in the fixture itself, independent
+of the shared `scenario` toggle and surviving `/reset` (a real greylisting MTA defers a given sender/recipient pair
+regardless of anything else happening on the server) — see `docker/smtp-dev/evidence-server.mjs` and its extended
+`evidence-server.test.mjs` coverage. Confirmed fixed with three independent fresh `dev:reset` +
+`docker compose ... up -d --build` + single `bruno:smtp-dev` run cycles, all clean (47 requests / 78 tests
+passing). Re-running the collection repeatedly against the *same* organization without an intervening `dev:reset`
+now deterministically hits a separate, correct, and preexisting business rule instead (`BalanceBelowReservedException`
+/ HTTP 409 on `PUT /credits/:id`, since the still-outstanding `target_temporary_reject` reservation from the earlier
+run legitimately blocks zeroing the balance) — this is expected given the collection's own documented validation
+flow is one run per fresh reset, not repeated reruns against one organization, and is unrelated to the flake fixed
+here.
 
 Full validation actually run and passing: `tsc --noEmit` (root), `apps/web` `tsc -b`, the full root Jest suite
 (259 suites / 3323 tests) and the full `apps/web` Vitest suite (30 files / 632 tests), `architecture:check` (0
@@ -351,9 +385,10 @@ section for the complete mapping): `application/delivery/batch/batch-admission.s
 `corepack pnpm bruno:batch-verification` — 9 requests / 15 tests passing against a freshly `dev:reset` stack;
 `infrastructure/queues/batch-verification/batch-email-verification-queue.integration.spec.ts` against real Redis
 (`TEST_REDIS_URL=redis://localhost:<published-port>`) — 6/6 passing, proving the new step machine over live
-BullMQ. `corepack pnpm bruno:smtp-dev` fails on a preexisting environmental fixture flake, reproduced identically
-against unmodified `master` on the same stack — not a regression from this plan; no new deduplication fixture was
-added to it.
+BullMQ. `corepack pnpm bruno:smtp-dev` initially failed on a preexisting environmental fixture flake, reproduced
+identically against unmodified `master` on the same stack (not a regression from this plan) and then root-caused
+and fixed in `docker/smtp-dev/evidence-server.mjs`; see Outcomes & Retrospective for the full write-up. No new
+deduplication fixture was added to `bruno/batch-verification`.
 
 ## Idempotence and Recovery
 

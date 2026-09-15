@@ -67,6 +67,15 @@ function writeLine(socket, line) {
 export function createEvidenceFixture({ hostname, tlsOptions }) {
     let scenario = 'default'
     let counters = { connections: 0 }
+    // A real greylisting MTA defers a specific (sender, recipient) pair independently of whatever else the
+    // server is doing later. `scenario` is a single global toggle shared across every connection, so without
+    // this, a recipient greylisted here keeps that status only as long as `scenario` happens to stay selected.
+    // The app's own retry for a 450 is scheduled tens of seconds out (see GREYLIST_BACKOFF_UNIT_MS) and often
+    // fires well after a later Bruno request has moved `scenario` on, or after the run's own `/reset` restores
+    // the accepts-all baseline — at which point a stale retry would be conclusively (and wrongly) accepted and
+    // cached for 24h, poisoning every later run against this same address. A greylisted recipient therefore
+    // stays greylisted for the life of this process, surviving both later `scenario` changes and `/reset`.
+    let greylistedRecipients = new Set()
 
     function ehloResponse(afterStartTls) {
         if (afterStartTls) return `250 ${hostname}`
@@ -76,6 +85,11 @@ export function createEvidenceFixture({ hostname, tlsOptions }) {
     function respondToRecipient(socket, recipient, sawSender) {
         if (!sawSender) {
             writeLine(socket, '503 Bad sequence of commands')
+            return
+        }
+
+        if (!isControlRecipient(recipient) && greylistedRecipients.has(recipient)) {
+            writeLine(socket, '450 4.2.1 Mailbox temporarily unavailable')
             return
         }
 
@@ -104,6 +118,7 @@ export function createEvidenceFixture({ hostname, tlsOptions }) {
                 writeLine(socket, '554 5.7.1 Message rejected due to policy')
                 return
             case 'target_temporary_reject':
+                greylistedRecipients.add(recipient)
                 writeLine(socket, '450 4.2.1 Mailbox temporarily unavailable')
                 return
             default:
@@ -200,6 +215,12 @@ export function createEvidenceFixture({ hostname, tlsOptions }) {
         if (request.method === 'POST' && request.url === '/reset') {
             scenario = 'default'
             counters = { connections: 0 }
+            // Deliberately NOT clearing greylistedRecipients here: callers use /reset to restore the
+            // accepts-all baseline at the end of a test run, while the app's own retry for an address
+            // greylisted during that run is still scheduled tens of seconds out. Clearing the greylist here
+            // would let that later retry see scenario `default` with no memory of the earlier 450, so it gets
+            // conclusively (and wrongly) accepted — exactly the bug this greylist exists to prevent. A fresh
+            // container start already starts with an empty set; that is the only reset this needs.
             response.writeHead(204).end()
             return
         }
