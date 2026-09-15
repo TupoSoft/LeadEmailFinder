@@ -64,6 +64,7 @@ for (const width of [1440, 320]) {
                 expect(lines).toHaveLength(3)
                 const emailIndex = lines[0].split(',').indexOf('email')
                 const reasonIndex = lines[0].split(',').indexOf('reason')
+                const creditsChargedIndex = lines[0].split(',').indexOf('creditsCharged')
                 expect(reasonIndex).toBeGreaterThanOrEqual(0)
                 expect(lines.slice(1).map(line => line.split(',')[reasonIndex])).toEqual([
                     'accepted_email',
@@ -76,10 +77,15 @@ for (const width of [1440, 320]) {
                         .map(line => line.split(',')[emailIndex])
                         .sort(),
                 ).toEqual(['other@lef.test', 'person@lef.test'])
+                // The plain @lef.test catch-all domain always answers inconclusively (it accepts every
+                // recipient, so the domain policy can never conclusively confirm a specific mailbox), so
+                // both reservations are released rather than captured.
+                expect(creditsChargedIndex).toBeGreaterThanOrEqual(0)
+                expect(lines.slice(1).map(line => line.split(',')[creditsChargedIndex])).toEqual(['0', '0'])
                 await download.delete()
                 expect(posts).toBe(1)
                 const balance = await page.request.get(`${fixture.origin}/v1/billing/summary`)
-                expect(await balance.json()).toEqual({ balance: 0, reserved: 0, available: 0 })
+                expect(await balance.json()).toEqual({ balance: 2, reserved: 0, available: 2 })
                 const accessibility = await new AxeBuilder({ page })
                     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
                     .analyze()

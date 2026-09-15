@@ -1,4 +1,3 @@
-import { CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { safeErrorType } from '@tuposoft/lead-email-finder/common'
 import { ok } from 'node:assert'
 import { BatchJobStep } from '../../../domain/batch-job'
@@ -8,19 +7,29 @@ import {
     VerificationFailureStage,
     VerificationTraceObserver,
 } from '../../verification-trace/verification-trace-observer'
+import { VerificationExecutionDispatcher } from '../../ports/verification-execution-dispatcher'
 import { BatchJobHandle } from './batch-jobs'
-import { BatchChildFlow } from './batch-child-flow'
+import { BatchAdmissionStore } from './batch-admission-store'
+import { BatchAdmissionService } from './batch-admission.service'
 import { BatchInput } from './batch-input'
+import { BatchRowStore } from './batch-row-store'
 import { BatchResultWriter } from './batch-result-writer'
-import { BatchAwaitingChildrenSignal } from './batch-awaiting-children.signal'
+import { BatchAwaitingSettlementSignal } from './batch-awaiting-settlement.signal'
+
+const ROW_PAGE_SIZE = 500
+const DISPATCH_PAGE_SIZE = 100
+const DEFAULT_POLL_INTERVAL_MS = 5_000
 
 export class BatchEmailVerificationWorkflow {
     constructor(
         private readonly input: BatchInput,
-        private readonly childFlow: BatchChildFlow,
+        private readonly rows: BatchRowStore,
+        private readonly admissions: BatchAdmissionStore,
+        private readonly admissionService: BatchAdmissionService,
+        private readonly dispatcher: VerificationExecutionDispatcher,
         private readonly resultWriter: BatchResultWriter,
-        private readonly creditsService: CreditsService,
         private readonly traceObserver: VerificationTraceObserver = NOOP_VERIFICATION_TRACE_OBSERVER,
+        private readonly pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS,
     ) {}
 
     async advance(job: BatchJobHandle, token: string): Promise<string> {
@@ -34,13 +43,17 @@ export class BatchEmailVerificationWorkflow {
                         stage = 'batch_validation'
                         await this.validateFile(job)
                         break
-                    case BatchJobStep.Process:
+                    case BatchJobStep.Admit:
                         stage = 'queue_dispatch'
-                        await this.processFile(job)
+                        await this.admitBatch(job)
                         break
-                    case BatchJobStep.WaitForChildren:
+                    case BatchJobStep.Dispatch:
                         stage = 'queue_dispatch'
-                        await this.waitForChildren(job, token)
+                        await this.dispatchExecutions(job)
+                        break
+                    case BatchJobStep.AwaitSettlement:
+                        stage = 'queue_dispatch'
+                        await this.awaitSettlement(job, token)
                         break
                     case BatchJobStep.UploadResults:
                         stage = 'batch_result_publication'
@@ -54,7 +67,7 @@ export class BatchEmailVerificationWorkflow {
             ok(job.data.step === BatchJobStep.Finish, 'Invalid step.')
             return job.data.resultFilePath
         } catch (error) {
-            if (!(error instanceof BatchAwaitingChildrenSignal)) {
+            if (!(error instanceof BatchAwaitingSettlementSignal)) {
                 observeSafely(() =>
                     this.traceObserver.failed({
                         operationId: job.id,
@@ -110,18 +123,46 @@ export class BatchEmailVerificationWorkflow {
         ok(job.data.step === BatchJobStep.Validate, 'Invalid step.')
 
         const { bucket, key, organizationId, credentialId } = job.data
+        const batchId = job.id
 
         let rowCount = 0
+        const seenAddresses = new Set<string>()
+        let rowBuffer: { batchId: string; sourceRow: number; originalEmail: string; normalizedAddress: string }[] = []
+        let addressBuffer: { normalizedAddress: string; firstSeenRow: number }[] = []
 
         for await (const row of this.input.rows(bucket, key)) {
-            void row
             rowCount++
+            const normalizedAddress = row.email.toLowerCase()
+            rowBuffer.push({ batchId, sourceRow: rowCount, originalEmail: row.email, normalizedAddress })
+            if (!seenAddresses.has(normalizedAddress)) {
+                seenAddresses.add(normalizedAddress)
+                addressBuffer.push({ normalizedAddress, firstSeenRow: rowCount })
+            }
+            if (rowBuffer.length >= ROW_PAGE_SIZE) {
+                await this.rows.insertMany(organizationId, rowBuffer)
+                rowBuffer = []
+            }
+            if (addressBuffer.length >= ROW_PAGE_SIZE) {
+                await this.admissions.insertUniqueAddresses(batchId, organizationId, addressBuffer)
+                addressBuffer = []
+            }
         }
+        if (rowBuffer.length > 0) await this.rows.insertMany(organizationId, rowBuffer)
+        if (addressBuffer.length > 0) await this.admissions.insertUniqueAddresses(batchId, organizationId, addressBuffer)
 
-        await this.creditsService.debit(organizationId, rowCount, job.id)
+        // TODO(verification-billing/05): thread the upload's own Idempotency-Key/content digest through
+        // `BatchJobData` once the controller-level replay wiring lands, instead of always `null` here.
+        await this.admissions.createOrReplay({
+            batchId,
+            organizationId,
+            totalRows: rowCount,
+            uniqueAddressCount: seenAddresses.size,
+            clientRequestKey: null,
+            contentDigest: null,
+        })
 
         await job.updateStep({
-            step: BatchJobStep.Process,
+            step: BatchJobStep.Admit,
             bucket,
             key,
             organizationId,
@@ -129,20 +170,14 @@ export class BatchEmailVerificationWorkflow {
         })
     }
 
-    private async processFile(job: BatchJobHandle): Promise<void> {
-        ok(job.data.step === BatchJobStep.Process, 'Invalid step.')
+    private async admitBatch(job: BatchJobHandle): Promise<void> {
+        ok(job.data.step === BatchJobStep.Admit, 'Invalid step.')
 
         const { bucket, key, organizationId, credentialId } = job.data
-
-        for await (const { email } of this.input.rows(bucket, key)) {
-            await this.childFlow.dispatchChild(
-                { id: job.id, queueQualifiedName: job.queueQualifiedName },
-                { email, organizationId, credentialId },
-            )
-        }
+        await this.admissionService.admit(job.id, organizationId)
 
         await job.updateStep({
-            step: BatchJobStep.WaitForChildren,
+            step: BatchJobStep.Dispatch,
             bucket,
             key,
             organizationId,
@@ -150,16 +185,45 @@ export class BatchEmailVerificationWorkflow {
         })
     }
 
-    private async waitForChildren(job: BatchJobHandle, token: string): Promise<void> {
-        ok(job.data.step === BatchJobStep.WaitForChildren, 'Invalid step.')
-
-        const { shouldWait } = await this.childFlow.awaitChildren(job.id, token)
-
-        if (shouldWait) {
-            throw new BatchAwaitingChildrenSignal()
-        }
+    private async dispatchExecutions(job: BatchJobHandle): Promise<void> {
+        ok(job.data.step === BatchJobStep.Dispatch, 'Invalid step.')
 
         const { bucket, key, organizationId, credentialId } = job.data
+        const batchId = job.id
+
+        for (let skip = 0; ; skip += DISPATCH_PAGE_SIZE) {
+            const page = await this.admissions.pageUniqueAddresses(batchId, organizationId, skip, DISPATCH_PAGE_SIZE)
+            if (page.length === 0) break
+            for (const address of page) {
+                if (address.admissionKind === 'created' && address.executionId !== null) {
+                    await this.dispatcher.dispatch(address.executionId, organizationId)
+                }
+            }
+        }
+
+        await job.updateStep({
+            step: BatchJobStep.AwaitSettlement,
+            bucket,
+            key,
+            organizationId,
+            credentialId,
+        })
+    }
+
+    /**
+     * Polls durable request state rather than a queue child count — cached/shared/cooldown addresses need no
+     * child job of this batch's own at all. `token` is accepted (unused here) so the infrastructure worker can
+     * pass it straight through to `job.moveToDelayed()` when it catches the raised signal, mirroring
+     * `VerificationExecutionProcessor`'s own retry-scheduling idiom.
+     */
+    private async awaitSettlement(job: BatchJobHandle, _token: string): Promise<void> {
+        ok(job.data.step === BatchJobStep.AwaitSettlement, 'Invalid step.')
+
+        const { bucket, key, organizationId, credentialId } = job.data
+        const unsettled = await this.admissions.countUnsettledAddresses(job.id, organizationId)
+        if (unsettled > 0) {
+            throw new BatchAwaitingSettlementSignal(Date.now() + this.pollIntervalMs)
+        }
 
         await job.updateStep({
             step: BatchJobStep.UploadResults,

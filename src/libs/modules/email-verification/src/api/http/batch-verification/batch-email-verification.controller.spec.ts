@@ -164,6 +164,20 @@ describe('BatchEmailVerificationController', () => {
                 processed: 8,
                 unprocessed: 2,
                 progress: 80,
+                resultsAvailable: false,
+                counts: {
+                    totalRows: 10,
+                    uniqueAddresses: 8,
+                    duplicateRows: 2,
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: 8,
+                    conclusiveAddresses: 8,
+                    inconclusiveAddresses: 0,
+                    failedAddresses: 0,
+                },
+                billing: { state: 'pending', reserved: 8, charged: 8 },
             })
 
             const response = await request(app.getHttpServer()).get(`/verifyBatch/${id}`)

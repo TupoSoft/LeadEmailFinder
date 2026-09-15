@@ -1,6 +1,7 @@
 export const VERIFICATION_COOLDOWN_READER = Symbol('VerificationCooldownReader')
 
 export interface CooldownCandidate {
+    readonly resultId: string
     readonly verificationQuality: string
     readonly createdAt: Date
 }

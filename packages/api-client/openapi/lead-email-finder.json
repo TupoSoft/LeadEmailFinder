@@ -272,6 +272,88 @@
         ],
         "type": "object"
       },
+      "BatchStatusAddressCountsDto": {
+        "properties": {
+          "cachedAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "completedAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "conclusiveAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "cooldownAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "duplicateRows": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "failedAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "inconclusiveAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "sharedAddresses": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "totalRows": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "uniqueAddresses": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "totalRows",
+          "uniqueAddresses",
+          "duplicateRows",
+          "cachedAddresses",
+          "sharedAddresses",
+          "cooldownAddresses",
+          "completedAddresses",
+          "conclusiveAddresses",
+          "inconclusiveAddresses",
+          "failedAddresses"
+        ],
+        "type": "object"
+      },
+      "BatchStatusBillingDto": {
+        "properties": {
+          "charged": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "reserved": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "settled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "reserved",
+          "charged"
+        ],
+        "type": "object"
+      },
       "BillingCreditPackResponseDto": {
         "properties": {
           "amountMinor": {
@@ -680,6 +762,12 @@
       },
       "GetBatchStatusResponseDto": {
         "properties": {
+          "billing": {
+            "$ref": "#/components/schemas/BatchStatusBillingDto"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/BatchStatusAddressCountsDto"
+          },
           "failureCode": {
             "description": "Present only for failed jobs. processing_failed makes no claim about whether credits were charged.",
             "enum": [
@@ -701,6 +789,10 @@
             "maximum": 100,
             "minimum": 0,
             "type": "number"
+          },
+          "resultsAvailable": {
+            "description": "True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing.",
+            "type": "boolean"
           },
           "status": {
             "enum": [
@@ -727,7 +819,10 @@
           "progress",
           "total",
           "processed",
-          "unprocessed"
+          "unprocessed",
+          "resultsAvailable",
+          "counts",
+          "billing"
         ],
         "type": "object"
       },

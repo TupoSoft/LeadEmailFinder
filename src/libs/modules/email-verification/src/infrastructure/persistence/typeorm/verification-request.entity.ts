@@ -12,7 +12,7 @@ const DELIVERY_MODES = [
     'batch',
     'batch_child',
 ] as const satisfies readonly VerificationDeliveryMode[]
-const REQUEST_SOURCES = ['fresh', 'cache', 'shared'] as const satisfies readonly VerificationRequestSource[]
+const REQUEST_SOURCES = ['fresh', 'cache', 'shared', 'cooldown'] as const satisfies readonly VerificationRequestSource[]
 const BILLING_STATES = ['pending', 'settled'] as const satisfies readonly VerificationBillingState[]
 const FINAL_REASONS = [
     'conclusive',

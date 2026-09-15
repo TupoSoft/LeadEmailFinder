@@ -672,6 +672,24 @@ export interface components {
             /** @enum {string} */
             code: "authentication_required";
         };
+        BatchStatusAddressCountsDto: {
+            cachedAddresses: number;
+            completedAddresses: number;
+            conclusiveAddresses: number;
+            cooldownAddresses: number;
+            duplicateRows: number;
+            failedAddresses: number;
+            inconclusiveAddresses: number;
+            sharedAddresses: number;
+            totalRows: number;
+            uniqueAddresses: number;
+        };
+        BatchStatusBillingDto: {
+            charged: number;
+            reserved: number;
+            /** @enum {string} */
+            state: "pending" | "settled";
+        };
         BillingCreditPackResponseDto: {
             /** @description Price in the currency minor unit */
             amountMinor: number;
@@ -802,6 +820,8 @@ export interface components {
             name: string;
         };
         GetBatchStatusResponseDto: {
+            billing: components["schemas"]["BatchStatusBillingDto"];
+            counts: components["schemas"]["BatchStatusAddressCountsDto"];
             /**
              * @description Present only for failed jobs. processing_failed makes no claim about whether credits were charged.
              * @enum {string}
@@ -811,6 +831,8 @@ export interface components {
             id: string;
             processed: number;
             progress: number;
+            /** @description True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing. */
+            resultsAvailable: boolean;
             /** @enum {string} */
             status: "queued" | "running" | "completed" | "failed" | "unavailable";
             total: number;

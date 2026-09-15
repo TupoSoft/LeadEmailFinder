@@ -12,6 +12,7 @@ import {
     BatchEmailVerificationService,
 } from '../../../application/delivery/batch/batch-email-verification.service'
 import { BatchResultReader, BatchResultUnavailableError } from '../../../application/delivery/batch/batch-result-reader'
+import { BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
 import { BullBatchJobs } from '../../../infrastructure/queues/batch-verification/bull-batch-jobs'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
 
@@ -32,13 +33,24 @@ describe('batch verification HTTP status and download contracts', () => {
     let principal: AuthPrincipal | undefined
     const queue = { getJob: jest.fn(), add: jest.fn() }
     const resultReader: jest.Mocked<BatchResultReader> = { read: jest.fn() }
+    const admissions: jest.Mocked<BatchAdmissionStore> = {
+        createOrReplay: jest.fn(),
+        findById: jest.fn(),
+        findByClientKey: jest.fn(),
+        updateState: jest.fn(),
+        insertUniqueAddresses: jest.fn(),
+        pageUniqueAddresses: jest.fn(),
+        recordAdmissionOutcome: jest.fn(),
+        recordPayerRequestId: jest.fn(),
+        countUnsettledAddresses: jest.fn(),
+        getStatusCounts: jest.fn(),
+    }
 
     function rawJob(state: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
         return {
             id: jobId,
-            data: { organizationId, step: BatchJobStep.WaitForChildren },
+            data: { organizationId, step: BatchJobStep.AwaitSettlement },
             getState: jest.fn().mockResolvedValue(state),
-            getDependenciesCount: jest.fn().mockResolvedValue({ processed: 8, unprocessed: 2 }),
             failedReason: 'private CSV parser and storage diagnostics',
             stacktrace: ['private stack'],
             ...extra,
@@ -53,7 +65,11 @@ describe('batch verification HTTP status and download contracts', () => {
                 PermissionsGuard,
                 {
                     provide: BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN,
-                    useValue: new BatchEmailVerificationService(new BullBatchJobs(queue as never), resultReader),
+                    useValue: new BatchEmailVerificationService(
+                        new BullBatchJobs(queue as never, admissions),
+                        resultReader,
+                        admissions,
+                    ),
                 },
             ],
         }).compile()
@@ -76,7 +92,44 @@ describe('batch verification HTTP status and download contracts', () => {
         jest.resetAllMocks()
         principal = principalFixture
         queue.getJob.mockResolvedValue(rawJob('active'))
+        admissions.findById.mockResolvedValue({
+            batchId: jobId,
+            organizationId,
+            state: 'admitted',
+            totalRows: 10,
+            uniqueAddressCount: 10,
+            clientRequestKey: null,
+            contentDigest: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        admissions.countUnsettledAddresses.mockResolvedValue(2)
+        admissions.getStatusCounts.mockResolvedValue({
+            cachedAddresses: 0,
+            sharedAddresses: 0,
+            cooldownAddresses: 0,
+            completedAddresses: 8,
+            conclusiveAddresses: 8,
+            inconclusiveAddresses: 0,
+            failedAddresses: 0,
+            reserved: 8,
+            charged: 8,
+        })
     })
+
+    const expectedCounts = {
+        totalRows: 10,
+        uniqueAddresses: 10,
+        duplicateRows: 0,
+        cachedAddresses: 0,
+        sharedAddresses: 0,
+        cooldownAddresses: 0,
+        completedAddresses: 8,
+        conclusiveAddresses: 8,
+        inconclusiveAddresses: 0,
+        failedAddresses: 0,
+    }
+    const expectedBilling = { state: 'pending', reserved: 8, charged: 8 }
 
     afterAll(async () => {
         await app.close()
@@ -120,7 +173,17 @@ describe('batch verification HTTP status and download contracts', () => {
     ])('serializes %s as only safe %s state and exact bounded counts', async (rawState, status) => {
         queue.getJob.mockResolvedValue(rawJob(rawState))
         const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
-        expect(response.body).toEqual({ id: jobId, status, total: 10, processed: 8, unprocessed: 2, progress: 80 })
+        expect(response.body).toEqual({
+            id: jobId,
+            status,
+            total: 10,
+            processed: 8,
+            unprocessed: 2,
+            progress: 80,
+            resultsAvailable: false,
+            counts: expectedCounts,
+            billing: expectedBilling,
+        })
         expect(queue.add).not.toHaveBeenCalled()
     })
 
@@ -138,6 +201,9 @@ describe('batch verification HTTP status and download contracts', () => {
                 processed: 8,
                 unprocessed: 2,
                 progress: 0,
+                resultsAvailable: true,
+                counts: expectedCounts,
+                billing: expectedBilling,
                 failureCode:
                     marker === 'invalid_csv' || marker === 'insufficient_credits' ? marker : 'processing_failed',
             })
@@ -160,6 +226,9 @@ describe('batch verification HTTP status and download contracts', () => {
             processed: 8,
             unprocessed: 2,
             progress: 100,
+            resultsAvailable: true,
+            counts: expectedCounts,
+            billing: expectedBilling,
         })
     })
 

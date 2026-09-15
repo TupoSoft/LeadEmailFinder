@@ -339,6 +339,8 @@ class SystemVerificationClock implements VerificationClock {
         VERIFICATION_REQUEST_STORE,
         VERIFICATION_EXECUTION_STORE,
         VERIFICATION_SETTLEMENT_STORE,
+        VERIFICATION_RESULT_CACHE_READER,
+        VERIFICATION_COOLDOWN_READER,
         VerificationAdmissionService,
         VerificationSettlementService,
         VerificationExecutionRunner,

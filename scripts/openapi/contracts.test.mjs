@@ -251,11 +251,38 @@ test('batch publishes only multipart create, status and CSV download with safe b
     assert.equal(schemas.UploadFileRequestDto.properties.file.type, 'string')
     assert.equal(schemas.UploadFileResponseDto.properties.id.format, 'uuid')
     assert.deepEqual(Object.keys(schemas.GetBatchStatusResponseDto.properties).sort(), [
-        'failureCode', 'id', 'processed', 'progress', 'status', 'total', 'unprocessed',
+        'billing', 'counts', 'failureCode', 'id', 'processed', 'progress', 'resultsAvailable', 'status', 'total', 'unprocessed',
     ])
     assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.status.enum, ['queued', 'running', 'completed', 'failed', 'unavailable'])
     assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.failureCode.enum, ['invalid_csv', 'insufficient_credits', 'processing_failed'])
     assert.equal(schemas.GetBatchStatusResponseDto.required.includes('failureCode'), false)
+    for (const field of ['resultsAvailable', 'counts', 'billing']) {
+        assert.ok(schemas.GetBatchStatusResponseDto.required.includes(field))
+    }
+    assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.resultsAvailable, {
+        type: 'boolean',
+        description:
+            'True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing.',
+    })
+    assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.counts, { $ref: '#/components/schemas/BatchStatusAddressCountsDto' })
+    assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.billing, { $ref: '#/components/schemas/BatchStatusBillingDto' })
+    const counts = schemas.BatchStatusAddressCountsDto
+    const countFields = [
+        'cachedAddresses', 'completedAddresses', 'conclusiveAddresses', 'cooldownAddresses', 'duplicateRows',
+        'failedAddresses', 'inconclusiveAddresses', 'sharedAddresses', 'totalRows', 'uniqueAddresses',
+    ]
+    assert.deepEqual(Object.keys(counts.properties).sort(), countFields)
+    assert.deepEqual([...counts.required].sort(), countFields)
+    for (const field of countFields) {
+        assert.deepEqual(counts.properties[field], { type: 'number', minimum: 0 })
+    }
+    const batchBilling = schemas.BatchStatusBillingDto
+    assert.deepEqual(Object.keys(batchBilling.properties).sort(), ['charged', 'reserved', 'state'])
+    assert.deepEqual([...batchBilling.required].sort(), ['charged', 'reserved', 'state'])
+    assert.deepEqual(batchBilling.properties.state.enum, ['pending', 'settled'])
+    for (const field of ['reserved', 'charged']) {
+        assert.deepEqual(batchBilling.properties[field], { type: 'number', minimum: 0 })
+    }
     assert.deepEqual(download.responses['200'].content, { 'text/csv': { schema: { type: 'string', format: 'binary' } } })
     assert.ok(download.responses['200'].headers['Content-Disposition'])
 })
@@ -274,7 +301,10 @@ test('generated batch operations have Blob upload/download types and exact publi
             Assert<Equal<paths['/verifyBatch/{id}/results']['get']['responses'][200]['content']['text/csv'], Blob>>,
             Assert<Equal<Status['status'], 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'>>,
             Assert<Equal<Status['failureCode'], 'invalid_csv' | 'insufficient_credits' | 'processing_failed' | undefined>>,
-            Assert<Equal<keyof Status, 'id' | 'status' | 'progress' | 'total' | 'processed' | 'unprocessed' | 'failureCode'>>,
+            Assert<Equal<Status['resultsAvailable'], boolean>>,
+            Assert<Equal<keyof Status['counts'], 'totalRows' | 'uniqueAddresses' | 'duplicateRows' | 'cachedAddresses' | 'sharedAddresses' | 'cooldownAddresses' | 'completedAddresses' | 'conclusiveAddresses' | 'inconclusiveAddresses' | 'failedAddresses'>>,
+            Assert<Equal<Status['billing'], { state: 'pending' | 'settled'; reserved: number; charged: number }>>,
+            Assert<Equal<keyof Status, 'id' | 'status' | 'progress' | 'total' | 'processed' | 'unprocessed' | 'failureCode' | 'resultsAvailable' | 'counts' | 'billing'>>,
             Assert<Equal<NonNullable<paths['/verifyBatch/csv']['get']>, never>>,
             Assert<Equal<NonNullable<paths['/verifyBatch/{id}']['post']>, never>>,
             Assert<Equal<NonNullable<paths['/verifyBatch/{id}/results']['post']>, never>>

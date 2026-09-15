@@ -19,6 +19,10 @@ function transportFailure(error: unknown): never {
     throw new ApiError(0, 'request-failed')
 }
 
+function areSafeNonNegativeIntegers(values: readonly unknown[]): values is number[] {
+    return values.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
+}
+
 export async function createBatchVerification(
     api: ApiClient,
     file: File,
@@ -62,7 +66,24 @@ export async function readBatchVerification(
         !Number.isFinite(data.progress) ||
         data.progress < 0 ||
         data.progress > 100 ||
-        ![data.total, data.processed, data.unprocessed].every(value => Number.isSafeInteger(value) && value >= 0)
+        !areSafeNonNegativeIntegers([data.total, data.processed, data.unprocessed]) ||
+        typeof data.resultsAvailable !== 'boolean' ||
+        !data.counts ||
+        !data.billing ||
+        !areSafeNonNegativeIntegers([
+            data.counts.totalRows,
+            data.counts.uniqueAddresses,
+            data.counts.duplicateRows,
+            data.counts.cachedAddresses,
+            data.counts.sharedAddresses,
+            data.counts.cooldownAddresses,
+            data.counts.completedAddresses,
+            data.counts.conclusiveAddresses,
+            data.counts.inconclusiveAddresses,
+            data.counts.failedAddresses,
+        ]) ||
+        !areSafeNonNegativeIntegers([data.billing.reserved, data.billing.charged]) ||
+        (data.billing.state !== 'pending' && data.billing.state !== 'settled')
     )
         throw new ApiError(502, 'request-failed')
     const status: BatchVerificationStatus['status'] = ['queued', 'running', 'completed', 'failed'].includes(data.status)
@@ -76,6 +97,24 @@ export async function readBatchVerification(
         total: data.total,
         processed: data.processed,
         unprocessed: data.unprocessed,
+        resultsAvailable: data.resultsAvailable,
+        counts: {
+            totalRows: data.counts.totalRows,
+            uniqueAddresses: data.counts.uniqueAddresses,
+            duplicateRows: data.counts.duplicateRows,
+            cachedAddresses: data.counts.cachedAddresses,
+            sharedAddresses: data.counts.sharedAddresses,
+            cooldownAddresses: data.counts.cooldownAddresses,
+            completedAddresses: data.counts.completedAddresses,
+            conclusiveAddresses: data.counts.conclusiveAddresses,
+            inconclusiveAddresses: data.counts.inconclusiveAddresses,
+            failedAddresses: data.counts.failedAddresses,
+        },
+        billing: {
+            state: data.billing.state,
+            reserved: data.billing.reserved,
+            charged: data.billing.charged,
+        },
     }
     if (status === 'failed') {
         snapshot.failureCode =

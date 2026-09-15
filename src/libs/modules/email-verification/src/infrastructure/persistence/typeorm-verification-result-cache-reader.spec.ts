@@ -68,6 +68,7 @@ describe('TypeOrmVerificationResultCacheReader', () => {
             const reader = new TypeOrmVerificationResultCacheReader(store)
 
             await expect(reader.findLatestOutcome('org-1', 'person@example.test')).resolves.toEqual({
+                resultId: 'result-1',
                 verificationQuality: 'inconclusive',
                 createdAt: new Date('2026-09-13T00:00:00.000Z'),
             })

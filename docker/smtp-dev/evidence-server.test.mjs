@@ -195,6 +195,50 @@ test('target_temporary_reject scenario rejects the target with a temporary 450',
     })
 })
 
+test('a target_temporary_reject recipient stays greylisted after the scenario moves on to something else', async () => {
+    await withFixture(async ({ smtpPort, controlPort }) => {
+        await setScenario(controlPort, 'target_temporary_reject')
+        const first = await runExchange(smtpPort, { recipients: [`person@${hostname}`] })
+        assert.equal(first.rcptResponses[0][0], '450 4.2.1 Mailbox temporarily unavailable')
+
+        // A real retry against the same recipient can land long after the scenario moves on (the app's own
+        // greylist backoff is tens of seconds); it must still see a deferral, never the new scenario's answer.
+        await setScenario(controlPort, 'default')
+        const second = await runExchange(smtpPort, { recipients: [`person@${hostname}`] })
+        assert.equal(second.rcptResponses[0][0], '450 4.2.1 Mailbox temporarily unavailable')
+
+        await setScenario(controlPort, 'target_accepted')
+        const third = await runExchange(smtpPort, { recipients: [`person@${hostname}`] })
+        assert.equal(third.rcptResponses[0][0], '450 4.2.1 Mailbox temporarily unavailable')
+
+        // A different recipient is unaffected by another address's greylist status.
+        await setScenario(controlPort, 'default')
+        const other = await runExchange(smtpPort, { recipients: [`someone-else@${hostname}`] })
+        assert.equal(other.rcptResponses[0][0], '250 OK')
+    })
+})
+
+test('reset restores the default scenario but does not clear a pending greylist', async () => {
+    await withFixture(async ({ smtpPort, controlPort }) => {
+        await setScenario(controlPort, 'target_temporary_reject')
+        const first = await runExchange(smtpPort, { recipients: [`person@${hostname}`] })
+        assert.equal(first.rcptResponses[0][0], '450 4.2.1 Mailbox temporarily unavailable')
+
+        // Bruno calls /reset at the end of a run to restore the accepts-all baseline. The app's own retry
+        // for this recipient is still scheduled tens of seconds out at that point; reset must not erase its
+        // greylist status, or that later retry would see a clean slate and be wrongly, conclusively accepted.
+        const response = await fetch(`http://127.0.0.1:${controlPort}/reset`, { method: 'POST' })
+        assert.equal(response.status, 204)
+
+        const second = await runExchange(smtpPort, { recipients: [`person@${hostname}`] })
+        assert.equal(second.rcptResponses[0][0], '450 4.2.1 Mailbox temporarily unavailable')
+
+        // A different recipient is unaffected and sees the freshly-restored default scenario.
+        const other = await runExchange(smtpPort, { recipients: [`someone-else@${hostname}`] })
+        assert.equal(other.rcptResponses[0][0], '250 OK')
+    })
+})
+
 test('sender_rejected scenario rejects MAIL FROM regardless of the recipient', async () => {
     await withFixture(async ({ smtpPort, controlPort }) => {
         await setScenario(controlPort, 'sender_rejected')
