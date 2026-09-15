@@ -39,9 +39,9 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
     private admissions = new Map<string, BatchAdmissionRecord>()
     private addresses = new Map<string, BatchUniqueAddressRecord[]>()
 
-    async createOrReplay(input: NewBatchAdmissionInput): Promise<CreateBatchAdmissionOutcome> {
+    createOrReplay(input: NewBatchAdmissionInput): Promise<CreateBatchAdmissionOutcome> {
         const existing = this.admissions.get(input.batchId)
-        if (existing) return { kind: 'replayed', record: existing }
+        if (existing) return Promise.resolve({ kind: 'replayed', record: existing })
         const record: BatchAdmissionRecord = {
             batchId: input.batchId,
             organizationId: input.organizationId,
@@ -54,23 +54,24 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
             updatedAt: new Date(),
         }
         this.admissions.set(input.batchId, record)
-        return { kind: 'created', record }
+        return Promise.resolve({ kind: 'created', record })
     }
 
-    async findById(batchId: string): Promise<BatchAdmissionRecord | null> {
-        return this.admissions.get(batchId) ?? null
+    findById(batchId: string): Promise<BatchAdmissionRecord | null> {
+        return Promise.resolve(this.admissions.get(batchId) ?? null)
     }
 
-    async findByClientKey(): Promise<BatchAdmissionRecord | null> {
-        return null
+    findByClientKey(): Promise<BatchAdmissionRecord | null> {
+        return Promise.resolve(null)
     }
 
-    async updateState(batchId: string, _organizationId: string, state: BatchAdmissionState): Promise<void> {
+    updateState(batchId: string, _organizationId: string, state: BatchAdmissionState): Promise<void> {
         const existing = this.admissions.get(batchId)
         if (existing) this.admissions.set(batchId, { ...existing, state })
+        return Promise.resolve()
     }
 
-    async insertUniqueAddresses(
+    insertUniqueAddresses(
         batchId: string,
         _organizationId: string,
         addresses: readonly { normalizedAddress: string; firstSeenRow: number }[],
@@ -90,13 +91,14 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
             }
         }
         this.addresses.set(batchId, list)
+        return Promise.resolve()
     }
 
-    async pageUniqueAddresses(batchId: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchUniqueAddressRecord[]> {
-        return (this.addresses.get(batchId) ?? []).slice(skip, skip + take)
+    pageUniqueAddresses(batchId: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchUniqueAddressRecord[]> {
+        return Promise.resolve((this.addresses.get(batchId) ?? []).slice(skip, skip + take))
     }
 
-    async recordAdmissionOutcome(
+    recordAdmissionOutcome(
         batchId: string,
         normalizedAddress: string,
         outcome: { readonly admissionKind: BatchUniqueAddressAdmissionKind; readonly executionId: string | null; readonly resultId: string | null },
@@ -104,20 +106,22 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
         const list = this.addresses.get(batchId) ?? []
         const index = list.findIndex(address => address.normalizedAddress === normalizedAddress)
         if (index >= 0 && list[index].admissionKind === null) list[index] = { ...list[index], ...outcome }
+        return Promise.resolve()
     }
 
-    async recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
+    recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
         const list = this.addresses.get(batchId) ?? []
         const index = list.findIndex(address => address.normalizedAddress === normalizedAddress)
         if (index >= 0) list[index] = { ...list[index], payerRequestId }
+        return Promise.resolve()
     }
 
-    async countUnsettledAddresses(batchId: string): Promise<number> {
-        return (this.addresses.get(batchId) ?? []).filter(address => address.payerRequestId === null).length
+    countUnsettledAddresses(batchId: string): Promise<number> {
+        return Promise.resolve((this.addresses.get(batchId) ?? []).filter(address => address.payerRequestId === null).length)
     }
 
-    async getStatusCounts(): Promise<BatchStatusCounts> {
-        return {
+    getStatusCounts(): Promise<BatchStatusCounts> {
+        return Promise.resolve({
             cachedAddresses: 0,
             sharedAddresses: 0,
             cooldownAddresses: 0,
@@ -127,23 +131,24 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
             failedAddresses: 0,
             reserved: 0,
             charged: 0,
-        }
+        })
     }
 }
 
 class InMemoryBatchRowStore implements BatchRowStore {
     private rows: BatchRowRecord[] = []
 
-    async insertMany(_organizationId: string, rows: readonly BatchRowRecord[]): Promise<void> {
+    insertMany(_organizationId: string, rows: readonly BatchRowRecord[]): Promise<void> {
         this.rows.push(...rows)
+        return Promise.resolve()
     }
 
-    async pageBySourceRow(batchId: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchRowRecord[]> {
-        return this.rows.filter(row => row.batchId === batchId).slice(skip, skip + take)
+    pageBySourceRow(batchId: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchRowRecord[]> {
+        return Promise.resolve(this.rows.filter(row => row.batchId === batchId).slice(skip, skip + take))
     }
 
-    async countRows(batchId: string): Promise<number> {
-        return this.rows.filter(row => row.batchId === batchId).length
+    countRows(batchId: string): Promise<number> {
+        return Promise.resolve(this.rows.filter(row => row.batchId === batchId).length)
     }
 }
 

@@ -40,7 +40,7 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
         }))
     }
 
-    async createOrReplay(input: NewBatchAdmissionInput): Promise<CreateBatchAdmissionOutcome> {
+    createOrReplay(input: NewBatchAdmissionInput): Promise<CreateBatchAdmissionOutcome> {
         this.admission = {
             batchId: input.batchId,
             organizationId: input.organizationId,
@@ -52,31 +52,33 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
             createdAt: now,
             updatedAt: now,
         }
-        return { kind: 'created', record: this.admission }
+        return Promise.resolve({ kind: 'created', record: this.admission })
     }
 
-    async findById(id: string, _organizationId: string): Promise<BatchAdmissionRecord | null> {
-        return this.admission && this.admission.batchId === id ? this.admission : null
+    findById(id: string, _organizationId: string): Promise<BatchAdmissionRecord | null> {
+        return Promise.resolve(this.admission && this.admission.batchId === id ? this.admission : null)
     }
 
-    async findByClientKey(): Promise<BatchAdmissionRecord | null> {
-        return null
+    findByClientKey(): Promise<BatchAdmissionRecord | null> {
+        return Promise.resolve(null)
     }
 
-    async updateState(id: string, _organizationId: string, state: BatchAdmissionState): Promise<void> {
+    updateState(id: string, _organizationId: string, state: BatchAdmissionState): Promise<void> {
         if (this.admission && this.admission.batchId === id) this.admission = { ...this.admission, state }
+        return Promise.resolve()
     }
 
-    async insertUniqueAddresses(): Promise<void> {
+    insertUniqueAddresses(): Promise<void> {
         // Seeded directly via `seed()` in these tests.
+        return Promise.resolve()
     }
 
-    async pageUniqueAddresses(id: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchUniqueAddressRecord[]> {
-        if (!this.admission || this.admission.batchId !== id) return []
-        return this.addresses.slice(skip, skip + take)
+    pageUniqueAddresses(id: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchUniqueAddressRecord[]> {
+        if (!this.admission || this.admission.batchId !== id) return Promise.resolve([])
+        return Promise.resolve(this.addresses.slice(skip, skip + take))
     }
 
-    async recordAdmissionOutcome(
+    recordAdmissionOutcome(
         id: string,
         normalizedAddress: string,
         outcome: { readonly admissionKind: BatchUniqueAddressAdmissionKind; readonly executionId: string | null; readonly resultId: string | null },
@@ -85,23 +87,25 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
         if (index >= 0 && this.addresses[index].admissionKind === null) {
             this.addresses[index] = { ...this.addresses[index], ...outcome }
         }
+        return Promise.resolve()
     }
 
-    async recordPayerRequestId(id: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
+    recordPayerRequestId(id: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
         const index = this.addresses.findIndex(address => address.batchId === id && address.normalizedAddress === normalizedAddress)
         if (index >= 0) this.addresses[index] = { ...this.addresses[index], payerRequestId }
+        return Promise.resolve()
     }
 
     snapshot(): readonly BatchUniqueAddressRecord[] {
         return this.addresses
     }
 
-    async countUnsettledAddresses(): Promise<number> {
-        return this.addresses.filter(address => address.payerRequestId === null).length
+    countUnsettledAddresses(): Promise<number> {
+        return Promise.resolve(this.addresses.filter(address => address.payerRequestId === null).length)
     }
 
-    async getStatusCounts(): Promise<BatchStatusCounts> {
-        return {
+    getStatusCounts(): Promise<BatchStatusCounts> {
+        return Promise.resolve({
             cachedAddresses: 0,
             sharedAddresses: 0,
             cooldownAddresses: 0,
@@ -111,7 +115,7 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
             failedAddresses: 0,
             reserved: 0,
             charged: 0,
-        }
+        })
     }
 }
 
@@ -206,40 +210,46 @@ describe('BatchAdmissionService', () => {
     }
 
     it('admits an all-cached/shared/cooldown batch without ever calling reserveMany', async () => {
-        cacheReader.findLatestCandidate.mockImplementation(async (_org, address) =>
-            address === 'cached@example.test' ? { resultId: 'result-cache', verificationQuality: 'conclusive_positive', evidenceObservedAt: now, evidencePolicyVersion: 1 } : null,
+        cacheReader.findLatestCandidate.mockImplementation((_org, address) =>
+            Promise.resolve(
+                address === 'cached@example.test' ? { resultId: 'result-cache', verificationQuality: 'conclusive_positive', evidenceObservedAt: now, evidencePolicyVersion: 1 } : null,
+            ),
         )
-        cooldownReader.findLatestOutcome.mockImplementation(async (_org, address) =>
-            address === 'cooldown@example.test'
-                ? { resultId: 'result-cooldown', verificationQuality: 'inconclusive', createdAt: new Date(now.getTime() - 1_000) }
-                : null,
+        cooldownReader.findLatestOutcome.mockImplementation((_org, address) =>
+            Promise.resolve(
+                address === 'cooldown@example.test'
+                    ? { resultId: 'result-cooldown', verificationQuality: 'inconclusive', createdAt: new Date(now.getTime() - 1_000) }
+                    : null,
+            ),
         )
         executions.claimOrJoin.mockImplementation(
-            async (_org, address): Promise<ClaimAddressOutcome> =>
-                address === 'shared@example.test'
-                    ? {
-                          kind: 'joined',
-                          execution: {
-                              executionId: 'execution-shared',
-                              organizationId,
-                              normalizedAddress: address,
-                              payerRequestId: 'other-request',
-                              state: 'running',
-                              fundingOwnerType: 'single',
-                              fundingOwnerId: 'execution-shared',
-                              attemptGeneration: 0,
-                              leaseOwnerId: null,
-                              leaseExpiresAt: null,
-                              resultId: null,
-                              retryAt: null,
-                              deadlineAt: now,
-                              createdAt: now,
-                              updatedAt: now,
-                          },
-                      }
-                    : (() => {
-                          throw new Error('unexpected claimOrJoin call')
-                      })(),
+            (_org, address): Promise<ClaimAddressOutcome> =>
+                Promise.resolve(
+                    address === 'shared@example.test'
+                        ? {
+                              kind: 'joined',
+                              execution: {
+                                  executionId: 'execution-shared',
+                                  organizationId,
+                                  normalizedAddress: address,
+                                  payerRequestId: 'other-request',
+                                  state: 'running',
+                                  fundingOwnerType: 'single',
+                                  fundingOwnerId: 'execution-shared',
+                                  attemptGeneration: 0,
+                                  leaseOwnerId: null,
+                                  leaseExpiresAt: null,
+                                  resultId: null,
+                                  retryAt: null,
+                                  deadlineAt: now,
+                                  createdAt: now,
+                                  updatedAt: now,
+                              },
+                          }
+                        : (() => {
+                              throw new Error('unexpected claimOrJoin call')
+                          })(),
+                ),
         )
         seedAdmission('validating', [
             { normalizedAddress: 'cached@example.test', firstSeenRow: 1 },
@@ -260,9 +270,9 @@ describe('BatchAdmissionService', () => {
 
     it('reserves and dispatches every newly created execution as one atomic group', async () => {
         executions.claimOrJoin.mockImplementation(
-            async (_org, _address, payerRequestId, newExecutionId, _deadlineAt, _isUsable, fundingOwner?: ExecutionFundingOwner): Promise<ClaimAddressOutcome> => {
+            (_org, _address, payerRequestId, newExecutionId, _deadlineAt, _isUsable, fundingOwner?: ExecutionFundingOwner): Promise<ClaimAddressOutcome> => {
                 expect(fundingOwner).toEqual({ type: 'batch_group', id: batchId })
-                return {
+                return Promise.resolve({
                     kind: 'created',
                     execution: {
                         executionId: newExecutionId,
@@ -281,7 +291,7 @@ describe('BatchAdmissionService', () => {
                         createdAt: now,
                         updatedAt: now,
                     },
-                }
+                })
             },
         )
         seedAdmission('validating', [{ normalizedAddress: 'new@example.test', firstSeenRow: 1 }])
@@ -295,7 +305,7 @@ describe('BatchAdmissionService', () => {
     })
 
     it('fences the whole group as insufficient credits without funding any created execution', async () => {
-        executions.claimOrJoin.mockImplementation(async (_org, _address, payerRequestId, newExecutionId): Promise<ClaimAddressOutcome> => ({
+        executions.claimOrJoin.mockImplementation((_org, _address, payerRequestId, newExecutionId): Promise<ClaimAddressOutcome> => Promise.resolve({
             kind: 'created',
             execution: {
                 executionId: newExecutionId,

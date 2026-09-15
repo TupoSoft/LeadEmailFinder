@@ -16,6 +16,18 @@ async function account(context: BrowserContext, allowed = capabilities) {
         }),
     )
 }
+const zeroCounts = {
+    totalRows: 0,
+    uniqueAddresses: 0,
+    duplicateRows: 0,
+    cachedAddresses: 0,
+    sharedAddresses: 0,
+    cooldownAddresses: 0,
+    completedAddresses: 0,
+    conclusiveAddresses: 0,
+    inconclusiveAddresses: 0,
+    failedAddresses: 0,
+}
 const snapshot = (status: string, extra = {}) => ({
     id,
     status,
@@ -23,6 +35,9 @@ const snapshot = (status: string, extra = {}) => ({
     total: 80,
     processed: status === 'completed' ? 80 : 30,
     unprocessed: status === 'completed' ? 0 : 50,
+    resultsAvailable: status === 'completed',
+    counts: { ...zeroCounts, totalRows: 80, uniqueAddresses: 80 },
+    billing: { state: status === 'completed' ? 'settled' : 'pending', reserved: 80, charged: 0 },
     ...extra,
 })
 async function accessible(page: Page) {

@@ -17,7 +17,7 @@ import {
     OrganizationMembership,
     ServiceCredential,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { CreditReservationService, InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
+import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
 import { VerificationClock } from '../../application/ports/verification-clock'
 import { VerificationAdmissionService } from '../../application/operations/verification-admission.service'
 import { VerificationSettlementService } from '../../application/operations/verification-settlement.service'

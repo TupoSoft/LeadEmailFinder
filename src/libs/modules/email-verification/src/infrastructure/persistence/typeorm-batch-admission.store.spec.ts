@@ -72,7 +72,7 @@ describe('TypeOrmBatchAdmissionStore', () => {
             getRawOne: jest.fn().mockResolvedValue(null),
         }
         selectQueryBuilder.where.mockReturnValue(selectQueryBuilder)
-        selectQueryBuilder.andWhere.mockImplementation((arg: unknown) => {
+        selectQueryBuilder.andWhere.mockImplementation((arg: string | ((builder: typeof selectQueryBuilder) => string)) => {
             if (typeof arg === 'function') arg(selectQueryBuilder)
             return selectQueryBuilder
         })
