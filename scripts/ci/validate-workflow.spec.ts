@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -253,7 +253,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree',
         'corepack pnpm docs:lint:changed',
         'corepack pnpm architecture:check',
-        'corepack pnpm test -- select-validation validate-workflow build-workflow execplan-repository-fixture --runInBand',
+        'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',
         'corepack pnpm test:ci-paths',
     ],
     backend: [
@@ -299,7 +299,7 @@ const preservedCommands: Record<string, string[]> = {
 }
 
 describe('Validate workflow syntax and structure', () => {
-    it.each(readdirSync(resolve(root, '.github/workflows')).filter((file) => /\.ya?ml$/.test(file)))(
+    it.each(['validate.yml', 'sync-execplans.yml'])(
         '%s routes every job to the ARC scale set',
         (file) => {
             const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))

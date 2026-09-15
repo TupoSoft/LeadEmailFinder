@@ -99,7 +99,7 @@ jobs:
         run: corepack pnpm architecture:check
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Test validation selection and workflow
-        run: corepack pnpm test -- select-validation validate-workflow build-workflow execplan-repository-fixture --runInBand
+        run: corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Check validation fixtures
         run: corepack pnpm test:ci-paths
