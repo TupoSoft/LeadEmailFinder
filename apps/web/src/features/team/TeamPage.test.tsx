@@ -165,21 +165,21 @@ describe('team management', () => {
     })
 
     it('renders access denial after a delayed member-list response', async () => {
+        const response = deferred<Response>()
         let responseTimer: ReturnType<typeof setTimeout> | undefined
         try {
-            const { fetch, router } = renderTeam({
+            const { fetch, router, session } = renderTeam({
                 capabilities: [],
-                intercept: request => {
-                    if (new URL(request.url).pathname === membersPath) {
-                        return new Promise<Response>(resolve => {
-                            responseTimer = setTimeout(() => resolve(new Response(null, { status: 403 })), 1200)
-                        })
-                    }
-                },
+                intercept: request => (new URL(request.url).pathname === membersPath ? response.promise : undefined),
             })
+            // Start the response delay after authentication and the initial request are ready.
+            await act(() => session.bootstrap())
+            await waitFor(() => expect(requestsFor(fetch, membersPath)).toHaveLength(1))
+            responseTimer = setTimeout(() => response.resolve(new Response(null, { status: 403 })), 1200)
             expect(await screen.findByRole('heading', { name: /access/i })).toBeInTheDocument()
             expect(router.state.location.pathname).toBe('/app/forbidden')
             expect(requestsFor(fetch, membersPath)).toHaveLength(1)
+            expect(requestsFor(fetch, '/v1/auth/session')).toHaveLength(1)
         } finally {
             clearTimeout(responseTimer)
         }

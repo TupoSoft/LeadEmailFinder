@@ -50,6 +50,7 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-15) Align the synthetic Bruno server with the current async verification collection and pass all 92 runner tests.
 - [x] (2026-09-15) Split overloaded browser scenarios and pass all 138 main browser tests with retries disabled.
 - [x] (2026-09-15) Verify the auth and billing splits with delayed accessibility scans under the unchanged 30-second deadline.
+- [x] (2026-09-15) Separate authentication setup from the delayed team authorization assertion and verify both timeout controls.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -58,6 +59,9 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-15) Web job `104368929988` passed 627 tests and failed the delayed member-list authorization test.
+  Its three-second DOM query began before authentication completed; the failure snapshot still showed the
+  member list loading. That setup time competed with the intended 1.2-second response delay.
 - (2026-09-15) Browser UI job `104343935099` completed its main suite in 26.6 minutes with three failed tests,
   seven tests that passed on retry, and 110 immediate passes. The failures exhausted the 30-second test deadline
   after combining several interactions or accessibility scans. The expanded job budget was not the failure.
@@ -108,6 +112,11 @@ None.
 
 ## Decision Log
 
+- Decision: Await authentication and the initial member request before starting the delayed authorization response.
+  Rationale: Preserve the real 1.2-second delay, global three-second DOM budget, forbidden route assertion, and
+  timer cleanup. Require exactly one authentication request and one member request. Application code remains
+  unchanged; the response assertion now measures only its intended asynchronous phase.
+  Date/Author: 2026-09-15, user-authorized CI monitoring follow-up.
 - Decision: Split independent auth, team, billing, and batch browser scenarios into separate tests.
   Rationale: Each scenario retains the normal 30-second budget and all applicable assertions. Keep lifecycle
   sequences together, including session recovery, role rejection, and upload followed by reload. Preserve the
@@ -287,6 +296,12 @@ billing-recovery tests failed at 30.1 seconds; each separated case passed in 16.
 No delay or timeout override was committed. Browser-test organization changed; application behavior and
 architecture boundaries did not. The complete Actions result still requires validation on the published commit.
 
+The team authorization follow-up passed all 22 focused tests. A temporary 2.2-second authentication delay made
+the original test fail after 3.04 seconds; the corrected test passed after 3.48 seconds. Temporarily restoring
+a one-second DOM budget still made the corrected test fail after 1.06 seconds. The controls were removed, and
+the real response delay and bounded assertion remain in the committed test. All 628 web tests, focused ESLint,
+web type checking, formatting, and the strict UI audit passed. No API or architecture boundary changed.
+
 ## Context and Orientation
 
 `.github/workflows/validate.yml` owns eleven jobs: change discovery, five validation consumers, three browser
@@ -447,6 +462,16 @@ corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
 corepack pnpm architecture:check
 corepack pnpm typecheck
+corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+Team authorization follow-up validation:
+
+```sh
+corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1 src/features/team/TeamPage.test.tsx
+corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
+corepack pnpm --filter @tuposoft/lead-email-finder-web exec eslint src/features/team/TeamPage.test.tsx
+corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
 corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
 ```
 
