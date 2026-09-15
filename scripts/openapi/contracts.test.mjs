@@ -130,7 +130,7 @@ test('async verification publishes only create and status reads with their authe
     const status = browser.paths['/verifyAsync/{id}'].get
     assert.deepEqual(create.security, [{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
     assert.deepEqual(status.security, [{ lef_session: [] }, { oidc: [] }])
-    assert.deepEqual(Object.keys(create.responses).sort(), ['202', '400', '401', '402', '403'])
+    assert.deepEqual(Object.keys(create.responses).sort(), ['202', '400', '401', '402', '403', '409', '410', '429'])
     assert.deepEqual(Object.keys(status.responses).sort(), ['200', '400', '401', '403', '404'])
     assert.equal(create.requestBody.required, true)
     assert.deepEqual(create.requestBody.content['application/json'].schema, {
@@ -164,15 +164,31 @@ test('async status exposes five discriminated outcomes and only safe result fiel
     const schemas = browser.components.schemas
     for (const [state, name] of Object.entries(variants)) {
         const schema = schemas[name]
-        const fields = state === 'completed' ? ['result', 'state'] : state === 'failed' ? ['failureCode', 'state'] : ['state']
+        const required = state === 'completed' ? ['result', 'state'] : state === 'failed' ? ['failureCode', 'state'] : ['state']
+        const fields = state === 'completed' || state === 'failed' ? [...required, 'operation'].sort() : required
         assert.deepEqual(schema.properties.state, { type: 'string', enum: [state] })
         assert.deepEqual(Object.keys(schema.properties).sort(), fields)
-        assert.deepEqual([...schema.required].sort(), fields)
+        assert.deepEqual([...schema.required].sort(), required)
         assert.equal(content.examples[state].value.state, state)
         assert.deepEqual(Object.keys(content.examples[state].value).sort(), fields)
+        if (state === 'completed' || state === 'failed') {
+            assert.deepEqual(schema.properties.operation.allOf, [{
+                $ref: '#/components/schemas/VerificationOperationMetadataDto',
+            }])
+        }
     }
     assert.deepEqual(schemas.AsyncVerificationFailedResponseDto.properties.failureCode.enum, ['verification_failed'])
-    assert.deepEqual(content.examples.failed.value, { state: 'failed', failureCode: 'verification_failed' })
+    assert.deepEqual(content.examples.failed.value, {
+        state: 'failed',
+        failureCode: 'verification_failed',
+        operation: {
+            id: '00000000-0000-4000-8000-000000000003',
+            source: 'fresh',
+            observedAt: null,
+            cacheExpiresAt: null,
+            billing: { state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' },
+        },
+    })
     assert.deepEqual(schemas.AsyncVerificationCompletedResponseDto.properties.result, {
         $ref: '#/components/schemas/AsyncVerificationResultDto',
     })
@@ -184,6 +200,28 @@ test('async status exposes five discriminated outcomes and only safe result fiel
     for (const field of ['exists', 'catchAll']) {
         assert.equal(result.properties[field].type, 'boolean')
         assert.equal(result.properties[field].nullable, true)
+    }
+})
+
+test('verification operation metadata exposes only public evidence and bounded billing fields', () => {
+    const schemas = browser.components.schemas
+    const operation = schemas.VerificationOperationMetadataDto
+    const fields = ['billing', 'cacheExpiresAt', 'id', 'observedAt', 'source']
+    assert.deepEqual(Object.keys(operation.properties).sort(), fields)
+    assert.deepEqual([...operation.required].sort(), fields)
+    assert.deepEqual(operation.properties.id, { type: 'string', format: 'uuid' })
+    assert.deepEqual(operation.properties.source.enum, ['fresh', 'cache', 'shared'])
+    for (const field of ['observedAt', 'cacheExpiresAt']) {
+        assert.deepEqual(operation.properties[field], { type: 'string', format: 'date-time', nullable: true })
+    }
+    assert.deepEqual(operation.properties.billing, { $ref: '#/components/schemas/VerificationOperationBillingDto' })
+    const billing = schemas.VerificationOperationBillingDto
+    assert.deepEqual(Object.keys(billing.properties).sort(), ['charged', 'reason', 'reserved', 'state'])
+    assert.deepEqual([...billing.required].sort(), ['charged', 'reserved', 'state'])
+    assert.deepEqual(billing.properties.state.enum, ['pending', 'settled'])
+    assert.deepEqual(billing.properties.reason.enum, ['conclusive', 'cached', 'shared', 'inconclusive', 'failed'])
+    for (const field of ['reserved', 'charged']) {
+        assert.deepEqual(billing.properties[field], { type: 'number', enum: [0, 1] })
     }
 })
 
@@ -277,13 +315,17 @@ test('generated async types preserve exact state discrimination, required result
         type Assert<T extends true> = T
         type Status = paths['/verifyAsync/{id}']['get']['responses'][200]['content']['application/json']
         type Result = components['schemas']['AsyncVerificationResultDto']
+        type Operation = components['schemas']['VerificationOperationMetadataDto']
+        type Billing = components['schemas']['VerificationOperationBillingDto']
         type Assertions = [
             Assert<Equal<Status['state'], 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'>>,
-            Assert<Equal<Extract<Status, { state: 'completed' }>, { state: 'completed'; result: Result }>>,
-            Assert<Equal<Extract<Status, { state: 'failed' }>, { state: 'failed'; failureCode: 'verification_failed' }>>,
+            Assert<Equal<Extract<Status, { state: 'completed' }>, { state: 'completed'; result: Result; operation?: Operation }>>,
+            Assert<Equal<Extract<Status, { state: 'failed' }>, { state: 'failed'; failureCode: 'verification_failed'; operation?: Operation }>>,
             Assert<Equal<Extract<Status, { state: 'queued' }>, { state: 'queued' }>>,
             Assert<Equal<Extract<Status, { state: 'running' }>, { state: 'running' }>>,
             Assert<Equal<Extract<Status, { state: 'unavailable' }>, { state: 'unavailable' }>>,
+            Assert<Equal<Operation, { id: string; source: 'fresh' | 'cache' | 'shared'; observedAt: string | null; cacheExpiresAt: string | null; billing: Billing }>>,
+            Assert<Equal<Billing, { state: 'pending' | 'settled'; reserved: 0 | 1; charged: 0 | 1; reason?: 'conclusive' | 'cached' | 'shared' | 'inconclusive' | 'failed' }>>,
             Assert<Equal<Result['exists'], boolean | null>>,
             Assert<Equal<Result['catchAll'], boolean | null>>,
             Assert<Equal<keyof Result, 'id' | 'email' | 'localPart' | 'domain' | 'format' | 'exists' | 'catchAll' | 'reason' | 'sources' | 'mxDomain' | 'targetExchange'>>,
@@ -362,7 +404,12 @@ test('runtime verification docs retain the current POST contract and omit the re
     assert.deepEqual(verification.post.responses['201'].content['application/json'].schema, {
         $ref: '#/components/schemas/EmailVerificationResponseDto',
     })
-    assert.equal(Object.hasOwn(verification.post.responses, '200'), false)
+    assert.deepEqual(Object.keys(verification.post.responses).sort(), ['201', '202', '400', '401', '402', '403', '409', '410', '429'])
+    assert.deepEqual(verification.post.responses['202'].content['application/json'].schema, {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+    })
 
     const schemas = runtime.components.schemas
     assert.equal(Object.hasOwn(schemas, 'OldSyncEmailVerificationRequestQueryDto'), false)
@@ -370,12 +417,18 @@ test('runtime verification docs retain the current POST contract and omit the re
     assert.equal(schemas.EmailVerificationRequestDto.properties.email.type, 'string')
     const response = schemas.EmailVerificationResponseDto
     assert.deepEqual(Object.keys(response.properties).sort(), [
-        'catchAll', 'createdAt', 'domain', 'email', 'exists', 'format', 'id', 'localPart', 'mxDomain',
-        'reason', 'sources', 'targetExchange',
+        'catchAll', 'createdAt', 'domain', 'email', 'evidenceObservedAt', 'exists', 'format', 'id', 'localPart', 'mxDomain',
+        'operation', 'reason', 'sources', 'targetExchange',
     ])
     assert.equal(response.properties.id.type, 'string')
     assert.equal(response.properties.email.type, 'string')
     assert.equal(response.properties.sources.type, 'array')
+    assert.equal(response.properties.evidenceObservedAt.type, 'string')
+    assert.equal(response.properties.evidenceObservedAt.format, 'date-time')
+    assert.equal(response.properties.evidenceObservedAt.nullable, true)
+    assert.ok(response.required.includes('evidenceObservedAt'))
+    assert.equal(response.required.includes('operation'), false)
+    assert.deepEqual(response.properties.operation.allOf, [{ $ref: '#/components/schemas/VerificationOperationMetadataDto' }])
 })
 
 test('ambient configuration and secret-file settings cannot change the export', async () => {

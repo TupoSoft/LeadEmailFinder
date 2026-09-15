@@ -208,12 +208,14 @@ test('successful restoration preserves the exact callback error and its stack', 
     )
 })
 
-test('pinned CLI runs the async workflow once and rejects raw queue states', async () => {
+test('pinned CLI verifies async settlement, cooldown and idempotency and rejects raw queue states', async () => {
     let origin
     let balance = 0
     let enqueues = 0
     let reads = 0
+    let completed = false
     let rawQueueState = false
+    const keyedSubmissions = new Map()
     const job = randomUUID()
     const result = {
         id: randomUUID(),
@@ -224,6 +226,13 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         catchAll: true,
         reason: 'accepted_email',
         sources: [],
+    }
+    const operation = {
+        id: job,
+        source: 'fresh',
+        observedAt: null,
+        cacheExpiresAt: null,
+        billing: { state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' },
     }
     const server = createServer(async (request, response) => {
         const reply = (status, body) => {
@@ -247,10 +256,33 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
             return reply(200, { balance })
         }
         if (pathname === '/verifyAsync') {
-            if (balance === 0) return reply(402, {})
-            if (JSON.parse(raw).email !== 'person@lef.test') return reply(400, {})
+            const email = JSON.parse(raw).email
+            if (email === 'invalid-address') return reply(400, {})
+            const key = request.headers['idempotency-key']
+            if (key) {
+                const previous = keyedSubmissions.get(key)
+                if (previous) {
+                    return previous.email === email
+                        ? reply(202, { id: previous.id })
+                        : reply(409, { message: 'idempotency_key_conflict' })
+                }
+                const timestamp = Number.parseInt(key.replaceAll('-', '').slice(0, 12), 16)
+                if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+                    return reply(410, { message: 'idempotency_key_expired' })
+                }
+            }
+            if (email === result.email && completed) {
+                response.setHeader('Retry-After', '60')
+                return reply(429, { message: 'verification_cooldown' })
+            }
+            if (balance === 0) return reply(402, { message: 'insufficient_credits' })
             balance--
             enqueues++
+            if (key) {
+                const id = randomUUID()
+                keyedSubmissions.set(key, { id, email })
+                return reply(202, { id })
+            }
             return reply(202, { id: job })
         }
         const id = pathname.split('/').at(-1)
@@ -258,7 +290,12 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         if (id !== job || client !== customer.keycloakClientId) return reply(404, {})
         reads++
         if (rawQueueState) return reply(200, { state: 'waiting', failedReason: 'private exception' })
-        return reply(200, reads < 2 ? { state: 'queued' } : { state: 'completed', result })
+        if (reads < 2) return reply(200, { state: 'queued' })
+        if (!completed) {
+            completed = true
+            balance++
+        }
+        return reply(200, { state: 'completed', result, operation })
     })
     await new Promise(done => server.listen(0, '127.0.0.1', done))
     origin = `http://127.0.0.1:${server.address().port}`
@@ -274,16 +311,20 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
     }
     try {
-        assert.deepEqual(await executeCollection('async-verification', environment, root), { requests: 15, tests: 15 })
-        assert.equal(enqueues, 1)
-        assert.equal(balance, 0)
+        assert.deepEqual(await executeCollection('async-verification', environment, root), { requests: 22, tests: 22 })
+        assert.equal(enqueues, 2)
+        assert.equal(keyedSubmissions.size, 1)
+        assert.equal(balance, 1)
         assert.ok(reads >= 4)
+        completed = false
+        reads = 0
+        keyedSubmissions.clear()
         rawQueueState = true
         await assert.rejects(executeCollection('async-verification', environment, root), error => {
             const diagnostic = failureDiagnostic(error)
             assert.equal(diagnostic.stage, 'collection')
             assert.equal(diagnostic.request, 8)
-            assert.equal(diagnostic.requests, 15)
+            assert.equal(diagnostic.requests, 22)
             assert.match(error.message, /raw output is withheld/)
             assert.doesNotMatch(JSON.stringify(error), /private exception|synthetic-customer-secret|person@lef.test/)
             return true
