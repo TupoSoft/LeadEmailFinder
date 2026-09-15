@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -34,7 +34,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -99,7 +99,7 @@ jobs:
         run: corepack pnpm architecture:check
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Test validation selection and workflow
-        run: corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand
+        run: corepack pnpm test -- select-validation validate-workflow build-workflow execplan-repository-fixture --runInBand
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Check validation fixtures
         run: corepack pnpm test:ci-paths
@@ -108,7 +108,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -162,6 +162,12 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.backend == 'true'
+      - name: Prepare Ruby tool cache and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libyaml-0-2 libgmp10
+          sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/hostedtoolcache
+        if: needs.changes.outputs.backend == 'true'
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
@@ -212,7 +218,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -284,7 +290,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -341,7 +347,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -361,6 +367,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+        if: needs.changes.outputs.images == 'true'
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v2
         if: needs.changes.outputs.images == 'true'
       - name: Set up Docker Buildx
         id: buildx
@@ -415,7 +424,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     timeout-minutes: 15
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -483,7 +492,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -566,7 +575,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -619,6 +628,9 @@ jobs:
         if: needs.changes.outputs.browser == 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
+        if: needs.changes.outputs.browser == 'true'
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v2
         if: needs.changes.outputs.browser == 'true'
       - name: Set up Docker Buildx
         id: buildx
@@ -717,7 +729,7 @@ jobs:
       - browser-ui
       - browser-live
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -741,7 +753,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     steps:
       - uses: actions/checkout@v4
         with:

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { isMap, parseAllDocuments } from 'yaml'
@@ -252,7 +252,7 @@ const preservedCommands: Record<string, string[]> = {
         'corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree',
         'corepack pnpm docs:lint:changed',
         'corepack pnpm architecture:check',
-        'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',
+        'corepack pnpm test -- select-validation validate-workflow build-workflow execplan-repository-fixture --runInBand',
         'corepack pnpm test:ci-paths',
     ],
     backend: [
@@ -298,6 +298,44 @@ const preservedCommands: Record<string, string[]> = {
 }
 
 describe('Validate workflow syntax and structure', () => {
+    it.each(readdirSync(resolve(root, '.github/workflows')).filter((file) => /\.ya?ml$/.test(file)))(
+        '%s routes every job to the ARC scale set',
+        (file) => {
+            const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))
+            for (const job of Object.values(declared.jobs)) {
+                expect(job['runs-on']).toBe('tuposoft-pc-wsl')
+            }
+        },
+    )
+
+    it.each(['images', 'browser-live'])('%s provisions Compose before starting Docker builds or services', (id) => {
+        const steps = workflow.jobs[id].steps
+        const composeIndex = steps.findIndex((step) => step.uses === 'docker/setup-compose-action@v2')
+        const buildxIndex = steps.findIndex((step) => step.uses === 'docker/setup-buildx-action@v4')
+        expect(composeIndex).toBeGreaterThanOrEqual(0)
+        expect(buildxIndex).toBeGreaterThan(composeIndex)
+    })
+
+    it('prepares the fixed Ruby cache and runtime libraries before setting up Ruby', () => {
+        const steps = workflow.jobs.backend.steps
+        const setupIndex = steps.findIndex((step) => step.uses === 'ruby/setup-ruby@v1')
+        expect(setupIndex).toBeGreaterThan(0)
+        const preparation = steps.slice(0, setupIndex).map((step) => step.run ?? '').join('\n')
+        expect(preparation).toContain('sudo apt-get install --no-install-recommends -y libyaml-0-2 libgmp10')
+        expect(preparation).toContain('sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/hostedtoolcache')
+    })
+
+    it('installs GitHub CLI before the ExecPlan synchronizer invokes it', () => {
+        const sync = parseWorkflow(readFileSync(resolve(root, '.github/workflows/sync-execplans.yml'), 'utf8'))
+        const steps = sync.jobs.sync.steps
+        const installationIndex = steps.findIndex((step) => step.run?.includes('apt-get install --no-install-recommends -y gh'))
+        const syncIndex = steps.findIndex((step) => step.run === 'corepack pnpm plans:sync')
+        expect(installationIndex).toBeGreaterThanOrEqual(0)
+        expect(syncIndex).toBeGreaterThan(installationIndex)
+        expect(steps[installationIndex].if).toBeUndefined()
+        expect(steps[installationIndex]['continue-on-error']).not.toBe(true)
+    })
+
     it('cancels superseded runs within the same workflow and ref', () => {
         expect(workflow.concurrency).toEqual({
             group: '${{ github.workflow }}-${{ github.ref }}',
@@ -318,7 +356,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('ubuntu-latest')
+            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-pc-wsl')
         }
     })
 

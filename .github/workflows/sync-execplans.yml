@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: tuposoft-pc-wsl
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +41,11 @@ jobs:
         run: >-
           corepack pnpm --filter @tuposoft/lead-email-finder...
           install --frozen-lockfile
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gh
 
       - name: Sync ExecPlans to the project board
         env:
