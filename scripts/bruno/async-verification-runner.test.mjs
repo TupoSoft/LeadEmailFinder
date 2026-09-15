@@ -214,7 +214,10 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
     let enqueues = 0
     let reads = 0
     let rawQueueState = false
+    let settled = false
+    const keyedSubmissions = new Map()
     const job = randomUUID()
+    const keyedJob = randomUUID()
     const result = {
         id: randomUUID(),
         email: 'person@lef.test',
@@ -224,6 +227,13 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         catchAll: true,
         reason: 'accepted_email',
         sources: [],
+    }
+    const operation = {
+        id: job,
+        source: 'fresh',
+        observedAt: null,
+        cacheExpiresAt: null,
+        billing: { state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' },
     }
     const server = createServer(async (request, response) => {
         const reply = (status, body) => {
@@ -247,18 +257,39 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
             return reply(200, { balance })
         }
         if (pathname === '/verifyAsync') {
-            if (balance === 0) return reply(402, {})
-            if (JSON.parse(raw).email !== 'person@lef.test') return reply(400, {})
+            const { email } = JSON.parse(raw)
+            if (!email.endsWith('@lef.test')) return reply(400, {})
+            const key = request.headers['idempotency-key']
+            if (key) {
+                const previous = keyedSubmissions.get(key)
+                if (previous) {
+                    return previous.email === email ? reply(202, { id: previous.id }) : reply(409, {})
+                }
+                const timestamp = Number.parseInt(key.replaceAll('-', '').slice(0, 12), 16)
+                if (Date.now() - timestamp > 24 * 60 * 60 * 1000) return reply(410, {})
+            }
+            if (email === result.email && settled) {
+                response.setHeader('retry-after', '60')
+                return reply(429, { message: 'verification_cooldown' })
+            }
+            if (balance === 0) return reply(402, { message: 'insufficient_credits' })
             balance--
             enqueues++
-            return reply(202, { id: job })
+            const id = key ? keyedJob : job
+            if (key) keyedSubmissions.set(key, { email, id })
+            return reply(202, { id })
         }
         const id = pathname.split('/').at(-1)
         if (id === 'not-a-uuid') return reply(400, {})
         if (id !== job || client !== customer.keycloakClientId) return reply(404, {})
         reads++
         if (rawQueueState) return reply(200, { state: 'waiting', failedReason: 'private exception' })
-        return reply(200, reads < 2 ? { state: 'queued' } : { state: 'completed', result })
+        if (reads < 2) return reply(200, { state: 'queued' })
+        if (!settled) {
+            balance++
+            settled = true
+        }
+        return reply(200, { state: 'completed', result, operation })
     })
     await new Promise(done => server.listen(0, '127.0.0.1', done))
     origin = `http://127.0.0.1:${server.address().port}`
@@ -274,16 +305,23 @@ test('pinned CLI runs the async workflow once and rejects raw queue states', asy
         CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
     }
     try {
-        assert.deepEqual(await executeCollection('async-verification', environment, root), { requests: 15, tests: 15 })
-        assert.equal(enqueues, 1)
-        assert.equal(balance, 0)
+        assert.deepEqual(await executeCollection('async-verification', environment, root), { requests: 22, tests: 22 })
+        assert.equal(enqueues, 2)
+        assert.equal(keyedSubmissions.size, 1)
+        assert.equal(balance, 1)
         assert.ok(reads >= 4)
+        // Start a fresh workflow so cooldown cannot hide the unsafe status response.
+        balance = 0
+        enqueues = 0
+        reads = 0
+        settled = false
+        keyedSubmissions.clear()
         rawQueueState = true
         await assert.rejects(executeCollection('async-verification', environment, root), error => {
             const diagnostic = failureDiagnostic(error)
             assert.equal(diagnostic.stage, 'collection')
             assert.equal(diagnostic.request, 8)
-            assert.equal(diagnostic.requests, 15)
+            assert.equal(diagnostic.requests, 22)
             assert.match(error.message, /raw output is withheld/)
             assert.doesNotMatch(JSON.stringify(error), /private exception|synthetic-customer-secret|person@lef.test/)
             return true

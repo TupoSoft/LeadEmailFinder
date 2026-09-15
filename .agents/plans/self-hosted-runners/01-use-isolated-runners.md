@@ -47,6 +47,7 @@ timeouts to the isolated workers. It addresses the observed failures without cha
 - [x] (2026-09-15) Pass 17 HTTP discovery tests, 332 workflow and plan tests, selection fixtures, ESLint, type checking, and the architecture gate.
 - [x] (2026-09-15) Diagnose the Git history scanner test timeout and give that integration test a 15-second budget.
 - [x] (2026-09-15) Pass all eight scanner tests and the delayed-Git comparison using CI's Git 2.55.0.
+- [x] (2026-09-15) Align the synthetic Bruno server with the current async verification collection and pass all 92 runner tests.
 - [ ] (2026-09-12) After a separately authorized Swarm deployment, record a complete Actions run on the new pool.
 
 ## Plan dependencies
@@ -55,6 +56,9 @@ None.
 
 ## Surprises & Discoveries
 
+- (2026-09-15) Backend job `104325391711` passed all 3,331 Jest tests, then failed its Bruno runner test at
+  request eight. PR #629 expanded the collection from 15 to 22 requests, but its synthetic server still omitted
+  operation metadata, credit settlement, cooldown, and idempotency responses.
 - (2026-09-15) Backend job `104307858030` passed 3,330 tests, including the corrected HTTP fixtures, but its Git
   history scanner test exceeded Jest's five-second limit. That test runs 16 Git processes, including real commits
   and three scans. CI used Git 2.55.0; the local Git 2.43.0 produced different history output and cannot validate
@@ -98,6 +102,11 @@ None.
 
 ## Decision Log
 
+- Decision: Update only the synthetic server and its exact workflow assertions for the current Bruno collection.
+  Rationale: Preserve all collection assertions, require two submissions and one remaining credit, and release
+  the inconclusive reservation once. Reset fixture state before the unsafe queue response control so cooldown
+  cannot conceal that failure. Keep credential redaction and application behavior unchanged.
+  Date/Author: 2026-09-15, user-authorized CI monitoring follow-up.
 - Decision: Give only the Git history scanner integration test 15 seconds to complete its fixture and scans.
   Rationale: Process startup contributes to its total runtime on busy isolated workers. Preserve deleted-blob
   detection, binary exclusion, exact redacted metadata, repeatability, and every exit-code assertion. Validate
@@ -251,6 +260,11 @@ verifying its published checksum. A temporary wrapper delayed each Git process b
 five-second test failed, while the corrected test passed in 7.344 seconds with every assertion intact. The
 working-tree security scan also passed with an empty report. Focused ESLint and type checking passed. The
 complete CI result remains unverified.
+
+The Bruno fixture follow-up passed all 92 Node runner tests. The unchanged collection passed all 22 requests
+and tests against the synthetic server. Its unsafe queue response control still failed at request eight and
+withheld private output. Focused ESLint and formatting checks passed. This validates the runner fixture; live
+API execution and the complete Actions result remain pending. No application architecture boundary changed.
 
 ## Context and Orientation
 
@@ -412,6 +426,15 @@ corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=1
 corepack pnpm architecture:check
 corepack pnpm typecheck
+corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
+```
+
+Bruno fixture follow-up validation:
+
+```sh
+corepack pnpm test:oidc-runners
+corepack pnpm exec eslint scripts/bruno/async-verification-runner.test.mjs
+corepack pnpm exec prettier --check scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm docs:lint -- .agents/plans/self-hosted-runners/01-use-isolated-runners.md
 ```
 
