@@ -25,6 +25,9 @@ const result = {
 
 async function mockAccount(context: BrowserContext, capabilities = account.capabilities) {
     await context.route('**/v1/auth/session', route => route.fulfill({ json: { ...account, capabilities } }))
+    await context.route('**/v1/billing/summary', route =>
+        route.fulfill({ json: { balance: 10, reserved: 0, available: 10 } }),
+    )
 }
 
 async function accessible(page: Page) {
@@ -73,9 +76,11 @@ for (const state of ['queued', 'running', 'completed', 'failed', 'unavailable'])
             await expect(details).toContainText('The check timed out before a reliable answer was available.')
             await expect(details.getByText('Address pattern', { exact: true })).toHaveCount(0)
             await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).toBeFocused()
-            await expect(page.locator('main [aria-live="polite"][aria-atomic="true"]')).toContainText(
-                'Verification completed',
-            )
+            await expect(
+                page
+                    .locator('main [aria-live="polite"][aria-atomic="true"]')
+                    .filter({ hasText: 'Verification completed' }),
+            ).toContainText('Verification completed')
             const [detailsBounds, refreshBounds, anotherBounds, descriptionBounds] = await Promise.all([
                 details.boundingBox(),
                 page.getByRole('button', { name: 'Refresh status', exact: true }).boundingBox(),
@@ -166,12 +171,13 @@ test('completed evidence keeps visible offline and stale recovery messages witho
     await expect(page.getByRole('heading', { name: 'Verification result', exact: true })).not.toBeFocused()
 })
 
-test('keyboard form validation and uncertain submission prevent duplicate work until deliberate acknowledgment', async ({
+test('keyboard form validation and keyed recovery prevent duplicate work until a deliberate recovery', async ({
     page,
     context,
 }) => {
     await mockAccount(context)
     let posts = 0
+    const requestKeys: string[] = []
     let release!: () => void
     const pending = new Promise<void>(resolve => {
         release = resolve
@@ -179,6 +185,7 @@ test('keyboard form validation and uncertain submission prevent duplicate work u
     await context.route('**/verifyAsync', async route => {
         posts++
         expect(route.request().postDataJSON()).toEqual({ email: 'person@lef.test' })
+        requestKeys.push(route.request().headers()['idempotency-key'])
         await pending
         await route.abort('connectionfailed')
     })
@@ -197,17 +204,20 @@ test('keyboard form validation and uncertain submission prevent duplicate work u
     expect(posts).toBe(1)
     release()
     await expect(page.getByRole('heading', { name: 'Submission could not be confirmed', exact: true })).toBeVisible()
-    await expect(submit).toBeDisabled()
+    const recover = page.getByRole('button', { name: 'Recover submission', exact: true })
+    await expect(recover).toBeEnabled()
+    await expect(email).toHaveAttribute('readonly')
     await expect(email).toHaveValue('person@lef.test')
     await expect(page).toHaveURL(/\/app\/verifications\/new$/)
     await page.clock.install()
     await page.clock.fastForward(60_000)
     expect(posts).toBe(1)
-    await page
-        .getByRole('checkbox', { name: 'I understand that a new request may use another credit.', exact: true })
-        .check()
-    await expect(submit).toBeEnabled()
-    expect(posts).toBe(1)
+    await recover.focus()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => posts).toBe(2)
+    expect(requestKeys[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(requestKeys[1]).toBe(requestKeys[0])
+    await expect(recover).toBeEnabled()
     await accessible(page)
 })
 

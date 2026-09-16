@@ -15,7 +15,7 @@
         "ui:audit": "node ../../scripts/frontend/audit-premium-ui.mjs --mode strict ../..",
         "preview": "vite preview",
         "test:e2e": "pnpm build && pnpm test:e2e:prebuilt",
-        "test:e2e:prebuilt": "playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts",
+        "test:e2e:prebuilt": "playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts",
         "test:a11y": "pnpm build && pnpm test:a11y:prebuilt",
         "test:a11y:prebuilt": "playwright test tests/e2e/accessibility.spec.ts",
         "test:visual": "pnpm build && pnpm test:visual:prebuilt",

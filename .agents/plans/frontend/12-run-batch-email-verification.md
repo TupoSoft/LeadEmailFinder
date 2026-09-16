@@ -118,6 +118,11 @@ available under the server's retention policy.
 
 ## Outcomes & Retrospective
 
+Billing follow-up (2026-09-16): `verification-billing/06` replaces the original upfront-charge assumptions with
+server-reported reservations, settled charges, cache and shared-work metadata, and explicit uncertainty. The
+historical validation below describes this plan's original delivery. The follow-up owns current billing evidence.
+
+
 Backend contracts, generated binary transport, local CSV selection, refresh-safe job routes, download recovery,
 and deterministic regression coverage are implemented. Independent review found terminal queue snapshot races and
 focus loss when an uncertain upload or missing download removes its triggering button. Both now have fixes and

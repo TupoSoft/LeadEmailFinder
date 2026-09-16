@@ -36,7 +36,9 @@ async function mockBilling(
             json: { ...account, capabilities: options.readOnly ? ['billing.read'] : account.capabilities },
         }),
     )
-    await context.route('**/v1/billing/summary', route => route.fulfill({ json: { balance: options.balance ?? 125 } }))
+    await context.route('**/v1/billing/summary', route =>
+        route.fulfill({ json: { balance: options.balance ?? 125, reserved: 0, available: options.balance ?? 125 } }),
+    )
     await context.route('**/v1/billing/credit-packs', route => route.fulfill({ json: packs }))
     await context.route('**/v1/credit-purchases', route =>
         route.fulfill({ json: options.empty ? [] : [{ ...purchase, status: options.status ?? 'pending' }] }),
@@ -122,7 +124,10 @@ test('unknown return and partial summary failure leave authoritative history rea
     await mockBilling(context, { status: 'failed' })
     let unavailable = true
     await context.route('**/v1/billing/summary', route =>
-        route.fulfill({ status: unavailable ? 503 : 200, json: unavailable ? {} : { balance: 125 } }),
+        route.fulfill({
+            status: unavailable ? 503 : 200,
+            json: unavailable ? {} : { balance: 125, reserved: 0, available: 125 },
+        }),
     )
     await page.goto('/billing/complete?purchaseId=00000000-0000-4000-8000-000000000001&status=paid')
     await expect(page.getByRole('heading', { name: 'You returned from checkout', exact: true })).toBeVisible()

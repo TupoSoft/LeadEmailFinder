@@ -53,6 +53,7 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
 | Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
+| Detail list | `SignalDetails` | `DESIGN.md` | Evidence fields; supporting balance figures with regular-weight labels | Billing and verification component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
 | Form | `Form.module.css` | This contract | Email, role, password, description, and permission fields | Field validation and browser tests |
 | Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
@@ -303,6 +304,14 @@ return navigation focuses the notice once; polling preserves the user's focus. O
 remain readable alongside previously loaded data.
 
 
+## Verification Credit Accounting
+
+The source contract is `.agents/plans/verification-billing/06-explain-verification-charges.md`. Billing leads with
+available credits and separately labels reserved credits and total balance. Reserved credits are temporarily set
+aside, not deducted. A check that finishes without a charge returns its reservation to availability. All three
+figures come from the latest server summary. Loading and read errors preserve the existing independent panel
+boundaries, and settlement updates use polite announcements without moving keyboard focus.
+
 ## Team Management and Public Invitations
 
 The source contract is `.agents/plans/frontend/13-manage-organization-team.md`. Organization onboarding owns the
@@ -371,30 +380,45 @@ The source contract is `.agents/plans/frontend/11-run-single-email-verification.
 `verification.read`. Both use the generated same-origin client and the shared authentication boundary. The server
 remains the permission and organization-ownership authority. Navigation registers only the working form destination.
 
-The form states before submission that a request may use one credit. It uses a labeled native email field,
+The form states before submission that a new conclusive result costs one credit; cached and inconclusive results
+are free. It uses a labeled native email field,
 application-owned validation, first-invalid focus, and a stable submit button. A session-scoped coordinator preserves
-pending and uncertain submission states across in-app navigation. The address is never placed in the URL, storage,
-or logs. A confirmed identifier opens its job route; a late success after leaving the form offers that same job link
+pending and uncertain submission states across in-app navigation. Each deliberate submission creates a canonical
+UUIDv7 request key using the browser cryptographic random source. A deliberate recovery reuses that key and the
+original address. Neither value is placed in the URL, persistent storage, or logs. A confirmed identifier opens its
+job route; a late success after leaving the form offers that same job link
 on return. Authentication boundaries clear the coordinator and fence late responses.
+
+A request rejected because the device clock is ahead explains how to correct that clock. The email remains valid,
+and only a deliberate new submission creates a fresh request key after correction.
 
 | Operation | Pending | Confirmed response | Failure and recovery |
 | --- | --- | --- | --- |
 | Verify email | One request; prevent duplicate activation | Navigate using the returned job UUID | Preserve the address; associate validation errors with the field |
 | Insufficient credits | Keep entered values | No verification is claimed | Billing link only with `billing.read`; otherwise contact an organization owner |
-| Uncertain submission | Never repeat the POST automatically | No invented identifier or history entry | Explain possible charging; require explicit acknowledgment before a new request |
+| Uncertain submission | Never repeat the POST automatically | No invented identifier or history entry | Recover deliberately with the original key and input; preserve uncertainty until the server confirms the result |
 | Read job status | Retain the last confirmed response | Show queued, running, completed, failed, or unavailable | Mark retained data stale and offer Refresh status; never submit again |
-| Monitor active job | One read every five seconds, at most sixty checks | Stop for completed, failed, and unavailable | Pause while hidden or offline; after a read error require a manual refresh |
+| Monitor active job | One read every five seconds, at most sixty checks | Stop for completed, failed, and unavailable states | Pause while hidden or offline; after a read error require a manual refresh |
 | Open or refresh job URL | Validate UUID shape, then read that job | Restore the same organization-scoped status | Missing and cross-organization jobs share Verification not found |
 
 Each state has an explicit heading and document title without email or account data. Hidden or offline pauses keep
 confirmed data visible. Status announcements change only when the state or recovery instruction changes, rather
-than on every successful poll. Completion focuses the result heading once. Status refresh retains that focus choice.
+than on every successful poll. Completion focuses the result heading once when no control already has focus. Status refresh keeps keyboard
+focus on its action while a read is pending, using the existing disabled appearance with `aria-disabled` and a
+dispatch guard.
+The form remains usable when a previously read balance is zero. Only the server determines cache reuse and funded
+shared work. A `429` exposes the server retry time when supplied and allows only a deliberate retry after that time.
 No job-retention guarantee, recent-history list, cancellation, automatic resubmission, or credit adjustment is implied.
 
 `SignalDetails` renders email, local part, domain, nullable existence and catch-all signals, reviewed reason and source
 labels, and optional pattern and mail-exchange fields. True, false, and null remain Yes, No, and Unknown. Completion
-uses neutral evidence styling and never claims guaranteed delivery. Unexpected server fields never enter the job
-cache or markup. The shared `useBrowserAvailability` hook owns visibility and connectivity subscriptions for billing
+uses neutral evidence styling and never claims guaranteed delivery. Operation metadata distinguishes fresh, cached,
+and shared evidence. Evidence observation and expiry use UTC; the request time never implies fresh evidence.
+Charge status separates the original reservation, settlement in progress, confirmed charges, and unknown amounts.
+Operation reservations retain their historical amount after settlement; they do not describe the current account hold. A missing
+amount never implies zero. Completion and confirmed admission rejection refresh authoritative billing data only
+for accounts with `billing.read`; the browser never subtracts credits locally. Unexpected server fields never enter
+the job cache or markup. The shared `useBrowserAvailability` hook owns visibility and connectivity subscriptions for billing
 and verification. Desktop, narrow, keyboard, reduced-motion, stale, error, and accessibility checks cover the routes.
 
 
@@ -448,7 +472,8 @@ requires `verification.read`. The browser reuses the generated same-origin trans
 
 The visible native picker explains the email column and 100-megabyte limit before selection. Extension and size checks
 provide early feedback; server validation remains authoritative. The selected file and filename stay local to the
-mounted form. Settlement, removal, page hide, or route disposal clears file references and the native input. No
+mounted form. Acceptance, invalid-file rejection, removal, page hide, or route disposal clears file references and the native input.
+A definite credit or rate-limit rejection retains the selection for a deliberate retry. No
 file, multipart body, filename, or downloaded CSV enters shared caches, persistent storage, or diagnostics.
 
 | Operation | Pending | Confirmed response | Failure and recovery |
@@ -456,7 +481,7 @@ file, multipart body, filename, or downloaded CSV enters shared caches, persiste
 | Upload CSV | Disable duplicate submission and replacement; indeterminate Uploading CSV | Open the returned batch UUID route | Associate a rejected file with correction guidance; clear selection |
 | Uncertain upload | Never retry the POST automatically | No invented job link | Explain possible job creation and charging; require acknowledgment and fresh selection |
 | Read batch | Shared five-second polling with at most sixty checks | Show exact server progress and counts | Pause when hidden or offline; retain stale values and offer manual refresh |
-| Terminal status | Stop automatic polling | Completion enables result download | Failure uses a safe code; unavailable makes no outcome or charging claim |
+| Terminal status | Stop automatic polling | The server’s `resultsAvailable` flag enables result download, including a partial failure | Failure uses a safe code; unavailable makes no outcome or charging claim |
 | Download result | Disable duplicate activation during the authenticated GET | Start the CSV download and revoke its object URL | Retry only the GET; a later 404 renders Result no longer available |
 
 `ProgressIndicator` owns determinate and indeterminate semantics. Job progress uses the finite server value without
@@ -465,9 +490,17 @@ Announcements describe state changes rather than each count update; manual statu
 Completion is announced once. A missing or foreign job uses the same non-disclosing recovery state.
 
 Invalid CSV offers correction through a fresh selection. Insufficient credits links to billing only with
-`billing.read`, otherwise it advises contacting an organization owner. Generic processing failure explains that
-credits may have been charged. Unavailable states and download errors never trigger another upload. There is no
+`billing.read`, otherwise it advises contacting an organization owner. Generic processing failure preserves the
+confirmed charge when supplied and otherwise leaves the amount unknown. Unavailable states and download errors
+never trigger another upload. There is no
 batch history, cancellation, resumption, automatic retry, or browser result preview.
+
+Batch accounting displays the server's total rows, unique addresses, duplicate rows, cached addresses, shared
+addresses, original reservations, and charged credits. Every original CSV row is retained in the download. Funding and
+settlement states stay visible, and neither row counts nor success counts predict a charge. A zero balance does not
+disable upload. Status refresh, reload, and download only read existing work. Rate limits expose the supplied retry
+time and require a deliberate retry. Terminal or settled accounting refreshes the billing summary with the existing
+permission and session guards.
 
 
 ## Platform Organization Bootstrap

@@ -11,6 +11,10 @@ counts and charges, including partial processing failure.
 
 ## Progress
 
+- [ ] (2026-09-16) Repair the payer request identity mismatch found by Plan 06 live validation. Two unique
+  conclusive addresses capture two credits, but batch status reports zero. Add complete settlement and CSV
+  regression coverage before treating batch accounting as validated.
+
 - [x] (2026-09-15) Persist ordered batch rows and unique-address admission groups: `BatchAdmissionStore`/
   `BatchRowStore` ports, `BatchAdmissionEntity`/`BatchUniqueAddressEntity`/`BatchRowEntity`, and their TypeORM
   adapters, with focused specs.
@@ -20,16 +24,16 @@ counts and charges, including partial processing failure.
   `pageNonterminal`/`pageCanceledPendingCleanup` no longer exclude `batch_group`-owned rows, so the existing
   `VerificationReconciler` recovers batch executions the same way. New `cancelBatchGroupUnstarted()` for terminal
   batch-failure fencing.
-- [x] (2026-09-15) Replaced per-row debit and child dispatch with atomic unique-execution reservations:
-  `BatchAdmissionService` resolves every unique address (cache/cooldown/shared/created), reserves every `created`
-  execution in one `reserveMany()` call, fences the whole group with `closeAdmissionMany()` on insufficient funds,
+- [x] (2026-09-15) Replaced per-row debit and child dispatch with atomic unique-execution reservations.
+  `BatchAdmissionService` resolves every unique address (cache/cooldown/shared/created) and reserves every `created`
+  execution in one `reserveMany()` call. It fences the whole group with `closeAdmissionMany()` on insufficient funds
   and materializes one idempotent `VerificationRequestStore` row per address.
 - [x] (2026-09-15) Reused shared operations and implemented bounded dispatch and failure settlement: the workflow
   step machine is now `Validate → Admit → Dispatch → AwaitSettlement → UploadResults → Finish`, dispatching
   `created` executions onto the existing `verification-execution` queue and polling durable settlement state
   (`BatchAwaitingSettlementSignal` + `job.moveToDelayed`) instead of a BullMQ parent/child fan-out. The old
   `BullBatchChildFlow`/`BatchChildFlow` and the now-orphaned `async-email-verification`-queue infrastructure
-  (`AsyncEmailVerificationModule`/processor/queue-config) were deleted.
+  (`AsyncEmailVerificationModule`, processor, and queue configuration) were deleted.
 - [x] (2026-09-15) Preserved output rows and published accurate batch accounting and progress: `S3BatchResultWriter`
   rewritten as a `BatchRowEntity` → `BatchUniqueAddressEntity` → request/result join preserving every original row
   (including duplicates, zero-charged with `billingReason: 'duplicate'`); `GetBatchStatusResponseDto` gained
@@ -45,8 +49,8 @@ counts and charges, including partial processing failure.
   `bruno:smtp-dev` initially still failed at a preexisting environmental fixture flake (not a regression —
   reproduced identically on unmodified `master` against the same fresh stack), root-caused and fixed in the
   fixture itself; see Outcomes & Retrospective.
-- [x] (2026-09-15) Root-caused and fixed the `bruno:smtp-dev` flake: `docker/smtp-dev/evidence-server.mjs`'s
-  `target_temporary_reject` scenario now greylists a recipient per-address, independent of the fixture's shared
+- [x] (2026-09-15) Root-caused and fixed the `bruno:smtp-dev` flake: the `target_temporary_reject` scenario
+  in `docker/smtp-dev/evidence-server.mjs` now greylists a recipient per-address, independent of the fixture's shared
   `scenario` toggle and surviving `/reset`, instead of relying solely on `scenario` staying selected while the
   app's own delayed greylist retry is outstanding. Confirmed fixed with three independent fresh `dev:reset` +
   single-collection-run cycles (all clean) plus direct log/DB-level tracing of the failure mechanism; see
@@ -58,6 +62,20 @@ counts and charges, including partial processing failure.
 
 ## Surprises & Discoveries
 
+Plan 06 live browser validation on 2026-09-16 found a deterministic defect in the delivered backend at `a4680b0`.
+`BatchAdmissionService.resolveAddress()` generates the execution payer request ID, but `materializeRequest()`
+generates a different ID for the fresh request. `TypeOrmVerificationSettlementStore.confirmSettlement()` compares
+those IDs, so the request becomes `finalReason: shared` with `chargedCount: 0` despite a captured reservation.
+The four-row/two-unique live fixture returned settled billing with two originally reserved credits and zero charged.
+Database inspection confirmed both ID mismatches and two captured credits. Status aggregation and CSV output
+consume the incorrect request accounting; the browser cannot correct it from row counts.
+
+The repair must reuse each created execution's persisted payer request ID and preserve it across interrupted or
+replayed request materialization. Add a focused identity assertion and a real database admission-through-settlement
+regression: four ordered input rows, two unique conclusive addresses, two captured ledger credits, API charge two,
+and CSV charge sum two. Extend `bruno/batch-verification` for this changed HTTP accounting behavior. The current
+Plan 06 live assertion remains enabled and failing until this repair lands; no backend code changed in Plan 06.
+
 `BatchEmailVerificationWorkflow.validateFile()` counts every parsed row and debits the count using the batch job ID.
 `BullBatchChildFlow.dispatchChild()` gives every row a random child UUID. `S3BatchResultWriter` streams persisted
 verification rows by batch ID, so simply deduplicating child jobs would silently remove duplicate input rows from
@@ -68,15 +86,14 @@ the output. A durable row-to-operation mapping is required.
 `'batch'`/`'batch_child'`. `CreditReservationService.reserveMany()`/`closeAdmissionMany()` already exist and are
 exactly the atomic all-or-nothing group operation this plan needs — no new credits-module work required.
 
-Contrary to this plan's own "Artifacts and Notes" assumption ("`frontend/12` owns the original batch screen"),
-`apps/web` already has a working batch verification screen (`BatchVerificationPage`,
-`routes/BatchVerificationJobPage.tsx`, `features/verification/batch-verification-api.ts` and its
-`use-batch-verification.ts` hook) that actively calls `GET /verifyBatch/:id` and defensively re-projects its
-response into a typed, validated snapshot before it enters the query cache. Adding `resultsAvailable`/`counts`/
-`billing` as required response fields broke this file's `tsc -b` build (it destructures/asserts every existing
-field), so this plan necessarily touched `apps/web` after all: extended the defensive validation/projection for
-the three new fields (same safe-integer-array style already used for the existing ones) and updated the two
-frontend test files' fixtures. No new UI was built or changed — the existing screen simply keeps compiling and
+The original "Artifacts and Notes" assumption was "`frontend/12` owns the original batch screen".
+However, `apps/web` already has a working batch verification screen: `BatchVerificationPage`,
+`routes/BatchVerificationJobPage.tsx`, `features/verification/batch-verification-api.ts`, and its
+`use-batch-verification.ts` hook. It calls `GET /verifyBatch/:id` and defensively projects the response into a typed,
+validated snapshot before it enters the query cache. Adding `resultsAvailable`/`counts`/`billing` as required
+response fields broke the `tsc -b` build because the adapter destructures and asserts every existing field.
+This plan therefore touched `apps/web`: it extended defensive validation/projection for the three new fields,
+using the existing safe-integer-array style. It also updated fixtures in the two frontend test files. No new UI was built or changed — the existing screen simply keeps compiling and
 passing against the richer contract; it does not yet render the new fields.
 
 ## Decision Log
@@ -93,11 +110,11 @@ passing against the richer contract; it does not yet render the new fields.
   IDs remain recoverable and publication retries do not probe or charge again. Rationale: A durable useful result
   already exists; an S3 outage must not create a second financial decision. The existing download route can stream settled row data if S3 publication fails. Date/Author: 2026-09-08, policy planning.
 - Decision: Implement the "lock the organization's admission record" requirement as a transaction-scoped
-  `pg_advisory_xact_lock(hashtext(organizationId))` as the first statement inside `claimOrJoin`'s own transaction,
+  `pg_advisory_xact_lock(hashtext(organizationId))` as the first statement inside the transaction owned by `claimOrJoin`,
   rather than a physical lock-row table. Rationale: needs no new schema, cannot race its own creation, and is
-  released automatically on commit/rollback (including across the nested savepoint transaction the insert path
+  released automatically on commit/rollback (including across the nested `SAVEPOINT` transaction the insert path
   already uses). Both single admission and each per-address batch step go through this one method, so both are
-  serialized per organization without touching `VerificationAdmissionService.admit()`'s call sites. Date/Author:
+  serialized per organization without touching call sites of `VerificationAdmissionService.admit()`. Date/Author:
   2026-09-15, implementation.
 - Decision: Add batch admission as a new sibling `BatchAdmissionService` in `application/delivery/batch/` that
   reuses the same pure/port primitives as `VerificationAdmissionService`, rather than editing `admit()` itself.
@@ -113,15 +130,13 @@ passing against the richer contract; it does not yet render the new fields.
   directory (`AsyncEmailVerificationModule`, its processor, queue configuration, job-data interface, and
   `GreylistedException`) rather than leaving them dead-but-wired. Rationale: that queue's own doc comment already
   said "kept solely for batch's child-verification dispatch … plan 05 removes this path" — this was anticipated,
-  not scope creep. Removing `BullBatchChildFlow`'s only consumer necessarily orphans the queue it fed. Date/Author:
+  not scope creep. Removing the only consumer of `BullBatchChildFlow` necessarily orphans the queue it fed. Date/Author:
   2026-09-15, implementation.
 - Decision: Did **not** cascade the deletion further into `EmailVerificationOrchestrator`, its `VerificationStore`
-  port/`TypeOrmVerificationStore` adapter, or `DomainPolicyService`'s verification-time enforcement, even though
-  removing the async-verification queue module left all three with no remaining caller. Rationale: unlike the
-  queue module, nothing in this plan's own Scope/Plan of Work named their removal, and retiring
-  `DomainPolicyService`'s enforcement is a materially separate, debatable product decision (should domain-policy
-  checking be ported to the new stack instead of retired?) that deserves its own explicit ExecPlan rather than
-  being folded in here under time pressure. They remain wired in `EmailVerificationCoreModule` (harmless — Nest
+  port/`TypeOrmVerificationStore` adapter, or verification-time enforcement in `DomainPolicyService`, even though
+  removing the async-verification queue module left all three with no remaining caller. Rationale: the Scope/Plan of Work named removal of the queue module but not these components.
+  Retiring enforcement in `DomainPolicyService` is a separate product decision: should domain-policy checking
+  move to the new stack instead? That choice deserves an explicit ExecPlan rather than inclusion here under time pressure. They remain wired in `EmailVerificationCoreModule` (harmless — Nest
   still constructs them, just with zero active callers). **Recommended follow-up**: a small ExecPlan that either
   ports domain-policy enforcement into `VerificationAdmissionService`/`BatchAdmissionService` or removes this
   entire orphaned chain deliberately. Date/Author: 2026-09-15, implementation.
@@ -133,46 +148,50 @@ passing against the richer contract; it does not yet render the new fields.
   own outcome), since `cache`/`shared`/`cooldown` are already separate, stable, admission-time categories per the
   plan's own words ("The cached/shared categories describe initial admission and remain stable"). Date/Author:
   2026-09-15, implementation.
-- Decision: Deferred three pieces of the original Plan of Work rather than implementing them under time pressure:
-  (1) the upload-level `Idempotency-Key`/content-digest replay binding and the `VerificationRateLimitGuard` on
-  `POST /verifyBatch/csv`; (2) the `bruno/batch-verification` fixture rewrite (duplicate/mixed-cache/insufficient-
-  credit/replay scenarios) — the existing collection was kept passing (its two status assertions updated for the
-  new response fields) and was later confirmed passing live against a freshly reset stack, but still does not
-  exercise deduplication; (3) the "stream the same ordered CSV projection from the database when a durable S3 object is
-  unavailable" fallback for `GET /verifyBatch/:id/results` — `resultsAvailable` is reported accurately, but the
-  results route itself still requires a real S3 object exactly as before. Rationale: each is a substantial,
-  separable, well-scoped unit of work in its own right, and the core billing-correctness engine (dedup admission,
-  atomic group reservation, real execution dispatch, settlement-driven completion, accurate CSV output) is the
-  part actually named by this issue's title and acceptance criteria; landing that correctly and fully tested was
-  prioritized over a partially-verified attempt at everything. All three are named explicitly here, not silently
-  dropped. Date/Author: 2026-09-15, implementation.
+- Decision: Deferred three pieces of the original Plan of Work rather than implementing them under time pressure.
+  First, the upload-level `Idempotency-Key`/content-digest replay binding and the `VerificationRateLimitGuard` on
+  `POST /verifyBatch/csv` remain deferred. Second, the `bruno/batch-verification` fixture rewrite for duplicate,
+  mixed-cache, insufficient-credit, and replay scenarios remains deferred. The existing collection stayed passing
+  after updating its two status assertions for the new response fields. It later passed live against a freshly
+  reset stack, but still does not exercise deduplication. Third, the database fallback for
+  `GET /verifyBatch/:id/results` remains deferred. It would stream the same ordered CSV projection when a durable
+  S3 object is unavailable. Although `resultsAvailable` is reported accurately, the results route still requires
+  a real S3 object. Rationale: each deferred item is a substantial, separable unit of work. The issue title and
+  acceptance criteria name the core billing engine: dedup admission, atomic group reservation, real execution
+  dispatch, settlement-driven completion, and accurate CSV output. Completing and testing that engine took
+  priority over a partially verified attempt at every item. All three deferred items are recorded explicitly.
+  Date/Author: 2026-09-15, implementation.
 
 ## Outcomes & Retrospective
 
+**2026-09-16 validation correction:** the historical passing checks below did not detect the payer request identity
+mismatch. Live Plan 06 validation proves that actual captures can disagree with batch status and CSV charges.
+The follow-up above remains open; the earlier validation does not establish correct end-to-end batch accounting.
+
 Delivered: batch upload now dedupes by normalized address and reserves/charges at most one credit per unique
-address regardless of duplicate rows, driven through the same durable admission/execution/settlement stack as
-single verification (`BatchAdmissionService` + the existing `VerificationExecutionRunner`/`VerificationReconciler`/
-`verification-execution` queue), with atomic all-or-nothing group funding via `CreditReservationService.reserveMany`/
-`closeAdmissionMany`. Output CSV preserves every original row (including duplicates, correctly zero-charged) via a
+address regardless of duplicate rows. It uses the same durable admission/execution/settlement stack as single
+verification: `BatchAdmissionService` plus the existing `VerificationExecutionRunner`/`VerificationReconciler`/
+`verification-execution` queue. Group funding is atomic and all-or-nothing through
+`CreditReservationService.reserveMany`/`closeAdmissionMany`. Output CSV preserves every original row (including duplicates, correctly zero-charged) via a
 rewritten `S3BatchResultWriter`. Batch status now reports accurate per-address counts and billing state. This
-matches the ExecPlan's own acceptance-criteria example: 80 unique addresses among 100 rows reserve 80 (not 100),
-and only conclusive `created` addresses among them are ever charged — proved directly against a real Postgres
-database (`test:verification-billing-postgres`, 10/10 passing, including a dedicated batch-dedup-reservation case,
-an insufficient-funds group-fencing case, and a batch/single-verification address-sharing race case).
+matches the ExecPlan example: 80 unique addresses among 100 rows reserve 80, and only conclusive `created`
+addresses are charged. Validation against a real Postgres database passed 10/10 checks in
+`test:verification-billing-postgres`. These included batch dedup reservation, insufficient-funds group fencing,
+and a batch/single-verification address-sharing race.
 
 A genuinely large, unplanned but correctly-scoped consequence surfaced mid-implementation: removing batch's old
 per-row child dispatch (`BullBatchChildFlow`) orphaned the entire `async-email-verification` queue module it
 existed solely to feed, which in turn orphaned `EmailVerificationOrchestrator`/`VerificationStore`/
-`DomainPolicyService`'s verification-time enforcement. The queue module's own removal was anticipated by its doc
-comment and is deleted; the orchestrator chain was deliberately left wired-but-unused rather than cascading
-further into a separate, debatable product decision — see the Decision Log and the recommended follow-up there.
+verification-time enforcement in `DomainPolicyService`. The queue module was deleted, as anticipated by its doc
+comment. The orchestrator chain remains wired but unused because its removal requires a separate product decision.
+See the Decision Log and its recommended follow-up.
 
-Deferred, and named explicitly rather than silently dropped (see Decision Log): the upload-level Idempotency-Key/
-content-digest replay binding and rate-limit guard on `POST /verifyBatch/csv`; the `bruno/batch-verification`
-fixture rewrite for deduplication scenarios (the existing collection's two status assertions were updated so it
-keeps passing, but no new fixture yet exercises dedup); and the database-fallback CSV read for
-`GET /verifyBatch/:id/results` when a durable S3 object is unavailable (`resultsAvailable` is reported correctly,
-but the download route itself is unchanged and still requires a real S3 object).
+The Decision Log records three deferred items. The first is upload-level `Idempotency-Key`/content-digest replay
+binding and the rate-limit guard on `POST /verifyBatch/csv`. The second is the `bruno/batch-verification` fixture
+rewrite for deduplication scenarios. Its two status assertions were updated to keep the collection passing, but
+no new fixture exercises deduplication. The third is the database fallback for CSV reads through
+`GET /verifyBatch/:id/results` when a durable S3 object is unavailable. Although `resultsAvailable` is reported
+correctly, the download route remains unchanged and requires a real S3 object.
 
 **Live validation, run afterward against the real local dev stack**: `corepack pnpm bruno:batch-verification`
 passed fully (9 requests / 15 tests) against a freshly `dev:reset` stack, both before and after rebuilding the API
@@ -191,39 +210,37 @@ freshly-reset stack (API container rebuilt from `master`, fixture reset) — **i
 
 It was then root-caused and fixed. `MailboxVerificationService.verify()` always probes the fixed catch-all/control
 address before the real target; once that control probe's evidence is conclusively "missing" it is cached for 24h
-and never reprobed. For `target_temporary_reject`, the app schedules a durable retry with a growing backoff
-(60s, 120s, and onward — `GREYLIST_BACKOFF_UNIT_MS` in `verification-execution-runner.ts`), well past both a
-single collection run's ~1-3-second wall-clock duration and its own final `POST {{evidenceControlUrl}}/reset` step
-(request 47, which restores the fixture's shared `scenario` toggle to `default`, accepting everyone).
-`docker/smtp-dev/evidence-server.mjs`'s `target_temporary_reject` behavior was keyed only on that single shared
-`scenario` value. The app's background retry fires tens of seconds after the run that scheduled it, by which time
-`scenario` had moved on to `default` (or a later run's own scenario); the fixture would then see the target as
-accepted, a genuinely fresh SMTP probe, and cache that "accepted" verdict for 24 hours.
-`deriveEvidenceObservedAt`'s `Math.min(target, control)` rule (`classify-verification-quality.ts`) then further
-attributes that wrongly-cached result's timestamp to the control probe's own long-lived cached timestamp, which is
-why unrelated addresses appeared to share an identical `evidenceObservedAt` when this was being traced. Every
+and never reprobed. For `target_temporary_reject`, the app schedules a durable retry with growing backoff: 60 seconds, 120 seconds, and onward,
+using `GREYLIST_BACKOFF_UNIT_MS` in `verification-execution-runner.ts`. This outlasts the roughly 1–3-second
+collection run and its final `POST {{evidenceControlUrl}}/reset` step. That final step, request 47, restores the
+shared fixture `scenario` toggle to `default`, accepting everyone. The `target_temporary_reject` behavior in
+`docker/smtp-dev/evidence-server.mjs` depended only on this shared `scenario` value.
+The background retry fires tens of seconds after the run that scheduled it. By then, `scenario` had moved to
+`default` or a later run's scenario. The fixture therefore accepted the target during a fresh SMTP probe and
+cached that "accepted" verdict for 24 hours. The `Math.min(target, control)` rule in `deriveEvidenceObservedAt`
+(`classify-verification-quality.ts`) then assigns the wrongly cached result the timestamp of the long-lived
+cached control probe. This explains why unrelated addresses appeared to share an identical `evidenceObservedAt`
+during tracing. Every
 later run against the same organization then hit this same poisoned per-address cache at `request 43`,
 deterministically. Confirmed via direct Postgres inspection of
 `smtp_verifications`/`verification_executions` and temporary `console.error` instrumentation in the fixture,
 correlating the exact retry timestamp with the exact moment `scenario` (and, before the fix, the in-fixture
 greylist) had already reverted.
 
-The fix makes `target_temporary_reject` greylist the specific recipient address in the fixture itself, independent
-of the shared `scenario` toggle and surviving `/reset` (a real greylisting MTA defers a given sender/recipient pair
-regardless of anything else happening on the server) — see `docker/smtp-dev/evidence-server.mjs` and its extended
-`evidence-server.test.mjs` coverage. Confirmed fixed with three independent fresh `dev:reset` +
+The fix makes `target_temporary_reject` greylist the specific recipient address within the fixture,
+independent of the shared `scenario` toggle and surviving `/reset`. A real greylisting MTA defers a given
+sender/recipient pair regardless of other server activity. See `docker/smtp-dev/evidence-server.mjs`. The extended tests are in `evidence-server.test.mjs`. Confirmed fixed with three independent fresh `dev:reset` +
 `docker compose ... up -d --build` + single `bruno:smtp-dev` run cycles, all clean (47 requests / 78 tests
-passing). Re-running the collection repeatedly against the *same* organization without an intervening `dev:reset`
-now deterministically hits a separate, correct, and preexisting business rule instead (`BalanceBelowReservedException`
-/ HTTP 409 on `PUT /credits/:id`, since the still-outstanding `target_temporary_reject` reservation from the earlier
-run legitimately blocks zeroing the balance) — this is expected given the collection's own documented validation
-flow is one run per fresh reset, not repeated reruns against one organization, and is unrelated to the flake fixed
-here.
+passing). Repeated runs against the same organization without running `dev:reset` between attempts now hit a separate,
+preexisting business rule: `BalanceBelowReservedException` / HTTP 409 on `PUT /credits/:id`. The outstanding
+`target_temporary_reject` reservation from the earlier run legitimately blocks zeroing the balance.
+This is expected: the documented validation flow uses one collection run per fresh reset. Repeated runs against
+one organization fall outside that flow, and this behavior is unrelated to the fixture flake fixed here.
 
 Full validation actually run and passing: `tsc --noEmit` (root), `apps/web` `tsc -b`, the full root Jest suite
 (259 suites / 3323 tests) and the full `apps/web` Vitest suite (30 files / 632 tests), `architecture:check` (0
 violations), `openapi:export`/`generate`/`check`, and `test:verification-billing-postgres` (10/10 against a real,
-freshly-synced schema). `docs:lint` was run on this file and the two touched module/Bruno READMEs (see the final
+freshly-synced schema). `docs:lint` was run on this file and the two touched module/Bruno `README.md` files (see the final
 response for the exact result).
 
 ## Context and Orientation
@@ -367,8 +384,7 @@ corepack pnpm test:verification-billing-postgres                # 10/10, real Po
 corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/batch-verification/README.md .agents/plans/verification-billing/05-charge-unique-batch-results.md
 ```
 
-New/updated focused spec files exercised throughout (not an exhaustive list — see the module README's Validation
-section for the complete mapping): `application/delivery/batch/batch-admission.service.spec.ts`,
+New/updated focused spec files exercised throughout (not an exhaustive list — see the Validation section of the module `README.md` for the complete mapping): `application/delivery/batch/batch-admission.service.spec.ts`,
 `application/delivery/batch/batch-email-verification-workflow.spec.ts`,
 `application/delivery/batch/batch-email-verification.service.spec.ts`,
 `infrastructure/persistence/typeorm-batch-admission.store.spec.ts`,
@@ -400,9 +416,9 @@ incompatible development schemas, after stopping old workers. Add no migrations 
 
 ## Artifacts and Notes
 
-`apps/web` already has a working batch screen (see the Surprises entry above, correcting this plan's original
-assumption that `frontend/12` was still pending); it now compiles and passes against the richer status contract
-but does not yet render `resultsAvailable`/`counts`/`billing` — a follow-up frontend plan can consume them.
+`apps/web` already has a working batch screen. See the Surprises entry above, which corrects the original
+assumption that `frontend/12` was still pending. The screen compiles and passes against the richer status contract
+but does not yet render `resultsAvailable`/`counts`/`billing`. A follow-up frontend plan can consume those fields.
 The new row registry (`BatchRowEntity`) is address-bearing customer data and must be listed in the processing
 contract for later retention, matching `BatchUniqueAddressEntity`/`BatchAdmissionEntity`.
 

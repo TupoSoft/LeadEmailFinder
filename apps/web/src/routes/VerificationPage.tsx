@@ -5,6 +5,8 @@ import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
 import { useVerificationSubmission } from '../features/verification/use-verification'
 import { verificationCopy as copy } from '../features/verification/verification-copy'
+import { useRetryTime } from '../shared/use-retry-time'
+import { formatVerificationTime } from '../shared/verification-time'
 import { useBrowserAvailability } from '../shared/use-browser-availability'
 import { ProductPanel } from '../shared/ProductPanel'
 import action from '../shared/Action.module.css'
@@ -13,23 +15,29 @@ import styles from '../features/verification/VerificationView.module.css'
 
 function VerificationForm({ organizationId, canReadBilling }: { organizationId: string; canReadBilling: boolean }) {
     const navigate = useNavigate()
-    const { submission, start, resetReady } = useVerificationSubmission(
+    const { submission, start, recover, resetReady } = useVerificationSubmission(
         organizationId,
         id => void navigate(`/app/verifications/${id}`),
     )
     const [email, setEmail] = useState('')
     const [invalid, setInvalid] = useState(false)
-    const [acknowledged, setAcknowledged] = useState(false)
     const emailInput = useRef<HTMLInputElement>(null)
     const { online } = useBrowserAvailability()
     const pending = submission.phase === 'pending'
     const fieldError = invalid || submission.phase === 'invalid'
     const uncertain = submission.phase === 'uncertain'
+    const rateLimited = submission.phase === 'rate-limited'
+    const retryAt = rateLimited ? submission.retryAt : undefined
+    const waiting = useRetryTime(retryAt)
+    const locked = 'request' in submission
+    const inputEmail = locked ? submission.request.email : email
     const title = uncertain
         ? copy.uncertainTitle
         : submission.phase === 'insufficient'
           ? 'Insufficient credits'
-          : copy.title
+          : submission.phase === 'clock-rejected'
+            ? copy.clockRejectedTitle
+            : copy.title
     useDocumentTitle(`${title} | Lead Email Finder`)
     useEffect(() => {
         if (submission.phase === 'invalid') emailInput.current?.focus()
@@ -37,7 +45,11 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (pending || !online || submission.phase === 'ready') return
+        if (pending || !online || submission.phase === 'ready' || submission.phase === 'expired') return
+        if (uncertain || rateLimited) {
+            recover()
+            return
+        }
         const input = emailInput.current
         if (!email.trim() || !input?.validity.valid) {
             setInvalid(true)
@@ -45,8 +57,7 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
             return
         }
         setInvalid(false)
-        start(email.trim(), acknowledged)
-        setAcknowledged(false)
+        start(email.trim())
     }
 
     return (
@@ -76,7 +87,8 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
                             required
                             autoComplete="off"
                             spellCheck={false}
-                            value={email}
+                            value={inputEmail}
+                            readOnly={locked}
                             disabled={pending}
                             aria-invalid={fieldError}
                             aria-describedby={fieldError ? 'verification-email-error' : undefined}
@@ -94,6 +106,12 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
                     <div className={styles.feedback} aria-live="polite">
                         {pending ? <p>{copy.pending}</p> : null}
                         {!online ? <p>{copy.formOffline}</p> : null}
+                        {submission.phase === 'clock-rejected' ? (
+                            <>
+                                <h2>{copy.clockRejectedTitle}</h2>
+                                <p>{copy.clockRejected}</p>
+                            </>
+                        ) : null}
                         {submission.phase === 'insufficient' ? (
                             <>
                                 <h2>Insufficient credits</h2>
@@ -113,18 +131,25 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
                                 <p>{copy.uncertain}</p>
                             </>
                         ) : null}
+                        {rateLimited ? (
+                            <>
+                                <h2>{copy.rateLimited}</h2>
+                                <p>
+                                    {retryAt !== undefined
+                                        ? `${copy.retryAfter} ${formatVerificationTime(retryAt)}.`
+                                        : copy.retryMissing}
+                                </p>
+                                <p>{copy.retryHelp}</p>
+                            </>
+                        ) : null}
+                        {submission.phase === 'expired' ? (
+                            <>
+                                <h2>{copy.expiredTitle}</h2>
+                                <p>{copy.expired}</p>
+                            </>
+                        ) : null}
                         {submission.phase === 'ready' ? <p>{copy.ready}</p> : null}
                     </div>
-                    {uncertain ? (
-                        <label className={styles.acknowledgment}>
-                            <input
-                                type="checkbox"
-                                checked={acknowledged}
-                                onChange={event => setAcknowledged(event.target.checked)}
-                            />
-                            {copy.acknowledge}
-                        </label>
-                    ) : null}
                     <div className={form.actions}>
                         {submission.phase === 'ready' ? (
                             <>
@@ -139,13 +164,20 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
                                     {copy.another}
                                 </button>
                             </>
-                        ) : (
+                        ) : submission.phase === 'expired' ? (
                             <button
                                 className={action.action}
-                                type="submit"
-                                disabled={pending || !online || (uncertain && !acknowledged)}
+                                type="button"
+                                onClick={() => {
+                                    resetReady()
+                                    setEmail('')
+                                }}
                             >
-                                {copy.submit}
+                                {copy.newRequest}
+                            </button>
+                        ) : (
+                            <button className={action.action} type="submit" disabled={pending || !online || waiting}>
+                                {uncertain ? copy.recover : rateLimited ? copy.retry : copy.submit}
                             </button>
                         )}
                     </div>

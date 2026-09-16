@@ -29,6 +29,11 @@
     font-size: var(--font-size-product-heading);
     line-height: var(--line-height-product-heading);
 }
+.reservationExplanation {
+    margin-block-start: var(--space-content-gap);
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
 .packs {
     padding: 0;
     margin: 0;

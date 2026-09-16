@@ -1,20 +1,32 @@
-import type { VerificationResult, VerificationStatus } from './verification-api'
+import type { VerificationOperation, VerificationResult, VerificationStatus } from './verification-api'
 
 export const verificationCopy = {
     title: 'Verify an email',
     description: 'Check one address and follow its verification on a page you can bookmark.',
     email: 'Email address',
     submit: 'Verify email',
-    cost: 'Submitting a verification may use one credit.',
+    cost: 'A new conclusive result costs one credit. Cached and inconclusive results are free.',
     invalid: 'Enter a valid email address, such as person@lef.test.',
+    clockRejectedTitle: 'Check your device clock',
+    clockRejected:
+        "The request time is too far ahead of the server's time. Check and correct your device's date and time, then select Verify email again.",
     pending: 'Submitting your verification. Please wait before starting another request.',
     insufficient: 'There are not enough credits to run this verification.',
     owner: 'Contact an organization owner to arrange more credits.',
     billing: 'Go to billing',
     uncertainTitle: 'Submission could not be confirmed',
     uncertain:
-        'The request may already have started and used one credit. We could not retrieve its job link. A new request may use another credit.',
-    acknowledge: 'I understand that a new request may use another credit.',
+        'The request may already have started. Recover it using the same address and request key to retrieve the original outcome and charge.',
+    recover: 'Recover submission',
+    retry: 'Retry verification',
+    rateLimited: 'Verification temporarily limited',
+    retryAfter: 'Retry after',
+    retryMissing: 'The server did not provide a retry time. Wait before trying again.',
+    retryHelp: 'Retrying is always your choice. This page will not submit automatically.',
+    expiredTitle: 'Recovery has expired',
+    expired:
+        'The server can no longer recover this request. Its previous charge is unknown. Starting a new verification may create a separate charge.',
+    newRequest: 'Start a new verification',
     ready: 'Your verification was submitted. Open its job page to see the status.',
     view: 'View verification',
     another: 'Verify another email',
@@ -39,6 +51,10 @@ export const verificationCopy = {
     refresh: 'Refresh status',
     refreshing: 'Refreshing status…',
     result: 'Verification result',
+    resultSource: 'Result source',
+    evidenceObserved: 'Evidence observed (UTC)',
+    cacheExpires: 'Cache expires (UTC)',
+    notReported: 'Not reported',
     catchAllUnconfirmed:
         'Catch-all: the server accepted a made-up address, so we couldn’t confirm whether this specific mailbox exists.',
     limits: 'These signals describe the checks performed. They do not guarantee delivery or establish permission to send.',
@@ -62,7 +78,7 @@ export const verificationCopy = {
         failed: {
             title: 'Verification failed',
             description:
-                'The verification could not finish. You can refresh its status or deliberately start a new verification. No credit adjustment is implied.',
+                'The verification could not finish. Review the confirmed charge below before starting a new verification.',
         },
         unavailable: {
             title: 'Verification unavailable',
@@ -109,3 +125,17 @@ export function verificationReasonLabel(result: Pick<VerificationResult, 'reason
         ? verificationReasonLabels[result.reason]
         : verificationCopy.unknown
 }
+
+export const verificationOperationSources = {
+    fresh: 'New verification',
+    cache: 'Cached result',
+    shared: 'Shared verification',
+} satisfies Record<VerificationOperation['source'], string>
+
+export const verificationChargeReasons = {
+    conclusive: 'A new conclusive result used one credit.',
+    cached: 'Existing evidence was reused at no charge.',
+    shared: 'This request shared an existing verification at no charge.',
+    inconclusive: 'The checks did not reach a conclusive result, so no credits were charged.',
+    failed: 'The verification failed, so no credits were charged.',
+} satisfies Record<NonNullable<VerificationOperation['billing']['reason']>, string>

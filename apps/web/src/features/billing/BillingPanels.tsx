@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
 import { billingCopy } from '../../content/billing'
 import { ProductPanel } from '../../shared/ProductPanel'
+import { SignalDetails } from '../../shared/SignalDetails'
 import action from '../../shared/Action.module.css'
 import type { CreditPurchase } from './billing-api'
 import { formatCredits, formatMoney, formatPurchaseDate } from './format-billing'
@@ -8,6 +9,8 @@ import type { useBillingQueries, useCheckout } from './use-billing'
 import styles from './BillingView.module.css'
 
 type Queries = ReturnType<typeof useBillingQueries>
+
+const creditUnit = (amount: number) => (amount === 1 ? billingCopy.credit : billingCopy.credits.toLowerCase())
 
 export function BalancePanel({ query }: { query: Queries['summary'] }) {
     return (
@@ -18,11 +21,29 @@ export function BalancePanel({ query }: { query: Queries['summary'] }) {
             refreshing={query.isFetching}
             failed={query.isError}
             retry={() => void query.refetch()}
+            reserveContent
         >
             {query.data ? (
-                <p className={styles.balance}>
-                    <strong>{formatCredits(query.data.balance)}</strong> {billingCopy.credits.toLowerCase()}
-                </p>
+                <div aria-live="polite" aria-atomic="true">
+                    <p>{billingCopy.available}</p>
+                    <p className={styles.balance}>
+                        <strong>{formatCredits(query.data.available)}</strong> {creditUnit(query.data.available)}
+                    </p>
+                    <SignalDetails
+                        variant="balance"
+                        entries={[
+                            {
+                                label: billingCopy.reserved,
+                                value: `${formatCredits(query.data.reserved)} ${creditUnit(query.data.reserved)}`,
+                            },
+                            {
+                                label: billingCopy.total,
+                                value: `${formatCredits(query.data.balance)} ${creditUnit(query.data.balance)}`,
+                            },
+                        ]}
+                    />
+                    <p className={styles.reservationExplanation}>{billingCopy.reservationExplanation}</p>
+                </div>
             ) : null}
         </ProductPanel>
     )

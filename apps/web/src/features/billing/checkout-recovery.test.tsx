@@ -35,7 +35,7 @@ it('a superseded recovery cannot unlock a newer checkout', async () => {
                         grantableServiceClientPermissions: [],
                     }),
                 )
-            return Promise.resolve(Response.json(path === '/v1/billing/summary' ? { balance: 25 } : []))
+            return Promise.resolve(Response.json(path === '/v1/billing/summary' ? { balance: 25, reserved: 0, available: 25 } : []))
         },
     })
     await session.bootstrap()

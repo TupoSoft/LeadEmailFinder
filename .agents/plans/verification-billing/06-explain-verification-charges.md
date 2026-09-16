@@ -10,11 +10,15 @@ duplicates costs less than its row count. The UI displays the server's settled a
 
 ## Progress
 
-- [ ] (2026-09-08) Extend billing summary presentation with available and reserved credits.
-- [ ] (2026-09-08) Update single-verification copy, outcome details, and recovery metadata.
-- [ ] (2026-09-08) Update batch counts, charges, and duplicate/output explanations.
-- [ ] (2026-09-08) Update shared behavior contracts and focused browser/accessibility evidence.
-- [ ] (2026-09-08) Complete generated-client, design-contract, prose, and runtime validation.
+- [x] (2026-09-16) Extend billing summary presentation with available and reserved credits.
+- [x] (2026-09-16) Update single-verification copy, outcome details, and recovery metadata.
+- [x] (2026-09-16) Update batch counts, charges, and duplicate/output explanations.
+- [x] (2026-09-16) Update shared behavior contracts and focused browser/accessibility evidence.
+- [x] (2026-09-16) Complete generated-client, design-contract, prose, component, and mocked browser validation.
+- [ ] (2026-09-16) Pass all three live accounting scenarios after the prerequisite batch payer identity defect is
+  fixed in `verification-billing/05`. Current result: two passed, one failed; no skipped tests.
+
+- [x] (2026-09-16) Reduce billing summary density using the approved compact type and content spacing; verify desktop and mobile rendering.
 
 ## Plan dependencies
 
@@ -24,11 +28,41 @@ duplicates costs less than its row count. The UI displays the server's settled a
 
 ## Surprises & Discoveries
 
-The current checkout has the billing screen but not the single/batch feature screens described by `frontend/11`
-and `/12`. Those plans assume upfront charges and unknown debit consequences on failure. This plan deliberately
-depends on their delivered screens and replaces those billing-specific assumptions after the backend policy ships.
+The implementation checkout at `a4680b0` contains the prerequisite single and batch screens and generated billing
+contracts. Their original copy still assumes upfront charges. Queued single responses do not provide operation
+accounting; the UI must retain an unknown charge state until authoritative metadata arrives.
+
+The initial dependency installation encountered a read-only default pnpm store. A task-specific store under `/tmp`
+allows validation without changing the shared package cache. No development containers were running at discovery.
+The isolated `lef577` stack supplied the API, authentication, database, and SMTP fixtures for live validation.
+Its containers and network were removed afterward; its three named volumes were preserved.
+Browser review found native disabling removed status-refresh focus; the shared action treatment and both result
+screens now preserve it. Cached responses currently expose a null cache expiry; the browser shows that uncertainty.
+
+Live duplicate-batch validation exposed an existing backend defect at `a4680b0`: batch admission claims an execution
+with one payer request ID, then materializes the request with another ID. Settlement marks that request as shared,
+so status and CSV accounting report zero even though the ledger captures credits. The four-row/two-unique fixture
+returned `billing: { state: settled, reserved: 2, charged: 0 }`; database inspection confirmed two captured credits
+and both mismatched payer IDs. The owning Plan 05 records the required repair and regression coverage.
 
 ## Decision Log
+
+- Decision: Keep available credits as the primary figure. Add a `balance` variant to the existing `SignalDetails`
+  owner for compact secondary amounts with regular-weight labels. Separate shorter reservation guidance with
+  the existing 1.5rem content gap. Preserve ink contrast and server-owned accounting. Date/Author: 2026-09-16,
+  user-approved density refinement.
+
+- Decision: Keep the duplicate-batch live assertion at two charged credits and record the backend defect in Plan 05.
+  The UI displays the server's accounting without calculating replacement amounts from row counts or balance changes.
+  Backend repair remains outside this UI implementation. Date/Author: 2026-09-16, live validation.
+
+- Decision: Label operation reservation metadata as the original reservation. The server retains `reservedCount`
+  after charging or releasing credits, including during partial batch settlement. The organization summary alone
+  reports currently held credits. Date/Author: 2026-09-16, implementation.
+- Decision: Preserve the documented terminal polling stop. A terminal result with pending accounting offers
+  explicit status refresh; it does not restart automatic polling. Date/Author: 2026-09-16, implementation.
+- Decision: Keep status refresh focusable with `aria-disabled` during a read and retain the existing dispatch guard.
+  Native disabling removes keyboard focus in Chromium. Date/Author: 2026-09-16, browser validation.
 
 - Decision: Explain reservations as credits temporarily set aside, and label deductions only from settled server
   metadata. Rationale: A lower available count does not mean the user was charged. Date/Author: 2026-09-08, policy planning.
@@ -37,16 +71,59 @@ depends on their delivered screens and replaces those billing-specific assumptio
 - Decision: Reuse the approved visual system and session/query contracts. Rationale: This is a behavior and copy
   change, not a redesign or a new frontend architecture. Date/Author: 2026-09-08, policy planning.
 
+## Publication Review
+
+The publication snapshot is based on `e4c1062`; its only additional commit after `a4680b0` adds unrelated planning
+documents. Compose recovery, shared spacing, and the divider fix have separate draft pull requests. This UI draft
+continues to display authoritative server values, even where backend behavior is still incorrect.
+
+The batch payer identity defect is tracked by issue #644. Review also confirmed issue #649: failed batch status can
+advertise results even though the download endpoint rejects non-completed batches. The UI honors the flag and
+handles the resulting unavailable download, but real partial-failure download acceptance remains blocked by that
+backend repair. Mocked browser coverage does not prove these backend cases.
+
+Publication review found that a UUID request key rejected because the device clock is ahead was mislabeled as an
+invalid email. The frontend now preserves only that specific public rejection code, explains clock correction,
+and permits a deliberate fresh submission without marking a valid address invalid. The retry timer must also
+respect a corrected device clock. Focused regression checks cover this behavior without a backend change.
+
+Publication validation on this isolated snapshot passed: 676 web unit tests, 142 mocked browser, accessibility,
+and visual cases, and seven runner/privacy checks. Frontend and runner ESLint, the production build, module
+architecture, OpenAPI consistency, design lint, and the strict UI audit also passed. No screenshot baseline changed. The live accounting
+runner was not rerun; its historical two-pass, one-failure result and the backend blockers above still apply.
+The publication process did not reset data or change the running development stack.
+
 ## Outcomes & Retrospective
 
-Not started.
+The browser now distinguishes current account holds from historical operation reservations and settled charges.
+Single submissions retain a cryptographic UUIDv7 key and their original input for deliberate recovery. Batch views
+show original rows and unique, duplicate, cached, and shared addresses, with downloads controlled by the server's
+availability flag. Both forms remain usable with a zero balance. Shared charge presentation and retry-time helpers
+reuse generated types, existing panels, and the session boundary; no backend policy or API schema changed.
+
+Static, component, mocked browser, accessibility, and visual checks passed as recorded below. Live fresh charging,
+free cache reuse at zero balance, and actual inconclusive SMTP evidence passed. Duplicate-batch accounting failed
+because of the prerequisite payer identity defect; the complete live acceptance gate remains unsatisfied. The
+implementation retains existing feature hooks and adapters; no material architectural trade-off or new
+infrastructure dependency was introduced.
+
+The approved density refinement keeps available credits prominent while secondary figures and reservation
+copy use compact type. Computed browser checks confirm regular-weight labels and a 24-pixel gap above the note.
+The focused billing component suite passed 23 tests, and the billing and verification-accounting browser suites
+passed 28 tests. Synthetic screenshots at widths of 1440, 390, and 320 pixels show no overflow. Accessibility checks
+reported no violations; console and page-error checks were clean. Keyboard refresh on the mocked payment-return
+screen updates authoritative balances. Browser plugin tools were unavailable, so validation used Playwright.
+Build, focused lint, design lint, the UI audit, and Harper passed. The local web container was rebuilt and now
+serves the updated assets at port 53000. No API contract changed; Bruno coverage is not applicable to this refinement.
+Screenshot evidence is outside the repository at `/tmp/lef577-billing-refinement/`.
 
 ## Context and Orientation
 
 The React/Vite frontend is `apps/web`. Existing billing files include `src/features/billing/BillingPanels.tsx`,
 `billing-api.ts`, `use-billing.ts`, and `src/content/billing.ts`. Shared components and routes live under `src/shared`
-and `src/routes`; the session generation and QueryClient owners are under `src/features/auth`. The prerequisite
-frontend plans add the verification and batch feature folders and routes; inspect their final paths before editing.
+and `src/routes`; the session generation and QueryClient owners are under `src/features/auth`. Single and batch
+features live under `src/features/verification`, with their form and job pages under `src/routes`. Shared charge
+presentation, request-key generation, and retry timing live under `src/shared`.
 
 Plan 02 adds `{ balance, reserved, available }` to the current-organization billing summary. Plans 04 and 05 provide
 operation source, evidence times, settled charges, batch counts, and safe recovery handles. Generated types live
@@ -144,7 +221,7 @@ verification live runners. Add `apps/web/playwright.verification-billing.config.
 launcher must reject skipped/empty runs and redact credentials and addresses from diagnostics. Mocked browser
 evidence does not replace that local API/SMTP/ledger check.
 
-Bruno is not applicable to UI-only implementation when the backend contracts remain unchanged. If implementation
+Bruno is not applicable to this UI-only implementation because the backend contracts remain unchanged. If implementation
 finds a missing HTTP behavior, update the owning backend plan and nearest collection rather than hiding the change
 inside this UI PR. Include any additionally edited Markdown files in the Harper invocation.
 
@@ -157,9 +234,32 @@ do not reset another checkout's stack or record real customer addresses in scree
 
 ## Artifacts and Notes
 
-This is a plan for extending the approved screens after their prerequisites. No new image concept or visual
-approval is needed. Runtime and browser acceptance remain unverified until the implementation PR runs these checks.
+Validation recorded on 2026-09-16:
+
+- Web `test:ci`: 670 tests passed across 31 files. The final singular-credit copy check also passed all 23 billing
+  route tests. After the final pending-accounting copy correction, all 117 single/batch component tests passed.
+- Web type checking, lint, production build, `openapi:check`, `design:lint`, and strict `ui:audit` passed.
+- The normal browser selection exercised 134 cases. Five existing single-screen checks exposed stale mock setup;
+  after updating those fixtures, all 22 single-screen cases passed. The other 112 cases passed in the integrated run.
+- The final pending-accounting copy passed both desktop and narrow settlement recovery browser checks.
+- Dedicated accessibility and visual-baseline checks passed all eight cases. New billing/browser cases cover
+  320 by 720, 390 by 844, and 1440 by 900, keyboard recovery, reduced motion, and session replacement.
+- The runner's four Node tests reject incomplete, skipped, and failed evidence, and check redacted reporting.
+  All three browser artifact guards passed with Chromium available, including the new billing configuration.
+- The final live configuration ran three tests: two passed, one failed, zero skipped, and zero runner errors. The
+  retained failure is `verification-billing.spec.ts:168`, which expects two charged credits. Actual SMTP evidence
+  was verified: fresh evidence had observation/expiry timestamps, cache reuse retained its observation timestamp,
+  and the inconclusive result was `accepted_email` with `catchAll: true`.
+- Harper passed all five changed Markdown files. Include both prerequisite frontend plans and the owning batch
+  backend plan in the command in Validation after any further prose edits.
+- Browser plugin not available. The repository Playwright workflow used Chromium from
+  `PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-577-playwright`; artifacts are outside the repository under `/tmp`.
+
+Live verification uses `COMPOSE_PROJECT_NAME=lef577 PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-577-playwright corepack pnpm test:verification-billing-web`.
+The launcher requires three passing scenarios and rejects skipped or empty evidence. The final strict run used
+the same `playwright.verification-billing.config.ts` directly with a counts-only report under `/tmp`; it did not
+pass the three-scenario gate. No new visual concept or shared design token was needed.
 
 ## Plan readiness
 
-Ready to implement
+Blocked by the live duplicate-batch API and ledger disagreement

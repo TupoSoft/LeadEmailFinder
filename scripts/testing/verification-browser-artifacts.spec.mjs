@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, '../..')
 const web = join(root, 'apps/web')
 const require = createRequire(join(web, 'package.json'))
 
-for (const kind of ['single', 'batch'])
+for (const kind of ['single', 'batch', 'billing'])
     test(
         `${kind} verification assertions never record job URLs, addresses, or page snapshots after authentication`,
         { timeout: 60_000 },
@@ -20,14 +20,21 @@ for (const kind of ['single', 'batch'])
             const marker = 'SYNTHETIC_VERIFICATION_MATERIAL_MUST_NOT_BE_RECORDED'
             try {
                 writeFileSync(join(directory, 'package.json'), '{"type":"module"}\n', { mode: 0o600 })
+                const config =
+                    kind === 'single'
+                        ? 'playwright.verification.config.ts'
+                        : kind === 'batch'
+                          ? 'playwright.batch-verification.config.ts'
+                          : 'playwright.verification-billing.config.ts'
+                const testFile = kind === 'billing' ? 'verification-billing.spec.ts' : `${kind}-verification.spec.ts`
                 writeFileSync(
                     join(directory, 'playwright.config.ts'),
                     `
-import configuration from ${JSON.stringify(join(web, kind === 'single' ? 'playwright.verification.config.ts' : 'playwright.batch-verification.config.ts'))}
+import configuration from ${JSON.stringify(join(web, config))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
-    testMatch: '${kind}-verification.spec.ts',
+    testMatch: '${testFile}',
     reporter: ${JSON.stringify(join(web, 'tests/support/browser-fixture-reporter.ts'))},
     outputDir: ${JSON.stringify(output)},
 }
@@ -35,7 +42,7 @@ export default {
                     { mode: 0o600 },
                 )
                 writeFileSync(
-                    join(directory, `${kind}-verification.spec.ts`),
+                    join(directory, testFile),
                     `
 import { test, expect } from ${JSON.stringify(join(web, 'tests/support/privileged-login.ts'))}
 test('owner guarded verification assertion', async ({ page }) => {

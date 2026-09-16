@@ -14,7 +14,8 @@ export function BatchResultDownload({ id, online }: { id: string; online: boolea
     const objectUrl = useRef<string | null>(null)
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
-        heading.current?.focus()
+        // Results arriving after a manual read must not take focus from that control.
+        if (document.activeElement === document.body) heading.current?.focus()
         const release = () => {
             request.current?.abort()
             request.current = null

@@ -2,7 +2,24 @@ export const batchVerificationCopy = {
     title: 'Verify a CSV file',
     description: 'Upload a list of email addresses and follow its verification on a page you can bookmark.',
     format: 'Choose one .csv file, up to 100 MB (104,857,600 bytes). Include a header row with an email column containing the addresses to verify.',
-    cost: 'Credits are determined from valid rows after upload. Uploading does not confirm that validation or payment has finished.',
+    cost: 'One credit is charged for each new conclusive result. Cached, shared, and inconclusive results are free. Duplicate rows do not create extra checks. Credits are reserved after validation; uploading does not confirm a charge.',
+    rows: 'The result CSV retains every original row, including duplicates. Each unique address is checked once.',
+    funding:
+        'Validation, funding, or settlement is pending. The original reservation records credits initially set aside; the final charge is not yet confirmed.',
+    counts: {
+        total: 'Total rows',
+        unique: 'Unique addresses',
+        duplicate: 'Duplicate rows',
+        cached: 'Cached addresses',
+        shared: 'Shared addresses',
+        processed: 'Processed',
+        unprocessed: 'Unprocessed',
+    },
+    insufficient:
+        'The server could not fund this batch with the available credits. Cached or shared work may still be free.',
+    retryLater: 'The server is limiting uploads. Its retry time is unavailable. Try again later.',
+    retryAt: (time: string) =>
+        `The server is limiting uploads. You can retry after ${time}. Uploading will only resume when you submit again.`,
     choose: 'CSV file',
     submit: 'Upload and verify CSV',
     pending: 'Uploading CSV',
@@ -31,10 +48,10 @@ export const batchVerificationCopy = {
         description:
             'We could not read the latest status. Refreshing the status will not upload another file or start another verification.',
     },
-    stale: 'The latest read failed. The displayed progress and counts are the last confirmed update and may be out of date.',
-    staleCounts: 'Last confirmed progress and counts — out of date',
+    stale: 'The latest read failed. The displayed progress, counts, and charges are the last confirmed update and may be out of date.',
+    staleCounts: 'Last confirmed progress, counts, and charges — out of date',
     jobOffline:
-        'You are offline. Reconnect to refresh the status. Displayed progress and counts are the last confirmed update and may be out of date.',
+        'You are offline. Reconnect to refresh the status. Displayed progress, counts, and charges are the last confirmed update and may be out of date.',
     validating:
         'The file is being validated. Row counts are not available yet; zero counts do not mean the file is empty.',
     progress: 'Batch verification progress',
@@ -55,7 +72,7 @@ export const batchVerificationCopy = {
         failed: {
             title: 'Batch verification failed',
             description:
-                'Processing could not finish. Credits may have been charged. Refresh the status or contact support before deciding what to do next.',
+                'Processing could not finish. Review the confirmed charges below. Download any available results, or refresh the status for an update.',
         },
         unavailable: {
             title: 'Batch verification unavailable',
@@ -71,12 +88,12 @@ export const batchVerificationCopy = {
         },
         insufficient_credits: {
             title: 'Insufficient credits',
-            description: 'The balance was insufficient when validation of the uploaded file completed.',
+            description: 'Available credits were insufficient to fund the uploaded file after validation.',
         },
         processing_failed: {
             title: 'Batch processing failed',
             description:
-                'Processing could not finish. Credits may have been charged. Refresh the status or contact support before deciding what to do next.',
+                'Processing could not finish. Review the confirmed charges below. Download any available results, or refresh the status for an update.',
         },
     },
     download: 'Download result CSV',
