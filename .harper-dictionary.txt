@@ -200,6 +200,8 @@ React
 SHA1
 TanStack
 base64url
+base64
+OAuth2
 callback
 grantable
 misclassify
