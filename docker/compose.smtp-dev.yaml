@@ -1,5 +1,8 @@
 services:
   api:
+    networks:
+      default: {}
+      smtp-dev: {}
     dns: !override
       - 172.28.0.53
     environment:
@@ -29,7 +32,8 @@ services:
       - ./smtp-dev/coredns/Corefile:/etc/coredns/Corefile:ro
       - ./smtp-dev/coredns/lef.test.zone:/etc/coredns/lef.test.zone:ro
     networks:
-      default:
+      default: {}
+      smtp-dev:
         ipv4_address: 172.28.0.53
 
   smtp-evidence:
@@ -53,7 +57,7 @@ services:
       retries: 10
       start_period: 5s
     networks:
-      default:
+      smtp-dev:
         ipv4_address: 172.28.0.25
 
   plaintext-mailpit:
@@ -70,7 +74,7 @@ services:
       retries: 10
       start_period: 5s
     networks:
-      default:
+      smtp-dev:
         ipv4_address: 172.28.0.26
 
   smtp-dev-proxy:
@@ -79,7 +83,7 @@ services:
     volumes:
       - ./smtp-dev/3proxy.cfg:/etc/3proxy/3proxy.cfg:ro
     networks:
-      default:
+      smtp-dev:
         ipv4_address: 172.28.0.108
 
   smtp-dev-dns-cache-reset:
@@ -100,6 +104,9 @@ services:
   smtp-dev-proxy-bootstrap:
     image: curlimages/curl:8.16.0
     restart: "no"
+    networks:
+      default: {}
+      smtp-dev: {}
     dns:
       - 172.28.0.53
     depends_on:
@@ -145,7 +152,9 @@ services:
           create_host_path: false
 
 networks:
-  default:
+  # Keep the base network unchanged when enabling or disabling this overlay.
+  # Replacing it can drop service aliases on reused infrastructure containers.
+  smtp-dev:
     ipam:
       config:
         - subnet: 172.28.0.0/24
