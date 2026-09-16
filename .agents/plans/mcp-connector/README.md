@@ -8,22 +8,33 @@ documents implements nothing by itself.
 
 ## Order and Dependencies
 
+A companion review road map, [`mcp-connector-hardening`](../mcp-connector-hardening/README.md), corrects four
+findings from the review of the PR that added this road map (PR #652) — including two real gaps in the table
+below (a token-cache secret-bypass and an incomplete dependency graph) and two real omissions (missing `400`/`403`
+error mapping and an unsupported Claude Desktop connection path). The dependencies below already reflect those
+corrections; implement `mcp-connector-hardening/04` first, since it is what makes this table's own dependencies
+enforceable.
+
 | Key | Implementation Task | Outcome | Dependencies |
 | --- | --- | --- | --- |
-| `mcp-connector/01` | [Scaffold the connector workspace](01-scaffold-mcp-server-workspace.md) | A runnable, lint/typecheck/test-covered `apps/mcp-server` with one unauthenticated smoke tool | None |
+| `mcp-connector/01` | [Scaffold the connector workspace](01-scaffold-mcp-server-workspace.md) | A runnable, lint/typecheck/test-covered `apps/mcp-server` with one unauthenticated smoke tool | `mcp-connector-hardening/04` |
 | `mcp-connector/02` | [Bridge OIDC client-credentials auth](02-bridge-oidc-client-credentials.md) | Every MCP request requires and exchanges a customer's own Basic credential for a cached bearer token | `mcp-connector/01` |
-| `mcp-connector/03` | [Internal API client, error mapping, and credit balance](03-api-client-error-mapping-credit-balance.md) | The shared upstream client/error vocabulary, proved end-to-end by `check_credit_balance` | `mcp-connector/02` |
-| `mcp-connector/04` | [Single-email verification tools](04-single-email-verification-tools.md) | `verify_email`, `submit_async_verification`, `check_async_verification`, `get_verification_result` | `mcp-connector/03` |
-| `mcp-connector/05` | [Batch verification tools](05-batch-verification-tools.md) | `submit_batch_verification`, `check_batch_verification`, `download_batch_results` | `mcp-connector/03` |
+| `mcp-connector/03` | [Internal API client, error mapping, and credit balance](03-api-client-error-mapping-credit-balance.md) | The shared upstream client/error vocabulary, proved end-to-end by `check_credit_balance` | `mcp-connector/02`, `mcp-connector-hardening/01` |
+| `mcp-connector/04` | [Single-email verification tools](04-single-email-verification-tools.md) | `verify_email`, `submit_async_verification`, `check_async_verification`, `get_verification_result` | `mcp-connector/03`, `mcp-connector-hardening/02` |
+| `mcp-connector/05` | [Batch verification tools](05-batch-verification-tools.md) | `submit_batch_verification`, `check_batch_verification`, `download_batch_results` | `mcp-connector/03`, `mcp-connector-hardening/02` |
 | `mcp-connector/06` | [Deploy the connector](06-deploy-mcp-server.md) | `docker/mcp-server.Dockerfile`, a Compose service, and `images` CI coverage | `mcp-connector/03` |
-| `mcp-connector/07` | [Live validation and customer documentation](07-live-validation-and-docs.md) | An Inspector-driven live CI check and the customer setup guide | `mcp-connector/06` |
+| `mcp-connector/07` | [Live validation and customer documentation](07-live-validation-and-docs.md) | An Inspector-driven live CI check and the customer setup guide | `mcp-connector/04`, `mcp-connector/05`, `mcp-connector/06`, `mcp-connector-hardening/03` |
 
-Implement 01 and 02 first; nothing else can authenticate without them. Plan 03 establishes the one shared
-upstream client and error vocabulary every later tool plan reuses — implement it before 04 or 05. Plans 04 and 05
-are independent of each other and may proceed in either order, or in parallel, once 03 lands. Plan 06 only
-strictly requires 03 to have something meaningful to deploy, but implementing it after 04 and 05 avoids
+Implement `mcp-connector-hardening/04` before plan 01; nothing in this road map can start until its own dependency
+graph is the enforceable one above. Implement 01 and 02 next; nothing else can authenticate without them. Plan 03
+now also requires `mcp-connector-hardening/01`'s credential-bound token cache before it exists as a shared
+dependency. Plans 04 and 05 each now also require `mcp-connector-hardening/02`'s complete error mapping; they
+remain independent of each other and may proceed in either order, or in parallel, once their prerequisites land.
+Plan 06 only requires plan 03 to have something meaningful to deploy, but implementing it after 04 and 05 avoids
 retouching the Compose/CI wiring twice; treat that ordering as a strong recommendation rather than a hard
-dependency. Plan 07 needs the deployed service from 06 to validate against.
+dependency. Plan 07 requires both tool plans, the deployed service, and `mcp-connector-hardening/03`'s supported
+Claude Desktop bridge — plan 06 does not transitively supply the tool plans, so each is a genuinely separate
+prerequisite.
 
 Readiness means a plan contains enough decisions to implement. Dependencies determine when it can start; a ready
 plan does not assert that its prerequisite is complete.
@@ -66,6 +77,8 @@ plan does not assert that its prerequisite is complete.
 
 ## Related Plans
 
+- [MCP connector hardening](../mcp-connector-hardening/README.md) — the four corrective plans this road map's
+  dependencies above already incorporate.
 - [Service Client Management](../../../src/libs/modules/service-client-management/README.md) — the self-service
   credential a customer configures into their MCP client.
 - [Identity](../../../src/libs/modules/identity/README.md) — the permission vocabulary every tool's required

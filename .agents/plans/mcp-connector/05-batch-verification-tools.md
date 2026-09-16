@@ -18,6 +18,7 @@ and downloading its results would show.
 ## Plan dependencies
 
 - `mcp-connector/03`
+- `mcp-connector-hardening/02`
 
 ## Surprises & Discoveries
 
@@ -64,6 +65,10 @@ job status vocabulary already used by single verification). `GET /verifyBatch/:i
 `domain`, `localPart`, `format`, `targetExchange`, `mxDomain`, `exists`, `catchAll`, `reason`, `sources`,
 `createdAt`, `verificationQuality`, `evidenceObservedAt`, `evidencePolicyVersion`, `verificationStatus`,
 `creditsCharged`, `billingReason`).
+
+This plan now also depends on `mcp-connector-hardening/02`, which extends the shared `mapUpstreamError` from plan
+03 with `400 -> validation_failed` and `403 -> permission_denied` mappings the original road map omitted. Confirm
+that correction has landed in `apps/mcp-server/src/lef-api/errors.ts` before relying on those two codes here.
 
 `bruno/batch-verification/fixtures/sample.csv` is a small, real, checked-in fixture (`person@lef.test`,
 `other@lef.test`) already used by this repository's own batch tests — a convenient known-good manual verification

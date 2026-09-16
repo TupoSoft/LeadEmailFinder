@@ -18,6 +18,7 @@ clear pointer to poll asynchronously instead of a bare timeout).
 ## Plan dependencies
 
 - `mcp-connector/03`
+- `mcp-connector-hardening/02`
 
 ## Surprises & Discoveries
 
@@ -57,6 +58,10 @@ distinguishes these two outcomes (consult the module README for the exact discri
 `completed` (carrying the result), `failed` (carrying a failure code), `unavailable`. `GET /verifications/:id`
 (permission `verification:read`) looks up a previously produced result by its own id, scoped to the caller's
 organization (never a foreign one).
+
+This plan now also depends on `mcp-connector-hardening/02`, which extends the shared `mapUpstreamError` from plan
+03 with `400 -> validation_failed` and `403 -> permission_denied` mappings the original road map omitted. Confirm
+that correction has landed in `apps/mcp-server/src/lef-api/errors.ts` before relying on those two codes here.
 
 `apps/mcp-server/src/lef-api/client.ts` (from `mcp-connector/03`) already has `getBillingSummary` and the shared
 `mapUpstreamError`; this plan adds sibling methods to the same class rather than creating a second client.
