@@ -32,6 +32,7 @@
         "visualRegression": "apps/web/tests/e2e/visual.spec.ts",
         "authentication": "apps/web/tests/e2e/auth-shell.spec.ts",
         "billing": "apps/web/tests/e2e/billing-ui.spec.ts",
+        "billingDividers": "apps/web/tests/e2e/billing-ui.spec.ts",
         "billingRuntime": "apps/web/tests/e2e/billing.spec.ts",
         "team": "apps/web/tests/e2e/team-ui.spec.ts",
         "invitationPrivacy": "apps/web/tests/e2e/invitations-ui.spec.ts",

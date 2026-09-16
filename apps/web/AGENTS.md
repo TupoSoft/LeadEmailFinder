@@ -69,6 +69,8 @@ new features, a redesign, or unrelated refactoring.
   regular weight, readable ink contrast, and zero outer margins. Keep customer-facing copy in its existing owner.
 - Keep `ProductPanel` responsible for its header, loading, feedback, and content reservation. Apply this contract
   to the content being changed; leave unrelated existing screen layouts for their own tasks.
+- When a list ends at a panel boundary, draw item dividers only between rows. Let `ProductPanel` own the section
+  rule; do not duplicate it with a border after the final row. Check both single-item and empty lists.
 - Verify the affected screen at desktop and mobile widths, including its relevant loading and recovery states.
   Assert important rendered gaps in the existing browser suite and run `design:lint` and `ui:audit`.
 - Inspect screenshots and review visual differences before updating any screenshot baseline. A passing static
