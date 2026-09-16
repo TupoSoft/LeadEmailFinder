@@ -24,7 +24,7 @@ failure deep inside `mcp-connector/03` or later.
 
 ## Plan dependencies
 
-None.
+- `mcp-connector-hardening/04`
 
 ## Surprises & Discoveries
 
@@ -60,6 +60,10 @@ Not started.
 ## Context and Orientation
 
 All paths below are repository-relative.
+
+This plan's only prerequisite, `mcp-connector-hardening/04`, is a metadata-only correction (it fixes the road
+map's own dependency graph and adds a scheduling regression test) with no runtime code of its own — it does not
+change anything this plan implements, only when the synchronizer considers this plan eligible to start.
 
 **Workspace layout.** `pnpm-workspace.yaml` declares `packages: ['apps/*', 'packages/*']`. The real backend is
 **not** Nest-CLI monorepo mode: `nest-cli.json` sets `sourceRoot: "src"` and has no `projects` field, so the live

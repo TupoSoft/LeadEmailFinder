@@ -21,6 +21,7 @@ inventing its own.
 ## Plan dependencies
 
 - `mcp-connector/02`
+- `mcp-connector-hardening/01`
 
 ## Surprises & Discoveries
 
@@ -56,6 +57,11 @@ Not started.
 ## Context and Orientation
 
 All paths below are repository-relative.
+
+This plan now also depends on `mcp-connector-hardening/01`, which corrects `mcp-connector/02`'s token-cache
+identity (binding cache entries to the complete presented credential, not the client ID alone, closing a secret-
+bypass gap). `LefApiClient`'s injected token accessor must be backed by that corrected cache, not the original
+ID-only one, before this plan is implemented.
 
 `GET /v1/billing/summary` (owned by `src/libs/modules/credits`, see its README) requires `billing:read` and
 returns `{balance: number, reserved: number, available: number}` for the caller's own organization (resolved from

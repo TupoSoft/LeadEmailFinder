@@ -10,8 +10,8 @@ A developer observes success when the synchronizer keeps final validation in `Ba
 
 ## Progress
 
-- [ ] (2026-09-16) Correct the original dependency sections and road map.
-- [ ] (2026-09-16) Add focused scheduling regression coverage and record validation results.
+- [x] (2026-09-16) Correct the original dependency sections and road map.
+- [x] (2026-09-16) Add focused scheduling regression coverage and record validation results.
 
 ## Plan dependencies
 
@@ -37,7 +37,18 @@ The existing repository fixture proves that keys resolve and the graph has no cy
 
 ## Outcomes & Retrospective
 
-Not started. Creating this plan has not changed the original dependency sections or their effective scheduling.
+Delivered as specified. `mcp-connector/01`, `03`, `04`, `05`, and `07` now declare the corrected direct
+dependencies from the table in Plan of Work; `06` was already correct and left unchanged. `mcp-connector/07`'s
+Interfaces and Dependencies section no longer claims plan 06 transitively supplies plans 04/05. The original road
+map's order table, prose, and Related Plans now match and link to this hardening road map.
+`scripts/plans/execplan-repository-fixture.spec.ts` gained a nested `describe` block with six cases: four
+"missing one prerequisite" cases (`mcp-connector/04`, `05`, `06`, `mcp-connector-hardening/03`, each independently
+left incomplete) asserting `mcp-connector/07` stays `Backlog` and names the missing plan; one "every prerequisite
+done" case asserting it becomes `Todo`; and one case reproducing the original failure exactly (only plans
+01/02/03/06 done among the original seven, all four corrective plans done) asserting it stays `Backlog`. All
+cases clone the real, currently-incomplete checked-in plans via `discoverExecPlans` and mutate only in-memory
+`progress` clones — no Markdown file's actual progress was changed by the test. No connector runtime code exists
+yet; this PR is metadata and test-only, exactly as scoped.
 
 ## Context and Orientation
 
@@ -163,7 +174,14 @@ Do not remove a required prerequisite solely to make a project item eligible.
 Review basis: [PR #652](https://github.com/TupoSoft/LeadEmailFinder/pull/652), head `471b33cd83e61d08a479ff356e851dddf8020c30`.
 The merged base for these corrective plans is `e4c10620d377185c9f24e0087e2161cf8e8f6a25`.
 All seven original connector plans remain incomplete at that base.
-Record the focused test results here when this plan is implemented; planning alone does not satisfy its acceptance criteria.
+
+Actual validation results (2026-09-16):
+
+- `corepack pnpm exec jest --runInBand scripts/plans/execplan-repository-fixture.spec.ts scripts/plans/execplan.spec.ts` — 52/52 passing (up from 46 before this change).
+- `corepack pnpm exec eslint scripts/plans/execplan-repository-fixture.spec.ts` — clean.
+- `corepack pnpm typecheck` — clean (root `dist/tsconfig.tsbuildinfo` is unwritable in this environment from an unrelated prior `docker build`; reran with `--tsBuildInfoFile` pointed at a scratch path to confirm zero type errors, which is the actual signal this command exists to prove).
+- `corepack pnpm docs:lint -- .agents/plans/mcp-connector .agents/plans/mcp-connector-hardening` — no new actionable findings in the five original plans or the road map touched by this PR; remaining findings are the same pre-existing Harper false-positive categories already accepted when those files were authored (a recurring code-span-adjacent-possessive tokenization issue, plus `MB`/`backoff`/`README's` style opinions on already-accepted terms), including on the newly added prose, which reproduces the identical pattern. The four `mcp-connector-hardening` plan files are unchanged by this PR and were not re-reviewed here.
+- `git diff --cached --check` — clean, no whitespace errors.
 
 ## Plan readiness
 
