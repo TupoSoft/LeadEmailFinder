@@ -49,6 +49,43 @@ async function accessible(page: Page) {
     await expect(page.locator('vite-error-overlay')).toHaveCount(0)
 }
 
+async function expectBillingSpacing(page: Page) {
+    const panel = page.getByRole('region', { name: 'Credit balance', exact: true })
+    const amount = panel.locator('p:has(> strong)')
+    const details = panel.locator('dl')
+    const explanation = panel.getByText(/^Reserved credits are held for checks in progress,/)
+    await expect(explanation).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const [amountBounds, detailsBounds, explanationBounds] = await Promise.all([
+        amount.boundingBox(),
+        details.boundingBox(),
+        explanation.boundingBox(),
+    ])
+    expect(amountBounds).not.toBeNull()
+    expect(detailsBounds).not.toBeNull()
+    expect(explanationBounds).not.toBeNull()
+    // Measure the rendered gaps so missing spacing or doubled child margins both fail.
+    expect(detailsBounds!.y - (amountBounds!.y + amountBounds!.height)).toBeCloseTo(12, 1)
+    expect(explanationBounds!.y - (detailsBounds!.y + detailsBounds!.height)).toBeCloseTo(24, 1)
+    for (const text of [
+        details.getByText('Reserved credits', { exact: true }),
+        details.getByText('Total balance', { exact: true }),
+        explanation,
+    ]) {
+        await expect(text).toHaveCSS('font-size', '14px')
+        await expect(text).toHaveCSS('font-weight', '400')
+    }
+    await expect(explanation).toHaveCSS('margin-top', '0px')
+    await expect(explanation).toHaveCSS('margin-bottom', '0px')
+    expect(await explanation.evaluate(element => Number.parseFloat(getComputedStyle(element).lineHeight))).toBeCloseTo(
+        20.3,
+        1,
+    )
+    expect(
+        await amount.locator('strong').evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize)),
+    ).toBeGreaterThan(14)
+}
+
 for (const viewport of [
     { width: 320, height: 720 },
     { width: 390, height: 844 },
@@ -57,7 +94,7 @@ for (const viewport of [
     test(`authoritative billing and duplicate batch counts remain readable at ${viewport.width}`, async ({
         page,
         context,
-    }) => {
+    }, testInfo) => {
         await page.setViewportSize(viewport)
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await mockAccount(context)
@@ -73,7 +110,11 @@ for (const viewport of [
         await expect(balance).toContainText('7 credits')
         await expect(balance.getByText('Reserved credits', { exact: true }).locator('..')).toContainText('3')
         await expect(balance.getByText('Total balance', { exact: true }).locator('..')).toContainText('10')
+        await expectBillingSpacing(page)
         await accessible(page)
+        await balance.screenshot({
+            path: `/tmp/lef-shared-spacing-billing-${viewport.width}-${testInfo.project.name}.png`,
+        })
         await page.screenshot({ path: `/tmp/issue577-billing-${viewport.width}.png`, fullPage: true })
         await context.route(`**/verifyBatch/${id}`, route =>
             route.fulfill({
@@ -140,6 +181,52 @@ for (const viewport of [
         await page.screenshot({ path: `/tmp/issue577-batch-${viewport.width}.png`, fullPage: true })
     })
 }
+
+test('billing spacing survives a pending read, failure, and keyboard retry', async ({ page, context }, testInfo) => {
+    await mockAccount(context)
+    let reads = 0
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+        release = resolve
+    })
+    await context.route('**/v1/billing/summary', async route => {
+        reads++
+        if (reads === 1) {
+            await pending
+            await route.fulfill({ status: 503, json: {} })
+            return
+        }
+        await route.fulfill({ json: { balance: 1002, reserved: 3, available: 999 } })
+    })
+    await page.goto('/app/billing')
+    const panel = page.getByRole('region', { name: 'Credit balance', exact: true })
+    await expect(panel.getByText('Loading…', { exact: true })).toBeVisible()
+    await expect(panel.getByText('Available credits', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('region', { name: 'Credit packs', exact: true })).toContainText(
+        'No credit packs are currently available.',
+    )
+    release()
+    const retry = panel.getByRole('button', { name: 'Try again', exact: true })
+    await expect(retry).toBeVisible()
+    await expect(panel.getByText('Available credits', { exact: true })).toHaveCount(0)
+    await retry.focus()
+    await page.keyboard.press('Enter')
+    await expect(panel).toContainText('999 credits')
+    await expect(panel.getByText('Reserved credits', { exact: true }).locator('..')).toContainText('3 credits')
+    await expect(panel.getByText('Total balance', { exact: true }).locator('..')).toContainText('1,002 credits')
+    await expectBillingSpacing(page)
+    const balanceContent = panel.locator('[aria-live="polite"][aria-atomic="true"]')
+    await balanceContent.evaluate(element => element.setAttribute('hidden', ''))
+    await expect(balanceContent).toBeHidden()
+    await expect(panel).toBeVisible()
+    await balanceContent.evaluate(element => element.removeAttribute('hidden'))
+    await expectBillingSpacing(page)
+    await accessible(page)
+    await panel.screenshot({
+        path: `/tmp/lef-shared-spacing-billing-recovered-${page.viewportSize()!.width}-${testInfo.project.name}.png`,
+    })
+    expect(reads).toBe(2)
+})
 
 test('settlement stays distinct from reservation through offline and keyboard read recovery', async ({
     page,
