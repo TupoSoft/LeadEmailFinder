@@ -10,6 +10,7 @@ duplicates costs less than its row count. The UI displays the server's settled a
 
 ## Progress
 
+- [x] (2026-09-17) Correct the CI browser-suite inventory after reproducing the shared policy and backend test failure.
 - [x] (2026-09-16) Extend billing summary presentation with available and reserved credits.
 - [x] (2026-09-16) Update single-verification copy, outcome details, and recovery metadata.
 - [x] (2026-09-16) Update batch counts, charges, and duplicate/output explanations.
@@ -94,6 +95,17 @@ runner was not rerun; its historical two-pass, one-failure result and the backen
 The publication process did not reset data or change the running development stack.
 
 ## Outcomes & Retrospective
+
+CI repair (2026-09-17): PR #666 added the verification-billing browser suite but left the workflow test's expected
+suite list unchanged. Both the policy and backend jobs failed on that single assertion; the final validation job
+reported their failure. The expected list now includes the new suite and retains exact inventory, build-order,
+and failure-propagation checks. The focused policy checks passed all 315 tests, and the validation-selection
+fixtures and scoped ESLint also passed. This repair changes only test expectations and documentation.
+
+All 98 runner tests passed separately. The full local Jest run passed 3330 tests but failed an unchanged security
+scanner test: local Git 2.43 emits line-delimited output where the scanner expects null-delimited history. The
+original CI run used Git 2.55 and passed that test. Local full-suite validation therefore remains limited by the
+Git version; this CI repair does not change the scanner. The 113 conditional integration tests were skipped.
 
 The browser now distinguishes current account holds from historical operation reservations and settled charges.
 Single submissions retain a cryptographic UUIDv7 key and their original input for deliberate recovery. Batch views
@@ -197,6 +209,9 @@ remain distinct. No new backend endpoint, external service, or runtime library i
 ## Validation
 
 ```bash
+corepack pnpm exec jest --runInBand select-validation validate-workflow execplan-repository-fixture
+corepack pnpm test:ci-paths
+corepack pnpm test:ci
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci
 corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
 corepack pnpm --filter @tuposoft/lead-email-finder-web lint
