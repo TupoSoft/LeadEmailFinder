@@ -10,6 +10,11 @@ its own healthcheck, and built as part of the same CI `images` job that already 
 developer observes success by bringing up the full local dev stack and reaching the connector's `/health` and
 `/mcp` endpoints from the host exactly as they already can for `api`.
 
+This plan's only structural prerequisite is `mcp-connector/03` (a buildable package exists). Implementing it
+after `mcp-connector/04` and `mcp-connector/05` land is recommended, so the deployed service has its full toolset
+from the start, but is not required — the connector from plan 03 alone (with `check_credit_balance`) is already a
+legitimate, if minimal, deployable service.
+
 ## Progress
 
 - [ ] (2026-09-16) Not started.
@@ -17,10 +22,6 @@ developer observes success by bringing up the full local dev stack and reaching 
 ## Plan dependencies
 
 - `mcp-connector/03`
-
-Implementing this plan after `mcp-connector/04` and `mcp-connector/05` land is recommended (so the deployed
-service has its full toolset from the start) but not required — the connector from plan 03 alone (with
-`check_credit_balance`) is already a legitimate, if minimal, deployable service.
 
 ## Surprises & Discoveries
 
