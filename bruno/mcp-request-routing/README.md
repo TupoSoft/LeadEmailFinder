@@ -22,9 +22,11 @@ If authentication has landed since this collection was written, the `/mcp` reque
 routing and method rejection, not tool access; retain the documented local fixture credentials if the requests
 have grown an `Authorization` header.
 
-Run it against a locally running scaffold:
+Run it against a locally running scaffold. From the repository root, with workspace dependencies already
+installed:
 
 ```shell
+corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
 PORT=3002 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server start
 ```
 

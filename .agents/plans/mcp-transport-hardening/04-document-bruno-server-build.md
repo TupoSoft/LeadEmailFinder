@@ -14,9 +14,10 @@ the review of PR #681. It unlocks repeatable local validation of the existing MC
 
 ## Progress
 
-- [ ] (2026-09-17) Add the package build to the collection setup instructions.
-- [ ] (2026-09-17) Verify the instructions in a disposable checkout with no MCP build output.
-- [ ] (2026-09-17) Run focused documentation and plan checks, then record the results.
+- [x] (2026-09-17) Added the package `build` command before `start` in the collection README.
+- [x] (2026-09-17) Verified the documented sequence in a disposable `git archive` snapshot with no
+      `apps/mcp-server/dist`.
+- [x] (2026-09-17) Ran focused documentation and plan checks and recorded the results below.
 
 ## Plan dependencies
 
@@ -24,7 +25,13 @@ the review of PR #681. It unlocks repeatable local validation of the existing MC
 
 ## Surprises & Discoveries
 
-None yet.
+- The disposable fixture reproduced the defect exactly as the review recorded it: `git archive HEAD | tar -x`
+  into a fresh temporary directory, with the package's own `node_modules` and the root `node_modules` reused
+  via read-only symlinks, produced a checkout with no `apps/mcp-server/dist` at all. Running the documented
+  build immediately before `start` (rather than the old `start`-only instruction) let the server boot cleanly on
+  the first try, `GET /health` returned exactly `{"status":"ok"}`, and the full six-request routing collection
+  (including the `mcp-transport-hardening/03` malformed-target and final health requests, already merged by the
+  time this plan was implemented) passed 6/6 against that same process.
 
 ## Decision Log
 
@@ -40,7 +47,11 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: `bruno/mcp-request-routing/README.md` now documents the
+package `build` step immediately before `start`, framed as running from the repository root with workspace
+dependencies already installed. Verified in a disposable snapshot with no preexisting build output, per the
+plan's own validation design, rather than only inspecting the diff. No package script, runtime source, or
+collection request changed.
 
 ## Context and Orientation
 
