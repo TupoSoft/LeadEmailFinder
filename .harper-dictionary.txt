@@ -410,3 +410,8 @@ scaffolded
 selectable
 Vitest
 jsdom
+GHCR
+kubelet
+LimitRange
+kubectl
+DinD
