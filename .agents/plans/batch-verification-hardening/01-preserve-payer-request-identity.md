@@ -13,8 +13,8 @@ The CSV attributes the same charge to the first input row for the address. Dupli
 - [x] (2026-09-17) Persist one immutable request UUID for each unique batch address before claiming execution.
 - [x] (2026-09-17) Reuse that UUID during request materialization and make interrupted insertion replay safe.
 - [x] (2026-09-17) Prove ledger, status, and CSV agreement for charged, released, cached, and duplicate results.
-- [x] (2026-09-17) Complete available focused checks and module/collection documentation. Live Bruno remains
-  unverified because the SMTP fixture belongs to another checkout; its synthetic workflow passes.
+- [x] (2026-09-17) Complete focused checks and module/collection documentation, including live Bruno validation
+  against the isolated development stack and the affected queue suite against real Redis.
 
 ## Plan dependencies
 
@@ -58,9 +58,14 @@ suite passes all 18 tests, including positive and negative conclusive captures, 
 results and followers, concurrent identity assignment, and interruption recovery. Real database cursor output
 agrees with receipt and ledger accounting, including duplicate rows. Only the external object upload is replaced.
 
-Live Bruno execution remains unverified. The launcher stopped at `fixture_bootstrap` because the existing `lef`
-stack belongs to a different checkout. Its SMTP network occupies the overlay's fixed `172.28.0.0/24` subnet, and
-ownership checks reject using that stack or adding an unsupported override. No existing stack was changed.
+Live Bruno validation passed on 2026-09-17 against implementation commit `f673f67`: all 16 requests and 24 tests
+executed successfully with no skipped requests. The collection verified one actual debit, matching batch status,
+and one charge on the first CSV row, with free duplicates sharing the same result UUID. It restored the customer
+balance and SMTP baseline. The six affected queue tests also passed against real Redis and BullMQ.
+
+The first live attempt was blocked by another checkout's SMTP fixture. After the user removed that stack, the
+remaining empty network was removed and a separate `lef-issue644` project was built and provisioned for this
+checkout. The successful validation used real DNS, proxy, SMTP, API, database, queue, and object-storage services.
 Request attachment, funding recovery, and historical repair remain with the later plans.
 
 ## Context and Orientation
@@ -182,7 +187,8 @@ during planning. Preserve existing user changes when implementing or reverting t
 Validation completed on 2026-09-17:
 
 - `corepack pnpm exec jest --runInBand src/libs/modules/email-verification/src`: 84 suites and 1,011 tests passed.
-  The generic run skipped six opt-in infrastructure suites (35 tests); PostgreSQL ran separately below.
+  The generic run skipped six opt-in infrastructure suites (35 tests); PostgreSQL and the affected queue suite
+  ran separately below.
 - `corepack pnpm test:verification-billing-postgres`: 18 tests passed, zero skipped, on the disposable database
   owned by this checkout. The CSV assertions use the actual database joins and writer projection.
 - `node --test scripts/bruno/batch-verification-runner.test.mjs scripts/bruno/run-collection.test.mjs`: 16 tests
@@ -191,8 +197,9 @@ Validation completed on 2026-09-17:
 - `corepack pnpm typecheck`: passed for the root and MCP server TypeScript projects.
 - `corepack pnpm exec eslint src/libs/modules/email-verification/src scripts/bruno/run-collection.mjs scripts/bruno/batch-verification-runner.test.mjs`: passed.
 - `corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/01-preserve-payer-request-identity.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md`: Harper passed all three files.
-- `corepack pnpm bruno:batch-verification`: stopped at fixture ownership validation before executing requests.
-  Live SMTP/API validation remains unverified for this checkout; see Outcomes & Retrospective.
+- `COMPOSE_PROJECT_NAME=lef-issue644 corepack pnpm bruno:batch-verification`: all 16 requests and 24 tests passed
+  against the isolated stack, with no skipped requests.
+- `TEST_REDIS_URL=redis://127.0.0.1:56379 corepack pnpm exec jest --runInBand batch-email-verification-queue.integration.spec.ts`: all six tests passed against the isolated stack's Redis service.
 
 The SOLID review found no new module coupling or infrastructure leaks into application code. UUID comparison is
 performed both on application replay reads and at the persistence conflict boundary to protect concurrent inserts.
