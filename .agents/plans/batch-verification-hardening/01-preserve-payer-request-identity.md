@@ -10,10 +10,11 @@ The CSV attributes the same charge to the first input row for the address. Dupli
 
 ## Progress
 
-- [ ] (2026-09-15) Persist one immutable request UUID for each unique batch address before claiming execution.
-- [ ] (2026-09-15) Reuse that UUID during request materialization and make interrupted insertion replay safe.
-- [ ] (2026-09-15) Prove ledger, status, and CSV agreement for charged, released, cached, and duplicate results.
-- [ ] (2026-09-15) Complete focused checks and update the module and collection documentation.
+- [x] (2026-09-17) Persist one immutable request UUID for each unique batch address before claiming execution.
+- [x] (2026-09-17) Reuse that UUID during request materialization and make interrupted insertion replay safe.
+- [x] (2026-09-17) Prove ledger, status, and CSV agreement for charged, released, cached, and duplicate results.
+- [x] (2026-09-17) Complete available focused checks and module/collection documentation. Live Bruno remains
+  unverified because the SMTP fixture belongs to another checkout; its synthetic workflow passes.
 
 ## Plan dependencies
 
@@ -21,9 +22,25 @@ The CSV attributes the same charge to the first input row for the address. Dupli
 
 ## Surprises & Discoveries
 
-None yet.
+- The prerequisite is merged at implementation base `1f7b3c6`; the planned duplicate UUID defect is still present.
+- `countUnsettledAddresses()` already uses `NOT EXISTS` for a settled receipt, so it correctly counts an assigned
+  UUID whose receipt has not been inserted. A real database regression now covers this state.
+- The initial PostgreSQL run caught an unquoted `requestId` in the insert return clause. The adapter now requests
+  the mapped column through the TypeORM column array; mocked queries alone did not reveal this failure.
 
 ## Decision Log
+
+- Decision: Protect UUID insertion uniformly after the existing client-key lookup, using
+  `ON CONFLICT ("requestId") DO NOTHING`. Rationale: Restricting protection to incoming batch requests allowed a
+  replay with another mode or a new client key to overwrite a batch receipt. Existing client-key arbitration and
+  ordinary fresh single requests retain their behavior; conflicting internal UUID reuse now fails across modes.
+  Date/Author: 2026-09-17, Codex implementation.
+- Decision: Replace `recordPayerRequestId()` with the conditional, organization-scoped assignment operation.
+  Rationale: Removing the overwrite API makes immutable identity the only supported assignment contract.
+  Date/Author: 2026-09-17, Codex implementation.
+- Decision: Keep identity validation strict for cached results and `cooldown` results while allowing execution settlement fields to
+  advance. Rationale: Replaying admission must preserve the recorded result and an already settled receipt.
+  Date/Author: 2026-09-17, Codex implementation.
 
 - Decision: Assign the existing manifest `payerRequestId` before claiming execution, and retain it for every
   admission outcome. Rationale: An address needs one durable receipt identity; another identifier column or a
@@ -36,7 +53,15 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Stable UUID assignment and receipt replay validation now preserve actual batch charges. The real PostgreSQL
+suite passes all 18 tests, including positive and negative conclusive captures, inconclusive release, free cached
+results and followers, concurrent identity assignment, and interruption recovery. Real database cursor output
+agrees with receipt and ledger accounting, including duplicate rows. Only the external object upload is replaced.
+
+Live Bruno execution remains unverified. The launcher stopped at `fixture_bootstrap` because the existing `lef`
+stack belongs to a different checkout. Its SMTP network occupies the overlay's fixed `172.28.0.0/24` subnet, and
+ownership checks reject using that stack or adding an unsupported override. No existing stack was changed.
+Request attachment, funding recovery, and historical repair remain with the later plans.
 
 ## Context and Orientation
 
@@ -46,8 +71,8 @@ Apply this plan only after its explicit prerequisite is available, and compare a
 All paths below are repository-relative. References shortened to `application/` or `infrastructure/` are below
 `src/libs/modules/email-verification/src/`.
 
-`application/delivery/batch/batch-admission.service.ts` generates one UUID in `resolveAddress()` and passes it
-as the execution's payer. Later, `materializeRequest()` generates a different UUID for the actual request.
+Before this fix, `application/delivery/batch/batch-admission.service.ts` generated one UUID in `resolveAddress()`
+and passed it as the execution's payer. Later, `materializeRequest()` generated a different UUID for the receipt.
 `infrastructure/persistence/typeorm-verification-settlement.store.ts` uses equality with the execution payer UUID
 to assign the final reason and charged count. Therefore, the actual receipt is treated as a follower.
 
@@ -122,7 +147,7 @@ shared terminal-aware finalization contract from `verification-billing-hardening
 
 ## Validation
 
-Run from the implementation checkout. These are required future checks; this document claims no implemented fix.
+Run from the implementation checkout. Record completed checks separately below; a skipped runtime is not passing evidence.
 
 ```sh
 corepack pnpm exec jest --runInBand batch-admission.service.spec.ts typeorm-batch-admission.store.spec.ts typeorm-verification-request.store.spec.ts typeorm-verification-settlement.store.spec.ts s3-batch-result-writer.spec.ts batch-email-verification.service.spec.ts
@@ -153,6 +178,25 @@ the intended disposable stack and let it reseed credentials and credits. Do not 
 during planning. Preserve existing user changes when implementing or reverting this PR.
 
 ## Artifacts and Notes
+
+Validation completed on 2026-09-17:
+
+- `corepack pnpm exec jest --runInBand src/libs/modules/email-verification/src`: 84 suites and 1,011 tests passed.
+  The generic run skipped six opt-in infrastructure suites (35 tests); PostgreSQL ran separately below.
+- `corepack pnpm test:verification-billing-postgres`: 18 tests passed, zero skipped, on the disposable database
+  owned by this checkout. The CSV assertions use the actual database joins and writer projection.
+- `node --test scripts/bruno/batch-verification-runner.test.mjs scripts/bruno/run-collection.test.mjs`: 16 tests
+  passed. The collection now requires 16 requests and 24 assertions, including the hidden-charge regression.
+- `corepack pnpm architecture:check`: nine modules, zero violations.
+- `corepack pnpm typecheck`: passed for the root and MCP server TypeScript projects.
+- `corepack pnpm exec eslint src/libs/modules/email-verification/src scripts/bruno/run-collection.mjs scripts/bruno/batch-verification-runner.test.mjs`: passed.
+- `corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/01-preserve-payer-request-identity.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md`: Harper passed all three files.
+- `corepack pnpm bruno:batch-verification`: stopped at fixture ownership validation before executing requests.
+  Live SMTP/API validation remains unverified for this checkout; see Outcomes & Retrospective.
+
+The SOLID review found no new module coupling or infrastructure leaks into application code. UUID comparison is
+performed both on application replay reads and at the persistence conflict boundary to protect concurrent inserts.
+There is no schema change or migration. The implementation is isolated from unrelated changes in the main checkout.
 
 Read root/module instructions, the module README, and the repository PostgreSQL skill before implementation.
 The review reproduction is summarized above so this plan does not depend on temporary review files.

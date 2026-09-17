@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -29,7 +29,7 @@ export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 22, tests: 22, sandbox: 'developer', network: 'compose' }),
-    'batch-verification': Object.freeze({ requests: 9, tests: 15, sandbox: 'developer', network: 'compose' }),
+    'batch-verification': Object.freeze({ requests: 16, tests: 24, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 34, sandbox: 'developer', network: 'host' }),
     'proxy-registry': Object.freeze({
@@ -154,6 +154,7 @@ export function collectionEnvironment(name, metadata, serviceClient, serviceCred
         KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
         KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
         PLATFORM_ORGANIZATION_ID: credential.data.organizationId,
+        ...(name === 'batch-verification' ? { EVIDENCE_CONTROL_URL: 'http://smtp-evidence:8025' } : {}),
     }
 }
 
@@ -173,6 +174,7 @@ export function cliArguments(name, environment, reportFile) {
                 !environment.CUSTOMER_SERVICE_CLIENT_ID ||
                 !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
         (name === 'service-client-management' && !environment.SERVICE_CLIENT_ORGANIZATION_ID) ||
+        (name === 'batch-verification' && !environment.EVIDENCE_CONTROL_URL) ||
         (name === 'credit-purchases' &&
             (!environment.PAYMENTS_STUB_WEBHOOK_SECRET ||
                 !environment.PLATFORM_ORGANIZATION_ID ||
@@ -201,6 +203,16 @@ export function cliArguments(name, environment, reportFile) {
     ]
 }
 
+async function restoreBatchEvidenceScenario(controlUrl) {
+    const response = await fetch(`${controlUrl}/reset`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+    }).catch(() => {
+        throw brunoFailure({ stage: 'fixture_bootstrap' })
+    })
+    if (response.status !== 204) throw brunoFailure({ stage: 'fixture_bootstrap', status: response.status })
+}
+
 export async function executeCollection(name, environment, checkoutRoot) {
     const collection = registeredCollection(name)
     const cliPackageFile = require.resolve('@usebruno/cli/package.json')
@@ -212,6 +224,18 @@ export async function executeCollection(name, environment, checkoutRoot) {
     const reportFile = resolve(reportDirectory, 'report.json')
     let stage = 'collection'
     try {
+        if (name === 'batch-verification') {
+            const address = `batch-${randomUUID()}@evidence.lef.test`
+            const path = resolve(reportDirectory, 'duplicates.csv')
+            await writeFile(
+                path,
+                `email\n${address.replace('batch-', 'Batch-')}\n${address}\n${address.toUpperCase()}\n`,
+                {
+                    mode: 0o600,
+                },
+            )
+            environment = { ...environment, BATCH_DUPLICATE_ADDRESS: address, BATCH_DUPLICATE_CSV_PATH: path }
+        }
         await execFileAsync(
             process.execPath,
             [
@@ -247,7 +271,15 @@ export async function executeCollection(name, environment, checkoutRoot) {
         }
         throw brunoFailure(reportFailureDiagnostic(report, stage))
     } finally {
-        await rm(reportDirectory, { recursive: true, force: true })
+        try {
+            // The control service has a baseline reset, but no read-current-scenario endpoint. Restore that
+            // baseline even when the CLI exits before the collection's final reset request.
+            if (name === 'batch-verification' && environment.EVIDENCE_CONTROL_URL) {
+                await restoreBatchEvidenceScenario(environment.EVIDENCE_CONTROL_URL)
+            }
+        } finally {
+            await rm(reportDirectory, { recursive: true, force: true })
+        }
     }
 }
 

@@ -151,8 +151,23 @@ export class TypeOrmBatchAdmissionStore implements BatchAdmissionStore {
         )
     }
 
-    async recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
-        await this.dataSource.manager.update(BatchUniqueAddressEntity, { batchId, normalizedAddress }, { payerRequestId })
+    async ensurePayerRequestId(
+        batchId: string,
+        organizationId: string,
+        normalizedAddress: string,
+        candidateId: string,
+    ): Promise<string> {
+        const identity = { batchId, organizationId, normalizedAddress }
+        // Concurrent updates serialize on this row; after the first assignment, the NULL predicate prevents
+        // every later candidate from replacing the committed identity.
+        await this.dataSource.manager.update(
+            BatchUniqueAddressEntity,
+            { ...identity, payerRequestId: IsNull() },
+            { payerRequestId: candidateId },
+        )
+        const address = await this.dataSource.manager.findOneBy(BatchUniqueAddressEntity, identity)
+        if (!address?.payerRequestId) throw new Error('batch_payer_identity_missing')
+        return address.payerRequestId
     }
 
     async countUnsettledAddresses(batchId: string, organizationId: string): Promise<number> {

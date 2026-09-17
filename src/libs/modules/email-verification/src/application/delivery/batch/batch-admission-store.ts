@@ -22,6 +22,7 @@ export interface BatchUniqueAddressRecord {
     readonly admissionKind: BatchUniqueAddressAdmissionKind | null
     readonly executionId: string | null
     readonly resultId: string | null
+    /** Reserved receipt identity; a non-null UUID does not prove that its request row exists yet. */
     readonly payerRequestId: string | null
 }
 
@@ -84,11 +85,18 @@ export interface BatchAdmissionStore {
         },
     ): Promise<void>
 
-    recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void>
+    /** Assigns the candidate only while empty and returns the stored winner, including on concurrent retry.
+     *  Requires the batch, organization, and address to match; missing or foreign manifests fail unchanged.
+     *  Once assigned, the identity is immutable and may precede request insertion. */
+    ensurePayerRequestId(
+        batchId: string,
+        organizationId: string,
+        normalizedAddress: string,
+        candidateId: string,
+    ): Promise<string>
 
-    /** Counts unique addresses in this batch whose payer request either has no `payerRequestId` yet (admission
-     *  itself is still in progress) or whose linked `VerificationRequestStore` row is not yet `billingState:
-     *  'settled'`. Zero means the batch is safe to move on to result publication. */
+    /** Counts addresses whose receipt identity is unassigned, whose request row is missing, or whose linked
+     *  request is not yet `billingState: 'settled'`. Zero means the batch is safe to publish its results. */
     countUnsettledAddresses(batchId: string, organizationId: string): Promise<number>
 
     /** Aggregate per-address status counts for the public status endpoint. `conclusive`/`inconclusive`/`failed`
