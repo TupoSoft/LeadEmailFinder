@@ -1,0 +1,18 @@
+info:
+  name: 02-unknown-path-is-not-found
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/does-not-exist"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('an unrouted path returns a stable not_found body', function() {
+          expect(res.status).to.equal(404);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(res.body).to.eql({ status: 'not_found' });
+        });

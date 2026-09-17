@@ -13,9 +13,9 @@ This plan addresses the `P2` finding from PR #671 and maps to one implementation
 
 ## Progress
 
-- [ ] (2026-09-17) Add the narrow request parsing guard and a process regression test.
-- [ ] (2026-09-17) Add repeatable Bruno coverage for HTTP routing and document its local setup.
-- [ ] (2026-09-17) Run focused checks, inspect the diff, and record the results.
+- [x] (2026-09-17) Added the narrow request parsing guard and the process regression test in `main.spec.ts`.
+- [x] (2026-09-17) Added `bruno/mcp-request-routing/` with its README and ran it against a live local process.
+- [x] (2026-09-17) Ran focused checks, inspected the diff, and recorded the results below.
 
 ## Plan dependencies
 
@@ -23,7 +23,22 @@ This plan addresses the `P2` finding from PR #671 and maps to one implementation
 
 ## Surprises & Discoveries
 
-None yet.
+- Confirmed the reproduced crash directly: `new URL('//', 'http://localhost')` and
+  `new URL('http://[', 'http://localhost')` both throw `TypeError [ERR_INVALID_URL]`, and Node's own HTTP parser
+  accepts both `GET // HTTP/1.1` and `GET http://[ HTTP/1.1` as syntactically valid request lines, handing the raw
+  target straight to the application. A raw `node:net` socket write was required to prove this; `fetch`/`curl`
+  normalize `//` before the request is sent and cannot reproduce the crash.
+- The process regression's temporary build only needed `tsc -p apps/mcp-server/tsconfig.json --outDir <tempDir>/dist`
+  plus a `node_modules` directory symlink and a minimal `{"type":"module"}` manifest in the temp directory —
+  `apps/mcp-server`'s own `node_modules` already contains the resolved `@modelcontextprotocol/sdk`, so no
+  separate install step was needed for the isolated build.
+- Verified the regression test actually detects the bug (not a false-positive pass) by temporarily reverting the
+  `main.ts` fix and re-running `main.spec.ts`: the first malformed request then returned `NaN` (the raw socket
+  received no valid HTTP response before the process crashed) and the second failed with `ECONNREFUSED`, because
+  the child process had already exited after the first request. Restoring the fix returned both suites to green.
+- Mocking `./create-server.js`'s `createServer` export only for the HTTP-500 test (via `jest.requireActual` plus
+  `mockImplementationOnce`) left every other in-process test using the real implementation; the forked
+  child-process regression is unaffected either way since it loads real modules from disk in a separate process.
 
 ## Decision Log
 
@@ -41,7 +56,12 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: a narrow `try`/`catch` around request-target parsing in
+`apps/mcp-server/src/main.ts`, a Jest process regression proving the fix against a real, freshly built child
+process and a real MCP SDK client, and a repeatable `bruno/mcp-request-routing/` collection for the routing
+behavior a normal HTTP client can exercise. The regression's detection power was verified directly (see Surprises
+& Discoveries) rather than assumed. No scope beyond the plan was added; origin validation remains
+`mcp-transport-hardening/02`'s responsibility.
 
 ## Context and Orientation
 

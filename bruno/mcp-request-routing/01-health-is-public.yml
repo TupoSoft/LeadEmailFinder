@@ -1,0 +1,18 @@
+info:
+  name: 01-health-is-public
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/health"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('the scaffold health check answers 200 with a stable status body', function() {
+          expect(res.status).to.equal(200);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(res.body).to.eql({ status: 'ok' });
+        });
