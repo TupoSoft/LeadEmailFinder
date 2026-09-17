@@ -1,7 +1,7 @@
 info:
-  name: 05-health-remains-available
+  name: 06-health-remains-available
   type: http
-  seq: 5
+  seq: 6
 
 http:
   method: GET
