@@ -33,7 +33,13 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Prom
 
 export function createApp(): Server {
     return createHttpServer((req, res) => {
-        const url = new URL(req.url ?? '/', 'http://localhost')
+        let url: URL
+        try {
+            url = new URL(req.url ?? '/', 'http://localhost')
+        } catch {
+            sendJson(res, 400, { status: 'bad_request' })
+            return
+        }
         if (req.method === 'GET' && url.pathname === '/health') {
             sendJson(res, 200, { status: 'ok' })
             return
