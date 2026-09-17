@@ -20,7 +20,10 @@ failure deep inside `mcp-connector/03` or later.
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-17) `apps/mcp-server` scaffolded (`package.json`, `tsconfig.json`, `create-server.ts`, `main.ts`,
+      `create-server.spec.ts`); root `typecheck` chain, `.github/workflows/validate.yml`'s `backend` install
+      filter, `scripts/ci/select-validation.mjs`/`validation-fixtures.json`, and `pnpm-lock.yaml` all updated. Every
+      acceptance criterion validated locally (see Validation).
 
 ## Plan dependencies
 
@@ -28,7 +31,25 @@ failure deep inside `mcp-connector/03` or later.
 
 ## Surprises & Discoveries
 
-None yet.
+- The currently published `@modelcontextprotocol/inspector@2.7.0` CLI does not accept
+  `--transport streamable-http` as this plan's original Validation section assumed; its accepted values are
+  `sse`, `http`, and `stdio` (`http` selects the Streamable HTTP transport). Validation below is corrected to
+  `--transport http`.
+- Jest could not resolve `apps/mcp-server`'s own relative imports (e.g. `./main.js`, required by TypeScript's
+  `NodeNext` module resolution even though the source file is `main.ts`) without a small addition to root
+  `jest.config.ts`'s `moduleNameMapper`: `'^(\\.{1,2}/.*)\\.js$': '$1'`. This is the standard, narrowly-scoped
+  recipe for this exact TS/Jest interop gap (it only rewrites relative specifiers, so it cannot mask a real
+  `@modelcontextprotocol/sdk` resolution failure); nothing in the repository previously needed it because no
+  other package used `NodeNext` relative imports under Jest. Every later `mcp-connector` plan benefits from this
+  fix without needing to repeat it.
+- `scripts/ci/validate-workflow.spec.ts` hardcodes the exact expected `backend` job install command; adding the
+  new `--filter @tuposoft/lead-email-finder-mcp-server...` flag required updating that one assertion string
+  alongside the workflow file itself.
+- `@modelcontextprotocol/sdk@1.30.0`'s official, documented pattern for a stateless Streamable HTTP server is a
+  fresh `McpServer` + `StreamableHTTPServerTransport` pair per `POST /mcp` request (`sessionIdGenerator:
+  undefined`), not one long-lived shared transport — this avoids state/response-stream leakage across concurrent
+  requests. `main.ts` follows this pattern and rejects `GET`/`DELETE /mcp` with `405`, matching the SDK's own
+  stateless example.
 
 ## Decision Log
 
@@ -55,7 +76,14 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: a runnable, lint/typecheck/test-covered `apps/mcp-server`
+workspace package exposing one unauthenticated `ping` tool over Streamable HTTP, plus the three shared-plumbing
+fixes (root `typecheck` chain, `backend` job's install filter, `select-validation.mjs`/fixtures). One additional,
+narrowly-scoped fix was required beyond the plan's original text: a root `jest.config.ts` `moduleNameMapper`
+entry to resolve `NodeNext`-style relative `.js` imports under Jest (see Surprises & Discoveries) — without it,
+`corepack pnpm test` could not even load `create-server.spec.ts`. All acceptance criteria were validated against
+the real, installed `@modelcontextprotocol/sdk@1.30.0` and `@modelcontextprotocol/inspector@2.7.0` packages, not
+assumed from documentation.
 
 ## Context and Orientation
 
@@ -195,7 +223,7 @@ possibly `repository-policy`/`contract`, pending verification). New `backendPref
 - `corepack pnpm test` discovers and passes `apps/mcp-server/src/create-server.spec.ts`.
 - Running `pnpm --filter @tuposoft/lead-email-finder-mcp-server start` boots the server; `curl
   http://localhost:<port>/health` returns `200`; `npx @modelcontextprotocol/inspector --cli
-  http://localhost:<port>/mcp --transport streamable-http --method tools/list` lists exactly one tool, `ping`, and
+  http://localhost:<port>/mcp --transport http --method tools/list` lists exactly one tool, `ping`, and
   `--method tools/call --tool-name ping` returns the fixed text result.
 - `node scripts/ci/select-validation.mjs --fixtures` passes with the new fixture case.
 
@@ -210,8 +238,8 @@ node scripts/ci/select-validation.mjs --fixtures
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server start &
 sleep 1 && curl -sf http://localhost:3002/health
-npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport streamable-http --method tools/list
-npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport streamable-http --method tools/call --tool-name ping
+npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport http --method tools/list
+npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport http --method tools/call --tool-name ping
 corepack pnpm docs:lint -- .agents/plans/mcp-connector/01-scaffold-mcp-server-workspace.md
 ```
 

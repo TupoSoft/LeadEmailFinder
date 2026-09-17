@@ -527,7 +527,7 @@ describe('Validate workflow syntax and structure', () => {
 
     it.each([
         ['repository-policy', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
-        ['backend', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
+        ['backend', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile'],
         ['contract', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
         ['web', 'web', 'corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile'],
         ...browserWorkers.map((id) => [id, 'workspace', 'corepack pnpm install --frozen-lockfile'] as const),

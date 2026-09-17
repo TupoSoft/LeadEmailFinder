@@ -406,6 +406,7 @@ redispatched
 redispatch
 backoff
 cooldown
+scaffolded
 selectable
 Vitest
 jsdom
