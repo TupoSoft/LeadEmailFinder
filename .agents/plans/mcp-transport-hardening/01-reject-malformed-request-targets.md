@@ -26,8 +26,14 @@ This plan addresses the `P2` finding from PR #671 and maps to one implementation
 - Confirmed the reproduced crash directly: `new URL('//', 'http://localhost')` and
   `new URL('http://[', 'http://localhost')` both throw `TypeError [ERR_INVALID_URL]`, and Node's own HTTP parser
   accepts both `GET // HTTP/1.1` and `GET http://[ HTTP/1.1` as syntactically valid request lines, handing the raw
-  target straight to the application. A raw `node:net` socket write was required to prove this; `fetch`/`curl`
-  normalize `//` before the request is sent and cannot reproduce the crash.
+  target straight to the application. A raw `node:net` socket write was used to prove this for the process
+  regression, but it was not the only way to reach either target: an earlier draft of this note claimed ordinary
+  HTTP clients normalize `//` away and so cannot reproduce the crash, which was checked and found wrong for that
+  target — `fetch`, `curl`, and Bruno all preserve a literal `//` path unmodified (`mcp-transport-hardening/03`
+  added collection coverage for exactly this). The two targets are not equivalent, though: `http://[` is an
+  absolute-form request-target with an unbalanced bracket, which a URL-based client library must be able to
+  parse as a request URL before it can even open the connection, so no ordinary HTTP client can send it as the
+  literal wire request — only a raw socket can.
 - The process regression's temporary build only needed `tsc -p apps/mcp-server/tsconfig.json --outDir <tempDir>/dist`
   plus a `node_modules` directory symlink and a minimal `{"type":"module"}` manifest in the temp directory —
   `apps/mcp-server`'s own `node_modules` already contains the resolved `@modelcontextprotocol/sdk`, so no
@@ -46,9 +52,10 @@ This plan addresses the `P2` finding from PR #671 and maps to one implementation
   `{"status":"bad_request"}`. Rationale: malformed input is a client error; parsing must not throw out of the
   HTTP listener. Keep the existing response helper and avoid a new service or dependency.
   Date/Author: 2026-09-17, Codex planning.
-- Decision: Use a real Node child process and a raw TCP socket for the crash regression. Rationale: ordinary
-  URL clients can normalize the target, and an in-process test cannot safely prove that an uncaught exception
-  leaves the server alive. Date/Author: 2026-09-17, Codex planning.
+- Decision: Use a real Node child process and a raw TCP socket for the crash regression. Rationale: one of the
+  two targets (`http://[`) cannot be sent as a literal wire request by any URL-based client library, and an
+  in-process test cannot safely prove that an uncaught exception leaves the whole process alive rather than
+  merely rejecting one request. Date/Author: 2026-09-17, Codex planning.
 - Decision: Add `bruno/mcp-request-routing` for the independent, public MCP routing workflow. Rationale: the
   repository has no existing MCP collection, and this change alters an HTTP response. Use the socket test for
   malformed wire targets and Bruno for normal requests and rejection responses.
@@ -127,8 +134,9 @@ Finally, create the YAML Bruno collection using the repository's existing collec
 `opencollection.yml`, `environments/local.yml`, a README, and requests for `GET /health`, an unknown path,
 `GET /mcp`, `DELETE /mcp`, and a final health check. Assert status codes, JSON content type, and stable response
 fields. The local environment reads `baseUrl` from `MCP_BASE_URL`. The README must explain that the scaffold needs no credentials
-or other services and that the raw malformed-target test is separate because normal URL clients
-may normalize `//`. Do not claim Bruno sends the malformed wire request.
+or other services, and must distinguish the two malformed targets accurately: an ordinary client such as Bruno
+can send `GET //` unmodified (`mcp-transport-hardening/03` adds collection coverage for it), but `http://[` is
+an absolute-form target no URL-based client library can construct, so only the raw socket process test covers it.
 
 If authentication lands before this implementation, preserve its checks and use the existing disposable credential fixture for accepted MCP calls.
 Keep malformed target rejection before authentication; it must return HTTP 400 without exchanging credentials.

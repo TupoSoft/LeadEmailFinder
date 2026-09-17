@@ -10,9 +10,9 @@ The documentation will explain which malformed targets ordinary HTTP clients can
 
 ## Progress
 
-- [ ] (2026-09-17) Add the malformed target request before the final health check in the existing collection.
-- [ ] (2026-09-17) Correct the client normalization claims in the collection README and prerequisite plan.
-- [ ] (2026-09-17) Run focused validation, review the diff, and record actual results.
+- [x] (2026-09-17) Added `05-malformed-target-is-bad-request.yml` and renumbered the final health check to `06`.
+- [x] (2026-09-17) Corrected the client-normalization claims in the collection README and in plan 01.
+- [x] (2026-09-17) Ran focused validation, reviewed the diff, and recorded actual results below.
 
 ## Plan dependencies
 
@@ -20,7 +20,15 @@ The documentation will explain which malformed targets ordinary HTTP clients can
 
 ## Surprises & Discoveries
 
-None yet.
+- Confirmed the review's finding directly: a plain Node `fetch('http://localhost:3002//')` and `curl
+  http://localhost:3002//` both preserve the literal double-slash path and receive the same `400
+  {"status":"bad_request"}` as the Bruno request added here — the original claim that ordinary HTTP clients
+  normalize `//` away was wrong for all three, not only for Bruno.
+- The two malformed targets this road map covers are not equivalent, and that is the real reason a raw socket
+  is still needed for one of them: `http://[` is an absolute-form request-target with an unbalanced bracket,
+  which a URL-based client library (Bruno, `fetch`, `curl`, the MCP SDK's own transport) must be able to parse
+  as a request URL before it can even open the connection. No such client can ever put that string on the wire
+  as the literal request-line target, so it remains exclusive to the raw-socket process regression.
 
 ## Decision Log
 
@@ -35,7 +43,10 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: the routing collection now has six requests, with the
+malformed-target rejection immediately before the final health check; the collection README and plan 01 no
+longer claim ordinary HTTP clients cannot send `GET //`, and instead state the verified, narrower distinction
+between the two malformed targets. No server behavior, package, or authentication changed.
 
 ## Context and Orientation
 
