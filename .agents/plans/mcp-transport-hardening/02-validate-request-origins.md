@@ -10,9 +10,11 @@ A developer observes success when an untrusted origin receives HTTP 403 before p
 
 ## Progress
 
-- [ ] (2026-09-17) Add explicit origin configuration and validate requests before MCP dispatch.
-- [ ] (2026-09-17) Add focused unit, HTTP integration, and Bruno coverage.
-- [ ] (2026-09-17) Record actual validation results and update this plan.
+- [x] (2026-09-17) Added `src/request-origin.ts` (configuration parser and predicate) and wired it into `main.ts`
+      ahead of the existing method handling on `/mcp`.
+- [x] (2026-09-17) Added `request-origin.spec.ts`, `request-origin.integration.spec.ts`, `apps/mcp-server/README.md`,
+      and `bruno/mcp-request-origins/`.
+- [x] (2026-09-17) Ran focused checks and the full suite, and recorded the results below.
 
 ## Plan dependencies
 
@@ -20,7 +22,25 @@ A developer observes success when an untrusted origin receives HTTP 403 before p
 
 ## Surprises & Discoveries
 
-None yet.
+- A single canonical-origin check (parse with `URL`, require `http`/`https`, no userinfo, `pathname === '/'`,
+  empty `search`/`hash`, and `url.origin === value`) rejects every invalid form the plan lists — a wildcard,
+  `null`, a trailing slash, an explicit default port, a path, a query string, and a comma-separated value —
+  without any special-casing, because each either fails `URL` parsing outright or fails to round-trip back to
+  the exact input string. Verified this empirically against all of those inputs before writing the module.
+- Detecting a duplicate `Origin` header (including one repeated with different capitalization) requires reading
+  `req.rawHeaders` directly; Node's normalized `req.headers.origin` would already have folded duplicates by the
+  time the handler sees it, no comma-splitting recovers what was actually two separate header lines.
+- The existing stateless design already creates a fresh `McpServer` per POST, so an "accepted" request can call
+  the mocked `createServer` boundary more than once within a single test (an `initialize` request and a
+  subsequent tool call are two separate POSTs); the integration tests assert `toHaveBeenCalled()` for acceptance
+  and `not.toHaveBeenCalled()` for rejection rather than an exact call count.
+- The installed SDK's Streamable HTTP transport answers a successful `initialize` with a Server-Sent Events
+  body, not plain JSON, even though the client also accepts `application/json`; both the integration spec and
+  the Bruno collection parse the single `data: ` line out of that body before asserting on the JSON payload.
+- Reused the isolated-build technique from `mcp-transport-hardening/01`'s `main.spec.ts` for the startup-config
+  regression, but forked the real, unmodified `dist/main.js` entry point directly (rather than a custom
+  bootstrap script) so the test exercises `main.ts`'s actual `process.env.MCP_ALLOWED_ORIGINS` parsing and
+  exit-before-listen behavior, not a stand-in for it.
 
 ## Decision Log
 
@@ -37,7 +57,12 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: a pure `src/request-origin.ts` config parser and predicate, an
+origin check in `main.ts` ahead of the existing (still absent) authentication and method handling on `/mcp`,
+table-driven unit coverage, real HTTP integration coverage (including a raw-request child-process regression
+proving invalid configuration stops startup before any listener opens), a `bruno/mcp-request-origins/` collection
+run against a live local scaffold, and `apps/mcp-server/README.md` documenting the new variable. No CORS
+response headers, browser client, or listener-address change was added, matching the stated non-goals.
 
 ## Context and Orientation
 

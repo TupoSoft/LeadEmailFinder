@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createServer } from './create-server.js'
+import { isRequestOriginAllowed, parseAllowedOrigins } from './request-origin.js'
 
 const port = Number(process.env.PORT ?? 3002)
 
@@ -12,7 +13,11 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /** Stateless mode: a fresh server/transport pair per call keeps concurrent requests isolated. */
-async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleMcpRequest(req: IncomingMessage, res: ServerResponse, allowedOrigins: ReadonlySet<string>): Promise<void> {
+    if (!isRequestOriginAllowed(req.rawHeaders, allowedOrigins)) {
+        sendJson(res, 403, { error: 'origin_not_allowed' })
+        return
+    }
     if (req.method !== 'POST') {
         sendJson(res, 405, {
             jsonrpc: '2.0',
@@ -31,7 +36,12 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Prom
     await transport.handleRequest(req, res)
 }
 
-export function createApp(): Server {
+export interface CreateAppOptions {
+    allowedOrigins?: ReadonlySet<string>
+}
+
+export function createApp(options: CreateAppOptions = {}): Server {
+    const allowedOrigins = new Set(options.allowedOrigins ?? [])
     return createHttpServer((req, res) => {
         let url: URL
         try {
@@ -45,7 +55,7 @@ export function createApp(): Server {
             return
         }
         if (url.pathname === '/mcp') {
-            handleMcpRequest(req, res).catch(() => {
+            handleMcpRequest(req, res, allowedOrigins).catch(() => {
                 if (!res.headersSent) {
                     sendJson(res, 500, { jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null })
                 }
@@ -57,7 +67,14 @@ export function createApp(): Server {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-    createApp().listen(port, () => {
+    let allowedOrigins: ReadonlySet<string>
+    try {
+        allowedOrigins = parseAllowedOrigins(process.env.MCP_ALLOWED_ORIGINS)
+    } catch {
+        console.error('Invalid MCP_ALLOWED_ORIGINS configuration.')
+        process.exit(1)
+    }
+    createApp({ allowedOrigins }).listen(port, () => {
         console.log(`mcp-server listening on port ${port}`)
     })
 }
