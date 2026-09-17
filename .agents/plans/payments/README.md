@@ -23,3 +23,9 @@ Shared decisions:
 - The payment provider stays behind a `PaymentProvider` port. A stub adapter drives local development and Bruno runs without network access or live keys.
 - Browser purchase flows depend on `.agents/plans/auth/06-bff-sessions.md`. Plans 1 and 2 are independent of it; plan 3 onward assume an authenticated principal exists, however it was obtained.
 - No plan may add database migrations or production deployment work.
+
+## Durable Purchase Follow-Up
+
+The [checkout recovery road map](../checkout-recovery/README.md) extends this work with atomic purchase/job
+admission, provider observation, durable checkout processing, browser recovery, and repeatable crash validation.
+Its six ExecPlans preserve the completed payment plans above and define one pull request per change.
