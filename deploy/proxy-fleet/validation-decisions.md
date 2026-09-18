@@ -197,47 +197,107 @@ The commands below are proposals for the later Kubernetes implementation. They h
 Run the controller commands from the repository root. Installation, exact image selection, network bootstrap,
 resource manifests, seed Jobs, and the test runner must be supplied before executing the complete workflow.
 
-### Preparation and Ownership
+### Prepare the Lab Settings
 
-Use k3d, Docker, kubectl, and `jq` versions recorded with the run. Local CLI syntax was checked with k3d `v5.9.0`;
-its default K3s version is not a substitute for an explicit tested image digest. Check CPU, memory, disk capacity,
-and the selected API port before creation. Reject overlap between the Docker bridge, Kubernetes pod and Service
-networks, existing host/VPN routes, `172.29.10.0/28`, and `198.18.0.0/24`.
+This preparation chooses the Docker engine, names the lab, and creates a private directory for its records.
+Run every step below in the same dedicated Bash session, from the repository root. Cluster creation comes afterward.
 
-Required controller inputs are `LEF_RUN_ID`, `LEF_DOCKER_HOST`, `LEF_K3S_IMAGE`, `LEF_BRIDGE_CIDR`, and `LEF_API_PORT`.
-Use a fresh lowercase alphanumeric run ID of at most 20 characters, a verified local Docker socket, a pinned
-K3s image reference containing the SHA-256 digest, an available bridge subnet, and an available local API port.
-The run directory contains private cluster identities, configuration, credentials, and evidence and stays outside Git.
+Record the versions of k3d, Docker, kubectl, and `jq`. The command syntax was checked with k3d `v5.9.0`.
+Before continuing, check CPU, memory, disk capacity, and port availability. The Docker bridge, Kubernetes pod and
+Service networks, host/VPN routes, `172.29.10.0/28`, and `198.18.0.0/24` must not overlap.
+
+#### 1. Choose and Check the Inputs
+
+Set these five shell variables before running the commands. The examples illustrate the format; the Docker socket,
+subnet, port, and image must be checked for the machine that will run the lab.
+
+| Variable | What it controls | Example or required format |
+| --- | --- | --- |
+| `LEF_RUN_ID` | Unique name for this run | `test01`; 1–20 lowercase letters or digits. |
+| `LEF_DOCKER_HOST` | Local Docker engine to use | `unix:///var/run/docker.sock`, after verifying that socket. |
+| `LEF_K3S_IMAGE` | Exact K3s image for the nodes | A verified image reference ending in `@sha256:` and 64 hexadecimal digits. |
+| `LEF_BRIDGE_CIDR` | Docker network connecting the nodes | `172.30.0.0/24`, only if it does not overlap the networks above. |
+| `LEF_API_PORT` | Local port for the Kubernetes API | `16443`, only if it is available. |
+
+The first two commands stop the procedure on errors and make new files private. Each `${VARIABLE:?message}` check
+prints its message and stops if the variable is missing or empty.
 
 ```bash
 set -euo pipefail
 umask 077
+
 : "${LEF_RUN_ID:?Set a fresh lab run ID}"
-: "${LEF_DOCKER_HOST:?Set the explicit local Docker Unix socket}"
+: "${LEF_DOCKER_HOST:?Set the explicit local Docker socket}"
 : "${LEF_K3S_IMAGE:?Set a verified K3s image with its digest}"
 : "${LEF_BRIDGE_CIDR:?Set a checked, nonoverlapping bridge subnet}"
 : "${LEF_API_PORT:?Set an available local API port}"
-[[ "$LEF_RUN_ID" =~ ^[a-z0-9]{1,20}$ ]]
-[[ "$LEF_K3S_IMAGE" =~ ^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$ ]]
-case "$LEF_DOCKER_HOST" in unix:///*) ;; *) exit 1 ;; esac
+
+# Check the name and image-reference formats from the table.
+if [[ ! "$LEF_RUN_ID" =~ ^[a-z0-9]{1,20}$ ]]; then
+  printf '%s\n' 'Use 1-20 lowercase letters or digits for LEF_RUN_ID.' >&2
+  exit 1
+fi
+if [[ ! "$LEF_K3S_IMAGE" =~ ^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$ ]]; then
+  printf '%s\n' 'LEF_K3S_IMAGE must include a SHA-256 image digest.' >&2
+  exit 1
+fi
+if [[ "$LEF_DOCKER_HOST" != unix:///* ]]; then
+  printf '%s\n' 'LEF_DOCKER_HOST must point to a local Docker socket: unix:///...' >&2
+  exit 1
+fi
+
+# Make the YAML template inputs available to k3d.
 export LEF_RUN_ID LEF_K3S_IMAGE LEF_BRIDGE_CIDR LEF_API_PORT
+```
+
+These checks validate presence and format. They do not verify image provenance, subnet availability, or port
+availability; complete those checks before proceeding.
+
+#### 2. Name the Lab and Create Its Private Directory
+
+Derive the cluster name and Kubernetes context from the run ID. The namespace holds application resources.
+The temporary directory holds the configuration, kubeconfig, credentials, and cleanup records outside Git.
+
+```bash
 export LEF_CLUSTER="lef-lab-$LEF_RUN_ID"
+export LEF_CONTEXT="k3d-$LEF_CLUSTER"
 export LEF_NAMESPACE=lef-lab
-export LEF_RUN_DIR="$(mktemp -d /tmp/lef-k3d.XXXXXXXX)"
+
+LEF_RUN_DIR=$(mktemp -d /tmp/lef-k3d.XXXXXXXX)
+export LEF_RUN_DIR
+```
+
+Keep directory creation separate from `export` so a failed `mktemp` command stops the procedure.
+
+#### 3. Select the Docker Engine
+
+Tell k3d which Docker socket to use. Clear inherited context and TLS settings so they cannot override that choice.
+
+```bash
 export DOCKER_HOST="$LEF_DOCKER_HOST"
 unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
-export LEF_CONTEXT="k3d-$LEF_CLUSTER"
+```
+
+#### 4. Record the Engine and Check the Cluster Name
+
+Save the Docker engine's ID so later commands can confirm they still target the same engine. Save the current
+cluster list, then stop if the proposed cluster name is already in use. A failed query also stops the procedure.
+
+```bash
 LEF_DOCKER_ID=$(docker --host "$LEF_DOCKER_HOST" info --format '{{.ID}}')
 test -n "$LEF_DOCKER_ID"
 printf '%s\n' "$LEF_DOCKER_ID" > "$LEF_RUN_DIR/docker-id"
+
 k3d cluster list --output json > "$LEF_RUN_DIR/clusters.before.json"
-jq -e --arg name "$LEF_CLUSTER" 'all(.[]; .name != $name)' "$LEF_RUN_DIR/clusters.before.json"
+
+# Require every existing cluster to have a different name.
+jq --exit-status --arg name "$LEF_CLUSTER" \
+  'all(.[]; .name != $name)' "$LEF_RUN_DIR/clusters.before.json"
 ```
 
-Before creation, also reject existing containers, networks, or volumes claiming this exact cluster name or run
-label. Do not adopt an existing lab by name. All k3d commands inherit the explicit `DOCKER_HOST`; Docker identity
-must match the recorded value before every later mutation. No Swarm command belongs in this lifecycle, even if
-the selected Docker engine also hosts an unrelated Swarm.
+Before creation, also check for containers, networks, or volumes already claiming this cluster name or run label.
+Stop if any exist; do not adopt an existing lab by name. Later changes must use the selected Docker engine and
+match its recorded ID. This workflow uses no Swarm commands, even if that engine also hosts an unrelated Swarm.
 
 ### Create the Dedicated Cluster
 

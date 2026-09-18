@@ -24,6 +24,7 @@ ExecPlan with its own pull request. This preparation remains documentation only.
 - [x] (2026-09-18) Replace the selected integration-lab architecture with self-contained Kubernetes on k3d, preserving
   proxy identities and source checks while identifying new deployment and network work.
 - [x] (2026-09-18) Validate the Kubernetes documentation revision and update its evidence and handoff record.
+- [x] (2026-09-18) Clarify preparation with an input table, four labeled steps, and readable validation errors.
 
 ## Plan dependencies
 
@@ -260,13 +261,15 @@ Static validation of the Kubernetes documentation revision on 2026-09-18:
   passed both files after correcting prose and adding legitimate Kubernetes terminology to `.harper-dictionary.txt`.
 - `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`
   passed one suite and one test.
-- All three Bash blocks in the proposal and the shell block in this plan passed `bash -n` without execution.
+- All six Bash blocks in the proposal and the shell block in this plan passed `bash -n` without execution.
   Relative Markdown links were checked and `git diff --check` passed.
 - The embedded configuration parsed with PyYAML and passed Python `jsonschema` validation against
   `pkg/config/v1alpha5/schema.json` from the upstream k3d `v5.9.0` tag. Substitution used synthetic run, network,
   port, and image-digest values. No Docker daemon or Kubernetes API was contacted for this check.
 - Local k3d `v5.9.0` help confirmed the documented CLI options. Review corrected missing exports for template
   variables and specified how planned node replacements update the owned-resource record before cleanup.
+- A readability revision grouped preparation into four steps and explained each input and check. Directory
+  creation now runs before its separate export so a failed `mktemp` command stops the procedure.
 
 No Kubernetes manifest, cluster, image, bootstrap procedure, or application scenario has been implemented or run.
 The material operational trade-offs are privileged setup inside disposable node containers, host-network isolation
