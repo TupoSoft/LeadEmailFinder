@@ -2,14 +2,18 @@ import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type { AccessTokenProvider } from './auth/token-cache.js'
 import { createApp } from './main.js'
+
+const fakeTokenCache: AccessTokenProvider = { getAccessToken: () => Promise.resolve('fake-access-token') }
+const validAuthorizationHeader = `Basic ${Buffer.from('test-client:test-secret').toString('base64')}`
 
 describe('mcp-server scaffold', () => {
     let server: Server
     let baseUrl: URL
 
     beforeAll(async () => {
-        server = createApp()
+        server = createApp({ tokenCache: fakeTokenCache })
         await new Promise<void>(resolve => server.listen(0, resolve))
         const { port } = server.address() as AddressInfo
         baseUrl = new URL(`http://127.0.0.1:${port}/`)
@@ -28,7 +32,9 @@ describe('mcp-server scaffold', () => {
 
     it('lists exactly one tool, ping, over the real MCP protocol', async () => {
         const client = new Client({ name: 'create-server.spec', version: '0.0.0' })
-        const transport = new StreamableHTTPClientTransport(new URL('mcp', baseUrl))
+        const transport = new StreamableHTTPClientTransport(new URL('mcp', baseUrl), {
+            requestInit: { headers: { Authorization: validAuthorizationHeader } },
+        })
         await client.connect(transport)
 
         try {

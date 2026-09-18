@@ -13,10 +13,13 @@ jest.mock('./create-server.js', () => {
     return { ...actual, createServer: jest.fn(actual.createServer) }
 })
 
+import type { AccessTokenProvider } from './auth/token-cache.js'
 import { createServer } from './create-server.js'
 import { createApp } from './main.js'
 
 const mockedCreateServer = createServer as jest.MockedFunction<typeof createServer>
+const fakeTokenCache: AccessTokenProvider = { getAccessToken: () => Promise.resolve('fake-access-token') }
+const validAuthorizationHeader = `Basic ${Buffer.from('test-client:test-secret').toString('base64')}`
 
 function rawPost(port: number, headers: Record<string, string | string[]>): Promise<{ status: number; body: string }> {
     return new Promise((resolvePromise, reject) => {
@@ -27,7 +30,12 @@ function rawPost(port: number, headers: Record<string, string | string[]>): Prom
                 port,
                 path: '/mcp',
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json, text/event-stream',
+                    Authorization: validAuthorizationHeader,
+                    ...headers,
+                },
                 timeout: 5_000,
             },
             res => {
@@ -50,7 +58,7 @@ describe('request origin integration (HTTP boundary)', () => {
     let port: number
 
     beforeAll(async () => {
-        server = createApp({ allowedOrigins: new Set(['https://client.example']) })
+        server = createApp({ allowedOrigins: new Set(['https://client.example']), tokenCache: fakeTokenCache })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
@@ -65,10 +73,9 @@ describe('request origin integration (HTTP boundary)', () => {
 
     async function callPingViaSdk(origin?: string): Promise<unknown> {
         const client = new Client({ name: 'request-origin.spec', version: '0.0.0' })
-        const transport = new StreamableHTTPClientTransport(
-            new URL(`http://127.0.0.1:${port}/mcp`),
-            origin === undefined ? undefined : { requestInit: { headers: { Origin: origin } } },
-        )
+        const headers: Record<string, string> = { Authorization: validAuthorizationHeader }
+        if (origin !== undefined) headers.Origin = origin
+        const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), { requestInit: { headers } })
         await client.connect(transport)
         try {
             return await client.callTool({ name: 'ping', arguments: {} })
@@ -215,7 +222,7 @@ describe('process regression: MCP_ALLOWED_ORIGINS startup validation', () => {
             try {
                 child = fork(mainPath, [], {
                     cwd: tempDir,
-                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://client.example', PORT: '0' },
+                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://client.example', OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1', PORT: '0' },
                     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
                 })
                 const stdout = await collectUntilMatch(child, 'stdout', /listening on port/, 5_000)
@@ -238,7 +245,12 @@ describe('process regression: MCP_ALLOWED_ORIGINS startup validation', () => {
             try {
                 child = fork(mainPath, [], {
                     cwd: tempDir,
-                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://this-invalid-value-must-not-be-echoed.example/some/path', PORT: '0' },
+                    env: {
+                        ...process.env,
+                        MCP_ALLOWED_ORIGINS: 'https://this-invalid-value-must-not-be-echoed.example/some/path',
+                        OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1',
+                        PORT: '0',
+                    },
                     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
                 })
                 const stderr = await collectUntilMatch(child, 'stderr', /MCP_ALLOWED_ORIGINS/, 5_000)
