@@ -1,7 +1,10 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { parseBasicCredentials } from './auth/basic-credentials.js'
+import { TokenCache, type AccessTokenProvider } from './auth/token-cache.js'
 import { createServer } from './create-server.js'
 import { isRequestOriginAllowed, parseAllowedOrigins } from './request-origin.js'
 
@@ -13,7 +16,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /** Stateless mode: a fresh server/transport pair per call keeps concurrent requests isolated. */
-async function handleMcpRequest(req: IncomingMessage, res: ServerResponse, allowedOrigins: ReadonlySet<string>): Promise<void> {
+async function handleMcpRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    allowedOrigins: ReadonlySet<string>,
+    tokenCache: AccessTokenProvider,
+): Promise<void> {
     if (!isRequestOriginAllowed(req.rawHeaders, allowedOrigins)) {
         sendJson(res, 403, { error: 'origin_not_allowed' })
         return
@@ -26,6 +34,20 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse, allow
         })
         return
     }
+
+    const parsedCredentials = parseBasicCredentials(req.headers.authorization)
+    if (!parsedCredentials.ok) {
+        sendJson(res, 401, { error: 'authentication_required' })
+        return
+    }
+    let accessToken: string
+    try {
+        accessToken = await tokenCache.getAccessToken(parsedCredentials.credentials)
+    } catch {
+        sendJson(res, 401, { error: 'authentication_required' })
+        return
+    }
+
     const server = createServer()
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {
@@ -33,15 +55,19 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse, allow
         void server.close()
     })
     await server.connect(transport)
-    await transport.handleRequest(req, res)
+    const authenticatedReq = req as IncomingMessage & { auth?: AuthInfo }
+    authenticatedReq.auth = { token: accessToken, clientId: parsedCredentials.credentials.clientId, scopes: [] }
+    await transport.handleRequest(authenticatedReq, res)
 }
 
 export interface CreateAppOptions {
     allowedOrigins?: ReadonlySet<string>
+    tokenCache: AccessTokenProvider
 }
 
-export function createApp(options: CreateAppOptions = {}): Server {
+export function createApp(options: CreateAppOptions): Server {
     const allowedOrigins = new Set(options.allowedOrigins ?? [])
+    const { tokenCache } = options
     return createHttpServer((req, res) => {
         let url: URL
         try {
@@ -55,7 +81,7 @@ export function createApp(options: CreateAppOptions = {}): Server {
             return
         }
         if (url.pathname === '/mcp') {
-            handleMcpRequest(req, res, allowedOrigins).catch(() => {
+            handleMcpRequest(req, res, allowedOrigins, tokenCache).catch(() => {
                 if (!res.headersSent) {
                     sendJson(res, 500, { jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null })
                 }
@@ -74,7 +100,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         console.error('Invalid MCP_ALLOWED_ORIGINS configuration.')
         process.exit(1)
     }
-    createApp({ allowedOrigins }).listen(port, () => {
+    const tokenEndpointBaseUrl = process.env.OIDC_BACKCHANNEL_URL
+    if (!tokenEndpointBaseUrl) {
+        console.error('OIDC_BACKCHANNEL_URL is required.')
+        process.exit(1)
+    }
+    const tokenCache = new TokenCache(tokenEndpointBaseUrl)
+    createApp({ allowedOrigins, tokenCache }).listen(port, () => {
         console.log(`mcp-server listening on port ${port}`)
     })
 }
