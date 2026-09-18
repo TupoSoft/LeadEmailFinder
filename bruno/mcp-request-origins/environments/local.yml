@@ -6,3 +6,7 @@ variables:
     value: https://client.example
   - name: deniedOrigin
     value: https://untrusted.example
+  - name: clientId
+    value: '{{process.env.MCP_AUTH_CLIENT_ID}}'
+  - name: clientSecret
+    value: '{{process.env.MCP_AUTH_CLIENT_SECRET}}'
