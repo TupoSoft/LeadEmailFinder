@@ -42,9 +42,11 @@ plan does not assert that its prerequisite is complete.
 ## Shared Constraints
 
 - The connector holds no long-lived secret of its own. A customer's client secret exists only for the duration of
-  a token-mint call; the in-memory cache stores only `{clientId -> token, expiresAtMs}`, never the secret. No log
-  line, error message, or tool result may ever contain a secret, bearer token, or unfiltered upstream response
-  body.
+  a token-mint call; the in-memory cache stores only `{token, expiresAtMs}` entries, never the secret itself, and
+  is identified by an HMAC-SHA-256 digest over the complete `(clientId, clientSecret)` pair — never by `clientId`
+  alone, which would let an incorrect or empty secret reuse another request's cached token for the same `clientId`
+  (`mcp-connector-hardening/01`). No log line, error message, or tool result may ever contain a secret, bearer
+  token, or unfiltered upstream response body.
 - `/emails*` and `/credits/:organizationId` remain platform-admin-only and must never be exposed as tools, now or
   in any later plan. Every tool maps to exactly one already-customer-facing, permission-gated endpoint.
 - Preserve the existing `VerificationRateLimitGuard` behavior as observed by the connector: surface `429` (with
@@ -72,8 +74,12 @@ plan does not assert that its prerequisite is complete.
   script. Plan 01 fixes both explicitly; later plans must not silently reintroduce either gap.
 - Follow root `AGENTS.md` for the synced issue assignment, project status, living progress updates, conventional
   commits, and PR linkage once implementation starts. Creating this road map does not create or modify external
-  issues or PRs. The Bruno Test Policy does not apply to this feature: the connector is not an HTTP endpoint of
-  `apps/lead-email-finder-api`, so no Bruno collection changes are appropriate here.
+  issues or PRs. **Correction (2026-09-18):** root `AGENTS.md`'s Bruno Test Policy does apply to this feature —
+  the connector speaks real HTTP, and its externally observable routing, origin, and authentication behavior is
+  exactly what that policy covers. The original blanket exemption above was wrong; `bruno/mcp-request-routing/`,
+  `bruno/mcp-request-origins/`, and `bruno/mcp-authentication/` already exist and are the required coverage for
+  the behavior each corresponding plan added. Add a scoped collection for any later plan that changes this
+  connector's HTTP behavior, the same as for any other HTTP-facing part of this repository.
 
 ## Related Plans
 
