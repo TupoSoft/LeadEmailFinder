@@ -3,7 +3,7 @@
 Prepared for [plan 16](../../.agents/plans/proxy-fleet/16-validate-disposable-multi-node-fleet.md)
 by [plan 19](../../.agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md).
 Repository evidence was inspected at `e3ae79e4e8eb5442930b29da1158b38efbb228e2` on 2026-09-15 and checked again at
-`1b869d2607e709ee2570efcfbd213268603c54b3` when the fixture decision was updated that day.
+`d13134d243e38b192991c204210527c26743b9ed` for the Swarm fixture decision on 2026-09-18.
 
 ## Decision and Evidence Status
 
@@ -12,15 +12,33 @@ uses `sshuttle` to carry only the three listener destinations over the existing 
 application and reconciler continue to dial the registered WireGuard addresses. The exact commands below are
 proposals for plan 16; they have not run against the lab.
 
-The owner selected Mailpit for SMTP conversations, retaining the existing peer probe for sequential source-IP
-checks. Both run temporarily on `verifier-1`: the peer probe uses a staged Node runtime, and Mailpit uses a pinned
-standalone binary. Run them in separate phases on port `2525`. Capacity assertions require additional instrumentation.
-This choice does not start plan 16 or prove the proposed commands. Plan 16 still requires finalized execution
-procedures, the known runtime corrections, and live evidence.
+On 2026-09-18, the owner selected Swarm services on the Vagrant VMs for the proxies and fixtures. Extend the existing
+three-node Swarm design by making `verifier-1` a non-proxy worker, then run Mailpit and the existing peer probe there
+as separate services in a fixture stack. Run them in separate phases on port `2525`. This replaces the earlier
+standalone-binary and transient-systemd proposal. Capacity assertions still require additional instrumentation.
+The application and reconciler remain outside the VMs and use the selected tunnel. These choices do not start plan
+16 or prove the commands. Provisioning changes, finalized execution procedures, and live evidence remain in plan 16.
 
 This is a documentation handoff. It installs no tool, creates no VM, changes no network or application state, and
 provides no public Internet egress or deliverability evidence. The existing VirtualBox lab remains the provider
 baseline. Native Linux/libvirt validation remains separate in plan 18.
+
+### Selected VM and Service Topology
+
+Vagrant creates the Ubuntu VMs. Ansible configures Docker, WireGuard, firewall policy, Swarm membership, and labels.
+Swarm deploys the proxy and fixture containers. The selected topology is:
+
+| VM | Swarm role | Workload |
+| --- | --- | --- |
+| `proxy-manager-1` | Manager | Manages the disposable cluster. |
+| `proxy-node-a` | Proxy worker | One proxy service with two listeners and two egress identities. |
+| `proxy-node-b` | Proxy worker | One proxy service with one listener and one egress identity. |
+| `verifier-1` | Non-proxy fixture worker | Mailpit or the peer probe, one active fixture at a time. |
+
+The fourth Swarm membership and fixture stack are future plan-16 changes. The current inventory and playbook still
+provision the verifier without Docker. Keep it outside `proxy_nodes`, which triggers proxy manifests, credentials,
+and egress labels. The fixture stack has its own name and resources; it does not extend the proxy renderer or move
+the rest of the application stack into Swarm.
 
 ## Source Map and Network Path
 
@@ -29,6 +47,7 @@ All paths in this document are relative to the repository root unless a guest pa
 | Hop or contract | Repository evidence | Observation |
 | --- | --- | --- |
 | Lab topology | `deploy/proxy-fleet/ansible/inventory/vagrant-lab.yml` | One manager, two proxy nodes, and `verifier-1`; the verifier owns `172.29.10.4/28`. |
+| Docker and Swarm provisioning | `deploy/proxy-fleet/ansible/playbooks/proxy-fleet.yml`; `roles/swarm/tasks/label.yml` | Currently includes managers and proxy nodes only. Plan 16 must add the verifier as an explicit non-proxy member with a fixture label. |
 | Management access | `deploy/proxy-fleet/vagrant/README.md`, `Vagrantfile` | Capture `vagrant ssh-config`; the default shared folder is disabled. WSL uses mirrored networking to reach VirtualBox's forwarded SSH ports. |
 | Guest source identities and return routes | `deploy/proxy-fleet/vagrant/provision/guest-network.sh` | Proxy identities reside on `lef-egress0`; the verifier has explicit return routes through the isolated underlay. |
 | Listener configuration | `deploy/proxy-fleet/ansible/roles/proxy_topology/tasks/main.yml`, `templates/listeners.json.j2` | The inventory supplies listener endpoints, egress addresses, allowed worker sources, and destination ports. |
@@ -39,7 +58,7 @@ All paths in this document are relative to the repository root unless a guest pa
 | SMTP connection | `src/libs/modules/email-verification/src/infrastructure/mailbox/smtp/smtp-mailbox-probe.ts`, `tryConnect`; `smtp-client.factory.ts`; `smtp-client.ts` | The real mailbox probe supplies the allocated proxy to the SMTP client. |
 | Socket transport | `src/libs/socket/src/connect.ts`, `connect`; `http-proxy-connect.ts`, `connectThroughHttpProxy` | Opens TCP to the proxy host and port, then authenticates an HTTP CONNECT to the SMTP destination. |
 | Peer fixture | `scripts/proxy-fleet-swarm/smtp-peer-probe.ts`, `startSmtpPeerProbe`; `smtp-peer-probe-cli.ts` | Reports only the last TCP peer. The CLI needs Node and defaults both listening hosts to `0.0.0.0`. |
-| Mailpit version precedent | `docker/compose.smtp-dev.yaml`, `plaintext-mailpit` | Pins Mailpit `v1.30.7` for a plaintext rejection scenario. The lab proposal uses that version's standalone binary with STARTTLS enabled. |
+| Mailpit version precedent | `docker/compose.smtp-dev.yaml`, `plaintext-mailpit` | Pins Mailpit `v1.30.7` for a plaintext rejection scenario. The lab proposal pins that image by digest and enables STARTTLS. |
 | Detailed SMTP evidence fixture | `docker/smtp-dev/evidence-server.mjs`, `createEvidenceFixture`; `bruno/smtp-dev/README.md` | Existing precise SMTP classification tests retain this fixture. Mailpit supplies the fleet's ordinary SMTP phase. |
 
 | Proxy node | Registered listener | Expected SMTP source |
@@ -67,9 +86,16 @@ baseline and interpret a failed check as a reason to loosen the contracts.
 - The firewall template restores a whole filter table and has no verifier SMTP rule. Reset restores an open table.
   Plan 16 must preserve unrelated rules, admit SMTP only from the three declared egress sources, and keep status
   ports private. See `roles/firewall/` and `roles/proxy_fleet_reset/` under the Ansible directory.
-- Swarm joins lack explicit WireGuard advertise and data addresses. Reset inspects Docker on the verifier and does
-  not enforce worker departures before the manager. See `roles/swarm/tasks/join_or_init.yml` and
-  `roles/proxy_fleet_reset/tasks/main.yml`.
+- The verifier's current play installs only WireGuard and firewall policy. Add explicit non-proxy Swarm membership,
+  such as a `fixture_workers` group, and include it in Docker installation and worker joining. Generalize the member
+  set used by `roles/firewall/tasks/main.yml` and `templates/iptables.rules.j2` to include exactly those declared
+  members. Keep proxy topology validation and `proxy.egress` labels limited to `proxy_nodes`; assign only
+  `lef.fixture=verifier-1` to the fixture host. Update the relevant inventory and role tests.
+- Swarm joins lack explicit WireGuard advertise and data addresses. Reset currently inspects Docker even on a
+  verifier without Docker and does not enforce worker departures before the manager. Plan 16 must gate Docker reset
+  by actual declared membership, including the new fixture worker, and remove fixture services, configurations,
+  secrets, and the fixture label before workers leave. Leave WireGuard available until remote cleanup finishes.
+  See `roles/swarm/tasks/join_or_init.yml` and `roles/proxy_fleet_reset/tasks/main.yml`.
 
 ## Reachability Alternatives
 
@@ -227,99 +253,193 @@ Repeat the snapshot and socket checks afterward. Plan 16 must test this proposed
 tool and firewall backend. This is not a whole-table restore or an unconditional recovery claim after a hard kill.
 Keep the private session directory until fixture cleanup, evidence inspection, and all local-state checks finish.
 
-## Proposed Peer Probe Lifecycle
+## Proposed Swarm Fixture Lifecycle
 
-The selected fixture model starts with this peer probe, followed by Mailpit for SMTP conversations. These commands
-are proposals for plan 16; they have not been executed against the lab. They require the plan-16 firewall and
-WireGuard corrections first. Mailpit does not implement the reconciler's `/last-peer` contract.
+Run a separate fixture stack in the same disposable Swarm as the proxies. Pin both fixture services to the
+non-proxy worker `verifier-1` using the proposed node label `lef.fixture=verifier-1`. Keep the proxy renderer's
+two-service contract unchanged. Each fixture uses the external `host` network; publish no ports through the routing
+mesh. SMTP binds to `172.29.10.4:2525`, peer status to `127.0.0.1:9000`, and Mailpit UI/API to `127.0.0.1:8025`.
 
-The peer probe imports only `node:http` and `node:net`. Compile its two TypeScript files on the controller with
-repository dependencies, then copy the JavaScript and one verified official Node 24 Linux x64 distribution to
-`verifier-1`. No package installation, Docker daemon, shared folder, or source checkout is required in that guest.
-A temporary systemd service gives this one process a stable name and bounded termination without PID matching.
-The guest must have systemd and passwordless Vagrant `sudo`; the service itself runs as the captured SSH user.
+The commands and stack definition below are proposals for plan 16, not files or services already installed by this
+PR. They require the provisioning corrections above, a running recognized lab Swarm, and reachable image registries.
+No Node or Mailpit binary is installed on a guest. The peer probe runs in a pinned Node container, with its two
+compiled JavaScript files supplied as Swarm configurations. Mailpit uses its pinned container image, a certificate
+configuration, and a TLS-key secret. Use only the existing disposable test certificate and key.
 
-### Fixture Preparation
+### Preparation and Ownership
 
-Run from the repository root in the same Bash scenario shell. `LEF_SSH_CONFIG` is the absolute path of the captured
-Vagrant SSH configuration. Set `LEF_RUN_ID` to a unique lowercase scenario identifier, `LEF_NODE_ARCHIVE` to the
-absolute path of an official Node 24 Linux x64 archive with a specific patch version, and `LEF_NODE_SHA256` to that
-archive's checksum from a verified release manifest. Do not use an archive selected through a `latest` alias. Use Node's documented
-signed-manifest verification procedure before these commands; record the exact version and checksum in the later
-sanitized evidence. The chosen patch release is an execution input for the plan-16 implementer.
+Run from the repository root in the dedicated Bash scenario shell. Keep `set -euo pipefail` and `umask 077` enabled.
+Supply these inputs in addition to the captured SSH configuration and private run directory:
+
+| Input | Meaning |
+| --- | --- |
+| `LEF_RUN_ID` | A fresh lowercase alphanumeric identifier, optionally containing hyphens, at most 24 characters. |
+| `LEF_CLUSTER_ID` | The exact ClusterID recorded after this scenario created the disposable Swarm. Never adopt the current cluster merely by reading its ID. |
+| `LEF_PEER_IMAGE` | A verified Node 24 Linux image reference pinned with `@sha256:<digest>`. |
+| `LEF_MAILPIT_IMAGE` | The verified `axllent/mailpit:v1.30.7` Linux image pinned with `@sha256:<digest>`. |
+
+Record the exact image references and private run variables before deployment. The manager and verifier must belong
+to the recorded cluster; `verifier-1` must be Ready/Active, carry the fixture label, and have no proxy-egress label.
+No other node may carry that fixture label. Plan 16 must assert those facts after provisioning. Stop if an unfinished
+run already owns the proposed stack or directory; recover that run instead of overwriting it.
 
 ```bash
-set -euo pipefail
-umask 077
 : "${LEF_SSH_CONFIG:?Captured Vagrant SSH configuration is required}"
-: "${LEF_RUN_ID:?Unique lowercase scenario identifier is required}"
-: "${LEF_NODE_ARCHIVE:?Absolute pinned Node 24 Linux x64 archive path is required}"
-: "${LEF_NODE_SHA256:?Verified archive SHA256 is required}"
-case "$LEF_RUN_ID" in ''|*[!a-z0-9-]*) exit 1 ;; esac
-LEF_FIXTURE_LOCAL=$(mktemp -d /tmp/lef-peer-stage.XXXXXXXX)
-LEF_FIXTURE_REMOTE="/tmp/lef-peer-$LEF_RUN_ID"
-LEF_FIXTURE_UNIT="lef-peer-$LEF_RUN_ID.service"
-printf '%s  %s\n' "$LEF_NODE_SHA256" "$LEF_NODE_ARCHIVE" | sha256sum --check -
-mkdir "$LEF_FIXTURE_LOCAL/node" "$LEF_FIXTURE_LOCAL/probe"
-tar -xJf "$LEF_NODE_ARCHIVE" --strip-components=1 -C "$LEF_FIXTURE_LOCAL/node"
+: "${LEF_RUN_DIR:?Private scenario directory is required}"
+: "${LEF_RUN_ID:?Unique scenario identifier is required}"
+: "${LEF_CLUSTER_ID:?Recorded disposable Swarm ClusterID is required}"
+: "${LEF_PEER_IMAGE:?Pinned Node 24 image is required}"
+: "${LEF_MAILPIT_IMAGE:?Pinned Mailpit 1.30.7 image is required}"
+[[ "$LEF_RUN_ID" =~ ^[a-z0-9][a-z0-9-]{0,23}$ ]]
+[[ "$LEF_CLUSTER_ID" =~ ^[a-z0-9]+$ ]]
+for LEF_IMAGE_REF in "$LEF_PEER_IMAGE" "$LEF_MAILPIT_IMAGE"; do
+  [[ "$LEF_IMAGE_REF" =~ ^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$ ]]
+done
+LEF_FIXTURE_STACK="lef-fixtures-$LEF_RUN_ID"
+LEF_FIXTURE_LOCAL=$(mktemp -d /tmp/lef-fixtures-stage.XXXXXXXX)
+LEF_FIXTURE_REMOTE="/tmp/$LEF_FIXTURE_STACK"
 corepack pnpm exec tsc --target ES2023 --module commonjs --moduleResolution node \
   --strict --skipLibCheck --types node --noEmitOnError \
-  --rootDir scripts/proxy-fleet-swarm --outDir "$LEF_FIXTURE_LOCAL/probe" \
+  --rootDir scripts/proxy-fleet-swarm --outDir "$LEF_FIXTURE_LOCAL" \
   scripts/proxy-fleet-swarm/smtp-peer-probe.ts \
   scripts/proxy-fleet-swarm/smtp-peer-probe-cli.ts
-ssh -F "$LEF_SSH_CONFIG" verifier-1 'test "$(uname -m)" = x86_64 && command -v systemd-run && sudo -n true'
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "test \"\$(systemctl show '$LEF_FIXTURE_UNIT' -p LoadState --value)\" = not-found"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "mkdir -m 0700 '$LEF_FIXTURE_REMOTE'"
+install -m 0600 docker/smtp-dev/tls/smtp.crt docker/smtp-dev/tls/smtp.key "$LEF_FIXTURE_LOCAL/"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   for kind in service config secret; do
+     LEF_FOUND=\$(sudo -n docker --host unix:///var/run/docker.sock \$kind ls -q \
+       --filter label=com.docker.stack.namespace='$LEF_FIXTURE_STACK') || exit 1
+     test -z \"\$LEF_FOUND\" || exit 1
+   done"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :9000 or sport = :8025 )'"
+```
+
+Require no fixture listener before continuing. Save the following proposed YAML as
+`$LEF_FIXTURE_LOCAL/fixtures.yml`. Both services initially have zero replicas, so deployment alone cannot create a
+port conflict. The image variables are passed explicitly to the remote Docker CLI in the deployment command.
+
+```yaml
+version: '3.8'
+services:
+  peer:
+    image: ${LEF_PEER_IMAGE}
+    user: '1000:1000'
+    command: ['node', '/smtp-peer-probe-cli.js']
+    networks: { hostnet: null }
+    environment:
+      SMTP_PEER_PROBE_HOST: '172.29.10.4'
+      SMTP_PEER_PROBE_SMTP_PORT: '2525'
+      SMTP_PEER_PROBE_STATUS_HOST: '127.0.0.1'
+      SMTP_PEER_PROBE_STATUS_PORT: '9000'
+    configs:
+      - source: peer_module
+        target: /smtp-peer-probe.js
+      - source: peer_cli
+        target: /smtp-peer-probe-cli.js
+    stop_grace_period: 5s
+    deploy:
+      replicas: 0
+      placement:
+        constraints: ['node.labels.lef.fixture == verifier-1']
+      restart_policy: { condition: none }
+      update_config: { order: stop-first }
+  mailpit:
+    image: ${LEF_MAILPIT_IMAGE}
+    user: '1000:1000'
+    networks: { hostnet: null }
+    environment:
+      MP_SMTP_BIND_ADDR: '172.29.10.4:2525'
+      MP_UI_BIND_ADDR: '127.0.0.1:8025'
+      MP_SMTP_TLS_CERT: /smtp.crt
+      MP_SMTP_TLS_KEY: /run/secrets/smtp_key
+      MP_SMTP_REQUIRE_STARTTLS: 'true'
+      MP_SMTP_DISABLE_RDNS: 'true'
+      MP_DISABLE_VERSION_CHECK: 'true'
+      MP_DATABASE: /tmp/mailpit.db
+      MP_VERBOSE: 'true'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz', '--listen', '127.0.0.1:8025']
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    configs:
+      - source: smtp_cert
+        target: /smtp.crt
+    secrets:
+      - source: smtp_key
+        target: smtp_key
+        uid: '1000'
+        gid: '1000'
+        mode: 0400
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs: { size: 67108864 }
+    stop_grace_period: 5s
+    deploy:
+      replicas: 0
+      placement:
+        constraints: ['node.labels.lef.fixture == verifier-1']
+      restart_policy: { condition: none }
+      update_config: { order: stop-first }
+networks:
+  hostnet: { external: true, name: host }
+configs:
+  peer_module: { file: ./smtp-peer-probe.js }
+  peer_cli: { file: ./smtp-peer-probe-cli.js }
+  smtp_cert: { file: ./smtp.crt }
+secrets:
+  smtp_key: { file: ./smtp.key }
+```
+
+Swarm configurations are immutable. Use a new run identifier after changing the fixture artifacts. The fixtures
+have no persistent volumes; Mailpit stores its disposable database in memory. SMTP transcript logs remain in the
+guest Docker logging system until its retention or VM destruction removes them. Use synthetic addresses and commit
+only sanitized observations. SMTP authentication, forwarding, relay, and Chaos remain disabled for the normal phase.
+
+### Stage and Deploy the Idle Fixture Stack
+
+Create the private manager directory exclusively, then record ownership before copying files. The local markers
+also cover a partial deployment; keep them until cleanup is verified. A failed directory creation authorizes no
+removal of an existing directory or stack. No configuration needs a guest bind mount or shared source checkout.
+
+```bash
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 "mkdir -m 0700 '$LEF_FIXTURE_REMOTE'"
 printf '%s\n' "$LEF_FIXTURE_REMOTE" > "$LEF_RUN_DIR/fixture-owned"
-tar -C "$LEF_FIXTURE_LOCAL" -cf - node probe |
-  ssh -F "$LEF_SSH_CONFIG" verifier-1 "tar -C '$LEF_FIXTURE_REMOTE' -xf -"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "'$LEF_FIXTURE_REMOTE/node/bin/node' --version"
+printf '%s\n' "$LEF_FIXTURE_STACK" > "$LEF_RUN_DIR/fixture-stack-owned"
+tar -C "$LEF_FIXTURE_LOCAL" -cf - fixtures.yml smtp-peer-probe.js smtp-peer-probe-cli.js smtp.crt smtp.key |
+  ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 "tar -C '$LEF_FIXTURE_REMOTE' -xf -"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   cd '$LEF_FIXTURE_REMOTE' &&
+   sudo -n env LEF_PEER_IMAGE='$LEF_PEER_IMAGE' LEF_MAILPIT_IMAGE='$LEF_MAILPIT_IMAGE' \
+     docker --host unix:///var/run/docker.sock stack deploy --detach=true \
+     --compose-file fixtures.yml '$LEF_FIXTURE_STACK'"
 ```
 
-Stop if the remote directory or service name already belongs to an unfinished run. Do not stop its service, upload
-files into it, or remove it. Recover that run using its recorded identifier before preparing another. The local
-`fixture-owned` marker records a successful exclusive directory creation for this run. If that creation failed,
-remove only newly created local staging files. Record these scenario variables in the ignored run notes so cleanup
-can be resumed after losing the controller terminal. Never commit that note or the captured SSH configuration.
-An unsuccessful preparation still requires removing any directory that these commands created.
+Inspect the exact services with `docker stack services` through the manager SSH transport. Require `peer` and
+`mailpit` at `0/0`, the expected immutable image references, the fixture placement constraint, and the external host
+network. Do not deploy this zero-replica file again during an active test: doing so stops both fixtures. Resuming a
+run starts with inspecting its existing services and recorded phase. Never print or inspect the TLS-key contents.
 
-### Fixture Start
+### Start the Peer Phase and Check Private Status
 
-Run from the same controller shell:
+Start only the peer service, after confirming that Mailpit has zero replicas and no running container:
 
 ```bash
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "sudo -n systemd-run --unit='$LEF_FIXTURE_UNIT' --collect \
-    --property=Type=exec --property=User=\$(id -un) \
-    --property=TimeoutStopSec=5s --property=RuntimeMaxSec=2h \
-    --property=KillMode=control-group \
-    --setenv=SMTP_PEER_PROBE_HOST=172.29.10.4 \
-    --setenv=SMTP_PEER_PROBE_SMTP_PORT=2525 \
-    --setenv=SMTP_PEER_PROBE_STATUS_HOST=127.0.0.1 \
-    --setenv=SMTP_PEER_PROBE_STATUS_PORT=9000 \
-    '$LEF_FIXTURE_REMOTE/node/bin/node' \
-    '$LEF_FIXTURE_REMOTE/probe/smtp-peer-probe-cli.js'"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   sudo -n docker --host unix:///var/run/docker.sock service scale --detach=true '${LEF_FIXTURE_STACK}_peer=1'"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "sudo -n docker --host unix:///var/run/docker.sock stack services '$LEF_FIXTURE_STACK'"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "sudo -n docker --host unix:///var/run/docker.sock service ps '${LEF_FIXTURE_STACK}_peer'"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :9000 or sport = :8025 )'"
 ```
 
-The existing CLI handles `SIGINT` and `SIGTERM` by closing both servers, but active sockets can delay `server.close()`.
-Stopping this unit sends `SIGTERM`; systemd kills any remaining process after five seconds. The two-hour run limit
-bounds an abandoned process after loss of SSH access. The limit is a fixture lifetime, not a test timeout; split
-long validation work into fresh fixture sessions. Automatic process expiry still leaves staged files to clean up.
-The temporary service and its process group are owned by this scenario; no persistent unit file is installed.
-
-### Fixture Readiness and Private Status
-
-Confirm that the service remains active and its listening addresses are exact. Repeat the read-only checks within
-five seconds while Node starts; if the expected sockets do not appear, stop and use the fixture cleanup procedure:
-
-```bash
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "systemctl is-active '$LEF_FIXTURE_UNIT'"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :9000 )'"
-```
-
-Expect SMTP only on `172.29.10.4:2525`, and status only on `127.0.0.1:9000`. Do not proceed if status appears on a
-wildcard, underlay, or WireGuard address. In a dedicated controller terminal, with the same `LEF_SSH_CONFIG`, run:
+Repeat the read-only checks for at most 60 seconds while the task starts. Require one Running peer task on
+`verifier-1`, SMTP only on `172.29.10.4:2525`, and status only on `127.0.0.1:9000`. Stop and clean up on a rejected,
+failed, or persistently pending task. In a dedicated controller terminal, start the foreground status forward:
 
 ```bash
 ssh -F "$LEF_SSH_CONFIG" -N -T \
@@ -327,151 +447,47 @@ ssh -F "$LEF_SSH_CONFIG" -N -T \
   -L 127.0.0.1:19000:127.0.0.1:9000 verifier-1
 ```
 
-Keep this SSH session in the foreground. The controller port 19000 must be free; a bind failure stops the command.
 In the scenario shell:
 
 ```bash
 curl --fail --silent --show-error --max-time 5 http://127.0.0.1:19000/last-peer
 ```
 
-A fresh fixture returns `{"peerAddress":null,"observedAt":null}`. The response proves the HTTP forward and status
-contract, not proxy health. Plan 16 must separately prove denial of status access through the guest network interfaces
-from another guest. Keep the SSH connection available until every sequential egress assertion is complete.
+A fresh task returns `{"peerAddress":null,"observedAt":null}`. This proves the status contract, not proxy health.
+Run the existing reconciliation procedure above, sequentially checking all three sources with no competing SMTP
+client. Capture a fresh observation for each listener; an old matching address is insufficient. Prove that another
+guest cannot reach the status port. Stop and restart the peer phase when a new null baseline is required.
 
-### Fixture Use
+### Switch to Mailpit
 
-Use the existing reconciliation procedure with these exact additional inputs:
-
-```bash
-export PROXY_FLEET_SMTP_PROBE_HOST=172.29.10.4
-export PROXY_FLEET_SMTP_PROBE_PORT=2525
-export PROXY_FLEET_SMTP_PROBE_STATUS_URL=http://127.0.0.1:19000/last-peer
-```
-
-`reconcile-cli.ts` also requires the tracked inventory, credential directory, API URL, and M2M credential file.
-Use its unchanged environment contract from `deploy/proxy-fleet/swarm/README.md`. Reconciliation creates or updates
-registry state; execute it only during the authorized plan-16 live scenario, after the tunnel and API are ready.
-
-Allow only one health-check sequence and no competing SMTP clients during peer-origin checks. The fixture records
-only the most recent TCP connection; `verifyListenerEgress()` compares that address with the requested listener's
-egress IP. Capture a fresh observation after each authenticated CONNECT and assert `.21`, `.22`, and `.23` for the
-three listeners. A concurrent application run can overwrite these observations. Restart the peer fixture when a
-fresh null baseline is required; do not infer freshness from an old matching address alone.
-
-### Fixture Stop, Interruption, and Repetition
-
-Stop application/probe callers first, then stop the one guest service. Its name includes the recorded scenario ID.
-An inactive unit can already have disappeared because `--collect` releases the transient unit after termination.
-From the same controller shell:
+Pause reconciliation and verification callers. Scale the peer service to zero first:
 
 ```bash
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   sudo -n docker --host unix:///var/run/docker.sock service scale --detach=true '${LEF_FIXTURE_STACK}_peer=0'"
 ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "if [ \"\$(systemctl show '$LEF_FIXTURE_UNIT' -p LoadState --value)\" != not-found ]; then
-     sudo -n systemctl stop '$LEF_FIXTURE_UNIT'
-   fi"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "case \"\$(systemctl show '$LEF_FIXTURE_UNIT' -p ActiveState --value)\" in
-     inactive|failed) exit 0 ;;
-     *) exit 1 ;;
-   esac"
+  "sudo -n docker --host unix:///var/run/docker.sock ps -q \
+    --filter label=com.docker.swarm.service.name='${LEF_FIXTURE_STACK}_peer'"
 ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :9000 )'"
 ```
 
-Require no active service and no fixture listeners. Then press `Ctrl+C` in the foreground status-forward terminal and
-confirm port 19000 has closed on the controller. Remove only the remote and local directories created above:
+Wait at most 30 seconds for `peer` to reach `0/0`, the verifier's container query to return nothing, and both sockets
+to close. A task's desired state alone does not prove that its old container has stopped. If the checks fail, stop
+the transition and inspect the fixture; do not start Mailpit. Close the peer-status SSH forward with `Ctrl+C` and
+confirm controller port `19000` is free. Then start Mailpit:
 
 ```bash
-test "$(cat "$LEF_RUN_DIR/fixture-owned")" = "$LEF_FIXTURE_REMOTE"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "rm -rf -- '$LEF_FIXTURE_REMOTE'"
-rm -rf -- "$LEF_FIXTURE_LOCAL"
-rm -- "$LEF_RUN_DIR/fixture-owned"
-```
-
-The Node archive and verified manifest may be retained as explicitly recorded reusable prerequisites; remove their
-copies as well if downloaded only for this run. Retain the scenario directory, captured SSH configuration, and
-tunnel for the Mailpit phase. If a later health or recovery scenario requires reconciliation, stop Mailpit first
-and prepare a fresh peer-probe session with a new identifier. Never point the reconciler's status URL at Mailpit.
-
-On `Ctrl+C` or SSH loss elsewhere, reconnect using the captured configuration and run the same stop-and-remove steps.
-Do not assume closing the original SSH session stops a systemd service. If the guest is unreachable, the cleanup procedure remains
-incomplete until access returns or the disposable VM is destroyed through the existing Vagrant procedure. Report
-that gap rather than claiming cleanup from the automatic two-hour process expiry.
-
-## Proposed Mailpit Lifecycle
-
-Use the standalone Mailpit `v1.30.7` binary for 64-bit Linux, matching the version already pinned in the development
-Compose file. Mailpit needs no Node runtime or Docker daemon. The following proposed commands reuse the captured
-SSH configuration and the temporary-service lifecycle; they have not run in the lab.
-
-### Mailpit Preparation
-
-Finish peer checks, pause reconciliation and verification callers, stop the peer service, and close its status
-forward using the preceding cleanup procedure. Confirm port `2525` is free before starting Mailpit. Keep the tunnel
-running. From the repository root, set `LEF_MAILPIT_ARCHIVE` to the absolute path of the release asset
-`mailpit-linux-amd64.tar.gz` from `v1.30.7`. The checksum below is that asset's SHA-256 digest from the GitHub release API;
-the release has no separate checksum manifest asset. Record all run variables in the private scenario notes.
-
-```bash
-: "${LEF_SSH_CONFIG:?Captured Vagrant SSH configuration is required}"
-: "${LEF_RUN_ID:?Unique lowercase scenario identifier is required}"
-: "${LEF_MAILPIT_ARCHIVE:?Absolute Mailpit v1.30.7 Linux amd64 archive path is required}"
-case "$LEF_RUN_ID" in ''|*[!a-z0-9-]*) exit 1 ;; esac
-LEF_MAILPIT_SHA256=a35c053509441b95fb96da6479b3a26b3eb309e223232aced28255c011d29efc
-printf '%s  %s\n' "$LEF_MAILPIT_SHA256" "$LEF_MAILPIT_ARCHIVE" | sha256sum --check -
-LEF_MAILPIT_LOCAL=$(mktemp -d /tmp/lef-mailpit-stage.XXXXXXXX)
-LEF_MAILPIT_REMOTE="/tmp/lef-mailpit-$LEF_RUN_ID"
-LEF_MAILPIT_UNIT="lef-mailpit-$LEF_RUN_ID.service"
-tar -xzf "$LEF_MAILPIT_ARCHIVE" -C "$LEF_MAILPIT_LOCAL" mailpit
-install -m 0600 docker/smtp-dev/tls/smtp.crt docker/smtp-dev/tls/smtp.key \
-  docker/smtp-dev/tls/ca.crt "$LEF_MAILPIT_LOCAL/"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 'test "$(uname -m)" = x86_64 && command -v systemd-run && sudo -n true'
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "test \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p LoadState --value)\" = not-found"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   sudo -n docker --host unix:///var/run/docker.sock service scale --detach=true '${LEF_FIXTURE_STACK}_mailpit=1'"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "sudo -n docker --host unix:///var/run/docker.sock service ps '${LEF_FIXTURE_STACK}_mailpit'"
 ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
 ```
 
-Require no listener on either guest port. Stop if the service or directory belongs to an unfinished run; recover
-that run first. Create the directory exclusively before copying files, then record ownership:
-
-```bash
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "mkdir -m 0700 '$LEF_MAILPIT_REMOTE'"
-printf '%s\n' "$LEF_MAILPIT_REMOTE" > "$LEF_RUN_DIR/mailpit-owned"
-tar -C "$LEF_MAILPIT_LOCAL" -cf - mailpit smtp.crt smtp.key ca.crt |
-  ssh -F "$LEF_SSH_CONFIG" verifier-1 "tar -C '$LEF_MAILPIT_REMOTE' -xf -"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "mkdir -m 0700 '$LEF_MAILPIT_REMOTE/tmp'"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "'$LEF_MAILPIT_REMOTE/mailpit' version --no-release-check"
-```
-
-Require version `1.30.7`. A failed preparation still requires removing the directories created by this run.
-
-### Mailpit Start and Readiness
-
-Start the service as the captured SSH user. Keep its database and verbose SMTP log inside the private directory so
-cleanup includes both. The test certificate enables STARTTLS; required STARTTLS preserves the verifier's secure
-transport contract. Leave SMTP authentication, forwarding, relay, and Chaos disabled for this acceptance phase.
-
-```bash
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "sudo -n systemd-run --unit='$LEF_MAILPIT_UNIT' --collect \
-    --property=Type=exec --property=User=\$(id -un) \
-    --property=TimeoutStopSec=5s --property=RuntimeMaxSec=2h \
-    --property=KillMode=control-group \
-    --property=WorkingDirectory='$LEF_MAILPIT_REMOTE' \
-    --setenv=TMPDIR='$LEF_MAILPIT_REMOTE/tmp' \
-    '$LEF_MAILPIT_REMOTE/mailpit' \
-    --smtp=172.29.10.4:2525 --listen=127.0.0.1:8025 \
-    --smtp-tls-cert='$LEF_MAILPIT_REMOTE/smtp.crt' \
-    --smtp-tls-key='$LEF_MAILPIT_REMOTE/smtp.key' --smtp-require-starttls \
-    --smtp-disable-rdns --disable-version-check \
-    --database='$LEF_MAILPIT_REMOTE/mailpit.db' \
-    --verbose --log-file='$LEF_MAILPIT_REMOTE/smtp.log'"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "systemctl is-active '$LEF_MAILPIT_UNIT'"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
-```
-
-Repeat the read-only checks within five seconds while Mailpit starts. Require SMTP only on `172.29.10.4:2525`
-and HTTP only on `127.0.0.1:8025`; stop and clean up if the unit fails or either binding differs. Start a foreground
-SSH forward in a dedicated controller terminal with the same `LEF_SSH_CONFIG`:
+Within 60 seconds, require one Mailpit task in the Running state on `verifier-1`, a healthy container, SMTP only on
+`172.29.10.4:2525`, and HTTP only on `127.0.0.1:8025`. In a dedicated terminal, start its foreground HTTP forward:
 
 ```bash
 ssh -F "$LEF_SSH_CONFIG" -N -T \
@@ -479,47 +495,59 @@ ssh -F "$LEF_SSH_CONFIG" -N -T \
   -L 127.0.0.1:18025:127.0.0.1:8025 verifier-1
 ```
 
-From the scenario shell, check readiness through the private HTTP forward:
+From the scenario shell:
 
 ```bash
 curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18025/readyz
 ```
 
-Readiness proves the service reports itself ready. The real application phase below must separately prove SMTP,
-STARTTLS, and proxy use. Prove HTTP access from another guest is denied. Raw verbose logs include SMTP envelope
-addresses; extract only sanitized session, peer, and command-result evidence for the later validation report.
+Readiness covers the HTTP service; the real application phase below must prove SMTP, STARTTLS, and proxy use.
+Prove that another guest cannot reach HTTP. For later reconciliation or recovery checks, reverse the procedure:
+scale `mailpit` to zero, prove its container and ports are gone, close its forward, then start a fresh peer task.
+Scaling both services in one command does not guarantee this order. `stop-first` governs updates within one service.
 
-### Mailpit Stop, Interruption, and Repetition
+### Stop, Interruption, and Repetition
 
-Stop verification callers before stopping Mailpit. From the same controller shell:
-
-```bash
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "if [ \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p LoadState --value)\" != not-found ]; then
-     sudo -n systemctl stop '$LEF_MAILPIT_UNIT'
-   fi"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 \
-  "case \"\$(systemctl show '$LEF_MAILPIT_UNIT' -p ActiveState --value)\" in
-     inactive|failed) exit 0 ;;
-     *) exit 1 ;;
-   esac"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :8025 )'"
-```
-
-Require no active unit or fixture listeners. Press `Ctrl+C` in the Mailpit HTTP-forward terminal and confirm that
-controller port `18025` has closed. After inspecting evidence, remove only this run's staged files, database, and log:
+Stop verification callers and complete any registry draining while the required fixture and tunnel remain reachable.
+Remove only the recorded fixture stack through the recognized manager:
 
 ```bash
-test "$(cat "$LEF_RUN_DIR/mailpit-owned")" = "$LEF_MAILPIT_REMOTE"
-ssh -F "$LEF_SSH_CONFIG" verifier-1 "rm -rf -- '$LEF_MAILPIT_REMOTE'"
-rm -rf -- "$LEF_MAILPIT_LOCAL"
-rm -- "$LEF_RUN_DIR/mailpit-owned"
+test "$(cat "$LEF_RUN_DIR/fixture-stack-owned")" = "$LEF_FIXTURE_STACK"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "test \"\$(sudo -n docker --host unix:///var/run/docker.sock info --format '{{.Swarm.Cluster.ID}}')\" = '$LEF_CLUSTER_ID' &&
+   sudo -n docker --host unix:///var/run/docker.sock stack rm --detach=true '$LEF_FIXTURE_STACK'"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
+  "for kind in service config secret; do
+     sudo -n docker --host unix:///var/run/docker.sock \$kind ls \
+       --filter label=com.docker.stack.namespace='$LEF_FIXTURE_STACK' || exit 1
+   done"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 \
+  "for phase in peer mailpit; do
+     sudo -n docker --host unix:///var/run/docker.sock ps -q \
+       --filter label=com.docker.swarm.service.name='${LEF_FIXTURE_STACK}_'\$phase || exit 1
+   done"
+ssh -F "$LEF_SSH_CONFIG" verifier-1 "ss -ltnp '( sport = :2525 or sport = :9000 or sport = :8025 )'"
 ```
 
-The five-second shutdown bound and two-hour service lifetime also apply to Mailpit. After interruption or SSH loss,
-resume these steps using the recorded variables. Automatic expiry stops the process but does not remove its files.
-If the guest is unreachable, the cleanup procedure remains incomplete until access returns or the disposable VM is destroyed. A new run
-uses a fresh identifier and directory; retain the pinned archive only if recorded as a reusable prerequisite.
+Poll the read-only checks for at most 30 seconds. Require no fixture services, configurations, secrets, running
+containers, or listening sockets. Stack removal is asynchronous: if anything remains, keep the ownership markers
+and inspect the exact objects before retrying removal of this same stack. Do not use a global prune. Close both
+fixture SSH forwards and confirm local ports `19000` and `18025` are free. Then remove the owned staging directories:
+
+```bash
+test "$(cat "$LEF_RUN_DIR/fixture-owned")" = "$LEF_FIXTURE_REMOTE"
+ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 "rm -rf -- '$LEF_FIXTURE_REMOTE'"
+rm -rf -- "$LEF_FIXTURE_LOCAL"
+rm -- "$LEF_RUN_DIR/fixture-owned" "$LEF_RUN_DIR/fixture-stack-owned"
+```
+
+The five-second stop grace bounds normal task shutdown; it does not impose a fixture lifetime. Swarm services do
+not expire when SSH disconnects. After interruption, recover the recorded variables, verify the manager's ClusterID,
+and run the same scoped removal. If a guest is unreachable, the cleanup procedure remains incomplete until access returns or the
+disposable VMs are destroyed. Never claim success from the manager's desired state while a disconnected worker may
+still run a container. Finish fixture cleanup before any worker leaves; `verifier-1` and both proxy workers must
+leave before the manager, with WireGuard available until all required remote cleanup has finished.
+
 
 ## Real Application and Capacity Evidence
 
@@ -566,8 +594,9 @@ case "$LEF_RUN_DIR" in
 esac
 ```
 
-Confirm that all recorded guest services, temporary directories, local forwards, and tunnel state are absent before
-reporting cleanup complete. Remove archive copies too if they were downloaded only for this run.
+Confirm that all recorded fixture services, configurations, secrets, temporary directories, local forwards, and
+tunnel state are absent before reporting cleanup complete. Image-cache cleanup belongs to disposable VM destruction;
+never prune images or volumes from the controller's Docker daemon.
 
 ## Remote Docker Boundary
 
@@ -581,7 +610,8 @@ ssh -F "$LEF_SSH_CONFIG" proxy-manager-1 \
   > "$LEF_RUN_DIR/manager-identity.json"
 ```
 
-Confirm that the manager is inactive before creating the lab Swarm; record its new ClusterID privately afterward.
+Confirm that the manager is inactive before creating the lab Swarm; record its new ClusterID privately afterward
+as `LEF_CLUSTER_ID`. Check the verifier's membership against that same ID after its worker join.
 Compare that identity privately before every deployment or reset sequence. Stop on a mismatch. The current deployment
 adapter invokes the caller's Docker CLI. Plan 16 must document its captured-SSH transport and test its identity guard
 before invoking it; the plain deploy command in the Swarm guide is insufficient on this controller. The direct SSH
@@ -595,7 +625,7 @@ Guest reset and final `vagrant destroy -f` remain the direct procedures in plan 
 | Which listener-reachability model? | Owner selected the tunnel through `verifier-1` on 2026-09-15. | Prove the proposed lifecycle and original endpoints in plan 16. | Plan-16 implementer |
 | Can the controller support the exact tunnel? | WSL Vagrant access is documented; the method needs privileged local firewall redirection. | Confirm the selected host, compatible tool versions, port availability, and scoped privileges. The chosen model does not prove those prerequisites. | Project owner |
 | Where do real verification processes run? | A host process can use this proposal; the default command does not prove container traffic coverage. | Confirm direct WSL execution and reachable application dependencies, or document a tested container-network procedure. | Plan-16 implementer |
-| How should fixtures run on the verifier? | Owner selected standalone Mailpit for SMTP and the existing peer probe for sequential egress checks. | Validate the proposed transient services, staged Node for the probe, pinned Mailpit binary, and phase transitions. | Plan-16 implementer |
+| How should fixtures run on the verifier? | Owner selected Swarm services on the Vagrant VMs on 2026-09-18. | Provision the verifier as a non-proxy member; validate the separate fixture stack, image digests, private bindings, phase transitions, and cleanup. | Plan-16 implementer |
 | How is full SMTP and capacity behavior exercised? | Mailpit supplies SMTP/STARTTLS; neither its inbox nor the peer probe proves concurrent leases. | Finalize DNS/CA setup, application invocation, synchronization barrier, Redis assertions, and failure/recovery evidence. | Plan-16 implementer |
 | Which disposable application environment is used? | Reconciliation needs an API and administrative M2M access; verification also needs seeded data and Redis. | Supply the isolated API, dependency endpoints, image digest, and credential files. | Project owner |
 | Are worker access, return paths, and cleanup correct? | Current templates have the gaps listed above. | Correct and prove them without changing the registry or application contracts. | Plan-16 implementer |
@@ -620,15 +650,17 @@ documentation only.
 - [Vagrant SSH configuration](https://developer.hashicorp.com/vagrant/docs/cli/ssh_config): captured connection facts.
 - [TypeScript compiler options](https://www.typescriptlang.org/docs/handbook/compiler-options.html): explicit input
   files and compilation options.
-- [Node binary verification](https://github.com/nodejs/node#verifying-binaries): exact archives and signed manifests.
-- [Mailpit installation](https://mailpit.axllent.org/docs/install/) and
-  [release metadata for Mailpit 1.30.7](https://api.github.com/repos/axllent/mailpit/releases/tags/v1.30.7): standalone archive and digest.
+- [Docker service placement](https://docs.docker.com/engine/swarm/services/) and
+  [host networking](https://docs.docker.com/engine/network/drivers/host/): fixture placement and direct guest bindings.
+- [Swarm stack deployment](https://docs.docker.com/reference/cli/docker/stack/deploy/),
+  [scaling](https://docs.docker.com/reference/cli/docker/service/scale/), and
+  [removal](https://docs.docker.com/reference/cli/docker/stack/rm/): explicit manager operations and asynchronous completion.
+- [Swarm configurations](https://docs.docker.com/engine/swarm/configs/) and
+  [secrets](https://docs.docker.com/engine/swarm/secrets/): immutable fixture artifacts and scoped TLS-key access.
+- [Container definition for Mailpit 1.30.7](https://github.com/axllent/mailpit/blob/v1.30.7/Dockerfile): executable and health check.
 - [Mailpit SMTP configuration](https://mailpit.axllent.org/docs/configuration/smtp/) and
   [command flags for Mailpit 1.30.7](https://github.com/axllent/mailpit/blob/v1.30.7/cmd/root.go): bindings, STARTTLS, database, and logging.
 - [Readiness for Mailpit 1.30.7](https://github.com/axllent/mailpit/blob/v1.30.7/cmd/readyz.go),
   [API](https://mailpit.axllent.org/docs/api-v1/), and
   [Chaos](https://mailpit.axllent.org/docs/integration/chaos/): readiness signals and fixture capability boundaries.
-- [systemd 255 transient services](https://github.com/systemd/systemd/blob/v255/man/systemd-run.xml),
-  [service time limits](https://github.com/systemd/systemd/blob/v255/man/systemd.service.xml), and
-  [termination](https://github.com/systemd/systemd/blob/v255/man/systemd.kill.xml): process ownership and bounded shutdown.
 - [Docker remote access](https://docs.docker.com/engine/security/protect-access/): explicitly selected remote daemons.
