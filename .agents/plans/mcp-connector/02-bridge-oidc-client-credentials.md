@@ -57,8 +57,8 @@ now requires auth to reach.
   bound to port 3002 and briefly caused a live-verification run to hit the wrong, pre-auth server build. Killing
   it by PID (found via `lsof -i :3002`) and rerunning confirmed the real, current build's behavior.
 - `@modelcontextprotocol/inspector@2.7.0 --cli` does not surface a raw `401` from the server as a plain error;
-  it treats any `401` as an invitation to attempt its own interactive OAuth discovery flow and fails with a
-  generic `auth_required`/"Interactive OAuth requires a TTY" message instead. This is the Inspector CLI's own
+  it treats any `401` as an invitation to attempt its own interactive OAuth discovery flow, failing instead with
+  a generic `auth_required` error whose message mentions needing a TTY. This is the Inspector CLI's own
   client-side behavior, not a server defect -- a direct `curl` against the same running process confirms the
   real, raw response is exactly `401 {"error":"authentication_required"}` as intended. "Fails cleanly with 401"
   in this plan's acceptance criteria is verified at the HTTP level, not through the Inspector CLI's own output.
@@ -85,6 +85,13 @@ now requires auth to reach.
   (POSTs `{issuer}/protocol/openid-connect/token`, caches with a clock-skew margin derived from `expires_in`); its
   own spec (`m2m-token-provider.spec.ts`, mocking `global.fetch`) is the concrete unit-test convention this plan's
   tests mirror. Date/Author: 2026-09-16, Codex planning.
+  **Superseded 2026-09-18 by `mcp-connector-hardening/01`**: keying the cache by `clientId` alone let a request
+  presenting an incorrect or empty secret reuse another request's already-cached token for the same `clientId` —
+  confirmed both in review and in this plan's own live validation (see Surprises & Discoveries above). The shipped
+  cache in `apps/mcp-server/src/auth/token-cache.ts` is keyed by an HMAC-SHA-256 digest over the complete
+  `(clientId, clientSecret)` pair instead; every "keyed by `clientId`" reference elsewhere in this document
+  (Plan of Work, Interfaces and Dependencies, Acceptance Criteria) describes the original, since-corrected design
+  and should be read together with that plan.
 - Decision: The cache stores only the minted token and its expiry, never the client secret. Rationale: minimizing
   how long and how widely a customer's secret is held in memory is a direct security property this plan must
   preserve, matching this repository's existing discipline of never retaining or logging credential material
@@ -110,6 +117,8 @@ generalized from `m2m-token-provider.ts`, and a request-level auth gate in front
 calls) and live against a real dev-stack Keycloak with the seeded `lef-svc-dev-fixture` customer credential. The
 known `clientId`-only cache-key gap was left exactly as this plan specifies, and live validation reproduced it
 directly, confirming why `mcp-connector-hardening/01` is the correct very-next plan rather than a nice-to-have.
+**Update (2026-09-18):** `mcp-connector-hardening/01` has since implemented that fix; the cache is credential-bound
+in the shipped code even though this document's own Plan of Work still describes the original, superseded design.
 
 ## Context and Orientation
 

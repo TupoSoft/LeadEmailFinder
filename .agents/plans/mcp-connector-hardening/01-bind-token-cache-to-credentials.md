@@ -17,8 +17,13 @@ finding from its review. Keep the stable plan key and its synced issue instead o
 
 ## Progress
 
-- [ ] (2026-09-16) Implement credential-bound token caching and focused rejection coverage after the prerequisite.
-- [ ] (2026-09-16) Validate HTTP behavior, secret handling, concurrency, and the documentation changes.
+- [x] (2026-09-18) Rebuilt `TokenCache` to identify entries by an HMAC-SHA-256 digest over the complete
+      `(clientId, clientSecret)` pair, with independent pending-grant promises per digest.
+- [x] (2026-09-18) Extended `token-cache.spec.ts`, added `auth-http.integration.spec.ts` and
+      `bruno/mcp-authentication/`, and updated the original plan 02 and road map README's superseded cache
+      guidance and Bruno exemption.
+- [x] (2026-09-18) Validated HTTP behavior, secret handling, concurrency, and documentation changes; ran the
+      collection live against a real dev-stack Keycloak. Recorded results below.
 
 ## Plan dependencies
 
@@ -35,6 +40,28 @@ Only one token grant occurred. These are local HTTP results, not live Keycloak v
 Two calls made while the first grant was pending also started two grants.
 The existing concurrent test in `main.spec.ts` resolves its mock immediately and does not prove shared pending work.
 The package tests passed 68 of 68 cases despite both gaps. Implementation has not started.
+
+**Implementation evidence, 2026-09-18:**
+
+- Reproduced the pre-fix defect directly rather than only trusting the review write-up: temporarily restored the
+  original `clientId`-only `TokenCache` and reran the new isolation/concurrency tests against it — three failed
+  exactly as expected (a wrong or empty secret after a valid login still resolved to the cached token; the
+  concurrency test failed for a different, also-expected reason, since the old design deduplicated nothing).
+  Restoring the fixed implementation returned all tests to green. This confirms the new tests are genuine
+  regression coverage, not tests that would pass against either design.
+- Live-verified the fix end to end against the real dev-stack Keycloak using the seeded `lef-svc-dev-fixture`
+  credential and the new `bruno/mcp-authentication/` collection: a wrong secret for that same client ID, which
+  PR #705's live validation had shown succeeding with `200`/`pong`, now correctly receives `401` after this fix,
+  while the valid credential still succeeds before and after that rejection.
+- Mocking `global.fetch` for the token endpoint in `auth-http.integration.spec.ts` required discriminating by
+  request URL and forwarding anything else to the real `fetch`, and restoring it in `afterEach` — the same
+  pattern already established in `main.spec.ts`'s and `request-origin.integration.spec.ts`'s auth/origin
+  integration tests, because the MCP SDK's own `StreamableHTTPClientTransport` also uses the global `fetch` to
+  reach the server under test.
+- `ping` carries no signal that would let a test observe *which* bearer token a given request's handler received,
+  so `auth-http.integration.spec.ts` mocks `create-server.js` to swap in a small `echo-token` tool (returning
+  `extra.authInfo?.token`) instead of reusing the real `ping` — this is the only way to prove concurrent clients
+  never observe each other's bearer through the real SDK path rather than only at the `TokenCache` unit level.
 
 ## Decision Log
 
@@ -59,7 +86,14 @@ The package tests passed 68 of 68 cases despite both gaps. Implementation has no
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: `TokenCache` now identifies entries by an HMAC-SHA-256 digest
+over the complete `(clientId, clientSecret)` pair (a process-local key, never derived from or reversible to the
+credentials), with independent pending-grant promises per digest so concurrent identical credentials share one
+grant while different secrets for the same `clientId` never do. The public `getAccessToken` shape and constructor
+order are unchanged, so `main.ts`'s auth gate needed no edits. Added the required unit, HTTP-integration, and
+Bruno coverage, and corrected the superseded `clientId`-only cache guidance and blanket Bruno exemption in the
+original `mcp-connector/02` plan and road map README. Live validation against a real dev-stack Keycloak confirms
+the fix; no business-module, database, or API change was needed.
 
 ## Context and Orientation
 

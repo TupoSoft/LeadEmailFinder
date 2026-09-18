@@ -1,3 +1,5 @@
+import { createHmac, randomBytes } from 'node:crypto'
+
 export interface ClientCredentials {
     readonly clientId: string
     readonly clientSecret: string
@@ -24,10 +26,16 @@ export class ClientCredentialsGrantError extends Error {
 }
 
 /** Generalizes `scripts/proxy-fleet-swarm/m2m-token-provider.ts`'s single-credential provider into a
- * cache keyed by `clientId`, so one connector process can serve many customers' own credentials. Only
- * the minted token and its expiry are ever cached -- never the client secret. */
+ * cache serving many customers' own credentials. Entries are identified by an HMAC-SHA-256 digest over
+ * the complete `(clientId, clientSecret)` pair -- never by `clientId` alone -- so a cached token can
+ * never be reused by a request presenting an incorrect or empty secret for a client ID that has
+ * previously authenticated successfully. The HMAC key is generated once per process and is never
+ * derived from, or reversible to, the credentials it hashes. Only the minted token and its expiry are
+ * ever cached; the raw secret itself is never stored. */
 export class TokenCache implements AccessTokenProvider {
     private readonly cache = new Map<string, { token: string; expiresAtMs: number }>()
+    private readonly pending = new Map<string, Promise<string>>()
+    private readonly hmacKey = randomBytes(32)
 
     constructor(
         private readonly tokenEndpointBaseUrl: string,
@@ -36,10 +44,34 @@ export class TokenCache implements AccessTokenProvider {
     ) {}
 
     async getAccessToken(credentials: ClientCredentials): Promise<string> {
+        const digest = this.digestCredentials(credentials)
         const nowMs = this.now()
-        const cached = this.cache.get(credentials.clientId)
-        if (cached && cached.expiresAtMs > nowMs) return cached.token
 
+        const cached = this.cache.get(digest)
+        if (cached) {
+            if (cached.expiresAtMs > nowMs) return cached.token
+            this.cache.delete(digest)
+        }
+
+        const existingGrant = this.pending.get(digest)
+        if (existingGrant) return existingGrant
+
+        const grant = this.requestGrant(credentials, digest, nowMs).finally(() => {
+            this.pending.delete(digest)
+        })
+        this.pending.set(digest, grant)
+        return grant
+    }
+
+    /** The tuple is JSON-encoded (not concatenated) so that, for example, `clientId: 'ab', secret: 'c'`
+     * and `clientId: 'a', secret: 'bc'` -- equal under plain concatenation -- digest differently. */
+    private digestCredentials(credentials: ClientCredentials): string {
+        return createHmac('sha256', this.hmacKey)
+            .update(JSON.stringify([credentials.clientId, credentials.clientSecret]))
+            .digest('hex')
+    }
+
+    private async requestGrant(credentials: ClientCredentials, digest: string, nowMs: number): Promise<string> {
         const response = await fetch(`${this.tokenEndpointBaseUrl}/protocol/openid-connect/token`, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -57,7 +89,7 @@ export class TokenCache implements AccessTokenProvider {
 
         const ttlSeconds = payload.expires_in ?? 60
         const entry = { token: payload.access_token, expiresAtMs: nowMs + Math.max(ttlSeconds - this.clockSkewSeconds, 1) * 1000 }
-        this.cache.set(credentials.clientId, entry)
+        this.cache.set(digest, entry)
         return entry.token
     }
 }

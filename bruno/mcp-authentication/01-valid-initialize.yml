@@ -1,0 +1,40 @@
+info:
+  name: 01-valid-initialize
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/mcp"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Accept
+      value: application/json, text/event-stream
+    - name: Authorization
+      value: "{{authValid}}"
+  body:
+    type: json
+    data: |-
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": { "name": "bruno", "version": "0.0.0" }
+        }
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('a valid credential can initialize', function() {
+          expect(res.status).to.equal(200);
+          var text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
+          var dataLine = text.split('\n').filter(function(line) { return line.indexOf('data: ') === 0; })[0];
+          var payload = dataLine ? JSON.parse(dataLine.slice('data: '.length)) : res.body;
+          expect(payload.result.protocolVersion).to.equal('2025-06-18');
+        });
