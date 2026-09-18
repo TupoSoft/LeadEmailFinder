@@ -4,23 +4,26 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
-Give the owner of `proxy-fleet/16` a reviewable proposal for reaching the lab's proxy listeners and running its SMTP
-fixture. One documentation pull request produces `deploy/proxy-fleet/validation-decisions.md`, with repository
-evidence, proposed lifecycle commands, trade-offs, and explicit questions. A developer can prepare this proposal
-without a running fleet or an installed VM provider. The owner selected a tunnel through `verifier-1` and Swarm
-services on the Vagrant VMs for the proxies, Mailpit, and the existing peer probe. The verifier becomes a Swarm
-worker without a proxy role. Mailpit handles SMTP conversations; the peer probe handles sequential source checks.
-Adapting provisioning, finalizing execution procedures, capacity instrumentation, and live proof remains in plan 16.
+Give the owner a reviewable design for a self-contained Kubernetes integration lab. One documentation pull request
+maintains `deploy/proxy-fleet/validation-decisions.md`, with repository evidence, selected topology, networking
+requirements, lifecycle procedures, and explicit limits. The selected lab uses k3d with one server and three agents:
+two proxy workers and one application and fixture worker. The application, its dependencies, the reconciler,
+Mailpit, and the peer probe run inside the cluster.
+
+This replaces the previously selected Vagrant, Swarm, and controller-tunnel path for the integration lab. It does
+not implement Kubernetes packaging or validate the existing Swarm deployment. Plan 16 and issue #424 still describe
+Vagrant, WireGuard, and Swarm validation; implementation requires a revision of that plan or a separate Kubernetes
+ExecPlan with its own pull request. This preparation remains documentation only.
 
 ## Progress
 
 - [x] (2026-09-15) Trace the listener, registry, application, and SMTP fixture paths against the current repository.
-- [x] (2026-09-15) Write the proposed execution models, lifecycle commands, evidence requirements, and owner questions.
-- [x] (2026-09-15) Complete static documentation and plan validation; record limitations and hand off the proposal.
-- [x] (2026-09-15) Revise the fixture proposal to the owner's Mailpit choice and validate the documentation for the existing PR.
-- [x] (2026-09-18) Record the selected Swarm fixture model and the required verifier membership, firewall, placement,
-  and reset adaptations without changing runtime code or plan 16.
-- [x] (2026-09-18) Validate the Swarm documentation revision and update its evidence and handoff record.
+- [x] (2026-09-15) Write and statically validate the original tunnel and fixture proposal.
+- [x] (2026-09-15) Record the owner's Mailpit selection and validate that documentation revision.
+- [x] (2026-09-18) Record and statically validate the earlier Swarm fixture model on the Vagrant VMs.
+- [x] (2026-09-18) Replace the selected integration-lab architecture with self-contained Kubernetes on k3d, preserving
+  proxy identities and source checks while identifying new deployment and network work.
+- [x] (2026-09-18) Validate the Kubernetes documentation revision and update its evidence and handoff record.
 
 ## Plan dependencies
 
@@ -30,188 +33,174 @@ Adapting provisioning, finalizing execution procedures, capacity instrumentation
 
 ## Surprises & Discoveries
 
-- The lab inventory does not override `proxy_fleet_worker_cidrs`. The effective default is the whole
-  `172.29.10.0/28` overlay, so the `.4/32` restriction stated in plan 16 needs a correction in both host firewall and
-  rendered proxy configuration before worker-only access can be claimed.
-- Mailpit `v1.30.7` is already pinned in `docker/compose.smtp-dev.yaml`. Its container supports explicit private
-  bindings and STARTTLS, so the fleet's ordinary SMTP phase needs no new SMTP server entry point. The existing Node
-  evidence fixture continues to own its precise classification scenarios.
-- Mailpit has no `/last-peer` contract or deterministic hold/release control. The reconciler still needs the peer
-  probe in a separate phase; capacity proof needs a synchronization barrier and Redis assertions in plan 16.
+- A k3d node is a Docker container. Multiple Kubernetes nodes do not automatically supply the three egress
+  addresses required by this lab. Explicit address assignment and return routes inside the node network namespaces
+  remain necessary, followed by observed source-address checks.
+- The existing proxy renderer rejects any listener or egress address absent from its network namespace.
+  `hostNetwork: true` allows the proposed proxy pods to use addresses assigned to their k3d node containers.
+  Aliases and routes must be restored and checked when nodes restart or are recreated.
+- A source allow list of `172.29.10.4/32` requires the real application and reconciler to originate proxy connections
+  from that address. Merely scheduling them on the same Kubernetes node is insufficient; source selection and
+  return routing need explicit configuration and live proof.
+- The current reconciler command shells out to `ansible-inventory`. Its reconciliation logic and HTTP adapters can
+  be reused, but a Kubernetes lab configuration adapter and a container entry point are still required.
+- Mailpit `v1.30.7` is pinned in `docker/compose.smtp-dev.yaml`. Mailpit has no `/last-peer` contract or deterministic
+  hold/release control, so the existing peer probe retains sequential source checks and capacity proof needs
+  separate synchronization and Redis assertions.
 - The real verifier stops after RCPT and QUIT without DATA, so the Mailpit inbox remains empty. Default acceptance
   produces a catch-all result rather than conclusive target evidence. Fresh control evidence and reverse-DNS
   records are prerequisites for exercising the actual SMTP path.
-- The current verification-worker play installs neither Docker nor the Swarm role. Swarm firewall membership is
-  computed from managers and proxy nodes only. Plan 16 must add explicit membership for the fixture worker while
-  keeping it outside `proxy_nodes`, whose validation, topology, and labels require actual proxy listeners.
-- The existing proxy stack already uses host networking and node placement constraints. A separate fixture stack
-  can preserve the two proxy services while constraining one active fixture to `verifier-1`. Host networking lets
-  SMTP bind to `172.29.10.4:2525` and status or UI bind to the guest's loopback address without routing-mesh ports.
-- Container images remove the need to install Node or a standalone Mailpit binary on the verifier. The peer's
-  compiled JavaScript can be supplied through Swarm configurations; the Mailpit certificate and key can use configurations and
-  secrets. Stack removal must verify task termination and remove only the fixture's owned artifacts. No proposed
-  guest or Swarm procedure has run.
+- The existing plan 16 contains VM, WireGuard, Ansible, and Swarm acceptance criteria. A passing Kubernetes scenario
+  cannot satisfy those deployment-specific criteria, and this documentation revision does not change their status.
 
 ## Decision Log
 
-- Decision: Run the proxies and fixtures as Swarm services on the Vagrant VMs, with `verifier-1` as a worker without
-  a proxy role.
-  Rationale: The owner selected this deployment model on 2026-09-18. Keep the existing proxy stack and use a separate
-  fixture stack pinned to the verifier's host network. Use immutable image digests, compiled peer-probe configurations,
-  and Mailpit certificate and key artifacts. Run the peer probe and Mailpit sequentially by setting their replica
-  counts to zero or one; verify that the previous task and listener have stopped before changing phase. This
-  supersedes the standalone Node and Mailpit staging and transient systemd-service proposals below. The selected
-  tunnel, listener endpoints, private status access, and separate capacity proof remain unchanged. Plan 16 must
-  adapt membership, firewall peer rules, worker placement, and ordered reset before live use.
-  Date/Author: 2026-09-18, project owner and Codex implementation.
-- Decision: Use a pinned standalone Mailpit binary for SMTP/STARTTLS and retain the existing peer probe for
-  sequential source-IP checks.
-  Rationale: The owner requested this update on 2026-09-15. Mailpit supplies the normal SMTP conversation with private
-  UI/API access. The probe retains the reconciler's `/last-peer` contract; only that phase needs staged Node. Capacity
-  synchronization remains separate validation work in plan 16. This superseded the proposed full Node SMTP entry
-  point. The 2026-09-18 decision retains these fixture responsibilities and supersedes standalone execution.
-  Date/Author: 2026-09-15, project owner and Codex implementation.
-- Decision: Record the owner's explicit choice of a temporary subnet tunnel through `verifier-1`.
-  Rationale: The owner selected this model on 2026-09-15 and authorized the documentation PR. The proposed `sshuttle`
-  procedure retains the original listener endpoints. This selection alone did not accept a fixture proposal;
-  the later Mailpit decision records that choice. Neither decision proves controller privileges, container
-  reachability, or the live acceptance criteria in plan 16.
-  Date/Author: 2026-09-15, project owner and Codex implementation.
-- Decision: Propose a staged Node runtime and transient service for the existing peer fixture.
-  Rationale: The verifier lacks Node, Docker, and shared source. A verified runtime archive and locally compiled
-  fixture keep these additions temporary; status access through `127.0.0.1` uses the captured SSH configuration.
-  The later Mailpit decision retained this model for the peer phase only. The 2026-09-18 Swarm decision supersedes
-  its staged runtime and transient-service lifecycle.
-  Date/Author: 2026-09-15, Codex implementation.
-- Decision: Deliver one proposal document without selecting or validating the fleet execution models.
-  Rationale: Gathering evidence and preparing commands can start now; plan 16 still requires an explicit execution
-  choice before live work. A documented unresolved question does not prevent completion of this preparation.
-  Date/Author: 2026-09-11, project owner and Codex planning.
-- Decision: Keep the document beside the existing deployment documentation in `deploy/proxy-fleet/`.
-  Rationale: The Ansible, Swarm, and Vagrant guides already live there and provide the source contracts.
-  Date/Author: 2026-09-11, Codex planning.
-- Decision: Consume the completed VirtualBox lab from plan 17 without adding a dependency on plan 18.
-  Rationale: Native Linux/libvirt validation is separate work and does not block a repository-based proposal.
-  Date/Author: 2026-09-11, Codex planning.
+- Decision: Select a self-contained Kubernetes integration lab using k3d.
+  Rationale: The owner selected this architecture on 2026-09-18. Use one server and three agents with explicit
+  placement: proxy A, proxy B, and the application and fixture worker. Run the application and reconciler inside the
+  cluster so integration traffic needs no WSL-to-verifier tunnel. Reuse the proxy image, reconciliation logic,
+  registry API, Mailpit, and peer probe. Add Kubernetes packaging, configuration input, and scoped network bootstrap
+  in later implementation work. Preserve three distinct egress identities and prove the real source addresses.
+  This supersedes the selected Vagrant, Swarm, standalone fixture, and tunnel execution paths for this lab.
+  Date/Author: 2026-09-18, project owner and Codex documentation.
+- Decision: Keep deployment migration separate from evidence for the existing Swarm fleet.
+  Rationale: Plan 16 and issue #424 remain unchanged and require a deliberate revision or a separate Kubernetes
+  ExecPlan before implementation. This document can describe the selected design without claiming that Kubernetes
+  validates the old Vagrant, WireGuard, firewall, Swarm placement, or reset behavior.
+  Date/Author: 2026-09-18, project owner and Codex documentation.
+- Decision: Retain separate peer-probe and Mailpit phases.
+  Rationale: The probe records connection origin; Mailpit supports ordinary SMTP and STARTTLS. Run one fixture at a
+  time on port `2525`, observe complete termination before changing phase, and serialize source checks. Capacity
+  validation remains separate because Mailpit does not provide deterministic synchronization.
+  Date/Author: 2026-09-18, project owner and Codex documentation.
+- Historical decision: Use Swarm services on the Vagrant VMs, with `verifier-1` as a non-proxy worker.
+  Rationale: This was the earlier 2026-09-18 choice. A separate fixture stack, host bindings, and a tunnel from WSL
+  were documented and statically checked. The later Kubernetes decision supersedes this execution model.
+  Date/Author: 2026-09-18, project owner and Codex documentation.
+- Historical decision: Select a temporary subnet tunnel through `verifier-1` and later a standalone Mailpit binary.
+  Rationale: These 2026-09-15 choices retained an application outside the VMs. The peer probe supplied origin
+  evidence, while Mailpit supplied SMTP conversations. Neither choice was run against the lab; later decisions
+  superseded their runtime and transport procedures.
+  Date/Author: 2026-09-15, project owner and Codex documentation.
+- Decision: Keep the proposal beside the existing deployment documentation.
+  Rationale: `deploy/proxy-fleet/` contains the reusable image, Ansible, Swarm, and Vagrant contracts. Plans 12, 13,
+  and 17 remain dependencies as evidence for this preparation, rather than prerequisites to create a future k3d
+  cluster. The separate libvirt provider work in plan 18 is not part of this proposal.
+  Date/Author: 2026-09-11, Codex planning; clarified 2026-09-18, Codex documentation.
 
 ## Outcomes & Retrospective
 
-The handoff now records the selected tunnel and Swarm services for the peer-probe and Mailpit phases. It identifies
-the verifier's required membership and provisioning changes, a separate fixture stack, private host bindings, and
-ordered phase changes and cleanup. The 2026-09-18 revision passed Harper, the repository-plan test, shell syntax
-checks, fixture compilation, and static Docker stack configuration parsing. These checks do not prove service
-deployment or runtime behavior. No guest, tunnel, registry, container, or application scenario ran. Runtime
-implementation, exact deployment inputs, and deterministic capacity proof remain in plan 16.
+The current handoff selects Kubernetes on k3d for the self-contained integration lab. It records explicit workload
+placement, retained listener and egress identities, node-local address and route requirements, reuse boundaries,
+separate fixture phases, and scoped cleanup. It removes the tunnel and Swarm lifecycle from the selected path.
+The Kubernetes revision passed Harper, the repository-plan test, shell syntax checks, and validation of the
+embedded configuration against the k3d version 5.9.0 schema. Earlier documentation checks below are historical.
+These static checks do not validate runtime behavior.
+
+No cluster, container workload, network alias, route, registry, or application scenario has been created or changed
+by this preparation. Kubernetes implementation and live source, privacy, capacity, restart, and cleanup proof remain
+future work. Plan 16 and issue #424 are not satisfied by this revision.
 
 ## Context and Orientation
 
-`deploy/proxy-fleet/ansible/inventory/vagrant-lab.yml` declares a manager, two proxy nodes, and `verifier-1`. The proxy
-listeners advertise `172.29.10.2:13001`, `172.29.10.2:13002`, and `172.29.10.3:13001`; their egress identities are
-`198.18.0.21`, `.22`, and `.23`. The verifier uses `172.29.10.4` on the WireGuard overlay. The Vagrant guide documents
-direct lifecycle commands. Captured SSH aliases belong in the ignored `.vagrant/proxy-fleet/` directory.
+The existing Vagrant inventory declares three proxy listeners: `172.29.10.2:13001`,
+`172.29.10.2:13002`, and `172.29.10.3:13001`. Their egress identities are `198.18.0.21`, `.22`, and `.23`.
+The proposed Kubernetes topology retains those application-facing addresses and uses `172.29.10.4` for the
+application and fixture worker. These are lab identities assigned inside the k3d node containers; they do not become
+Kubernetes node addresses simply by creating several agents.
 
-The health check in `scripts/proxy-fleet-swarm/listener-health-check.ts` authenticates through the listener endpoint.
-Reconciliation in `reconcile.ts` publishes the same `bindIp` to the registry for the application to consume. Forwarding a listener to a
-different localhost address does not demonstrate that the real application can reach the advertised endpoint.
+`docker/proxy-fleet/render-config.sh` validates local address assignment, applies worker source restrictions,
+and renders explicit listener and egress bindings for 3proxy. Two node-pinned proxy workloads with host networking
+can reuse this image and its listener manifests. Kubernetes configuration and secret mounts replace Swarm-specific
+packaging. The normal pod network may serve application dependencies, while source-sensitive verification,
+reconciliation, and fixture traffic use the application and fixture node's host network and explicit routes.
 
-`scripts/proxy-fleet-swarm/smtp-peer-probe.ts` records the most recent connection's address and exposes it through
-`/last-peer`. Its CLI uses Node and defaults both listening hosts to `0.0.0.0`. The current Vagrant and Ansible
-procedures install neither Node nor Docker on the verifier and disable the shared source folder. The selected
-model requires plan 16 to install Docker and join the verifier to Swarm without adding it to `proxy_nodes`. A pinned
-Node image supplies the peer runtime; locally compiled fixture files become Swarm configurations. The probe retains its
-private status contract and proves connection origin, not a complete email verification conversation.
+`scripts/proxy-fleet-swarm/reconcile.ts` computes registry changes and uses a listener health check before
+activation. The CLI in `reconcile-cli.ts` currently loads Ansible inventory and credential files. A Kubernetes
+configuration adapter must supply the same desired listeners without pretending that the current CLI already reads
+Kubernetes resources. The application still dials the addresses published to its existing registry.
 
-Mailpit supplies ordinary SMTP conversations as a service in the separate fixture stack. An immutable image with
-host networking and verifier placement can bind SMTP to `172.29.10.4:2525` and UI/API to `127.0.0.1:8025`, using the
-existing `smtp.lef.test` certificate. The peer service uses the same SMTP port and loopback status port `9000`.
-Run these services sequentially, with at most one replica of one fixture, and pause reconciliation during the
-Mailpit phase. Do not publish either service through the routing mesh. The existing SSH management path provides
-private access to status and UI.
+`scripts/proxy-fleet-swarm/smtp-peer-probe.ts` records the last connection address and exposes `/last-peer`.
+Place the probe and reconciliation Job on the application and fixture worker with host networking, and keep probe
+status bound to the loopback address. Checks must run sequentially without competing SMTP clients. Mailpit runs in a
+separate phase on `172.29.10.4:2525`, with its UI/API bound to the loopback address and STARTTLS using the existing
+`smtp.lef.test` certificate. The application requires the existing SMTP test DNS, CA, and control-cache prerequisites.
 
-Plan 16 owns eventual live validation and known firewall, WireGuard, Swarm-address, and reset corrections. It must
-also replace its assumption that the verifier has no Docker with the selected worker role, expand the declared
-Swarm peer set, and order the verifier's departure before the manager's. The verifier must receive no proxy labels
-or listener manifest. These changes are documented requirements for that implementation, not runtime changes in
-this preparation.
+Node-container aliases, routes with the intended source address, and narrowly owned firewall rules require
+privileged bootstrap inside the disposable nodes. Host networking does not provide pod-level network isolation
+for these workloads; privacy and source restrictions require explicit node rules and live rejection checks.
+Bootstrap must be reapplied and validated after node restart or recreation. No instruction should alter the
+controller's routes or unrelated Docker networks.
 
 ## Scope and Non-Goals
 
-Maintain `deploy/proxy-fleet/validation-decisions.md` and the implementation record in this plan in the same
-documentation pull request. The document covers only the two execution decisions blocking plan 16 and the evidence
-needed to select and later validate them.
+Maintain `deploy/proxy-fleet/validation-decisions.md`, this implementation record, and legitimate terms in the
+documentation spelling dictionary in the existing pull request. Replace stale selected execution procedures with the Kubernetes decision and document
+what can be reused, what must be implemented, and which evidence remains missing.
 
-Do not implement a tunnel, fixture, adapter, endpoint, provider, route, or VM lifecycle wrapper. Do not install
-Vagrant, create guests, change host networking, contact a proxy registry, or run live scenarios. Do not select a
-different provider or start plan 18. Record the selected fixture-worker adaptation for plan 16 without editing that
-plan or relaxing its endpoint, source, privacy, recovery, or live-evidence requirements. No schema or HTTP behavior
-changes are included.
+Do not create a cluster, change deployment code, add Kubernetes manifests, build images, install tools, bootstrap
+networking, contact a proxy registry, or run live scenarios. Do not edit plan 16, close issue #424, or imply that
+Kubernetes validates the existing Swarm deployment. No schema or HTTP API behavior changes are included.
 
 ## Plan of Work
 
-First, inspect the tracked inventory, the Vagrant guide and provisioner, the Ansible firewall and WireGuard roles,
-and the Swarm reconciliation and probe sources. Trace the application path consuming the reconciled registry host
-to its connection adapter. Record repository-relative files and symbols for each network hop, endpoint, source
-identity, allow-list restriction, runtime prerequisite, and existing defect relevant to the two decisions.
+Inspect the existing listener image, proxy registry, reconciler, peer probe, Mailpit configuration, application test
+stack, and Vagrant routing setup. Separate reusable application contracts from Ansible, WireGuard, and Swarm-specific
+implementation. Check k3d and Kubernetes behavior against primary documentation where repository evidence is
+insufficient.
 
-Write a short comparison of the execution models already identified in plan 16: a scenario-scoped subnet tunnel,
-guest-side validation tooling, and a narrow connection override. Explain whether each preserves the advertised
-`bindIp` and exercises the real application path, where traffic originates, which firewall rules permit it, and what
-controller privileges or dependencies it would require. Mark models that conflict with the unchanged endpoint
-contract as unsuitable; do not quietly relax the contract to make a model appear feasible.
+Describe the selected one-server, three-agent cluster and exact workload responsibilities. Keep two listeners on
+the first proxy worker and one on the second, with three distinct egress identities. Place the application, reconciliation Job, and
+fixtures on the third agent, and specify which workloads need host networking. Explain why application placement,
+source-address selection, and narrow access rules jointly replace the previous controller tunnel.
 
-For fixture execution, document the selected Swarm model while accounting for the verifier's missing Docker and
-Swarm membership. Identify the required provisioning, firewall peer-set, placement-label, and reset adaptations as
-plan-16 work. Explain why adding the verifier to `proxy_nodes` is unsuitable. Keep the two proxy services separate
-from a fixture stack pinned to the verifier with host networking. Describe immutable Node and Mailpit images,
-compiled peer-probe configurations, and scoped certificate and key artifacts without assuming a shared source folder or
-guest Node installation. Preserve the peer-status contract, private status access, and source observations.
+Document node-local address assignment, return routes, conflict detection, and required bootstrap privileges.
+Require the peer probe to observe every declared egress address before proceeding to application validation.
+Treat network source preservation as an experiment that must pass, not an automatic property of k3d. Include
+restart and recreation checks because Kubernetes scheduling alone does not restore external network bootstrap.
 
-Document the zero-or-one replica phase transition and require the previous task and listener to stop before the
-next starts on the shared SMTP port. Separate sequential source-address observations from Mailpit conversations
-and deterministic capacity evidence. Concurrent clients can overwrite the peer probe's last observed address.
+Describe configuration and secret packaging, immutable image inputs, private status access, sequential source
+checks, and the stop-then-start transition between peer probe and Mailpit. Separate normal SMTP conversations from
+the deterministic synchronization required for capacity proof. Describe removal of only owned cluster resources and
+lab nodes, with registry draining and workload termination before connectivity disappears.
 
-For each viable proposal, write exact proposed lifecycle commands for preparation, start, readiness, use, normal
-cleanup, and interruption. Include explicit working directories and named environment inputs. Mark commands that
-have not run as proposals, identify commands that depend on future code, and describe how their results will be verified. Use
-captured Vagrant SSH configuration for guest access and explicit remote-manager transport for any proposed Docker
-mutation. Explain ownership, safe repetition, credential handling, and restoration of temporary processes, files, and
-network state. Check external command syntax against primary documentation when repository evidence is insufficient.
+Mark proposed commands and future implementation dependencies explicitly. Use an isolated kubeconfig and an
+explicit cluster identity, and prevent commands from falling back to unrelated Kubernetes or Docker resources.
+Explain which checks run statically during this documentation task and which require the future live lab.
 
-Finish with the owner's selected tunnel and Swarm fixture model, the retained peer-probe contract, and a decision table
-containing the question, repository evidence, missing external fact, and responsible role. Use the project owner for environment or privilege questions
-and the plan-16 implementer for execution details; do not assign a named collaborator. Each unresolved choice has a
-clear effect on plan 16. Distinguish the owner's selected models from unverified lifecycle commands and unresolved
-execution details; completion of this document does not approve remaining choices or prove live behavior.
+Finish with a clear handoff: the owner selected Kubernetes, while deployment implementation needs a new or
+revised ExecPlan. Existing Swarm and Vagrant acceptance criteria remain outstanding. Update the documentation
+evidence and run the focused checks without creating infrastructure.
 
 ## Interfaces and Dependencies
 
-The only new interface is the documentation handoff to plan 16. Preserve listener addresses, registry ownership,
-worker-only access, lab-routed source identities, private fixture status, direct Vagrant lifecycle, and explicit
-remote Docker selection. Plans 12, 13, and 17 supply existing implementation and topology evidence. There is no
-runtime or package dependency for this preparation beyond the repository's documentation and plan tooling.
-The selected runtime model adds a non-proxy Swarm worker and a separate fixture stack in plan 16. That later work
-must define immutable image inputs, private configuration and secret handling, placement ownership, explicit manager
-identity checks, ordered service cleanup, and worker departure. Existing proxy registry and application APIs stay
-unchanged.
+The interface delivered here is a design document. Existing proxy registry APIs, listener authentication, desired
+listener identities, source checks, and application verification behavior remain unchanged. Plans 12, 13, and 17
+supply source evidence for reusable contracts and the earlier topology.
+
+Future implementation needs Kubernetes workload and dependency packaging, a reconciler configuration adapter,
+node placement and privileged network bootstrap, private configuration and secret handling, fixture phase control,
+and deterministic validation. It must define image pins, ownership of the namespace and cluster, source selection, scoped
+firewall recovery, and restart behavior. This preparation adds no runtime or package dependencies.
 
 ## Acceptance Criteria
 
-- The document maps the listener and fixture paths to current source files and identifies all three listener endpoints.
-- Each viable proposal explains privileges, dependencies, endpoint preservation, private status access, and recovery.
-- Proposed commands cover preparation, readiness, use, normal cleanup, and interruption. Inputs and evidence
-  requirements are explicit. Commands that have not run and dependencies on future code are visibly labeled.
-- The document distinguishes peer-origin evidence from actual application verification and records the probe's
-  sequential-use constraint.
-- The document records the selected Swarm services, separate fixture stack, verifier placement and host bindings,
-  and immutable image and artifact inputs. It identifies the required non-proxy worker provisioning, firewall
-  membership, and reset adaptations as unimplemented plan-16 work.
-- Proposed fixture transitions allow at most one active fixture on port `2525`. Cleanup verifies task termination,
-  private socket closure, and removal of only owned services, configurations, secrets, and temporary artifacts before reset.
-- Unresolved choices identify a responsible role and the missing fact. Their continued presence does not block this
-  preparation, and the document does not claim approval of remaining execution details or completed live validation.
-- Plan 16 retains its conditional readiness and every runtime acceptance requirement. Documentation checks pass
-  without requiring a running fleet or installed Vagrant. Recording the selected model does not implement its
-  provisioning changes or establish live validation.
+- The document selects k3d with one server and three agents and identifies all workload placements, including the
+  application, dependencies, reconciler, two proxy workers, Mailpit, and peer probe.
+- The document preserves all three listener endpoints and egress identities and identifies their repository
+  contracts. It distinguishes lab aliases from k3d node addresses and public Internet egress.
+- The document specifies node-local aliases, source selection, return routes, required privileges, placement,
+  privacy, and restart requirements. It requires observed source checks rather than assuming source preservation.
+- Proposed lifecycle procedures cover preparation, readiness, fixture phases, normal cleanup, interruption, and
+  repeat runs. Future code dependencies and commands that have not run are explicitly labeled.
+- Peer-origin checks remain sequential. Fixture transitions require the previous workload and listener to stop
+  before the next fixture takes port `2525`. Actual SMTP conversations and capacity evidence remain distinct.
+- The selected path requires no WSL-to-verifier tunnel or Vagrant/Swarm lifecycle. Historical alternatives are
+  clearly marked as superseded rather than presented as current requirements.
+- The document identifies reusable components and missing Kubernetes implementation. It explicitly states that plan
+  16 and issue #424 need a revision or a separate Kubernetes ExecPlan and retain their unverified Swarm criteria.
+- Documentation and plan checks pass without creating a cluster or changing runtime state. Passing static checks
+  does not claim deployment, application, source-address, capacity, or cleanup validation.
 
 ## Validation
 
@@ -223,61 +212,67 @@ corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repositor
 git diff --check
 ```
 
-Manually compare every cited path, endpoint, environment variable, and repository command with its source. Review
-each proposed lifecycle against the unchanged acceptance criteria in plan 16 and record unsupported host assumptions.
-Do not execute the proposed live commands as a validation requirement. Record exact static results and distinguish
-them from the later fleet evidence. Bruno: not applicable — documentation changes no HTTP behavior.
+Manually compare cited paths, endpoint identities, environment variables, and repository commands with source.
+Check proposed command syntax without executing cluster or network mutations. Review the new design against the
+reusable application contracts and clearly identify which old plan-16 deployment criteria it does not test.
+Record exact static results separately from later live evidence. Bruno: not applicable — documentation changes
+no HTTP behavior.
 
 ## Idempotence and Recovery
 
-Preparation edits only the proposal document and this plan. Reread their current contents before updating them;
+Preparation edits the proposal document, this plan, and legitimate terms in the documentation spelling dictionary.
+Reread their current contents before updating them;
 preserve unrelated work and retain the distinction between evidence, assumptions, and decisions on every revision.
 After interruption, resume from the unchecked progress item. Recovery requires correcting or reverting only this
-pull request's documentation; no guest, service, registry, credential, or controller state is changed.
+pull request's documentation; no guest, cluster, service, registry, credential, or controller state is changed.
 
 ## Artifacts and Notes
 
-The handoff is `deploy/proxy-fleet/validation-decisions.md`. Record the inspected revision and sanitized source
-references. Do not include captured SSH files, absolute controller paths, credentials, private keys, or machine IDs.
-Completion supplies the selected models and proposed procedures for plan 16 to consume; it neither starts that plan
-nor marks its remaining execution decisions resolved. The document records inspected revisions
-`e3ae79e4e8eb5442930b29da1158b38efbb228e2` and `d13134d243e38b192991c204210527c26743b9ed` and the primary references checked.
+The handoff is `deploy/proxy-fleet/validation-decisions.md`. Record inspected revisions and sanitized source
+references. Do not commit kubeconfigs, captured SSH files, credentials, private keys, machine identities, or absolute
+controller paths. Completion records the selected Kubernetes design without starting its implementation.
 
-Historical static validation of the standalone fixture revision on 2026-09-15, from the repository root:
+The earlier revisions inspected `e3ae79e4e8eb5442930b29da1158b38efbb228e2` and
+`d13134d243e38b192991c204210527c26743b9ed`. The Kubernetes revision started from
+`dfbb2897c0a44b9428ea450eb1629f2b9282f210`.
 
-- `corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md`
-  passed for both files after correcting the reported prose findings.
-- `corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts` passed one suite
-  and one test, covering repository-wide plan discovery and dependency resolution.
-- All 23 Bash blocks in the revised proposal and the shell block in this plan passed `bash -n` without execution.
-  Relative Markdown links and explicit repository source paths were checked. `git diff --check` passed.
-- The initial revision's proposed `corepack pnpm exec tsc` invocation compiled the two existing peer-probe files into
-  a temporary local directory. Both emitted JavaScript files passed `node --check`; neither fixture was started.
-- The Mailpit archive name and SHA-256 digest were checked against the release API. Command flags, version checking,
-  and readiness behavior were checked against the pinned upstream source. No Mailpit binary was installed or run.
-- Dependencies were installed with the frozen lockfile and a temporary writable pnpm store after the default store
-  rejected a project-registration write. Validation used `TMPDIR=/tmp TMP=/tmp TEMP=/tmp`. No dependency files changed.
+Historical static validation of the standalone fixture revision on 2026-09-15:
 
-Static validation of the Swarm documentation revision on 2026-09-18, from the repository root:
+- Harper passed both Markdown files; the repository-plan test passed one suite and one test.
+- All 23 Bash blocks in that proposal and this plan's shell block passed `bash -n`; links and
+  `git diff --check` passed.
+- The two existing peer-probe files compiled to a temporary directory and passed `node --check`.
+- The Mailpit archive and digest were checked against the release API; no fixture binary or guest process ran.
+
+Historical static validation of the Swarm documentation revision on 2026-09-18:
+
+- Harper passed both Markdown files; the repository-plan test passed one suite and one test.
+- All 19 Bash blocks in that proposal and this plan's shell block passed `bash -n`; links and
+  `git diff --check` passed.
+- Both peer-probe files compiled and passed `node --check`.
+- The embedded fixture YAML passed `docker stack config --compose-file` with synthetic image digests.
+  No images were pulled and no Docker daemon state changed.
+- Review corrected ownership queries that could otherwise treat a failed Docker query as an empty result.
+
+Static validation of the Kubernetes documentation revision on 2026-09-18:
 
 - `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md`
-  passed for both files.
+  passed both files after correcting prose and adding legitimate Kubernetes terminology to `.harper-dictionary.txt`.
 - `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`
   passed one suite and one test.
-- All 19 Bash blocks in the proposal and the shell block in this plan passed `bash -n` without execution. Relative
-  Markdown links and cited repository paths were checked. `git diff --check` passed.
-- The documented `corepack pnpm exec tsc` invocation compiled both existing peer-probe files into a temporary local
-  directory. Both emitted files passed `node --check`; neither fixture was started.
-- The embedded YAML passed `docker stack config --compose-file` using a temporary copy and synthetic image digests.
-  This checked configuration parsing only; no images were pulled and no Docker daemon state changed.
-- Review checked lifecycle flags and Mailpit configuration against primary documentation and pinned source. It
-  found and corrected a preflight that could treat a failed Docker query as an empty result. Ownership and cleanup
-  queries now stop on query failure.
+- All three Bash blocks in the proposal and the shell block in this plan passed `bash -n` without execution.
+  Relative Markdown links were checked and `git diff --check` passed.
+- The embedded configuration parsed with PyYAML and passed Python `jsonschema` validation against
+  `pkg/config/v1alpha5/schema.json` from the upstream k3d `v5.9.0` tag. Substitution used synthetic run, network,
+  port, and image-digest values. No Docker daemon or Kubernetes API was contacted for this check.
+- Local k3d `v5.9.0` help confirmed the documented CLI options. Review corrected missing exports for template
+  variables and specified how planned node replacements update the owned-resource record before cleanup.
 
-Bruno: not applicable — this preparation changes documentation only. Review found no application architecture change;
-the verifier's Swarm membership, fixture services, and privileged tunnel remain explicit operational trade-offs
-for plan 16. Swarm fixtures persist after SSH disconnects and require explicit cleanup. Runtime implementation and
-live validation remain unverified.
+No Kubernetes manifest, cluster, image, bootstrap procedure, or application scenario has been implemented or run.
+The material operational trade-offs are privileged setup inside disposable node containers, host-network isolation
+limits, and the need to restore aliases and routes after node lifecycle events.
+
+Bruno: not applicable — this preparation changes documentation only.
 
 ## Plan readiness
 

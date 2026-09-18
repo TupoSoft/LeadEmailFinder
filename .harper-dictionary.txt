@@ -403,3 +403,16 @@ cooldown
 selectable
 Vitest
 jsdom
+k3d
+K3s
+kubeconfig
+kubeconfigs
+kubectl
+kubelet
+ClusterIP
+NodePort
+NetworkPolicy
+ConfigMap
+ConfigMaps
+UID
+PyYAML
