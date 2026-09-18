@@ -12,7 +12,8 @@ reuses its unexpired token.
 
 This plan delivers one implementation PR, with the proposed conventional title
 `fix(mcp): bind cached tokens to complete credentials`. It corrects the cache contract proposed by
-`mcp-connector/02`; it does not implement the original connector scaffold ahead of that prerequisite.
+`mcp-connector/02`. PR #705 now implements that unsafe contract, so this existing plan also owns the first
+finding from its review. Keep the stable plan key and its synced issue instead of creating a duplicate task.
 
 ## Progress
 
@@ -26,9 +27,19 @@ This plan delivers one implementation PR, with the proposed conventional title
 
 ## Surprises & Discoveries
 
-None yet.
+Review evidence from 2026-09-18 confirms the planned defect at PR #705 head
+`dffe34cc66085c042343cc5c7aaa75547aeb925f`. A local fake token endpoint and the real connector returned
+HTTP `200` and `pong` for a valid secret, a wrong secret, and an empty secret under the same client ID.
+Only one token grant occurred. These are local HTTP results, not live Keycloak validation.
+
+Two calls made while the first grant was pending also started two grants.
+The existing concurrent test in `main.spec.ts` resolves its mock immediately and does not prove shared pending work.
+The package tests passed 68 of 68 cases despite both gaps. Implementation has not started.
 
 ## Decision Log
+
+- Decision: Reuse plan 01 for the confirmed PR #705 bypass. Date/Author: 2026-09-18, Codex.
+  This preserves the synced issue and existing security prerequisite without duplicating implementation work.
 
 - Decision: Identify cache entries using an HMAC-SHA-256 digest over the UTF-8 representation of
   `JSON.stringify([clientId, clientSecret])`. Generate a random 32-byte HMAC key once when the process's singleton
@@ -52,17 +63,18 @@ Not started.
 
 ## Context and Orientation
 
-All paths are repository-relative. At planning baseline `e4c1062`, `.agents/plans/mcp-connector/02-bridge-oidc-client-credentials.md`
-is a plan, and `apps/mcp-server` has not been implemented. The application paths below are proposed by that
-prerequisite, except for the new integration spec and Bruno collection explicitly named here. Inspect the
-prerequisite's delivered files before editing and record any path changes in this document.
+All paths are repository-relative. This update was authored on master commit
+`e8b7d77688302ea8de9c15bc97f1af8cbb638326` using the exact PR #705 head recorded above.
+At that master base the scaffold exists, but the authentication files are still in the open PR.
+Begin implementation from a base containing `mcp-connector/02`; recheck its source if the head changes.
 
-The proposed connector receives HTTP Basic credentials, exchanges them at the Keycloak token endpoint, and passes
-the resulting bearer token to the MCP request context. Original plan 02 proposes
-`apps/mcp-server/src/auth/token-cache.ts` with `getAccessToken({clientId, clientSecret}): Promise<string>` and a
-cache indexed only by `clientId`. Returning a cached token before checking the supplied secret authenticates an
-incorrect secret whenever that ID has a live entry. The downstream API receives a valid bearer token and cannot
-recover the fact that the connector accepted the wrong secret.
+The delivered design in PR #705 parses Basic credentials in `apps/mcp-server/src/auth/basic-credentials.ts`.
+`main.ts` checks origin and method before exchanging credentials through an injected `AccessTokenProvider`.
+`TokenCache.getAccessToken` in `apps/mcp-server/src/auth/token-cache.ts` returns an unexpired entry using only
+`clientId`, without checking the submitted secret. That admits an incorrect or empty secret after a valid login.
+Each request receives a fresh server and transport; the singleton cache is shared across requests.
+The resulting bearer is stored in `req.auth` and reaches handlers through the SDK field `authInfo`.
+Only `ping` exists at the reviewed head. Future API calls cannot detect that their bearer came from a wrong secret.
 
 Existing evidence is `scripts/proxy-fleet-swarm/m2m-token-provider.ts`: its
 `OidcClientCredentialsTokenProvider` owns one fixed credential, exchanges the `client_credentials` grant, and
@@ -86,12 +98,15 @@ This PR adds no verification tool, billing policy, OAuth discovery flow, Desktop
 database change, TypeORM migration, Keycloak migration, or new external dependency. It does not change the API's
 authentication module or the existing proxy-fleet token provider. Immediate secret-rotation invalidation and
 general cache-capacity policy are separate concerns.
+Repairing the existing origin collection belongs to `mcp-connector-hardening/05`.
+The startup documentation repair belongs to `mcp-connector-hardening/06`.
+This plan remains the required security prerequisite for `mcp-connector/03` and later business tools.
 
 ## Plan of Work
 
 First inspect the implementation delivered by `mcp-connector/02`, especially
 `apps/mcp-server/src/auth/token-cache.ts`, its spec, and the authentication gate in
-`apps/mcp-server/src/main.ts`. Keep the current constructor's endpoint and clock inputs. Add private process-local
+`apps/mcp-server/src/main.ts`. Keep the constructor inputs `tokenEndpointBaseUrl`, `clockSkewSeconds`, and `now` in their existing order. Add private process-local
 HMAC key material generated with `randomBytes(32)` from `node:crypto`, and a small private digest operation using
 `createHmac('sha256', key)`. Hash the JSON tuple immediately for each call. Never index an entry by the client ID
 alone, concatenate ID and secret without an unambiguous encoding, or use the Basic header itself as a cache key.
@@ -117,30 +132,30 @@ endpoint outages; never reinterpret an outage as permission to use a token from 
 Keep bearer state in the SDK's per-request context rather than a mutable field shared by requests.
 
 Extend `apps/mcp-server/src/auth/token-cache.spec.ts` with table-driven credential-isolation cases, the valid-then-
-incorrect-secret regression, fake-clock expiry and failed-renewal cases, retry after failed grant, and deferred
+incorrect-secret and empty-secret regressions, fake-clock expiry and failed-renewal cases, retry after failed grant, and deferred
 fetch responses that prove the concurrent cases. Cover IDs and secrets whose plain concatenations would be equal
 so that an ambiguous replacement of the tuple encoding would fail. Check that returned errors and captured logs
 contain none of the fixture's secret or token values. Restore mocks after each test.
 
 Add `apps/mcp-server/src/auth/auth-http.integration.spec.ts`. Reuse the prerequisite's server factory, a local
 fake token endpoint, and the real SDK transport on an ephemeral port. Initialize a client with valid credentials
-and call `ping`, then send a valid MCP request with the same ID, an incorrect secret, and the established session
-ID if the transport uses sessions. Assert HTTP `401` and unchanged transport/tool dispatch counts for the rejected
-request. Repeat with the correct credential and assert success with no extra valid-credential grant. Also cover
+and call `ping`, then send valid MCP requests with the same ID and either an incorrect or empty secret.
+Use the existing stateless transport and do not introduce sessions.
+Assert HTTP `401` and unchanged transport/tool dispatch counts for the rejected requests. Repeat with the correct credential and assert success with no extra valid-credential grant. Also cover
 an incorrect request while the valid grant is pending, and concurrent valid clients whose handlers observe only
 their own request's bearer. Close servers and clients in `finally`; no Compose stack is needed for these tests.
 
 Add `bruno/mcp-authentication/` as a distinct MCP initialization workflow, following the YAML format of
 `bruno/m2m-oidc-authentication/`. Include `opencollection.yml`, `environments/local.yml`, a short `README.md`, and
 ordered requests `01-valid-initialize.yml`, `02-wrong-secret-rejected.yml`, `03-missing-credential-rejected.yml`,
-and `04-valid-initialize-again.yml`. Read the connector URL, client ID, and secret from process environment
-variables `MCP_AUTH_BASE_URL`, `MCP_AUTH_CLIENT_ID`, and `MCP_AUTH_CLIENT_SECRET`; commit no real credential.
+`04-empty-secret-rejected.yml`, and `05-valid-initialize-again.yml`.
+Read the connector URL, client ID, and secret from process environment variables `MCP_AUTH_BASE_URL`, `MCP_AUTH_CLIENT_ID`, and `MCP_AUTH_CLIENT_SECRET`; commit no real credential.
 Derive an incorrect secret in memory by appending a suffix to the valid one. Both valid requests initialize the
 real connector using the SDK protocol version delivered by the prerequisite, with the transport's required
 headers, and assert a successful initialization response. Allow the transport's documented JSON or finite SSE
-response framing. Rejection requests assert `401` and the generic error shape. Delete sessions created by the
-collection when the transport supports session deletion. Do not print headers, variables, or exported response
-reports containing credentials. The SDK integration test separately proves that handlers were not dispatched.
+response framing. Rejection requests assert `401` and the generic error shape.
+The current stateless transport creates no sessions, so no session deletion is needed.
+Do not print headers, variables, or exported response reports containing credentials. The SDK integration test separately proves that handlers were not dispatched.
 
 Finally update the cache decision, work instructions, tests, and acceptance criteria in
 `.agents/plans/mcp-connector/02-bridge-oidc-client-credentials.md` and the shared cache constraint in
@@ -162,8 +177,8 @@ and root validation integration. This plan can be validated using `ping` before 
 
 ## Acceptance Criteria
 
-- A valid credential warms the cache; an incorrect secret for the same ID is sent to the token endpoint and
-  rejected. It receives no cached token, HTTP `401` is returned, and no transport/tool dispatch occurs.
+- A valid credential warms the cache; incorrect and empty secrets for the same ID are sent to the token endpoint
+  and rejected. Those requests receive no cached token, HTTP `401` is returned, and no transport/tool dispatch occurs.
 - Repeating the identical valid credential before expiry uses one completed grant. Distinct credentials never
   receive each other's token, including input pairs that would collide under plain concatenation.
 - Concurrent requests with identical credentials share one grant. Concurrent requests with different secrets
@@ -172,8 +187,8 @@ and root validation integration. This plan can be validated using `ping` before 
   and permits a later retry to make a fresh grant. A failure for one digest leaves other valid entries usable.
 - Cache keys and values contain no raw client secret or Basic header; completed values contain only token and
   expiry. Captured logs and public errors contain no fixture secret, bearer token, HMAC key, or digest.
-- HTTP integration tests and all four Bruno requests pass with correct success/rejection outcomes. Missing
-  credentials still trigger zero token grants in the integration test, and `/health` remains public.
+- HTTP integration tests and all five Bruno requests pass with correct success/rejection outcomes. Missing
+  credentials and malformed Basic headers still trigger zero token grants in the integration test, and `/health` remains public.
 - Focused tests, package typecheck, root typecheck/lint, and prose validation pass. No schema, provider, business
   permission, or billing behavior changes.
 
@@ -190,16 +205,22 @@ corepack pnpm lint
 
 The first command exercises unit behavior and real local HTTP/SDK integration using a fake token endpoint. It is
 not live Keycloak evidence. For Bruno, run the connector from prerequisite 02 against the local development
-Keycloak instance, using that plan's documented startup command and seeded service-client credential. Load the
-three `MCP_AUTH_*` variables into the environment without printing the credential. Then run:
-
-```sh
-cd bruno/mcp-authentication
-corepack pnpm exec bru run --env local
-```
+Keycloak instance. Build the package, set `OIDC_BACKCHANNEL_URL` to the reachable realm URL, and start it.
+Use `MCP_ALLOWED_ORIGINS=https://client.example` if the client sends that origin.
+Load `MCP_AUTH_BASE_URL`, `MCP_AUTH_CLIENT_ID`, and `MCP_AUTH_CLIENT_SECRET` without printing credentials.
+The customer summary in `.dev/keycloak/customer-fixture.json` contains no secret.
+Reuse `loadDevelopmentStack` from `scripts/testing/development-stack.mjs` with `persistMetadata: false`.
+Check the summary issuer against that stack and require client ID `lef-svc-dev-fixture`.
+Then use `customerClientSecret` from `scripts/bruno/async-verification-fixture.mjs` to read its current secret.
+In that same Node process, call `spawn('corepack', ['pnpm', 'exec', 'bru', 'run', '--env', 'local'], options)`.
+Set `options.cwd` to `resolve('bruno/mcp-authentication')` and use `stdio: 'inherit'`.
+Pass the parent environment plus all three `MCP_AUTH_*` values through `options.env`.
+Await the child exit and propagate failures; never place the secret in command arguments or logs.
+Include this complete retrieval and execution snippet in the new collection README.
+Do not assume that a child process can export credentials to a later shell.
 
 This standalone collection does not use the API-specific runner registry in `scripts/bruno/run-collection.mjs`.
-Inspect its four executed results; discovery without execution is not a pass. If the local connector or Keycloak
+Inspect its five executed results; discovery without execution is not a pass. If the local connector or Keycloak
 is unavailable, validate the collection's YAML and report Bruno execution as unverified. Container deployment is
 not a prerequisite, and no production validation is claimed.
 
@@ -209,7 +230,7 @@ From the repository root, validate all Markdown changed by the implementation PR
 corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/01-bind-token-cache-to-credentials.md .agents/plans/mcp-connector/02-bridge-oidc-client-credentials.md .agents/plans/mcp-connector/README.md bruno/mcp-authentication/README.md
 ```
 
-During planning, only this document exists among the new artifacts. Run its focused prose command separately:
+During planning, the new tests and collection remain proposed artifacts. Run its focused prose command separately:
 
 ```sh
 corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/01-bind-token-cache-to-credentials.md
@@ -219,8 +240,7 @@ corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/01-bind-token-c
 
 Repeating authenticated calls is safe and preserves the existing token-cache lifetime. Restarting the connector
 discards the HMAC key, cached tokens, and pending state; the next valid call performs a new grant. The focused tests
-use disposable servers and no database. Bruno initializes sessions without creating product data and closes
-those sessions when supported. No reset, reseed, or migration is needed for this change. If an existing local
+use disposable servers and no database. Bruno initializes the stateless connector without creating product data. No reset, reseed, or migration is needed for this change. If an existing local
 development stack needs recovery, use its established procedure rather than adding another one here.
 
 ## Artifacts and Notes
@@ -229,6 +249,10 @@ The unsafe contract is visible in the `Map<clientId, {token, expiresAtMs}>` deci
 `getAccessToken` instructions. The existing script's fixed constructor credential explains why copying its cache
 shape into a shared HTTP service needs an explicit credential identity. This document specifies one narrow fix
 and preserves the distinction between existing repository code and proposed connector files.
+
+The 2026-09-18 review also found 29 Harper diagnostics in the updated original authentication plan.
+When this implementation revises that document, fix actionable findings and require the focused prose check to pass.
+Do not classify a failing check as passed because some diagnostics existed before this change.
 
 Before implementation, follow root `AGENTS.md` for assigning the synced issue and moving it to In Progress. At
 delivery, link that issue with `Closes` in the single implementation PR, report Bruno's actual result, and record
