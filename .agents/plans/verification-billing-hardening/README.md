@@ -10,7 +10,7 @@ The plans follow `.agents/PLANS.md` and repair the single-verification flow intr
 | --- | --- | --- | --- |
 | `verification-billing-hardening/08` | [Restore verification validation fixtures](08-restore-verification-validation.md) | Backend lint, OpenAPI assertions, and the stale Bruno runner fixture | `verification-billing/04` |
 | `verification-billing-hardening/01` | [Claim request keys before funding](01-claim-idempotency-keys-before-funding.md) | Conflicting requests can still be charged | `verification-billing/04`, `verification-billing-hardening/08` |
-| `verification-billing-hardening/02` | [Enforce stored domain prohibitions](02-enforce-domain-prohibitions.md) | Prohibited domains can be probed and charged | `verification-billing/04`, `verification-billing-hardening/08` |
+| `verification-billing-hardening/02` | [Enforce stored domain prohibitions](02-enforce-domain-prohibitions.md) | Prohibited domains can be probed and charged | `verification-billing/04`, `verification-billing-hardening/08`, `frontend/11` |
 | `verification-billing-hardening/03` | [Serialize request attachment with settlement](03-serialize-request-attachment-with-settlement.md) | Shared requests can remain pending permanently | `verification-billing/04`, `verification-billing-hardening/01` |
 | `verification-billing-hardening/04` | [Bound async execution dispatch](04-bound-async-execution-dispatch.md) | Queue outages can hide an admitted operation handle | `verification-billing/04`, `verification-billing-hardening/08` |
 | `verification-billing-hardening/05` | [Recover settled email-cache updates](05-recover-settled-email-cache-updates.md) | Confirmed settlement can lose its email-cache update | `verification-billing/04`, `verification-billing-hardening/08` |
@@ -25,6 +25,12 @@ execution, settlement, and fixture files without combining their implementation 
 Readiness describes whether each plan contains enough decisions to implement. Its dependencies determine when
 the work is eligible. A completed review or a ready plan does not mean a fix has shipped. These documents do not
 mark `verification-billing/04` or any remediation task complete.
+
+Plan 02 was refreshed against checkout `e8b7d77688302ea8de9c15bc97f1af8cbb638326` on 2026-09-18. It now
+protects the runner shared by single and batch verification and preserves the existing browser's domain-rejection
+workflow. The [operator domain-policy road map](../domain-verification-policy/README.md) reuses its stable key
+and adds separate batch admission, management API, and operator browser plans. This update does not mark any
+implementation complete or refresh unrelated findings against that newer checkout.
 
 ## Shared Constraints
 
@@ -63,3 +69,4 @@ mark `verification-billing/04` or any remediation task complete.
 - [Single-verification activation](../verification-billing/04-charge-single-verification-outcomes.md)
 - [Later batch billing](../verification-billing/05-charge-unique-batch-results.md)
 - [Later browser billing explanation](../verification-billing/06-explain-verification-charges.md)
+- [Operator domain-policy management](../domain-verification-policy/README.md)
