@@ -11,8 +11,12 @@ rejected origins still fail before authentication. This delivers one implementat
 
 ## Progress
 
-- [ ] (2026-09-18) Update the existing collection and its focused setup notes.
-- [ ] (2026-09-18) Run the collection and focused checks, then record actual results.
+- [x] (2026-09-19) Added `clientId`/`clientSecret` to `environments/local.yml` and applied Bruno's native
+      `http.auth` Basic auth to requests 02 and 03.
+- [x] (2026-09-19) Added `06-allowed-origin-without-credentials.yml` and
+      `07-allowed-origin-with-malformed-credentials.yml`, and rewrote the collection README.
+- [x] (2026-09-19) Ran the collection twice live against a real dev-stack connector (cold and warm cache) and
+      the focused checks. Recorded results below.
 
 ## Plan dependencies
 
@@ -25,6 +29,18 @@ PR #705 at `dffe34cc66085c042343cc5c7aaa75547aeb925f` adds an authentication gat
 initialization requests in `bruno/mcp-request-origins/` omit credentials. The review reported three passing
 requests and two failures because the success requests received HTTP `401`. This plan records that review
 evidence; it does not claim the correction or a new runtime check has completed.
+
+**Implementation evidence, 2026-09-19:**
+
+- Bruno's per-request Basic auth is not a raw header string in the OpenCollection YAML format this repository
+  uses: it is a structured `http.auth: { type: basic, username, password }` block (confirmed directly from the
+  installed `@usebruno/filestore@0.12.0` package's YAML parser, `formats/yml/items/parseHttpRequest.ts` and
+  `formats/yml/common/auth.ts`), which the runner Base64-encodes into the `Authorization` header itself. Request
+  07's deliberately malformed credential still had to be written as a literal `Authorization: Basic !!!` header,
+  since that structured block cannot express an invalid value.
+- Ran the full seven-request collection twice against the same live connector process without restarting it —
+  once with a cold token cache, once immediately afterward with it warm from the first run — and both runs
+  passed identically, confirming the acceptance criterion that a warm cache changes nothing observable here.
 
 ## Decision Log
 
@@ -40,7 +56,12 @@ evidence; it does not claim the correction or a new runtime check has completed.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: requests 02 and 03 now authenticate with the real seeded
+customer credential via Bruno's native Basic-auth support, requests 04/05/06/07 prove the precedence between
+origin checking and authentication (denied/null origin rejected before authentication runs; an allowed origin
+with no or malformed credentials is rejected by authentication instead), and the collection README explains all
+seven outcomes and the live-credential-retrieval procedure. No application code, cache semantics, or origin
+policy changed — this PR is Bruno collection and documentation only.
 
 ## Context and Orientation
 
