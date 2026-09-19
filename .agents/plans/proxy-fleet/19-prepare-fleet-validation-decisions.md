@@ -25,6 +25,7 @@ ExecPlan with its own pull request. This preparation remains documentation only.
   proxy identities and source checks while identifying new deployment and network work.
 - [x] (2026-09-18) Validate the Kubernetes documentation revision and update its evidence and handoff record.
 - [x] (2026-09-18) Clarify preparation with an input table, four labeled steps, and readable validation errors.
+- [x] (2026-09-19) Simplify validation notes and remove environment-specific command prefixes.
 
 ## Plan dependencies
 
@@ -257,10 +258,8 @@ Historical static validation of the Swarm documentation revision on 2026-09-18:
 
 Static validation of the Kubernetes documentation revision on 2026-09-18:
 
-- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md`
-  passed both files after correcting prose and adding legitimate Kubernetes terminology to `.harper-dictionary.txt`.
-- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`
-  passed one suite and one test.
+- Harper passed both Markdown files.
+- The ExecPlan repository fixture passed one suite and one test.
 - All six Bash blocks in the proposal and the shell block in this plan passed `bash -n` without execution.
   Relative Markdown links were checked and `git diff --check` passed.
 - The embedded configuration parsed with PyYAML and passed Python `jsonschema` validation against
