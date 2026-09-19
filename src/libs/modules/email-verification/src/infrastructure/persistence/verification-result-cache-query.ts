@@ -41,6 +41,7 @@ export async function queryLatestCacheCandidate(
 }
 
 export interface LatestVerificationOutcome {
+    readonly resultId: string
     readonly verificationQuality: string
     readonly createdAt: Date
 }
@@ -59,5 +60,5 @@ export async function queryLatestVerificationOutcome(
     if (!latest) return null
     if (!(await isSettlementConfirmed(manager, latest.id))) return null
 
-    return { verificationQuality: latest.verificationQuality, createdAt: latest.createdAt }
+    return { resultId: latest.id, verificationQuality: latest.verificationQuality, createdAt: latest.createdAt }
 }

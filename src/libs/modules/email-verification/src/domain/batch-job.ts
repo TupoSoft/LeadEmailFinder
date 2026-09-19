@@ -1,7 +1,8 @@
 export enum BatchJobStep {
     Validate,
-    Process,
-    WaitForChildren,
+    Admit,
+    Dispatch,
+    AwaitSettlement,
     UploadResults,
     Finish,
 }
@@ -15,8 +16,9 @@ export type BatchJobData =
     | ({
           step:
               | BatchJobStep.Validate
-              | BatchJobStep.Process
-              | BatchJobStep.WaitForChildren
+              | BatchJobStep.Admit
+              | BatchJobStep.Dispatch
+              | BatchJobStep.AwaitSettlement
               | BatchJobStep.UploadResults
           key: string
           bucket: string

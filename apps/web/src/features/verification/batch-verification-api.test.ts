@@ -19,7 +19,28 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const id = '11111111-1111-4111-8111-111111111111'
-const status = { id, status: 'running', progress: 37.5, total: 8, processed: 3, unprocessed: 5 }
+const status = {
+    id,
+    status: 'running',
+    progress: 37.5,
+    total: 8,
+    processed: 3,
+    unprocessed: 5,
+    resultsAvailable: false,
+    counts: {
+        totalRows: 8,
+        uniqueAddresses: 8,
+        duplicateRows: 0,
+        cachedAddresses: 0,
+        sharedAddresses: 0,
+        cooldownAddresses: 0,
+        completedAddresses: 3,
+        conclusiveAddresses: 3,
+        inconclusiveAddresses: 0,
+        failedAddresses: 0,
+    },
+    billing: { state: 'pending', reserved: 3, charged: 3 },
+}
 const file = () => new File(['email\nsynthetic@example.test\n'], 'synthetic.csv', { type: '' })
 const csvResponse = (headers: Record<string, string> = {}) =>
     new Response('email,exists\nsynthetic@example.test,true\n', {
@@ -158,6 +179,11 @@ describe('batch status transport', () => {
         { processed: 0.5 },
         { unprocessed: Number.MAX_SAFE_INTEGER + 1 },
         { id: 'another-job' },
+        { resultsAvailable: 'true' },
+        { counts: undefined },
+        { billing: undefined },
+        { billing: { ...status.billing, state: 'unknown' } },
+        { counts: { ...status.counts, totalRows: -1 } },
     ])('rejects malformed progress, counts or job identity without estimating values', async changed => {
         const api = createBrowserApiClient({ fetch: () => Promise.resolve(Response.json({ ...status, ...changed })) })
         await expect(readBatchVerification(api, id)).rejects.toMatchObject({ status: 502 })

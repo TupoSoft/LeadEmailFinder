@@ -1,18 +1,24 @@
-import { WaitingChildrenError } from 'bullmq'
+import { DelayedError } from 'bullmq'
 import { BatchJobStep } from '../../../domain/batch-job'
 import { BatchEmailVerificationWorkflow } from '../../../application/delivery/batch/batch-email-verification-workflow'
-import { BatchAwaitingChildrenSignal } from '../../../application/delivery/batch/batch-awaiting-children.signal'
+import { BatchAwaitingSettlementSignal } from '../../../application/delivery/batch/batch-awaiting-settlement.signal'
+import { BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { InvalidBatchCsvError } from '../../../application/delivery/batch/batch-terminal-failure'
 import { InsufficientCreditsException } from '@tuposoft/lead-email-finder/modules/credits'
 
 describe('BatchEmailVerificationProcessor', () => {
     let workflow: jest.Mocked<Pick<BatchEmailVerificationWorkflow, 'advance'>>
+    let admissions: jest.Mocked<Pick<BatchAdmissionStore, 'findById' | 'countUnsettledAddresses'>>
     let processor: BatchEmailVerificationProcessor
 
     beforeEach(() => {
         workflow = { advance: jest.fn() }
-        processor = new BatchEmailVerificationProcessor(workflow as unknown as BatchEmailVerificationWorkflow)
+        admissions = { findById: jest.fn(), countUnsettledAddresses: jest.fn() }
+        processor = new BatchEmailVerificationProcessor(
+            workflow as unknown as BatchEmailVerificationWorkflow,
+            admissions as unknown as BatchAdmissionStore,
+        )
     })
 
     it('delegates to the workflow and returns its result', async () => {
@@ -35,31 +41,25 @@ describe('BatchEmailVerificationProcessor', () => {
         expect(workflow.advance).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1' }), 'token')
     })
 
-    it('translates the awaiting-children signal into a real BullMQ WaitingChildrenError', async () => {
-        workflow.advance.mockRejectedValue(new BatchAwaitingChildrenSignal())
+    it('translates the awaiting-settlement signal into a real BullMQ moveToDelayed + DelayedError', async () => {
+        const retryAtMs = Date.now() + 5_000
+        workflow.advance.mockRejectedValue(new BatchAwaitingSettlementSignal(retryAtMs))
 
         const job = {
             id: 'job-1',
             data: {
-                step: BatchJobStep.WaitForChildren,
+                step: BatchJobStep.AwaitSettlement,
                 bucket: 'b',
                 key: 'k',
                 organizationId: 'org-1',
                 credentialId: 'c',
             },
+            moveToDelayed: jest.fn().mockResolvedValue(undefined),
             updateData: jest.fn(),
         }
 
-        await expect(processor.process(job as never, 'token')).rejects.toBeInstanceOf(WaitingChildrenError)
-        expect(job.updateData).not.toHaveBeenCalled()
-    })
-
-    it('preserves a BullMQ waiting control signal without a failure marker', async () => {
-        const signal = new WaitingChildrenError()
-        workflow.advance.mockRejectedValue(signal)
-        const job = { data: {}, updateData: jest.fn() }
-
-        await expect(processor.process(job as never, 'token')).rejects.toBe(signal)
+        await expect(processor.process(job as never, 'token')).rejects.toBeInstanceOf(DelayedError)
+        expect(job.moveToDelayed).toHaveBeenCalledWith(retryAtMs, 'token')
         expect(job.updateData).not.toHaveBeenCalled()
     })
 

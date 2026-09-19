@@ -87,6 +87,7 @@ describe('VerificationAdmissionService', () => {
             cancelIfNoCaptureIntention: jest.fn(),
             pageNonterminal: jest.fn(),
             pageCanceledPendingCleanup: jest.fn(),
+            cancelBatchGroupUnstarted: jest.fn(),
         }
         cacheReader = { findLatestCandidate: jest.fn().mockResolvedValue(null) }
         cooldownReader = { findLatestOutcome: jest.fn().mockResolvedValue(null) }
@@ -150,6 +151,7 @@ describe('VerificationAdmissionService', () => {
 
     it('reports address-cooldown for a recent inconclusive outcome, creating no request or execution', async () => {
         cooldownReader.findLatestOutcome.mockResolvedValue({
+            resultId: 'result-1',
             verificationQuality: 'inconclusive',
             createdAt: new Date(now.getTime() - 10_000),
         })
@@ -162,6 +164,7 @@ describe('VerificationAdmissionService', () => {
 
     it('does not apply a cooldown once it has fully elapsed', async () => {
         cooldownReader.findLatestOutcome.mockResolvedValue({
+            resultId: 'result-1',
             verificationQuality: 'inconclusive',
             createdAt: new Date(now.getTime() - addressCooldownMs),
         })
@@ -173,6 +176,7 @@ describe('VerificationAdmissionService', () => {
 
     it('does not apply a cooldown for a conclusive outcome', async () => {
         cooldownReader.findLatestOutcome.mockResolvedValue({
+            resultId: 'result-1',
             verificationQuality: 'conclusive_negative',
             createdAt: new Date(now.getTime() - 1_000),
         })

@@ -160,7 +160,7 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
         if: needs.changes.outputs.backend == 'true'
       - name: Install dependencies
-        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
+        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
         if: needs.changes.outputs.backend == 'true'
       - name: Prepare Ruby tool cache and libraries
         run: |

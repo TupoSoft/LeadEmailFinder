@@ -1,8 +1,10 @@
 import {
+    BatchStatusAddressCounts,
+    BatchStatusBilling,
     EnqueueBatchResponse,
     GetBatchStatusResponse,
 } from '../../../application/delivery/batch/batch-email-verification.service'
-import { Expose } from 'class-transformer'
+import { Expose, Type } from 'class-transformer'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { IsUUID } from 'class-validator'
 import { VERIFICATION_JOB_STATES, VerificationJobState } from '../../../application/delivery/verification-job-state'
@@ -10,6 +12,62 @@ import {
     BATCH_TERMINAL_FAILURE_CODES,
     BatchTerminalFailureCode,
 } from '../../../application/delivery/batch/batch-terminal-failure'
+
+export class BatchStatusAddressCountsDto implements BatchStatusAddressCounts {
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    totalRows: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    uniqueAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    duplicateRows: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    cachedAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    sharedAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    cooldownAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    completedAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    conclusiveAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    inconclusiveAddresses: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    failedAddresses: number
+}
+
+export class BatchStatusBillingDto implements BatchStatusBilling {
+    @ApiProperty({ type: String, enum: ['pending', 'settled'] })
+    @Expose()
+    state: 'pending' | 'settled'
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    reserved: number
+
+    @ApiProperty({ type: Number, minimum: 0 })
+    @Expose()
+    charged: number
+}
 
 export class UploadFileResponseDto implements EnqueueBatchResponse {
     @ApiProperty({ type: String, format: 'uuid' })
@@ -66,4 +124,22 @@ export class GetBatchStatusResponseDto implements GetBatchStatusResponse {
     @ApiProperty({ type: Number, minimum: 0 })
     @Expose()
     unprocessed: number
+
+    @ApiProperty({
+        type: Boolean,
+        description:
+            'True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing.',
+    })
+    @Expose()
+    resultsAvailable: boolean
+
+    @ApiProperty({ type: BatchStatusAddressCountsDto })
+    @Expose()
+    @Type(() => BatchStatusAddressCountsDto)
+    counts: BatchStatusAddressCountsDto
+
+    @ApiProperty({ type: BatchStatusBillingDto })
+    @Expose()
+    @Type(() => BatchStatusBillingDto)
+    billing: BatchStatusBillingDto
 }

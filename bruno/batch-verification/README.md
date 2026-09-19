@@ -24,3 +24,11 @@ and immediate rejection of a non-CSV media type. Worker tests cover insufficient
 The retained result is read through the existing authenticated API. A later missing object or job is not a promise
 of permanent retention. The collection records no job identifiers, customer filenames, rows, or raw worker failures
 in committed artifacts. Repeated runs create fresh batch jobs and use the existing retention policy for cleanup.
+
+`verification-billing/05` moved batch billing from one credit per parsed row to at most one credit per unique
+normalized address, atomically reserved for the whole upload. This collection's fixture uses two distinct
+addresses, so its existing credit accounting is unaffected, and the `02`/`05` status assertions were updated for
+the response's new `resultsAvailable`/`counts`/`billing` fields — but no fixture here yet exercises deduplication
+(duplicate rows, mixed cache/shared/cooldown addresses, or group insufficient-funds fencing) or a live run against
+the rewritten worker. That live validation and those fixtures remain a follow-up; see the ExecPlan's Outcomes &
+Retrospective.

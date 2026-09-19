@@ -233,19 +233,48 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
                 processed: 0,
                 unprocessed: 0,
                 failureCode: 'invalid_csv',
+                resultsAvailable: false,
+                counts: {
+                    totalRows: 0,
+                    uniqueAddresses: 0,
+                    duplicateRows: 0,
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: 0,
+                    conclusiveAddresses: 0,
+                    inconclusiveAddresses: 0,
+                    failedAddresses: 0,
+                },
+                billing: { state: 'settled', reserved: 0, charged: 0 },
             })
         }
         if (pathname === `/verifyBatch/${job}`) {
             statusReads++
             if (rawQueueState)
                 return reply(200, { status: 'waiting-children', failedReason: 'private queue exception' })
+            const completed = statusReads >= 2
             return reply(200, {
                 id: job,
-                status: statusReads < 2 ? 'running' : 'completed',
-                progress: statusReads < 2 ? 50 : 100,
+                status: completed ? 'completed' : 'running',
+                progress: completed ? 100 : 50,
                 total: 2,
-                processed: statusReads < 2 ? 1 : 2,
-                unprocessed: statusReads < 2 ? 1 : 0,
+                processed: completed ? 2 : 1,
+                unprocessed: completed ? 0 : 1,
+                resultsAvailable: completed,
+                counts: {
+                    totalRows: 2,
+                    uniqueAddresses: 2,
+                    duplicateRows: 0,
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: completed ? 2 : 1,
+                    conclusiveAddresses: completed ? 2 : 1,
+                    inconclusiveAddresses: 0,
+                    failedAddresses: 0,
+                },
+                billing: { state: completed ? 'settled' : 'pending', reserved: 2, charged: completed ? 2 : 0 },
             })
         }
         if (pathname === `/verifyBatch/${job}/results`) {

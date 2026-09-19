@@ -9,6 +9,7 @@ import {
 } from '../../verification-trace/verification-trace-observer'
 import { BatchJobStep } from '../../../domain/batch-job'
 import { BatchJobs } from './batch-jobs'
+import { BatchAdmissionStore } from './batch-admission-store'
 import { BatchResultReader, BatchResultUnavailableError } from './batch-result-reader'
 import { BatchEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { VerificationJobState } from '../verification-job-state'
@@ -28,6 +29,25 @@ export interface EnqueueBatchResponse {
     id: string
 }
 
+export interface BatchStatusAddressCounts {
+    readonly totalRows: number
+    readonly uniqueAddresses: number
+    readonly duplicateRows: number
+    readonly cachedAddresses: number
+    readonly sharedAddresses: number
+    readonly cooldownAddresses: number
+    readonly completedAddresses: number
+    readonly conclusiveAddresses: number
+    readonly inconclusiveAddresses: number
+    readonly failedAddresses: number
+}
+
+export interface BatchStatusBilling {
+    readonly state: 'pending' | 'settled'
+    readonly reserved: number
+    readonly charged: number
+}
+
 export interface GetBatchStatusResponse {
     id: string
     status: VerificationJobState
@@ -36,6 +56,9 @@ export interface GetBatchStatusResponse {
     processed: number
     unprocessed: number
     progress: number
+    resultsAvailable: boolean
+    counts: BatchStatusAddressCounts
+    billing: BatchStatusBilling
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -46,6 +69,7 @@ export class BatchEmailVerificationService {
     constructor(
         private readonly jobs: BatchJobs,
         private readonly resultReader: BatchResultReader,
+        private readonly admissions: BatchAdmissionStore,
         private readonly traceObserver: VerificationTraceObserver = NOOP_VERIFICATION_TRACE_OBSERVER,
     ) {}
 
@@ -93,7 +117,36 @@ export class BatchEmailVerificationService {
         const stats = await this.getStats(job)
         if (status.status === 'completed') stats.progress = 100
 
-        return { id, ...status, ...stats }
+        const admission = await this.admissions.findById(id, organizationId)
+        const addressCounts = admission ? await this.admissions.getStatusCounts(id, organizationId) : null
+
+        const counts: BatchStatusAddressCounts = {
+            totalRows: admission?.totalRows ?? 0,
+            uniqueAddresses: admission?.uniqueAddressCount ?? 0,
+            duplicateRows: admission ? Math.max(0, admission.totalRows - admission.uniqueAddressCount) : 0,
+            cachedAddresses: addressCounts?.cachedAddresses ?? 0,
+            sharedAddresses: addressCounts?.sharedAddresses ?? 0,
+            cooldownAddresses: addressCounts?.cooldownAddresses ?? 0,
+            completedAddresses: addressCounts?.completedAddresses ?? 0,
+            conclusiveAddresses: addressCounts?.conclusiveAddresses ?? 0,
+            inconclusiveAddresses: addressCounts?.inconclusiveAddresses ?? 0,
+            failedAddresses: addressCounts?.failedAddresses ?? 0,
+        }
+        const billing: BatchStatusBilling = {
+            state:
+                admission !== null && admission.uniqueAddressCount > 0 && counts.completedAddresses >= admission.uniqueAddressCount
+                    ? 'settled'
+                    : 'pending',
+            reserved: addressCounts?.reserved ?? 0,
+            charged: addressCounts?.charged ?? 0,
+        }
+        // A terminal failure past validation still leaves settled row accounting downloadable, even though the
+        // job itself never reached `completed` (e.g. output publication kept failing).
+        const resultsAvailable =
+            status.status === 'completed' ||
+            (status.status === 'failed' && admission !== null && admission.state !== 'validating' && admission.state !== 'invalid')
+
+        return { id, ...status, ...stats, resultsAvailable, counts, billing }
     }
 
     async getBatchResults(id: string, organizationId: string): Promise<Readable> {
@@ -130,7 +183,8 @@ export class BatchEmailVerificationService {
 
         switch (step) {
             case BatchJobStep.Validate:
-            case BatchJobStep.Process:
+            case BatchJobStep.Admit:
+            case BatchJobStep.Dispatch:
                 return stats
             case BatchJobStep.Finish:
                 stats.progress = 100

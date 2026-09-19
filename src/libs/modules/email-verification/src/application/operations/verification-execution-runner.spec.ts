@@ -63,6 +63,7 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
         cancelIfNoCaptureIntention: jest.fn(),
         pageNonterminal: jest.fn(),
         pageCanceledPendingCleanup: jest.fn(),
+        cancelBatchGroupUnstarted: jest.fn(),
         ...overrides,
     }
 }
