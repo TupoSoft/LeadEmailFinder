@@ -13,8 +13,12 @@ It addresses the missing startup configuration found in PR #705.
 
 ## Progress
 
-- [ ] (2026-09-18) Update the package and both Bruno README files with consistent startup and credential instructions.
-- [ ] (2026-09-18) Exercise the documented commands and record HTTP, Bruno, and Harper results.
+- [x] (2026-09-19) Rewrote `apps/mcp-server/README.md` as the canonical setup guide: configuration table with
+      `OIDC_BACKCHANNEL_URL`, the origin/method/authentication precedence, a foreground launcher snippet deriving
+      the realm URL from `loadDevelopmentStack`, and a credential-retrieval section.
+- [x] (2026-09-19) Updated both Bruno collection READMEs to the same launcher pattern and linked them to the
+      package README instead of duplicating its explanations.
+- [x] (2026-09-19) Exercised every documented command live and recorded the results below.
 
 ## Plan dependencies
 
@@ -23,7 +27,15 @@ It addresses the missing startup configuration found in PR #705.
 
 ## Surprises & Discoveries
 
-None yet.
+- Verified the documented `env -u OIDC_BACKCHANNEL_URL node apps/mcp-server/dist/main.js` command genuinely exits
+  `1` with `OIDC_BACKCHANNEL_URL is required.` before this document claimed it, rather than assuming the prior
+  plan's behavior still held.
+- Verified the foreground launcher's signal forwarding directly: sent `SIGTERM` to the launcher process and
+  confirmed the owned `dist/main.js` child exited and released port `3002` before the launcher itself exited —
+  the documented shutdown story is not just prose.
+- Ran the routing collection's six requests against the *same* authenticated-startup connector process used for
+  the origin collection's seven (rather than a separately started one), confirming directly that a connector
+  which requires `OIDC_BACKCHANNEL_URL` to boot still serves every unauthenticated routing outcome unchanged.
 
 ## Decision Log
 
@@ -38,7 +50,14 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: `apps/mcp-server/README.md` is now the canonical local setup
+guide, documenting `OIDC_BACKCHANNEL_URL` as required with no default, the origin/method/authentication
+precedence, a foreground launcher that derives the realm URL from this checkout's own development stack, and a
+credential-retrieval section. Both Bruno collection READMEs use the same launcher pattern and link to the
+package README rather than reexplaining it; the origin collection's live-run script gained the
+`--env-var baseUrl=...` override plan 06 specifies. Live validation confirmed the required-variable rejection,
+signal-forwarding shutdown, and both collections (6 and 7 requests respectively) passing against the
+authenticated connector — the origin collection twice, cold and warm. No application code changed.
 
 ## Context and Orientation
 
