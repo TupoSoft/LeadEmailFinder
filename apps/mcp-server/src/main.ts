@@ -21,6 +21,7 @@ async function handleMcpRequest(
     res: ServerResponse,
     allowedOrigins: ReadonlySet<string>,
     tokenCache: AccessTokenProvider,
+    apiBaseUrl: string,
 ): Promise<void> {
     if (!isRequestOriginAllowed(req.rawHeaders, allowedOrigins)) {
         sendJson(res, 403, { error: 'origin_not_allowed' })
@@ -48,7 +49,7 @@ async function handleMcpRequest(
         return
     }
 
-    const server = createServer()
+    const server = createServer(apiBaseUrl)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {
         void transport.close()
@@ -63,11 +64,12 @@ async function handleMcpRequest(
 export interface CreateAppOptions {
     allowedOrigins?: ReadonlySet<string>
     tokenCache: AccessTokenProvider
+    apiBaseUrl: string
 }
 
 export function createApp(options: CreateAppOptions): Server {
     const allowedOrigins = new Set(options.allowedOrigins ?? [])
-    const { tokenCache } = options
+    const { tokenCache, apiBaseUrl } = options
     return createHttpServer((req, res) => {
         let url: URL
         try {
@@ -81,7 +83,7 @@ export function createApp(options: CreateAppOptions): Server {
             return
         }
         if (url.pathname === '/mcp') {
-            handleMcpRequest(req, res, allowedOrigins, tokenCache).catch(() => {
+            handleMcpRequest(req, res, allowedOrigins, tokenCache, apiBaseUrl).catch(() => {
                 if (!res.headersSent) {
                     sendJson(res, 500, { jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null })
                 }
@@ -105,8 +107,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         console.error('OIDC_BACKCHANNEL_URL is required.')
         process.exit(1)
     }
+    const apiBaseUrl = process.env.API_URL
+    if (!apiBaseUrl) {
+        console.error('API_URL is required.')
+        process.exit(1)
+    }
     const tokenCache = new TokenCache(tokenEndpointBaseUrl)
-    createApp({ allowedOrigins, tokenCache }).listen(port, () => {
+    createApp({ allowedOrigins, tokenCache, apiBaseUrl }).listen(port, () => {
         console.log(`mcp-server listening on port ${port}`)
     })
 }

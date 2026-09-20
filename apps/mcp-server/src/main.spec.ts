@@ -7,11 +7,21 @@ import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+/** These suites are about routing and the auth gate, not any particular tool's behavior, so they
+ * substitute a trivial always-succeeding tool for the real one rather than depending on
+ * check_credit_balance's own upstream API. */
+function buildProbeServer(): McpServer {
+    const server = new McpServer({ name: 'main-spec-test-server', version: '0.0.0' })
+    server.registerTool('probe', { description: 'Always succeeds.' }, () => ({ content: [{ type: 'text', text: 'ok' }] }))
+    return server
+}
 
 jest.mock('./create-server.js', () => {
     const actual = jest.requireActual<typeof import('./create-server.js')>('./create-server.js')
-    return { ...actual, createServer: jest.fn(actual.createServer) }
+    return { ...actual, createServer: jest.fn(buildProbeServer) }
 })
 
 import { TokenCache, type AccessTokenProvider } from './auth/token-cache.js'
@@ -27,7 +37,7 @@ describe('mcp-server request routing', () => {
     let baseUrl: URL
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: fakeTokenCache })
+        server = createApp({ tokenCache: fakeTokenCache, apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         const { port } = server.address() as AddressInfo
         baseUrl = new URL(`http://127.0.0.1:${port}/`)
@@ -141,7 +151,7 @@ describe('mcp-server authentication gate', () => {
     const realFetch = global.fetch
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: new TokenCache('https://issuer') })
+        server = createApp({ tokenCache: new TokenCache('https://issuer'), apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
@@ -220,8 +230,8 @@ describe('mcp-server authentication gate', () => {
         })
         await client.connect(transport)
         try {
-            const result = await client.callTool({ name: 'ping', arguments: {} })
-            expect(result.content).toEqual([{ type: 'text', text: 'pong' }])
+            const result = await client.callTool({ name: 'probe', arguments: {} })
+            expect(result.content).toEqual([{ type: 'text', text: 'ok' }])
         } finally {
             await client.close()
         }
@@ -245,7 +255,7 @@ function buildIsolatedServer(): { tempDir: string; bootstrapPath: string } {
         [
             "import { createApp } from './dist/main.js'",
             '',
-            "const server = createApp({ tokenCache: { getAccessToken: () => Promise.resolve('fake-access-token') } })",
+            "const server = createApp({ tokenCache: { getAccessToken: () => Promise.resolve('fake-access-token') }, apiBaseUrl: 'http://127.0.0.1:1' })",
             "server.listen(0, '127.0.0.1', () => {",
             '    const address = server.address()',
             "    if (!address || typeof address === 'string') throw new Error('expected a network address')",
@@ -369,8 +379,13 @@ describe('process regression: malformed request targets do not crash the server'
         })
         await client.connect(transport)
         try {
-            const result = await client.callTool({ name: 'ping', arguments: {} })
-            expect(result.content).toEqual([{ type: 'text', text: 'pong' }])
+            // No real LEF API is reachable from this isolated process; check_credit_balance's network
+            // failure against http://127.0.0.1:1 (connection refused, no DNS lookup) is itself the proof
+            // that the same process still resolves auth and dispatches a real tool call cleanly.
+            const result = await client.callTool({ name: 'check_credit_balance', arguments: {} })
+            expect(result.isError).toBe(true)
+            const content = result.content as Array<{ type: string; text: string }>
+            expect(JSON.parse(content[0]?.text ?? '')).toMatchObject({ code: 'unexpected_upstream_error' })
         } finally {
             await client.close()
         }

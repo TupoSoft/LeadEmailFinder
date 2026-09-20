@@ -101,7 +101,7 @@ describe('MCP authentication over real HTTP and the real SDK transport', () => {
     const grantDelays = new Map<string, Deferred<void>>()
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: new TokenCache('https://issuer') })
+        server = createApp({ tokenCache: new TokenCache('https://issuer'), apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
