@@ -1,6 +1,13 @@
 import { mapNetworkError, mapUpstreamError } from './errors.js'
 
-const sensitiveBody = { message: 'do-not-leak-this-secret-value', internalTraceId: 'do-not-leak-this-secret-value' }
+const sensitiveBody = {
+    message: 'do-not-leak-this-secret-value',
+    internalTraceId: 'do-not-leak-this-secret-value',
+    email: 'submitted-address@example.test',
+    token: 'do-not-leak-this-bearer-token',
+    secret: 'do-not-leak-this-client-secret',
+}
+const sentinels = Object.values(sensitiveBody)
 
 function response(status: number, headers: Record<string, string> = {}): Response {
     return new Response(null, { status, headers })
@@ -8,8 +15,10 @@ function response(status: number, headers: Record<string, string> = {}): Respons
 
 describe('mapUpstreamError', () => {
     it.each([
+        [400, 'validation_failed'],
         [401, 'authentication_required'],
         [402, 'insufficient_credits'],
+        [403, 'permission_denied'],
         [404, 'not_found'],
         [422, 'validation_failed'],
         [429, 'rate_limited'],
@@ -18,7 +27,17 @@ describe('mapUpstreamError', () => {
         const error = mapUpstreamError(response(status), sensitiveBody)
 
         expect(error.code).toBe(expectedCode)
-        expect(error.message).not.toContain('do-not-leak-this-secret-value')
+        for (const sentinel of sentinels) expect(error.message).not.toContain(sentinel)
+    })
+
+    it('maps 400 and 422 to the exact same fixed shape', () => {
+        expect(mapUpstreamError(response(400), sensitiveBody)).toEqual(mapUpstreamError(response(422), sensitiveBody))
+    })
+
+    it('maps 403 to the exact fixed permission-denied message', () => {
+        const error = mapUpstreamError(response(403), sensitiveBody)
+
+        expect(error).toEqual({ code: 'permission_denied', message: 'The credential lacks the required permission.' })
     })
 
     it('maps an unmapped 5xx status to unexpected_upstream_error', () => {
@@ -46,8 +65,8 @@ describe('mapUpstreamError', () => {
         expect(error.retryAfterSeconds).toBeUndefined()
     })
 
-    it('never extracts retryAfterSeconds for a status other than 429/503', () => {
-        const error = mapUpstreamError(response(404, { 'Retry-After': '30' }), sensitiveBody)
+    it.each([400, 403, 404])('never extracts retryAfterSeconds for status %d even with a Retry-After header present', status => {
+        const error = mapUpstreamError(response(status, { 'Retry-After': '30' }), sensitiveBody)
 
         expect(error.retryAfterSeconds).toBeUndefined()
     })

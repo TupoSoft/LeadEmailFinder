@@ -1,6 +1,7 @@
 export type UpstreamErrorCode =
     | 'authentication_required'
     | 'insufficient_credits'
+    | 'permission_denied'
     | 'not_found'
     | 'validation_failed'
     | 'rate_limited'
@@ -13,11 +14,15 @@ export interface UpstreamError {
     readonly retryAfterSeconds?: number
 }
 
+const validationFailed = { code: 'validation_failed' as const, message: 'The request failed validation.' }
+
 const statusMessages: Readonly<Record<number, { code: UpstreamErrorCode; message: string }>> = {
+    400: validationFailed,
     401: { code: 'authentication_required', message: 'Authentication is required or the credential was rejected.' },
     402: { code: 'insufficient_credits', message: 'The organization does not have enough available credit for this operation.' },
+    403: { code: 'permission_denied', message: 'The credential lacks the required permission.' },
     404: { code: 'not_found', message: 'The requested resource was not found.' },
-    422: { code: 'validation_failed', message: 'The request failed validation.' },
+    422: validationFailed,
     429: { code: 'rate_limited', message: 'Too many requests. Retry after the given delay.' },
     503: { code: 'service_unavailable', message: 'The upstream service is temporarily unavailable.' },
 }

@@ -119,8 +119,10 @@ may be implemented first once `03` is available.
   /verifyAsync/:id` directly would show.
 - `get_verification_result` against a real completed result's id returns that result; against a nonexistent or
   foreign id returns a clean `not_found` tool error, never another organization's data.
-- Each tool's `401`/`402`/`404`/`422`/`429` rejection paths (as relevant to that tool) are unit-covered using the
-  fake-client convention from plan 03.
+- Each tool's `400`/`401`/`402`/`403`/`404`/`422`/`429` rejection paths (as relevant to that tool, matching each
+  endpoint's actual documented responses — single-request validation and invalid-UUID-lookup failures are `400`
+  per `mcp-connector-hardening/02`'s correction, not `422`) are unit-covered using the fake-client convention
+  from plan 03.
 
 ## Validation
 

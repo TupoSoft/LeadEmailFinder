@@ -14,8 +14,12 @@ This document specifies one future implementation PR, titled
 
 ## Progress
 
-- [ ] (2026-09-16) Implement the shared mappings and focused regression coverage after `mcp-connector/03` is available.
-- [ ] (2026-09-16) Reconcile the original connector plans with the corrected contract and complete validation.
+- [x] (2026-09-20) Added `permission_denied` and the `400 -> validation_failed`/`403 -> permission_denied`
+      mappings to `apps/mcp-server/src/lef-api/errors.ts`, matching the exact status-to-code table specified.
+- [x] (2026-09-20) Extended `errors.spec.ts`, `client.spec.ts`, and `check-credit-balance.spec.ts` with the new
+      cases and reconciled plans 03 and 04's superseded guidance.
+- [x] (2026-09-20) Ran focused and full test suites, the named API integration suites, and prose validation.
+      Recorded results below.
 
 ## Plan dependencies
 
@@ -24,7 +28,12 @@ This document specifies one future implementation PR, titled
 
 ## Surprises & Discoveries
 
-None yet.
+- Reusing the existing `validationFailed` object literal for both the `400` and `422` table entries (rather than
+  two separate literals with identical `code`/`message` fields) makes the "map `400` and `422` to the exact same
+  fixed shape" acceptance criterion trivially, structurally true rather than merely tested to be true.
+- Confirmed directly (not merely trusted from the plan's own evidence section) that
+  `async-email-verification-http.integration.spec.ts` and `billing-summary-http.integration.spec.ts` both still
+  pass unmodified, reconfirming the underlying API's `400`/`403` behavior this mapping now matches.
 
 ## Decision Log
 
@@ -40,7 +49,11 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: `permission_denied` for `403`, `400` mapped identically to the
+existing `422 -> validation_failed` shape, `retryAfterSeconds` still restricted to `429`/`503`, and every existing
+code and message preserved unchanged. Reconciled `mcp-connector/03` and `04`'s superseded `422`-for-single-request
+guidance. No API, DTO, permission, or billing behavior changed — this PR is connector-side error classification
+and its tests only, matching the stated non-goals.
 
 ## Context and Orientation
 

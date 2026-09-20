@@ -23,14 +23,16 @@ describe('LefApiClient.getBillingSummary', () => {
     })
 
     it.each([
+        [400, 'validation_failed'],
         [401, 'authentication_required'],
         [402, 'insufficient_credits'],
+        [403, 'permission_denied'],
         [404, 'not_found'],
         [422, 'validation_failed'],
         [429, 'rate_limited'],
         [503, 'service_unavailable'],
         [500, 'unexpected_upstream_error'],
-    ] as const)('rejects with the mapped code %s -> %s on HTTP %d', async (status, expectedCode) => {
+    ] as const)('rejects with the mapped code on HTTP %d -> %s, making exactly one request', async (status, expectedCode) => {
         fetchMock.mockResolvedValueOnce(jsonResponse(status, { message: 'do-not-leak-this-secret-value' }))
         const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
 
@@ -44,6 +46,7 @@ describe('LefApiClient.getBillingSummary', () => {
         expect(thrown).toBeInstanceOf(UpstreamRequestError)
         expect((thrown as UpstreamRequestError).code).toBe(expectedCode)
         expect((thrown as Error).message).not.toContain('do-not-leak-this-secret-value')
+        expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
     it('surfaces retryAfterSeconds from a 429 response', async () => {

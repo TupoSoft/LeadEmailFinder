@@ -72,9 +72,10 @@ describe('check_credit_balance over real HTTP and the real SDK transport', () =>
     })
 
     it.each([
+        [400, 'validation_failed'],
         [401, 'authentication_required'],
         [402, 'insufficient_credits'],
-        [403, 'unexpected_upstream_error'],
+        [403, 'permission_denied'],
         [404, 'not_found'],
         [422, 'validation_failed'],
         [429, 'rate_limited'],
@@ -89,6 +90,16 @@ describe('check_credit_balance over real HTTP and the real SDK transport', () =>
         const body = JSON.parse(result.content[0]?.text ?? '') as { code: string }
         expect(body.code).toBe(expectedCode)
         expect(JSON.stringify(body)).not.toContain('do-not-leak-this-secret-value')
+    })
+
+    it('surfaces a permission_denied failure as isError with only code and the fixed message', async () => {
+        billingResponse = () => jsonResponse(403, { message: 'do-not-leak-this-secret-value' })
+
+        const result = await callCheckCreditBalance()
+
+        expect(result.isError).toBe(true)
+        const body = JSON.parse(result.content[0]?.text ?? '')
+        expect(body).toEqual({ code: 'permission_denied', message: 'The credential lacks the required permission.' })
     })
 
     it('surfaces retryAfterSeconds from a 429 upstream response', async () => {
