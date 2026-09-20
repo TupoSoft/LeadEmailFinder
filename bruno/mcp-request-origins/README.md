@@ -34,14 +34,29 @@ payload underneath — the raw response is not itself a JSON document.
 
 ## Running It Live
 
-Build and start the connector against the local development stack's Keycloak, with the allowlist configured to
-match this collection's `allowedOrigin` variable:
+See `apps/mcp-server/README.md` for the full local setup guide. Build the package, then start the connector with
+the allowlist configured to match this collection's `allowedOrigin` variable, deriving the required
+`OIDC_BACKCHANNEL_URL` from this checkout's own running, seeded development stack:
 
 ```shell
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-MCP_ALLOWED_ORIGINS=https://client.example \
-  OIDC_BACKCHANNEL_URL=http://localhost:58080/realms/lead-email-finder \
-  PORT=3002 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server start
+MCP_ALLOWED_ORIGINS=https://client.example node --input-type=module <<'EOF'
+import { spawn } from 'node:child_process'
+import { loadDevelopmentStack } from './scripts/testing/development-stack.mjs'
+
+const stack = loadDevelopmentStack(process.cwd(), { persistMetadata: false })
+const child = spawn('node', ['apps/mcp-server/dist/main.js'], {
+    stdio: 'inherit',
+    env: {
+        ...process.env,
+        OIDC_BACKCHANNEL_URL: `${stack.keycloakUrl}/realms/lead-email-finder`,
+        PORT: process.env.PORT ?? '3002',
+    },
+})
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal))
+const exitCode = await new Promise(resolvePromise => child.on('exit', resolvePromise))
+process.exitCode = exitCode ?? 0
+EOF
 ```
 
 From another terminal, retrieve the seeded `lef-svc-dev-fixture` customer credential's *current* secret from
@@ -72,11 +87,11 @@ const env = { ...process.env, MCP_AUTH_CLIENT_ID: summary.keycloakClientId, MCP_
 
 function runOnce() {
     return new Promise((resolvePromise, reject) => {
-        const child = spawn('corepack', ['pnpm', 'exec', 'bru', 'run', '--env', 'local'], {
-            cwd: resolve(repositoryRoot, 'bruno/mcp-request-origins'),
-            stdio: 'inherit',
-            env,
-        })
+        const child = spawn(
+            'corepack',
+            ['pnpm', 'exec', 'bru', 'run', '--env', 'local', '--env-var', `baseUrl=${process.env.MCP_BASE_URL ?? 'http://127.0.0.1:3002'}`],
+            { cwd: resolve(repositoryRoot, 'bruno/mcp-request-origins'), stdio: 'inherit', env },
+        )
         child.on('exit', code => (code === 0 ? resolvePromise() : reject(new Error(`bru run exited with code ${code}`))))
     })
 }
@@ -90,8 +105,9 @@ await runOnce()
 node /tmp/run-mcp-request-origins.mjs
 ```
 
-`loadDevelopmentStack` (`scripts/testing/development-stack.mjs`) fails closed if the local Compose stack is not
-this checkout's own disposable one. `customerClientSecret` (`scripts/bruno/async-verification-fixture.mjs`) reads
-the client's *current* secret directly from the Keycloak admin API using the local admin credentials — it is
-never printed or logged. Both `bru run` invocations must report all seven requests passing. Stop the connector
-with `Ctrl+C` after the collection completes, and delete the temporary script.
+See `apps/mcp-server/README.md`'s "Getting a Customer Credential for Authenticated Calls" section for what
+`loadDevelopmentStack` and `customerClientSecret` do and why the secret must never be printed or persisted. Both
+`bru run` invocations must report all seven requests passing. Stop the connector with `Ctrl+C` in its own
+terminal after the collection completes, and delete the temporary script. If port `3002` is already in use,
+choose a free port and set both `PORT` and `MCP_BASE_URL` (read by the snippet above as the collection's
+`baseUrl` override) consistently.

@@ -6,7 +6,10 @@ public, an unrouted path returns `404`, `GET`/`DELETE /mcp` are rejected with `4
 method-not-allowed error, and the double-slash target `GET //` is rejected with `400 {"status":"bad_request"}` —
 all without stopping the process, and with health still answering afterward.
 
-The scaffold needs no credentials, container, or other service; a plain `node dist/main.js` process is enough.
+None of these six requests need a customer credential or any container — but the process itself still requires
+a reachable Keycloak realm URL to start at all (see below), since authentication is unconditional on every
+`/mcp` request even though these particular requests are all rejected or routed before authentication would run.
+
 An earlier version of this README claimed Bruno's request runner normalizes `//` before sending, and so could
 not reproduce that rejection; that claim was wrong — an ordinary Bruno request to `{{baseUrl}}//` reaches the
 server with the literal target `//`, exactly like `curl` or `fetch` would, and request `05` below now exercises
@@ -18,17 +21,12 @@ survives both malformed requests and still serves a real `ping` call afterward �
 process test `apps/mcp-server/src/main.spec.ts`, which writes the literal request lines over a raw `node:net`
 socket.
 
-If authentication has landed since this collection was written, the `/mcp` request tests below assert only
-routing and method rejection, not tool access; retain the documented local fixture credentials if the requests
-have grown an `Authorization` header.
+These requests assert routing and method rejection only, never tool access, so they need no `Authorization`
+header even though the connector requires one for every other `/mcp` outcome.
 
-Run it against a locally running scaffold. From the repository root, with workspace dependencies already
-installed:
-
-```shell
-corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-PORT=3002 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server start
-```
+Build and start the connector against this checkout's own running, seeded local development stack — see
+`apps/mcp-server/README.md`'s "Running Locally" section for the exact build command and the launcher snippet
+that derives the required `OIDC_BACKCHANNEL_URL` from that stack and starts `dist/main.js` in the foreground.
 
 From another terminal, at the repository root:
 
@@ -37,4 +35,5 @@ cd bruno/mcp-request-routing
 MCP_BASE_URL=http://127.0.0.1:3002 corepack pnpm exec bru run --env local
 ```
 
-Stop the local server with `Ctrl+C` after the collection completes.
+Stop the local server with `Ctrl+C` in its own terminal after the collection completes. If port `3002` is
+already in use, choose a free port and use it consistently for both `PORT` and `MCP_BASE_URL`.
