@@ -1,11 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LefApiClient, UpstreamRequestError } from '../lef-api/client.js'
-
-function errorContent(error: UpstreamRequestError): { content: [{ type: 'text'; text: string }]; isError: true } {
-    const body: { code: string; message: string; retryAfterSeconds?: number } = { code: error.code, message: error.message }
-    if (error.retryAfterSeconds !== undefined) body.retryAfterSeconds = error.retryAfterSeconds
-    return { content: [{ type: 'text', text: JSON.stringify(body) }], isError: true }
-}
+import { upstreamErrorResult } from './upstream-error-result.js'
 
 export function registerCheckCreditBalance(server: McpServer, apiBaseUrl: string): void {
     server.registerTool(
@@ -20,7 +15,7 @@ export function registerCheckCreditBalance(server: McpServer, apiBaseUrl: string
                 const summary = await client.getBillingSummary()
                 return { content: [{ type: 'text', text: JSON.stringify(summary) }] }
             } catch (error) {
-                if (error instanceof UpstreamRequestError) return errorContent(error)
+                if (error instanceof UpstreamRequestError) return upstreamErrorResult(error)
                 throw error
             }
         },
