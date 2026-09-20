@@ -47,7 +47,7 @@ describe('BatchEmailVerificationService', () => {
             insertUniqueAddresses: jest.fn(),
             pageUniqueAddresses: jest.fn(),
             recordAdmissionOutcome: jest.fn(),
-            recordPayerRequestId: jest.fn(),
+            ensurePayerRequestId: jest.fn(),
             countUnsettledAddresses: jest.fn(),
             getStatusCounts: jest.fn(),
         }

@@ -185,13 +185,56 @@ describe('TypeOrmBatchAdmissionStore', () => {
         )
     })
 
-    it('records the payer request id for an address', async () => {
-        await store.recordPayerRequestId(batchId, 'a@example.test', 'request-1')
-        expect(manager.update).toHaveBeenCalledWith(
-            BatchUniqueAddressEntity,
-            { batchId, normalizedAddress: 'a@example.test' },
-            { payerRequestId: 'request-1' },
-        )
+    describe('ensurePayerRequestId', () => {
+        const identity = { batchId, organizationId, normalizedAddress: 'a@example.test' }
+
+        it('assigns an identity only to an unassigned address in the owning organization', async () => {
+            manager.findOneBy.mockResolvedValue({ ...identity, payerRequestId: 'request-1' })
+
+            await expect(
+                store.ensurePayerRequestId(batchId, organizationId, identity.normalizedAddress, 'request-1'),
+            ).resolves.toBe('request-1')
+
+            expect(manager.update).toHaveBeenCalledWith(
+                BatchUniqueAddressEntity,
+                { ...identity, payerRequestId: IsNull() },
+                { payerRequestId: 'request-1' },
+            )
+            expect(manager.findOneBy).toHaveBeenCalledWith(BatchUniqueAddressEntity, identity)
+        })
+
+        it('returns the committed winner instead of the candidate when the identity is already assigned', async () => {
+            manager.update.mockResolvedValue({ affected: 0 })
+            manager.findOneBy.mockResolvedValue({ ...identity, payerRequestId: 'winning-request' })
+
+            await expect(
+                store.ensurePayerRequestId(batchId, organizationId, identity.normalizedAddress, 'losing-request'),
+            ).resolves.toBe('winning-request')
+            expect(manager.update).toHaveBeenCalledTimes(1)
+            expect(manager.update).toHaveBeenCalledWith(
+                BatchUniqueAddressEntity,
+                { ...identity, payerRequestId: IsNull() },
+                { payerRequestId: 'losing-request' },
+            )
+        })
+
+        it.each([organizationId, 'foreign-organization'])('rejects missing or foreign rows for %s', async requestedOrg => {
+            manager.update.mockResolvedValue({ affected: 0 })
+            manager.findOneBy.mockResolvedValue(null)
+
+            await expect(
+                store.ensurePayerRequestId(batchId, requestedOrg, identity.normalizedAddress, 'request-1'),
+            ).rejects.toThrow('batch_payer_identity_missing')
+            expect(manager.update).toHaveBeenCalledWith(
+                BatchUniqueAddressEntity,
+                { ...identity, organizationId: requestedOrg, payerRequestId: IsNull() },
+                { payerRequestId: 'request-1' },
+            )
+            expect(manager.findOneBy).toHaveBeenCalledWith(BatchUniqueAddressEntity, {
+                ...identity,
+                organizationId: requestedOrg,
+            })
+        })
     })
 
     describe('countUnsettledAddresses', () => {
