@@ -124,11 +124,16 @@ context notes say it currently covers `verification:run`/`verification:read` onl
 itself rather than trusting this note, since it may have changed since this plan was written.
 
 The connector's known error surfaces, per `src/libs/modules/email-verification/README.md` and
-`src/libs/modules/credits/README.md`: `401` (missing/invalid bearer — code `authentication_required`), `402`
-(insufficient credits, thrown by `CreditGuard`), `404` (not found / foreign organization concealment), `422`
-(request validation failure, e.g. malformed email or CSV), `429` (`VerificationRateLimitGuard`, includes a
-`Retry-After` header), `503` (`rate_limit_unavailable`, the limiter's own fail-safe outage response). Any other
-status or a network-level throw (connection refused, timeout, DNS failure) is an unexpected upstream error.
+`src/libs/modules/credits/README.md`: `400` (single-request validation failure, e.g. malformed email or an
+invalid UUID lookup parameter — code `validation_failed`, corrected by `mcp-connector-hardening/02`, which
+originally miscategorized this as `422`), `401` (missing/invalid bearer — code `authentication_required`), `402`
+(insufficient credits, thrown by `CreditGuard`), `403` (an authenticated credential missing a required
+permission — code `permission_denied`, added by `mcp-connector-hardening/02`), `404` (not found / foreign
+organization concealment), `422` (batch CSV upload validation failure — missing file, invalid media type, or
+oversized upload; also mapped to `validation_failed`, the same code as `400`), `429`
+(`VerificationRateLimitGuard`, includes a `Retry-After` header), `503` (`rate_limit_unavailable`, the limiter's
+own fail-safe outage response). Any other status or a network-level throw (connection refused, timeout, DNS
+failure) is an unexpected upstream error.
 
 ## Scope and Non-Goals
 
@@ -142,7 +147,9 @@ not add Docker/Compose wiring.
 Create `apps/mcp-server/src/lef-api/errors.ts` exporting a `mapUpstreamError(response: Response, body: unknown):
 UpstreamError` function and its `UpstreamError` type (`{code: 'authentication_required' | 'insufficient_credits' |
 'not_found' | 'validation_failed' | 'rate_limited' | 'service_unavailable' | 'unexpected_upstream_error', message:
-string, retryAfterSeconds?: number}`), mapping each documented status to its code with a short, fixed,
+string, retryAfterSeconds?: number}` — `mcp-connector-hardening/02` later adds `'permission_denied'` for `403`
+and a `400 -> validation_failed` mapping this original text omitted), mapping each documented status to its code
+with a short, fixed,
 non-parameterized message per code (never interpolating the raw upstream body into the message) and extracting
 `retryAfterSeconds` only from the `429`/`503` cases' `Retry-After` header when present. Export a second helper for
 mapping a thrown network/transport error (never a `Response`) to `unexpected_upstream_error` without inspecting
@@ -185,9 +192,10 @@ Depends on `mcp-connector/02`'s per-request access token. Establishes the client
 
 ## Acceptance Criteria
 
-- `getBillingSummary` on a fake `fetch` returning each of `200`/`401`/`402`/`404`/`422`/`429`/`503`/an unmapped
-  `5xx`/a thrown network error produces the correct success value or the correct `UpstreamError` code in every
-  case, and the `429`/`503` cases surface `retryAfterSeconds` when the fake response includes `Retry-After`.
+- `getBillingSummary` on a fake `fetch` returning each of `200`/`400`/`401`/`402`/`403`/`404`/`422`/`429`/`503`/an
+  unmapped `5xx`/a thrown network error produces the correct success value or the correct `UpstreamError` code
+  in every case (`mcp-connector-hardening/02` adds the `400`/`403` cases this original text omitted), and the
+  `429`/`503` cases surface `retryAfterSeconds` when the fake response includes `Retry-After`.
 - No test assertion's mapped error message contains the literal fixture body used to simulate the failure.
 - `check_credit_balance` called through the connector with a valid credential returns real
   `{balance, reserved, available}` values.
