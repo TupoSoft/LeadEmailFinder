@@ -209,3 +209,109 @@ describe('LefApiClient.getVerificationResult', () => {
         await expect(client.getVerificationResult('not-a-uuid')).rejects.toMatchObject({ code: 'validation_failed' })
     })
 })
+
+const batchCounts = {
+    totalRows: 2,
+    uniqueAddresses: 2,
+    duplicateRows: 0,
+    cachedAddresses: 0,
+    sharedAddresses: 0,
+    cooldownAddresses: 0,
+    completedAddresses: 2,
+    conclusiveAddresses: 0,
+    inconclusiveAddresses: 2,
+    failedAddresses: 0,
+}
+
+const batchStatus = {
+    id: 'batch-id',
+    status: 'completed' as const,
+    progress: 100,
+    total: 2,
+    processed: 2,
+    unprocessed: 0,
+    resultsAvailable: true,
+    counts: batchCounts,
+    billing: { state: 'settled' as const, reserved: 2, charged: 0 },
+}
+
+describe('LefApiClient.uploadBatchCsv', () => {
+    let fetchMock: jest.Mock
+
+    beforeEach(() => {
+        fetchMock = jest.fn()
+        global.fetch = fetchMock as unknown as typeof fetch
+    })
+
+    it('sends the CSV as multipart form data and returns the accepted id on 202', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(202, { id: 'batch-id' }))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.uploadBatchCsv('email\nperson@lef.test\n')).resolves.toEqual({ id: 'batch-id' })
+        const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+        expect(url).toBe('https://api.example/verifyBatch/csv')
+        expect(init.method).toBe('POST')
+        expect((init.headers as Record<string, string>).Authorization).toBe('Bearer the-access-token')
+        expect(init.body).toBeInstanceOf(FormData)
+        const file = (init.body as FormData).get('file') as File
+        expect(await file.text()).toBe('email\nperson@lef.test\n')
+    })
+
+    it('rejects with the mapped code on a failed upload', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(422, { message: 'invalid csv' }))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.uploadBatchCsv('email\n')).rejects.toMatchObject({ code: 'validation_failed' })
+    })
+})
+
+describe('LefApiClient.getBatchStatus', () => {
+    let fetchMock: jest.Mock
+
+    beforeEach(() => {
+        fetchMock = jest.fn()
+        global.fetch = fetchMock as unknown as typeof fetch
+    })
+
+    it('returns the full status object for an owned batch', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(200, batchStatus))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.getBatchStatus('batch-id')).resolves.toEqual(batchStatus)
+        const [url] = fetchMock.mock.calls[0] as [string]
+        expect(url).toBe('https://api.example/verifyBatch/batch-id')
+    })
+
+    it('rejects with not_found for a missing or foreign batch', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(404, { message: 'not found' }))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.getBatchStatus('missing-id')).rejects.toMatchObject({ code: 'not_found' })
+    })
+})
+
+describe('LefApiClient.getBatchResultsCsv', () => {
+    let fetchMock: jest.Mock
+
+    beforeEach(() => {
+        fetchMock = jest.fn()
+        global.fetch = fetchMock as unknown as typeof fetch
+    })
+
+    it('returns the raw CSV text on success', async () => {
+        const csv = 'id,email\nresult-id,person@lef.test\n'
+        fetchMock.mockResolvedValueOnce(new Response(csv, { status: 200, headers: { 'content-type': 'text/csv' } }))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.getBatchResultsCsv('batch-id')).resolves.toBe(csv)
+        const [url] = fetchMock.mock.calls[0] as [string]
+        expect(url).toBe('https://api.example/verifyBatch/batch-id/results')
+    })
+
+    it('rejects with not_found when results are not yet available', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse(404, { message: 'not found' }))
+        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+
+        await expect(client.getBatchResultsCsv('batch-id')).rejects.toMatchObject({ code: 'not_found' })
+    })
+})

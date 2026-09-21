@@ -13,7 +13,21 @@ and downloading its results would show.
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-21) Added `uploadBatchCsv`, `getBatchStatus`, and `getBatchResultsCsv` to
+  `apps/mcp-server/src/lef-api/client.ts`, typed to `GetBatchStatusResponseDto`'s exact field set; extracted a
+  shared `throwMappedError` helper so `getBatchResultsCsv`'s raw-text success path and `parseOrThrow`'s JSON path
+  share the same error mapping instead of duplicating it.
+- [x] (2026-09-21) Added `csv-parse`/`csv-stringify` to `apps/mcp-server/package.json`, reusing the same versions
+  already used by the `email-verification` module.
+- [x] (2026-09-21) Created `submit_batch_verification`, `check_batch_verification`, and `download_batch_results`
+  tool modules with specs, and registered all three in `create-server.ts`.
+- [x] (2026-09-21) Unit-covered all three tools plus the three new `LefApiClient` methods; full suite green (3553
+  passed), typecheck and lint clean.
+- [x] (2026-09-21) Live-validated against a real dev-stack customer credential via `@modelcontextprotocol/inspector
+  --cli`: `submit_batch_verification` with two real addresses, `check_batch_verification` observing the batch
+  reach `completed`, `download_batch_results` in two paginated windows (default page and an `offset=1&limit=1`
+  window) matching the real result CSV's content and columns exactly, a nonexistent batch id mapping to a clean
+  `not_found`, and an empty address list rejected at the protocol level with zero upstream calls.
 
 ## Plan dependencies
 
@@ -22,7 +36,36 @@ and downloading its results would show.
 
 ## Surprises & Discoveries
 
-None yet.
+- `download_batch_results`'s "not yet available" branch is decided by calling `getBatchStatus` first and checking
+  `resultsAvailable`, not by inspecting the download endpoint's own response: `getBatchResults` in
+  `batch-email-verification.service.ts` throws the same `BatchEmailVerificationJobNotFoundException` (mapped to a
+  plain `404`) both for a batch that genuinely does not exist and for one that exists but is not yet complete —
+  the two cases are indistinguishable from that endpoint's response alone. Checking status first, as the plan's
+  Plan of Work anticipated as one option, gives a materially clearer message than a generic `not_found`.
+  Confirmed this exact status-shares-both-cases behavior by reading `batch-email-verification.service.ts` directly
+  rather than assuming from the DTO alone.
+  Reusing this session's established fetch-mocking convention, `download-batch-results.spec.ts` discriminates the
+  two upstream calls (`/verifyBatch/:id` vs `/verifyBatch/:id/results`) by URL suffix within one `fetchMock`.
+- `mcp-connector-hardening/04`'s repository-fixture regression test (`scripts/plans/execplan-repository-fixture.spec.ts`)
+  asserted `mcp-connector/07` stays `Backlog` while cloning the *real, currently checked-in* progress of
+  `mcp-connector/04` and `mcp-connector/05` themselves (only forcing every other prerequisite complete in memory).
+  That assumption silently broke the moment `mcp-connector/04`'s real Markdown progress actually became complete
+  (in the immediately preceding PR): the "only mcp-connector/04 is incomplete" scenario stopped forcing 04
+  incomplete and instead inherited its real, now-complete state, so the test would have started asserting `Todo`
+  wrongly resolved to `Backlog` for the wrong reason (or vice versa) rather than genuinely exercising the missing-
+  dependency path. Fixed by adding a `forceIncompleteKeys` parameter to the test's `withCompleted` helper so each
+  "only X incomplete" scenario (including the one reproducing the original pre-fix failure, which excludes both
+  `mcp-connector/04` and `mcp-connector/05`) explicitly resets that plan to incomplete in memory regardless of its
+  real state — making the fixture robust to this plan's own completion, exactly as this PR performs, and to
+  `mcp-connector/05`'s completion by this very PR.
+- A batch of `@lef.test`-domain addresses (the checked-in Bruno fixture's own domain) verifies inconclusively and
+  settles with `creditsCharged: 0` almost immediately, as the module README documents — useful for cheap manual
+  verification but not for observing a nonzero charge. `evidence1@lef.test`/`evidence2@lef.test` were used for
+  live validation here for exactly that reason (matching the plan's own Artifacts and Notes guidance), and the
+  live batch reached `completed`/`resultsAvailable: true` within the polling window on the first check, with no
+  intermediate `queued`/`running` state actually observed given how fast this fixture resolves.
+
+## Decision Log
 
 ## Decision Log
 
@@ -48,7 +91,16 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+All three planned tools (`submit_batch_verification`, `check_batch_verification`, `download_batch_results`)
+shipped exactly as scoped, backed by three new `LefApiClient` methods reusing plan 03's shared
+request/error-mapping infrastructure and a newly extracted `throwMappedError` helper. The three Decision Log
+choices (list-of-strings input, the 5,000-address client-side cap, and capped/paginated JSON rows instead of raw
+CSV) all worked as designed, verified live: an oversized or empty list is rejected before any upstream call, and
+row-level pagination matches the real result CSV exactly for two different offset/limit windows. All acceptance
+criteria were met, including a dedicated unit test for comma/quote CSV escaping. The one unplanned finding was
+not in the connector itself but in a sibling repository-fixture regression test, whose scenario design implicitly
+depended on this plan (and plan 04) staying perpetually unimplemented; fixed in place as a small, self-contained
+change so the fixture now stays correct through this plan's own completion and any later one.
 
 ## Context and Orientation
 
