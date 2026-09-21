@@ -6,6 +6,8 @@ on:
 jobs:
   build-push:
     uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
+    with:
+      runner: tuposoft-ci
     permissions:
       packages: write
       contents: read
