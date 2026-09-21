@@ -66,6 +66,44 @@ export type AsyncVerificationState =
     | { readonly state: 'failed'; readonly failureCode: 'verification_failed'; readonly operation?: VerificationOperationMetadata }
     | { readonly state: 'unavailable' }
 
+export type BatchJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'
+export type BatchTerminalFailureCode = 'invalid_csv' | 'insufficient_credits' | 'processing_failed'
+
+/** Matches `BatchStatusAddressCountsDto`. `cached`/`shared`/`cooldown` are stable admission-time
+ * categories; `completed`/`conclusive`/`inconclusive`/`failed` count only newly created addresses. */
+export interface BatchStatusAddressCounts {
+    readonly totalRows: number
+    readonly uniqueAddresses: number
+    readonly duplicateRows: number
+    readonly cachedAddresses: number
+    readonly sharedAddresses: number
+    readonly cooldownAddresses: number
+    readonly completedAddresses: number
+    readonly conclusiveAddresses: number
+    readonly inconclusiveAddresses: number
+    readonly failedAddresses: number
+}
+
+export interface BatchStatusBilling {
+    readonly state: 'pending' | 'settled'
+    readonly reserved: number
+    readonly charged: number
+}
+
+/** Matches `GetBatchStatusResponseDto`. */
+export interface BatchStatus {
+    readonly id: string
+    readonly status: BatchJobStatus
+    readonly failureCode?: BatchTerminalFailureCode
+    readonly progress: number
+    readonly total: number
+    readonly processed: number
+    readonly unprocessed: number
+    readonly resultsAvailable: boolean
+    readonly counts: BatchStatusAddressCounts
+    readonly billing: BatchStatusBilling
+}
+
 /** Thin wrapper around the real LeadEmailFinder API. Has no auth concerns of its own: the caller
  * injects a function returning the bearer token to attach, already resolved for the current request. */
 export class LefApiClient {
@@ -114,6 +152,28 @@ export class LefApiClient {
         return this.parseOrThrow(response)
     }
 
+    /** Uploads a single-column CSV built by the caller as a batch. No `Content-Type` header is set
+     * here -- `fetch` derives the multipart boundary from the `FormData` body itself. */
+    async uploadBatchCsv(csvContent: string): Promise<{ id: string }> {
+        const form = new FormData()
+        form.append('file', new Blob([csvContent], { type: 'text/csv' }), 'batch.csv')
+        const response = await this.request('/verifyBatch/csv', { method: 'POST', body: form })
+        return this.parseOrThrow(response)
+    }
+
+    async getBatchStatus(id: string): Promise<BatchStatus> {
+        const response = await this.request(`/verifyBatch/${encodeURIComponent(id)}`)
+        return this.parseOrThrow(response)
+    }
+
+    /** Fetches the raw result CSV text -- parsing is the caller's responsibility, keeping this
+     * client's own responsibility limited to HTTP transport, same as every other method here. */
+    async getBatchResultsCsv(id: string): Promise<string> {
+        const response = await this.request(`/verifyBatch/${encodeURIComponent(id)}/results`)
+        if (!response.ok) await this.throwMappedError(response)
+        return await response.text()
+    }
+
     private async request(path: string, init: RequestInit = {}): Promise<Response> {
         const token = await this.getAccessToken()
         try {
@@ -123,11 +183,13 @@ export class LefApiClient {
         }
     }
 
+    private async throwMappedError(response: Response): Promise<never> {
+        const body = await response.json()
+        throw new UpstreamRequestError(mapUpstreamError(response, body))
+    }
+
     private async parseOrThrow<T>(response: Response): Promise<T> {
-        if (!response.ok) {
-            const body = await response.json()
-            throw new UpstreamRequestError(mapUpstreamError(response, body))
-        }
+        if (!response.ok) await this.throwMappedError(response)
         return (await response.json()) as T
     }
 }

@@ -44,13 +44,22 @@ describe('ExecPlan repository fixture', () => {
             plans = await discoverExecPlans(plansRoot, repositoryRoot)
         })
 
-        function withCompleted(doneKeys: readonly string[]): ExecPlan[] {
+        /**
+         * `forceIncompleteKeys` resets specific plans to incomplete regardless of their real, current
+         * checked-in progress -- without it, a scenario built to prove "07 stays Backlog while plan X is
+         * incomplete" would silently stop testing anything once X's real implementation actually
+         * finishes, since `plans` reflects the live repository, not a frozen snapshot.
+         */
+        function withCompleted(doneKeys: readonly string[], forceIncompleteKeys: readonly string[] = []): ExecPlan[] {
             const done = new Set(doneKeys)
+            const forceIncomplete = new Set(forceIncompleteKeys)
 
             return plans.map(plan => {
                 const clone = structuredClone(plan)
 
-                if (done.has(clone.key)) {
+                if (forceIncomplete.has(clone.key)) {
+                    clone.progress = { total: Math.max(clone.progress.total, 1), completed: 0 }
+                } else if (done.has(clone.key)) {
                     const total = Math.max(clone.progress.total, 1)
                     clone.progress = { total, completed: total }
                 }
@@ -74,7 +83,7 @@ describe('ExecPlan repository fixture', () => {
 
         it('stays in Backlog and names the missing tool plan when only mcp-connector/04 is incomplete', () => {
             const doneKeys = everyOtherPrerequisite.filter(key => key !== 'mcp-connector/04')
-            const states = resolvePlanStates(withCompleted(doneKeys))
+            const states = resolvePlanStates(withCompleted(doneKeys, ['mcp-connector/04']))
 
             expect(states.get('mcp-connector/07')).toMatchObject({
                 status: 'Backlog',
@@ -84,7 +93,7 @@ describe('ExecPlan repository fixture', () => {
 
         it('stays in Backlog and names the missing tool plan when only mcp-connector/05 is incomplete', () => {
             const doneKeys = everyOtherPrerequisite.filter(key => key !== 'mcp-connector/05')
-            const states = resolvePlanStates(withCompleted(doneKeys))
+            const states = resolvePlanStates(withCompleted(doneKeys, ['mcp-connector/05']))
 
             expect(states.get('mcp-connector/07')).toMatchObject({
                 status: 'Backlog',
@@ -94,7 +103,7 @@ describe('ExecPlan repository fixture', () => {
 
         it('stays in Backlog and names the missing deployment plan when only mcp-connector/06 is incomplete', () => {
             const doneKeys = everyOtherPrerequisite.filter(key => key !== 'mcp-connector/06')
-            const states = resolvePlanStates(withCompleted(doneKeys))
+            const states = resolvePlanStates(withCompleted(doneKeys, ['mcp-connector/06']))
 
             expect(states.get('mcp-connector/07')).toMatchObject({
                 status: 'Backlog',
@@ -104,7 +113,7 @@ describe('ExecPlan repository fixture', () => {
 
         it('stays in Backlog and names the missing desktop bridge plan when only mcp-connector-hardening/03 is incomplete', () => {
             const doneKeys = everyOtherPrerequisite.filter(key => key !== 'mcp-connector-hardening/03')
-            const states = resolvePlanStates(withCompleted(doneKeys))
+            const states = resolvePlanStates(withCompleted(doneKeys, ['mcp-connector-hardening/03']))
 
             expect(states.get('mcp-connector/07')).toMatchObject({
                 status: 'Backlog',
@@ -135,7 +144,7 @@ describe('ExecPlan repository fixture', () => {
                 'mcp-connector-hardening/03',
                 'mcp-connector-hardening/04',
             ]
-            const states = resolvePlanStates(withCompleted(doneKeys))
+            const states = resolvePlanStates(withCompleted(doneKeys, ['mcp-connector/04', 'mcp-connector/05']))
 
             expect(states.get('mcp-connector/07')?.status).toBe('Backlog')
         })
