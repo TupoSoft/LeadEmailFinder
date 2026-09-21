@@ -30,7 +30,7 @@ describe('mcp-server scaffold', () => {
         expect(await response.json()).toEqual({ status: 'ok' })
     })
 
-    it('lists exactly one tool, check_credit_balance, over the real MCP protocol', async () => {
+    it('lists exactly the five registered tools over the real MCP protocol', async () => {
         const client = new Client({ name: 'create-server.spec', version: '0.0.0' })
         const transport = new StreamableHTTPClientTransport(new URL('mcp', baseUrl), {
             requestInit: { headers: { Authorization: validAuthorizationHeader } },
@@ -40,8 +40,13 @@ describe('mcp-server scaffold', () => {
         try {
             const { tools } = await client.listTools()
 
-            expect(tools).toHaveLength(1)
-            expect(tools[0]?.name).toBe('check_credit_balance')
+            expect(tools.map(tool => tool.name).sort()).toEqual([
+                'check_async_verification',
+                'check_credit_balance',
+                'get_verification_result',
+                'submit_async_verification',
+                'verify_email',
+            ])
         } finally {
             await client.close()
         }
