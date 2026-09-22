@@ -32,11 +32,13 @@ ExecPlan
 ExecPlans
 ExecPlan's
 gitignored
+healthcheck
 ICP
 idempotence
 idempotently
 Idempotence
 IPs
+jq
 JSONB
 JWKS
 Keycloak
