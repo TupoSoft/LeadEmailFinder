@@ -262,7 +262,7 @@ test('batch publishes only multipart create, status and CSV download with safe b
     assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.resultsAvailable, {
         type: 'boolean',
         description:
-            'True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing.',
+            'True only for a completed job with a valid retained result location. Status polling does not check storage; a later missing object returns 404, and storage failures can still prevent download.',
     })
     assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.counts, { $ref: '#/components/schemas/BatchStatusAddressCountsDto' })
     assert.deepEqual(schemas.GetBatchStatusResponseDto.properties.billing, { $ref: '#/components/schemas/BatchStatusBillingDto' })

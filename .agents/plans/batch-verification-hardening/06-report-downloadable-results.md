@@ -19,6 +19,8 @@ The single PR title is `fix(email-verification): report batch download availabil
 - [x] (2026-09-22) Update API descriptions, generated contracts, Bruno assertions, and module documentation; OpenAPI checks pass.
 - [x] (2026-09-22) Complete independent diff review and Harper validation. Focused tests, architecture, type checking, lint, and the synthetic Bruno runner pass. Live Bruno passes all 16 requests and 25 tests without skips on the isolated development stack.
 
+- [x] (2026-09-22) Update the separate OpenAPI tooling assertion and run its complete suite: all 24 tests pass. Hosted validation is tracked by the checks on PR 734.
+
 ## Plan dependencies
 
 - `verification-billing/05`
@@ -37,6 +39,11 @@ The single PR title is `fix(email-verification): report batch download availabil
 - The initial live attempt found only another checkout's partially running Docker Compose project. A later
   check of the active rootless Docker context found no containers or volumes. Live validation then created the
   isolated `lef649` project from this checkout, using its own containers, network, volumes, and free host ports.
+
+- Hosted contract validation exposed an assertion omitted from the original focused checks:
+  `scripts/openapi/contracts.test.mjs` still expected the old availability description. The generated artifacts
+  matched the DTO, so `openapi:check` passed while the separate tooling suite failed. The assertion now expects
+  the corrected description; the full tooling command is included below.
 
 ## Decision Log
 
@@ -171,6 +178,7 @@ corepack pnpm exec jest --runInBand --modulePathIgnorePatterns '<rootDir>/.claud
 corepack pnpm openapi:export
 corepack pnpm openapi:generate
 corepack pnpm openapi:check
+node --test scripts/openapi/*.test.mjs
 corepack pnpm architecture:check
 corepack pnpm typecheck
 node --test scripts/bruno/batch-verification-runner.test.mjs
@@ -201,6 +209,12 @@ the development stack. Preserve other checkouts and their data. Do not add produ
 ## Artifacts and Notes
 
 Validation on 2026-09-22:
+
+- The CI follow-up updates only the stale tooling assertion and this plan. `node --test scripts/openapi/*.test.mjs`
+  passed all 24 tests with zero failures or skips. `corepack pnpm openapi:check`,
+  `corepack pnpm exec eslint scripts/openapi/contracts.test.mjs`, and `git diff --check` passed.
+  The independent assertion audit found no other executable expectations requiring this change and no material
+  SOLID trade-offs. Bruno is not applicable to this follow-up because it changes no HTTP behavior.
 
 - The exact focused Jest command above passed: 5 suites, 115 tests, zero skips. Before the fix, three service
   cases reproduced the incorrect true flag for failed admissions.
