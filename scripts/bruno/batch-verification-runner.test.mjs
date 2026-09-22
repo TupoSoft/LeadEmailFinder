@@ -148,7 +148,7 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     assert.equal(registered.requests, files.length)
     assert.equal(registered.requests, 16)
     assert.equal(registered.tests, testCount)
-    assert.equal(registered.tests, 24)
+    assert.equal(registered.tests, 25)
     assert.equal(registered.network, 'compose')
     assert.deepEqual(
         documents.map(document => document.info.seq),
@@ -187,6 +187,8 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
     let rejectedMedia = 0
     let duplicateUploads = 0
     let incorrectPayerReceipt = false
+    let incorrectAvailabilityStatus
+    let incorrectInvalidAvailability = false
     let balance = 2
     let scenario = 'default'
     let resets = 0
@@ -328,7 +330,7 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
                 processed: 0,
                 unprocessed: 0,
                 failureCode: 'invalid_csv',
-                resultsAvailable: false,
+                resultsAvailable: incorrectInvalidAvailability,
                 counts: {
                     totalRows: 0,
                     uniqueAddresses: 0,
@@ -349,14 +351,18 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
             if (rawQueueState)
                 return reply(200, { status: 'waiting-children', failedReason: 'private queue exception' })
             const completed = statusReads >= 2
+            // Corrupt request 02 only so later requests still exercise the successful workflow.
+            const incorrectAvailability = statusReads === 1 && incorrectAvailabilityStatus !== undefined
+            const status = incorrectAvailability ? incorrectAvailabilityStatus : completed ? 'completed' : 'running'
             return reply(200, {
                 id: job,
-                status: completed ? 'completed' : 'running',
-                progress: completed ? 100 : 50,
+                status,
+                progress: status === 'completed' ? 100 : 50,
                 total: 2,
                 processed: completed ? 2 : 1,
                 unprocessed: completed ? 0 : 1,
-                resultsAvailable: completed,
+                resultsAvailable: incorrectAvailability ? status !== 'completed' : completed,
+                ...(status === 'failed' ? { failureCode: 'processing_failed' } : {}),
                 counts: {
                     totalRows: 2,
                     uniqueAddresses: 2,
@@ -387,7 +393,7 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
     origin = `http://127.0.0.1:${server.address().port}`
     const environment = fixtureEnvironment(origin)
     try {
-        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 24 })
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
         assert.equal(successfulUploads, 1)
         assert.equal(invalidUploads, 1)
         assert.equal(downloads, 1)
@@ -399,7 +405,7 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
         assert.equal(balance, 0)
         assert.equal(scenario, 'default')
         assert.equal(resets, 2)
-        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 24 })
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
         assert.equal(duplicateUploads, 2)
         assert.equal(uploadedAddresses.size, 2)
         assert.equal(resets, 4)
@@ -411,6 +417,21 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
         assert.equal(balance, 0, 'The regression rejects a hidden charge even when the debit succeeds')
         assert.equal(scenario, 'default')
         incorrectPayerReceipt = false
+        for (const status of ['queued', 'running', 'completed', 'failed', 'unavailable']) {
+            statusReads = 0
+            incorrectAvailabilityStatus = status
+            await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+                assert.equal(failureDiagnostic(error).request, 2, `Rejects incorrect availability for ${status}`)
+                return true
+            })
+        }
+        incorrectAvailabilityStatus = undefined
+        incorrectInvalidAvailability = true
+        await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+            assert.equal(failureDiagnostic(error).request, 5, 'Invalid CSV never offers a result download')
+            return true
+        })
+        incorrectInvalidAvailability = false
         rawQueueState = true
         await assert.rejects(executeCollection('batch-verification', environment, root), error => {
             const diagnostic = failureDiagnostic(error)

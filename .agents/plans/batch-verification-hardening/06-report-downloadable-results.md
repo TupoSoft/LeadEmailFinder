@@ -14,10 +14,10 @@ The single PR title is `fix(email-verification): report batch download availabil
 
 ## Progress
 
-- [ ] (2026-09-15 16:54Z) Add and reuse one pure eligibility function for status and result download.
-- [ ] (2026-09-15 16:54Z) Cover terminal, transitional, missing-location, storage, and ownership behavior.
-- [ ] (2026-09-15 16:54Z) Update API descriptions, generated contracts, Bruno assertions, and module documentation.
-- [ ] (2026-09-15 16:54Z) Run focused checks, record actual outcomes, and review the final diff.
+- [x] (2026-09-22) Add and reuse one pure eligibility function for status and result download.
+- [x] (2026-09-22) Cover terminal, transitional, missing-location, storage, and ownership behavior: 115 focused tests pass.
+- [x] (2026-09-22) Update API descriptions, generated contracts, Bruno assertions, and module documentation; OpenAPI checks pass.
+- [x] (2026-09-22) Complete independent diff review and Harper validation. Focused tests, architecture, type checking, lint, and the synthetic Bruno runner pass. Live Bruno stops at fixture setup and remains unverified.
 
 ## Plan dependencies
 
@@ -25,7 +25,17 @@ The single PR title is `fix(email-verification): report batch download availabil
 
 ## Surprises & Discoveries
 
-None yet.
+- The implementation starts from current `master` at `095454b`, which includes the billing prerequisite.
+  Regression tests reproduced true availability for failed `admitting`, `admitted`, and `insufficient_credits`
+  admissions before the service fix.
+- This checkout contains an unrelated nested checkout under the untracked `.claude/` directory. Focused Jest
+  commands exclude it with `--modulePathIgnorePatterns '<rootDir>/.claude/'` and select exact test paths.
+  The commit hook also discovered an obsolete test there, which could not load the removed
+  `@automapper/nestjs` dependency. The architecture check passed. A separate affected-test run excluded that
+  directory and passed all seven suites. The single commit bypasses the hook after these equivalent checks;
+  unrelated files and repository configuration remain unchanged.
+- The available Docker Compose project belongs to another checkout and contains only one running service.
+  Live Bruno validation must use this checkout's own healthy stack; the unrelated project will not be reused.
 
 ## Decision Log
 
@@ -40,7 +50,15 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Both endpoints now share one pure application eligibility function. Only completed jobs with an accepted retained
+location advertise downloadable results. Failed jobs remain unavailable even after settlement or result upload
+failure. HTTP tests verify the unchanged missing-object `404`, infrastructure `500`, and organization concealment.
+Status polling makes no storage call, and billing and address counts keep their existing behavior.
+
+The generated API contract changes only the flag description. Architecture review found no new public exports,
+module dependencies, infrastructure coupling, or material SOLID trade-offs. No schema change or reset is needed.
+Live Bruno remains unverified because this checkout has no healthy development stack; the synthetic runner checks
+collection behavior but does not prove live storage, SMTP, or database behavior.
 
 ## Context and Orientation
 
@@ -81,8 +99,8 @@ owned by their existing logic. This plan requires no schema changes or migration
 ## Plan of Work
 
 Read root `AGENTS.md`, `src/libs/modules/AGENTS.md`, the canonical module guide, and the email-verification README.
-Read `apps/web/AGENTS.md` before checking the generated API-client boundary. Apply the SOLID skill to keep the
-eligibility rule independent of Nest, BullMQ, S3, and TypeORM.
+Read `apps/web/AGENTS.md` before checking the generated API-client boundary. Apply the repository architecture
+rules to keep the eligibility rule independent of Nest, BullMQ, S3, and TypeORM.
 
 Add `getDownloadableBatchResultLocation(snapshot): string | undefined` to the existing application
 `batch-verification-status.ts`. It accepts `BatchVerificationSnapshot` and returns the retained location only
@@ -140,7 +158,12 @@ flag remains true. Neither case authorizes probing again, changing credit settle
 From the repository root, run the focused service, status mapping, adapter, and HTTP contract checks:
 
 ```bash
-corepack pnpm exec jest --runInBand batch-email-verification.service.spec.ts batch-verification-status.spec.ts bull-batch-jobs.spec.ts batch-verification-http.integration.spec.ts batch-verification.openapi.spec.ts
+corepack pnpm exec jest --runInBand --modulePathIgnorePatterns '<rootDir>/.claude/' --runTestsByPath \
+  src/libs/modules/email-verification/src/application/delivery/batch/batch-email-verification.service.spec.ts \
+  src/libs/modules/email-verification/src/application/delivery/batch/batch-verification-status.spec.ts \
+  src/libs/modules/email-verification/src/infrastructure/queues/batch-verification/bull-batch-jobs.spec.ts \
+  src/libs/modules/email-verification/src/api/http/batch-verification/batch-verification-http.integration.spec.ts \
+  src/libs/modules/email-verification/src/api/http/batch-verification/batch-verification.openapi.spec.ts
 corepack pnpm openapi:export
 corepack pnpm openapi:generate
 corepack pnpm openapi:check
@@ -172,6 +195,27 @@ No development reset is required for this change. If a clean fixture is necessar
 the development stack. Preserve other checkouts and their data. Do not add production migrations or backfills.
 
 ## Artifacts and Notes
+
+Validation on 2026-09-22:
+
+- The exact focused Jest command above passed: 5 suites, 115 tests, zero skips. Before the fix, three service
+  cases reproduced the incorrect true flag for failed admissions.
+- `corepack pnpm openapi:export`, `corepack pnpm openapi:generate`, and `corepack pnpm openapi:check` passed.
+  Both generated files changed only their description of `resultsAvailable`.
+- `corepack pnpm architecture:check` passed with 9 modules and zero violations. `corepack pnpm typecheck` passed.
+- Focused ESLint on all changed TypeScript and runner JavaScript files passed. `git diff --check` passed.
+- `corepack pnpm exec jest --passWithNoTests -o --runInBand --modulePathIgnorePatterns '<rootDir>/.claude/'`
+  passed all 7 affected suites and 125 tests with zero skips.
+- The exact `corepack pnpm docs:lint --` command above passed Harper for all three edited Markdown files.
+- Independent diff review found no actionable defects or material architectural trade-offs.
+- `node --test scripts/bruno/batch-verification-runner.test.mjs` passed all 4 tests with zero skips. The pinned
+  CLI successfully executed 16 requests and 25 collection tests against the synthetic server, and rejected
+  incorrect availability for all five public states and invalid CSV.
+- `corepack pnpm bruno:batch-verification` exited with `stage: fixture_bootstrap` before live execution.
+  Docker Compose reports only the unrelated `lef` project from another checkout, with one running service.
+- The locked workspace dependencies were restored before final validation. The first install encountered a
+  read-only package cache; the authorized retry of `corepack pnpm install --frozen-lockfile` completed.
+
 
 The review reproduced `resultsAvailable: true` and a job-not-found error for the same failed admitted batch.
 The original plan for PR #633 explicitly deferred a database download fallback; this plan corrects the flag without

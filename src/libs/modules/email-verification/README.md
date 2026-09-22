@@ -304,8 +304,10 @@ Batch status shares the async application's five public states: `queued`, `runni
 `unavailable`. A completed batch without a valid stored result location is `unavailable`. Only failed jobs expose
 `failureCode`: `invalid_csv`, `insufficient_credits`, or `processing_failed`; this generic failure makes no claim
 about whether credits were charged. `GetBatchStatusResponseDto` exposes `resultsAvailable`, `counts`,
-and `billing`. `resultsAvailable` becomes true once settled row accounting is downloadable, including after a
-terminal failure past validation whose output publication kept failing. `counts` includes `totalRows`,
+and `billing`. `resultsAvailable` is true only for a completed job with a valid retained result location, using
+the same pure application rule as the download route. Failed jobs report false even after billing settles or
+result publication fails. Status polling performs no storage request; later object loss can still make download
+return `404`, and infrastructure failures retain their existing error response. `counts` includes `totalRows`,
 `uniqueAddresses`, `duplicateRows`, and per-address `cached`/`shared`/`cooldown`/`completed`/`conclusive`/`inconclusive`/`failed`
 counts. The last three count only `created` addresses; `cache`/`shared`/`cooldown` are stable admission-time
 categories and are not counted again. `billing` includes `state` and the `reserved`/`charged` totals across the
@@ -576,7 +578,9 @@ Focused tests are grouped by behavior:
   `BatchAwaitingSettlementSignal`, invalid-row and dispatch-failure classification, and completion tracing —
   entirely against fake ports
 - **Batch public status**: `application/delivery/batch/batch-verification-status.spec.ts` covers all application
-  snapshots, missing result locations, safe failure fallbacks, successful retries, and unknown future states.
+  snapshots, shared download eligibility, missing result locations, safe failure fallbacks, successful retries,
+  and unknown future states. Service, queue adapter, and HTTP tests verify agreement between the availability
+  flag and download eligibility, including upload failure after settlement, without probing storage during polling.
 - **Batch HTTP**: `api/http/batch-verification/batch-email-verification.controller.spec.ts`,
   `api/http/batch-verification/batch-verification-http.integration.spec.ts`, and
   `api/http/batch-verification/batch-verification.openapi.spec.ts` cover multipart validation, safe status
