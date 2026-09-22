@@ -17,7 +17,7 @@ The single PR title is `fix(email-verification): report batch download availabil
 - [x] (2026-09-22) Add and reuse one pure eligibility function for status and result download.
 - [x] (2026-09-22) Cover terminal, transitional, missing-location, storage, and ownership behavior: 115 focused tests pass.
 - [x] (2026-09-22) Update API descriptions, generated contracts, Bruno assertions, and module documentation; OpenAPI checks pass.
-- [x] (2026-09-22) Complete independent diff review and Harper validation. Focused tests, architecture, type checking, lint, and the synthetic Bruno runner pass. Live Bruno stops at fixture setup and remains unverified.
+- [x] (2026-09-22) Complete independent diff review and Harper validation. Focused tests, architecture, type checking, lint, and the synthetic Bruno runner pass. Live Bruno passes all 16 requests and 25 tests without skips on the isolated development stack.
 
 ## Plan dependencies
 
@@ -34,8 +34,9 @@ The single PR title is `fix(email-verification): report batch download availabil
   `@automapper/nestjs` dependency. The architecture check passed. A separate affected-test run excluded that
   directory and passed all seven suites. The single commit bypasses the hook after these equivalent checks;
   unrelated files and repository configuration remain unchanged.
-- The available Docker Compose project belongs to another checkout and contains only one running service.
-  Live Bruno validation must use this checkout's own healthy stack; the unrelated project will not be reused.
+- The initial live attempt found only another checkout's partially running Docker Compose project. A later
+  check of the active rootless Docker context found no containers or volumes. Live validation then created the
+  isolated `lef649` project from this checkout, using its own containers, network, volumes, and free host ports.
 
 ## Decision Log
 
@@ -57,8 +58,11 @@ Status polling makes no storage call, and billing and address counts keep their 
 
 The generated API contract changes only the flag description. Architecture review found no new public exports,
 module dependencies, infrastructure coupling, or material SOLID trade-offs. No schema change or reset is needed.
-Live Bruno remains unverified because this checkout has no healthy development stack; the synthetic runner checks
-collection behavior but does not prove live storage, SMTP, or database behavior.
+Live Bruno passed against the fresh `lef649` development stack: 16 executed requests and 25 passing tests with no
+skipped requests. The run used the real API, Keycloak, PostgreSQL, Redis, Garage, DNS, proxy, and local SMTP fixture.
+It verified successful upload, completed availability and CSV download, invalid-CSV rejection with false
+availability, foreign-result concealment, and duplicate-address billing. This is local integration evidence;
+result-upload failure and storage-outage behavior remain covered by deterministic injected HTTP tests.
 
 ## Context and Orientation
 
@@ -211,11 +215,19 @@ Validation on 2026-09-22:
 - `node --test scripts/bruno/batch-verification-runner.test.mjs` passed all 4 tests with zero skips. The pinned
   CLI successfully executed 16 requests and 25 collection tests against the synthetic server, and rejected
   incorrect availability for all five public states and invalid CSV.
-- `corepack pnpm bruno:batch-verification` exited with `stage: fixture_bootstrap` before live execution.
-  Docker Compose reports only the unrelated `lef` project from another checkout, with one running service.
+- The first `corepack pnpm bruno:batch-verification` attempt stopped at `stage: fixture_bootstrap` because no
+  suitable stack was running. After setup, `COMPOSE_PROJECT_NAME=lef649 corepack pnpm bruno:batch-verification`
+  passed: `Bruno 4.1.0: 16 requests and 25 tests passed; no skipped requests`.
+- The isolated stack was built from implementation commit `665a944`, with `API_START_COMMAND='pnpm exec nest start'`
+  for both base startup and the SMTP overlay. Keycloak provisioning, credential seeding, customer seeding, and
+  `corepack pnpm keycloak:smoke` passed. The SMTP proxy bootstrap exited with code zero before the collection ran.
+- The `lef649` project uses web port `53149`, Keycloak `58149`, PostgreSQL `55149`, Redis `56149`, Garage `59149`,
+  and Bull Board `54149`. The standard base and SMTP Compose files are the only configuration inputs. The stack
+  remains running with healthy services, and the launcher restores the fixture credit balance and SMTP scenario.
+- After recording live evidence, `corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/06-report-downloadable-results.md`
+  passed Harper for the updated plan.
 - The locked workspace dependencies were restored before final validation. The first install encountered a
   read-only package cache; the authorized retry of `corepack pnpm install --frozen-lockfile` completed.
-
 
 The review reproduced `resultsAvailable: true` and a job-not-found error for the same failed admitted batch.
 The original plan for PR #633 explicitly deferred a database download fallback; this plan corrects the flag without
