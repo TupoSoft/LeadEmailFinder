@@ -300,14 +300,28 @@ const preservedCommands: Record<string, string[]> = {
 
 describe('Validate workflow syntax and structure', () => {
     it.each(['validate.yml', 'sync-execplans.yml'])(
-        '%s routes every job to the ARC scale set',
+        '%s routes every job to the shared ARC runner pool',
         (file) => {
             const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))
             for (const job of Object.values(declared.jobs)) {
-                expect(job['runs-on']).toBe('tuposoft-pc-wsl')
+                expect(job['runs-on']).toBe('tuposoft-ci')
             }
         },
     )
+
+    it('passes the shared runner label to the reusable build workflow', () => {
+        const documents = parseAllDocuments(readFileSync(resolve(root, '.github/workflows/build.yml'), 'utf8'))
+        expect(documents).toHaveLength(1)
+        expect(documents[0].errors).toEqual([])
+        const declared: unknown = documents[0].toJS()
+        if (!isRecord(declared) || !isRecord(declared.jobs) || !isRecord(declared.jobs['build-push'])) {
+            throw new Error('Expected a reusable build job.')
+        }
+        const build = declared.jobs['build-push']
+        expect(build.uses).toBe('TupoSoft/GitHubActions/.github/workflows/build-push.yml@master')
+        expect(build.with).toEqual({ runner: 'tuposoft-ci' })
+        expect(build['runs-on']).toBeUndefined()
+    })
 
     it.each(['images', 'browser-live'])('%s provisions Compose before starting Docker builds or services', (id) => {
         const steps = workflow.jobs[id].steps
@@ -391,7 +405,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-pc-wsl')
+            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-ci')
         }
     })
 

@@ -42,7 +42,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 120s
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       API_URL: http://localhost:3000
