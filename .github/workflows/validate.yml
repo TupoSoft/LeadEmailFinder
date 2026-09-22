@@ -417,6 +417,18 @@ jobs:
           cache-from: type=gha,version=2,scope=lef-web
           cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
         if: needs.changes.outputs.images == 'true'
+      - name: Build independent MCP connector image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/mcp-server.Dockerfile
+          tags: lead-email-finder-mcp-server:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-mcp-server
+          cache-to: type=gha,version=2,scope=lef-mcp-server,mode=max,ignore-error=true
+        if: needs.changes.outputs.images == 'true'
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
         if: needs.changes.outputs.images == 'true'

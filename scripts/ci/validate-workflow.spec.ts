@@ -607,6 +607,7 @@ describe('Validate workflow syntax and structure', () => {
                 ['Dockerfile', 'lead-email-finder:ci', 'lef-production'],
                 ['docker/Dockerfile', 'lead-email-finder-api:frontend-06', 'lef-api'],
                 ['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web'],
+                ['docker/mcp-server.Dockerfile', 'lead-email-finder-mcp-server:frontend-06', 'lef-mcp-server'],
             ]
             : [['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web']]
         expect(setups).toHaveLength(1)

@@ -17,7 +17,21 @@ legitimate, if minimal, deployable service.
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-22) Added `docker/mcp-server.Dockerfile`, a single-stage build (not multi-stage — see Surprises &
+  Discoveries) scoped via `--filter @tuposoft/lead-email-finder-mcp-server...`.
+- [x] (2026-09-22) Added the `mcp-server` Compose service block to `docker/compose.yaml`: no `secrets:` block,
+  published port `${MCP_SERVER_PORT:-53002}:3002`, `depends_on: api: condition: service_healthy`, a
+  curl+jq healthcheck mirroring `api`'s own, and `API_URL`/`OIDC_BACKCHANNEL_URL` pointed at the Compose-internal
+  `api`/`keycloak` hostnames.
+- [x] (2026-09-22) Added a matching `images` CI job step for `docker/mcp-server.Dockerfile` in
+  `.github/workflows/validate.yml`, and updated `scripts/ci/validate-workflow.spec.ts`'s expected build list to
+  include it; confirmed `apps/mcp-server/` and `docker/` paths already select the `images` consumer in
+  `scripts/ci/select-validation.mjs` from prior plans, so no discovery-logic change was needed.
+- [x] (2026-09-22) Verified all Acceptance Criteria against the real dev stack: standalone `docker build`, `docker
+  compose config --quiet`, `docker compose up -d mcp-server` reaching healthy, `curl /health` returning `200`, and
+  a full `@modelcontextprotocol/inspector --cli` round trip (`tools/list` showing all 8 registered tools,
+  `check_credit_balance` returning a real balance) against the containerized service's published port, matching
+  the locally-run process used for manual verification in plans 02-05.
 
 ## Plan dependencies
 
@@ -25,7 +39,32 @@ legitimate, if minimal, deployable service.
 
 ## Surprises & Discoveries
 
-None yet.
+- The Plan of Work's assumption of a multi-stage "slim runtime" Dockerfile (build stage, then a runtime stage
+  copying only `dist` plus production `node_modules`) turned out not to fit this monorepo's actual pnpm layout.
+  `pnpm --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile`, run with only the root and
+  `apps/mcp-server` manifests present in the build context (mirroring `docker/web.Dockerfile`'s own partial-copy
+  technique), still resolves and installs the *entire* monorepo's dependency tree (NestJS, TypeORM, Jest, ESLint,
+  and everything else), confirmed by inspecting the built image's `node_modules` directly — `--filter` here scopes
+  which workspace package's own scripts/lifecycle run, not which dependencies get fetched, given this repository's
+  single root lockfile. `pnpm deploy` (the pnpm-native tool for exactly this slimming problem) requires either
+  `inject-workspace-packages=true` in a workspace-wide `.npmrc` (a configuration change out of this plan's scope) or its
+  `--legacy` mode, which was tested directly and produces the identical full-tree result. Since `docker/Dockerfile`
+  (the `api` service) already accepts this same full-tree install with no attempt at slimming, a single-stage
+  Dockerfile mirroring that established, already-CI-proven shape is consistent with existing repository
+  convention, not a regression introduced here — documented instead of chased further, per this plan's own
+  Artifacts and Notes preference for matching established shapes over inventing a new one.
+- During manual verification, bringing `mcp-server` up on the already-running local dev stack with
+  `docker compose up -d --build mcp-server` triggered a `docker compose` network-recreation attempt (because
+  Compose detected pre-existing orphan containers from `docker/compose.smtp-dev.yaml`, which was not included in
+  this narrower command) that failed partway through, briefly stopping `postgres`/`redis`/`api`/`garage` and
+  leaving one container in a broken "not connected to its own network" state. This is a real, reproducible Docker
+  Compose fragility unrelated to any file this plan adds — restored by a clean `docker compose down
+  --remove-orphans` followed by `docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d`
+  (both overlay files together, matching how the stack was actually running beforehand), which brought every
+  service back healthy with no data loss (all state lives in named volumes, not container filesystems). Worth
+  flagging to whoever next touches `docker compose up` against a stack with active overlay files: always include
+  every overlay file already in use, not just `docker/compose.yaml` alone, to avoid tripping this same orphan-
+  container path.
 
 ## Decision Log
 
@@ -40,7 +79,13 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The connector is now a real, independently buildable and runnable Compose service exactly as scoped: both
+Decision Log choices (no `secrets:` block, `docker/mcp-server.Dockerfile` naming) held up unchanged. The one
+planning-time assumption that did not survive contact with the real repository was the multi-stage "slim
+runtime" shape; a single-stage Dockerfile mirroring `docker/Dockerfile`'s already-established, already-CI-proven
+convention was the correct, lower-risk choice once the pnpm workspace's actual install behavior was verified
+directly rather than assumed. All acceptance criteria were verified live, including a full tool round trip
+through the containerized service's published port, not just a `/health` check.
 
 ## Context and Orientation
 
