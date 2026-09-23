@@ -29,7 +29,7 @@ export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 22, tests: 22, sandbox: 'developer', network: 'compose' }),
-    'batch-verification': Object.freeze({ requests: 16, tests: 24, sandbox: 'developer', network: 'compose' }),
+    'batch-verification': Object.freeze({ requests: 16, tests: 25, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 34, sandbox: 'developer', network: 'host' }),
     'proxy-registry': Object.freeze({

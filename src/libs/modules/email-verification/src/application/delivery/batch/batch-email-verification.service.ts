@@ -14,7 +14,7 @@ import { BatchResultReader, BatchResultUnavailableError } from './batch-result-r
 import { BatchEmailVerificationJobNotFoundException } from './job-not-found.exception'
 import { VerificationJobState } from '../verification-job-state'
 import { BatchTerminalFailureCode } from './batch-terminal-failure'
-import { mapBatchVerificationStatus } from './batch-verification-status'
+import { getDownloadableBatchResultLocation, mapBatchVerificationStatus } from './batch-verification-status'
 
 export const BATCH_EMAIL_VERIFICATION_SERVICE_TOKEN = 'BatchEmailVerificationServiceToken'
 
@@ -113,7 +113,8 @@ export class BatchEmailVerificationService {
             throw new BatchEmailVerificationJobNotFoundException(id)
         }
 
-        const status = mapBatchVerificationStatus(await job.readStatus())
+        const snapshot = await job.readStatus()
+        const status = mapBatchVerificationStatus(snapshot)
         const stats = await this.getStats(job)
         if (status.status === 'completed') stats.progress = 100
 
@@ -140,11 +141,7 @@ export class BatchEmailVerificationService {
             reserved: addressCounts?.reserved ?? 0,
             charged: addressCounts?.charged ?? 0,
         }
-        // A terminal failure past validation still leaves settled row accounting downloadable, even though the
-        // job itself never reached `completed` (e.g. output publication kept failing).
-        const resultsAvailable =
-            status.status === 'completed' ||
-            (status.status === 'failed' && admission !== null && admission.state !== 'validating' && admission.state !== 'invalid')
+        const resultsAvailable = getDownloadableBatchResultLocation(snapshot) !== undefined
 
         return { id, ...status, ...stats, resultsAvailable, counts, billing }
     }
@@ -155,13 +152,13 @@ export class BatchEmailVerificationService {
         ok(job, new BatchEmailVerificationJobNotFoundException(id))
         ok(job.data.organizationId === organizationId, new BatchEmailVerificationJobNotFoundException(id))
 
-        const snapshot = await job.readStatus()
-        if (mapBatchVerificationStatus(snapshot).status !== 'completed' || !snapshot.resultLocation) {
+        const resultLocation = getDownloadableBatchResultLocation(await job.readStatus())
+        if (resultLocation === undefined) {
             throw new BatchEmailVerificationJobNotFoundException(id)
         }
 
         try {
-            return await this.resultReader.read(snapshot.resultLocation)
+            return await this.resultReader.read(resultLocation)
         } catch (error) {
             if (error instanceof BatchResultUnavailableError) throw new BatchEmailVerificationJobNotFoundException(id)
             throw error

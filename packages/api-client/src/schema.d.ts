@@ -831,7 +831,7 @@ export interface components {
             id: string;
             processed: number;
             progress: number;
-            /** @description True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing. */
+            /** @description True only for a completed job with a valid retained result location. Status polling does not check storage; a later missing object returns 404, and storage failures can still prevent download. */
             resultsAvailable: boolean;
             /** @enum {string} */
             status: "queued" | "running" | "completed" | "failed" | "unavailable";
