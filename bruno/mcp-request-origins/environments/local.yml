@@ -1,0 +1,12 @@
+name: local
+variables:
+  - name: baseUrl
+    value: http://127.0.0.1:3002
+  - name: allowedOrigin
+    value: https://client.example
+  - name: deniedOrigin
+    value: https://untrusted.example
+  - name: clientId
+    value: '{{process.env.MCP_AUTH_CLIENT_ID}}'
+  - name: clientSecret
+    value: '{{process.env.MCP_AUTH_CLIENT_SECRET}}'

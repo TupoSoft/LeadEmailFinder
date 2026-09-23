@@ -124,6 +124,7 @@ function fixtureEnvironment(origin) {
         CUSTOMER_ORGANIZATION_ID: randomUUID(),
         CUSTOMER_SERVICE_CLIENT_ID: customerClient,
         CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
+        EVIDENCE_CONTROL_URL: origin,
     }
 }
 
@@ -145,13 +146,13 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     )
     const registered = registeredCollection('batch-verification')
     assert.equal(registered.requests, files.length)
-    assert.equal(registered.requests, 9)
+    assert.equal(registered.requests, 16)
     assert.equal(registered.tests, testCount)
-    assert.equal(registered.tests, 15)
+    assert.equal(registered.tests, 25)
     assert.equal(registered.network, 'compose')
     assert.deepEqual(
         documents.map(document => document.info.seq),
-        [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        Array.from({ length: 16 }, (_, index) => index + 1),
     )
     const environment = fixtureEnvironment('http://127.0.0.1:58106')
     const args = cliArguments('batch-verification', environment, '/tmp/report.json')
@@ -165,6 +166,7 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
         'KEYCLOAK_SERVICE_CLIENT_ID',
         'KEYCLOAK_SERVICE_CLIENT_SECRET',
         'OIDC_BACKCHANNEL_URL',
+        'EVIDENCE_CONTROL_URL',
     ]) {
         assert.throws(
             () => cliArguments('batch-verification', { ...environment, [field]: '' }, '/tmp/report.json'),
@@ -173,7 +175,7 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     }
 })
 
-test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failure and ownership boundaries', async () => {
+test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and ownership boundaries', async () => {
     let origin
     let rawQueueState = false
     let successfulUploads = 0
@@ -183,8 +185,19 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
     let unauthorized = 0
     let foreignReads = 0
     let rejectedMedia = 0
+    let duplicateUploads = 0
+    let incorrectPayerReceipt = false
+    let incorrectAvailabilityStatus
+    let incorrectInvalidAvailability = false
+    let balance = 2
+    let scenario = 'default'
+    let resets = 0
+    let duplicateEmails = []
+    const uploadedAddresses = new Set()
     const job = randomUUID()
     const invalidJob = randomUUID()
+    const duplicateJob = randomUUID()
+    const duplicateResult = randomUUID()
     const server = createServer(async (request, response) => {
         const reply = (status, body) => {
             response.writeHead(status, { 'content-type': 'application/json', 'x-request-id': randomUUID() })
@@ -193,6 +206,18 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
         const pathname = new URL(request.url, origin).pathname
         let raw = ''
         for await (const chunk of request) raw += chunk
+        if (pathname === '/reset' && request.method === 'POST') {
+            resets++
+            scenario = 'default'
+            response.writeHead(204).end()
+            return
+        }
+        if (pathname === '/scenario' && request.method === 'PUT') {
+            scenario = JSON.parse(raw).scenario
+            assert.equal(scenario, 'target_accepted')
+            response.writeHead(204).end()
+            return
+        }
         if (pathname.endsWith('/protocol/openid-connect/token')) {
             const client = new URLSearchParams(raw).get('client_id')
             const claims = Buffer.from(JSON.stringify({ iss: origin, client })).toString('base64url')
@@ -204,6 +229,14 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
             return reply(401, {})
         }
         const client = JSON.parse(Buffer.from(authorization.split('.')[1], 'base64url').toString()).client
+        if (pathname.startsWith('/credits/')) {
+            assert.equal(client, 'platform')
+            if (request.method === 'PUT') {
+                balance = JSON.parse(raw).amount
+                assert.equal(balance, 1)
+            }
+            return reply(200, { balance })
+        }
         if (pathname === '/verifyBatch/csv' && request.method === 'POST') {
             if (client !== customerClient) return reply(403, {})
             assert.match(request.headers['content-type'], /^multipart\/form-data; boundary=/)
@@ -216,6 +249,20 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
                 invalidUploads++
                 return reply(202, { id: invalidJob })
             }
+            if (raw.includes('filename="duplicates.csv"')) {
+                assert.equal(scenario, 'target_accepted')
+                assert.equal(balance, 1)
+                const emails = raw.match(
+                    /\bBatch-[0-9a-f-]+@evidence\.lef\.test\n(batch-[0-9a-f-]+@evidence\.lef\.test)\nBATCH-[0-9A-F-]+@EVIDENCE\.LEF\.TEST\n/,
+                )
+                assert.ok(emails, 'The CSV contains three case-varied fixture rows in order')
+                assert.equal(uploadedAddresses.has(emails[1]), false, 'Every collection run uses a fresh address')
+                uploadedAddresses.add(emails[1])
+                duplicateEmails = emails[0].trim().split('\n')
+                duplicateUploads++
+                balance--
+                return reply(202, { id: duplicateJob })
+            }
             assert.match(raw, /filename="sample.csv"/)
             successfulUploads++
             return reply(202, { id: job })
@@ -223,6 +270,56 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
         if (client !== customerClient) {
             foreignReads++
             return reply(404, {})
+        }
+        if (pathname === `/verifyBatch/${duplicateJob}`) {
+            return reply(200, {
+                id: duplicateJob,
+                status: 'completed',
+                progress: 100,
+                total: 1,
+                processed: 1,
+                unprocessed: 0,
+                resultsAvailable: true,
+                counts: {
+                    totalRows: 3,
+                    uniqueAddresses: 1,
+                    duplicateRows: 2,
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: 1,
+                    conclusiveAddresses: 1,
+                    inconclusiveAddresses: 0,
+                    failedAddresses: 0,
+                },
+                billing: { state: 'settled', reserved: 1, charged: incorrectPayerReceipt ? 0 : 1 },
+            })
+        }
+        if (pathname === `/verifyBatch/${duplicateJob}/results`) {
+            response.writeHead(200, {
+                'content-type': 'text/csv; charset=utf-8',
+                'content-disposition': `attachment; filename="batch-verification-${duplicateJob}.csv"`,
+            })
+            return response.end(
+                [
+                    'id,email,normalizedEmail,sourceRow,duplicateOfRow,verificationStatus,verificationQuality,reason,creditsCharged,billingReason',
+                    ...duplicateEmails.map((email, index) =>
+                        [
+                            duplicateResult,
+                            email,
+                            email.toLowerCase(),
+                            index + 1,
+                            index === 0 ? '' : 1,
+                            'completed',
+                            'conclusive_positive',
+                            'accepted_email',
+                            index === 0 && !incorrectPayerReceipt ? 1 : 0,
+                            index === 0 ? (incorrectPayerReceipt ? 'shared' : 'conclusive') : 'duplicate',
+                        ].join(','),
+                    ),
+                    '',
+                ].join('\n'),
+            )
         }
         if (pathname === `/verifyBatch/${invalidJob}`) {
             return reply(200, {
@@ -233,7 +330,7 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
                 processed: 0,
                 unprocessed: 0,
                 failureCode: 'invalid_csv',
-                resultsAvailable: false,
+                resultsAvailable: incorrectInvalidAvailability,
                 counts: {
                     totalRows: 0,
                     uniqueAddresses: 0,
@@ -254,14 +351,18 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
             if (rawQueueState)
                 return reply(200, { status: 'waiting-children', failedReason: 'private queue exception' })
             const completed = statusReads >= 2
+            // Corrupt request 02 only so later requests still exercise the successful workflow.
+            const incorrectAvailability = statusReads === 1 && incorrectAvailabilityStatus !== undefined
+            const status = incorrectAvailability ? incorrectAvailabilityStatus : completed ? 'completed' : 'running'
             return reply(200, {
                 id: job,
-                status: completed ? 'completed' : 'running',
-                progress: completed ? 100 : 50,
+                status,
+                progress: status === 'completed' ? 100 : 50,
                 total: 2,
                 processed: completed ? 2 : 1,
                 unprocessed: completed ? 0 : 1,
-                resultsAvailable: completed,
+                resultsAvailable: incorrectAvailability ? status !== 'completed' : completed,
+                ...(status === 'failed' ? { failureCode: 'processing_failed' } : {}),
                 counts: {
                     totalRows: 2,
                     uniqueAddresses: 2,
@@ -292,7 +393,7 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
     origin = `http://127.0.0.1:${server.address().port}`
     const environment = fixtureEnvironment(origin)
     try {
-        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 9, tests: 15 })
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
         assert.equal(successfulUploads, 1)
         assert.equal(invalidUploads, 1)
         assert.equal(downloads, 1)
@@ -300,12 +401,43 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
         assert.equal(foreignReads, 2)
         assert.equal(rejectedMedia, 1)
         assert.ok(statusReads >= 2)
+        assert.equal(duplicateUploads, 1)
+        assert.equal(balance, 0)
+        assert.equal(scenario, 'default')
+        assert.equal(resets, 2)
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
+        assert.equal(duplicateUploads, 2)
+        assert.equal(uploadedAddresses.size, 2)
+        assert.equal(resets, 4)
+        incorrectPayerReceipt = true
+        await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+            assert.equal(failureDiagnostic(error).request, 13)
+            return true
+        })
+        assert.equal(balance, 0, 'The regression rejects a hidden charge even when the debit succeeds')
+        assert.equal(scenario, 'default')
+        incorrectPayerReceipt = false
+        for (const status of ['queued', 'running', 'completed', 'failed', 'unavailable']) {
+            statusReads = 0
+            incorrectAvailabilityStatus = status
+            await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+                assert.equal(failureDiagnostic(error).request, 2, `Rejects incorrect availability for ${status}`)
+                return true
+            })
+        }
+        incorrectAvailabilityStatus = undefined
+        incorrectInvalidAvailability = true
+        await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+            assert.equal(failureDiagnostic(error).request, 5, 'Invalid CSV never offers a result download')
+            return true
+        })
+        incorrectInvalidAvailability = false
         rawQueueState = true
         await assert.rejects(executeCollection('batch-verification', environment, root), error => {
             const diagnostic = failureDiagnostic(error)
             assert.equal(diagnostic.stage, 'collection')
             assert.equal(diagnostic.request, 2)
-            assert.equal(diagnostic.requests, 9)
+            assert.equal(diagnostic.requests, 16)
             assert.match(error.message, /raw output is withheld/)
             assert.doesNotMatch(
                 JSON.stringify(error),
@@ -313,6 +445,8 @@ test('pinned CLI verifies batch upload, safe progress, CSV bytes, terminal failu
             )
             return true
         })
+        assert.equal(scenario, 'default')
+        assert.ok(resets >= 7)
     } finally {
         server.closeAllConnections()
         await new Promise(done => server.close(done))

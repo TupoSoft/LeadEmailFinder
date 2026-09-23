@@ -1,0 +1,38 @@
+info:
+    name: 10-prepare-duplicate-credit
+    type: http
+    seq: 10
+
+http:
+    method: PUT
+    url: '{{baseUrl}}/credits/{{organizationId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{platformToken}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"amount": 1}
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
+                method: 'POST', body: new URLSearchParams({ grant_type: 'client_credentials',
+                  client_id: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_ID'),
+                  client_secret: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_SECRET'),
+                }),
+              });
+              const payload = await response.json();
+              if (!response.ok || !payload.access_token) throw new Error('Fixture token request failed');
+              bru.setVar('platformToken', payload.access_token);
+              req.setHeader('Authorization', `Bearer ${payload.access_token}`);
+        - type: tests
+          code: |-
+              test('prepares one credit for one fresh unique address', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.balance).to.equal(1);
+              });

@@ -1,0 +1,4 @@
+name: local
+variables:
+  - name: baseUrl
+    value: '{{process.env.MCP_BASE_URL}}'

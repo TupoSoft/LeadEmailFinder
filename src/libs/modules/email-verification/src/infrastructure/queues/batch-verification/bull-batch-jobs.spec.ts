@@ -4,6 +4,10 @@ import { BatchJobData, BatchJobStep } from '../../../domain/batch-job'
 import { BATCH_ADMISSION_STORE, BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification-queue.config'
 import { BullBatchJobs } from './bull-batch-jobs'
+import {
+    getDownloadableBatchResultLocation,
+    mapBatchVerificationStatus,
+} from '../../../application/delivery/batch/batch-verification-status'
 
 describe('BullBatchJobs', () => {
     let queue: { add: jest.Mock; getJob: jest.Mock }
@@ -20,7 +24,7 @@ describe('BullBatchJobs', () => {
             insertUniqueAddresses: jest.fn(),
             pageUniqueAddresses: jest.fn(),
             recordAdmissionOutcome: jest.fn(),
-            recordPayerRequestId: jest.fn(),
+            ensurePayerRequestId: jest.fn(),
             countUnsettledAddresses: jest.fn().mockResolvedValue(0),
             getStatusCounts: jest.fn(),
         }
@@ -93,12 +97,16 @@ describe('BullBatchJobs', () => {
 
         const handle = await jobs.find('job-1')
 
-        await expect(handle?.readStatus()).resolves.toEqual(
+        const snapshot = await handle!.readStatus()
+        expect(snapshot).toEqual(
             state === 'completed'
                 ? { state, resultLocation: 's3://bucket/results/file.csv' }
                 : state === 'failed'
                   ? { state, failureCode: 'invalid_csv' }
                   : { state },
+        )
+        expect(getDownloadableBatchResultLocation(snapshot)).toBe(
+            state === 'completed' ? 's3://bucket/results/file.csv' : undefined,
         )
     })
 
@@ -113,7 +121,10 @@ describe('BullBatchJobs', () => {
 
             const handle = await jobs.find('job-1')
 
-            await expect(handle?.readStatus()).resolves.toEqual({ state: 'completed', resultLocation: undefined })
+            const snapshot = await handle!.readStatus()
+            expect(snapshot).toEqual({ state: 'completed', resultLocation: undefined })
+            expect(mapBatchVerificationStatus(snapshot)).toEqual({ status: 'unavailable' })
+            expect(getDownloadableBatchResultLocation(snapshot)).toBeUndefined()
         },
     )
 

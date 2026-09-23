@@ -17,7 +17,10 @@ successfully call `check_credit_balance` using only the README's Customer Setup 
 
 ## Plan dependencies
 
+- `mcp-connector/04`
+- `mcp-connector/05`
 - `mcp-connector/06`
+- `mcp-connector-hardening/03`
 
 ## Surprises & Discoveries
 
@@ -102,7 +105,10 @@ Add one link to `apps/mcp-server/README.md` from the root `README.md`'s existing
 
 New `scripts/testing/mcp-server-live.mjs` and root `test:mcp-server-live` script. One new step in the
 `browser-live` CI job. Final content for `apps/mcp-server/README.md` and one new link from the root `README.md`.
-Depends on `mcp-connector/06`'s deployed service and, transitively, every tool from plans 03–05.
+Depends directly on `mcp-connector/04` and `mcp-connector/05` (the tools this plan's script exercises),
+`mcp-connector/06` (the deployed service it validates against), and `mcp-connector-hardening/03` (the supported
+Claude Desktop connection path this plan documents). Plan 06 does not transitively supply plans 04 or 05 — it
+depends only on plan 03 — so each of those was a genuinely separate, previously unrecorded prerequisite.
 
 ## Acceptance Criteria
 
