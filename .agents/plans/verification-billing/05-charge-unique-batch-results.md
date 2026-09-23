@@ -11,9 +11,9 @@ counts and charges, including partial processing failure.
 
 ## Progress
 
-- [ ] (2026-09-16) Repair the payer request identity mismatch found by Plan 06 live validation. Two unique
-  conclusive addresses capture two credits, but batch status reports zero. Add complete settlement and CSV
-  regression coverage before treating batch accounting as validated.
+- [x] (2026-09-23) Confirm that merged PR #676 resolves the payer request identity mismatch found by Plan 06.
+  The repair and its settlement, CSV, database, and live Bruno evidence are recorded in
+  `batch-verification-hardening/01`; Plan 06 separately validates the combined browser flow.
 
 - [x] (2026-09-15) Persist ordered batch rows and unique-address admission groups: `BatchAdmissionStore`/
   `BatchRowStore` ports, `BatchAdmissionEntity`/`BatchUniqueAddressEntity`/`BatchRowEntity`, and their TypeORM
@@ -70,11 +70,10 @@ The four-row/two-unique live fixture returned settled billing with two originall
 Database inspection confirmed both ID mismatches and two captured credits. Status aggregation and CSV output
 consume the incorrect request accounting; the browser cannot correct it from row counts.
 
-The repair must reuse each created execution's persisted payer request ID and preserve it across interrupted or
-replayed request materialization. Add a focused identity assertion and a real database admission-through-settlement
-regression: four ordered input rows, two unique conclusive addresses, two captured ledger credits, API charge two,
-and CSV charge sum two. Extend `bruno/batch-verification` for this changed HTTP accounting behavior. The current
-Plan 06 live assertion remains enabled and failing until this repair lands; no backend code changed in Plan 06.
+Merged PR #676 repairs this defect by retaining one immutable payer request ID per unique batch address across
+admission and receipt materialization. Its database and live Bruno coverage verifies matching ledger, status, and
+CSV charges with free duplicate rows. Plan 06 retains its independent four-row/two-unique live browser assertion;
+no backend code changes belong to that UI plan.
 
 `BatchEmailVerificationWorkflow.validateFile()` counts every parsed row and debits the count using the batch job ID.
 `BullBatchChildFlow.dispatchChild()` gives every row a random child UUID. `S3BatchResultWriter` streams persisted
@@ -164,9 +163,15 @@ passing against the richer contract; it does not yet render the new fields.
 
 ## Outcomes & Retrospective
 
+Follow-up status (2026-09-23): merged PR #676 resolves the payer identity defect and extends live duplicate-row
+coverage. Merged PR #734 makes status and download eligibility agree: failed jobs report `resultsAvailable: false`,
+including failures after settlement. Completed jobs require a valid retained result location. The planned database
+fallback below remains deferred and is not an implemented download capability; the current contract is maintained
+in `batch-verification-hardening/06`. Plan 06 now follows this corrected availability contract.
+
 **2026-09-16 validation correction:** the historical passing checks below did not detect the payer request identity
-mismatch. Live Plan 06 validation proves that actual captures can disagree with batch status and CSV charges.
-The follow-up above remains open; the earlier validation does not establish correct end-to-end batch accounting.
+mismatch. Live Plan 06 validation showed that actual captures disagreed with batch status and CSV charges.
+At that time the follow-up remained open; the earlier validation did not establish correct end-to-end batch accounting.
 
 Delivered: batch upload now dedupes by normalized address and reserves/charges at most one credit per unique
 address regardless of duplicate rows. It uses the same durable admission/execution/settlement stack as single
@@ -314,10 +319,10 @@ a safe failure status. Do not expose internal exceptions, lease generations, cre
 
 Keep the writer's durable-upload condition: a completed batch has a retrievable object, finalized accounting, and
 all original rows. An output-publication failure keeps progress below 100 and safe `processing_failed` after
-retries; retry publication from row metadata without executing verification again. After validation and admission, a terminal failed batch with settled row accounting exposes `resultsAvailable: true`.
-Its existing results route streams the same ordered CSV projection from the database when a durable S3 object is
-unavailable; this read performs no new probes or settlement. Invalid or unfunded batches expose no partial output.
-This gives callers access to paid results even when S3 publication fails. An S3 upload retry uses the same result key.
+retries; retry publication from row metadata without executing verification again. The corrected contract in
+`batch-verification-hardening/06` reports `resultsAvailable: false` for every failed batch, including one with settled
+charges. Its existing result route returns `404`. Streaming settled rows directly from the database remains deferred.
+An S3 upload retry uses the same result key.
 
 Extend `bruno/batch-verification` with duplicate, case/whitespace, mixed-cache, all-cache-zero-balance, unknown,
 insufficient-credit, partial failure, and replay fixtures. Register `corepack pnpm bruno:batch-verification` using
@@ -362,8 +367,8 @@ Do not change this ratio into a financial estimate. Extend generated binary sche
   reservations, child work, rows, or debits. Key conflicts change no existing batch or charge.
 - A failed batch releases outstanding owned reservations, preserves settled results, and never cancels shared
   work owned elsewhere. A worker fenced during cancellation cannot capture afterward.
-- After output publication fails, a terminal batch still lets its owner download settled rows through the existing
-  result route without a new debit. Invalid/unfunded batches expose no partial output.
+- After output publication fails, a failed batch preserves confirmed charges, reports `resultsAvailable: false`,
+  and returns `404` from its result route. Invalid and unfunded batches also expose no partial output.
 - Status totals reconcile, progress remains finite in [0,100], and 100 requires durable output and final accounting.
   Foreign status/result requests remain indistinguishable from missing resources.
 
