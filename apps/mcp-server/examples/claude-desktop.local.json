@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "lead-email-finder-local": {
+      "command": "<absolute-path-to-node-executable>",
+      "args": [
+        "<absolute-checkout-path>/apps/mcp-server/node_modules/mcp-remote/dist/proxy.js",
+        "http://127.0.0.1:53002/mcp",
+        "--transport",
+        "http-only",
+        "--allow-http",
+        "--silent",
+        "--header",
+        "Authorization:${LEF_MCP_AUTHORIZATION}"
+      ],
+      "env": {
+        "LEF_MCP_AUTHORIZATION": "Basic <base64-of-client-id-colon-client-secret>"
+      }
+    }
+  }
+}
