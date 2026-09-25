@@ -95,9 +95,15 @@ Rewrite `apps/mcp-server/README.md` to its final form: a Responsibility section 
 `src/libs/modules/email-verification/README.md`/`service-client-management/README.md` — this component owns the
 MCP protocol surface and the Basic-to-Bearer credential bridge; it owns no verification logic, no credit policy,
 and no customer data of its own, all of which remain owned by the modules it calls) and a Customer Setup section:
-how to obtain a service-client credential (linking `service-client-management`'s README), the exact MCP client
-configuration JSON (remote HTTP URL, `Authorization: Basic <base64(clientId:clientSecret)>` header) for at least
-Claude Desktop and Claude Code, and the full tool list with one example prompt per tool.
+how to obtain a service-client credential (linking `service-client-management`'s README), and the full tool list
+with one example prompt per tool. For the client configuration itself, do not present one remote HTTP URL plus
+`Authorization: Basic` header JSON as if it worked identically for every client — `mcp-connector-hardening/03`
+corrected this: Claude Desktop's local `mcpServers` configuration cannot reach a remote URL/header object
+directly and instead requires the local `mcp-remote` bridge process already documented in this README's own
+"Connecting Claude Desktop" section (link to it rather than duplicating it here). Only present a direct remote
+HTTP URL plus Basic-auth header configuration for a client whose own connection path genuinely supports it, such
+as Claude Code's existing HTTP client path, confirming that client's real supported configuration shape before
+documenting it rather than assuming Desktop's constraints apply everywhere.
 
 Add one link to `apps/mcp-server/README.md` from the root `README.md`'s existing list of module/guide links.
 
