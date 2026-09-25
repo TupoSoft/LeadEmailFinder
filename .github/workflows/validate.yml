@@ -680,6 +680,9 @@ jobs:
       - name: Reset, provision, and check disposable development stack
         run: corepack pnpm dev:reset -- --confirm-project=LEF
         if: needs.changes.outputs.browser == 'true'
+      - name: Test live MCP connector tool set
+        run: corepack pnpm test:mcp-server-live
+        if: needs.changes.outputs.browser == 'true'
       - name: Test genuine same-origin browser session and log privacy
         run: corepack pnpm test:web-live
         if: needs.changes.outputs.browser == 'true'
