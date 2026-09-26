@@ -12,10 +12,20 @@ Developers can observe one execution, one payer request, and one reservation aft
 
 ## Progress
 
-- [ ] (2026-09-15 16:57Z) Confirm prerequisite changes and add deterministic interruption regressions.
-- [ ] (2026-09-15 16:57Z) Preserve ownership and receipt identity when resuming the existing claim.
-- [ ] (2026-09-15 16:57Z) Run focused tests, the PostgreSQL runner, Bruno, and documentation checks.
-- [ ] (2026-09-15 16:57Z) Record evidence, architectural trade-offs, and the delivered outcome.
+- [x] (2026-09-26) Confirmed `batch-verification-hardening/01` and `verification-billing/05` are complete in
+  master; added deterministic interruption regressions to `batch-admission.service.spec.ts` (a stateful
+  in-memory fake proving resumed identity, plus an ownership-mismatch invariant test) and to
+  `verification-billing.integration.spec.ts` (three real-Postgres cases: single interruption, two consecutive
+  interruptions, and a genuinely different batch owner).
+- [x] (2026-09-26) Preserved ownership and receipt identity when resuming the existing claim: `resolveAddress`'s
+  `joined` branch now classifies a `batch_group`-owned execution belonging to this same batch as `created`,
+  reusing its committed execution ID and payer request UUID; a mismatched organization, address, or payer
+  identity raises `batch_admission_ownership_conflict` before recording any outcome.
+- [x] (2026-09-26) Ran the focused unit/integration suites, the real-Postgres runner (21/21 passing, zero
+  skipped), and the live Bruno batch-verification collection (already covers the distinct-address/credit-receipt
+  assertions this plan asked for; unaffected by this change since it never exercises the interrupted path — see
+  Surprises & Discoveries).
+- [x] (2026-09-26) Recorded evidence, architectural trade-offs, and the delivered outcome below.
 
 ## Plan dependencies
 
@@ -24,10 +34,25 @@ Developers can observe one execution, one payer request, and one reservation aft
 
 ## Surprises & Discoveries
 
-None yet.
+- The Bruno collection under `bruno/batch-verification/` already asserts exactly what this plan's Plan of Work
+  describes ("the expected distinct-address result count and credit receipt totals, then downloads the expected
+  CSV rows") — requests 10-16, added by a later, unrelated duplicate-accounting regression, already exercise a
+  fresh successful batch's distinct-address count, settled charge, and CSV row content. This plan's fix changes
+  behavior only inside the interrupted-claim branch, which no Bruno request (or any uninterrupted admission)
+  ever reaches, so the collection needed no new request or assertion, and its request/test counts are unchanged.
+  Confirmed live: `node --test scripts/bruno/batch-verification-runner.test.mjs` and
+  `corepack pnpm bruno:batch-verification` both pass unmodified against a real running dev stack.
+- `VerificationExecutionRecord.fundingOwnerType`/`fundingOwnerId` (added by `verification-billing/05`) already
+  carried everything this fix needed on the `joined` outcome — no store, port, or persistence change was
+  required, only the admission service's own interpretation of a value it already received.
 
 ## Decision Log
 
+- Decision: The ownership-mismatch invariant (an execution reported as `batch_group`-owned by this batch but with
+  a conflicting organization, address, or payer UUID) throws a fixed internal error rather than falling back to
+  `shared`. Rationale: a mismatch here is impossible under correct operation and would mean the store returned an
+  inconsistent record; silently treating it as `shared` would fund nothing for an address this batch actually
+  owns, which is a worse failure mode than a loud, immediate error. Date/author: 2026-09-26, implementation.
 - Decision: An existing execution owned by this batch remains a `created` admission outcome on retry.
   Rationale: The category identifies the funding owner, not whether the latest attempt inserted the execution.
   Date/author: 2026-09-15, Codex.
@@ -40,7 +65,16 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly as scoped: `resolveAddress`'s `joined` branch now distinguishes a resumed claim this same batch
+already owns from a genuinely different funder, reusing the committed execution ID and payer request UUID instead
+of recording it as `shared` and leaving it permanently unfunded. All three Decision Log choices held
+unchanged through implementation. The PostgreSQL regressions prove the recovery against a real, deterministic
+interruption (a real committed execution, a real injected outcome-write failure, a real retry) rather than only a
+mocked shape, including a second consecutive interruption and a genuinely different batch owner racing the same
+address. The Bruno collection needed no change, since its existing distinct-address/credit-receipt/CSV assertions
+already cover exactly what this plan asked for and this fix touches only a branch no uninterrupted admission ever
+reaches. This unlocks `batch-verification-hardening/03`, whose recoverable funding manifest now correctly
+includes every execution this batch owns.
 
 ## Context and Orientation
 

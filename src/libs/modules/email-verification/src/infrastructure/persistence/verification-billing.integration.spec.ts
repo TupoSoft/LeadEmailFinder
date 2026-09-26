@@ -673,6 +673,98 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         ).resolves.toBe(1)
     })
 
+    it('resumes its own batch-owned claim as created after the outcome write was interrupted, funding it exactly once', async () => {
+        const batchId = await prepareBatch(['resumed@example.test'])
+        jest.spyOn(batchAdmissions, 'recordAdmissionOutcome').mockImplementationOnce(() => {
+            throw new Error('injected_outcome_write_interruption')
+        })
+
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_outcome_write_interruption')
+        const [before] = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+        expect(before.admissionKind).toBeNull()
+        expect(before.payerRequestId).not.toBeNull()
+        const claimedAfterInterruption = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(claimedAfterInterruption).toHaveLength(1)
+        const originalExecutionId = claimedAfterInterruption[0].executionId
+
+        await batchAdmissionService.admit(batchId, organizationId)
+
+        const [after] = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+        expect(after.admissionKind).toBe('created')
+        expect(after.executionId).toBe(originalExecutionId)
+        expect(after.payerRequestId).toBe(before.payerRequestId)
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
+        const executionRows = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(executionRows).toHaveLength(1)
+        expect(executionRows[0].executionId).toBe(originalExecutionId)
+        expect(executionRows[0].state).toBe('queued')
+        const payerRequest = await requests.findById(after.payerRequestId!, organizationId)
+        expect(payerRequest).toEqual(
+            expect.objectContaining({
+                source: 'fresh',
+                billingState: 'pending',
+                reservedCount: 1,
+                executionId: originalExecutionId,
+            }),
+        )
+    })
+
+    it('preserves the same resumed identity across two consecutive interruptions', async () => {
+        const batchId = await prepareBatch(['twice-resumed@example.test'])
+        jest.spyOn(batchAdmissions, 'recordAdmissionOutcome')
+            .mockImplementationOnce(() => {
+                throw new Error('injected_first_interruption')
+            })
+            .mockImplementationOnce(() => {
+                throw new Error('injected_second_interruption')
+            })
+
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_first_interruption')
+        const firstClaim = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(firstClaim).toHaveLength(1)
+
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_second_interruption')
+        const secondClaim = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(secondClaim).toHaveLength(1)
+        expect(secondClaim[0].executionId).toBe(firstClaim[0].executionId)
+
+        await batchAdmissionService.admit(batchId, organizationId)
+
+        const [after] = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+        expect(after.admissionKind).toBe('created')
+        expect(after.executionId).toBe(firstClaim[0].executionId)
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
+        const finalExecutions = await schemaDataSource
+            .getRepository(VerificationExecutionEntity)
+            .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
+        expect(finalExecutions).toHaveLength(1)
+    })
+
+    it('still records a genuinely different batch owner as shared, never mistaking it for its own resumed claim', async () => {
+        const firstBatchId = await prepareBatch(['cross-batch-shared@example.test'])
+        await batchAdmissionService.admit(firstBatchId, organizationId)
+        const [firstAddress] = await batchAdmissions.pageUniqueAddresses(firstBatchId, organizationId, 0, 10)
+        expect(firstAddress.admissionKind).toBe('created')
+
+        const secondBatchId = await prepareBatch(['cross-batch-shared@example.test'])
+        await batchAdmissionService.admit(secondBatchId, organizationId)
+
+        const [secondAddress] = await batchAdmissions.pageUniqueAddresses(secondBatchId, organizationId, 0, 10)
+        expect(secondAddress.admissionKind).toBe('shared')
+        expect(secondAddress.executionId).toBe(firstAddress.executionId)
+        await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
+        const payerRequest = await requests.findById(secondAddress.payerRequestId!, organizationId)
+        expect(payerRequest).toEqual(expect.objectContaining({ source: 'shared', billingState: 'pending', reservedCount: 0 }))
+    })
+
     it('replays an insertion interrupted after commit without resetting the subsequently settled receipt', async () => {
         const batchId = await prepareBatch(['insert-replay@example.test'])
         const insert = requests.insert.bind(requests)

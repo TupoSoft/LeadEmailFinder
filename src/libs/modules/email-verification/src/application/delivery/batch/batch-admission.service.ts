@@ -161,6 +161,25 @@ export class BatchAdmissionService {
             return
         }
         if (claim.kind === 'joined') {
+            // A joined execution this same batch already owns is a resumed claim, not another funder's work:
+            // the earlier attempt committed the claim but crashed before recording this outcome. The category
+            // identifies the funding owner, not whether this attempt inserted the row, so it must still be
+            // funded as `created` -- recording it as `shared` would leave it permanently unfunded.
+            if (claim.execution.fundingOwnerType === 'batch_group' && claim.execution.fundingOwnerId === batchId) {
+                if (
+                    claim.execution.organizationId !== organizationId ||
+                    claim.execution.normalizedAddress !== normalizedAddress ||
+                    claim.execution.payerRequestId !== payerRequestId
+                ) {
+                    throw new Error('batch_admission_ownership_conflict')
+                }
+                await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
+                    admissionKind: 'created',
+                    executionId: claim.execution.executionId,
+                    resultId: null,
+                })
+                return
+            }
             await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
                 admissionKind: 'shared',
                 executionId: claim.execution.executionId,
