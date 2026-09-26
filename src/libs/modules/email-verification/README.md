@@ -272,6 +272,16 @@ that the receipt has been inserted. The materialization pass reads every resolve
 organization, validates its immutable identity, and creates it when absent. An owned execution receives that same
 UUID as its payer, while a shared execution keeps its original payer and the batch receives a free follower.
 
+A crash between `claimOrJoin()` committing a new execution and this address's own outcome write leaves that
+execution real but unrecorded in the manifest. A retry's `claimOrJoin()` call for the same address then reports
+`joined`, not `created`, since the slot is already occupied — but when the returned execution's funding owner is
+this same batch, that is a resumed claim from the interrupted attempt, not another funder's work. The resolver
+classifies it as `created`, reusing the execution's own committed ID and payer request UUID (never a fresh
+candidate), so the address is still funded exactly once. A mismatch between that execution's organization,
+address, or payer identity and this manifest's own record is a fixed internal invariant violation, never a new
+reservation. An execution owned by a genuinely different funder — a different batch or a single verification
+request — is unaffected and still resolves as `shared`.
+
 After the existing client-key lookup, every request insertion protects the receipt UUID with conflict-safe
 create-or-replay semantics. Compatible UUID replay preserves source, result association, settlement state,
 financial counts, and timestamps. Conflicting organization, address, delivery mode, client key, source, or execution
