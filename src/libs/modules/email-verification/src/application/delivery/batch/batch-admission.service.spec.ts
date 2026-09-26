@@ -2,7 +2,13 @@ import { CreditReservationService, InsufficientCreditsException } from '@tuposof
 import { VerificationClock } from '../../ports/verification-clock'
 import { VerificationCooldownReader } from '../../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../../ports/verification-result-cache-reader'
-import { ClaimAddressOutcome, ExecutionFundingOwner, VerificationExecutionStore } from '../../ports/verification-execution-store'
+import {
+    CachedResultCandidate,
+    ClaimAddressOutcome,
+    ExecutionFundingOwner,
+    VerificationExecutionRecord,
+    VerificationExecutionStore,
+} from '../../ports/verification-execution-store'
 import { InsertRequestOutcome, NewVerificationRequestInput, VerificationRequestRecord, VerificationRequestStore } from '../../ports/verification-request-store'
 import {
     BatchAdmissionRecord,
@@ -120,6 +126,62 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
             reserved: 0,
             charged: 0,
         })
+    }
+}
+
+/**
+ * Retains committed claims across calls, keyed by `(organizationId, normalizedAddress)` -- the real store's own
+ * one-nonterminal-execution-per-address invariant -- so a second `claimOrJoin` call for an address this same
+ * batch already committed returns `joined` with the *original* execution identity, exactly like the real store
+ * would after a crash between the claim commit and this address's own outcome write. A scripted one-shot mock
+ * return value cannot prove this: it would hide exactly the recovery path this plan exists to fix.
+ */
+class FakeExecutionClaimStore {
+    private readonly claims = new Map<string, VerificationExecutionRecord>()
+
+    claimOrJoin(
+        organizationId: string,
+        normalizedAddress: string,
+        payerRequestId: string,
+        newExecutionId: string,
+        deadlineAt: Date,
+        _isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+        fundingOwner?: ExecutionFundingOwner,
+    ): Promise<ClaimAddressOutcome> {
+        const key = `${organizationId}:${normalizedAddress}`
+        const existing = this.claims.get(key)
+        if (existing) return Promise.resolve({ kind: 'joined', execution: existing })
+
+        const execution: VerificationExecutionRecord = {
+            executionId: newExecutionId,
+            organizationId,
+            normalizedAddress,
+            payerRequestId,
+            state: 'funding_pending',
+            fundingOwnerType: fundingOwner?.type ?? 'single',
+            fundingOwnerId: fundingOwner?.id ?? newExecutionId,
+            attemptGeneration: 0,
+            leaseOwnerId: null,
+            leaseExpiresAt: null,
+            resultId: null,
+            retryAt: null,
+            deadlineAt,
+            createdAt: now,
+            updatedAt: now,
+        }
+        this.claims.set(key, execution)
+        return Promise.resolve({ kind: 'created', execution })
+    }
+
+    markQueued(executionId: string, organizationId: string): Promise<VerificationExecutionRecord> {
+        for (const [key, execution] of this.claims) {
+            if (execution.executionId === executionId && execution.organizationId === organizationId) {
+                const queued = { ...execution, state: 'queued' as const }
+                this.claims.set(key, queued)
+                return Promise.resolve(queued)
+            }
+        }
+        throw new Error('unknown execution')
     }
 }
 
@@ -556,4 +618,71 @@ describe('BatchAdmissionService', () => {
         expect(requests.insert).not.toHaveBeenCalled()
     })
 
+    it('resumes its own interrupted claim as created, funding the original execution exactly once', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'resumed@example.test', firstSeenRow: 1 }])
+        const fakeClaims = new FakeExecutionClaimStore()
+        executions.claimOrJoin.mockImplementation((...args) => fakeClaims.claimOrJoin(...args))
+        executions.markQueued.mockImplementation((executionId, ownerId) => fakeClaims.markQueued(executionId, ownerId))
+        // Simulate a crash between the real claim commit (already reflected in `fakeClaims`) and this
+        // address's own outcome write -- the exact interruption window this plan recovers.
+        jest.spyOn(admissions, 'recordAdmissionOutcome').mockImplementationOnce(() => Promise.reject(new Error('outcome write interrupted')))
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('outcome write interrupted')
+        expect(executions.claimOrJoin).toHaveBeenCalledTimes(1)
+        expect(admissions.snapshot()[0].admissionKind).toBeNull()
+        const payerRequestId = admissions.snapshot()[0].payerRequestId
+        expect(payerRequestId).not.toBeNull()
+
+        await service.admit(batchId, organizationId)
+
+        expect(executions.claimOrJoin).toHaveBeenCalledTimes(2)
+        const [, , firstPayerRequestId] = executions.claimOrJoin.mock.calls[0]
+        const [, , secondPayerRequestId] = executions.claimOrJoin.mock.calls[1]
+        expect(secondPayerRequestId).toBe(firstPayerRequestId)
+        const resumed = admissions.snapshot()[0]
+        expect(resumed.admissionKind).toBe('created')
+        expect(resumed.executionId).not.toBeNull()
+        expect(credits.reserveMany).toHaveBeenCalledTimes(1)
+        expect(credits.reserveMany).toHaveBeenCalledWith(organizationId, [{ operationId: resumed.executionId, amount: 1 }])
+        expect(executions.markQueued).toHaveBeenCalledTimes(1)
+        expect(executions.markQueued).toHaveBeenCalledWith(resumed.executionId, organizationId)
+        expect(insertedRequests).toHaveLength(1)
+        expect(insertedRequests[0]).toMatchObject({
+            requestId: payerRequestId,
+            source: 'fresh',
+            executionId: resumed.executionId,
+            reservedCount: 1,
+            billingState: 'pending',
+        })
+    })
+
+    it('fails before recording an outcome or funding anything when a resumed claim reports a mismatched identity', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'resumed@example.test', firstSeenRow: 1 }])
+        executions.claimOrJoin.mockResolvedValue({
+            kind: 'joined',
+            execution: {
+                executionId: 'stale-execution',
+                organizationId,
+                normalizedAddress: 'resumed@example.test',
+                payerRequestId: 'a-different-payer-request',
+                state: 'funding_pending',
+                fundingOwnerType: 'batch_group',
+                fundingOwnerId: batchId,
+                attemptGeneration: 0,
+                leaseOwnerId: null,
+                leaseExpiresAt: null,
+                resultId: null,
+                retryAt: null,
+                deadlineAt: now,
+                createdAt: now,
+                updatedAt: now,
+            },
+        })
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('batch_admission_ownership_conflict')
+
+        expect(admissions.snapshot()[0].admissionKind).toBeNull()
+        expect(credits.reserveMany).not.toHaveBeenCalled()
+        expect(executions.markQueued).not.toHaveBeenCalled()
+    })
 })
