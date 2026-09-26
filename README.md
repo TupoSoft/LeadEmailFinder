@@ -355,6 +355,7 @@ The development Compose stack starts the following supporting services:
 | Redis      | `localhost:56379`           | Queue and cache storage             |
 | Bull Board | http://localhost:54000      | Queue dashboard                     |
 | Garage/S3  | http://localhost:59000      | S3-compatible object storage        |
+| [MCP Server](apps/mcp-server/README.md) | http://localhost:53002/health | AI-agent access to this API over the Model Context Protocol |
 
 The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
 the ordinary development stack.

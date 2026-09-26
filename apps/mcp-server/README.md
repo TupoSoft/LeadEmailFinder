@@ -1,8 +1,16 @@
 # MCP Server
 
-`@tuposoft/lead-email-finder-mcp-server` is a standalone Node/TypeScript workspace package that speaks the Model
-Context Protocol (MCP) over Streamable HTTP. It has no database or business logic of its own yet; see
-`.agents/plans/mcp-connector/README.md` for the road map that builds real tools on top of this scaffold.
+## Responsibility
+
+`@tuposoft/lead-email-finder-mcp-server` is a standalone Node/TypeScript workspace package that exposes the
+Lead Email Finder API to AI agents over the Model Context Protocol (MCP), via Streamable HTTP. It owns exactly
+two things: the MCP protocol surface itself (tool registration, request/response framing, transport) and the
+Basic-to-Bearer credential bridge (accepting a customer's own service-client `clientId`/`clientSecret` as HTTP
+Basic auth and exchanging it for the same bearer token any other API caller would use). It owns no verification
+logic, no credit policy, and no customer data of its own — every tool call is a thin, request-scoped pass-through
+to the real API, and every one of those responsibilities remains owned by the modules that already implement
+them (`email-verification`, `credits`, `service-client-management`). See
+`.agents/plans/mcp-connector/README.md` for the road map that built this component's tools one plan at a time.
 
 ## Configuration
 
@@ -30,6 +38,60 @@ each step must pass before the next one runs:
 
 Passing the origin check does not imply a valid credential, and vice versa — both are independent, unconditional
 gates on every `/mcp` request.
+
+## Customer Setup
+
+**1. Get a service-client credential.** Every tool call authenticates as your own organization's service-client
+credential — the same `clientId`/`clientSecret` pair used for any other programmatic access to this API, with at
+least the `billing:read` permission (add `verification:run`/`verification:read` for the verification and batch
+tools below). See [`service-client-management`](../../src/libs/modules/service-client-management/README.md) for
+how to create one from your account. Treat the secret exactly as you would any other API credential: it is shown
+once at creation time and is never recoverable afterward.
+
+**2. Configure your MCP client.** Which configuration applies depends on how your client connects:
+
+- **Claude Desktop** cannot reach a remote HTTP URL directly from its local `mcpServers` configuration — see
+  ["Connecting Claude Desktop (Local Bridge)"](#connecting-claude-desktop-local-bridge) below for the exact,
+  complete setup (it needs a small local bridge process, not just this connector's URL).
+- **Claude Code**, whose HTTP client path supports a genuinely remote MCP server directly, can point at this
+  connector's `/mcp` URL with a Basic-auth header, for example via a project `.mcp.json`:
+
+  ```json
+  {
+    "mcpServers": {
+      "lead-email-finder": {
+        "type": "http",
+        "url": "https://<your-connector-host>/mcp",
+        "headers": { "Authorization": "Basic <base64-of-client-id-colon-client-secret>" }
+      }
+    }
+  }
+  ```
+
+  Confirm the exact configuration key names and location (project `.mcp.json` vs. a `claude mcp add` command) in
+  Claude Code's own current documentation, since its CLI surface can change independently of this connector.
+
+**3. Try it.** Ask your MCP client to check your credit balance first — it is read-only and does not spend any
+credit, unlike every verification tool below.
+
+### Tools
+
+| Tool | Input | Example prompt |
+| --- | --- | --- |
+| `check_credit_balance` | none | "What's my current credit balance?" |
+| `verify_email` | `{email}` | "Verify the email address jane@example.com." |
+| `submit_async_verification` | `{email}` | "Submit jane@example.com for asynchronous verification." |
+| `check_async_verification` | `{id}` | "Check the status of async verification `<id>`." |
+| `get_verification_result` | `{id}` | "Look up the result of verification `<id>`." |
+| `submit_batch_verification` | `{emails: string[]}` (up to 5000) | "Verify this list of email addresses as a batch: jane@example.com, john@example.com." |
+| `check_batch_verification` | `{id}` | "What's the status of batch `<id>`?" |
+| `download_batch_results` | `{id, offset?, limit?}` | "Download the first page of results from batch `<id>`." |
+
+`verify_email` resolves synchronously when the address responds quickly, or returns an id to poll with
+`check_async_verification` when it does not — never a bare timeout. `submit_batch_verification` builds the CSV
+upload internally from the given address list; no local file is ever needed. `check_batch_verification`'s own
+`counts` answer most "how did the batch go" questions without needing `download_batch_results`'s row-level data
+at all.
 
 ## Running Locally
 
@@ -78,13 +140,14 @@ Stop the server with `Ctrl+C` in the first terminal; the script forwards the sig
 waits for it to exit before the script itself exits. If port `3002` is already in use, set `PORT` to a free one
 consistently across every command in this document — never stop a process this checkout does not own.
 
-## Getting a Customer Credential for Authenticated Calls
+## Retrieving the Seeded Development Credential (Repository Development Only)
 
-Public routing — `GET /health`, unrouted paths, method rejection, and malformed-target rejection — needs no
-credential. A successful `POST /mcp` call does. This checkout's development stack seeds exactly one customer
-service-client fixture, `lef-svc-dev-fixture`; retrieve its *current* secret directly from Keycloak rather than
-from any committed file (no file contains it), and never let the secret appear in a shell command, argument, or
-log line:
+This section is for developers working in this checkout, not real customers — see "Customer Setup" above for how
+an actual customer obtains and uses their own credential. Public routing — `GET /health`, unrouted paths, method
+rejection, and malformed-target rejection — needs no credential. A successful `POST /mcp` call does. This
+checkout's development stack seeds exactly one customer service-client fixture, `lef-svc-dev-fixture`; retrieve
+its *current* secret directly from Keycloak rather than from any committed file (no file contains it), and never
+let the secret appear in a shell command, argument, or log line:
 
 ```js
 import { readFile } from 'node:fs/promises'
