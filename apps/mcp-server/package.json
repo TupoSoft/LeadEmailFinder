@@ -15,6 +15,7 @@
     },
     "devDependencies": {
         "@types/node": "^22.18.0",
+        "mcp-remote": "0.14.2",
         "typescript": "^5.9.2"
     }
 }

@@ -186,6 +186,7 @@ const browserCommands: Record<(typeof browserWorkers)[number], string[]> = {
     'browser-live': [
         'corepack pnpm test:gateway',
         'corepack pnpm dev:reset -- --confirm-project=LEF',
+        'corepack pnpm test:mcp-server-live',
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
         `${webCommand} browser-fixtures:bootstrap`,
@@ -759,10 +760,16 @@ describe('Validate workflow syntax and structure', () => {
             && step.with?.tags === 'lead-email-finder-web:frontend-06')
         expect(webBuildIndex).toBeGreaterThanOrEqual(0)
         expect(commands.indexOf('corepack pnpm test:gateway')).toBeGreaterThan(webBuildIndex)
-        for (const run of browserCommands['browser-live'].slice(2)) {
+        const devResetCommand = command('corepack pnpm dev:reset -- --confirm-project=LEF')
+        const devResetIndex = browserCommands['browser-live'].map(command).indexOf(devResetCommand)
+        expect(devResetIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(devResetIndex + 1)) {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
         }
-        for (const run of browserCommands['browser-live'].slice(5)) {
+        const bootstrapCommand = command(`${webCommand} browser-fixtures:bootstrap`)
+        const bootstrapIndex = browserCommands['browser-live'].map(command).indexOf(bootstrapCommand)
+        expect(bootstrapIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(bootstrapIndex + 1)) {
             before(`${webCommand} browser-fixtures:bootstrap`, run)
         }
         for (const run of [
