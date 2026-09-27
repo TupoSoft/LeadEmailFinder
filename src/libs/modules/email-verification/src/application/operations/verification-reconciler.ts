@@ -1,4 +1,5 @@
 import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
+import { BatchAdmissionRecovery } from '../ports/batch-admission-recovery'
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationExecutionRecord, VerificationExecutionStore } from '../ports/verification-execution-store'
 import { VerificationRequestStore } from '../ports/verification-request-store'
@@ -10,6 +11,7 @@ export interface VerificationReconcileReport {
     readonly executionsChecked: number
     readonly intentionsSettled: number
     readonly cancellationsCleanedUp: number
+    readonly batchGroupsChecked: number
 }
 
 /**
@@ -25,7 +27,8 @@ export interface VerificationReconcileReport {
  * execution would hold its reservation and leave its requests `pending` forever. That cleanup can itself fail
  * or be interrupted after the row is already terminal, so every sweep also retries it for any `canceled` row a
  * dedicated query still finds holding a `pending` linked request — both steps are idempotent, so repeating them
- * for an already-cleaned-up row is a safe no-op.
+ * for an already-cleaned-up row is a safe no-op. A `batch_group`-owned `funding_pending` row belongs to batch
+ * admission recovery, which runs last so already admitted single work progresses even when batches are large.
  */
 export class VerificationReconciler {
     constructor(
@@ -37,6 +40,7 @@ export class VerificationReconciler {
         private readonly credits: CreditReservationService,
         private readonly clock: VerificationClock,
         private readonly leaseTakeoverGraceMs: number,
+        private readonly batchAdmissionRecovery: BatchAdmissionRecovery,
     ) {}
 
     async reconcile(limit: number): Promise<VerificationReconcileReport> {
@@ -60,10 +64,13 @@ export class VerificationReconciler {
             await this.cleanUpCancellation(execution)
         }
 
+        const batchGroups = await this.batchAdmissionRecovery.reconcile(limit)
+
         return {
             executionsChecked: executions.length,
             intentionsSettled: intentions.length,
             cancellationsCleanedUp: pendingCleanup.length,
+            batchGroupsChecked: batchGroups.groupsChecked,
         }
     }
 
@@ -77,6 +84,9 @@ export class VerificationReconciler {
 
     private async reconcileExecution(execution: VerificationExecutionRecord): Promise<void> {
         if (execution.state === 'settling') return
+        // An unfunded batch execution is normal while its group resolves addresses; only group recovery may decide
+        // it, never this generic deadline or missing-reservation path.
+        if (execution.state === 'funding_pending' && execution.fundingOwnerType === 'batch_group') return
 
         const now = this.clock.now()
         if (execution.deadlineAt.getTime() <= now.getTime()) {

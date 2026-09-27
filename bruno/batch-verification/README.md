@@ -8,8 +8,8 @@ corepack pnpm bruno:batch-verification
 
 The launcher verifies that the API, web gateway, Keycloak, and SMTP development fixtures belong to this checkout.
 It retrieves the seeded customer client's current secret, preserves the public issuer through the Compose back
-channel, and runs `bru run --env local --sandbox developer` with the pinned CLI. It requires all sixteen requests and
-twenty-five tests to execute successfully; zero execution, skipped requests, and missing reports fail validation.
+channel, and runs `bru run --env local --sandbox developer` with the pinned CLI. It requires all twenty requests and
+thirty tests to execute successfully; zero execution, skipped requests, and missing reports fail validation.
 
 The shared verification fixture locks the seeded customer's balance against concurrent verification suites, sets
 two credits for the two-row synthetic CSV, and restores and verifies the previous balance after the run. The duplicate
@@ -42,8 +42,15 @@ row with `billingReason: conclusive`. Later rows report `billingReason: duplicat
 confirms that exactly the credit reported by status and CSV was deducted. The final request restores the baseline
 SMTP scenario; the launcher also restores it after success or failure and removes the temporary CSV.
 
-Mixed `cache`/`shared`/`cooldown` uploads and group insufficient-funds fixtures remain outside this collection's coverage.
+Requests 17–20 cover a group that cannot be funded. The launcher writes a second temporary CSV with two fresh
+addresses under `evidence.lef.test`, and the collection prepares only one credit. The status must complete with
+both unique addresses failed and billing `{ state: 'settled', reserved: 0, charged: 0 }`. The balance must remain
+one, and resetting it to zero must succeed; the credits API rejects a balance below held credits, so success proves
+that the denied group left no partial hold. That reset also returns the fixture to the post-duplicate balance.
+
+Mixed `cache`/`shared`/`cooldown` uploads remain outside this collection's coverage.
 The pinned CLI runner test uses a synthetic HTTP server and explicitly rejects a debited batch whose receipt reports
-zero charge. It also rejects incorrect result availability for every public status and invalid CSV. It checks the
-collection scripts rather than proving live SMTP or database behavior. Record live launcher results separately in
-the implementation ExecPlan.
+zero charge, a denied group that still reports a held credit, and a denied group that debits the balance. It also
+rejects incorrect result availability for every public status and invalid CSV. It checks the collection scripts
+rather than proving live SMTP or database behavior. Record live launcher results separately in the implementation
+ExecPlan.

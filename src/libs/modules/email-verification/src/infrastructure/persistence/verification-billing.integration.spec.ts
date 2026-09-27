@@ -5,7 +5,7 @@ import { S3 } from 'nestjs-s3'
 import { parse } from 'csv-parse/sync'
 import { Test, TestingModule } from '@nestjs/testing'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { DataSource } from 'typeorm'
+import { DataSource, In } from 'typeorm'
 import {
     AuditLogEntry,
     CREDIT_RESERVATION_STORE,
@@ -27,6 +27,10 @@ import { VerificationAdmissionService } from '../../application/operations/verif
 import { VerificationSettlementService } from '../../application/operations/verification-settlement.service'
 import { EmailAdministrationService } from '../../application/email-administration.service'
 import { BatchAdmissionService } from '../../application/delivery/batch/batch-admission.service'
+import { BatchAdmissionRecoveryService } from '../../application/delivery/batch/batch-admission-recovery.service'
+import { BatchAdmissionFence } from '../../application/delivery/batch/batch-admission-store'
+import { VerificationReconciler } from '../../application/operations/verification-reconciler'
+import { VerificationExecutionRunner } from '../../application/operations/verification-execution-runner'
 import { TypeOrmVerificationRequestStore } from './typeorm-verification-request.store'
 import { TypeOrmVerificationExecutionStore } from './typeorm-verification-execution.store'
 import { TypeOrmVerificationSettlementStore } from './typeorm-verification-settlement.store'
@@ -78,6 +82,8 @@ const entities = [
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const EXECUTION_DEADLINE_MS = 24 * 60 * 60 * 1000
 const ADDRESS_COOLDOWN_MS = 60_000
+const LEASE_DURATION_MS = 60_000
+const LEASE_RENEWAL_MS = 5_000
 
 function conclusiveResult(overrides: Partial<NewEmailVerification> = {}): NewEmailVerification {
     return {
@@ -97,6 +103,7 @@ function conclusiveResult(overrides: Partial<NewEmailVerification> = {}): NewEma
 
 describeWithPostgres('Verification billing against a real, freshly-synced Postgres schema', () => {
     let schemaDataSource: DataSource
+    let secondDataSource: DataSource
     let moduleRef: TestingModule
     let requests: TypeOrmVerificationRequestStore
     let executions: TypeOrmVerificationExecutionStore
@@ -109,6 +116,7 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
     let batchAdmissionService: BatchAdmissionService
     let organizationId: string
     let clock: VerificationClock
+    let currentTime: Date
 
     beforeAll(async () => {
         const databaseName = new URL(postgresUrl!).pathname.slice(1)
@@ -124,6 +132,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             entities,
         })
         await schemaDataSource.initialize()
+        // A separate pool models a second worker process racing the first one through its own connections.
+        secondDataSource = new DataSource({ type: 'postgres', url: postgresUrl, synchronize: false, entities })
+        await secondDataSource.initialize()
 
         moduleRef = await Test.createTestingModule({
             imports: [
@@ -144,6 +155,7 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
     afterAll(async () => {
         await moduleRef?.close()
+        if (secondDataSource?.isInitialized) await secondDataSource.destroy()
         if (schemaDataSource?.isInitialized) await schemaDataSource.destroy()
     })
 
@@ -163,7 +175,8 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             new TypeOrmEmailStore(schemaDataSource.getRepository(EmailEntity)),
         )
         settlementService = new VerificationSettlementService(settlements, credits, emailAdministration)
-        clock = { now: () => new Date('2026-09-11T00:00:00.000Z') }
+        currentTime = new Date('2026-09-11T00:00:00.000Z')
+        clock = { now: () => currentTime }
         admission = new VerificationAdmissionService(
             requests,
             executions,
@@ -187,8 +200,20 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             CACHE_TTL_MS,
             EXECUTION_DEADLINE_MS,
             ADDRESS_COOLDOWN_MS,
+            LEASE_DURATION_MS,
+            LEASE_RENEWAL_MS,
         )
     })
+
+    /** Drives bounded advancements until the group finishes admission and receipt finalization. */
+    async function admitToCompletion(batchId: string, service: BatchAdmissionService = batchAdmissionService): Promise<number> {
+        for (let advancements = 1; advancements <= 50; advancements++) {
+            const outcome = await service.admit(batchId, organizationId)
+            if (outcome.kind === 'complete') return advancements
+            if (outcome.kind === 'busy') throw new Error('Unexpected busy batch admission')
+        }
+        throw new Error('Batch admission did not complete')
+    }
 
     async function readAccount(): Promise<OrganizationCreditAccount> {
         return schemaDataSource.getRepository(OrganizationCreditAccount).findOneByOrFail({ organizationId })
@@ -846,7 +871,7 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             { normalizedAddress: 'z@example.test', firstSeenRow: 3 },
         ])
 
-        await batchAdmissionService.admit(batchId, organizationId)
+        await admitToCompletion(batchId)
 
         await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 2, reserved: 0 }))
         await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
@@ -896,5 +921,374 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             .findBy({ organizationId, normalizedAddress: 'shared-race@example.test' })
         expect(executionRows).toHaveLength(1)
         expect(['funded', 'joined']).toContain(singleOutcome.kind)
+    })
+
+    describe('batch group funding recovery', () => {
+        let recovery: BatchAdmissionRecoveryService
+        let runner: jest.Mocked<Pick<VerificationExecutionRunner, 'execute'>>
+        let reconciler: VerificationReconciler
+
+        beforeEach(() => {
+            recovery = new BatchAdmissionRecoveryService(batchAdmissions, batchAdmissionService, clock)
+            runner = { execute: jest.fn().mockResolvedValue({ kind: 'not-runnable' }) }
+            reconciler = new VerificationReconciler(
+                executions,
+                requests,
+                settlements,
+                settlementService,
+                runner as unknown as VerificationExecutionRunner,
+                credits,
+                clock,
+                5_000,
+                recovery,
+            )
+        })
+
+        function advanceClock(ms: number): void {
+            currentTime = new Date(currentTime.getTime() + ms)
+        }
+
+        function barrier(): { reached: Promise<void>; release: () => void; wait: () => Promise<void> } {
+            let reach!: () => void
+            let release!: () => void
+            const reached = new Promise<void>(resolve => (reach = resolve))
+            const released = new Promise<void>(resolve => (release = resolve))
+            return {
+                reached,
+                release,
+                wait: () => {
+                    reach()
+                    return released
+                },
+            }
+        }
+
+        async function ownedExecutions(batchId: string): Promise<VerificationExecutionEntity[]> {
+            return schemaDataSource
+                .getRepository(VerificationExecutionEntity)
+                .find({ where: { organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId }, order: { normalizedAddress: 'ASC' } })
+        }
+
+        async function reservations(): Promise<CreditReservation[]> {
+            return schemaDataSource.getRepository(CreditReservation).findBy({ organizationId })
+        }
+
+        async function receipts(batchId: string): Promise<VerificationRequestEntity[]> {
+            const addresses = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 1_000)
+            return schemaDataSource
+                .getRepository(VerificationRequestEntity)
+                .find({ where: addresses.map(address => ({ requestId: address.payerRequestId ?? randomUUID() })) })
+        }
+
+        /** Simulates a worker that dies mid-advancement: the step fails and the lease is never released. */
+        function crashWithoutRelease(): void {
+            jest.spyOn(batchAdmissions, 'releaseAdmissionLease').mockResolvedValueOnce(undefined)
+        }
+
+        it('survives reconciliation ticks while paused before reservation, then funds every address', async () => {
+            const batchId = await prepareBatch(['p1@example.test', 'p2@example.test'])
+            const paused = barrier()
+            const reserveMany = credits.reserveMany.bind(credits)
+            jest.spyOn(credits, 'reserveMany').mockImplementationOnce(async (org, items) => {
+                await paused.wait()
+                return reserveMany(org, items)
+            })
+
+            const admitting = batchAdmissionService.admit(batchId, organizationId)
+            await paused.reached
+            for (let tick = 0; tick < 3; tick++) {
+                await expect(reconciler.reconcile(100)).resolves.toEqual(expect.objectContaining({ batchGroupsChecked: 0 }))
+                advanceClock(30_000)
+                // The live owner renews at its liveness cadence; model that renewal for the paused call.
+                const group = await batchAdmissions.findById(batchId, organizationId)
+                await batchAdmissions.renewAdmissionLease(
+                    batchId,
+                    organizationId,
+                    { ownerId: group!.admissionLeaseOwnerId!, generation: group!.admissionGeneration, now: currentTime },
+                    new Date(currentTime.getTime() + LEASE_DURATION_MS),
+                )
+            }
+            expect((await ownedExecutions(batchId)).map(execution => execution.state)).toEqual(['funding_pending', 'funding_pending'])
+            paused.release()
+
+            await expect(admitting).resolves.toEqual({ kind: 'complete' })
+            expect((await ownedExecutions(batchId)).map(execution => execution.state)).toEqual(['queued', 'queued'])
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 2 }))
+        })
+
+        it('recovers worker loss during resolution only after lease expiry, keeping identities and holds unique', async () => {
+            const batchId = await prepareBatch(['r1@example.test', 'r2@example.test', 'r3@example.test'])
+            const record = batchAdmissions.recordAdmissionOutcome.bind(batchAdmissions)
+            let outcomes = 0
+            jest.spyOn(batchAdmissions, 'recordAdmissionOutcome').mockImplementation((...args) => {
+                outcomes += 1
+                if (outcomes === 2) return Promise.reject(new Error('injected_worker_loss'))
+                return record(...args)
+            })
+            crashWithoutRelease()
+
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_worker_loss')
+            const claimed = await ownedExecutions(batchId)
+            const identities = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+            expect(claimed).toHaveLength(2)
+
+            await expect(recovery.reconcile(100)).resolves.toEqual(expect.objectContaining({ groupsChecked: 0 }))
+            await expect(batchAdmissionService.admit(batchId, organizationId)).resolves.toMatchObject({ kind: 'busy' })
+
+            advanceClock(LEASE_DURATION_MS + 1)
+            for (let sweep = 0; sweep < 5; sweep++) await recovery.reconcile(100)
+
+            const group = await batchAdmissions.findById(batchId, organizationId)
+            expect(group).toEqual(expect.objectContaining({ state: 'admitted', finalizationState: 'ready' }))
+            expect(group!.admissionGeneration).toBeGreaterThanOrEqual(2)
+            const finalExecutions = await ownedExecutions(batchId)
+            expect(finalExecutions).toHaveLength(3)
+            expect(finalExecutions.map(execution => execution.executionId)).toEqual(
+                expect.arrayContaining(claimed.map(execution => execution.executionId)),
+            )
+            const finalIdentities = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
+            // Identities assigned before the loss survive; the untouched address receives its first one on recovery.
+            identities.forEach((address, index) => {
+                if (address.payerRequestId !== null) expect(finalIdentities[index].payerRequestId).toBe(address.payerRequestId)
+            })
+            expect(finalIdentities.every(address => address.payerRequestId !== null)).toBe(true)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 3 }))
+            await expect(reservations()).resolves.toHaveLength(3)
+            await expect(receipts(batchId)).resolves.toHaveLength(3)
+        })
+
+        it('resumes the exact manifest after worker loss between reservation and decision commit', async () => {
+            const batchId = await prepareBatch(['d1@example.test', 'd2@example.test'])
+            jest.spyOn(batchAdmissions, 'recordFundingDecision').mockRejectedValueOnce(new Error('injected_decision_loss'))
+            crashWithoutRelease()
+            const reserveMany = jest.spyOn(credits, 'reserveMany')
+
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_decision_loss')
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ reserved: 2 }))
+            await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                expect.objectContaining({ state: 'funding', fundingDecision: 'pending' }),
+            )
+
+            advanceClock(LEASE_DURATION_MS + 1)
+            for (let sweep = 0; sweep < 3; sweep++) await recovery.reconcile(100)
+
+            expect(reserveMany.mock.calls[1][1]).toEqual(reserveMany.mock.calls[0][1])
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 2 }))
+            await expect(reservations()).resolves.toHaveLength(2)
+            expect((await ownedExecutions(batchId)).map(execution => execution.state)).toEqual(['queued', 'queued'])
+        })
+
+        it('fences an expired owner on a second connection after a newer generation denied and closed the group', async () => {
+            await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 1 })
+            const batchId = await prepareBatch(['f1@example.test', 'f2@example.test'])
+            const staleStore = new TypeOrmBatchAdmissionStore(secondDataSource)
+            const staleExecutions = new TypeOrmVerificationExecutionStore(secondDataSource)
+            const leased = await staleStore.claimAdmissionLease(batchId, organizationId, randomUUID(), currentTime, new Date(currentTime.getTime() + LEASE_DURATION_MS))
+            if (leased.kind !== 'acquired') throw new Error('Expected the first owner to acquire the lease')
+            const stale: BatchAdmissionFence = { ownerId: leased.record.admissionLeaseOwnerId!, generation: leased.generation, now: currentTime }
+            await expect(staleStore.transitionState(batchId, organizationId, stale, 'validating', 'admitting')).resolves.toBe('applied')
+
+            advanceClock(LEASE_DURATION_MS + 1)
+            await admitToCompletion(batchId)
+            const staleNow = { ...stale, now: currentTime }
+            const [owned] = await ownedExecutions(batchId)
+
+            await expect(
+                staleExecutions.claimOrJoinForBatchGroup(batchId, staleNow, organizationId, 'f3@example.test', randomUUID(), randomUUID(), currentTime, () => false),
+            ).resolves.toEqual({ kind: 'stale-admission' })
+            await expect(staleStore.freezeFundingManifest(batchId, organizationId, staleNow)).resolves.toBe('stale')
+            await expect(staleStore.recordFundingDecision(batchId, organizationId, staleNow, 'approved')).resolves.toBe('stale')
+            await expect(staleExecutions.markBatchGroupQueued(owned.executionId, organizationId, batchId, staleNow)).resolves.toBe('stale')
+            await expect(staleStore.renewAdmissionLease(batchId, organizationId, staleNow, new Date(currentTime.getTime() + 1))).resolves.toBe(false)
+            await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied', finalizationState: 'ready' }),
+            )
+            expect((await ownedExecutions(batchId)).every(execution => execution.state === 'canceled')).toBe(true)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 1, reserved: 0 }))
+        })
+
+        it.each(['close-then-late-reserve', 'reserve-then-close'] as const)(
+            'leaves no hold for a stale reservation racing closure (%s)',
+            async order => {
+                await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 1 })
+                const batchId = await prepareBatch(['o1@example.test', 'o2@example.test'])
+                await admitToCompletion(batchId)
+                const owned = (await batchAdmissions.listOwnedExecutionIds(batchId, organizationId)).map(operationId => ({ operationId, amount: 1 }))
+                await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 10 })
+
+                if (order === 'close-then-late-reserve') {
+                    const late = await credits.reserveMany(organizationId, owned)
+                    expect(late.map(reservation => reservation.state)).toEqual(['released', 'released'])
+                } else {
+                    // A stale reservation that won before closure is released by the repeated closure.
+                    await schemaDataSource.getRepository(CreditReservation).delete({ organizationId })
+                    await credits.reserveMany(organizationId, owned)
+                    await expect(readAccount()).resolves.toEqual(expect.objectContaining({ reserved: 2 }))
+                    await credits.closeAdmissionMany(organizationId, owned)
+                }
+
+                await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+                expect((await reservations()).map(reservation => reservation.state)).toEqual(['released', 'released'])
+                expect((await ownedExecutions(batchId)).every(execution => execution.state === 'canceled')).toBe(true)
+                expect((await receipts(batchId)).every(receipt => receipt.finalReason === 'failed' && receipt.chargedCount === 0)).toBe(true)
+                await expect(admitToCompletion(batchId)).resolves.toBe(1)
+                await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                    expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied' }),
+                )
+            },
+        )
+
+        it('never reopens a denied group after interrupted closure and a later top-up', async () => {
+            await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 1 })
+            const batchId = await prepareBatch(['t1@example.test', 't2@example.test'])
+            const reserveMany = jest.spyOn(credits, 'reserveMany')
+            jest.spyOn(credits, 'closeAdmissionMany').mockRejectedValueOnce(new Error('injected_closure_interruption'))
+
+            await expect(batchAdmissionService.admit(batchId, organizationId)).resolves.toMatchObject({ kind: 'continuation', phase: 'closure' })
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_closure_interruption')
+            await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 100 })
+            await admitToCompletion(batchId)
+
+            expect(reserveMany).toHaveBeenCalledTimes(1)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 100, reserved: 0 }))
+            expect((await reservations()).map(reservation => reservation.state)).toEqual(['released', 'released'])
+            await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied' }),
+            )
+        })
+
+        it('denies a group whose reservation replay returns a released tombstone', async () => {
+            const batchId = await prepareBatch(['tomb1@example.test', 'tomb2@example.test'])
+            const reserveMany = credits.reserveMany.bind(credits)
+            jest.spyOn(credits, 'reserveMany').mockImplementationOnce(async (org, items) => {
+                // Another generation already closed the first operation before this reservation ran.
+                await credits.closeAdmissionMany(org, [items[0]])
+                return reserveMany(org, items)
+            })
+
+            await admitToCompletion(batchId)
+
+            expect((await ownedExecutions(batchId)).every(execution => execution.state === 'canceled')).toBe(true)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
+            await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied' }),
+            )
+        })
+
+        it('replays an approved group without reserving again after its execution already captured', async () => {
+            const batchId = await prepareBatch(['cap@example.test'])
+            jest.spyOn(batchAdmissions, 'markFinalizationReady').mockRejectedValueOnce(new Error('injected_finalization_loss'))
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_finalization_loss')
+            const [execution] = await ownedExecutions(batchId)
+            await settlements.persistResultAndIntention({
+                executionId: execution.executionId,
+                organizationId,
+                expectedGeneration: 0,
+                newVerification: conclusiveResult({ email: 'cap@example.test' }),
+                decision: 'capture',
+                finalReason: 'conclusive',
+            })
+            await settlementService.settle(execution.executionId, organizationId)
+            const reserveMany = jest.spyOn(credits, 'reserveMany')
+
+            await admitToCompletion(batchId)
+
+            expect(reserveMany).not.toHaveBeenCalled()
+            expect((await reservations()).map(reservation => reservation.state)).toEqual(['captured'])
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 9, reserved: 0 }))
+        })
+
+        it('yields a 101-address group at its budget and resumes from the first incomplete persisted row', async () => {
+            await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 200 })
+            const emails = Array.from({ length: 101 }, (_, index) => `bulk-${String(index).padStart(3, '0')}@example.test`)
+            const batchId = await prepareBatch(emails)
+            const record = batchAdmissions.recordAdmissionOutcome.bind(batchAdmissions)
+            let outcomes = 0
+            jest.spyOn(batchAdmissions, 'recordAdmissionOutcome').mockImplementation((...args) => {
+                outcomes += 1
+                // Interrupt just before the last budgeted write of the first advancement.
+                if (outcomes === 100) return Promise.reject(new Error('injected_last_write_interruption'))
+                return record(...args)
+            })
+
+            const reserveMany = jest.spyOn(credits, 'reserveMany')
+
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_last_write_interruption')
+            const first = await batchAdmissionService.admit(batchId, organizationId)
+            expect(first).toEqual(expect.objectContaining({ kind: 'continuation' }))
+            const released = await batchAdmissions.findById(batchId, organizationId)
+            expect(released).toEqual(expect.objectContaining({ admissionLeaseOwnerId: null, admissionLeaseExpiresAt: null }))
+            const releasedFence = { ownerId: randomUUID(), generation: released!.admissionGeneration, now: currentTime }
+            await expect(
+                batchAdmissions.renewAdmissionLease(batchId, organizationId, releasedFence, new Date(currentTime.getTime() + 1)),
+            ).resolves.toBe(false)
+
+            await admitToCompletion(batchId)
+
+            expect(reserveMany).toHaveBeenCalledTimes(1)
+            expect(reserveMany.mock.calls[0][1]).toHaveLength(101)
+            const owned = await ownedExecutions(batchId)
+            expect(owned).toHaveLength(101)
+            expect(new Set(owned.map(execution => execution.normalizedAddress)).size).toBe(101)
+            expect(owned.every(execution => execution.state === 'queued')).toBe(true)
+            await expect(readAccount()).resolves.toEqual(expect.objectContaining({ reserved: 101 }))
+            await expect(receipts(batchId)).resolves.toHaveLength(101)
+        })
+
+        it('runs single executions before a bounded, fair group sweep and recovers a missing receipt next sweep', async () => {
+            // Recovery sweeps every organization; retire earlier scenarios' groups in this disposable schema.
+            await schemaDataSource.getRepository(BatchAdmissionEntity).update({ finalizationState: 'preparing' }, { finalizationState: 'ready' })
+            await schemaDataSource
+                .getRepository(VerificationExecutionEntity)
+                .update({ state: In(['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling']) }, { state: 'canceled' })
+            const single = await admission.admit({ organizationId, email: 'single-first@example.test', deliveryMode: 'async' })
+            if (single.kind !== 'funded') throw new Error('Expected a funded single execution')
+            const cached = await schemaDataSource.getRepository(EmailVerificationEntity).save(
+                schemaDataSource.getRepository(EmailVerificationEntity).create({
+                    ...conclusiveResult({ email: 'fair@example.test', evidenceObservedAt: currentTime }),
+                    organizationId,
+                }),
+            )
+            expect(cached.id).toBeDefined()
+            const batchIds: string[] = []
+            for (let index = 0; index < 101; index++) batchIds.push(await prepareBatch(['fair@example.test']))
+            const order: string[] = []
+            runner.execute.mockImplementation(executionId => {
+                order.push(`single:${executionId}`)
+                return Promise.resolve({ kind: 'not-runnable' })
+            })
+            const admit = batchAdmissionService.admit.bind(batchAdmissionService)
+            jest.spyOn(batchAdmissionService, 'admit').mockImplementation((batchId, org) => {
+                order.push(`group:${batchId}`)
+                return admit(batchId, org)
+            })
+            const insert = requests.insert.bind(requests)
+            jest.spyOn(requests, 'insert').mockRejectedValueOnce(new Error('injected_receipt_loss')).mockImplementation(insert)
+
+            const first = await reconciler.reconcile(100)
+
+            const firstGroup = order.findIndex(entry => entry.startsWith('group:'))
+            expect(order.indexOf(`single:${single.executionId}`)).toBeGreaterThanOrEqual(0)
+            expect(order.indexOf(`single:${single.executionId}`)).toBeLessThan(firstGroup)
+            expect(order.slice(firstGroup).every(entry => entry.startsWith('group:'))).toBe(true)
+            const firstGroups = order.filter(entry => entry.startsWith('group:'))
+            expect(firstGroups).toHaveLength(100)
+            expect(new Set(firstGroups).size).toBe(100)
+            expect(first.batchGroupsChecked).toBe(100)
+            const untouched = batchIds.filter(batchId => !firstGroups.includes(`group:${batchId}`))
+            expect(untouched).toHaveLength(1)
+
+            order.length = 0
+            await reconciler.reconcile(100)
+
+            const secondGroups = order.filter(entry => entry.startsWith('group:'))
+            expect(secondGroups).toContain(`group:${untouched[0]}`)
+            expect(secondGroups).toHaveLength(2)
+            for (const batchId of batchIds) {
+                await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
+                    expect.objectContaining({ state: 'admitted', finalizationState: 'ready' }),
+                )
+            }
+        })
     })
 })

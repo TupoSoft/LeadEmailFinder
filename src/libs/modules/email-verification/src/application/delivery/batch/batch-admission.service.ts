@@ -6,16 +6,91 @@ import { VerificationResultCacheReader } from '../../ports/verification-result-c
 import { VerificationExecutionStore } from '../../ports/verification-execution-store'
 import { NewVerificationRequestInput, VerificationRequestRecord, VerificationRequestStore } from '../../ports/verification-request-store'
 import { isCachedResultUsable } from '../../verification-result-cache'
-import { BatchAdmissionStore, BatchUniqueAddressRecord } from './batch-admission-store'
+import {
+    BatchAdmissionFence,
+    BatchAdmissionPhase,
+    BatchAdmissionRecord,
+    BatchAdmissionStore,
+    BatchUniqueAddressRecord,
+} from './batch-admission-store'
 
-const DEFAULT_PAGE_SIZE = 100
+/** Address transitions (resolution, queuing, cancellation, receipt materialization) one advancement may make. */
+export const BATCH_ADMISSION_ADDRESS_STEP_BUDGET = 100
+const CONTINUATION_DELAY_MS = 1_000
+
+export type BatchAdmissionContinuationPhase = BatchAdmissionPhase | 'funding' | 'closure'
 
 /**
- * Admits every unique address in a validated batch upload atomically: at most one credit is reserved per new
- * execution, reserved once for the whole batch through `CreditReservationService.reserveMany()` rather than one
- * address at a time. Resolution (cache/cooldown/shared/created) and the eventual per-address
- * `VerificationRequestStore` row are both idempotent — a worker retry re-running `admit()` resumes exactly where
- * an interrupted prior attempt left off, since every write here is a no-op once already recorded.
+ * `complete`: admission and receipt finalization are done, so the batch may dispatch. `busy`: another live owner
+ * holds the group (or this owner lost it). `continuation`: this call spent its budget; the phase and last handled
+ * row are only hints, since the next advancement restarts from the first incomplete persisted row.
+ */
+export type BatchAdmissionAdvance =
+    | { readonly kind: 'complete' }
+    | { readonly kind: 'busy'; readonly retryAt: Date }
+    | {
+          readonly kind: 'continuation'
+          readonly retryAt: Date
+          readonly phase: BatchAdmissionContinuationPhase
+          readonly afterFirstSeenRow: number
+      }
+
+/** Raised inside one advancement when a guarded write reports that this owner no longer holds the group. */
+class AdmissionOwnershipLost extends Error {
+    name = 'AdmissionOwnershipLost'
+}
+
+class AdmissionAdvancement {
+    lost = false
+    private stepsRemaining: number
+    private creditOperationUsed = false
+
+    constructor(
+        readonly batchId: string,
+        readonly organizationId: string,
+        private readonly ownerId: string,
+        private readonly generation: number,
+        private readonly clock: VerificationClock,
+        stepBudget: number,
+    ) {
+        this.stepsRemaining = stepBudget
+    }
+
+    fence(): BatchAdmissionFence {
+        return { ownerId: this.ownerId, generation: this.generation, now: this.clock.now() }
+    }
+
+    /** Stops before the next write or credit call once renewal reported the lease lost. */
+    assertOwned(): void {
+        if (this.lost) throw new AdmissionOwnershipLost()
+    }
+
+    get remainingSteps(): number {
+        return this.stepsRemaining
+    }
+
+    spendStep(): void {
+        this.stepsRemaining -= 1
+    }
+
+    /** The whole-manifest reserve or close call is indivisible; one advancement makes at most one. */
+    takeCreditOperation(): boolean {
+        if (this.creditOperationUsed) return false
+        this.creditOperationUsed = true
+        return true
+    }
+}
+
+function ensureApplied(write: 'applied' | 'stale' | 'incomplete'): void {
+    if (write === 'stale') throw new AdmissionOwnershipLost()
+}
+
+/**
+ * Coordinates one batch group's admission through a durable, generation-fenced lease: resolve every unique address,
+ * freeze the owned-operation list, reserve it once through `CreditReservationService.reserveMany()`, then queue the
+ * owned executions (or cancel and close them on denial) and materialize every receipt. Each `admit()` call is one
+ * bounded advancement of at most `stepBudget` address transitions plus at most one whole-manifest credit call, so
+ * the batch workflow and background recovery can share it and resume from persisted state after interruption.
  */
 export class BatchAdmissionService {
     constructor(
@@ -29,84 +104,266 @@ export class BatchAdmissionService {
         private readonly cacheTtlMs: number,
         private readonly executionDeadlineMs: number,
         private readonly addressCooldownMs: number,
-        private readonly pageSize: number = DEFAULT_PAGE_SIZE,
+        private readonly leaseDurationMs: number,
+        private readonly leaseRenewalMs: number,
+        private readonly stepBudget: number = BATCH_ADMISSION_ADDRESS_STEP_BUDGET,
     ) {}
 
-    async admit(batchId: string, organizationId: string): Promise<void> {
+    async admit(batchId: string, organizationId: string): Promise<BatchAdmissionAdvance> {
         const admission = await this.admissions.findById(batchId, organizationId)
         if (!admission) throw new Error(`Batch admission ${batchId} not found for organization ${organizationId}`)
+        if (this.isFinished(admission)) return { kind: 'complete' }
 
-        // Resolution and funding only need to run once — once the group has left `validating`/`admitting`, a
-        // retry skips straight to materializing any request rows a prior, interrupted attempt never got to.
-        if (admission.state === 'validating' || admission.state === 'admitting') {
-            if (admission.state === 'validating') {
-                await this.admissions.updateState(batchId, organizationId, 'admitting')
-            }
+        const ownerId = randomUUID()
+        const claimedAt = this.clock.now()
+        const lease = await this.admissions.claimAdmissionLease(
+            batchId,
+            organizationId,
+            ownerId,
+            claimedAt,
+            this.leaseExpiry(claimedAt),
+        )
+        if (lease.kind === 'busy') return { kind: 'busy', retryAt: lease.leaseExpiresAt }
 
-            await this.forEachUnresolvedAddress(batchId, organizationId, address =>
-                this.resolveAddress(batchId, organizationId, address.normalizedAddress),
-            )
-
-            const created = await this.collectCreatedExecutions(batchId, organizationId)
-            if (created.length === 0) {
-                await this.admissions.updateState(batchId, organizationId, 'admitted')
-            } else {
-                await this.fundCreatedExecutions(batchId, organizationId, created)
-            }
+        const advancement = new AdmissionAdvancement(
+            batchId,
+            organizationId,
+            ownerId,
+            lease.generation,
+            this.clock,
+            this.stepBudget,
+        )
+        const renewal = this.startRenewal(advancement)
+        try {
+            return await this.advance(advancement, lease.record)
+        } catch (error) {
+            if (error instanceof AdmissionOwnershipLost) return { kind: 'busy', retryAt: this.continueAt() }
+            throw error
+        } finally {
+            clearInterval(renewal)
+            // A failed release only delays the next owner until the lease expires; it must not mask the result.
+            await this.admissions.releaseAdmissionLease(batchId, organizationId, advancement.fence()).catch(() => undefined)
         }
+    }
 
-        const finalAdmission = await this.admissions.findById(batchId, organizationId)
-        const admitted = finalAdmission?.state === 'admitted'
-        await this.forEachResolvedAddress(batchId, organizationId, address =>
-            this.materializeRequest(batchId, organizationId, address, admitted),
+    private isFinished(admission: BatchAdmissionRecord): boolean {
+        return (
+            admission.state === 'invalid' ||
+            admission.fundingDecision === 'closed' ||
+            ((admission.state === 'admitted' || admission.state === 'insufficient_credits') &&
+                admission.finalizationState === 'ready')
         )
     }
 
-    private async forEachUnresolvedAddress(
-        batchId: string,
-        organizationId: string,
-        handle: (address: BatchUniqueAddressRecord) => Promise<void>,
-    ): Promise<void> {
-        for (let skip = 0; ; skip += this.pageSize) {
-            const page = await this.admissions.pageUniqueAddresses(batchId, organizationId, skip, this.pageSize)
-            if (page.length === 0) return
-            for (const address of page) {
-                if (address.admissionKind === null) await handle(address)
-            }
-        }
+    /** Renews serially at the liveness cadence; an overlapping tick is skipped rather than queued. */
+    private startRenewal(advancement: AdmissionAdvancement): ReturnType<typeof setInterval> {
+        let renewing = false
+        return setInterval(() => {
+            if (renewing || advancement.lost) return
+            renewing = true
+            const fence = advancement.fence()
+            this.admissions
+                .renewAdmissionLease(advancement.batchId, advancement.organizationId, fence, this.leaseExpiry(fence.now))
+                .then(renewed => {
+                    if (!renewed) advancement.lost = true
+                })
+                .catch(() => {
+                    advancement.lost = true
+                })
+                .finally(() => {
+                    renewing = false
+                })
+        }, this.leaseRenewalMs)
     }
 
-    private async forEachResolvedAddress(
-        batchId: string,
-        organizationId: string,
-        handle: (address: BatchUniqueAddressRecord) => Promise<void>,
-    ): Promise<void> {
-        for (let skip = 0; ; skip += this.pageSize) {
-            const page = await this.admissions.pageUniqueAddresses(batchId, organizationId, skip, this.pageSize)
-            if (page.length === 0) return
-            for (const address of page) {
-                if (address.admissionKind !== null) await handle(address)
+    private async advance(advancement: AdmissionAdvancement, admission: BatchAdmissionRecord): Promise<BatchAdmissionAdvance> {
+        const { batchId, organizationId } = advancement
+        let state = admission.state
+        let decision = admission.fundingDecision
+
+        if (state === 'validating') {
+            advancement.assertOwned()
+            ensureApplied(await this.admissions.transitionState(batchId, organizationId, advancement.fence(), 'validating', 'admitting'))
+            state = 'admitting'
+        }
+
+        if (state === 'admitting') {
+            const continuation = await this.forEachIncomplete(advancement, 'resolution', address =>
+                this.resolveAddress(advancement, address.normalizedAddress),
+            )
+            if (continuation) return continuation
+
+            advancement.assertOwned()
+            const frozen = await this.admissions.freezeFundingManifest(batchId, organizationId, advancement.fence())
+            ensureApplied(frozen)
+            if (frozen === 'incomplete') throw new Error('batch_admission_manifest_incomplete')
+            state = 'funding'
+        }
+
+        if (state === 'funding') {
+            if (decision === 'pending') {
+                const decided = await this.decideFunding(advancement)
+                if (typeof decided !== 'string') return decided
+                decision = decided
+            }
+
+            if (decision === 'approved') {
+                const continuation = await this.forEachIncomplete(advancement, 'queue', async address => {
+                    ensureApplied(
+                        await this.executions.markBatchGroupQueued(
+                            address.executionId!,
+                            organizationId,
+                            batchId,
+                            advancement.fence(),
+                        ),
+                    )
+                })
+                if (continuation) return continuation
+                advancement.assertOwned()
+                ensureApplied(await this.admissions.transitionState(batchId, organizationId, advancement.fence(), 'funding', 'admitted'))
+                state = 'admitted'
+            } else if (decision === 'denied') {
+                const continuation = await this.closeDeniedGroup(advancement)
+                if (continuation) return continuation
+                state = 'insufficient_credits'
+            } else {
+                return { kind: 'complete' }
             }
         }
+
+        if (state === 'admitted' || state === 'insufficient_credits') {
+            const admitted = state === 'admitted'
+            const continuation = await this.forEachIncomplete(advancement, 'materialization', address =>
+                this.materializeRequest(batchId, organizationId, address, admitted),
+            )
+            if (continuation) return continuation
+
+            advancement.assertOwned()
+            const ready = await this.admissions.markFinalizationReady(batchId, organizationId, advancement.fence())
+            ensureApplied(ready)
+            if (ready === 'incomplete') throw new Error('batch_admission_receipts_incomplete')
+        }
+
+        return { kind: 'complete' }
     }
 
-    private async collectCreatedExecutions(
-        batchId: string,
-        organizationId: string,
-    ): Promise<readonly { readonly normalizedAddress: string; readonly executionId: string }[]> {
-        const created: { readonly normalizedAddress: string; readonly executionId: string }[] = []
-        for (let skip = 0; ; skip += this.pageSize) {
-            const page = await this.admissions.pageUniqueAddresses(batchId, organizationId, skip, this.pageSize)
-            if (page.length === 0) return created
-            for (const address of page) {
-                if (address.admissionKind === 'created' && address.executionId !== null) {
-                    created.push({ normalizedAddress: address.normalizedAddress, executionId: address.executionId })
+    /**
+     * Reserves the whole frozen manifest once. Approval requires every returned reservation to be `reserved`: a
+     * `released` row means another generation already closed this admission (a replay returns its tombstone), so the
+     * group takes the denied path instead. A `captured` row is impossible before approval and fails loudly.
+     */
+    private async decideFunding(advancement: AdmissionAdvancement): Promise<'approved' | 'denied' | BatchAdmissionAdvance> {
+        const { batchId, organizationId } = advancement
+        if (!advancement.takeCreditOperation()) return this.continuation('funding', -1)
+
+        const owned = await this.admissions.listOwnedExecutionIds(batchId, organizationId)
+        let decision: 'approved' | 'denied' = 'approved'
+        if (owned.length > 0) {
+            advancement.assertOwned()
+            try {
+                const reservations = await this.credits.reserveMany(
+                    organizationId,
+                    owned.map(operationId => ({ operationId, amount: 1 })),
+                )
+                if (reservations.some(reservation => reservation.state === 'captured')) {
+                    throw new Error('batch_admission_captured_before_approval')
                 }
+                if (reservations.some(reservation => reservation.state !== 'reserved')) decision = 'denied'
+            } catch (error) {
+                // Only insufficient funds is a decision; every other credit failure stays retryable from `pending`.
+                if (!(error instanceof InsufficientCreditsException)) throw error
+                decision = 'denied'
             }
         }
+
+        // A stale owner's late reservation response cannot record a decision or queue anything.
+        ensureApplied(await this.admissions.recordFundingDecision(batchId, organizationId, advancement.fence(), decision))
+        return decision
     }
 
-    private async resolveAddress(batchId: string, organizationId: string, normalizedAddress: string): Promise<void> {
+    /** Fences every still-pending owned execution before closing the whole frozen list; a denied group is never
+     *  reserved again, even after a top-up. */
+    private async closeDeniedGroup(advancement: AdmissionAdvancement): Promise<BatchAdmissionAdvance | null> {
+        const { batchId, organizationId } = advancement
+        const continuation = await this.forEachIncomplete(advancement, 'cancellation', async address => {
+            ensureApplied(
+                await this.executions.cancelBatchGroupFundingPending(
+                    address.executionId!,
+                    organizationId,
+                    batchId,
+                    advancement.fence(),
+                ),
+            )
+        })
+        if (continuation) return continuation
+
+        if (!advancement.takeCreditOperation()) return this.continuation('closure', -1)
+        const owned = await this.admissions.listOwnedExecutionIds(batchId, organizationId)
+        if (owned.length > 0) {
+            advancement.assertOwned()
+            await this.credits.closeAdmissionMany(
+                organizationId,
+                owned.map(operationId => ({ operationId, amount: 1 })),
+            )
+        }
+        advancement.assertOwned()
+        ensureApplied(
+            await this.admissions.transitionState(batchId, organizationId, advancement.fence(), 'funding', 'insufficient_credits'),
+        )
+        return null
+    }
+
+    /**
+     * Handles the phase's incomplete addresses in `firstSeenRow` order while budget remains, charging one step per
+     * address. Returns a continuation when the budget runs out with work left; otherwise confirms from persisted
+     * state that no incomplete address remains anywhere in the manifest.
+     */
+    private async forEachIncomplete(
+        advancement: AdmissionAdvancement,
+        phase: BatchAdmissionPhase,
+        handle: (address: BatchUniqueAddressRecord) => Promise<void>,
+    ): Promise<BatchAdmissionAdvance | null> {
+        const { batchId, organizationId } = advancement
+        let afterFirstSeenRow = -1
+        for (;;) {
+            const remaining = advancement.remainingSteps
+            const page = await this.admissions.pageIncompleteAddresses(
+                batchId,
+                organizationId,
+                phase,
+                afterFirstSeenRow,
+                Math.max(remaining, 1),
+            )
+            if (page.length === 0) break
+            if (remaining <= 0) return this.continuation(phase, afterFirstSeenRow)
+
+            for (const address of page) {
+                advancement.assertOwned()
+                await handle(address)
+                advancement.spendStep()
+                afterFirstSeenRow = address.firstSeenRow
+            }
+        }
+
+        const leftover = await this.admissions.pageIncompleteAddresses(batchId, organizationId, phase, -1, 1)
+        if (leftover.length > 0) throw new Error(`batch_admission_${phase}_incomplete`)
+        return null
+    }
+
+    private continuation(phase: BatchAdmissionContinuationPhase, afterFirstSeenRow: number): BatchAdmissionAdvance {
+        return { kind: 'continuation', retryAt: this.continueAt(), phase, afterFirstSeenRow }
+    }
+
+    private continueAt(): Date {
+        return new Date(this.clock.now().getTime() + CONTINUATION_DELAY_MS)
+    }
+
+    private leaseExpiry(now: Date): Date {
+        return new Date(now.getTime() + this.leaseDurationMs)
+    }
+
+    private async resolveAddress(advancement: AdmissionAdvancement, normalizedAddress: string): Promise<void> {
+        const { batchId, organizationId } = advancement
         const payerRequestId = await this.admissions.ensurePayerRequestId(
             batchId,
             organizationId,
@@ -116,14 +373,22 @@ export class BatchAdmissionService {
         const now = this.clock.now()
         const isUsable = (candidate: Parameters<typeof isCachedResultUsable>[0]): boolean =>
             isCachedResultUsable(candidate, now, this.cacheTtlMs)
+        const record = async (outcome: Parameters<BatchAdmissionStore['recordAdmissionOutcome']>[4]): Promise<void> => {
+            advancement.assertOwned()
+            ensureApplied(
+                await this.admissions.recordAdmissionOutcome(
+                    batchId,
+                    organizationId,
+                    advancement.fence(),
+                    normalizedAddress,
+                    outcome,
+                ),
+            )
+        }
 
         const candidate = await this.cacheReader.findLatestCandidate(organizationId, normalizedAddress)
         if (candidate && isUsable(candidate)) {
-            await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-                admissionKind: 'cache',
-                executionId: null,
-                resultId: candidate.resultId,
-            })
+            await record({ admissionKind: 'cache', executionId: null, resultId: candidate.resultId })
             return
         }
 
@@ -131,97 +396,53 @@ export class BatchAdmissionService {
         if (cooldown && cooldown.verificationQuality === 'inconclusive') {
             const cooldownActiveUntilMs = cooldown.createdAt.getTime() + this.addressCooldownMs
             if (now.getTime() < cooldownActiveUntilMs) {
-                await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-                    admissionKind: 'cooldown',
-                    executionId: null,
-                    resultId: cooldown.resultId,
-                })
+                await record({ admissionKind: 'cooldown', executionId: null, resultId: cooldown.resultId })
                 return
             }
         }
 
         const executionId = randomUUID()
         const deadlineAt = new Date(now.getTime() + this.executionDeadlineMs)
-        const claim = await this.executions.claimOrJoin(
+        advancement.assertOwned()
+        const claim = await this.executions.claimOrJoinForBatchGroup(
+            batchId,
+            advancement.fence(),
             organizationId,
             normalizedAddress,
             payerRequestId,
             executionId,
             deadlineAt,
             isUsable,
-            { type: 'batch_group', id: batchId },
         )
 
-        if (claim.kind === 'cache-available') {
-            await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-                admissionKind: 'cache',
-                executionId: null,
-                resultId: claim.resultId,
-            })
-            return
-        }
-        if (claim.kind === 'joined') {
-            // A joined execution this same batch already owns is a resumed claim, not another funder's work:
-            // the earlier attempt committed the claim but crashed before recording this outcome. The category
-            // identifies the funding owner, not whether this attempt inserted the row, so it must still be
-            // funded as `created` -- recording it as `shared` would leave it permanently unfunded.
-            if (claim.execution.fundingOwnerType === 'batch_group' && claim.execution.fundingOwnerId === batchId) {
-                if (
-                    claim.execution.organizationId !== organizationId ||
-                    claim.execution.normalizedAddress !== normalizedAddress ||
-                    claim.execution.payerRequestId !== payerRequestId
-                ) {
-                    throw new Error('batch_admission_ownership_conflict')
-                }
-                await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-                    admissionKind: 'created',
-                    executionId: claim.execution.executionId,
-                    resultId: null,
-                })
+        switch (claim.kind) {
+            case 'stale-admission':
+                throw new AdmissionOwnershipLost()
+            case 'cache-available':
+                await record({ admissionKind: 'cache', executionId: null, resultId: claim.resultId })
                 return
-            }
-            await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-                admissionKind: 'shared',
-                executionId: claim.execution.executionId,
-                resultId: null,
-            })
-            return
+            case 'joined':
+                // A joined execution this same batch already owns is a resumed claim, not another funder's work:
+                // the earlier attempt committed the claim but crashed before recording this outcome. The category
+                // identifies the funding owner, not whether this attempt inserted the row, so it must still be
+                // funded as `created` -- recording it as `shared` would leave it permanently unfunded.
+                if (claim.execution.fundingOwnerType === 'batch_group' && claim.execution.fundingOwnerId === batchId) {
+                    if (
+                        claim.execution.organizationId !== organizationId ||
+                        claim.execution.normalizedAddress !== normalizedAddress ||
+                        claim.execution.payerRequestId !== payerRequestId
+                    ) {
+                        throw new Error('batch_admission_ownership_conflict')
+                    }
+                    await record({ admissionKind: 'created', executionId: claim.execution.executionId, resultId: null })
+                    return
+                }
+                await record({ admissionKind: 'shared', executionId: claim.execution.executionId, resultId: null })
+                return
+            case 'created':
+                await record({ admissionKind: 'created', executionId, resultId: null })
+                return
         }
-        await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
-            admissionKind: 'created',
-            executionId,
-            resultId: null,
-        })
-    }
-
-    private async fundCreatedExecutions(
-        batchId: string,
-        organizationId: string,
-        created: readonly { readonly normalizedAddress: string; readonly executionId: string }[],
-    ): Promise<void> {
-        try {
-            await this.credits.reserveMany(
-                organizationId,
-                created.map(item => ({ operationId: item.executionId, amount: 1 })),
-            )
-        } catch (error) {
-            if (!(error instanceof InsufficientCreditsException)) throw error
-
-            for (const item of created) {
-                await this.executions.cancelFundingFailure(item.executionId, organizationId)
-            }
-            await this.credits.closeAdmissionMany(
-                organizationId,
-                created.map(item => ({ operationId: item.executionId, amount: 1 })),
-            )
-            await this.admissions.updateState(batchId, organizationId, 'insufficient_credits')
-            return
-        }
-
-        for (const item of created) {
-            await this.executions.markQueued(item.executionId, organizationId)
-        }
-        await this.admissions.updateState(batchId, organizationId, 'admitted')
     }
 
     private async materializeRequest(
