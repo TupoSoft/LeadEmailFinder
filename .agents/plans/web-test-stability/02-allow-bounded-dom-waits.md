@@ -10,8 +10,9 @@ and route transitions without changing application behavior or weakening their a
 
 ## Progress
 
-- [ ] (2026-09-13) Add the shared DOM wait budget and delayed authorization regression coverage.
-- [ ] (2026-09-13) Validate the focused scenarios and full frontend suite, then record separate CI evidence.
+- [x] (2026-09-27) Restore the shared DOM wait budget and delayed authorization regression coverage on current master.
+- [x] (2026-09-27) Validate the focused scenarios, negative controls, and complete frontend suite.
+- [ ] (2026-09-27) Record separate Actions evidence for the replacement implementation PR.
 
 ## Plan dependencies
 
@@ -19,7 +20,10 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- PR #611 merged into `kk/self-hosted-runners`, but PR #595 closed without merging that branch into master.
+  Master at `06563e6f923fa7673ec676f5deab61da3d33cf29` still lacked both test changes and retained the original plan.
+- Current workflows select `tuposoft-ci`; the web test command already uses `--maxWorkers=2` from PR #614.
+  The historical runner labels and publication dependency on PR #595 no longer apply.
 
 ## Decision Log
 
@@ -34,17 +38,23 @@ None yet.
 - Decision: Keep this plan in a separate planning PR targeting master and allow local implementation from master.
   Rationale: The DOM wait change has no code dependency on PR #595. Its isolated runner configuration remains
   required before publishing a revision that runs Actions. Date/Author: 2026-09-13, user-requested plan separation.
+- Decision: Recover the two test changes on current master in one replacement PR for issue #610. Retain the current
+  `tuposoft-ci` routing and obtain fresh Actions evidence. PR #611 targeted a branch that never reached master, so
+  its historical local results and request to skip CI do not validate this revision. This replaces the earlier
+  runner-branch publication instruction. Date/Author: 2026-09-27, Codex implementation following user authorization.
 
 ## Outcomes & Retrospective
 
-Not started.
+The shared three-second DOM wait and delayed authorization regression from PR #611 have been restored on current
+master. Local validation passed, including the complete frontend suite and negative controls. Actions evidence
+remains pending. The change introduces no material architectural trade-offs.
 
 ## Context and Orientation
 
 `apps/web/src/test/setup.ts` loads DOM matchers and registers the cleanup hook. The `application` project in
 `apps/web/vitest.config.ts` loads that setup; the `browser-fixtures` project uses a Node environment and does not.
-Testing Library DOM version 10.4.1 defaults to a 1,000-millisecond asynchronous query timeout. The setup does not
-override it, and increasing the separate whole-test timeout in Vitest would not change this query deadline.
+Testing Library DOM version 10.4.1 defaults to a 1,000-millisecond asynchronous query timeout. Before this change,
+the setup did not override it. Increasing the separate whole-test timeout in Vitest would not change this query deadline.
 
 `apps/web/src/features/team/TeamPage.test.tsx` supplies authenticated account and members responses through
 `renderTeam`. Its immediate HTTP 403 scenario has no capability hint and expects the access-denied heading plus
@@ -70,9 +80,8 @@ The result enables more reliable component checks; it does not claim to resolve 
 ## Plan of Work
 
 Start from current master in an isolated checkout, preserving newer tests and unrelated user changes.
-Local implementation and validation do not depend on PR #595. Before publishing a revision that runs Actions,
-require every direct job to use `self-hosted`, `swarm`, `ubuntu-22`, and `docker-isolated`. While #595 remains
-unmerged, base that implementation PR on its current branch or defer publication that would trigger CI.
+Restore only the two test changes from PR #611 and update this plan. Target master and preserve the current
+`tuposoft-ci` runner routing and two-worker web test command. Run normal Actions validation on the replacement PR.
 Before implementation, locate this plan's synced issue using marker `web-test-stability/02`, assign it, and move
 its Project 9 status to In Progress according to root `AGENTS.md`.
 
@@ -123,7 +132,7 @@ corepack pnpm docs:lint -- .agents/plans/web-test-stability/02-allow-bounded-dom
 ```
 
 To prove the new regression exercises the shared budget, run only its name with the focused command below in
-a disposable checkout. Temporarily set the shared budget to `1000`; expect a missing-heading query failure.
+a disposable checkout or isolated source copy. Temporarily set the shared budget to `1000`; expect a missing-heading query failure.
 Restore `3000`; expect success. Separately substitute a nonexistent heading in that test and expect a bounded
 query failure, then restore the test. Commit neither temporary mutation. Do not assert precise wall-clock timing.
 
@@ -144,8 +153,25 @@ output. Revert only this plan's setup and test changes to restore the prior budg
 
 Original evidence: [failed validation job](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/34754038140/job/103715423416).
 The prior local full-suite command was the same two-worker command listed above; its smaller test inventory must
-remain explicit. Implementation validation has not run. The readiness review found no unresolved implementation
-choice, external dependency, or product decision in this single-PR scope.
+remain explicit. The readiness review found no unresolved implementation choice, external dependency, or product
+decision in this single-PR scope.
+
+Recovery evidence: [PR #611](https://github.com/TupoSoft/LeadEmailFinder/pull/611) merged into
+`kk/self-hosted-runners` at `cb1368a534e7e5a5c71803ab68cbcd74962c6932`.
+[PR #595](https://github.com/TupoSoft/LeadEmailFinder/pull/595) later closed without merging that branch into master.
+The replacement branch is `kk/610-bounded-dom-waits-master`, based on
+`06563e6f923fa7673ec676f5deab61da3d33cf29`. Issue #610 is assigned to `KyryloKupin` and remains In Progress in Project 9.
+
+Local validation on 2026-09-27 used Vitest 4.1.11 and two workers. The focused Team and service-client suites passed
+51 tests in two files; the complete frontend suite passed 677 tests in 31 files. The API-client build, frontend lint,
+type checking, design lint, UI audit, formatting, and seven repository plan checks passed. These are local results;
+Actions validation remains pending. No browser, container, or live API execution is claimed.
+
+The delayed regression failed with `asyncUtilTimeout: 1000`, passed with `3000`, and failed with a nonexistent heading
+through a bounded query failure rather than the deadline for the complete test. These controls ran in an isolated
+source copy under `/tmp`, using the same locked dependencies. All temporary mutations were restored; logs and the
+control summary are under `/tmp/lef-610-validation/`. Harper passed with
+`corepack pnpm docs:lint -- .agents/plans/web-test-stability/02-allow-bounded-dom-waits.md`.
 
 ## Plan readiness
 
