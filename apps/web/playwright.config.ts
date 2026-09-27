@@ -9,6 +9,7 @@ export default defineConfig({
         'billing.spec.ts',
         'single-verification.spec.ts',
         'batch-verification.spec.ts',
+        'verification-billing.spec.ts',
         'invitations-ui.spec.ts',
         'platform-organizations-ui.spec.ts',
         'platform-organizations.spec.ts',

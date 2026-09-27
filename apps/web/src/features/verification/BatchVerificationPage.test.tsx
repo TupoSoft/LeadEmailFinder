@@ -10,6 +10,7 @@ import { BatchVerificationPage } from '../../routes/BatchVerificationPage'
 import { AuthProvider } from '../auth/AuthProvider'
 import { AuthSession } from '../auth/auth-session'
 import { batchVerificationQueryKeys } from './batch-verification-api'
+import { billingQueryKeys } from '../billing/billing-api'
 
 const NativeRequest = globalThis.Request
 class BrowserRequest extends NativeRequest {
@@ -108,6 +109,8 @@ function renderBatch({
         if (custom !== undefined) return Promise.resolve(custom)
         const path = new URL(request.url).pathname
         if (path === '/v1/auth/session') return Promise.resolve(Response.json({ ...account, capabilities }))
+        if (path === '/v1/billing/summary')
+            return Promise.resolve(Response.json({ balance: 10, reserved: 3, available: 7 }))
         if (path === uploadPath) return Promise.resolve(Response.json({ id }, { status: 202 }))
         if (path === statusPath) return Promise.resolve(Response.json(queued))
         if (path === resultPath)
@@ -328,6 +331,65 @@ describe('CSV batch selection and upload', () => {
         expect(screen.queryByRole('link', { name: 'Verify a CSV file' })).not.toBeInTheDocument()
         expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(0)
     })
+    it('allows a zero available balance to submit cached work', async () => {
+        const { session, fetch } = renderBatch()
+        await screen.findByLabelText('CSV file')
+        session.queryClient.setQueryData(billingQueryKeys.summary(account.organization.id), {
+            balance: 0,
+            reserved: 0,
+            available: 0,
+        })
+        await submit()
+        expect(await screen.findByRole('heading', { name: 'Batch verification queued' })).toBeInTheDocument()
+        expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(1)
+    })
+    it.each([true, false])(
+        'refreshes a confirmed funding rejection only with billing permission: %s',
+        async canReadBilling => {
+            const { fetch, session } = renderBatch({
+                capabilities: canReadBilling ? account.capabilities : ['verification.run', 'verification.read'],
+                intercept: request =>
+                    new URL(request.url).pathname === uploadPath ? new Response(null, { status: 402 }) : undefined,
+            })
+            await submit()
+            expect(await screen.findByText(/server could not fund this batch/)).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: 'Upload and verify CSV' })).toBeEnabled()
+            if (canReadBilling) {
+                expect(screen.getByRole('link', { name: 'Go to billing' })).toBeInTheDocument()
+                await waitFor(() =>
+                    expect(session.queryClient.getQueryData(billingQueryKeys.summary(account.organization.id))).toEqual(
+                        { balance: 10, reserved: 3, available: 7 },
+                    ),
+                )
+            } else {
+                expect(screen.getByText(/Contact an organization owner/)).toBeInTheDocument()
+                expect(screen.queryByRole('link', { name: 'Go to billing' })).not.toBeInTheDocument()
+            }
+            expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(canReadBilling ? 1 : 0)
+            expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(1)
+        },
+    )
+    it('shows the server retry time and waits for deliberate upload after 429', async () => {
+        const { fetch } = renderBatch({
+            intercept: request =>
+                new URL(request.url).pathname === uploadPath
+                    ? new Response(null, { status: 429, headers: { 'Retry-After': '30' } })
+                    : undefined,
+        })
+        await select()
+        vi.useFakeTimers()
+        const button = screen.getByRole('button', { name: 'Upload and verify CSV' })
+        fireEvent.click(button)
+        await tick(10)
+        expect(screen.getByText(/You can retry after.*UTC/)).toBeInTheDocument()
+        expect(button).toBeDisabled()
+        await tick(30_010)
+        expect(button).toBeEnabled()
+        expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(1)
+        fireEvent.click(button)
+        await tick(10)
+        expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(2)
+    })
 })
 
 describe('batch job status and recovery', () => {
@@ -341,14 +403,26 @@ describe('batch job status and recovery', () => {
         for (const [label, value] of [
             ['Processed', '3'],
             ['Unprocessed', '5'],
-            ['Total', '8'],
+            ['Total rows', '8'],
+            ['Unique addresses', '8'],
+            ['Duplicate rows', '0'],
+            ['Cached addresses', '0'],
+            ['Shared addresses', '0'],
         ])
             expect(screen.getByText(label).nextElementSibling).toHaveTextContent(value)
         expect(document.body.textContent).not.toMatch(/ETA|seconds remaining/)
+        expect(screen.getByText('3 credits initially reserved')).toBeInTheDocument()
+        expect(screen.getByText('3 credits charged so far')).toBeInTheDocument()
+        expect(screen.getByText('Settlement pending')).toBeInTheDocument()
     })
     it('describes validation while zero counts are provisional', async () => {
         renderBatch({ path: jobRoute })
         expect(await screen.findByText(/zero counts do not mean the file is empty/)).toBeInTheDocument()
+        expect(screen.getByText('0 credits initially reserved')).toBeInTheDocument()
+        expect(screen.getByText('Final charge pending')).toBeInTheDocument()
+        expect(screen.getByText(/Credit accounting is still pending/)).toBeInTheDocument()
+        expect(screen.queryByText(/Credits were set aside for this operation/)).not.toBeInTheDocument()
+        expect(screen.queryByText('No credits charged')).not.toBeInTheDocument()
     })
     it.each(['invalid_csv', 'insufficient_credits', 'processing_failed'])(
         'renders reviewed %s recovery only',
@@ -378,7 +452,7 @@ describe('batch job status and recovery', () => {
             if (failureCode === 'insufficient_credits')
                 expect(screen.getByRole('link', { name: 'Go to billing' })).toHaveAttribute('href', '/app/billing')
             if (failureCode === 'processing_failed')
-                expect(screen.getByText(/Credits may have been charged/)).toBeInTheDocument()
+                expect(screen.getByText(/Review the confirmed charges below/)).toBeInTheDocument()
             expect(
                 JSON.stringify(
                     session.queryClient.getQueryData(batchVerificationQueryKeys.job(account.organization.id, id)),
@@ -439,11 +513,113 @@ describe('batch job status and recovery', () => {
         stale = true
         const refresh = screen.getByRole('button', { name: 'Refresh status' })
         await userEvent.click(refresh)
-        expect(await screen.findByText('Last confirmed progress and counts — out of date')).toBeInTheDocument()
+        expect(
+            await screen.findByText('Last confirmed progress, counts, and charges — out of date'),
+        ).toBeInTheDocument()
         expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '37.5')
         expect(screen.getByText('Processed').nextElementSibling).toHaveTextContent('3')
         expect(refresh).toHaveFocus()
         expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(0)
+    })
+    it.each([true, false])(
+        'refreshes the authoritative summary at settlement only with billing permission: %s',
+        async canReadBilling => {
+            let settled = false
+            const { fetch, session } = renderBatch({
+                path: jobRoute,
+                capabilities: canReadBilling ? account.capabilities : ['verification.read'],
+                intercept: request =>
+                    new URL(request.url).pathname === statusPath
+                        ? Response.json(settled ? completed : running)
+                        : undefined,
+            })
+            await screen.findByRole('heading', { name: 'Batch verification running' })
+            expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(0)
+            settled = true
+            const refresh = screen.getByRole('button', { name: 'Refresh status' })
+            await userEvent.click(refresh)
+            expect(await screen.findByText('8 credits charged')).toBeInTheDocument()
+            expect(refresh).toHaveFocus()
+            expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(canReadBilling ? 1 : 0)
+            if (canReadBilling)
+                expect(session.queryClient.getQueryData(billingQueryKeys.summary(account.organization.id))).toEqual({
+                    balance: 10,
+                    reserved: 3,
+                    available: 7,
+                })
+            await userEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
+            expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(canReadBilling ? 1 : 0)
+        },
+    )
+    it('preserves exact row accounting and settled charges when a failed batch has no downloadable results', async () => {
+        renderBatch({
+            path: jobRoute,
+            intercept: request =>
+                new URL(request.url).pathname === statusPath
+                    ? Response.json({
+                          ...completed,
+                          status: 'failed',
+                          failureCode: 'processing_failed',
+                          resultsAvailable: false,
+                          counts: {
+                              ...zeroCounts,
+                              totalRows: 100,
+                              uniqueAddresses: 80,
+                              duplicateRows: 20,
+                              cachedAddresses: 20,
+                              sharedAddresses: 5,
+                          },
+                          billing: { state: 'settled', reserved: 0, charged: 45 },
+                      })
+                    : undefined,
+        })
+        await screen.findByRole('heading', { name: 'Batch processing failed' })
+        for (const [label, value] of [
+            ['Total rows', '100'],
+            ['Unique addresses', '80'],
+            ['Duplicate rows', '20'],
+            ['Cached addresses', '20'],
+            ['Shared addresses', '5'],
+        ]) {
+            expect(screen.getByText(label).nextElementSibling).toHaveTextContent(value)
+        }
+        expect(screen.getByText('45 credits charged')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Download result CSV' })).not.toBeInTheDocument()
+        expect(screen.getByText(/Results are unavailable for this failed batch/)).toBeInTheDocument()
+        expect(screen.getByText(/retains every original row, including duplicates/)).toBeInTheDocument()
+        expect(screen.queryByText('No credits charged')).not.toBeInTheDocument()
+    })
+    it('shows confirmed free settled work without inferring charges from processed counts', async () => {
+        renderBatch({
+            path: jobRoute,
+            intercept: request =>
+                new URL(request.url).pathname === statusPath
+                    ? Response.json({ ...completed, billing: { state: 'settled', reserved: 0, charged: 0 } })
+                    : undefined,
+        })
+        expect(await screen.findByText('No credits charged')).toBeInTheDocument()
+        expect(screen.getByText('Processed').nextElementSibling).toHaveTextContent('8')
+    })
+    it('discards a late settlement balance refresh after sign-out', async () => {
+        const delayed = deferred<Response>()
+        const { session, fetch } = renderBatch({
+            path: jobRoute,
+            intercept: request => {
+                const path = new URL(request.url).pathname
+                if (path === statusPath) return Response.json(completed)
+                if (path === '/v1/billing/summary') return delayed.promise
+            },
+        })
+        expect(await screen.findByText('8 credits charged')).toBeInTheDocument()
+        await waitFor(() => expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(1))
+        await act(() => session.signOut())
+        await act(async () => {
+            delayed.resolve(Response.json({ balance: 99, reserved: 0, available: 99 }))
+            await delayed.promise
+        })
+        expect(session.queryClient.getQueryCache().getAll()).toHaveLength(0)
+        expect(screen.queryByText('8 credits charged')).not.toBeInTheDocument()
+        expect(requestsFor(fetch, '/v1/billing/summary')[0].signal.aborted).toBe(true)
     })
 })
 

@@ -2,7 +2,13 @@ export const billingCopy = {
     title: 'Billing',
     description: 'Review your organization’s credits, choose a credit pack, and follow your purchases.',
     balance: 'Credit balance',
-    balanceDescription: 'The latest balance reported by your organization’s account.',
+    balanceDescription:
+        'The latest available credits, reservations, and total balance reported by your organization’s account.',
+    available: 'Available credits',
+    reserved: 'Reserved credits',
+    total: 'Total balance',
+    reservationExplanation:
+        'Reserved credits are held for checks in progress, not charged. Unused credits become available again.',
     catalog: 'Credit packs',
     catalogDescription:
         'Choose a pack to continue to secure hosted checkout. Payment confirmation may arrive after you return.',
@@ -53,6 +59,7 @@ export const billingCopy = {
     },
     statuses: { pending: 'Pending', paid: 'Paid', failed: 'Failed', expired: 'Expired' },
     date: 'Purchase date',
+    credit: 'credit',
     credits: 'Credits',
     amount: 'Amount',
     status: 'Status',

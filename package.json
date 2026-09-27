@@ -52,7 +52,8 @@
         "test:gateway": "node --test scripts/frontend/gateway.test.mjs scripts/frontend/checkout-config.test.mjs",
         "test:web-live": "node scripts/testing/web-live.mjs",
         "test:mcp-server-live": "node scripts/testing/mcp-server-live.mjs",
-        "bruno:service-client-rejections": "node scripts/bruno/run-collection.mjs service-client-management"
+        "bruno:service-client-rejections": "node scripts/bruno/run-collection.mjs service-client-management",
+        "test:verification-billing-web": "node scripts/testing/verification-billing-web.mjs"
     },
     "author": {
         "url": "https://tuposoft.com",

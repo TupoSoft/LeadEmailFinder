@@ -1,0 +1,8 @@
+.charges {
+    margin-block-start: var(--space-content-gap);
+    min-height: var(--state-min-height);
+}
+.charges p {
+    max-width: 65ch;
+    margin-block: var(--space-content-gap);
+}

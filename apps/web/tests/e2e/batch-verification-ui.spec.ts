@@ -4,6 +4,9 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test'
 const id = '725d7b63-6a47-4d14-8709-f2966f5a0948'
 const capabilities = ['verification.run', 'verification.read', 'billing.read']
 async function account(context: BrowserContext, allowed = capabilities) {
+    await context.route('**/v1/billing/summary', route =>
+        route.fulfill({ json: { balance: 10, reserved: 3, available: 7 } }),
+    )
     await context.route('**/v1/auth/session', route =>
         route.fulfill({
             json: {
@@ -37,7 +40,11 @@ const snapshot = (status: string, extra = {}) => ({
     unprocessed: status === 'completed' ? 0 : 50,
     resultsAvailable: status === 'completed',
     counts: { ...zeroCounts, totalRows: 80, uniqueAddresses: 80 },
-    billing: { state: status === 'completed' ? 'settled' : 'pending', reserved: 80, charged: 0 },
+    billing: {
+        state: status === 'completed' ? 'settled' : 'pending',
+        reserved: status === 'completed' ? 0 : 80,
+        charged: status === 'completed' ? 60 : 0,
+    },
     ...extra,
 })
 async function accessible(page: Page) {
@@ -100,16 +107,43 @@ for (const [failureCode, title] of [
         page.on('request', request => {
             if (request.method() === 'POST') posts++
         })
-        await context.route(`**/verifyBatch/${id}`, route =>
-            route.fulfill({ json: snapshot('failed', { failureCode }) }),
-        )
+        let reads = 0
+        const errors: string[] = []
+        page.on('pageerror', () => errors.push('pageerror'))
+        page.on('console', message => {
+            if (message.type() === 'error') errors.push('console error')
+        })
+        await context.route(`**/verifyBatch/${id}`, route => {
+            reads++
+            return route.fulfill({
+                json: snapshot('failed', {
+                    failureCode,
+                    ...(failureCode === 'processing_failed'
+                        ? { billing: { state: 'settled', reserved: 80, charged: 30 } }
+                        : {}),
+                }),
+            })
+        })
         await page.goto(`/app/verifications/batches/${id}`)
         await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
-        if (failureCode === 'processing_failed')
-            await expect(page.getByText(/Credits may have been charged/)).toBeVisible()
+        await expect(page).toHaveTitle(`${title} | Lead Email Finder`)
+        await expect(page.getByRole('button', { name: 'Download result CSV', exact: true })).toHaveCount(0)
+        if (failureCode === 'processing_failed') {
+            await expect(page.getByText(/Results are unavailable for this failed batch/)).toBeVisible()
+            await expect(page.getByLabel('Verification charges', { exact: true })).toContainText('30 credits charged')
+            const before = reads
+            const refresh = page.getByRole('button', { name: 'Refresh status', exact: true })
+            await refresh.focus()
+            await refresh.press('Enter')
+            await expect.poll(() => reads).toBe(before + 1)
+            await expect(refresh).toHaveAttribute('aria-busy', 'false')
+            await expect(refresh).toBeFocused()
+            await expect(page.getByRole('button', { name: 'Download result CSV', exact: true })).toHaveCount(0)
+        }
         if (failureCode === 'insufficient_credits')
             await expect(page.getByRole('link', { name: 'Go to billing', exact: true })).toBeVisible()
         await accessible(page)
+        expect(errors).toEqual([])
         expect(posts).toBe(0)
     })
 }
@@ -251,4 +285,35 @@ test('offline and failed reads preserve confirmed counts and manual recovery', a
     await expect(page.getByText(/^The latest read failed/)).toBeVisible()
     await expect(page.getByText('80', { exact: true }).first()).toBeVisible()
     await accessible(page)
+})
+
+test('keyboard refresh preserves focus while pending and when completed results appear', async ({ page, context }) => {
+    await account(context)
+    let reads = 0
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+        release = resolve
+    })
+    await context.route(`**/verifyBatch/${id}`, async route => {
+        reads++
+        if (reads === 1) return route.fulfill({ json: snapshot('running') })
+        await pending
+        await route.fulfill({ json: snapshot('completed') })
+    })
+    await page.goto(`/app/verifications/batches/${id}`)
+    await expect(page.getByRole('heading', { name: 'Batch verification running', exact: true })).toBeVisible()
+    const refresh = page.getByRole('button', { name: 'Refresh status', exact: true })
+    await refresh.focus()
+    await page.keyboard.press('Enter')
+    await expect(refresh).toHaveAttribute('aria-disabled', 'true')
+    await expect(refresh).toBeFocused()
+    await page.keyboard.press('Enter')
+    expect(reads).toBe(2)
+    release()
+    await expect(page.getByRole('heading', { name: 'Batch verification completed', exact: true })).toBeVisible()
+    await expect(refresh).toHaveAttribute('aria-disabled', 'false')
+    await expect(refresh).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Download result CSV', exact: true })).toBeEnabled()
+    await accessible(page)
+    await page.screenshot({ path: `/tmp/issue577-batch-keyboard-${page.viewportSize()!.width}.png`, fullPage: true })
 })

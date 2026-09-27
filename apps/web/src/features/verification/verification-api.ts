@@ -1,8 +1,9 @@
-import type { ApiClient, paths } from '@tuposoft/lead-email-finder-api-client'
+import type { ApiClient, components, paths } from '@tuposoft/lead-email-finder-api-client'
 import { ApiError } from '../../api/api-error'
 
 export type VerificationStatus = paths['/verifyAsync/{id}']['get']['responses'][200]['content']['application/json']
 export type VerificationResult = Extract<VerificationStatus, { state: 'completed' }>['result']
+export type VerificationOperation = components['schemas']['VerificationOperationMetadataDto']
 
 export const verificationQueryKeys = {
     job: (organizationId: string, id: string) => ['verification', organizationId, 'job', id] as const,
@@ -13,14 +14,48 @@ export function isVerificationId(id: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
-export async function createVerification(api: ApiClient, email: string): Promise<{ id: string }> {
+export async function createVerification(api: ApiClient, email: string, requestKey: string): Promise<{ id: string }> {
     const { data, response } = await api.POST('/verifyAsync', {
         body: { email },
+        headers: { 'Idempotency-Key': requestKey },
         signal: AbortSignal.timeout(30_000),
     })
     if (response.status !== 202 || !data || !isVerificationId(data.id))
         throw new ApiError(response.status, 'request-failed')
     return { id: data.id }
+}
+
+function projectOperation(operation: VerificationOperation | undefined): VerificationOperation | undefined {
+    if (!operation) return undefined
+    const { id, source, observedAt, cacheExpiresAt, billing } = operation
+    const timestamp = (value: unknown) =>
+        value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)))
+    if (
+        typeof id !== 'string' ||
+        !isVerificationId(id) ||
+        !['fresh', 'cache', 'shared'].includes(source) ||
+        !timestamp(observedAt) ||
+        !timestamp(cacheExpiresAt) ||
+        !billing ||
+        !['pending', 'settled'].includes(billing.state) ||
+        ![0, 1].includes(billing.charged) ||
+        ![0, 1].includes(billing.reserved) ||
+        (billing.reason !== undefined &&
+            !['conclusive', 'cached', 'shared', 'inconclusive', 'failed'].includes(billing.reason))
+    )
+        return undefined
+    return {
+        id,
+        source,
+        observedAt,
+        cacheExpiresAt,
+        billing: {
+            state: billing.state,
+            charged: billing.charged,
+            reserved: billing.reserved,
+            ...(billing.reason ? { reason: billing.reason } : {}),
+        },
+    }
 }
 
 export async function readVerification(api: ApiClient, id: string, signal?: AbortSignal): Promise<VerificationStatus> {
@@ -37,7 +72,11 @@ export async function readVerification(api: ApiClient, id: string, signal?: Abor
         case 'unavailable':
             return { state: data.state }
         case 'failed':
-            return { state: 'failed', failureCode: 'verification_failed' }
+            return {
+                state: 'failed',
+                failureCode: 'verification_failed',
+                ...('operation' in data ? { operation: projectOperation(data.operation) } : {}),
+            }
         case 'completed': {
             const result = data.result
             const nullableBoolean = (value: unknown) => value === null || typeof value === 'boolean'
@@ -72,6 +111,7 @@ export async function readVerification(api: ApiClient, id: string, signal?: Abor
             } = data.result
             return {
                 state: 'completed',
+                ...('operation' in data ? { operation: projectOperation(data.operation) } : {}),
                 result: {
                     id: resultId,
                     email,

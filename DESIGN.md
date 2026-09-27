@@ -296,6 +296,11 @@ the shared primary and secondary treatments. The return notice uses sage with an
 the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
 changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
 
+Available credits remain the billing summary's primary figure. The `balance` variant of `SignalDetails` presents
+reserved credits and total balance with regular-weight labels and compact typography. Reservation guidance also
+uses compact typography, separated from the final detail rule by the content gap of 1.5rem. Keep the existing ink
+color for readable contrast; hierarchy comes from type size, weight, and spacing.
+
 ### Team Forms and Invitations
 
 Team management and public invitation acceptance reuse the product heading, canvas, fine rules, and existing

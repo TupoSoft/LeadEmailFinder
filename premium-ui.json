@@ -9,6 +9,7 @@
     "requiredCapabilities": ["Scrollbar"],
     "ownership": {
         "Data panel": "ProductPanel",
+        "Detail list": "SignalDetails",
         "Form": "Form.module.css",
         "Select/Listbox": "native",
         "Dialog": "TeamDialog",

@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/api-error'
 import { ForbiddenPage } from '../app/AuthRoutes'
 import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
+import { billingQueryKeys, readBillingSummary } from '../features/billing/billing-api'
 import { createBatchVerification } from '../features/verification/batch-verification-api'
 import { batchVerificationCopy as copy } from '../features/verification/batch-verification-copy'
+import { verificationCopy } from '../features/verification/verification-copy'
 import { useBrowserAvailability } from '../shared/use-browser-availability'
+import { useRetryTime } from '../shared/use-retry-time'
+import { formatVerificationTime } from '../shared/verification-time'
 import { ProductPanel } from '../shared/ProductPanel'
 import { ProgressIndicator } from '../shared/ProgressIndicator'
 import action from '../shared/Action.module.css'
@@ -23,8 +27,8 @@ function formatFileSize(bytes: number): string {
           : `${fileSizeFormat.format(bytes / (1024 * 1024))} MB`
 }
 
-function BatchForm() {
-    const { api } = useAuth()
+function BatchForm({ organizationId, canReadBilling }: { organizationId: string; canReadBilling: boolean }) {
+    const { api, queryClient } = useAuth()
     const navigate = useNavigate()
     const { online } = useBrowserAvailability()
     const input = useRef<HTMLInputElement>(null)
@@ -36,6 +40,9 @@ function BatchForm() {
     const [phase, setPhase] = useState<'selecting' | 'uploading' | 'uncertain'>('selecting')
     const [error, setError] = useState<string | null>(null)
     const [acknowledged, setAcknowledged] = useState(false)
+    const [insufficient, setInsufficient] = useState(false)
+    const [retryAt, setRetryAt] = useState<number | undefined>()
+    const waitingForRetry = useRetryTime(retryAt)
     const previousPhase = useRef(phase)
     const pending = phase === 'uploading'
     const uncertain = phase === 'uncertain'
@@ -76,6 +83,17 @@ function BatchForm() {
         if (phase === 'uncertain' && previousPhase.current !== 'uncertain') uncertaintyHeading.current?.focus()
         previousPhase.current = phase
     }, [phase])
+    function refreshBilling() {
+        if (!canReadBilling) return
+        void queryClient
+            .fetchQuery({
+                queryKey: billingQueryKeys.summary(organizationId),
+                queryFn: ({ signal }) => readBillingSummary(api, signal),
+                staleTime: 0,
+                retry: false,
+            })
+            .catch(() => undefined)
+    }
 
     function select(next: File | undefined) {
         if (request.current || phase !== 'selecting') return
@@ -95,7 +113,13 @@ function BatchForm() {
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (request.current || phase !== 'selecting' || !navigator.onLine) return
+        if (
+            request.current ||
+            phase !== 'selecting' ||
+            !navigator.onLine ||
+            (retryAt !== undefined && retryAt > Date.now())
+        )
+            return
         if (!file.current) {
             setError(copy.required)
             input.current?.focus()
@@ -105,6 +129,7 @@ function BatchForm() {
         request.current = controller
         setPhase('uploading')
         setError(null)
+        setInsufficient(false)
         // Keep only the active fetch, with no automatic retry or retained mutation variables.
         void createBatchVerification(api, file.current, controller.signal).then(
             ({ id }) => {
@@ -116,13 +141,30 @@ function BatchForm() {
             (failure: unknown) => {
                 if (request.current !== controller) return
                 request.current = null
-                clearSelection()
                 if (failure instanceof ApiError && failure.status === 422) {
+                    clearSelection()
                     setPhase('selecting')
                     setError(copy.rejected)
+                    refreshBilling()
+                } else if (failure instanceof ApiError && failure.status === 402) {
+                    setPhase('selecting')
+                    setError(copy.insufficient)
+                    setInsufficient(true)
+                    refreshBilling()
+                } else if (failure instanceof ApiError && failure.status === 429) {
+                    setPhase('selecting')
+                    setRetryAt(failure.retryAt)
+                    setError(
+                        failure.retryAt === undefined
+                            ? copy.retryLater
+                            : copy.retryAt(formatVerificationTime(failure.retryAt)),
+                    )
+                    refreshBilling()
                 } else if (failure instanceof ApiError && [401, 403].includes(failure.status)) {
+                    clearSelection()
                     setPhase('selecting')
                 } else {
+                    clearSelection()
                     setAcknowledged(false)
                     setPhase('uncertain')
                 }
@@ -172,6 +214,15 @@ function BatchForm() {
                             {error ? (
                                 <p id="batch-file-error" className={form.error}>
                                     {error}
+                                </p>
+                            ) : null}
+                            {insufficient ? (
+                                <p>
+                                    {canReadBilling ? (
+                                        <Link to="/app/billing">{verificationCopy.billing}</Link>
+                                    ) : (
+                                        verificationCopy.owner
+                                    )}
                                 </p>
                             ) : null}
                         </div>
@@ -243,7 +294,11 @@ function BatchForm() {
                         </>
                     ) : (
                         <div className={form.actions}>
-                            <button className={action.action} type="submit" disabled={pending || !online}>
+                            <button
+                                className={action.action}
+                                type="submit"
+                                disabled={pending || !online || waitingForRetry}
+                            >
                                 {copy.submit}
                             </button>
                         </div>
@@ -258,5 +313,11 @@ export function BatchVerificationPage() {
     const { state } = useAuth()
     if (state.status !== 'authenticated') return null
     if (!state.account.capabilities.includes('verification.run')) return <ForbiddenPage />
-    return <BatchForm key={state.account.organization.id} />
+    return (
+        <BatchForm
+            key={state.account.organization.id}
+            organizationId={state.account.organization.id}
+            canReadBilling={state.account.capabilities.includes('billing.read')}
+        />
+    )
 }

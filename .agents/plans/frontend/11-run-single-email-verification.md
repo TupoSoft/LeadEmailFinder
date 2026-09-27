@@ -118,6 +118,11 @@ status and result after reload.
 
 ## Outcomes & Retrospective
 
+Billing follow-up (2026-09-16): `verification-billing/06` replaces the original upfront-charge assumptions with
+server-reported reservations, settled charges, cache and shared-work metadata, and explicit uncertainty. The
+historical validation below describes this plan's original delivery. The follow-up owns current billing evidence.
+
+
 The public async contract, generated client, single-email form, recoverable job route, reviewed signal labels,
 and distinct Bruno workflow are implemented. The form preserves uncertainty and pending work across in-app
 navigation. Polling preserves confirmed data and stops on terminal states or read failure. Sixty focused component

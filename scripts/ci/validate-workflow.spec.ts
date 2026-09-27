@@ -885,7 +885,7 @@ describe('browser workspace build reuse', () => {
     })
 
     it.each([
-        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts'],
+        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts'],
         ['test:a11y', 'playwright test tests/e2e/accessibility.spec.ts'],
         ['test:visual', 'playwright test tests/e2e/visual.spec.ts'],
     ])('%s retains its selectors and builds before delegating to the prebuilt suite', (suite, selector) => {

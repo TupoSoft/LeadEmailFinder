@@ -1,24 +1,38 @@
 import { useEffect, useRef } from 'react'
 import { SignalDetails } from '../../shared/SignalDetails'
-import type { VerificationResult } from './verification-api'
+import { formatVerificationTime } from '../../shared/verification-time'
+import type { VerificationOperation, VerificationResult } from './verification-api'
 import {
     verificationCopy as copy,
     signalLabel,
     verificationReasonLabel,
     verificationSourceLabels,
+    verificationOperationSources,
 } from './verification-copy'
 import styles from './VerificationView.module.css'
 
-export function VerificationResultView({ result }: { result: VerificationResult }) {
+export function VerificationResultView({
+    result,
+    operation,
+}: {
+    result: VerificationResult
+    operation?: VerificationOperation
+}) {
     const heading = useRef<HTMLHeadingElement>(null)
     const focused = useRef(false)
     useEffect(() => {
         if (focused.current) return
         focused.current = true
-        heading.current?.focus()
+        if (document.activeElement === document.body) heading.current?.focus()
     }, [])
     const entries = [
         { label: 'Email address', value: result.email },
+        {
+            label: copy.resultSource,
+            value: operation ? verificationOperationSources[operation.source] : copy.notReported,
+        },
+        { label: copy.evidenceObserved, value: formatVerificationTime(operation?.observedAt ?? null) },
+        { label: copy.cacheExpires, value: formatVerificationTime(operation?.cacheExpiresAt ?? null) },
         { label: 'Local part', value: result.localPart },
         { label: 'Domain', value: result.domain },
         { label: 'Mailbox exists', value: signalLabel(result.exists) },
