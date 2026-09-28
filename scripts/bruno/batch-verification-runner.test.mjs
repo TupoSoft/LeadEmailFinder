@@ -146,13 +146,13 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     )
     const registered = registeredCollection('batch-verification')
     assert.equal(registered.requests, files.length)
-    assert.equal(registered.requests, 16)
+    assert.equal(registered.requests, 20)
     assert.equal(registered.tests, testCount)
-    assert.equal(registered.tests, 25)
+    assert.equal(registered.tests, 30)
     assert.equal(registered.network, 'compose')
     assert.deepEqual(
         documents.map(document => document.info.seq),
-        Array.from({ length: 16 }, (_, index) => index + 1),
+        Array.from({ length: 20 }, (_, index) => index + 1),
     )
     const environment = fixtureEnvironment('http://127.0.0.1:58106')
     const args = cliArguments('batch-verification', environment, '/tmp/report.json')
@@ -175,7 +175,7 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     }
 })
 
-test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and ownership boundaries', async () => {
+test('pinned CLI verifies duplicate accounting, group denial, fresh fixtures, safe status and ownership boundaries', async () => {
     let origin
     let rawQueueState = false
     let successfulUploads = 0
@@ -193,6 +193,12 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
     let scenario = 'default'
     let resets = 0
     let duplicateEmails = []
+    let groupUploads = 0
+    let partialGroupHold = false
+    let hiddenGroupCharge = false
+    let held = 0
+    const groupAddresses = new Set()
+    const groupJob = randomUUID()
     const uploadedAddresses = new Set()
     const job = randomUUID()
     const invalidJob = randomUUID()
@@ -232,8 +238,11 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
         if (pathname.startsWith('/credits/')) {
             assert.equal(client, 'platform')
             if (request.method === 'PUT') {
-                balance = JSON.parse(raw).amount
-                assert.equal(balance, 1)
+                const amount = JSON.parse(raw).amount
+                assert.ok([0, 1].includes(amount))
+                // The API refuses a balance below credits still held for accepted operations.
+                if (amount < held) return reply(409, {})
+                balance = amount
             }
             return reply(200, { balance })
         }
@@ -262,6 +271,22 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
                 duplicateUploads++
                 balance--
                 return reply(202, { id: duplicateJob })
+            }
+            if (raw.includes('filename="insufficient-group.csv"')) {
+                assert.equal(balance, 1)
+                const emails = raw.match(
+                    /\n(batch-group-[0-9a-f-]+@evidence\.lef\.test)\n(batch-group-[0-9a-f-]+@evidence\.lef\.test)\n/,
+                )
+                assert.ok(emails, 'The CSV contains two distinct fresh group addresses')
+                assert.notEqual(emails[1], emails[2])
+                for (const email of emails.slice(1)) {
+                    assert.equal(groupAddresses.has(email), false, 'Every collection run uses fresh group addresses')
+                    groupAddresses.add(email)
+                }
+                groupUploads++
+                if (partialGroupHold) held = 1
+                if (hiddenGroupCharge) balance--
+                return reply(202, { id: groupJob })
             }
             assert.match(raw, /filename="sample.csv"/)
             successfulUploads++
@@ -293,6 +318,30 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
                     failedAddresses: 0,
                 },
                 billing: { state: 'settled', reserved: 1, charged: incorrectPayerReceipt ? 0 : 1 },
+            })
+        }
+        if (pathname === `/verifyBatch/${groupJob}`) {
+            return reply(200, {
+                id: groupJob,
+                status: 'completed',
+                progress: 100,
+                total: 2,
+                processed: 2,
+                unprocessed: 0,
+                resultsAvailable: true,
+                counts: {
+                    totalRows: 2,
+                    uniqueAddresses: 2,
+                    duplicateRows: 0,
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: 2,
+                    conclusiveAddresses: 0,
+                    inconclusiveAddresses: 0,
+                    failedAddresses: 2,
+                },
+                billing: { state: 'settled', reserved: held, charged: 0 },
             })
         }
         if (pathname === `/verifyBatch/${duplicateJob}/results`) {
@@ -393,7 +442,7 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
     origin = `http://127.0.0.1:${server.address().port}`
     const environment = fixtureEnvironment(origin)
     try {
-        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 20, tests: 30 })
         assert.equal(successfulUploads, 1)
         assert.equal(invalidUploads, 1)
         assert.equal(downloads, 1)
@@ -402,12 +451,14 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
         assert.equal(rejectedMedia, 1)
         assert.ok(statusReads >= 2)
         assert.equal(duplicateUploads, 1)
+        assert.equal(groupUploads, 1)
         assert.equal(balance, 0)
         assert.equal(scenario, 'default')
         assert.equal(resets, 2)
-        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 16, tests: 25 })
+        assert.deepEqual(await executeCollection('batch-verification', environment, root), { requests: 20, tests: 30 })
         assert.equal(duplicateUploads, 2)
         assert.equal(uploadedAddresses.size, 2)
+        assert.equal(groupAddresses.size, 4)
         assert.equal(resets, 4)
         incorrectPayerReceipt = true
         await assert.rejects(executeCollection('batch-verification', environment, root), error => {
@@ -417,6 +468,20 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
         assert.equal(balance, 0, 'The regression rejects a hidden charge even when the debit succeeds')
         assert.equal(scenario, 'default')
         incorrectPayerReceipt = false
+        partialGroupHold = true
+        await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+            assert.equal(failureDiagnostic(error).request, 19, 'A denied group reports no held credit')
+            return true
+        })
+        partialGroupHold = false
+        held = 0
+        hiddenGroupCharge = true
+        await assert.rejects(executeCollection('batch-verification', environment, root), error => {
+            assert.equal(failureDiagnostic(error).request, 20, 'A denied group never debits the balance')
+            return true
+        })
+        hiddenGroupCharge = false
+        balance = 0
         for (const status of ['queued', 'running', 'completed', 'failed', 'unavailable']) {
             statusReads = 0
             incorrectAvailabilityStatus = status
@@ -437,7 +502,7 @@ test('pinned CLI verifies duplicate accounting, fresh fixtures, safe status and 
             const diagnostic = failureDiagnostic(error)
             assert.equal(diagnostic.stage, 'collection')
             assert.equal(diagnostic.request, 2)
-            assert.equal(diagnostic.requests, 16)
+            assert.equal(diagnostic.requests, 20)
             assert.match(error.message, /raw output is withheld/)
             assert.doesNotMatch(
                 JSON.stringify(error),

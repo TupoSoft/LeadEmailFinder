@@ -29,7 +29,7 @@ export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
     'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 22, tests: 22, sandbox: 'developer', network: 'compose' }),
-    'batch-verification': Object.freeze({ requests: 16, tests: 25, sandbox: 'developer', network: 'compose' }),
+    'batch-verification': Object.freeze({ requests: 20, tests: 30, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
     'credit-purchases': Object.freeze({ requests: 34, sandbox: 'developer', network: 'host' }),
     'proxy-registry': Object.freeze({
@@ -234,7 +234,19 @@ export async function executeCollection(name, environment, checkoutRoot) {
                     mode: 0o600,
                 },
             )
-            environment = { ...environment, BATCH_DUPLICATE_ADDRESS: address, BATCH_DUPLICATE_CSV_PATH: path }
+            // Two fresh addresses need two credits; the collection prepares one so the whole group is denied.
+            const groupPath = resolve(reportDirectory, 'insufficient-group.csv')
+            await writeFile(
+                groupPath,
+                `email\nbatch-group-${randomUUID()}@evidence.lef.test\nbatch-group-${randomUUID()}@evidence.lef.test\n`,
+                { mode: 0o600 },
+            )
+            environment = {
+                ...environment,
+                BATCH_DUPLICATE_ADDRESS: address,
+                BATCH_DUPLICATE_CSV_PATH: path,
+                BATCH_INSUFFICIENT_GROUP_CSV_PATH: groupPath,
+            }
         }
         await execFileAsync(
             process.execPath,

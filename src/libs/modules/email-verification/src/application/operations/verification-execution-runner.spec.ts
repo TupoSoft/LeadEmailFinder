@@ -64,6 +64,9 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
         pageNonterminal: jest.fn(),
         pageCanceledPendingCleanup: jest.fn(),
         cancelBatchGroupUnstarted: jest.fn(),
+        claimOrJoinForBatchGroup: jest.fn(),
+        markBatchGroupQueued: jest.fn(),
+        cancelBatchGroupFundingPending: jest.fn(),
         ...overrides,
     }
 }

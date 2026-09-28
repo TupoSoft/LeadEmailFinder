@@ -1,3 +1,5 @@
+import { BatchAdmissionFence, BatchAdmissionGuardedWrite } from '../delivery/batch/batch-admission-store'
+
 export const VERIFICATION_EXECUTION_STORE = Symbol('VERIFICATION_EXECUTION_STORE')
 
 export type VerificationExecutionState =
@@ -43,6 +45,9 @@ export type ClaimAddressOutcome =
     | { readonly kind: 'joined'; readonly execution: VerificationExecutionRecord }
     | { readonly kind: 'cache-available'; readonly resultId: string }
 
+/** `stale-admission` means the batch fence no longer owns an `admitting` group, so nothing was claimed or joined. */
+export type BatchGroupClaimOutcome = ClaimAddressOutcome | { readonly kind: 'stale-admission' }
+
 export interface ExecutionFundingOwner {
     readonly type: VerificationFundingOwnerType
     readonly id: string
@@ -77,7 +82,41 @@ export interface VerificationExecutionStore {
         fundingOwner?: ExecutionFundingOwner,
     ): Promise<ClaimAddressOutcome>
 
+    /**
+     * `claimOrJoin` for a batch group, owned by `{type: 'batch_group', id: batchId}`. After the organization lock,
+     * it locks the batch group row and verifies that `fence` still owns an `admitting` group before creating or
+     * joining an execution, so an expired admission owner cannot add work after a newer generation took over.
+     */
+    claimOrJoinForBatchGroup(
+        batchId: string,
+        fence: BatchAdmissionFence,
+        organizationId: string,
+        normalizedAddress: string,
+        payerRequestId: string,
+        newExecutionId: string,
+        deadlineAt: Date,
+        isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+    ): Promise<BatchGroupClaimOutcome>
+
     findById(executionId: string, organizationId: string): Promise<VerificationExecutionRecord | null>
+
+    /** `funding_pending` -> `queued` for an execution `batchId` owns, only while `fence` owns a `funding` group whose
+     *  decision is `approved`. The group row is locked before the execution row. Idempotent once queued. */
+    markBatchGroupQueued(
+        executionId: string,
+        organizationId: string,
+        batchId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionGuardedWrite>
+
+    /** `funding_pending` -> `canceled` for an execution `batchId` owns, only while `fence` owns a `funding` group whose
+     *  decision is `denied`. Never touches a queued, running, or terminal execution. */
+    cancelBatchGroupFundingPending(
+        executionId: string,
+        organizationId: string,
+        batchId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionGuardedWrite>
 
     markQueued(executionId: string, organizationId: string): Promise<VerificationExecutionRecord>
 
@@ -118,8 +157,9 @@ export interface VerificationExecutionStore {
      *  slot. */
     cancelIfNoCaptureIntention(executionId: string, organizationId: string): Promise<VerificationExecutionRecord>
 
-    /** Pages nonterminal rows oldest-`updatedAt`-first, regardless of funding owner — the reconciler recovers a
-     *  `batch_group`-owned execution exactly like a `single`-owned one. */
+    /** Pages nonterminal rows oldest-`updatedAt`-first. A `batch_group`-owned `funding_pending` row is excluded:
+     *  batch admission recovery owns it until its group decides, so a large group cannot fill this page or be
+     *  canceled by the generic deadline path. Once queued, a batch-owned execution is reconciled like any other. */
     pageNonterminal(limit: number): Promise<readonly VerificationExecutionRecord[]>
 
     /** Pages `canceled` rows (oldest-`updatedAt`-first, any funding owner) that still have at least one linked

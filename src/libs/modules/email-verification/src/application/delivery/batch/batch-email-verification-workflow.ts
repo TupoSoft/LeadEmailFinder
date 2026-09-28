@@ -174,7 +174,10 @@ export class BatchEmailVerificationWorkflow {
         ok(job.data.step === BatchJobStep.Admit, 'Invalid step.')
 
         const { bucket, key, organizationId, credentialId } = job.data
-        await this.admissionService.admit(job.id, organizationId)
+        const advance = await this.admissionService.admit(job.id, organizationId)
+        // Busy and budget-exhausted advancements park this job exactly like pending settlement does; recovery may
+        // also advance the group meanwhile, and a later attempt observes its persisted progress.
+        if (advance.kind !== 'complete') throw new BatchAwaitingSettlementSignal(advance.retryAt.getTime())
 
         await job.updateStep({
             step: BatchJobStep.Dispatch,
