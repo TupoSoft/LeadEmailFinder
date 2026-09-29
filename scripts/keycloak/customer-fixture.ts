@@ -11,7 +11,7 @@ export const CUSTOMER_CREDIT_BALANCE = 1000
 // This is exactly MEMBER_PERMISSIONS (src/libs/modules/auth/src/application/role-permission-policy.service.ts):
 // the narrowest realistic set a customer integration would need (submit/poll verifications), deliberately
 // excluding members:manage/credentials:manage/billing:*/platform:admin.
-export const CUSTOMER_SERVICE_CLIENT_PERMISSIONS = ['verification:run', 'verification:read']
+export const CUSTOMER_SERVICE_CLIENT_PERMISSIONS = ['verification:run', 'verification:read', 'billing:read']
 // Fixed, not a random lef-svc-<uuid>: there is exactly one instance of this fixture by construction, and a
 // fixed name makes it trivially identifiable as seeded (not self-service-created) and keeps this script's own
 // find-or-create idempotent across repeated runs outside a full reset.

@@ -4,7 +4,7 @@ import { VerificationClock } from '../../ports/verification-clock'
 import { VerificationCooldownReader } from '../../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../../ports/verification-result-cache-reader'
 import { VerificationExecutionStore } from '../../ports/verification-execution-store'
-import { InsertRequestOutcome, VerificationRequestStore } from '../../ports/verification-request-store'
+import { NewVerificationRequestInput, VerificationRequestRecord, VerificationRequestStore } from '../../ports/verification-request-store'
 import { isCachedResultUsable } from '../../verification-result-cache'
 import { BatchAdmissionStore, BatchUniqueAddressRecord } from './batch-admission-store'
 
@@ -57,7 +57,7 @@ export class BatchAdmissionService {
 
         const finalAdmission = await this.admissions.findById(batchId, organizationId)
         const admitted = finalAdmission?.state === 'admitted'
-        await this.forEachAddressMissingPayerRequest(batchId, organizationId, address =>
+        await this.forEachResolvedAddress(batchId, organizationId, address =>
             this.materializeRequest(batchId, organizationId, address, admitted),
         )
     }
@@ -76,7 +76,7 @@ export class BatchAdmissionService {
         }
     }
 
-    private async forEachAddressMissingPayerRequest(
+    private async forEachResolvedAddress(
         batchId: string,
         organizationId: string,
         handle: (address: BatchUniqueAddressRecord) => Promise<void>,
@@ -85,7 +85,7 @@ export class BatchAdmissionService {
             const page = await this.admissions.pageUniqueAddresses(batchId, organizationId, skip, this.pageSize)
             if (page.length === 0) return
             for (const address of page) {
-                if (address.payerRequestId === null) await handle(address)
+                if (address.admissionKind !== null) await handle(address)
             }
         }
     }
@@ -107,6 +107,12 @@ export class BatchAdmissionService {
     }
 
     private async resolveAddress(batchId: string, organizationId: string, normalizedAddress: string): Promise<void> {
+        const payerRequestId = await this.admissions.ensurePayerRequestId(
+            batchId,
+            organizationId,
+            normalizedAddress,
+            randomUUID(),
+        )
         const now = this.clock.now()
         const isUsable = (candidate: Parameters<typeof isCachedResultUsable>[0]): boolean =>
             isCachedResultUsable(candidate, now, this.cacheTtlMs)
@@ -134,7 +140,6 @@ export class BatchAdmissionService {
             }
         }
 
-        const payerRequestId = randomUUID()
         const executionId = randomUUID()
         const deadlineAt = new Date(now.getTime() + this.executionDeadlineMs)
         const claim = await this.executions.claimOrJoin(
@@ -156,6 +161,25 @@ export class BatchAdmissionService {
             return
         }
         if (claim.kind === 'joined') {
+            // A joined execution this same batch already owns is a resumed claim, not another funder's work:
+            // the earlier attempt committed the claim but crashed before recording this outcome. The category
+            // identifies the funding owner, not whether this attempt inserted the row, so it must still be
+            // funded as `created` -- recording it as `shared` would leave it permanently unfunded.
+            if (claim.execution.fundingOwnerType === 'batch_group' && claim.execution.fundingOwnerId === batchId) {
+                if (
+                    claim.execution.organizationId !== organizationId ||
+                    claim.execution.normalizedAddress !== normalizedAddress ||
+                    claim.execution.payerRequestId !== payerRequestId
+                ) {
+                    throw new Error('batch_admission_ownership_conflict')
+                }
+                await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
+                    admissionKind: 'created',
+                    executionId: claim.execution.executionId,
+                    resultId: null,
+                })
+                return
+            }
             await this.admissions.recordAdmissionOutcome(batchId, normalizedAddress, {
                 admissionKind: 'shared',
                 executionId: claim.execution.executionId,
@@ -206,105 +230,91 @@ export class BatchAdmissionService {
         address: BatchUniqueAddressRecord,
         groupAdmitted: boolean,
     ): Promise<void> {
-        const requestId = randomUUID()
+        const requestId = address.payerRequestId ?? await this.admissions.ensurePayerRequestId(
+            batchId,
+            organizationId,
+            address.normalizedAddress,
+            randomUUID(),
+        )
+        const input = this.requestInput(requestId, organizationId, address, groupAdmitted)
+        if (!input) return
 
+        // Identity is reserved before resolution, so even a linked manifest can still need its receipt inserted.
+        const existing = await this.requests.findById(requestId, organizationId)
+        if (existing) {
+            this.assertReceiptIdentity(existing, input)
+            return
+        }
+
+        const outcome = await this.requests.insert(input)
+        if (outcome.kind === 'key-conflict') {
+            throw new Error('Unexpected idempotency-key conflict inserting a keyless batch request')
+        }
+        this.assertReceiptIdentity(outcome.record, input)
+    }
+
+    private requestInput(
+        requestId: string,
+        organizationId: string,
+        address: BatchUniqueAddressRecord,
+        groupAdmitted: boolean,
+    ): NewVerificationRequestInput | null {
+        const identity = {
+            requestId,
+            organizationId,
+            normalizedAddress: address.normalizedAddress,
+            deliveryMode: 'batch' as const,
+            clientRequestKey: null,
+        }
         switch (address.admissionKind) {
-            case 'cache': {
-                const outcome = await this.requests.insert({
-                    requestId,
-                    organizationId,
-                    normalizedAddress: address.normalizedAddress,
-                    deliveryMode: 'batch',
-                    clientRequestKey: null,
-                    source: 'cache',
+            case 'cache':
+            case 'cooldown':
+                return {
+                    ...identity,
+                    source: address.admissionKind,
                     executionId: null,
                     resultId: address.resultId,
                     reservedCount: 0,
                     billingState: 'settled',
-                    finalReason: 'cached',
-                })
-                await this.recordPayerRequestId(batchId, address, outcome)
-                return
-            }
-            case 'cooldown': {
-                const outcome = await this.requests.insert({
-                    requestId,
-                    organizationId,
-                    normalizedAddress: address.normalizedAddress,
-                    deliveryMode: 'batch',
-                    clientRequestKey: null,
-                    source: 'cooldown',
-                    executionId: null,
-                    resultId: address.resultId,
-                    reservedCount: 0,
-                    billingState: 'settled',
-                    finalReason: 'inconclusive',
-                })
-                await this.recordPayerRequestId(batchId, address, outcome)
-                return
-            }
-            case 'shared': {
-                const outcome = await this.requests.insert({
-                    requestId,
-                    organizationId,
-                    normalizedAddress: address.normalizedAddress,
-                    deliveryMode: 'batch',
-                    clientRequestKey: null,
+                    finalReason: address.admissionKind === 'cache' ? 'cached' : 'inconclusive',
+                }
+            case 'shared':
+                return {
+                    ...identity,
                     source: 'shared',
                     executionId: address.executionId,
                     resultId: null,
                     reservedCount: 0,
                     billingState: 'pending',
                     finalReason: null,
-                })
-                await this.recordPayerRequestId(batchId, address, outcome)
-                return
-            }
-            case 'created': {
-                const outcome = groupAdmitted
-                    ? await this.requests.insert({
-                          requestId,
-                          organizationId,
-                          normalizedAddress: address.normalizedAddress,
-                          deliveryMode: 'batch',
-                          clientRequestKey: null,
-                          source: 'fresh',
-                          executionId: address.executionId,
-                          resultId: null,
-                          reservedCount: 1,
-                          billingState: 'pending',
-                          finalReason: null,
-                      })
-                    : await this.requests.insert({
-                          requestId,
-                          organizationId,
-                          normalizedAddress: address.normalizedAddress,
-                          deliveryMode: 'batch',
-                          clientRequestKey: null,
-                          source: 'fresh',
-                          executionId: null,
-                          resultId: null,
-                          reservedCount: 0,
-                          billingState: 'settled',
-                          finalReason: 'failed',
-                      })
-                await this.recordPayerRequestId(batchId, address, outcome)
-                return
-            }
+                }
+            case 'created':
+                return {
+                    ...identity,
+                    source: 'fresh',
+                    executionId: groupAdmitted ? address.executionId : null,
+                    resultId: null,
+                    reservedCount: groupAdmitted ? 1 : 0,
+                    billingState: groupAdmitted ? 'pending' : 'settled',
+                    finalReason: groupAdmitted ? null : 'failed',
+                }
             case null:
-                return
+                return null
         }
     }
 
-    private async recordPayerRequestId(
-        batchId: string,
-        address: BatchUniqueAddressRecord,
-        outcome: InsertRequestOutcome,
-    ): Promise<void> {
-        // Batch never supplies a `clientRequestKey`, so `insert()` can only ever report `inserted` here.
-        if (outcome.kind === 'key-conflict') {
-            throw new Error('Unexpected idempotency-key conflict inserting a keyless batch request')
+    private assertReceiptIdentity(record: VerificationRequestRecord, input: NewVerificationRequestInput): void {
+        if (
+            record.requestId !== input.requestId ||
+            record.organizationId !== input.organizationId ||
+            record.normalizedAddress !== input.normalizedAddress ||
+            record.deliveryMode !== input.deliveryMode ||
+            record.clientRequestKey !== input.clientRequestKey ||
+            record.source !== input.source ||
+            record.executionId !== input.executionId ||
+            ((input.source === 'cache' || input.source === 'cooldown') && record.resultId !== input.resultId)
+        ) {
+            throw new Error('batch_request_identity_conflict')
         }
-        await this.admissions.recordPayerRequestId(batchId, address.normalizedAddress, outcome.record.requestId)
     }
 }

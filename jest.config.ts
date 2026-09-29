@@ -16,6 +16,9 @@ const config: Config = {
     // first it would collapse any deep import under that path down to the bare mapped directory,
     // silently discarding the rest of the specifier.
     moduleNameMapper: {
+        // NodeNext packages (e.g. apps/mcp-server) require explicit .js extensions on relative
+        // imports even though the source files are .ts; strip the extension so Jest resolves them.
+        '^(\\.{1,2}/.*)\\.js$': '$1',
         '@tuposoft/lead-email-finder/redis/(.*)': '<rootDir>/src/libs/redis/src/$1',
         '@tuposoft/lead-email-finder/keycloak-admin-http/(.*)': '<rootDir>/src/libs/keycloak-admin-http/src/$1',
         '@tuposoft/lead-email-finder/socket/(.*)': '<rootDir>/src/libs/socket/src/$1',

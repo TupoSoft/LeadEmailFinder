@@ -186,6 +186,7 @@ const browserCommands: Record<(typeof browserWorkers)[number], string[]> = {
     'browser-live': [
         'corepack pnpm test:gateway',
         'corepack pnpm dev:reset -- --confirm-project=LEF',
+        'corepack pnpm test:mcp-server-live',
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
         `${webCommand} browser-fixtures:bootstrap`,
@@ -300,14 +301,28 @@ const preservedCommands: Record<string, string[]> = {
 
 describe('Validate workflow syntax and structure', () => {
     it.each(['validate.yml', 'sync-execplans.yml'])(
-        '%s routes every job to the ARC scale set',
+        '%s routes every job to the shared ARC runner pool',
         (file) => {
             const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))
             for (const job of Object.values(declared.jobs)) {
-                expect(job['runs-on']).toBe('tuposoft-pc-wsl')
+                expect(job['runs-on']).toBe('tuposoft-ci')
             }
         },
     )
+
+    it('passes the shared runner label to the reusable build workflow', () => {
+        const documents = parseAllDocuments(readFileSync(resolve(root, '.github/workflows/build.yml'), 'utf8'))
+        expect(documents).toHaveLength(1)
+        expect(documents[0].errors).toEqual([])
+        const declared: unknown = documents[0].toJS()
+        if (!isRecord(declared) || !isRecord(declared.jobs) || !isRecord(declared.jobs['build-push'])) {
+            throw new Error('Expected a reusable build job.')
+        }
+        const build = declared.jobs['build-push']
+        expect(build.uses).toBe('TupoSoft/GitHubActions/.github/workflows/build-push.yml@master')
+        expect(build.with).toEqual({ runner: 'tuposoft-ci' })
+        expect(build['runs-on']).toBeUndefined()
+    })
 
     it.each(['images', 'browser-live'])('%s provisions Compose before starting Docker builds or services', (id) => {
         const steps = workflow.jobs[id].steps
@@ -391,7 +406,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-pc-wsl')
+            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-ci')
         }
     })
 
@@ -527,7 +542,7 @@ describe('Validate workflow syntax and structure', () => {
 
     it.each([
         ['repository-policy', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
-        ['backend', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
+        ['backend', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile'],
         ['contract', 'api', 'corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile'],
         ['web', 'web', 'corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile'],
         ...browserWorkers.map((id) => [id, 'workspace', 'corepack pnpm install --frozen-lockfile'] as const),
@@ -593,6 +608,7 @@ describe('Validate workflow syntax and structure', () => {
                 ['Dockerfile', 'lead-email-finder:ci', 'lef-production'],
                 ['docker/Dockerfile', 'lead-email-finder-api:frontend-06', 'lef-api'],
                 ['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web'],
+                ['docker/mcp-server.Dockerfile', 'lead-email-finder-mcp-server:frontend-06', 'lef-mcp-server'],
             ]
             : [['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web']]
         expect(setups).toHaveLength(1)
@@ -744,10 +760,16 @@ describe('Validate workflow syntax and structure', () => {
             && step.with?.tags === 'lead-email-finder-web:frontend-06')
         expect(webBuildIndex).toBeGreaterThanOrEqual(0)
         expect(commands.indexOf('corepack pnpm test:gateway')).toBeGreaterThan(webBuildIndex)
-        for (const run of browserCommands['browser-live'].slice(2)) {
+        const devResetCommand = command('corepack pnpm dev:reset -- --confirm-project=LEF')
+        const devResetIndex = browserCommands['browser-live'].map(command).indexOf(devResetCommand)
+        expect(devResetIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(devResetIndex + 1)) {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
         }
-        for (const run of browserCommands['browser-live'].slice(5)) {
+        const bootstrapCommand = command(`${webCommand} browser-fixtures:bootstrap`)
+        const bootstrapIndex = browserCommands['browser-live'].map(command).indexOf(bootstrapCommand)
+        expect(bootstrapIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(bootstrapIndex + 1)) {
             before(`${webCommand} browser-fixtures:bootstrap`, run)
         }
         for (const run of [
@@ -863,7 +885,7 @@ describe('browser workspace build reuse', () => {
     })
 
     it.each([
-        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts'],
+        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts'],
         ['test:a11y', 'playwright test tests/e2e/accessibility.spec.ts'],
         ['test:visual', 'playwright test tests/e2e/visual.spec.ts'],
     ])('%s retains its selectors and builds before delegating to the prebuilt suite', (suite, selector) => {

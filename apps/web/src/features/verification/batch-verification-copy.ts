@@ -72,7 +72,7 @@ export const batchVerificationCopy = {
         failed: {
             title: 'Batch verification failed',
             description:
-                'Processing could not finish. Review the confirmed charges below. Download any available results, or refresh the status for an update.',
+                'Processing could not finish. Review the confirmed charges below. Results are unavailable for this failed batch. Refresh the status for an update.',
         },
         unavailable: {
             title: 'Batch verification unavailable',
@@ -93,7 +93,7 @@ export const batchVerificationCopy = {
         processing_failed: {
             title: 'Batch processing failed',
             description:
-                'Processing could not finish. Review the confirmed charges below. Download any available results, or refresh the status for an update.',
+                'Processing could not finish. Review the confirmed charges below. Results are unavailable for this failed batch. Refresh the status for an update.',
         },
     },
     download: 'Download result CSV',

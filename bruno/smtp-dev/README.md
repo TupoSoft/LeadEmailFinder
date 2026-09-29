@@ -5,9 +5,8 @@ and restores it without restarting the fixture. Requests 08–14 prove that `POS
 balance and, for a successful `201` request, exposes the reservation and its outcome in the response's own
 `operation.billing` block. Both requests use the dedicated `sync-credit-check@lef.test` address, distinct from
 `person@lef.test` and never resubmitted elsewhere in this collection. This fixture domain accepts every recipient,
-including the catch-all control probe used to detect it, so every verification of any `@lef.test` address (this
-one and `person@lef.test` alike) is classified inconclusive: the reservation is released, not captured, and the
-balance after a successful `201` is unchanged rather than debited. Only the scenario-selectable
+including the catch-all control probe. Every verification of an `@lef.test` address is therefore classified as
+inconclusive. The reservation is released, and the balance after a successful `201` remains unchanged. Only the scenario-selectable
 `@evidence.lef.test` fixture used by requests 31–46 can produce a genuinely conclusive, chargeable result. Between
 adding that credit and sending the POST request, an authenticated request to the retired `GET /verify` route
 returns the API's normal `404`, and an immediate balance read confirms that the credit remains available. Later
@@ -27,9 +26,9 @@ completed result with its own persisted verification UUID and a `settled`/`fresh
 The next completed-status read must return the same result. Requests 25–30 confirm that enqueue reserves one
 credit that the same inconclusive-by-construction result then releases, conceal a missing job with `404`, reject
 a malformed job UUID with `400`, and require authentication for status with `401`. The last of these requests
-resets the balance to zero explicitly, then rejects enqueue at zero balance with `402` for the
-never-before-verified `async-credit-check-zero@lef.test` address — a fresh address so the check exercises the
-zero-balance admission path rather than the 60-second address cooldown a just-settled address would still carry.
+resets the balance to zero explicitly, then rejects enqueue with `402` for `async-credit-check-zero@lef.test`.
+This address has never been verified, so the check exercises admission at zero balance. It avoids the 60-second
+cooldown that would apply to an address whose verification had just settled.
 The final balance stays at zero after that reset and the rejected request. Permission rejection
 and foreign-job concealment use isolated principals in the async HTTP integration suite; this collection uses the
 provisioned platform credential.
@@ -47,12 +46,11 @@ target `250` after a conclusively missing control produces `accepted_email`, and
 `550 5.1.1` produces `rejected_email`. They also prove the identical `550 5.1.1` at `MAIL FROM` instead produces
 `unexpected_error`, never a false negative; a bare `550` and a `554 5.7.1` both remain ineligible generic
 failures; and an accepted target survives the fixture closing the connection before it answers `QUIT`. A temporary
-`450` schedules a durable retry instead of settling immediately — its 60-second first backoff does not fit the
-synchronous route's 30-second budget, so it falls back to the same `202` handle the async route would return,
-leaving that one reservation pending rather than captured. Only the target's own exact missing-recipient proof and
-an accepted target with a conclusively missing control are ever conclusive; a bare rejection, an ambiguous
-rejection, and a `MAIL FROM` rejection are all inconclusive by the same policy that keeps `rejected_email` itself
-strict, so their reservations are released rather than captured. A final balance read confirms exactly one credit
+`450` schedules a durable retry. Its 60-second first backoff exceeds the synchronous route's 30-second budget,
+so the response returns the same `202` handle as the async route. That reservation remains pending.
+Only the target's exact missing-recipient proof or an accepted target with a conclusively missing control counts
+as conclusive evidence. Bare rejections, ambiguous rejections, and `MAIL FROM` rejections remain inconclusive;
+their reservations are released. A final balance read confirms exactly one credit
 was captured for each of these three conclusive scenarios, with three more released as inconclusive and the
 temporary-rejection scenario still reserved and awaiting the reconciler's own retry cadence. Existing credit
 assertions in requests 01–30 remain accurate for this
@@ -85,13 +83,15 @@ way.
 Start the fixture from the repository root:
 
 ```shell
-pnpm dev:reset -- --confirm-project=LEF
-docker compose -f docker/compose.yaml down
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
 
-`dev:reset` provisions Keycloak and seeds the platform service credential before the overlay bind-mounts the
-generated `.dev/keycloak/service-client.json` file. If the file is missing, the overlay fails without creating a
+The base stack must already be provisioned. For fresh disposable data, run
+`pnpm dev:reset -- --confirm-project=LEF` first; it deletes development data, provisions Keycloak, and seeds the
+platform service credential before the overlay mounts the generated `.dev/keycloak/service-client.json` file.
+The overlay leaves the base network unchanged and adds a separate fixture network, so no `down` is needed.
+For a stack created by an older overlay, first follow the [network recovery instructions](../../docker/README.md#recover-an-older-smtp-network).
+If the credentials file is missing, the overlay fails without creating a
 directory in its place. Provisioning also repairs an empty directory left by older Compose configurations, while
 refusing to remove a nonempty directory.
 

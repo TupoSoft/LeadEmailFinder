@@ -1,0 +1,42 @@
+info:
+  name: 02-initialize-without-origin
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/mcp"
+  auth:
+    type: basic
+    username: "{{clientId}}"
+    password: "{{clientSecret}}"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Accept
+      value: application/json, text/event-stream
+  body:
+    type: json
+    data: |-
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": { "name": "bruno", "version": "0.0.0" }
+        }
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('a native client that sends no Origin header can initialize', function() {
+          expect(res.status).to.equal(200);
+          var text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
+          var dataLine = text.split('\n').filter(function(line) { return line.indexOf('data: ') === 0; })[0];
+          var payload = JSON.parse(dataLine.slice('data: '.length));
+          expect(payload.result.serverInfo.name).to.equal('@tuposoft/lead-email-finder-mcp-server');
+        });

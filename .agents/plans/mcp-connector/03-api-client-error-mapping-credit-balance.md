@@ -16,15 +16,49 @@ inventing its own.
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-20) Added `apps/mcp-server/src/lef-api/{client,errors}.ts` and their specs, and
+      `apps/mcp-server/src/tools/check-credit-balance.ts` (+ spec), registered in `create-server.ts` in place
+      of `ping`.
+- [x] (2026-09-20) Threaded `apiBaseUrl` through `CreateAppOptions`/`main.ts` (new required `API_URL`
+      environment variable, fail-fast like `OIDC_BACKCHANNEL_URL`), and widened
+      `CUSTOMER_SERVICE_CLIENT_PERMISSIONS` to include `billing:read`.
+- [x] (2026-09-20) Ran focused and full test suites, live-validated `check_credit_balance` against a real
+      dev-stack organization, and reran two existing Bruno suites depending on the customer fixture. Recorded
+      results below.
 
 ## Plan dependencies
 
 - `mcp-connector/02`
+- `mcp-connector-hardening/01`
 
 ## Surprises & Discoveries
 
-None yet.
+- Retiring `ping` broke every existing spec that called it through the real `create-server.ts` (`create-server.spec.ts`,
+  `main.spec.ts`'s routing/auth-gate/crash-regression suites, `request-origin.integration.spec.ts`). Suites whose
+  actual subject is routing, origin gating, or the auth gate itself — not any particular tool's behavior — now
+  substitute a trivial local `probe`/`echo-token` server via the same `jest.mock('./create-server.js', ...)`
+  pattern already established, instead of depending on `check_credit_balance`'s own upstream API. Only
+  `main.spec.ts`'s crash regression (a real forked, unmocked process) and the new `check-credit-balance.spec.ts`
+  exercise the real tool.
+- `apps/mcp-server`'s existing "one shared bearer-token function per request" design (`extra.authInfo?.token`,
+  populated by `main.ts`'s auth gate before dispatch) made `LefApiClient`'s injected `getAccessToken` trivial: a
+  tool handler just wraps the already-resolved token as `() => Promise.resolve(token)` and constructs a fresh
+  `LefApiClient` per call. It never needs to call back into `TokenCache` itself, since the secret was never
+  retained past the original grant.
+- `web`'s Nginx (`docker/web.Dockerfile`/`docker/web/nginx.conf`) proxies `/v1/*` (and the other customer-facing
+  path prefixes) straight through to `api`; `api` itself publishes no host port (`docker/compose.yaml` only
+  `expose`s it internally). Confirmed directly rather than assumed: a bare host process reaches the real API
+  through the *published `web` endpoint* (`loadDevelopmentStack`'s `apiUrl`), the same way Bruno and
+  browser-live fixtures already do — not through any `api`-specific URL.
+- Live-verified `check_credit_balance` returns byte-identical JSON to a direct `GET /v1/billing/summary` call
+  using the same freshly-minted bearer token against the real dev-stack organization.
+- `scripts/keycloak/customer-fixture.ts`'s `service_credentials` upsert (`ON CONFLICT ... DO UPDATE SET
+  permissions = EXCLUDED.permissions`) means widening `CUSTOMER_SERVICE_CLIENT_PERMISSIONS` and rerunning
+  `pnpm keycloak:seed-customer-fixture` updates the already-seeded credential's permissions in place — no
+  recreation or `dev:reset` was needed. `scripts/bruno/customer-billing-read-fixture.mjs`'s existing
+  `withBillingReadForCustomerFixture` (used by the `credit-purchases` collection) already guards for "the
+  fixture already has `billing:read`" and becomes a no-op in that case, so the widening needed no changes there.
+  Reran `bruno:credit-purchases` (34/34) and `bruno:async-verification` (22/22) live to confirm.
 
 ## Decision Log
 
@@ -48,14 +82,33 @@ None yet.
   to live-validate a `billing:read`-gated endpoint against the shared dev-stack customer fixture; deferring the
   widening to plan 07 would leave this plan's own acceptance criteria unverifiable end-to-end.
   Date/Author: 2026-09-16, Codex planning.
+- Decision: Read the real API's base URL from `API_URL`, required with no default (fail-fast before opening a
+  listener, mirroring `OIDC_BACKCHANNEL_URL`). Rationale: `API_URL` is already an established convention for "the
+  callable API base URL from a host process" elsewhere in this repository's own dev-stack tooling
+  (`scripts/keycloak/owned-browser-seed-stack.ts`, `scripts/testing/dev-reset.test.mjs`); reusing it avoids
+  inventing a second name for the same concept. Date/Author: 2026-09-20, implementation.
+- Decision: Construct a fresh `LefApiClient` inside each tool call, not once per `createServer()` invocation.
+  Rationale: `createServer()` runs before the request body is parsed, so the per-request bearer token
+  (`extra.authInfo.token`) is not yet available at that point; only the tool callback itself has it.
+  Date/Author: 2026-09-20, implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered exactly the scope this plan described: a hand-typed `LefApiClient` with one shared `mapUpstreamError`
+covering all six documented status codes plus the unmapped/network-failure fallback, and one real tool,
+`check_credit_balance`, replacing the scaffold's placeholder `ping`. Live-validated end to end against a real
+dev-stack organization (byte-identical to a direct API call) and confirmed the additive permission widening left
+two existing, customer-fixture-dependent Bruno suites passing unmodified. This is now the shared client/error
+foundation `mcp-connector/04` and `05` extend with their own methods.
 
 ## Context and Orientation
 
 All paths below are repository-relative.
+
+This plan now also depends on `mcp-connector-hardening/01`, which corrects `mcp-connector/02`'s token-cache
+identity (binding cache entries to the complete presented credential, not the client ID alone, closing a secret-
+bypass gap). `LefApiClient`'s injected token accessor must be backed by that corrected cache, not the original
+ID-only one, before this plan is implemented.
 
 `GET /v1/billing/summary` (owned by `src/libs/modules/credits`, see its README) requires `billing:read` and
 returns `{balance: number, reserved: number, available: number}` for the caller's own organization (resolved from
@@ -71,11 +124,16 @@ context notes say it currently covers `verification:run`/`verification:read` onl
 itself rather than trusting this note, since it may have changed since this plan was written.
 
 The connector's known error surfaces, per `src/libs/modules/email-verification/README.md` and
-`src/libs/modules/credits/README.md`: `401` (missing/invalid bearer — code `authentication_required`), `402`
-(insufficient credits, thrown by `CreditGuard`), `404` (not found / foreign organization concealment), `422`
-(request validation failure, e.g. malformed email or CSV), `429` (`VerificationRateLimitGuard`, includes a
-`Retry-After` header), `503` (`rate_limit_unavailable`, the limiter's own fail-safe outage response). Any other
-status or a network-level throw (connection refused, timeout, DNS failure) is an unexpected upstream error.
+`src/libs/modules/credits/README.md`: `400` (single-request validation failure, e.g. malformed email or an
+invalid UUID lookup parameter — code `validation_failed`, corrected by `mcp-connector-hardening/02`, which
+originally miscategorized this as `422`), `401` (missing/invalid bearer — code `authentication_required`), `402`
+(insufficient credits, thrown by `CreditGuard`), `403` (an authenticated credential missing a required
+permission — code `permission_denied`, added by `mcp-connector-hardening/02`), `404` (not found / foreign
+organization concealment), `422` (batch CSV upload validation failure — missing file, invalid media type, or
+oversized upload; also mapped to `validation_failed`, the same code as `400`), `429`
+(`VerificationRateLimitGuard`, includes a `Retry-After` header), `503` (`rate_limit_unavailable`, the limiter's
+own fail-safe outage response). Any other status or a network-level throw (connection refused, timeout, DNS
+failure) is an unexpected upstream error.
 
 ## Scope and Non-Goals
 
@@ -89,7 +147,9 @@ not add Docker/Compose wiring.
 Create `apps/mcp-server/src/lef-api/errors.ts` exporting a `mapUpstreamError(response: Response, body: unknown):
 UpstreamError` function and its `UpstreamError` type (`{code: 'authentication_required' | 'insufficient_credits' |
 'not_found' | 'validation_failed' | 'rate_limited' | 'service_unavailable' | 'unexpected_upstream_error', message:
-string, retryAfterSeconds?: number}`), mapping each documented status to its code with a short, fixed,
+string, retryAfterSeconds?: number}` — `mcp-connector-hardening/02` later adds `'permission_denied'` for `403`
+and a `400 -> validation_failed` mapping this original text omitted), mapping each documented status to its code
+with a short, fixed,
 non-parameterized message per code (never interpolating the raw upstream body into the message) and extracting
 `retryAfterSeconds` only from the `429`/`503` cases' `Retry-After` header when present. Export a second helper for
 mapping a thrown network/transport error (never a `Response`) to `unexpected_upstream_error` without inspecting
@@ -132,9 +192,10 @@ Depends on `mcp-connector/02`'s per-request access token. Establishes the client
 
 ## Acceptance Criteria
 
-- `getBillingSummary` on a fake `fetch` returning each of `200`/`401`/`402`/`404`/`422`/`429`/`503`/an unmapped
-  `5xx`/a thrown network error produces the correct success value or the correct `UpstreamError` code in every
-  case, and the `429`/`503` cases surface `retryAfterSeconds` when the fake response includes `Retry-After`.
+- `getBillingSummary` on a fake `fetch` returning each of `200`/`400`/`401`/`402`/`403`/`404`/`422`/`429`/`503`/an
+  unmapped `5xx`/a thrown network error produces the correct success value or the correct `UpstreamError` code
+  in every case (`mcp-connector-hardening/02` adds the `400`/`403` cases this original text omitted), and the
+  `429`/`503` cases surface `retryAfterSeconds` when the fake response includes `Retry-After`.
 - No test assertion's mapped error message contains the literal fixture body used to simulate the failure.
 - `check_credit_balance` called through the connector with a valid credential returns real
   `{balance, reserved, available}` values.

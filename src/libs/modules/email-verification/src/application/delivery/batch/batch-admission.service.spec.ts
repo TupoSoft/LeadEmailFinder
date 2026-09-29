@@ -2,8 +2,14 @@ import { CreditReservationService, InsufficientCreditsException } from '@tuposof
 import { VerificationClock } from '../../ports/verification-clock'
 import { VerificationCooldownReader } from '../../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../../ports/verification-result-cache-reader'
-import { ClaimAddressOutcome, ExecutionFundingOwner, VerificationExecutionStore } from '../../ports/verification-execution-store'
-import { InsertRequestOutcome, NewVerificationRequestInput, VerificationRequestStore } from '../../ports/verification-request-store'
+import {
+    CachedResultCandidate,
+    ClaimAddressOutcome,
+    ExecutionFundingOwner,
+    VerificationExecutionRecord,
+    VerificationExecutionStore,
+} from '../../ports/verification-execution-store'
+import { InsertRequestOutcome, NewVerificationRequestInput, VerificationRequestRecord, VerificationRequestStore } from '../../ports/verification-request-store'
 import {
     BatchAdmissionRecord,
     BatchAdmissionState,
@@ -55,8 +61,8 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
         return Promise.resolve({ kind: 'created', record: this.admission })
     }
 
-    findById(id: string, _organizationId: string): Promise<BatchAdmissionRecord | null> {
-        return Promise.resolve(this.admission && this.admission.batchId === id ? this.admission : null)
+    findById(id: string, ownerId: string): Promise<BatchAdmissionRecord | null> {
+        return Promise.resolve(this.admission && this.admission.batchId === id && this.admission.organizationId === ownerId ? this.admission : null)
     }
 
     findByClientKey(): Promise<BatchAdmissionRecord | null> {
@@ -90,10 +96,14 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
         return Promise.resolve()
     }
 
-    recordPayerRequestId(id: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
+    ensurePayerRequestId(id: string, ownerId: string, normalizedAddress: string, candidateId: string): Promise<string> {
         const index = this.addresses.findIndex(address => address.batchId === id && address.normalizedAddress === normalizedAddress)
-        if (index >= 0) this.addresses[index] = { ...this.addresses[index], payerRequestId }
-        return Promise.resolve()
+        if (!this.admission || this.admission.organizationId !== ownerId || index < 0) {
+            throw new Error('batch_address_not_found')
+        }
+        const payerRequestId = this.addresses[index].payerRequestId ?? candidateId
+        this.addresses[index] = { ...this.addresses[index], payerRequestId }
+        return Promise.resolve(payerRequestId)
     }
 
     snapshot(): readonly BatchUniqueAddressRecord[] {
@@ -119,6 +129,62 @@ class FakeBatchAdmissionStore implements BatchAdmissionStore {
     }
 }
 
+/**
+ * Retains committed claims across calls, keyed by `(organizationId, normalizedAddress)` -- the real store's own
+ * one-nonterminal-execution-per-address invariant -- so a second `claimOrJoin` call for an address this same
+ * batch already committed returns `joined` with the *original* execution identity, exactly like the real store
+ * would after a crash between the claim commit and this address's own outcome write. A scripted one-shot mock
+ * return value cannot prove this: it would hide exactly the recovery path this plan exists to fix.
+ */
+class FakeExecutionClaimStore {
+    private readonly claims = new Map<string, VerificationExecutionRecord>()
+
+    claimOrJoin(
+        organizationId: string,
+        normalizedAddress: string,
+        payerRequestId: string,
+        newExecutionId: string,
+        deadlineAt: Date,
+        _isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+        fundingOwner?: ExecutionFundingOwner,
+    ): Promise<ClaimAddressOutcome> {
+        const key = `${organizationId}:${normalizedAddress}`
+        const existing = this.claims.get(key)
+        if (existing) return Promise.resolve({ kind: 'joined', execution: existing })
+
+        const execution: VerificationExecutionRecord = {
+            executionId: newExecutionId,
+            organizationId,
+            normalizedAddress,
+            payerRequestId,
+            state: 'funding_pending',
+            fundingOwnerType: fundingOwner?.type ?? 'single',
+            fundingOwnerId: fundingOwner?.id ?? newExecutionId,
+            attemptGeneration: 0,
+            leaseOwnerId: null,
+            leaseExpiresAt: null,
+            resultId: null,
+            retryAt: null,
+            deadlineAt,
+            createdAt: now,
+            updatedAt: now,
+        }
+        this.claims.set(key, execution)
+        return Promise.resolve({ kind: 'created', execution })
+    }
+
+    markQueued(executionId: string, organizationId: string): Promise<VerificationExecutionRecord> {
+        for (const [key, execution] of this.claims) {
+            if (execution.executionId === executionId && execution.organizationId === organizationId) {
+                const queued = { ...execution, state: 'queued' as const }
+                this.claims.set(key, queued)
+                return Promise.resolve(queued)
+            }
+        }
+        throw new Error('unknown execution')
+    }
+}
+
 describe('BatchAdmissionService', () => {
     let admissions: FakeBatchAdmissionStore
     let executions: jest.Mocked<VerificationExecutionStore>
@@ -129,10 +195,12 @@ describe('BatchAdmissionService', () => {
     let clock: VerificationClock
     let service: BatchAdmissionService
     let insertedRequests: NewVerificationRequestInput[]
+    let storedRequests: Map<string, VerificationRequestRecord>
 
     beforeEach(() => {
         admissions = new FakeBatchAdmissionStore()
         insertedRequests = []
+        storedRequests = new Map()
         executions = {
             claimOrJoin: jest.fn(),
             findById: jest.fn(),
@@ -149,28 +217,22 @@ describe('BatchAdmissionService', () => {
         requests = {
             findByClientKey: jest.fn(),
             insert: jest.fn((input: NewVerificationRequestInput): Promise<InsertRequestOutcome> => {
+                const existing = storedRequests.get(input.requestId)
+                if (existing) return Promise.resolve({ kind: 'replayed', record: existing })
                 insertedRequests.push(input)
-                return Promise.resolve({
-                    kind: 'inserted',
-                    record: {
-                        requestId: input.requestId,
-                        organizationId: input.organizationId,
-                        normalizedAddress: input.normalizedAddress,
-                        deliveryMode: input.deliveryMode,
-                        clientRequestKey: input.clientRequestKey,
-                        executionId: input.executionId,
-                        resultId: input.resultId,
-                        source: input.source,
-                        billingState: input.billingState,
-                        reservedCount: input.reservedCount,
-                        chargedCount: 0,
-                        finalReason: input.finalReason,
-                        createdAt: now,
-                        settledAt: null,
-                    },
-                })
+                const record: VerificationRequestRecord = {
+                    ...input,
+                    chargedCount: 0,
+                    createdAt: now,
+                    settledAt: null,
+                }
+                storedRequests.set(input.requestId, record)
+                return Promise.resolve({ kind: 'inserted', record })
             }),
-            findById: jest.fn(),
+            findById: jest.fn((requestId, ownerId) => {
+                const record = storedRequests.get(requestId)
+                return Promise.resolve(record?.organizationId === ownerId ? record : null)
+            }),
             attachExecution: jest.fn(),
             settleCanceled: jest.fn(),
         }
@@ -266,6 +328,11 @@ describe('BatchAdmissionService', () => {
         expect(byAddress.get('cached@example.test')).toMatchObject({ source: 'cache', billingState: 'settled', finalReason: 'cached', reservedCount: 0, resultId: 'result-cache' })
         expect(byAddress.get('cooldown@example.test')).toMatchObject({ source: 'cooldown', billingState: 'settled', finalReason: 'inconclusive', reservedCount: 0, resultId: 'result-cooldown' })
         expect(byAddress.get('shared@example.test')).toMatchObject({ source: 'shared', billingState: 'pending', reservedCount: 0, executionId: 'execution-shared' })
+        for (const address of admissions.snapshot()) {
+            expect(address.payerRequestId).toBe(byAddress.get(address.normalizedAddress)?.requestId)
+        }
+        expect(executions.claimOrJoin.mock.calls[0][2]).toBe(byAddress.get('shared@example.test')?.requestId)
+        expect(byAddress.get('shared@example.test')?.requestId).not.toBe('other-request')
     })
 
     it('reserves and dispatches every newly created execution as one atomic group', async () => {
@@ -302,6 +369,8 @@ describe('BatchAdmissionService', () => {
         expect(executions.markQueued).toHaveBeenCalledTimes(1)
         expect((await admissions.findById(batchId, organizationId))?.state).toBe('admitted')
         expect(insertedRequests[0]).toMatchObject({ source: 'fresh', billingState: 'pending', reservedCount: 1 })
+        expect(insertedRequests[0].requestId).toBe(admissions.snapshot()[0].payerRequestId)
+        expect(insertedRequests[0].requestId).toBe(executions.claimOrJoin.mock.calls[0][2])
     })
 
     it('fences the whole group as insufficient credits without funding any created execution', async () => {
@@ -335,6 +404,7 @@ describe('BatchAdmissionService', () => {
         expect(executions.markQueued).not.toHaveBeenCalled()
         expect((await admissions.findById(batchId, organizationId))?.state).toBe('insufficient_credits')
         expect(insertedRequests[0]).toMatchObject({ source: 'fresh', billingState: 'settled', finalReason: 'failed', reservedCount: 0 })
+        expect(insertedRequests[0].requestId).toBe(executions.claimOrJoin.mock.calls[0][2])
     })
 
     it('resumes materializing requests on a retry after the group already reached a terminal admission state', async () => {
@@ -366,5 +436,253 @@ describe('BatchAdmissionService', () => {
         await service.admit(batchId, organizationId)
 
         expect(insertedRequests).toHaveLength(1)
+    })
+    it('reserves an identity before resolution and retains it after an interrupted lookup', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+        cacheReader.findLatestCandidate.mockImplementationOnce(() => {
+            expect(admissions.snapshot()[0].payerRequestId).not.toBeNull()
+            return Promise.reject(new Error('lookup interrupted'))
+        }).mockResolvedValue({
+            resultId: 'result-cache',
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 1,
+        })
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('lookup interrupted')
+        const reservedId = admissions.snapshot()[0].payerRequestId
+        expect(requests.insert).not.toHaveBeenCalled()
+
+        await service.admit(batchId, organizationId)
+
+        expect(admissions.snapshot()[0].payerRequestId).toBe(reservedId)
+        expect(insertedRequests).toHaveLength(1)
+        expect(insertedRequests[0].requestId).toBe(reservedId)
+    })
+
+    it('materializes an allocated identity after insertion failed without resolving the address again', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+        cacheReader.findLatestCandidate.mockResolvedValue({
+            resultId: 'result-cache',
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 1,
+        })
+        requests.insert.mockRejectedValueOnce(new Error('insertion interrupted'))
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('insertion interrupted')
+        const reservedId = admissions.snapshot()[0].payerRequestId
+        expect(reservedId).not.toBeNull()
+        expect(storedRequests.size).toBe(0)
+        // A later result must not replace the result already selected by this admission.
+        cacheReader.findLatestCandidate.mockResolvedValue({
+            resultId: 'newer-result-cache',
+            verificationQuality: 'conclusive_positive',
+            evidenceObservedAt: now,
+            evidencePolicyVersion: 1,
+        })
+
+        await service.admit(batchId, organizationId)
+
+        expect(cacheReader.findLatestCandidate).toHaveBeenCalledTimes(1)
+        expect(requests.insert).toHaveBeenCalledTimes(2)
+        expect(insertedRequests).toEqual([expect.objectContaining({ requestId: reservedId, resultId: 'result-cache' })])
+    })
+
+    it('preserves a settled owned receipt when insertion committed before an interrupted response', async () => {
+        seedAdmission('admitted', [{ normalizedAddress: 'created@example.test', firstSeenRow: 1 }])
+        const requestId = await admissions.ensurePayerRequestId(batchId, organizationId, 'created@example.test', 'payer-request')
+        await admissions.recordAdmissionOutcome(batchId, 'created@example.test', {
+            admissionKind: 'created',
+            executionId: 'owned-execution',
+            resultId: null,
+        })
+        const insert = requests.insert.getMockImplementation()!
+        requests.insert.mockImplementationOnce(async input => {
+            await insert(input)
+            throw new Error('insertion response interrupted')
+        })
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('insertion response interrupted')
+        const settled: VerificationRequestRecord = {
+            ...storedRequests.get(requestId)!,
+            resultId: 'conclusive-result',
+            billingState: 'settled',
+            reservedCount: 0,
+            chargedCount: 1,
+            finalReason: 'conclusive',
+            settledAt: now,
+        }
+        storedRequests.set(requestId, settled)
+
+        await service.admit(batchId, organizationId)
+
+        expect(requests.insert).toHaveBeenCalledTimes(1)
+        expect(storedRequests.size).toBe(1)
+        expect(storedRequests.get(requestId)).toBe(settled)
+        expect(admissions.snapshot()[0].payerRequestId).toBe(requestId)
+        expect(executions.claimOrJoin).not.toHaveBeenCalled()
+        expect(credits.reserveMany).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['request UUID', { requestId: 'different-request' }],
+        ['organization', { organizationId: 'different-organization' }],
+        ['address', { normalizedAddress: 'different@example.test' }],
+        ['delivery mode', { deliveryMode: 'async' }],
+        ['client key', { clientRequestKey: 'different-client-key' }],
+        ['source', { source: 'shared' }],
+        ['execution', { executionId: 'different-execution' }],
+        ['cache result', { resultId: 'different-result' }],
+    ] as const)('rejects an existing receipt with a conflicting %s without inserting', async (_field, mismatch) => {
+        seedAdmission('admitted', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+        const requestId = await admissions.ensurePayerRequestId(batchId, organizationId, 'cached@example.test', 'payer-request')
+        await admissions.recordAdmissionOutcome(batchId, 'cached@example.test', {
+            admissionKind: 'cache',
+            executionId: null,
+            resultId: 'result-cache',
+        })
+        const conflicting: VerificationRequestRecord = {
+            requestId,
+            organizationId,
+            normalizedAddress: 'cached@example.test',
+            deliveryMode: 'batch',
+            clientRequestKey: null,
+            source: 'cache',
+            executionId: null,
+            resultId: 'result-cache',
+            billingState: 'settled',
+            reservedCount: 0,
+            chargedCount: 0,
+            finalReason: 'cached',
+            createdAt: now,
+            settledAt: now,
+            ...mismatch,
+        }
+        requests.findById.mockResolvedValue(conflicting)
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('batch_request_identity_conflict')
+
+        expect(requests.findById).toHaveBeenCalledWith(requestId, organizationId)
+        expect(requests.insert).not.toHaveBeenCalled()
+        expect(admissions.snapshot()[0].payerRequestId).toBe(requestId)
+    })
+
+    it('replays the same receipt when concurrent materializers both observe it as missing', async () => {
+        seedAdmission('admitted', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+        const requestId = await admissions.ensurePayerRequestId(batchId, organizationId, 'cached@example.test', 'payer-request')
+        await admissions.recordAdmissionOutcome(batchId, 'cached@example.test', {
+            admissionKind: 'cache',
+            executionId: null,
+            resultId: 'result-cache',
+        })
+        requests.findById.mockResolvedValue(null)
+
+        await Promise.all([service.admit(batchId, organizationId), service.admit(batchId, organizationId)])
+
+        expect(requests.insert).toHaveBeenCalledTimes(2)
+        expect(requests.insert.mock.calls.every(([input]) => input.requestId === requestId)).toBe(true)
+        expect(insertedRequests).toHaveLength(1)
+        expect(storedRequests.size).toBe(1)
+    })
+
+    it('rejects a mismatched receipt returned by an insertion replay', async () => {
+        seedAdmission('admitted', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+        await admissions.recordAdmissionOutcome(batchId, 'cached@example.test', {
+            admissionKind: 'cache',
+            executionId: null,
+            resultId: 'result-cache',
+        })
+        requests.insert.mockImplementationOnce(input => Promise.resolve({
+            kind: 'replayed',
+            record: {
+                ...input,
+                requestId: 'different-request',
+                chargedCount: 0,
+                createdAt: now,
+                settledAt: now,
+            },
+        }))
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('batch_request_identity_conflict')
+    })
+
+    it('rejects a foreign organization before assigning or resolving an address', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'cached@example.test', firstSeenRow: 1 }])
+
+        await expect(service.admit(batchId, 'different-organization')).rejects.toThrow('not found')
+
+        expect(admissions.snapshot()[0].payerRequestId).toBeNull()
+        expect(cacheReader.findLatestCandidate).not.toHaveBeenCalled()
+        expect(requests.findById).not.toHaveBeenCalled()
+        expect(requests.insert).not.toHaveBeenCalled()
+    })
+
+    it('resumes its own interrupted claim as created, funding the original execution exactly once', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'resumed@example.test', firstSeenRow: 1 }])
+        const fakeClaims = new FakeExecutionClaimStore()
+        executions.claimOrJoin.mockImplementation((...args) => fakeClaims.claimOrJoin(...args))
+        executions.markQueued.mockImplementation((executionId, ownerId) => fakeClaims.markQueued(executionId, ownerId))
+        // Simulate a crash between the real claim commit (already reflected in `fakeClaims`) and this
+        // address's own outcome write -- the exact interruption window this plan recovers.
+        jest.spyOn(admissions, 'recordAdmissionOutcome').mockImplementationOnce(() => Promise.reject(new Error('outcome write interrupted')))
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('outcome write interrupted')
+        expect(executions.claimOrJoin).toHaveBeenCalledTimes(1)
+        expect(admissions.snapshot()[0].admissionKind).toBeNull()
+        const payerRequestId = admissions.snapshot()[0].payerRequestId
+        expect(payerRequestId).not.toBeNull()
+
+        await service.admit(batchId, organizationId)
+
+        expect(executions.claimOrJoin).toHaveBeenCalledTimes(2)
+        const [, , firstPayerRequestId] = executions.claimOrJoin.mock.calls[0]
+        const [, , secondPayerRequestId] = executions.claimOrJoin.mock.calls[1]
+        expect(secondPayerRequestId).toBe(firstPayerRequestId)
+        const resumed = admissions.snapshot()[0]
+        expect(resumed.admissionKind).toBe('created')
+        expect(resumed.executionId).not.toBeNull()
+        expect(credits.reserveMany).toHaveBeenCalledTimes(1)
+        expect(credits.reserveMany).toHaveBeenCalledWith(organizationId, [{ operationId: resumed.executionId, amount: 1 }])
+        expect(executions.markQueued).toHaveBeenCalledTimes(1)
+        expect(executions.markQueued).toHaveBeenCalledWith(resumed.executionId, organizationId)
+        expect(insertedRequests).toHaveLength(1)
+        expect(insertedRequests[0]).toMatchObject({
+            requestId: payerRequestId,
+            source: 'fresh',
+            executionId: resumed.executionId,
+            reservedCount: 1,
+            billingState: 'pending',
+        })
+    })
+
+    it('fails before recording an outcome or funding anything when a resumed claim reports a mismatched identity', async () => {
+        seedAdmission('validating', [{ normalizedAddress: 'resumed@example.test', firstSeenRow: 1 }])
+        executions.claimOrJoin.mockResolvedValue({
+            kind: 'joined',
+            execution: {
+                executionId: 'stale-execution',
+                organizationId,
+                normalizedAddress: 'resumed@example.test',
+                payerRequestId: 'a-different-payer-request',
+                state: 'funding_pending',
+                fundingOwnerType: 'batch_group',
+                fundingOwnerId: batchId,
+                attemptGeneration: 0,
+                leaseOwnerId: null,
+                leaseExpiresAt: null,
+                resultId: null,
+                retryAt: null,
+                deadlineAt: now,
+                createdAt: now,
+                updatedAt: now,
+            },
+        })
+
+        await expect(service.admit(batchId, organizationId)).rejects.toThrow('batch_admission_ownership_conflict')
+
+        expect(admissions.snapshot()[0].admissionKind).toBeNull()
+        expect(credits.reserveMany).not.toHaveBeenCalled()
+        expect(executions.markQueued).not.toHaveBeenCalled()
     })
 })

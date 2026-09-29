@@ -71,7 +71,7 @@ describe('BatchEmailVerificationWorkflow', () => {
             insertUniqueAddresses: jest.fn(),
             pageUniqueAddresses: jest.fn().mockResolvedValue([]),
             recordAdmissionOutcome: jest.fn(),
-            recordPayerRequestId: jest.fn(),
+            ensurePayerRequestId: jest.fn(),
             countUnsettledAddresses: jest.fn().mockResolvedValue(0),
             getStatusCounts: jest.fn(),
         }

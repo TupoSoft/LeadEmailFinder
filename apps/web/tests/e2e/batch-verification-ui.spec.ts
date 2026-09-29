@@ -107,16 +107,43 @@ for (const [failureCode, title] of [
         page.on('request', request => {
             if (request.method() === 'POST') posts++
         })
-        await context.route(`**/verifyBatch/${id}`, route =>
-            route.fulfill({ json: snapshot('failed', { failureCode }) }),
-        )
+        let reads = 0
+        const errors: string[] = []
+        page.on('pageerror', () => errors.push('pageerror'))
+        page.on('console', message => {
+            if (message.type() === 'error') errors.push('console error')
+        })
+        await context.route(`**/verifyBatch/${id}`, route => {
+            reads++
+            return route.fulfill({
+                json: snapshot('failed', {
+                    failureCode,
+                    ...(failureCode === 'processing_failed'
+                        ? { billing: { state: 'settled', reserved: 80, charged: 30 } }
+                        : {}),
+                }),
+            })
+        })
         await page.goto(`/app/verifications/batches/${id}`)
         await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
-        if (failureCode === 'processing_failed')
-            await expect(page.getByText(/Review the confirmed charges below/)).toBeVisible()
+        await expect(page).toHaveTitle(`${title} | Lead Email Finder`)
+        await expect(page.getByRole('button', { name: 'Download result CSV', exact: true })).toHaveCount(0)
+        if (failureCode === 'processing_failed') {
+            await expect(page.getByText(/Results are unavailable for this failed batch/)).toBeVisible()
+            await expect(page.getByLabel('Verification charges', { exact: true })).toContainText('30 credits charged')
+            const before = reads
+            const refresh = page.getByRole('button', { name: 'Refresh status', exact: true })
+            await refresh.focus()
+            await refresh.press('Enter')
+            await expect.poll(() => reads).toBe(before + 1)
+            await expect(refresh).toHaveAttribute('aria-busy', 'false')
+            await expect(refresh).toBeFocused()
+            await expect(page.getByRole('button', { name: 'Download result CSV', exact: true })).toHaveCount(0)
+        }
         if (failureCode === 'insufficient_credits')
             await expect(page.getByRole('link', { name: 'Go to billing', exact: true })).toBeVisible()
         await accessible(page)
+        expect(errors).toEqual([])
         expect(posts).toBe(0)
     })
 }

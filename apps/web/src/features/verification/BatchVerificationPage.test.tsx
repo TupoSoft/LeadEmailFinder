@@ -551,7 +551,7 @@ describe('batch job status and recovery', () => {
             expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(canReadBilling ? 1 : 0)
         },
     )
-    it('reports exact row accounting and settled charges for a partial failure with downloadable results', async () => {
+    it('preserves exact row accounting and settled charges when a failed batch has no downloadable results', async () => {
         renderBatch({
             path: jobRoute,
             intercept: request =>
@@ -560,6 +560,7 @@ describe('batch job status and recovery', () => {
                           ...completed,
                           status: 'failed',
                           failureCode: 'processing_failed',
+                          resultsAvailable: false,
                           counts: {
                               ...zeroCounts,
                               totalRows: 100,
@@ -583,7 +584,8 @@ describe('batch job status and recovery', () => {
             expect(screen.getByText(label).nextElementSibling).toHaveTextContent(value)
         }
         expect(screen.getByText('45 credits charged')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Download result CSV' })).toBeEnabled()
+        expect(screen.queryByRole('button', { name: 'Download result CSV' })).not.toBeInTheDocument()
+        expect(screen.getByText(/Results are unavailable for this failed batch/)).toBeInTheDocument()
         expect(screen.getByText(/retains every original row, including duplicates/)).toBeInTheDocument()
         expect(screen.queryByText('No credits charged')).not.toBeInTheDocument()
     })

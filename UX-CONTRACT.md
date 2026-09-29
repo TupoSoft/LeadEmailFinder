@@ -483,7 +483,7 @@ file, multipart body, filename, or downloaded CSV enters shared caches, persiste
 | Upload CSV | Disable duplicate submission and replacement; indeterminate Uploading CSV | Open the returned batch UUID route | Associate a rejected file with correction guidance; clear selection |
 | Uncertain upload | Never retry the POST automatically | No invented job link | Explain possible job creation and charging; require acknowledgment and fresh selection |
 | Read batch | Shared five-second polling with at most sixty checks | Show exact server progress and counts | Pause when hidden or offline; retain stale values and offer manual refresh |
-| Terminal status | Stop automatic polling | The server’s `resultsAvailable` flag enables result download, including a partial failure | Failure uses a safe code; unavailable makes no outcome or charging claim |
+| Terminal status | Stop automatic polling | The server’s `resultsAvailable` flag enables result download only for eligible completed jobs | Failure uses a safe code; unavailable makes no outcome or charging claim |
 | Download result | Disable duplicate activation during the authenticated GET | Start the CSV download and revoke its object URL | Retry only the GET; a later 404 renders Result no longer available |
 
 `ProgressIndicator` owns determinate and indeterminate semantics. Job progress uses the finite server value without
@@ -493,7 +493,9 @@ Completion is announced once. A missing or foreign job uses the same non-disclos
 
 Invalid CSV offers correction through a fresh selection. Insufficient credits links to billing only with
 `billing.read`, otherwise it advises contacting an organization owner. Generic processing failure preserves the
-confirmed charge when supplied and otherwise leaves the amount unknown. Unavailable states and download errors
+confirmed charge when supplied and otherwise leaves the amount unknown. Failed batches report no downloadable
+results, including failures after settlement; failure copy explains that the results are unavailable. This follows
+`.agents/plans/batch-verification-hardening/06-report-downloadable-results.md`. Unavailable states and download errors
 never trigger another upload. There is no
 batch history, cancellation, resumption, automatic retry, or browser result preview.
 

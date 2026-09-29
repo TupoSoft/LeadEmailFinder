@@ -109,11 +109,15 @@ class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
         return Promise.resolve()
     }
 
-    recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
+    ensurePayerRequestId(batchId: string, organizationId: string, normalizedAddress: string, candidateId: string): Promise<string> {
         const list = this.addresses.get(batchId) ?? []
         const index = list.findIndex(address => address.normalizedAddress === normalizedAddress)
-        if (index >= 0) list[index] = { ...list[index], payerRequestId }
-        return Promise.resolve()
+        if (this.admissions.get(batchId)?.organizationId !== organizationId || index < 0) {
+            return Promise.reject(new Error('batch_address_not_found'))
+        }
+        const payerRequestId = list[index].payerRequestId ?? candidateId
+        list[index] = { ...list[index], payerRequestId }
+        return Promise.resolve(payerRequestId)
     }
 
     countUnsettledAddresses(batchId: string): Promise<number> {

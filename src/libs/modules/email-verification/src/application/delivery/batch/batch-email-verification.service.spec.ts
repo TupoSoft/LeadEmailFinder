@@ -2,7 +2,7 @@ import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import { VerificationTraceObserver } from '../../verification-trace/verification-trace-observer'
 import { BatchJobStep } from '../../../domain/batch-job'
-import { BatchJobHandle, BatchJobs } from './batch-jobs'
+import { BatchJobHandle, BatchJobs, BatchVerificationSnapshot } from './batch-jobs'
 import { BatchResultReader } from './batch-result-reader'
 import { BatchAdmissionStore } from './batch-admission-store'
 import { BatchEmailVerificationJobNotFoundException } from './job-not-found.exception'
@@ -47,7 +47,7 @@ describe('BatchEmailVerificationService', () => {
             insertUniqueAddresses: jest.fn(),
             pageUniqueAddresses: jest.fn(),
             recordAdmissionOutcome: jest.fn(),
-            recordPayerRequestId: jest.fn(),
+            ensurePayerRequestId: jest.fn(),
             countUnsettledAddresses: jest.fn(),
             getStatusCounts: jest.fn(),
         }
@@ -138,6 +138,106 @@ describe('BatchEmailVerificationService', () => {
     })
 
     describe('getBatchStatus', () => {
+        it.each(['validating', 'admitting', 'admitted', 'insufficient_credits', 'invalid'] as const)(
+            'does not offer results for a failed batch with %s admission, even after settlement',
+            async state => {
+                const id = randomUUID()
+                const job = handle({
+                    data: {
+                        organizationId,
+                        step: BatchJobStep.UploadResults,
+                        bucket: 'b',
+                        key: 'k',
+                        credentialId: 'c',
+                    },
+                    readStatus: jest.fn().mockResolvedValue({ state: 'failed', failureCode: 'processing_failed' }),
+                    counts: jest.fn().mockResolvedValue({ processed: 2, unprocessed: 0 }),
+                })
+                jobs.find.mockResolvedValue(job)
+                admissions.findById.mockResolvedValue({
+                    batchId: id,
+                    organizationId,
+                    state,
+                    totalRows: 3,
+                    uniqueAddressCount: 2,
+                    clientRequestKey: null,
+                    contentDigest: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                })
+                admissions.getStatusCounts.mockResolvedValue({
+                    cachedAddresses: 0,
+                    sharedAddresses: 0,
+                    cooldownAddresses: 0,
+                    completedAddresses: 2,
+                    conclusiveAddresses: 1,
+                    inconclusiveAddresses: 1,
+                    failedAddresses: 0,
+                    reserved: 0,
+                    charged: 1,
+                })
+
+                await expect(service.getBatchStatus(id, organizationId)).resolves.toMatchObject({
+                    status: 'failed',
+                    resultsAvailable: false,
+                    counts: { totalRows: 3, uniqueAddresses: 2, duplicateRows: 1, completedAddresses: 2 },
+                    billing: { state: 'settled', reserved: 0, charged: 1 },
+                })
+                expect(job.readStatus).toHaveBeenCalledTimes(1)
+                expect(jobs.find).toHaveBeenCalledTimes(1)
+                await expect(service.getBatchResults(id, organizationId)).rejects.toThrow(
+                    BatchEmailVerificationJobNotFoundException,
+                )
+                expect(resultReader.read).not.toHaveBeenCalled()
+            },
+        )
+
+        it.each<{ snapshot: BatchVerificationSnapshot; status: string; available: boolean }>([
+            { snapshot: { state: 'queued', resultLocation: 's3://b/k' }, status: 'queued', available: false },
+            { snapshot: { state: 'running', resultLocation: 's3://b/k' }, status: 'running', available: false },
+            { snapshot: { state: 'failed', resultLocation: 's3://b/k' }, status: 'failed', available: false },
+            { snapshot: { state: 'unavailable', resultLocation: 's3://b/k' }, status: 'unavailable', available: false },
+            { snapshot: { state: 'completed' }, status: 'unavailable', available: false },
+            { snapshot: { state: 'completed', resultLocation: '' }, status: 'unavailable', available: false },
+            { snapshot: { state: 'completed', resultLocation: 's3://b/k' }, status: 'completed', available: true },
+        ])(
+            'reports $status with resultsAvailable=$available for $snapshot',
+            async ({ snapshot, status, available }) => {
+                const id = randomUUID()
+                const job = handle({
+                    data: {
+                        organizationId,
+                        step: BatchJobStep.UploadResults,
+                        bucket: 'b',
+                        key: 'k',
+                        credentialId: 'c',
+                    },
+                    readStatus: jest.fn().mockResolvedValue(snapshot),
+                })
+                jobs.find.mockResolvedValue(job)
+
+                await expect(service.getBatchStatus(id, organizationId)).resolves.toMatchObject({
+                    status,
+                    resultsAvailable: available,
+                })
+                expect(job.readStatus).toHaveBeenCalledTimes(1)
+                expect(jobs.find).toHaveBeenCalledTimes(1)
+                expect(resultReader.read).not.toHaveBeenCalled()
+
+                if (available) {
+                    const stream = Readable.from(['email\nexample@example.test\n'])
+                    resultReader.read.mockResolvedValue(stream)
+                    await expect(service.getBatchResults(id, organizationId)).resolves.toBe(stream)
+                    expect(resultReader.read).toHaveBeenCalledWith(snapshot.resultLocation)
+                } else {
+                    await expect(service.getBatchResults(id, organizationId)).rejects.toThrow(
+                        BatchEmailVerificationJobNotFoundException,
+                    )
+                    expect(resultReader.read).not.toHaveBeenCalled()
+                }
+            },
+        )
+
         it('throws BatchEmailVerificationJobNotFoundException when the job does not exist', async () => {
             jobs.find.mockResolvedValueOnce(undefined)
 

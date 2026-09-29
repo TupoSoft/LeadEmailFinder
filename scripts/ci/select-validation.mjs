@@ -28,7 +28,7 @@ const schemaPolicyInputs = new Set([
     'src/libs/modules/bff-session/src/application/browser-capability-policy.ts',
     'src/libs/modules/auth/src/application/service-client-grant-policy.ts',
 ])
-const backendPrefixes = ['src/', 'config/', 'deploy/', 'bruno/', '__mocks__/', 'scripts/testing/', 'scripts/bruno/']
+const backendPrefixes = ['src/', 'config/', 'deploy/', 'bruno/', '__mocks__/', 'scripts/testing/', 'scripts/bruno/', 'apps/mcp-server/']
 
 function consumersForPath(path) {
     if (webInputs.has(path)) return ['web', 'images', 'browser']

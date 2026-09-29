@@ -9,10 +9,10 @@ Synchronous verification uses `POST /verify`; the retired `GET /verify` returns 
 
 - Synchronous verification (`POST /verify`), with permission checks and a one-credit debit.
 - Asynchronous, job-based verification (`POST /verifyAsync` / `GET /verifyAsync/:id`).
-- CSV batch verification (`POST /verifyBatch/csv`, status polling, and durable result download): each unique
-  normalized address is admitted and probed once, reserving and charging at most one credit per unique address
-  regardless of duplicate rows, driven through the same durable admission/execution/settlement stack as single
-  verification, with an S3-backed result file preserving every original row.
+- CSV batch verification (`POST /verifyBatch/csv`, status polling, and durable result download). Each unique
+  normalized address is admitted once and probed once. The batch reserves and charges at most one credit per
+  unique address regardless of duplicate rows. It uses the same durable admission/execution/settlement stack as
+  single verification, with an S3-backed result file preserving every original row.
 - Domain and email persistence used to cache verification results and avoid rechecking the same address.
 - Organization-owned result lookup by verification UUID (`GET /verifications/:id`).
 - The SMTP verification engine itself: MX resolution, catch-all detection, and proxy-leased SMTP connections that require certificate-verified STARTTLS before either envelope address is sent.
@@ -173,7 +173,7 @@ persistence entities with TypeORM, builds every application service and port thr
 `verification-billing/05` removed `AsyncEmailVerificationModule` (the queue-only module that existed solely to
 give batch's old per-row child dispatch a worker) along with the `async-email-verification` queue's role in
 single/batch submission entirely — `EmailVerificationOrchestrator`, its `VerificationStore` port, and
-`DomainPolicyService`'s verification-time enforcement therefore have no remaining caller. They stay wired here
+verification-time enforcement by `DomainPolicyService` therefore have no remaining caller. They stay wired here
 deliberately (removing them is a distinct, larger decision — see the `verification-billing/05` ExecPlan's Decision
 Log for the recommended follow-up) rather than being deleted as an unplanned side effect of this change.
 
@@ -235,35 +235,61 @@ exact spelling and one-based position) and the set of unique normalized addresse
 freezing the batch's own `BatchAdmissionEntity` manifest row. `Admit` calls the new `BatchAdmissionService`
 (below). `Dispatch` pages `admissionKind: 'created'` addresses and calls `VerificationExecutionDispatcher.dispatch()`
 for each (the same dispatcher/queue single verification uses — idempotent, safe to repeat). `AwaitSettlement`
-polls `BatchAdmissionStore.countUnsettledAddresses()`; while addresses remain unsettled it raises the
-framework-free `BatchAwaitingSettlementSignal(retryAtMs)`, which the thin `BatchEmailVerificationProcessor` under
-`infrastructure/queues/batch-verification/` translates into `job.moveToDelayed()` + `DelayedError` — the same
-retry-scheduling idiom `VerificationExecutionProcessor` uses, and for the same reason (re-adding a job with the
-same ID while the attempt is still `active` is a silent BullMQ no-op). `BullBatchJobs` implements `BatchJobs`,
+polls `BatchAdmissionStore.countUnsettledAddresses()`. While addresses remain unsettled, it raises the
+framework-free `BatchAwaitingSettlementSignal(retryAtMs)`. The thin `BatchEmailVerificationProcessor` under
+`infrastructure/queues/batch-verification/` translates this signal into `job.moveToDelayed()` + `DelayedError`.
+`VerificationExecutionProcessor` uses the same retry-scheduling approach: re-adding a job with the same ID while
+its attempt is still `active` is a silent BullMQ no-op. `BullBatchJobs` implements `BatchJobs`,
 sourcing its `counts()` from the durable admission manifest (`uniqueAddressCount` minus unsettled) rather than a
-BullMQ parent/child dependency count, since cached/shared/cooldown addresses have no queue child of their own.
+BullMQ parent/child dependency count. Addresses resolved through cache reuse, shared execution, or a cooldown
+period have no queue child of their own.
 The old per-row `BullBatchChildFlow`/`BatchChildFlow` child-dispatch mechanism, the `async-email-verification`
 queue's role in batch, and the workflow's own upfront `CreditsService.debit()` are gone — replaced entirely by the
 admission/dispatch/settlement flow below.
 
 **`BatchAdmissionService`** (`application/delivery/batch/batch-admission.service.ts`) admits every unique address
-in one validated upload atomically. For each address (paged) it checks the cache/cooldown exactly like single
-verification's `VerificationAdmissionService`, then calls `VerificationExecutionStore.claimOrJoin(...,
+in one validated upload. Before resolving each address, it reserves an immutable receipt UUID through the
+organization-scoped `BatchAdmissionStore.ensurePayerRequestId()`. Concurrent assignments return the stored winner.
+It checks cache freshness and the address cooldown period exactly like single verification's
+`VerificationAdmissionService`, then calls `VerificationExecutionStore.claimOrJoin(...,
 {type: 'batch_group', id: batchId})` — the same method single verification uses, now accepting an optional
 funding-owner override (default `{type: 'single', id: newExecutionId}`, unchanged behavior for single
 verification). Every admission (single or batch) is additionally serialized per organization by a transaction-
-scoped `pg_advisory_xact_lock(hashtext(organizationId))` inside `claimOrJoin`'s own transaction, so a batch upload
+scoped `pg_advisory_xact_lock(hashtext(organizationId))` inside the transaction used by `claimOrJoin()`, so a batch upload
 freezing its manifest cannot race a concurrent single-verification submission for one of the same addresses. Once
 every address is resolved, it collects the `created` addresses' execution IDs and reserves them **all at once**
 through `CreditReservationService.reserveMany()` — one atomic, all-or-nothing group reservation, not one credit
-per address. On success it `markQueued()`s each; on `InsufficientCreditsException` it `cancelFundingFailure()`s
-each and calls `closeAdmissionMany()` with the same item list, fencing the whole group without funding any of it.
+per address. On success, it calls `markQueued()` for each execution. On `InsufficientCreditsException`, it calls
+`cancelFundingFailure()` for each execution and `closeAdmissionMany()` with the same item list, fencing the whole
+group without funding any of it.
 Only then does it materialize one `VerificationRequestStore` row per unique address (`deliveryMode: 'batch'`),
-mirroring `VerificationAdmissionService`'s own per-outcome shape (`cache`/`cooldown` → free and immediately
+matching the per-outcome shape used by `VerificationAdmissionService` (`cache`/`cooldown` → free and immediately
 settled; `shared` → zero-reserved follower; `created` → `reservedCount: 1` if the group funded, or a free
 `finalReason: 'failed'` row if it didn't). Every step is idempotent on retry: `admit()` reentering after the
 group already reached `admitted`/`insufficient_credits` skips straight to materializing any request row a prior,
-interrupted attempt never reached.
+interrupted attempt never reached. An assigned `payerRequestId` identifies the intended receipt; it does not prove
+that the receipt has been inserted. The materialization pass reads every resolved address's receipt by UUID and
+organization, validates its immutable identity, and creates it when absent. An owned execution receives that same
+UUID as its payer, while a shared execution keeps its original payer and the batch receives a free follower.
+
+A crash between `claimOrJoin()` committing a new execution and this address's own outcome write leaves that
+execution real but unrecorded in the manifest. A retry's `claimOrJoin()` call for the same address then reports
+`joined`, not `created`, since the slot is already occupied — but when the returned execution's funding owner is
+this same batch, that is a resumed claim from the interrupted attempt, not another funder's work. The resolver
+classifies it as `created`, reusing the execution's own committed ID and payer request UUID (never a fresh
+candidate), so the address is still funded exactly once. A mismatch between that execution's organization,
+address, or payer identity and this manifest's own record is a fixed internal invariant violation, never a new
+reservation. An execution owned by a genuinely different funder — a different batch or a single verification
+request — is unaffected and still resolves as `shared`.
+
+After the existing client-key lookup, every request insertion protects the receipt UUID with conflict-safe
+create-or-replay semantics. Compatible UUID replay preserves source, result association, settlement state,
+financial counts, and timestamps. Conflicting organization, address, delivery mode, client key, source, or execution
+identity fails as an internal invariant violation. This also protects batch receipts from an incompatible single
+request or a new client key. Normal single-verification and client-key behavior remains unchanged; conflicting
+UUID reuse is now rejected. Cache and cooldown receipts retain the result recorded in the manifest even if a newer
+result appears later. The batch adapter no longer exposes an overwrite operation for payer UUIDs. Interrupted
+execution-claim and funding recovery remain separate hardening tasks.
 
 `VerificationExecutionStore.pageNonterminal`/`pageCanceledPendingCleanup` no longer exclude `batch_group`-owned
 rows — the existing `VerificationReconciler` recovers a batch-owned execution (crash recovery, lease takeover,
@@ -274,27 +300,29 @@ for terminal batch-upload failure fencing. `VerificationRequestSource` gained `'
 free prior-inconclusive row path (single verification's own `admit()` returns `address-cooldown` before any
 request row exists, so it never produces this source).
 
-New persistence (`infrastructure/persistence/typeorm/`, adapters in `infrastructure/persistence/`):
-`BatchAdmissionEntity` (`batch_admissions`, PK `batchId` — the same ID as the BullMQ job) holds the manifest's
-own state (`validating|admitting|admitted|insufficient_credits|invalid`), row/address counts, and (reserved for a
-future Idempotency-Key pass) `clientRequestKey`/`contentDigest`; `BatchUniqueAddressEntity`
-(`batch_unique_addresses`, unique on `(batchId, normalizedAddress)`) is the immutable per-address manifest —
-`admissionKind`, `executionId`, `resultId`, `payerRequestId`, `firstSeenRow` — and doubles as the exact reservation
-list (`admissionKind = 'created'` rows) with no separate list stored; `BatchRowEntity` (`batch_rows`, unique on
+Persistence entities live in `infrastructure/persistence/typeorm/`, with adapters in `infrastructure/persistence/`.
+`BatchAdmissionEntity` (`batch_admissions`, PK `batchId` — the same ID as the BullMQ job) holds the manifest state
+(`validating|admitting|admitted|insufficient_credits|invalid`) and row/address counts. It also reserves
+`clientRequestKey`/`contentDigest` for a future Idempotency-Key feature. `BatchUniqueAddressEntity`
+(`batch_unique_addresses`, unique on `(batchId, normalizedAddress)`) is the immutable per-address manifest:
+`admissionKind`, `executionId`, `resultId`, `payerRequestId`, and `firstSeenRow`. Its `admissionKind = 'created'` rows
+also form the exact reservation list; no separate list is stored. `BatchRowEntity` (`batch_rows`, unique on
 `(batchId, sourceRow)`) is the ordered, duplicate-preserving original-row registry. `TypeOrmBatchAdmissionStore`/
 `TypeOrmBatchRowStore` implement the corresponding `BatchAdmissionStore`/`BatchRowStore` ports.
 
 Batch status shares the async application's five public states: `queued`, `running`, `completed`, `failed`, and
 `unavailable`. A completed batch without a valid stored result location is `unavailable`. Only failed jobs expose
 `failureCode`: `invalid_csv`, `insufficient_credits`, or `processing_failed`; this generic failure makes no claim
-about whether credits were charged. `GetBatchStatusResponseDto` additionally exposes `resultsAvailable` (true once
-settled row accounting is downloadable, including a terminal failure past validation whose output publication
-kept failing), `counts` (`totalRows`, `uniqueAddresses`, `duplicateRows`, and per-address
-`cached`/`shared`/`cooldown`/`completed`/`conclusive`/`inconclusive`/`failed` counts — the last three counted only
-among `created` addresses, since `cache`/`shared`/`cooldown` are stable admission-time categories, not
-double-counted into them), and `billing` (`state`, `reserved`, `charged` summed across the batch's own payer
-requests). `BatchAdmissionStore.getStatusCounts()` computes the per-address aggregate in one query;
-`countUnsettledAddresses()` backs both `AwaitSettlement`'s poll and the `billing.state` derivation.
+about whether credits were charged. `GetBatchStatusResponseDto` exposes `resultsAvailable`, `counts`,
+and `billing`. `resultsAvailable` is true only for a completed job with a valid retained result location, using
+the same pure application rule as the download route. Failed jobs report false even after billing settles or
+result publication fails. Status polling performs no storage request; later object loss can still make download
+return `404`, and infrastructure failures retain their existing error response. `counts` includes `totalRows`,
+`uniqueAddresses`, `duplicateRows`, and per-address `cached`/`shared`/`cooldown`/`completed`/`conclusive`/`inconclusive`/`failed`
+counts. The last three count only `created` addresses; `cache`/`shared`/`cooldown` are stable admission-time
+categories and are not counted again. `billing` includes `state` and the `reserved`/`charged` totals across the
+batch's own payer requests. `BatchAdmissionStore.getStatusCounts()` computes the per-address aggregate in one query;
+`countUnsettledAddresses()` backs both the `AwaitSettlement` poll and the `billing.state` derivation.
 
 The rewritten `S3BatchResultWriter` streams a join across `BatchRowEntity` (ordered by `sourceRow`) →
 `BatchUniqueAddressEntity` (by `normalizedAddress`) → the settled `VerificationRequestEntity`/`EmailVerificationEntity`
@@ -446,7 +474,7 @@ person attribution; verification and durable finding workflows remain separate w
 | -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `verification-execution`  | `VerificationExecutionModule`                                | `VerificationExecutionProcessor` — the shared execution dispatch queue for single verification (sync/async) and, since `verification-billing/05`, batch's `created` addresses too |
 | `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` delegates to the pure `BatchEmailVerificationWorkflow`, a `Validate → Admit → Dispatch → AwaitSettlement → UploadResults → Finish` state machine driven by durable admission/execution/settlement state, not a BullMQ parent/child fan-out |
-| `verification-reconciliation` | `VerificationReconciliationModule` (one repeatable job every 30 seconds, scheduled via `OnApplicationBootstrap`) | `VerificationReconciliationProcessor` delegates to `VerificationReconciler.reconcile()` — this module's first periodic queue, and the only dispatcher for `queued`/due-`awaiting_retry` executions, single or batch-owned |
+| `verification-reconciliation` | `VerificationReconciliationModule` (one repeatable job every 30 seconds, scheduled via `OnApplicationBootstrap`) | `VerificationReconciliationProcessor` delegates to `VerificationReconciler.reconcile()`. This is the module's first periodic queue. It is the only dispatcher for both single and batch-owned executions in `queued` or due `awaiting_retry` states |
 
 ## Persistence
 
@@ -459,7 +487,7 @@ person attribution; verification and durable finding workflows remain separate w
 | `VerificationRequestEntity` | `verification_requests` | UUID request ID; partial unique index on `(organizationId, clientRequestKey)` where the key is not null; durable record of one caller submission |
 | `VerificationExecutionEntity` | `verification_executions` | UUID execution ID; partial unique index on `(organizationId, normalizedAddress)` for nonterminal states — at most one live execution per address |
 | `VerificationSettlementIntentionEntity` | `verification_settlement_intentions` | UUID execution ID as primary key — enforces at most one settlement intention, ever, per execution |
-| `BatchAdmissionEntity` | `batch_admissions` | UUID batch ID (same as the BullMQ job ID) as primary key; one row per upload's admission manifest |
+| `BatchAdmissionEntity` | `batch_admissions` | UUID batch ID (same as the BullMQ job ID) as primary key; one admission manifest row per upload |
 | `BatchUniqueAddressEntity` | `batch_unique_addresses` | Unique on `(batchId, normalizedAddress)`; the immutable per-address admission manifest, also the exact reservation list (`admissionKind = 'created'` rows) |
 | `BatchRowEntity` | `batch_rows` | Unique on `(batchId, sourceRow)`; the ordered, duplicate-preserving original CSV row registry |
 
@@ -560,7 +588,9 @@ Focused tests are grouped by behavior:
   `BatchAwaitingSettlementSignal`, invalid-row and dispatch-failure classification, and completion tracing —
   entirely against fake ports
 - **Batch public status**: `application/delivery/batch/batch-verification-status.spec.ts` covers all application
-  snapshots, missing result locations, safe failure fallbacks, successful retries, and unknown future states.
+  snapshots, shared download eligibility, missing result locations, safe failure fallbacks, successful retries,
+  and unknown future states. Service, queue adapter, and HTTP tests verify agreement between the availability
+  flag and download eligibility, including upload failure after settlement, without probing storage during polling.
 - **Batch HTTP**: `api/http/batch-verification/batch-email-verification.controller.spec.ts`,
   `api/http/batch-verification/batch-verification-http.integration.spec.ts`, and
   `api/http/batch-verification/batch-verification.openapi.spec.ts` cover multipart validation, safe status
@@ -577,14 +607,17 @@ Focused tests are grouped by behavior:
   address/row insertion, the unsettled-address and status-count aggregate queries. The real-Postgres
   `infrastructure/persistence/verification-billing.integration.spec.ts` (see below) additionally proves batch
   admission's group reservation, insufficient-funds fencing, and single/batch address sharing against a real
-  schema.
+  schema. Payer identity regressions compare the credit debit, receipt, status aggregate, and actual CSV cursor
+  output for conclusive, inconclusive, cached, cooldown, and shared outcomes. They also cover concurrent identity
+  assignment and receipt insertion, foreign ownership, and interruptions before resolution and after insertion.
+  Only the external object upload is replaced in these database tests.
 - **Batch storage adapters**: `infrastructure/storage/batch-verification/s3-batch-input.spec.ts`,
   `infrastructure/storage/batch-verification/s3-batch-result-writer.spec.ts` (the row/unique-address/request/
   result join, duplicate-row zero-charge mapping, and verification-status derivation),
   `infrastructure/storage/batch-verification/s3-batch-result-reader.spec.ts`,
   `infrastructure/storage/batch-verification/derive-results-key.spec.ts`,
   `infrastructure/storage/batch-verification/parse-s3-result-location.spec.ts`, and
-  `infrastructure/storage/batch-verification/multer-options-factory-impl.service.spec.ts`; the writer
+  `infrastructure/storage/batch-verification/multer-options-factory-impl.service.spec.ts`. The writer
   specification reuses the common customer-object security contract for production and development mappings and
   verifies every spreadsheet-formula prefix, CSV quoting, ordinary values, future text fields, and streaming chunks
 - **Email administration**: `api/http/email-administration/email-administration.controller.spec.ts`
@@ -635,9 +668,9 @@ Focused tests are grouped by behavior:
   `infrastructure/persistence/verification-billing.integration.spec.ts` covers a concurrent admission race, the full
   funded-capture-and-cache-reuse pipeline, insufficient-funds fencing, settlement replay, and permit concurrency.
   It also includes a deterministic regression test for the transaction-poisoning race in the catch branch of
-  `claimOrJoin()`, batch admission reserving exactly once per unique address across duplicate rows, insufficient-
-  funds fencing an entire batch group as free failures, and a batch address sharing its single execution with a
-  concurrent single-verification submission for the same address. These tests use a real, freshly-synced schema
+  `claimOrJoin()`. Other cases cover one reservation per unique batch address across duplicate rows and
+  insufficient-funds fencing of an entire batch group as free failures. They also cover a batch address sharing
+  its single execution with a concurrent single-verification submission for the same address. These tests use a real, freshly-synced schema
   shared with the full `identity` entity set. Run `corepack pnpm test:verification-billing-postgres` for the
   disposable real-Postgres stack — its own `verification_billing_test` database, modeled on
   `test:credits-postgres`.
