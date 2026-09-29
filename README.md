@@ -102,6 +102,33 @@ The first command prints all six boolean flags. The fixture command verifies the
 The Jest checks parse workflow YAML, preserve command ownership, and exercise discovery, no-op guards, and summary
 failure handling. Live Actions runs remain separate evidence for GitHub's job and expression semantics.
 
+### Safe Stack Startup Diagnostics
+
+If the disposable stack reset fails, `browser-live` immediately runs a read-only collector before cleanup:
+
+```sh
+node scripts/testing/dev-stack-diagnostics.mjs
+```
+
+The collector accepts no arguments and targets only the fixed `lef` project. It checks exact Compose ownership
+labels against its own checkout before reading logs. Missing, ambiguous, foreign, and unavailable services remain
+explicit in the output. Keycloak and API collection take priority over the other six stack services.
+
+The version-1 JSON summary contains only fixed service names, collection results, closed failure reasons,
+state enums, health enums, bounded restart and probe counts, exit codes, numeric probe timestamps, and Docker's
+`oomKilled` flag when available. For Keycloak and the API, `startupSample` reports the sampled line count and six
+marker counters: `connection-refused`, `connection-timeout`, `name-resolution`, `memory-error`, `database-retry`,
+and `startup-failed`. Counts describe only the bounded sample; zero does not rule out a condition, and a match
+does not establish the cause of a startup failure.
+
+Collection has a 45-second total budget, a five-second command limit, and a 32,768-byte JSON output limit.
+Each log sample contains at most 200 lines. Commands exceeding 65,536 bytes across their captured streams are
+terminated, and their output is discarded. Probe history contains at most five entries. Raw logs, probe
+output, labels, container IDs, paths, environment variables, credentials, and error messages are never emitted
+or saved as artifacts. The summary stays in the Actions log. Diagnostic failures remain advisory: the reset
+and aggregate validation still fail, and the existing cleanup runs. Successful or skipped resets do not collect
+diagnostics. This command neither resets nor repairs a stack.
+
 ### Shared CI Caches
 
 Validation restores the pnpm store from GitHub Actions before each dependency install. Cache keys include the
