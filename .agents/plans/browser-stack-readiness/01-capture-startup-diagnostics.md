@@ -8,9 +8,9 @@ After a disposable browser stack reset fails, its Actions log will retain bounde
 
 ## Progress
 
-- [ ] (2026-09-14) Implement the bounded diagnostic collector and synthetic failure coverage.
-- [ ] (2026-09-14) Connect collection after reset failure to browser validation and verify resource removal and failure propagation.
-- [ ] (2026-09-14) Complete focused validation and record the resulting pull request and runtime evidence.
+- [x] (2026-09-29) Implement the bounded diagnostic collector and synthetic failure coverage.
+- [x] (2026-09-29) Connect collection after reset failure to the `browser-live` worker; verify resource removal declarations and failure propagation with local fixtures.
+- [ ] (2026-09-29) Complete focused validation and record the resulting pull request and runtime evidence.
 
 ## Plan dependencies
 
@@ -18,17 +18,23 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- The current workflow has separate browser workers and uses the `tuposoft-ci` runner. Only `browser-live` owns the reset and cleanup, so collection belongs there. The older runner labels in this plan predate the current base.
+- Docker sends container error logs through the Docker command's standard error stream. Successful log reads must count both streams privately, while failed command output remains discarded.
+- A local read-only invocation found no `lef` containers in the selected Docker context and returned eight `missing` records. This checks CLI output, not owned service metadata or a failed Actions reset.
+- The package script invocation `corepack pnpm test -- ... --runInBand` passes an argument separator through to Jest. Use `corepack pnpm exec jest ... --runInBand` to apply the serial execution flag.
 
 ## Decision Log
 
 - Decision: Retain strict JSON in the existing Actions log without uploading raw logs or adding an artifact store. Rationale: Docker and authentication output can contain secrets; closed fields preserve useful evidence without copying those values. Date: 2026-09-14. Author: Codex.
 - Decision: Collect immediately after reset failure with a 45-second total budget. Rationale: retain startup state before cleanup while preserving the reset failure and bounding teardown delays. Date: 2026-09-14. Author: Codex.
 - Decision: Use a dedicated inspection projection that accepts stopped containers. Rationale: `scripts/testing/development-stack.mjs` requires running services and loads credentials, so its discovery entry point cannot diagnose a service that failed to start. Reuse its ownership invariants without changing its contract. Date: 2026-09-14. Author: Codex.
+- Decision: Preserve the current `tuposoft-ci` runner and browser worker split. Rationale: this task changes only diagnostics; restoring the plan's older runner labels would undo unrelated merged work. Date: 2026-09-29. Author: Codex.
+- Decision: Reserve 250 milliseconds of the global budget for summary emission. Rationale: commands must stop before the 45-second limit while still leaving time to serialize the bounded output. Date: 2026-09-29. Author: Codex.
+- Decision: Share the capture limit across standard output and standard error. Rationale: Node applies `maxBuffer` to each stream separately, so a shared byte counter terminates commands that exceed the combined allowance. Date: 2026-09-29. Author: Codex.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented the read-only collector, strict diagnostic projection, bounded Docker adapter, and advisory failure-only step in `browser-live`. Local fixtures preserve the original reset and aggregate failures and the existing resource removal commands. The implementation adds no dependencies or HTTP behavior. Review found no material SOLID trade-off: pure projection, command execution, and collection orchestration remain separate functions. Validation and PR publication are being finalized; collection from an owned live stack and a naturally failing Actions reset remain unverified.
 
 ## Context and Orientation
 
@@ -42,7 +48,7 @@ The secret restrictions in `apps/web/tests/README.md`, `docs/platform-credits.md
 
 ## Scope and Non-Goals
 
-Change only startup diagnostics, workflow integration, focused tests, and explanatory CI documentation. Add no endpoint, response, business-module, provider, browser assertion, or schema change. `browser-stack-readiness/02` owns readiness budgets. Preserve the approved runner labels `[self-hosted, swarm, ubuntu-22, docker-isolated]`, job isolation, existing health requirements, confirmation, ownership checks, and cleanup commands. Do not capture unrelated containers, whole Docker inspection objects, environment variables, secret files, arbitrary command output, or authentication artifacts.
+Change only startup diagnostics, workflow integration, focused tests, and explanatory CI documentation. Add no endpoint, response, business-module, provider, browser assertion, or schema change. `browser-stack-readiness/02` owns readiness budgets. Preserve the current `tuposoft-ci` runner, job isolation, existing health requirements, confirmation, ownership checks, and cleanup commands. Do not capture unrelated containers, whole Docker inspection objects, environment variables, secret files, arbitrary command output, or authentication artifacts.
 
 ## Plan of Work
 
@@ -79,13 +85,13 @@ Run from the implementation checkout with Node 24 and installed workspace depend
 node --check scripts/testing/dev-stack-diagnostics.mjs
 node --test scripts/testing/dev-stack-diagnostics.test.mjs scripts/testing/dev-reset.test.mjs
 corepack pnpm exec eslint scripts/testing/dev-stack-diagnostics.mjs scripts/testing/dev-stack-diagnostics.test.mjs scripts/ci/validate-workflow.spec.ts
-TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- validate-workflow execplan-repository-fixture --runInBand
+TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm exec jest validate-workflow execplan-repository-fixture --runInBand
 actionlint .github/workflows/validate.yml
 corepack pnpm docs:lint -- README.md .agents/plans/browser-stack-readiness/01-capture-startup-diagnostics.md
 git diff --check
 ```
 
-The Node test command exercises the real CLI against fake Docker processes, including poisoned output and an enforced subprocess timeout; it creates no live stack. The workflow suite proves structural failure and cleanup contracts, not GitHub's runtime expression evaluation.
+The Node test command exercises the real CLI against fake Docker processes, including poisoned output and an enforced subprocess timeout; it creates no live stack. When Docker CLI is installed, a temporary mock daemon also exercises the actual inspection template, including secret exclusion, five-probe retention, and services without health checks. That template check skips when Docker CLI is absent. The workflow suite proves structural failure and cleanup contracts, not GitHub's runtime expression evaluation.
 
 When an owned disposable stack is already available, run `node scripts/testing/dev-stack-diagnostics.mjs` as a read-only runtime smoke check and record whether service metadata was collected. Do not break a shared stack to manufacture failure evidence. A later naturally failing CI reset must show the summary before cleanup; otherwise record that this failure path in Actions remains unverified. The companion readiness plan owns rerunning browser validation. Bruno: not applicable because HTTP behavior does not change; existing collections remain unchanged.
 
@@ -95,7 +101,9 @@ Collection only reads Docker state and emits a summary. Repetition writes no loc
 
 ## Artifacts and Notes
 
-The linked PR/run evidence motivates coverage but does not prove resource exhaustion or a configuration defect. The planning checkout has older `ubuntu-latest` workflow declarations; implement against the PR's reviewed configuration and preserve `[self-hosted, swarm, ubuntu-22, docker-isolated]`. Do not turn this task into a runner migration. Record the delivered commit, PR, exact validation results, and sanitized runtime evidence here. This plan has no unresolved product choice or dependency on reproducing a live failure.
+The linked PR/run evidence motivates coverage but does not prove resource exhaustion or a configuration defect. Implementation started from `6fad8cd9e4dae23881f018add5018787671f6c3d`, the current `origin/master`, on `kk/625-safe-stack-startup-diagnostics`. Issue #625 is assigned to the requesting user and marked In Progress in Project 9. The implementation retains the current `tuposoft-ci` runner. This plan has no unresolved product choice or dependency on reproducing a live failure.
+
+The combined workflow and repository plan fixture suites passed: 234 tests. The collector suite passed all 20 tests, including the real Docker 29.7.2 CLI against a mock daemon, with no skipped tests. The existing reset suite passed all 11 tests. Collector syntax and scoped ESLint passed. The official actionlint 1.7.12 archive was downloaded to `/tmp/lef-625-actionlint`, verified against its published checksum, and used to validate `.github/workflows/validate.yml` successfully. `corepack pnpm docs:lint -- README.md .agents/plans/browser-stack-readiness/01-capture-startup-diagnostics.md` passed both files, and `git diff --check` passed. Hosted Actions failure-path execution remains unverified. The resulting PR will be linked here after publication.
 
 ## Plan readiness
 
