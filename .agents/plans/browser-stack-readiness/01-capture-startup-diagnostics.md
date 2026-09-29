@@ -10,7 +10,7 @@ After a disposable browser stack reset fails, its Actions log will retain bounde
 
 - [x] (2026-09-29) Implement the bounded diagnostic collector and synthetic failure coverage.
 - [x] (2026-09-29) Connect collection after reset failure to the `browser-live` worker; verify resource removal declarations and failure propagation with local fixtures.
-- [ ] (2026-09-29) Complete focused validation and record the resulting pull request and runtime evidence.
+- [x] (2026-09-29) Complete focused validation and record PR #741 and the available runtime evidence; owned live-stack collection and the Actions reset-failure path remain unverified.
 
 ## Plan dependencies
 
@@ -34,7 +34,7 @@ None.
 
 ## Outcomes & Retrospective
 
-Implemented the read-only collector, strict diagnostic projection, bounded Docker adapter, and advisory failure-only step in `browser-live`. Local fixtures preserve the original reset and aggregate failures and the existing resource removal commands. The implementation adds no dependencies or HTTP behavior. Review found no material SOLID trade-off: pure projection, command execution, and collection orchestration remain separate functions. Validation and PR publication are being finalized; collection from an owned live stack and a naturally failing Actions reset remain unverified.
+Implemented the read-only collector, strict diagnostic projection, bounded Docker adapter, and advisory failure-only step in `browser-live`. Local fixtures preserve the original reset and aggregate failures and the existing resource removal commands. The implementation adds no dependencies or HTTP behavior. Review found no material SOLID trade-off: pure projection, command execution, and collection orchestration remain separate functions. Delivered in [PR #741](https://github.com/TupoSoft/LeadEmailFinder/pull/741) with all focused local checks passing. Collection from an owned live stack and a naturally failing Actions reset remain unverified.
 
 ## Context and Orientation
 
@@ -101,9 +101,9 @@ Collection only reads Docker state and emits a summary. Repetition writes no loc
 
 ## Artifacts and Notes
 
-The linked PR/run evidence motivates coverage but does not prove resource exhaustion or a configuration defect. Implementation started from `6fad8cd9e4dae23881f018add5018787671f6c3d`, the current `origin/master`, on `kk/625-safe-stack-startup-diagnostics`. Issue #625 is assigned to the requesting user and marked In Progress in Project 9. The implementation retains the current `tuposoft-ci` runner. This plan has no unresolved product choice or dependency on reproducing a live failure.
+The linked PR/run evidence motivates coverage but does not prove resource exhaustion or a configuration defect. Implementation started from `6fad8cd9e4dae23881f018add5018787671f6c3d`, the current `origin/master`. Commit `36916d3` is published on `kk/625-safe-stack-startup-diagnostics-v2` in [PR #741](https://github.com/TupoSoft/LeadEmailFinder/pull/741), assigned to the requesting user and linked with `Closes #625`. The original branch name belongs to closed, unmerged PR #628 and was preserved. Issue #625 is assigned to the requesting user and marked In Progress in Project 9. The implementation retains the current `tuposoft-ci` runner. This plan has no unresolved product choice or dependency on reproducing a live failure.
 
-The combined workflow and repository plan fixture suites passed: 234 tests. The collector suite passed all 20 tests, including the real Docker 29.7.2 CLI against a mock daemon, with no skipped tests. The existing reset suite passed all 11 tests. Collector syntax and scoped ESLint passed. The official actionlint 1.7.12 archive was downloaded to `/tmp/lef-625-actionlint`, verified against its published checksum, and used to validate `.github/workflows/validate.yml` successfully. `corepack pnpm docs:lint -- README.md .agents/plans/browser-stack-readiness/01-capture-startup-diagnostics.md` passed both files, and `git diff --check` passed. Hosted Actions failure-path execution remains unverified. The resulting PR will be linked here after publication.
+The combined workflow and repository plan fixture suites passed: 234 tests. The collector suite passed all 20 tests, including the real Docker 29.7.2 CLI against a mock daemon, with no skipped tests. The existing reset suite passed all 11 tests. Collector syntax and scoped ESLint passed. The official actionlint 1.7.12 archive was downloaded to `/tmp/lef-625-actionlint`, verified against its published checksum, and used to validate `.github/workflows/validate.yml` successfully. `corepack pnpm docs:lint -- README.md .agents/plans/browser-stack-readiness/01-capture-startup-diagnostics.md` passed both files, and `git diff --check` passed. Commit hooks passed the module architecture gate with nine modules and zero violations, plus 227 affected workflow tests. Hosted Actions failure-path execution remains unverified.
 
 ## Plan readiness
 
