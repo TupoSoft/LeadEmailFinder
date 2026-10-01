@@ -1,0 +1,15 @@
+opencollection: 1.0.0
+
+info:
+  name: MCP Authentication
+
+request:
+  scripts:
+    - type: before-request
+      code: |-
+        const clientId = bru.getEnvVar('mcpAuthClientId');
+        const clientSecret = bru.getEnvVar('mcpAuthClientSecret');
+        if (!clientId || !clientSecret) throw new Error('MCP_AUTH_CLIENT_ID and MCP_AUTH_CLIENT_SECRET are required');
+        bru.setVar('authValid', 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'));
+        bru.setVar('authWrong', 'Basic ' + Buffer.from(`${clientId}:${clientSecret}-wrong`).toString('base64'));
+        bru.setVar('authEmpty', 'Basic ' + Buffer.from(`${clientId}:`).toString('base64'));

@@ -7,6 +7,7 @@ const ADMISSION_KINDS = ['cache', 'shared', 'created', 'cooldown'] as const sati
  *  resolves that address; the exact set of executions this batch must fund is every row where it is `'created'`. */
 @Entity('batch_unique_addresses')
 @Index(['batchId', 'admissionKind'])
+@Index(['batchId', 'firstSeenRow'])
 export class BatchUniqueAddressEntity {
     @PrimaryColumn('uuid')
     batchId: string

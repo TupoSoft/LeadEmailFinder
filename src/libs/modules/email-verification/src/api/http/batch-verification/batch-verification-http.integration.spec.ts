@@ -13,7 +13,11 @@ import {
 } from '../../../application/delivery/batch/batch-email-verification.service'
 import { BatchResultReader, BatchResultUnavailableError } from '../../../application/delivery/batch/batch-result-reader'
 import { BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
-import { BullBatchJobs } from '../../../infrastructure/queues/batch-verification/bull-batch-jobs'
+import { BatchAdmissionService } from '../../../application/delivery/batch/batch-admission.service'
+import { BatchEmailVerificationWorkflow } from '../../../application/delivery/batch/batch-email-verification-workflow'
+import { BatchResultWriter } from '../../../application/delivery/batch/batch-result-writer'
+import { BatchEmailVerificationProcessor } from '../../../infrastructure/queues/batch-verification/batch-email-verification.processor'
+import { BatchQueueJobData, BullBatchJobs } from '../../../infrastructure/queues/batch-verification/bull-batch-jobs'
 import { BatchEmailVerificationController } from './batch-email-verification.controller'
 
 const organizationId = '00000000-0000-4000-8000-000000000001'
@@ -37,11 +41,20 @@ describe('batch verification HTTP status and download contracts', () => {
         createOrReplay: jest.fn(),
         findById: jest.fn(),
         findByClientKey: jest.fn(),
-        updateState: jest.fn(),
+        claimAdmissionLease: jest.fn(),
+        renewAdmissionLease: jest.fn(),
+        releaseAdmissionLease: jest.fn(),
+        transitionState: jest.fn(),
+        pageRecoverableGroups: jest.fn(),
+        pageIncompleteAddresses: jest.fn(),
+        freezeFundingManifest: jest.fn(),
+        listOwnedExecutionIds: jest.fn(),
+        recordFundingDecision: jest.fn(),
+        markFinalizationReady: jest.fn(),
         insertUniqueAddresses: jest.fn(),
         pageUniqueAddresses: jest.fn(),
         recordAdmissionOutcome: jest.fn(),
-        recordPayerRequestId: jest.fn(),
+        ensurePayerRequestId: jest.fn(),
         countUnsettledAddresses: jest.fn(),
         getStatusCounts: jest.fn(),
     }
@@ -100,6 +113,11 @@ describe('batch verification HTTP status and download contracts', () => {
             uniqueAddressCount: 10,
             clientRequestKey: null,
             contentDigest: null,
+            fundingDecision: 'pending',
+            finalizationState: 'preparing',
+            admissionLeaseOwnerId: null,
+            admissionLeaseExpiresAt: null,
+            admissionGeneration: 0,
             createdAt: new Date(),
             updatedAt: new Date(),
         })
@@ -155,7 +173,10 @@ describe('batch verification HTTP status and download contracts', () => {
     it.each(['', '/results'])('conceals foreign work exactly like missing work for GET %s', async suffix => {
         queue.getJob.mockResolvedValueOnce(undefined)
         const missing = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}${suffix}`).expect(404)
-        const foreign = rawJob('completed', { data: { organizationId: 'foreign-organization' } })
+        const foreign = rawJob('completed', {
+            data: { organizationId: 'foreign-organization' },
+            returnvalue: 's3://bucket/results/file.csv',
+        })
         queue.getJob.mockResolvedValueOnce(foreign)
         const other = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}${suffix}`).expect(404)
         expect(other.body).toEqual(missing.body)
@@ -184,6 +205,8 @@ describe('batch verification HTTP status and download contracts', () => {
             counts: expectedCounts,
             billing: expectedBilling,
         })
+        await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+        expect(resultReader.read).not.toHaveBeenCalled()
         expect(queue.add).not.toHaveBeenCalled()
     })
 
@@ -201,13 +224,124 @@ describe('batch verification HTTP status and download contracts', () => {
                 processed: 8,
                 unprocessed: 2,
                 progress: 0,
-                resultsAvailable: true,
+                resultsAvailable: false,
                 counts: expectedCounts,
                 billing: expectedBilling,
                 failureCode:
                     marker === 'invalid_csv' || marker === 'insufficient_credits' ? marker : 'processing_failed',
             })
             expect(response.text).not.toMatch(/private|stacktrace|failedReason|storage|parser/)
+            await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+            expect(resultReader.read).not.toHaveBeenCalled()
+        },
+    )
+
+    it.each(['validating', 'admitting', 'admitted', 'insufficient_credits', 'invalid'] as const)(
+        'reports no download for a failed job with %s admission',
+        async state => {
+            admissions.findById.mockResolvedValue({
+                batchId: jobId,
+                organizationId,
+                state,
+                totalRows: 10,
+                uniqueAddressCount: 10,
+                clientRequestKey: null,
+                contentDigest: null,
+                fundingDecision: 'pending',
+                finalizationState: 'preparing',
+                admissionLeaseOwnerId: null,
+                admissionLeaseExpiresAt: null,
+                admissionGeneration: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })
+            queue.getJob.mockResolvedValue(rawJob('failed', { returnvalue: 's3://bucket/results/file.csv' }))
+
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+            expect(response.body).toMatchObject({ status: 'failed', resultsAvailable: false })
+            await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+            expect(resultReader.read).not.toHaveBeenCalled()
+            expect(queue.add).not.toHaveBeenCalled()
+        },
+    )
+
+    it('keeps settled billing visible without promising a download after result publication fails', async () => {
+        admissions.countUnsettledAddresses.mockResolvedValue(0)
+        admissions.getStatusCounts.mockResolvedValue({
+            cachedAddresses: 0,
+            sharedAddresses: 0,
+            cooldownAddresses: 0,
+            completedAddresses: 10,
+            conclusiveAddresses: 10,
+            inconclusiveAddresses: 0,
+            failedAddresses: 0,
+            reserved: 10,
+            charged: 10,
+        })
+        const publicationError = new Error('private storage upload failure')
+        const resultWriter: jest.Mocked<BatchResultWriter> = {
+            write: jest.fn().mockRejectedValue(publicationError),
+        }
+        const admissionService = { admit: jest.fn() }
+        const dispatcher = { dispatch: jest.fn() }
+        const workflow = new BatchEmailVerificationWorkflow(
+            { rows: jest.fn() },
+            { insertMany: jest.fn(), pageBySourceRow: jest.fn(), countRows: jest.fn() },
+            admissions,
+            admissionService as unknown as BatchAdmissionService,
+            dispatcher,
+            resultWriter,
+        )
+        const processor = new BatchEmailVerificationProcessor(workflow, admissions)
+        const job = {
+            ...rawJob('active'),
+            data: {
+                step: BatchJobStep.AwaitSettlement,
+                bucket: 'bucket',
+                key: 'uploads/file.csv',
+                organizationId,
+                credentialId: principalFixture.credentialId,
+            } as BatchQueueJobData,
+            getState: jest.fn().mockResolvedValue('active'),
+            updateData: jest.fn((next: BatchQueueJobData) => {
+                job.data = next
+                return Promise.resolve()
+            }),
+        }
+
+        await expect(processor.process(job as never, 'token')).rejects.toBe(publicationError)
+        expect(job.data).toMatchObject({ step: BatchJobStep.UploadResults, failureCode: 'processing_failed' })
+        expect(resultWriter.write).toHaveBeenCalledWith('bucket', 'uploads/file.csv', organizationId, jobId)
+        // BullMQ marks the exhausted attempt failed after the processor rejects.
+        job.getState.mockResolvedValue('failed')
+        queue.getJob.mockResolvedValue(job)
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+            expect(response.body).toMatchObject({
+                status: 'failed',
+                failureCode: 'processing_failed',
+                resultsAvailable: false,
+                counts: { completedAddresses: 10 },
+                billing: { state: 'settled', reserved: 10, charged: 10 },
+            })
+            await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+        }
+        expect(resultReader.read).not.toHaveBeenCalled()
+        expect(resultWriter.write).toHaveBeenCalledTimes(1)
+        expect(admissionService.admit).not.toHaveBeenCalled()
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
+        expect(queue.add).not.toHaveBeenCalled()
+    })
+
+    it.each(['', 'not-an-s3-location', 's3://bucket', 'https://bucket/results/file.csv'])(
+        'rejects a completed job with an invalid retained location %# without reading storage',
+        async returnvalue => {
+            queue.getJob.mockResolvedValue(rawJob('completed', { returnvalue }))
+            const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+            expect(response.body).toMatchObject({ status: 'unavailable', resultsAvailable: false })
+            await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+            expect(resultReader.read).not.toHaveBeenCalled()
         },
     )
 
@@ -230,6 +364,7 @@ describe('batch verification HTTP status and download contracts', () => {
             counts: expectedCounts,
             billing: expectedBilling,
         })
+        expect(resultReader.read).not.toHaveBeenCalled()
     })
 
     it('downloads exact streamed CSV bytes with a UUID-only filename on repeatable GETs', async () => {
@@ -237,6 +372,9 @@ describe('batch verification HTTP status and download contracts', () => {
         queue.getJob.mockResolvedValue(rawJob('completed', { returnvalue: 's3://bucket/results/file.csv' }))
         resultReader.read.mockImplementation(() => Promise.resolve(Readable.from([csv.slice(0, 12), csv.slice(12)])))
         for (let attempt = 0; attempt < 2; attempt++) {
+            const status = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+            expect(status.body).toMatchObject({ status: 'completed', resultsAvailable: true })
+            expect(resultReader.read).toHaveBeenCalledTimes(attempt)
             const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(200)
             expect(response.headers['content-type']).toBe('text/csv')
             expect(response.headers['content-disposition']).toBe(
@@ -250,7 +388,23 @@ describe('batch verification HTTP status and download contracts', () => {
     it('returns a concealed 404 when the retained result has disappeared after completion', async () => {
         queue.getJob.mockResolvedValue(rawJob('completed', { returnvalue: 's3://bucket/results/file.csv' }))
         resultReader.read.mockRejectedValue(new BatchResultUnavailableError())
+        const status = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+        expect(status.body).toMatchObject({ status: 'completed', resultsAvailable: true })
+        expect(resultReader.read).not.toHaveBeenCalled()
         await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(404)
+        expect(resultReader.read).toHaveBeenCalledWith('s3://bucket/results/file.csv')
+        expect(queue.add).not.toHaveBeenCalled()
+    })
+
+    it('preserves an infrastructure failure as a server error despite retained download eligibility', async () => {
+        queue.getJob.mockResolvedValue(rawJob('completed', { returnvalue: 's3://bucket/results/file.csv' }))
+        resultReader.read.mockRejectedValue(new Error('private storage outage diagnostics'))
+        const status = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}`).expect(200)
+        expect(status.body).toMatchObject({ status: 'completed', resultsAvailable: true })
+        expect(resultReader.read).not.toHaveBeenCalled()
+        const response = await request(app.getHttpServer()).get(`/verifyBatch/${jobId}/results`).expect(500)
+        expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
+        expect(resultReader.read).toHaveBeenCalledWith('s3://bucket/results/file.csv')
         expect(queue.add).not.toHaveBeenCalled()
     })
 })

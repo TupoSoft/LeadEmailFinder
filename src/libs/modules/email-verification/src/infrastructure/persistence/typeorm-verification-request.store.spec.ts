@@ -50,10 +50,27 @@ describe('TypeOrmVerificationRequestStore', () => {
         save: jest.Mock
         create: jest.Mock
         update: jest.Mock
+        createQueryBuilder: jest.Mock
+    }
+    let queryBuilder: {
+        insert: jest.Mock
+        into: jest.Mock
+        values: jest.Mock
+        onConflict: jest.Mock
+        returning: jest.Mock
+        execute: jest.Mock
     }
     let store: TypeOrmVerificationRequestStore
 
     beforeEach(() => {
+        queryBuilder = {
+            insert: jest.fn().mockReturnThis(),
+            into: jest.fn().mockReturnThis(),
+            values: jest.fn().mockReturnThis(),
+            onConflict: jest.fn().mockReturnThis(),
+            returning: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue({ raw: [{ requestId: input().requestId }] }),
+        }
         manager = {
             findOne: jest.fn(),
             findOneBy: jest.fn(),
@@ -61,6 +78,7 @@ describe('TypeOrmVerificationRequestStore', () => {
             create: jest.fn((_entityClass: unknown, value: unknown) => value),
             save: jest.fn((_entityClass: unknown, value: unknown) => Promise.resolve(entity(value as object))),
             update: jest.fn(),
+            createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
         }
         const transaction = jest.fn(async (callback: (entityManager: EntityManager) => Promise<unknown>) =>
             callback(manager as unknown as EntityManager),
@@ -73,6 +91,7 @@ describe('TypeOrmVerificationRequestStore', () => {
 
     it('inserts a new request without a client key', async () => {
         manager.findOne.mockResolvedValue(null)
+        manager.findOneBy.mockResolvedValue(entity(input()))
         const outcome = await store.insert(input())
         expect(outcome).toEqual({ kind: 'inserted', record: expect.objectContaining({ requestId: input().requestId }) })
         expect(manager.findOne).not.toHaveBeenCalled()
@@ -80,6 +99,7 @@ describe('TypeOrmVerificationRequestStore', () => {
 
     it('locks and inserts under a supplied client key', async () => {
         manager.findOne.mockResolvedValue(null)
+        manager.findOneBy.mockResolvedValue(entity(input({ clientRequestKey: 'key-1' })))
         const outcome = await store.insert(input({ clientRequestKey: 'key-1' }))
         expect(outcome.kind).toBe('inserted')
         expect(manager.findOne).toHaveBeenCalledWith(
@@ -110,11 +130,148 @@ describe('TypeOrmVerificationRequestStore', () => {
 
     it('marks a cache-sourced insert settled with its result immediately', async () => {
         manager.findOne.mockResolvedValue(null)
-        await store.insert(input({ source: 'cache', resultId: 'result-1', billingState: 'settled', finalReason: 'cached' }))
+        const cacheInput = input({ source: 'cache', resultId: 'result-1', billingState: 'settled', finalReason: 'cached' })
+        manager.findOneBy.mockResolvedValue(entity(cacheInput))
+        await store.insert(cacheInput)
         expect(manager.create).toHaveBeenCalledWith(
             VerificationRequestEntity,
             expect.objectContaining({ billingState: 'settled', finalReason: 'cached', resultId: 'result-1' }),
         )
+    })
+
+    describe('unkeyed batch receipt insertion', () => {
+        const batchInput = input({ deliveryMode: 'batch', executionId: 'execution-1' })
+
+        it('inserts the assigned UUID without allowing an existing receipt to be overwritten', async () => {
+            manager.findOneBy.mockResolvedValue(entity(batchInput))
+
+            const outcome = await store.insert(batchInput)
+
+            expect(outcome).toEqual({
+                kind: 'inserted',
+                record: expect.objectContaining(batchInput),
+            })
+            expect(queryBuilder.into).toHaveBeenCalledWith(VerificationRequestEntity)
+            expect(queryBuilder.values).toHaveBeenCalledWith(expect.objectContaining(batchInput))
+            expect(queryBuilder.onConflict).toHaveBeenCalledWith('("requestId") DO NOTHING')
+            expect(queryBuilder.returning).toHaveBeenCalledWith(['requestId'])
+            expect(manager.findOneBy).toHaveBeenCalledWith(VerificationRequestEntity, {
+                requestId: batchInput.requestId,
+                organizationId,
+            })
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('replays a settled payer without changing its result, financial counts, or timestamps', async () => {
+            const settled = entity({
+                ...batchInput,
+                billingState: 'settled',
+                reservedCount: 1,
+                chargedCount: 1,
+                finalReason: 'conclusive',
+                resultId: 'result-1',
+                createdAt: new Date('2026-09-17T10:00:00Z'),
+                settledAt: new Date('2026-09-17T10:01:00Z'),
+            })
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(settled)
+
+            await expect(store.insert(batchInput)).resolves.toEqual({ kind: 'replayed', record: settled })
+            expect(manager.save).not.toHaveBeenCalled()
+            expect(manager.update).not.toHaveBeenCalled()
+        })
+
+        it('returns the pending winner after an equivalent UUID insertion race', async () => {
+            const pending = entity(batchInput)
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(pending)
+
+            await expect(store.insert(batchInput)).resolves.toEqual({ kind: 'replayed', record: pending })
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it.each(['sync', 'async', 'batch_child'] as const)(
+            'rejects a replay that changes a batch receipt to %s delivery',
+            async deliveryMode => {
+                const settled = entity({ ...batchInput, billingState: 'settled', chargedCount: 1 })
+                queryBuilder.execute.mockResolvedValue({ raw: [] })
+                manager.findOneBy.mockResolvedValue(settled)
+
+                await expect(store.insert({ ...batchInput, deliveryMode })).rejects.toThrow(
+                    'batch_request_identity_conflict',
+                )
+                expect(manager.save).not.toHaveBeenCalled()
+                expect(manager.update).not.toHaveBeenCalled()
+                expect(settled.deliveryMode).toBe('batch')
+                expect(settled.chargedCount).toBe(1)
+            },
+        )
+
+        it('rejects a new client key attached to an existing keyless batch UUID', async () => {
+            manager.findOne.mockResolvedValue(null)
+            const settled = entity({ ...batchInput, billingState: 'settled', chargedCount: 1 })
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(settled)
+
+            await expect(store.insert({ ...batchInput, clientRequestKey: 'new-key' })).rejects.toThrow(
+                'batch_request_identity_conflict',
+            )
+            expect(manager.save).not.toHaveBeenCalled()
+            expect(manager.update).not.toHaveBeenCalled()
+            expect(settled.clientRequestKey).toBeNull()
+            expect(settled.chargedCount).toBe(1)
+        })
+
+        it.each([
+            ['request UUID', { requestId: 'other-request' }],
+            ['organization', { organizationId: 'other-organization' }],
+            ['address', { normalizedAddress: 'other@example.test' }],
+            ['delivery mode', { deliveryMode: 'async' }],
+            ['source', { source: 'shared' }],
+            ['execution', { executionId: 'other-execution' }],
+            ['client key', { clientRequestKey: 'other-key' }],
+        ] satisfies [string, Partial<VerificationRequestEntity>][])('rejects a conflicting %s without mutation', async (_field, conflict) => {
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(entity({ ...batchInput, ...conflict }))
+
+            await expect(store.insert(batchInput)).rejects.toThrow('batch_request_identity_conflict')
+            expect(manager.save).not.toHaveBeenCalled()
+            expect(manager.update).not.toHaveBeenCalled()
+        })
+
+        it('conceals a UUID conflict belonging to another organization when the scoped read finds no winner', async () => {
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(null)
+
+            await expect(store.insert(batchInput)).rejects.toThrow('batch_request_identity_conflict')
+            expect(manager.findOneBy).toHaveBeenCalledWith(VerificationRequestEntity, {
+                requestId: batchInput.requestId,
+                organizationId,
+            })
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it.each(['cache', 'cooldown'] as const)('preserves the recorded %s result association on replay', async source => {
+            const freeInput = input({
+                deliveryMode: 'batch',
+                source,
+                executionId: null,
+                resultId: 'original-result',
+                reservedCount: 0,
+                billingState: 'settled',
+                finalReason: source === 'cache' ? 'cached' : 'inconclusive',
+            })
+            const freeReceipt = entity({ ...freeInput, settledAt: new Date('2026-09-17T10:01:00Z') })
+            queryBuilder.execute.mockResolvedValue({ raw: [] })
+            manager.findOneBy.mockResolvedValue(freeReceipt)
+
+            await expect(store.insert(freeInput)).resolves.toEqual({ kind: 'replayed', record: freeReceipt })
+            await expect(store.insert({ ...freeInput, resultId: 'newer-result' })).rejects.toThrow(
+                'batch_request_identity_conflict',
+            )
+            expect(manager.save).not.toHaveBeenCalled()
+            expect(manager.update).not.toHaveBeenCalled()
+        })
     })
 
     it('attaches an execution to an existing request', async () => {

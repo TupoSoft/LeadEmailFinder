@@ -1,0 +1,29 @@
+info:
+    name: 18-upload-insufficient-group
+    type: http
+    seq: 18
+
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyBatch/csv'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+    body:
+        type: multipart-form
+        data:
+            - name: file
+              type: file
+              value:
+                  - '{{insufficientGroupCsvPath}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('enqueues two fresh unique addresses', function() {
+                expect(res.status).to.equal(202);
+                expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+                expect(Object.keys(res.body)).to.deep.equal(['id']);
+                bru.setVar('insufficientGroupJobId', res.body.id);
+              });

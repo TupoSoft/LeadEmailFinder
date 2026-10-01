@@ -1,0 +1,19 @@
+info:
+  name: 03-get-mcp-is-rejected
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/mcp"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('a stateless GET /mcp is rejected with a JSON-RPC method-not-allowed error', function() {
+          expect(res.status).to.equal(405);
+          expect(res.headers['content-type']).to.include('application/json');
+          expect(res.body.jsonrpc).to.equal('2.0');
+          expect(res.body.error.code).to.equal(-32000);
+        });

@@ -60,13 +60,11 @@ import { VERIFICATION_EXECUTION_PERMITS, VerificationExecutionPermits } from '..
 import { VerificationAdmissionService } from '../application/operations/verification-admission.service'
 import { VerificationSettlementService } from '../application/operations/verification-settlement.service'
 import { VerificationExecutionRunner } from '../application/operations/verification-execution-runner'
-import { VerificationReconciler } from '../application/operations/verification-reconciler'
 import {
     VERIFICATION_ADDRESS_COOLDOWN_MS,
     VERIFICATION_EXECUTION_DEADLINE_MS,
     VERIFICATION_LEASE_DURATION_MS,
     VERIFICATION_LEASE_LIVENESS_POLL_MS,
-    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
 } from '../application/operations/verification-execution-timing'
 import {
     VERIFICATION_TRACE_OBSERVER,
@@ -298,37 +296,6 @@ class SystemVerificationClock implements VerificationClock {
                         DEFAULT_VERIFICATION_EXECUTION_MAX_CONCURRENT,
                 ),
         },
-        {
-            provide: VerificationReconciler,
-            inject: [
-                VERIFICATION_EXECUTION_STORE,
-                VERIFICATION_REQUEST_STORE,
-                VERIFICATION_SETTLEMENT_STORE,
-                VerificationSettlementService,
-                VerificationExecutionRunner,
-                CreditReservationService,
-                VERIFICATION_CLOCK,
-            ],
-            useFactory: (
-                executions: VerificationExecutionStore,
-                requests: VerificationRequestStore,
-                settlements: VerificationSettlementStore,
-                settlementService: VerificationSettlementService,
-                runner: VerificationExecutionRunner,
-                credits: CreditReservationService,
-                clock: VerificationClock,
-            ) =>
-                new VerificationReconciler(
-                    executions,
-                    requests,
-                    settlements,
-                    settlementService,
-                    runner,
-                    credits,
-                    clock,
-                    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
-                ),
-        },
     ],
     exports: [
         EmailVerificationOrchestrator,
@@ -344,7 +311,6 @@ class SystemVerificationClock implements VerificationClock {
         VerificationAdmissionService,
         VerificationSettlementService,
         VerificationExecutionRunner,
-        VerificationReconciler,
     ],
 })
 export class EmailVerificationCoreModule {}

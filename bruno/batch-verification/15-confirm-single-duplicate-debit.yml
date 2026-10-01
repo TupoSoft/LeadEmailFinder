@@ -1,0 +1,21 @@
+info:
+    name: 15-confirm-single-duplicate-debit
+    type: http
+    seq: 15
+
+http:
+    method: GET
+    url: '{{baseUrl}}/credits/{{organizationId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{platformToken}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('deducts exactly the one credit reported by status and CSV', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.balance).to.equal(0);
+                expect(1 - res.body.balance).to.equal(bru.getVar('duplicateBatchCharged'));
+              });

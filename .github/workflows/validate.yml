@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   changes:
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -34,7 +34,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -108,7 +108,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -160,7 +160,7 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
         if: needs.changes.outputs.backend == 'true'
       - name: Install dependencies
-        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
+        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
         if: needs.changes.outputs.backend == 'true'
       - name: Prepare Ruby tool cache and libraries
         run: |
@@ -218,7 +218,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -290,7 +290,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -347,7 +347,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -417,6 +417,18 @@ jobs:
           cache-from: type=gha,version=2,scope=lef-web
           cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
         if: needs.changes.outputs.images == 'true'
+      - name: Build independent MCP connector image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: docker/mcp-server.Dockerfile
+          tags: lead-email-finder-mcp-server:frontend-06
+          load: true
+          push: false
+          cache-from: type=gha,version=2,scope=lef-mcp-server
+          cache-to: type=gha,version=2,scope=lef-mcp-server,mode=max,ignore-error=true
+        if: needs.changes.outputs.images == 'true'
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
         if: needs.changes.outputs.images == 'true'
@@ -424,7 +436,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     timeout-minutes: 15
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -492,7 +504,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -575,7 +587,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -666,7 +678,16 @@ jobs:
         run: corepack pnpm test:gateway
         if: needs.changes.outputs.browser == 'true'
       - name: Reset, provision, and check disposable development stack
+        id: dev-reset
         run: corepack pnpm dev:reset -- --confirm-project=LEF
+        if: needs.changes.outputs.browser == 'true'
+      - name: Preserve safe stack startup diagnostics
+        if: always() && needs.changes.outputs.browser == 'true' && steps.dev-reset.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 1
+        run: node scripts/testing/dev-stack-diagnostics.mjs
+      - name: Test live MCP connector tool set
+        run: corepack pnpm test:mcp-server-live
         if: needs.changes.outputs.browser == 'true'
       - name: Test genuine same-origin browser session and log privacy
         run: corepack pnpm test:web-live
@@ -740,7 +761,7 @@ jobs:
       - browser-ui
       - browser-live
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -764,7 +785,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: tuposoft-pc-wsl
+    runs-on: tuposoft-ci
     steps:
       - uses: actions/checkout@v4
         with:

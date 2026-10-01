@@ -102,6 +102,33 @@ The first command prints all six boolean flags. The fixture command verifies the
 The Jest checks parse workflow YAML, preserve command ownership, and exercise discovery, no-op guards, and summary
 failure handling. Live Actions runs remain separate evidence for GitHub's job and expression semantics.
 
+### Safe Stack Startup Diagnostics
+
+If the disposable stack reset fails, `browser-live` immediately runs a read-only collector before cleanup:
+
+```sh
+node scripts/testing/dev-stack-diagnostics.mjs
+```
+
+The collector accepts no arguments and targets only the fixed `lef` project. It checks exact Compose ownership
+labels against its own checkout before reading logs. Missing, ambiguous, foreign, and unavailable services remain
+explicit in the output. Keycloak and API collection take priority over the other six stack services.
+
+The version-1 JSON summary contains only fixed service names, collection results, closed failure reasons,
+state enums, health enums, bounded restart and probe counts, exit codes, numeric probe timestamps, and Docker's
+`oomKilled` flag when available. For Keycloak and the API, `startupSample` reports the sampled line count and six
+marker counters: `connection-refused`, `connection-timeout`, `name-resolution`, `memory-error`, `database-retry`,
+and `startup-failed`. Counts describe only the bounded sample; zero does not rule out a condition, and a match
+does not establish the cause of a startup failure.
+
+Collection has a 45-second total budget, a five-second command limit, and a 32,768-byte JSON output limit.
+Each log sample contains at most 200 lines. Commands exceeding 65,536 bytes across their captured streams are
+terminated, and their output is discarded. Probe history contains at most five entries. Raw logs, probe
+output, labels, container IDs, paths, environment variables, credentials, and error messages are never emitted
+or saved as artifacts. The summary stays in the Actions log. Diagnostic failures remain advisory: the reset
+and aggregate validation still fail, and the existing cleanup runs. Successful or skipped resets do not collect
+diagnostics. This command neither resets nor repairs a stack.
+
 ### Shared CI Caches
 
 Validation restores the pnpm store from GitHub Actions before each dependency install. Cache keys include the
@@ -302,20 +329,23 @@ Attach the client to `localhost:59229`.
 ### ISP-Safe SMTP Verification
 
 To exercise DNS lookup, proxy allocation, SOCKS5 transport, and SMTP verification without using outbound port 25,
-prepare the base development stack first. The reset generates the gitignored Keycloak credentials that the fixture
-bind-mounts; the overlay now fails fast if this prerequisite is missing instead of creating a directory at the
-expected location.
+prepare the base development stack first. For a fresh disposable stack, `pnpm dev:reset -- --confirm-project=LEF`
+generates the gitignored Keycloak credentials that the fixture mounts. Reset deletes development data; skip it
+when the stack is already provisioned. The overlay fails fast if the credentials file is missing.
 
-Then stop the base stack so Compose can recreate the default network with the fixture subnet, and start the opt-in
-local fixture:
+Enable the local fixture directly on the running base stack:
 
 ```shell
-pnpm dev:reset
-docker compose -f docker/compose.yaml down
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
 
 The overlay configures the API to use port `2525` and adds Docker-network-only CoreDNS, Mailpit, and 3proxy services. It registers one active development proxy through the authenticated API. No DNS, SMTP, Mailpit, or proxy port is published to the host; the existing API remains available at `http://localhost:53000`. The fixed proxy credentials are development-only and cannot be reached through a published host port.
+
+The fixture uses a separate `smtp-dev` network with subnet `172.28.0.0/24`. Enabling it preserves the base network
+and its infrastructure service names. Repeating the same startup command is safe.
+
+Older overlay versions assigned this subnet to the default network. If that network still exists, follow the
+[network recovery instructions](docker/README.md#recover-an-older-smtp-network) before starting this version.
 
 Use the OpenCollection smoke test in `bruno/smtp-dev` or submit `person@lef.test` to `POST /verify`. Mailpit accepts every recipient, so a successful result validates local application wiring rather than external deliverability.
 
@@ -352,6 +382,7 @@ The development Compose stack starts the following supporting services:
 | Redis      | `localhost:56379`           | Queue and cache storage             |
 | Bull Board | http://localhost:54000      | Queue dashboard                     |
 | Garage/S3  | http://localhost:59000      | S3-compatible object storage        |
+| [MCP Server](apps/mcp-server/README.md) | http://localhost:53002/health | AI-agent access to this API over the Model Context Protocol |
 
 The opt-in Paddle fixture additionally publishes its checkout page on `http://localhost:57000`; it is not part of
 the ordinary development stack.

@@ -31,6 +31,36 @@ authenticated credit balance. Reset refuses another checkout's containers or an 
 and validates the project labels and exact allowlisted volume names before deletion. Stop overlays before reset.
 The command removes development data; inspect its printed targets before confirming it.
 
+## Recover an Older SMTP Network
+
+The SMTP overlay now uses a separate `smtp-dev` network. Its fixed subnet no longer replaces the base stack's
+default network. Enable it on an already provisioned base stack with:
+
+```sh
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
+```
+
+An older overlay may have left `172.28.0.0/24` assigned to `<project>_default`. That network must be replaced once
+before the new fixture network can use the subnet. Inspect it with `docker network inspect lef_default` for the
+default project; substitute the project name when using `-p`.
+
+For disposable object data, the following recovery retains the named PostgreSQL, Keycloak, and Redis volumes,
+but **deletes Garage's container-local object data**. Do not use it when existing batch files must be preserved:
+
+```sh
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down
+docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
+```
+
+To preserve object data, retain the Garage container instead. Stop the owned stack, record the container IDs and
+network configuration, and back up `/tmp/garage-meta` and `/tmp/garage-data` from Garage with `docker cp`.
+Disconnect every owned container from the old default network and remove only that network. Running
+`docker compose -f docker/compose.yaml create --no-recreate garage` creates the base network again. Reconnect
+each retained base service with `docker network connect --alias <service> --alias <container> <project>_default <container>`;
+include `smtp-dev-dns-cache-reset` if its container already exists. Then run the overlay startup command above.
+Compose recreates the fixture containers with their new network attachments. Verify service-name resolution,
+container identities, and health before discarding the backup. Never use `down -v` for this recovery.
+
 ## Route Ownership
 
 | Public path | Owner and result |

@@ -2,6 +2,10 @@ import { VerificationJobState } from '../verification-job-state'
 import { BatchVerificationSnapshot } from './batch-jobs'
 import { BatchTerminalFailureCode, safeBatchTerminalFailureCode } from './batch-terminal-failure'
 
+export function getDownloadableBatchResultLocation(snapshot: BatchVerificationSnapshot): string | undefined {
+    return mapBatchVerificationStatus(snapshot).status === 'completed' ? snapshot.resultLocation : undefined
+}
+
 export function mapBatchVerificationStatus(snapshot: BatchVerificationSnapshot): {
     status: VerificationJobState
     failureCode?: BatchTerminalFailureCode

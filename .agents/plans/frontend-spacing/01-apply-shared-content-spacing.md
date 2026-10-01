@@ -9,6 +9,12 @@ AI-generated and maintained product panels use the same spacing owner. A develop
 
 ## Progress
 
+- [x] (2026-09-29) Confirmed that PR #666 is merged and the shared spacing owners are still absent from `master`.
+- [x] (2026-09-29) Prepared the conflict resolution from current `master` plus the original 15-file spacing change.
+  Preserved the later billing fixes and the current UX contract. Every original spacing patch matched its context.
+- [ ] (2026-09-29) Run validation on the resolved branch. Local execution is unavailable in this session;
+  the historical results below do not validate the new merge commit.
+
 - [x] (2026-09-16) Inspected the design tokens, agent guidance, billing layout, audit, and browser coverage. The synced issue search for `frontend-spacing/01` returned no issue.
 - [x] (2026-09-16) Added shared owners, the billing consumer, and synchronized design and agent contracts.
 - [x] (2026-09-16) Added exact CSS token bindings and permanent browser geometry, recovery, and hidden-content checks.
@@ -35,6 +41,9 @@ now applies only to stacks without that attribute, and the browser test checks h
 
 ## Decision Log
 
+- 2026-09-29, Codex: Preserve branch history with a merge commit whose tree starts from current `master` and applies
+  only the original spacing change. This keeps the later billing fixes and avoids replaying the stale dependency.
+
 - 2026-09-16, Codex: Reuse the existing content and control tokens. Introduce small presentation components without new
   dependencies, business rules, or state. The user authorized this shared spacing contract.
 - 2026-09-16, Codex: Migrate only the balance summary now. Apply the instructions to new or changed content groups;
@@ -44,7 +53,11 @@ now applies only to stacks without that attribute, and the browser test checks h
 
 ## Publication Review
 
-This draft is stacked on the verification-charge UI PR #666. Validation on the isolated publication branch passed:
+PR #666 merged on September 27, 2026. This draft now targets `master` directly. The September 29 conflict resolution
+uses `06563e6f923fa7673ec676f5deab61da3d33cf29` as its base and preserves the original spacing change from `ee4af068`.
+It keeps the current verification, accounting, download, and recovery behavior from `master`.
+
+Historical validation on the September 16 publication branch passed:
 
 - 24 billing component tests and 40 UI audit tests.
 - 30 mocked browser cases at desktop and phone widths.
@@ -56,6 +69,12 @@ recorded below describe the original implementation checkout. Publication does n
 container or mutate billing data. The shared owners retain their presentation-only responsibility.
 
 ## Outcomes & Retrospective
+
+Conflict resolution review (2026-09-29): the spacing work remains relevant. Current `master` has neither shared
+owner nor the exact CSS binding and browser geometry checks. The resolution preserves the original spacing
+implementation and the later UX contract changes. The local shell fails before starting a process, and the Node
+runtime rejects the workspace path. Local unit, browser, build, design, UI audit, and Harper checks therefore remain
+unverified for this resolution. The earlier validation and local delivery results below are historical evidence.
 
 The shared owners and agent guidance are implemented. Billing now demonstrates control spacing within related
 values and content spacing before explanatory text. Validation passed: 23 billing component tests, 40 audit tests,
@@ -70,7 +89,8 @@ returns HTTP 200. Existing Vite loader and chunk-size warnings remain unrelated 
 The architecture review found no business coupling: the shared owners only render content, and billing keeps its
 existing query and live-region ownership. The deliberate trade-off is a narrow semantic-attribute API with no
 feature styling overrides. Future content grouping still requires agent and reviewer judgment; static declarations
-and the billing examples do not prove every screen's layout. The separate backend accounting defect remains open.
+and the billing examples do not prove every screen's layout. The earlier backend accounting and download blockers
+were resolved before PR #666 merged.
 
 ## Context and Orientation
 
@@ -85,7 +105,7 @@ The shared `SignalDetails` owns labeled values. `apps/web/AGENTS.md` is read bef
 Add shared vertical spacing and supporting text, demonstrate them in the billing summary, document their use,
 and guard the shared CSS contract and rendered billing spacing. Existing API calls, accounting, authorization,
 loading, retry, and live-region behavior stay with their current owners. This plan makes no database, backend,
-Compose, public-page redesign, or repository-wide layout changes. Publication uses one draft pull request stacked on the verification-charge UI change.
+Compose, public-page redesign, or repository-wide layout changes. Publication uses the existing draft PR #667 against `master`; its verification-charge UI dependency is merged.
 
 ## Plan of Work
 
@@ -150,8 +170,8 @@ all unrelated work. Do not reset local authentication, credits, or Docker volume
 ## Artifacts and Notes
 
 No issue matched `gh issue list --repo TupoSoft/LeadEmailFinder --label execplan --search 'frontend-spacing/01 in:body'`.
-The new shared contract does not resolve the separate duplicate-batch backend accounting defect recorded in
-`verification-billing/05`.
+A GitHub issue search for the same label and plan marker again returned no issue on September 29, 2026.
+The accounting and download fixes from PR #666 remain part of the base. This spacing change adds no HTTP behavior.
 
 Rendered evidence is stored outside the repository:
 

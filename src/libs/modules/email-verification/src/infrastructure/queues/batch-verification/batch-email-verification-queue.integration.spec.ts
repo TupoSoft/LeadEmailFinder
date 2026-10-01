@@ -7,16 +7,7 @@ import { BatchInput } from '../../../application/delivery/batch/batch-input'
 import { BatchResultWriter } from '../../../application/delivery/batch/batch-result-writer'
 import { BatchEmailVerificationWorkflow } from '../../../application/delivery/batch/batch-email-verification-workflow'
 import { BatchAdmissionService } from '../../../application/delivery/batch/batch-admission.service'
-import {
-    BatchAdmissionRecord,
-    BatchAdmissionState,
-    BatchAdmissionStore,
-    BatchStatusCounts,
-    BatchUniqueAddressAdmissionKind,
-    BatchUniqueAddressRecord,
-    CreateBatchAdmissionOutcome,
-    NewBatchAdmissionInput,
-} from '../../../application/delivery/batch/batch-admission-store'
+import { InMemoryBatchAdmissionStore } from '../../../application/delivery/batch/__tests__/in-memory-batch-admission'
 import { BatchRowRecord, BatchRowStore } from '../../../application/delivery/batch/batch-row-store'
 import { InvalidBatchCsvError } from '../../../application/delivery/batch/batch-terminal-failure'
 import { VerificationExecutionDispatcher } from '../../../application/ports/verification-execution-dispatcher'
@@ -34,106 +25,6 @@ const describeWithRedis = redisUrl === undefined ? describe.skip : describe
 const cacheTtlMs = 24 * 60 * 60 * 1000
 const executionDeadlineMs = 24 * 60 * 60 * 1000
 const addressCooldownMs = 60_000
-
-class InMemoryBatchAdmissionStore implements BatchAdmissionStore {
-    private admissions = new Map<string, BatchAdmissionRecord>()
-    private addresses = new Map<string, BatchUniqueAddressRecord[]>()
-
-    createOrReplay(input: NewBatchAdmissionInput): Promise<CreateBatchAdmissionOutcome> {
-        const existing = this.admissions.get(input.batchId)
-        if (existing) return Promise.resolve({ kind: 'replayed', record: existing })
-        const record: BatchAdmissionRecord = {
-            batchId: input.batchId,
-            organizationId: input.organizationId,
-            state: 'validating',
-            totalRows: input.totalRows,
-            uniqueAddressCount: input.uniqueAddressCount,
-            clientRequestKey: input.clientRequestKey,
-            contentDigest: input.contentDigest,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        }
-        this.admissions.set(input.batchId, record)
-        return Promise.resolve({ kind: 'created', record })
-    }
-
-    findById(batchId: string): Promise<BatchAdmissionRecord | null> {
-        return Promise.resolve(this.admissions.get(batchId) ?? null)
-    }
-
-    findByClientKey(): Promise<BatchAdmissionRecord | null> {
-        return Promise.resolve(null)
-    }
-
-    updateState(batchId: string, _organizationId: string, state: BatchAdmissionState): Promise<void> {
-        const existing = this.admissions.get(batchId)
-        if (existing) this.admissions.set(batchId, { ...existing, state })
-        return Promise.resolve()
-    }
-
-    insertUniqueAddresses(
-        batchId: string,
-        _organizationId: string,
-        addresses: readonly { normalizedAddress: string; firstSeenRow: number }[],
-    ): Promise<void> {
-        const list = this.addresses.get(batchId) ?? []
-        for (const address of addresses) {
-            if (!list.some(existing => existing.normalizedAddress === address.normalizedAddress)) {
-                list.push({
-                    batchId,
-                    normalizedAddress: address.normalizedAddress,
-                    firstSeenRow: address.firstSeenRow,
-                    admissionKind: null,
-                    executionId: null,
-                    resultId: null,
-                    payerRequestId: null,
-                })
-            }
-        }
-        this.addresses.set(batchId, list)
-        return Promise.resolve()
-    }
-
-    pageUniqueAddresses(batchId: string, _organizationId: string, skip: number, take: number): Promise<readonly BatchUniqueAddressRecord[]> {
-        return Promise.resolve((this.addresses.get(batchId) ?? []).slice(skip, skip + take))
-    }
-
-    recordAdmissionOutcome(
-        batchId: string,
-        normalizedAddress: string,
-        outcome: { readonly admissionKind: BatchUniqueAddressAdmissionKind; readonly executionId: string | null; readonly resultId: string | null },
-    ): Promise<void> {
-        const list = this.addresses.get(batchId) ?? []
-        const index = list.findIndex(address => address.normalizedAddress === normalizedAddress)
-        if (index >= 0 && list[index].admissionKind === null) list[index] = { ...list[index], ...outcome }
-        return Promise.resolve()
-    }
-
-    recordPayerRequestId(batchId: string, normalizedAddress: string, payerRequestId: string): Promise<void> {
-        const list = this.addresses.get(batchId) ?? []
-        const index = list.findIndex(address => address.normalizedAddress === normalizedAddress)
-        if (index >= 0) list[index] = { ...list[index], payerRequestId }
-        return Promise.resolve()
-    }
-
-    countUnsettledAddresses(batchId: string): Promise<number> {
-        return Promise.resolve((this.addresses.get(batchId) ?? []).filter(address => address.payerRequestId === null).length)
-    }
-
-    getStatusCounts(): Promise<BatchStatusCounts> {
-        return Promise.resolve({
-            cachedAddresses: 0,
-            sharedAddresses: 0,
-            cooldownAddresses: 0,
-            completedAddresses: 0,
-            conclusiveAddresses: 0,
-            inconclusiveAddresses: 0,
-            failedAddresses: 0,
-            reserved: 0,
-            charged: 0,
-        })
-    }
-}
 
 class InMemoryBatchRowStore implements BatchRowStore {
     private rows: BatchRowRecord[] = []
@@ -214,11 +105,21 @@ describeWithRedis('batch verification queue compatibility with Redis and BullMQ'
             pageNonterminal: jest.fn(),
             pageCanceledPendingCleanup: jest.fn(),
             cancelBatchGroupUnstarted: jest.fn(),
+            claimOrJoinForBatchGroup: jest.fn(),
+            markBatchGroupQueued: jest.fn(),
+            cancelBatchGroupFundingPending: jest.fn(),
+        }
+        const receipts = new Set<string>()
+        admissions.views = {
+            executionState: () => undefined,
+            executionOwnedBy: () => false,
+            receiptExists: requestId => receipts.has(requestId),
         }
         const requests: jest.Mocked<VerificationRequestStore> = {
             findByClientKey: jest.fn(),
             insert: jest.fn(
                 (requestInput): Promise<InsertRequestOutcome> =>
+                    receipts.add(requestInput.requestId) &&
                     Promise.resolve({
                         kind: 'inserted',
                         record: {
@@ -266,6 +167,8 @@ describeWithRedis('batch verification queue compatibility with Redis and BullMQ'
             cacheTtlMs,
             executionDeadlineMs,
             addressCooldownMs,
+            60_000,
+            5_000,
         )
     }
 

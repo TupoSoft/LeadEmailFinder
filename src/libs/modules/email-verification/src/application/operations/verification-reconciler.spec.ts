@@ -1,4 +1,5 @@
 import { CreditReservationService, ReservationRecord } from '@tuposoft/lead-email-finder/modules/credits'
+import { BatchAdmissionRecovery } from '../ports/batch-admission-recovery'
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationExecutionRecord, VerificationExecutionStore } from '../ports/verification-execution-store'
 import { VerificationRequestStore } from '../ports/verification-request-store'
@@ -61,6 +62,9 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
         pageNonterminal: jest.fn().mockResolvedValue([]),
         pageCanceledPendingCleanup: jest.fn().mockResolvedValue([]),
         cancelBatchGroupUnstarted: jest.fn(),
+        claimOrJoinForBatchGroup: jest.fn(),
+        markBatchGroupQueued: jest.fn(),
+        cancelBatchGroupFundingPending: jest.fn(),
         ...overrides,
     }
 }
@@ -113,6 +117,7 @@ function reconcilerFixture(
     settlementService: jest.Mocked<VerificationSettlementService>
     runner: jest.Mocked<VerificationExecutionRunner>
     credits: jest.Mocked<CreditReservationService>
+    batchRecovery: jest.Mocked<BatchAdmissionRecovery>
 } {
     const executions = executionsStore(executionsOverrides)
     const requests = requestsStore()
@@ -123,6 +128,9 @@ function reconcilerFixture(
         getReservation: jest.fn().mockResolvedValue(null),
         release: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<CreditReservationService>
+    const batchRecovery: jest.Mocked<BatchAdmissionRecovery> = {
+        reconcile: jest.fn().mockResolvedValue({ groupsChecked: 0, groupsCompleted: 0, groupsFailed: 0 }),
+    }
     const reconciler = new VerificationReconciler(
         executions,
         requests,
@@ -132,8 +140,9 @@ function reconcilerFixture(
         credits,
         clock(),
         LEASE_TAKEOVER_GRACE_MS,
+        batchRecovery,
     )
-    return { reconciler, executions, requests, settlements, settlementService, runner, credits }
+    return { reconciler, executions, requests, settlements, settlementService, runner, credits, batchRecovery }
 }
 
 describe('VerificationReconciler', () => {
@@ -148,7 +157,7 @@ describe('VerificationReconciler', () => {
         expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(executions.markQueued).toHaveBeenCalledWith('execution-1', organizationId)
         expect(executions.cancelFundingFailure).not.toHaveBeenCalled()
-        expect(report).toEqual({ executionsChecked: 1, intentionsSettled: 0, cancellationsCleanedUp: 0 })
+        expect(report).toEqual({ executionsChecked: 1, intentionsSettled: 0, cancellationsCleanedUp: 0, batchGroupsChecked: 0 })
     })
 
     it('cancels a funding_pending execution with no reservation on record', async () => {
@@ -293,7 +302,7 @@ describe('VerificationReconciler', () => {
 
         expect(settlementService.settle).toHaveBeenCalledWith('execution-1', organizationId)
         expect(settlementService.settle).toHaveBeenCalledWith('execution-2', organizationId)
-        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 2, cancellationsCleanedUp: 0 })
+        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 2, cancellationsCleanedUp: 0, batchGroupsChecked: 0 })
     })
 
     it('retries cleanup for a canceled execution a prior sweep left with a pending linked request', async () => {
@@ -307,7 +316,7 @@ describe('VerificationReconciler', () => {
         expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(credits.release).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
-        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 0, cancellationsCleanedUp: 1 })
+        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 0, cancellationsCleanedUp: 1, batchGroupsChecked: 0 })
     })
 
     it('skips releasing credits during a retried cleanup once the reservation is already gone', async () => {
@@ -320,5 +329,68 @@ describe('VerificationReconciler', () => {
 
         expect(credits.release).not.toHaveBeenCalled()
         expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
+    })
+
+    it('leaves a batch-owned funding_pending execution to group recovery, even past its deadline', async () => {
+        const batchOwned = execution({
+            state: 'funding_pending',
+            fundingOwnerType: 'batch_group',
+            fundingOwnerId: 'batch-1',
+            deadlineAt: new Date(now.getTime() - 1),
+        })
+        const { reconciler, executions, credits } = reconcilerFixture({
+            pageNonterminal: jest.fn().mockResolvedValue([batchOwned]),
+        })
+
+        await reconciler.reconcile(100)
+
+        expect(credits.getReservation).not.toHaveBeenCalled()
+        expect(executions.cancelIfNoCaptureIntention).not.toHaveBeenCalled()
+        expect(executions.cancelFundingFailure).not.toHaveBeenCalled()
+        expect(executions.markQueued).not.toHaveBeenCalled()
+    })
+
+    it('reconciles a queued batch-owned execution like any other', async () => {
+        const { reconciler, runner } = reconcilerFixture({
+            pageNonterminal: jest.fn().mockResolvedValue([
+                execution({ state: 'queued', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+            ]),
+        })
+
+        await reconciler.reconcile(100)
+
+        expect(runner.execute).toHaveBeenCalledWith('execution-1', organizationId)
+    })
+
+    it('recovers batch groups after single executions, settlements, and cancellation cleanup', async () => {
+        const calls: string[] = []
+        const { reconciler, runner, batchRecovery } = reconcilerFixture(
+            {
+                pageNonterminal: jest.fn().mockResolvedValue([execution({ state: 'queued' })]),
+                pageCanceledPendingCleanup: jest.fn((_limit: number) => {
+                    calls.push('cleanup')
+                    return Promise.resolve([] as VerificationExecutionRecord[])
+                }),
+            },
+            {
+                pagePendingIntentions: jest.fn((_limit: number) => {
+                    calls.push('intentions')
+                    return Promise.resolve([] as VerificationSettlementIntentionRecord[])
+                }),
+            },
+        )
+        runner.execute.mockImplementation(() => {
+            calls.push('single')
+            return Promise.resolve({ kind: 'settled' })
+        })
+        batchRecovery.reconcile.mockImplementation(limit => {
+            calls.push(`groups:${limit}`)
+            return Promise.resolve({ groupsChecked: 3, groupsCompleted: 1, groupsFailed: 1 })
+        })
+
+        const report = await reconciler.reconcile(100)
+
+        expect(calls).toEqual(['single', 'intentions', 'cleanup', 'groups:100'])
+        expect(report.batchGroupsChecked).toBe(3)
     })
 })

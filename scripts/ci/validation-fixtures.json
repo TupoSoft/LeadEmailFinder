@@ -45,6 +45,21 @@
     }
   },
   {
+    "name": "mcp-server",
+    "paths": [
+      "apps/mcp-server/src/main.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
     "name": "bruno-runner",
     "paths": [
       "scripts/bruno/run-collection.mjs"

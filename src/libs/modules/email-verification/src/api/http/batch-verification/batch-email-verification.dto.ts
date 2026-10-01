@@ -128,7 +128,7 @@ export class GetBatchStatusResponseDto implements GetBatchStatusResponse {
     @ApiProperty({
         type: Boolean,
         description:
-            'True once settled row accounting is downloadable, including a terminal failure past validation whose output publication kept failing.',
+            'True only for a completed job with a valid retained result location. Status polling does not check storage; a later missing object returns 404, and storage failures can still prevent download.',
     })
     @Expose()
     resultsAvailable: boolean

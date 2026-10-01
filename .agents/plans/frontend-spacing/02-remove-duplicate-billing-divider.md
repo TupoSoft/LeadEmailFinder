@@ -12,6 +12,8 @@ without a second line after the final pack. The same ownership rule guides futur
 - [x] (2026-09-16) Confirmed the final pack's bottom border duplicates the following panel's top border. No synced issue matched `frontend-spacing/02`.
 - [x] (2026-09-16) Restricted pack separators to interior rows and documented divider ownership.
 - [x] (2026-09-16) Verified multiple, single, and empty catalogs at desktop and phone widths; rebuilt the local web container.
+- [x] (2026-10-01) Resolved the conflicts with current `master`, preserving its newer behavior and the seven files from the divider commit. No synced issue matched `frontend-spacing/02`.
+- [ ] (2026-10-01) Verify the updated PR with hosted checks. Local commands are unavailable because the shell process cannot start.
 
 ## Plan dependencies
 
@@ -24,24 +26,41 @@ The following `ProductPanel` already owns the section rule. No new separator com
 Initial mobile screenshot capture failed after the layout assertions passed because the requested clip was below
 the viewport. Full-page capture with the same clip now includes both panels; this was a test artifact issue.
 
+PRs #666 and #667 merged separately, leaving the original stacked commits in this branch. Its comparison with
+`master` therefore included 60 files and conflicts. The divider commit still applies to current `master` with
+unique matching context in every existing file.
+
 ## Decision Log
 
 - 2026-09-16, Codex: Apply the existing soft rule only to direct pack rows that are not the last child. Preserve row
   padding, purchase controls, and the following panel's top border.
 - 2026-09-16, Codex: Add a concise boundary-ownership instruction and browser regression coverage. Use Playwright
   because Browser control tools and the browser skill are unavailable in this session.
+- 2026-10-01, Codex: Preserve the branch history with a merge commit. Start from the current `master` tree and apply
+  only the original divider commit, then update this plan. Use the GitHub API because the local shell cannot start.
+  Existing hosted checks own the new validation; the September results do not verify the updated branch.
 
 ## Publication Review
 
-This draft is stacked on shared-spacing PR #667 to keep its diff focused. The divider fix itself has no dependency
-on verification accounting. On the isolated publication branch, all 22 billing browser cases passed. The production
-build, scoped ESLint, design lint, strict UI audit, and diff checks also passed. Desktop and phone screenshots
-show the intended single section boundary; no screenshot baseline changed.
+This draft now targets `master`, including merged PRs #666 and #667. Its resolved tree contains only the divider
+fix, its guidance, browser coverage, and this plan relative to `master`. The divider fix has no dependency on
+verification accounting. Current validation remains pending.
+
+On September 16, all 22 billing browser cases passed on the original publication branch. The production build,
+scoped ESLint, design lint, strict UI audit, and diff checks also passed. Desktop and phone screenshots showed
+the intended single section boundary; no screenshot baseline changed.
 
 The local container and asset evidence below describe the original implementation checkout. Publication does not
 rebuild that container or mutate account data. The CSS change introduces no material architectural trade-off.
 
 ## Outcomes & Retrospective
+
+The October 1 conflict resolution preserves the current `master` files outside this fix. Exact patch-context checks
+passed for all six existing files, and the new plan remains the seventh changed file. Independent source review
+confirmed that the catalog fixtures and panel markup still support all six added browser cases. No local build,
+browser test, design audit, or Harper command has run in this session; hosted results remain pending.
+
+The following implementation and local delivery results were recorded on September 16.
 
 The last pack no longer draws a bottom border. Internal pack separators and the following section rule remain.
 All 22 billing browser cases passed at 1440 and 320 pixels, including the six new catalog-boundary cases and the

@@ -13,15 +13,64 @@ successfully call `check_credit_balance` using only the README's Customer Setup 
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-25) Created `scripts/testing/mcp-server-live.mjs`: exercises `check_credit_balance` (cross-checked
+  against a direct billing-summary request using an independently minted token), `verify_email`, and a full
+  `submit_batch_verification` → `check_batch_verification` → `download_batch_results` round trip against the real,
+  Compose-deployed connector. Uses the real MCP SDK client directly (resolved from `apps/mcp-server`'s own
+  installed dependency), not `@modelcontextprotocol/inspector --cli`.
+- [x] (2026-09-25) Added `test:mcp-server-live` to root `package.json` and a new `browser-live` CI step running it
+  immediately after `dev:reset`, before every other live suite. Updated `scripts/ci/validate-workflow.spec.ts`'s
+  exact ordered step-list fixture and its two brittle hardcoded-index assertions (made them look up their anchor
+  command's real position instead, so a future insertion cannot silently break them the way this one would have).
+- [x] (2026-09-25) Rewrote `apps/mcp-server/README.md` to its final form: a Responsibility section, a
+  customer-facing Customer Setup section (credential acquisition, per-client configuration guidance, and the full
+  eight-tool list with one example prompt each), and renamed the old dev-fixture-retrieval section to make clear
+  it is for repository development, not real customers. Added one link from root `README.md`'s Local Services
+  table (previously missing `mcp-server` entirely).
+- [x] (2026-09-25) Verified against a genuinely freshly `dev:reset` stack (not a warm/reused one): the live script
+  passed on the first run after reset completed successfully. Verified the redaction requirement by deliberately
+  forcing a connection failure and confirming neither the real client secret nor its Base64-encoded form appeared
+  anywhere in the script's combined standard output and standard error.
 
 ## Plan dependencies
 
+- `mcp-connector/04`
+- `mcp-connector/05`
 - `mcp-connector/06`
+- `mcp-connector-hardening/03`
 
 ## Surprises & Discoveries
 
-None yet.
+- Chose the MCP SDK's own TypeScript client directly over shelling out to `@modelcontextprotocol/inspector --cli`,
+  the option this plan explicitly left open. Reasons: the SDK is already a real, pinned dependency of
+  `apps/mcp-server` (no extra network fetch from the npm registry needed at CI runtime, unlike an ad hoc `npx`
+  invocation), and calling it directly gives typed JSON-RPC responses to assert against rather than parsing CLI
+  stdout. Since this root-level script lives outside `apps/mcp-server`'s own module resolution, it loads the SDK's
+  ESM entry points from that package's own `node_modules` directory directly (the same technique
+  `web-live.mjs`'s `bundleBrowserClient` already uses for `vite`, scoped to `apps/web` instead) rather than adding
+  `@modelcontextprotocol/sdk` as a second, redundant root-level dependency.
+- Interpreted "each matching what a direct API call for the same credential would show" pragmatically rather than
+  literally re-fetching every tool's result via a parallel raw HTTP call: `check_credit_balance` is cheap and
+  idempotent, so the script mints its own bearer token independently (the same client-credentials grant
+  `TokenCache` performs internally) and compares the connector's tool result against a direct
+  `GET /v1/billing/summary` call byte-for-byte. `verify_email` and the batch round trip instead assert internal
+  consistency (the returned address matches the request, row counts and addresses match what was submitted) —
+  duplicating a second independent verification/batch pipeline in this script would not add meaningfully more
+  confidence than what plans 04-06's own manual validation already established, for a large amount of extra,
+  redundant code.
+- `docker/scripts/dev-reset.sh`'s ownership check requires every currently running LEF-project container's
+  `com.docker.compose.project.config_files` label to be *exactly* `docker/compose.yaml` — a single file, not that
+  file plus `docker/compose.smtp-dev.yaml`. A local stack left running with the SMTP overlay attached (as
+  `mcp-connector/06`'s own manual validation, and this repository's `browser-live` CI job itself, both do at a
+  later point) fails `dev-reset.sh`'s ownership check with "Refusing to reset containers owned by another checkout
+  or Compose configuration" until the stack is brought back up with the base `compose.yaml` alone first. This is
+  pre-existing `dev-reset.sh` behavior, not something this plan changed — documented here since it is easy to
+  trip over when validating this exact plan's own live script by hand, immediately after a plan that legitimately
+  needed the overlay attached.
+- A Docker Buildx image build transiently failed with `getaddrinfo EAI_AGAIN registry.npmjs.org` while Corepack
+  fetched the pinned `pnpm` version inside the build sandbox — a real but unrelated environment network blip, not
+  a defect in any Dockerfile. A bare retry of the same `dev:reset` command succeeded immediately with every layer
+  still cached except the ones that had failed.
 
 ## Decision Log
 
@@ -41,7 +90,21 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The full connector tool set is now proven end-to-end against a real, freshly reset local dev stack as part of CI,
+not only by hand as every earlier plan in this road map did. Both Decision Log choices held up: the live script
+lives in the `browser-live` job exactly as planned (no second stack bring-up), and `apps/mcp-server/README.md`
+still does double duty as both the module's responsibility statement and the external customer guide. The one
+plan-time-open decision (Inspector CLI vs. the SDK client) resolved in favor of the SDK client for concrete,
+verified reasons, not a coin flip. This closes out the `mcp-connector` road map: plans 01 through 07 and the
+`mcp-connector-hardening`/`mcp-transport-hardening` corrective series are all now complete, and the connector is a
+real, deployed, documented, continuously live-validated capability rather than a scaffold.
+
+The literal "person given only the Customer Setup section" acceptance criterion was validated by close reading
+and by an actual end-to-end run of every mechanical step described there (credential retrieval, tool invocation,
+balance check) against the real deployed service, rather than by handing the section to an unfamiliar human or a
+separate fresh agent session in this same work session — that stronger, literal form of the check
+(a genuinely uninvolved person or session, blind to this implementation's own context) is a reasonable follow-up
+if this documentation's clarity is ever in doubt in practice.
 
 ## Context and Orientation
 
@@ -92,9 +155,15 @@ Rewrite `apps/mcp-server/README.md` to its final form: a Responsibility section 
 `src/libs/modules/email-verification/README.md`/`service-client-management/README.md` — this component owns the
 MCP protocol surface and the Basic-to-Bearer credential bridge; it owns no verification logic, no credit policy,
 and no customer data of its own, all of which remain owned by the modules it calls) and a Customer Setup section:
-how to obtain a service-client credential (linking `service-client-management`'s README), the exact MCP client
-configuration JSON (remote HTTP URL, `Authorization: Basic <base64(clientId:clientSecret)>` header) for at least
-Claude Desktop and Claude Code, and the full tool list with one example prompt per tool.
+how to obtain a service-client credential (linking `service-client-management`'s README), and the full tool list
+with one example prompt per tool. For the client configuration itself, do not present one remote HTTP URL plus
+`Authorization: Basic` header JSON as if it worked identically for every client — `mcp-connector-hardening/03`
+corrected this: Claude Desktop's local `mcpServers` configuration cannot reach a remote URL/header object
+directly and instead requires the local `mcp-remote` bridge process already documented in this README's own
+"Connecting Claude Desktop" section (link to it rather than duplicating it here). Only present a direct remote
+HTTP URL plus Basic-auth header configuration for a client whose own connection path genuinely supports it, such
+as Claude Code's existing HTTP client path, confirming that client's real supported configuration shape before
+documenting it rather than assuming Desktop's constraints apply everywhere.
 
 Add one link to `apps/mcp-server/README.md` from the root `README.md`'s existing list of module/guide links.
 
@@ -102,7 +171,10 @@ Add one link to `apps/mcp-server/README.md` from the root `README.md`'s existing
 
 New `scripts/testing/mcp-server-live.mjs` and root `test:mcp-server-live` script. One new step in the
 `browser-live` CI job. Final content for `apps/mcp-server/README.md` and one new link from the root `README.md`.
-Depends on `mcp-connector/06`'s deployed service and, transitively, every tool from plans 03–05.
+Depends directly on `mcp-connector/04` and `mcp-connector/05` (the tools this plan's script exercises),
+`mcp-connector/06` (the deployed service it validates against), and `mcp-connector-hardening/03` (the supported
+Claude Desktop connection path this plan documents). Plan 06 does not transitively supply plans 04 or 05 — it
+depends only on plan 03 — so each of those was a genuinely separate, previously unrecorded prerequisite.
 
 ## Acceptance Criteria
 
