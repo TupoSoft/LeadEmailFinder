@@ -1,5 +1,10 @@
-import { DataSource, IsNull } from 'typeorm'
+import { Brackets, DataSource, EntityManager, IsNull, SelectQueryBuilder } from 'typeorm'
 import {
+    BatchAdmissionCheckedWrite,
+    BatchAdmissionFence,
+    BatchAdmissionGuardedWrite,
+    BatchAdmissionLeaseOutcome,
+    BatchAdmissionPhase,
     BatchAdmissionRecord,
     BatchAdmissionState,
     BatchAdmissionStore,
@@ -11,13 +16,74 @@ import {
 } from '../../application/delivery/batch/batch-admission-store'
 import { BatchAdmissionEntity } from './typeorm/batch-admission.entity'
 import { BatchUniqueAddressEntity } from './typeorm/batch-unique-address.entity'
+import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
+import { lockFencedAdmission } from './batch-admission-fence'
+
+const RECOVERABLE_ADMISSION_STATES = [
+    'validating',
+    'admitting',
+    'funding',
+] as const satisfies readonly BatchAdmissionState[]
+const FINALIZING_ADMISSION_STATES = [
+    'admitted',
+    'insufficient_credits',
+] as const satisfies readonly BatchAdmissionState[]
+
+/** Restricts `address` rows to created addresses whose owned execution is still waiting for its group decision. */
+function whereOwnedExecutionFundingPending(query: SelectQueryBuilder<BatchUniqueAddressEntity>): void {
+    query.andWhere("address.admissionKind = 'created'").andWhere(qb => {
+        const subQuery = qb
+            .subQuery()
+            .select('1')
+            .from(VerificationExecutionEntity, 'execution')
+            .where('execution.executionId = address.executionId')
+            .andWhere('execution.organizationId = address.organizationId')
+            .andWhere("execution.fundingOwnerType = 'batch_group'")
+            .andWhere('execution.fundingOwnerId = address.batchId')
+            .andWhere("execution.state = 'funding_pending'")
+            .getQuery()
+        return `EXISTS (${subQuery})`
+    })
+}
+
+/** Restricts `address` rows to resolved addresses whose receipt row does not exist yet. */
+function whereReceiptMissing(query: SelectQueryBuilder<BatchUniqueAddressEntity>): void {
+    const receipt = query
+        .subQuery()
+        .select('1')
+        .from(VerificationRequestEntity, 'request')
+        .where('request.requestId = address.payerRequestId')
+        .andWhere('request.organizationId = address.organizationId')
+        .getQuery()
+    query.andWhere('address.admissionKind IS NOT NULL').andWhere(
+        new Brackets(missing => {
+            missing.where('address.payerRequestId IS NULL').orWhere(`NOT EXISTS (${receipt})`)
+        }),
+    )
+}
+
+function addressQuery(
+    manager: EntityManager,
+    batchId: string,
+    organizationId: string,
+): SelectQueryBuilder<BatchUniqueAddressEntity> {
+    return manager
+        .createQueryBuilder(BatchUniqueAddressEntity, 'address')
+        .where('address.batchId = :batchId', { batchId })
+        .andWhere('address.organizationId = :organizationId', { organizationId })
+}
 
 function toAdmissionRecord(entity: BatchAdmissionEntity): BatchAdmissionRecord {
     return {
         batchId: entity.batchId,
         organizationId: entity.organizationId,
         state: entity.state,
+        fundingDecision: entity.fundingDecision,
+        finalizationState: entity.finalizationState,
+        admissionLeaseOwnerId: entity.admissionLeaseOwnerId,
+        admissionLeaseExpiresAt: entity.admissionLeaseExpiresAt,
+        admissionGeneration: entity.admissionGeneration,
         totalRows: entity.totalRows,
         uniqueAddressCount: entity.uniqueAddressCount,
         clientRequestKey: entity.clientRequestKey,
@@ -67,6 +133,11 @@ export class TypeOrmBatchAdmissionStore implements BatchAdmissionStore {
                 batchId: input.batchId,
                 organizationId: input.organizationId,
                 state: 'validating',
+                fundingDecision: 'pending',
+                finalizationState: 'preparing',
+                admissionLeaseOwnerId: null,
+                admissionLeaseExpiresAt: null,
+                admissionGeneration: 0,
                 totalRows: input.totalRows,
                 uniqueAddressCount: input.uniqueAddressCount,
                 clientRequestKey: input.clientRequestKey,
@@ -88,10 +159,6 @@ export class TypeOrmBatchAdmissionStore implements BatchAdmissionStore {
             clientRequestKey,
         })
         return entity ? toAdmissionRecord(entity) : null
-    }
-
-    async updateState(batchId: string, organizationId: string, state: BatchAdmissionState): Promise<void> {
-        await this.dataSource.manager.update(BatchAdmissionEntity, { batchId, organizationId }, { state })
     }
 
     async insertUniqueAddresses(
@@ -137,18 +204,26 @@ export class TypeOrmBatchAdmissionStore implements BatchAdmissionStore {
 
     async recordAdmissionOutcome(
         batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
         normalizedAddress: string,
         outcome: {
             readonly admissionKind: BatchUniqueAddressAdmissionKind
             readonly executionId: string | null
             readonly resultId: string | null
         },
-    ): Promise<void> {
-        await this.dataSource.manager.update(
-            BatchUniqueAddressEntity,
-            { batchId, normalizedAddress, admissionKind: IsNull() },
-            { admissionKind: outcome.admissionKind, executionId: outcome.executionId, resultId: outcome.resultId },
-        )
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.dataSource.transaction(async manager => {
+            // The shared lock blocks a concurrent freeze or takeover until this outcome commits.
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'read')
+            if (admission?.state !== 'admitting') return 'stale'
+            await manager.update(
+                BatchUniqueAddressEntity,
+                { batchId, organizationId, normalizedAddress, admissionKind: IsNull() },
+                { admissionKind: outcome.admissionKind, executionId: outcome.executionId, resultId: outcome.resultId },
+            )
+            return 'applied'
+        })
     }
 
     async ensurePayerRequestId(
@@ -234,5 +309,229 @@ export class TypeOrmBatchAdmissionStore implements BatchAdmissionStore {
             reserved: toCount(raw?.reserved),
             charged: toCount(raw?.charged),
         }
+    }
+
+    async claimAdmissionLease(
+        batchId: string,
+        organizationId: string,
+        ownerId: string,
+        now: Date,
+        leaseExpiresAt: Date,
+    ): Promise<BatchAdmissionLeaseOutcome> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await manager.findOne(BatchAdmissionEntity, {
+                where: { batchId, organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            if (!admission) throw new Error('batch_admission_not_found')
+
+            const heldByAnother =
+                admission.admissionLeaseOwnerId !== null &&
+                admission.admissionLeaseOwnerId !== ownerId &&
+                admission.admissionLeaseExpiresAt !== null &&
+                admission.admissionLeaseExpiresAt.getTime() > now.getTime()
+            if (heldByAnother) return { kind: 'busy', leaseExpiresAt: admission.admissionLeaseExpiresAt! }
+
+            admission.admissionLeaseOwnerId = ownerId
+            admission.admissionLeaseExpiresAt = leaseExpiresAt
+            admission.admissionGeneration += 1
+            const saved = await manager.save(BatchAdmissionEntity, admission)
+            return { kind: 'acquired', generation: saved.admissionGeneration, record: toAdmissionRecord(saved) }
+        })
+    }
+
+    async renewAdmissionLease(
+        batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
+        leaseExpiresAt: Date,
+    ): Promise<boolean> {
+        const result = await this.dataSource
+            .createQueryBuilder()
+            .update(BatchAdmissionEntity)
+            .set({ admissionLeaseExpiresAt: leaseExpiresAt })
+            .where('batchId = :batchId', { batchId })
+            .andWhere('organizationId = :organizationId', { organizationId })
+            .andWhere('admissionLeaseOwnerId = :ownerId', { ownerId: fence.ownerId })
+            .andWhere('admissionGeneration = :generation', { generation: fence.generation })
+            .andWhere('admissionLeaseExpiresAt > :now', { now: fence.now })
+            .execute()
+        return (result.affected ?? 0) > 0
+    }
+
+    async releaseAdmissionLease(batchId: string, organizationId: string, fence: BatchAdmissionFence): Promise<void> {
+        await this.dataSource
+            .createQueryBuilder()
+            .update(BatchAdmissionEntity)
+            .set({ admissionLeaseOwnerId: null, admissionLeaseExpiresAt: null })
+            .where('batchId = :batchId', { batchId })
+            .andWhere('organizationId = :organizationId', { organizationId })
+            .andWhere('admissionLeaseOwnerId = :ownerId', { ownerId: fence.ownerId })
+            .andWhere('admissionGeneration = :generation', { generation: fence.generation })
+            .execute()
+    }
+
+    async transitionState(
+        batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
+        from: BatchAdmissionState,
+        to: BatchAdmissionState,
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'write')
+            if (admission?.state !== from) return 'stale'
+            admission.state = to
+            await manager.save(BatchAdmissionEntity, admission)
+            return 'applied'
+        })
+    }
+
+    async pageRecoverableGroups(now: Date, limit: number): Promise<readonly BatchAdmissionRecord[]> {
+        const groups = await this.dataSource.manager
+            .createQueryBuilder(BatchAdmissionEntity, 'admission')
+            .where("admission.fundingDecision <> 'closed'")
+            .andWhere(
+                new Brackets(lease => {
+                    lease
+                        .where('admission.admissionLeaseOwnerId IS NULL')
+                        .orWhere('admission.admissionLeaseExpiresAt IS NULL')
+                        .orWhere('admission.admissionLeaseExpiresAt <= :now', { now })
+                }),
+            )
+            .andWhere(
+                new Brackets(work => {
+                    work.where('admission.state IN (:...recoverable)', {
+                        recoverable: RECOVERABLE_ADMISSION_STATES,
+                    }).orWhere(
+                        new Brackets(finalizing => {
+                            finalizing
+                                .where('admission.state IN (:...finalizing)', {
+                                    finalizing: FINALIZING_ADMISSION_STATES,
+                                })
+                                .andWhere("admission.finalizationState = 'preparing'")
+                        }),
+                    )
+                }),
+            )
+            .orderBy('admission.updatedAt', 'ASC')
+            .addOrderBy('admission.batchId', 'ASC')
+            .take(limit)
+            .getMany()
+        return groups.map(toAdmissionRecord)
+    }
+
+    async pageIncompleteAddresses(
+        batchId: string,
+        organizationId: string,
+        phase: BatchAdmissionPhase,
+        afterFirstSeenRow: number,
+        limit: number,
+    ): Promise<readonly BatchUniqueAddressRecord[]> {
+        const query = addressQuery(this.dataSource.manager, batchId, organizationId).andWhere(
+            'address.firstSeenRow > :afterFirstSeenRow',
+            { afterFirstSeenRow },
+        )
+        switch (phase) {
+            case 'resolution':
+                query.andWhere('address.admissionKind IS NULL')
+                break
+            case 'queue':
+            case 'cancellation':
+                whereOwnedExecutionFundingPending(query)
+                break
+            case 'materialization':
+                whereReceiptMissing(query)
+                break
+        }
+        const addresses = await query.orderBy('address.firstSeenRow', 'ASC').take(limit).getMany()
+        return addresses.map(toUniqueAddressRecord)
+    }
+
+    async freezeFundingManifest(
+        batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionCheckedWrite> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'write')
+            if (admission?.state !== 'admitting') return 'stale'
+
+            const recorded = await addressQuery(manager, batchId, organizationId).getCount()
+            const unresolved = await addressQuery(manager, batchId, organizationId)
+                .andWhere('address.admissionKind IS NULL')
+                .getCount()
+            const unowned = await addressQuery(manager, batchId, organizationId)
+                .andWhere("address.admissionKind = 'created'")
+                .andWhere(qb => {
+                    const subQuery = qb
+                        .subQuery()
+                        .select('1')
+                        .from(VerificationExecutionEntity, 'execution')
+                        .where('execution.executionId = address.executionId')
+                        .andWhere('execution.organizationId = address.organizationId')
+                        .andWhere('execution.normalizedAddress = address.normalizedAddress')
+                        .andWhere("execution.fundingOwnerType = 'batch_group'")
+                        .andWhere('execution.fundingOwnerId = address.batchId')
+                        .getQuery()
+                    return `NOT EXISTS (${subQuery})`
+                })
+                .getCount()
+            if (recorded !== admission.uniqueAddressCount || unresolved > 0 || unowned > 0) return 'incomplete'
+
+            admission.state = 'funding'
+            await manager.save(BatchAdmissionEntity, admission)
+            return 'applied'
+        })
+    }
+
+    async listOwnedExecutionIds(batchId: string, organizationId: string): Promise<readonly string[]> {
+        const rows = await addressQuery(this.dataSource.manager, batchId, organizationId)
+            .andWhere("address.admissionKind = 'created'")
+            .andWhere('address.executionId IS NOT NULL')
+            .select('address.executionId', 'executionId')
+            .orderBy('address.firstSeenRow', 'ASC')
+            .getRawMany<{ executionId: string }>()
+        return rows.map(row => row.executionId)
+    }
+
+    async recordFundingDecision(
+        batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
+        decision: 'approved' | 'denied',
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'write')
+            if (admission?.state !== 'funding') return 'stale'
+            if (admission.fundingDecision === decision) return 'applied'
+            if (admission.fundingDecision !== 'pending') return 'stale'
+            admission.fundingDecision = decision
+            await manager.save(BatchAdmissionEntity, admission)
+            return 'applied'
+        })
+    }
+
+    async markFinalizationReady(
+        batchId: string,
+        organizationId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionCheckedWrite> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'write')
+            if (!admission || admission.fundingDecision === 'closed') return 'stale'
+            if (admission.state !== 'admitted' && admission.state !== 'insufficient_credits') return 'stale'
+
+            const missingReceipts = addressQuery(manager, batchId, organizationId)
+            whereReceiptMissing(missingReceipts)
+            const unresolved = await addressQuery(manager, batchId, organizationId)
+                .andWhere('address.admissionKind IS NULL')
+                .getCount()
+            if (unresolved > 0 || (await missingReceipts.getCount()) > 0) return 'incomplete'
+
+            admission.finalizationState = 'ready'
+            await manager.save(BatchAdmissionEntity, admission)
+            return 'applied'
+        })
     }
 }

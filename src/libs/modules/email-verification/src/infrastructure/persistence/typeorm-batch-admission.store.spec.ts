@@ -15,6 +15,11 @@ function admissionEntity(overrides: Partial<BatchAdmissionEntity> = {}): BatchAd
         uniqueAddressCount: 8,
         clientRequestKey: null,
         contentDigest: null,
+        fundingDecision: 'pending',
+        finalizationState: 'preparing',
+        admissionLeaseOwnerId: null,
+        admissionLeaseExpiresAt: null,
+        admissionGeneration: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
@@ -23,6 +28,7 @@ function admissionEntity(overrides: Partial<BatchAdmissionEntity> = {}): BatchAd
 
 describe('TypeOrmBatchAdmissionStore', () => {
     let manager: {
+        findOne: jest.Mock
         findOneBy: jest.Mock
         create: jest.Mock
         save: jest.Mock
@@ -46,6 +52,7 @@ describe('TypeOrmBatchAdmissionStore', () => {
 
     beforeEach(() => {
         manager = {
+            findOne: jest.fn(),
             findOneBy: jest.fn(),
             create: jest.fn((_entity: unknown, value: unknown) => value),
             save: jest.fn((_entity: unknown, value: unknown) => Promise.resolve(value)),
@@ -145,11 +152,6 @@ describe('TypeOrmBatchAdmissionStore', () => {
         expect(manager.findOneBy).toHaveBeenCalledWith(BatchAdmissionEntity, { batchId, organizationId })
     })
 
-    it('updates the admission state', async () => {
-        await store.updateState(batchId, organizationId, 'admitted')
-        expect(manager.update).toHaveBeenCalledWith(BatchAdmissionEntity, { batchId, organizationId }, { state: 'admitted' })
-    })
-
     it('skips the insert entirely for an empty address list', async () => {
         await store.insertUniqueAddresses(batchId, organizationId, [])
         expect(queryBuilder.execute).not.toHaveBeenCalled()
@@ -172,17 +174,79 @@ describe('TypeOrmBatchAdmissionStore', () => {
         })
     })
 
-    it('records an admission outcome only for a not-yet-recorded address', async () => {
-        await store.recordAdmissionOutcome(batchId, 'a@example.test', {
-            admissionKind: 'created',
-            executionId: 'execution-1',
-            resultId: null,
+    describe('admission fencing', () => {
+        const now = new Date('2026-09-15T00:00:00.000Z')
+        const fence = { ownerId: 'owner-1', generation: 3, now }
+        const leased = (overrides: Partial<BatchAdmissionEntity> = {}): BatchAdmissionEntity =>
+            admissionEntity({
+                state: 'admitting',
+                admissionLeaseOwnerId: 'owner-1',
+                admissionLeaseExpiresAt: new Date(now.getTime() + 1),
+                admissionGeneration: 3,
+                ...overrides,
+            })
+        const outcome = { admissionKind: 'created' as const, executionId: 'execution-1', resultId: null }
+
+        it('records an outcome only for a not-yet-recorded address under a shared group lock', async () => {
+            manager.findOne.mockResolvedValue(leased())
+
+            await expect(store.recordAdmissionOutcome(batchId, organizationId, fence, 'a@example.test', outcome)).resolves.toBe('applied')
+
+            expect(manager.findOne).toHaveBeenCalledWith(BatchAdmissionEntity, {
+                where: { batchId, organizationId },
+                lock: { mode: 'pessimistic_read' },
+            })
+            expect(manager.update).toHaveBeenCalledWith(
+                BatchUniqueAddressEntity,
+                { batchId, organizationId, normalizedAddress: 'a@example.test', admissionKind: IsNull() },
+                outcome,
+            )
         })
-        expect(manager.update).toHaveBeenCalledWith(
-            BatchUniqueAddressEntity,
-            { batchId, normalizedAddress: 'a@example.test', admissionKind: IsNull() },
-            { admissionKind: 'created', executionId: 'execution-1', resultId: null },
-        )
+
+        it.each([
+            ['an expired lease', { admissionLeaseExpiresAt: now }],
+            ['a newer generation', { admissionGeneration: 4 }],
+            ['a released lease', { admissionLeaseOwnerId: null, admissionLeaseExpiresAt: null }],
+            ['a frozen manifest', { state: 'funding' as const }],
+        ])('rejects an outcome write from %s without touching the manifest', async (_case, overrides) => {
+            manager.findOne.mockResolvedValue(leased(overrides))
+
+            await expect(store.recordAdmissionOutcome(batchId, organizationId, fence, 'a@example.test', outcome)).resolves.toBe('stale')
+
+            expect(manager.update).not.toHaveBeenCalled()
+        })
+
+        it('reports a live foreign lease as busy without taking it', async () => {
+            const leaseExpiresAt = new Date(now.getTime() + 30_000)
+            manager.findOne.mockResolvedValue(leased({ admissionLeaseOwnerId: 'other-owner', admissionLeaseExpiresAt: leaseExpiresAt }))
+
+            await expect(
+                store.claimAdmissionLease(batchId, organizationId, 'owner-2', now, new Date(now.getTime() + 60_000)),
+            ).resolves.toEqual({ kind: 'busy', leaseExpiresAt })
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('takes over an expired lease with the next generation', async () => {
+            manager.findOne.mockResolvedValue(leased({ admissionLeaseOwnerId: 'crashed-owner', admissionLeaseExpiresAt: now }))
+            const leaseExpiresAt = new Date(now.getTime() + 60_000)
+
+            const claimed = await store.claimAdmissionLease(batchId, organizationId, 'owner-2', now, leaseExpiresAt)
+
+            expect(claimed).toMatchObject({ kind: 'acquired', generation: 4 })
+            expect(manager.save).toHaveBeenCalledWith(
+                BatchAdmissionEntity,
+                expect.objectContaining({ admissionLeaseOwnerId: 'owner-2', admissionLeaseExpiresAt: leaseExpiresAt, admissionGeneration: 4 }),
+            )
+        })
+
+        it('transitions state only from the expected state under the current generation', async () => {
+            manager.findOne.mockResolvedValue(leased({ state: 'validating' }))
+            await expect(store.transitionState(batchId, organizationId, fence, 'admitting', 'funding')).resolves.toBe('stale')
+
+            manager.findOne.mockResolvedValue(leased({ state: 'validating' }))
+            await expect(store.transitionState(batchId, organizationId, fence, 'validating', 'admitting')).resolves.toBe('applied')
+            expect(manager.save).toHaveBeenCalledWith(BatchAdmissionEntity, expect.objectContaining({ state: 'admitting' }))
+        })
     })
 
     describe('ensurePayerRequestId', () => {

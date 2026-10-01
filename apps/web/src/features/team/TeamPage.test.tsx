@@ -164,6 +164,27 @@ describe('team management', () => {
         expect(requestsFor(fetch, membersPath)).toHaveLength(1)
     })
 
+    it('renders access denial after a delayed member-list response', async () => {
+        let responseTimer: ReturnType<typeof setTimeout> | undefined
+        try {
+            const { fetch, router } = renderTeam({
+                capabilities: [],
+                intercept: request => {
+                    if (new URL(request.url).pathname === membersPath) {
+                        return new Promise<Response>(resolve => {
+                            responseTimer = setTimeout(() => resolve(new Response(null, { status: 403 })), 1200)
+                        })
+                    }
+                },
+            })
+            expect(await screen.findByRole('heading', { name: /access/i })).toBeInTheDocument()
+            expect(router.state.location.pathname).toBe('/app/forbidden')
+            expect(requestsFor(fetch, membersPath)).toHaveLength(1)
+        } finally {
+            clearTimeout(responseTimer)
+        }
+    })
+
     it('guides administrators away from owner controls while retaining other role actions', async () => {
         renderTeam({ role: 'admin' })
         expect(await screen.findByText('Members 1–3 of 3')).toBeInTheDocument()

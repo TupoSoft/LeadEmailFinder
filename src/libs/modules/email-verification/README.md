@@ -251,29 +251,52 @@ admission/dispatch/settlement flow below.
 in one validated upload. Before resolving each address, it reserves an immutable receipt UUID through the
 organization-scoped `BatchAdmissionStore.ensurePayerRequestId()`. Concurrent assignments return the stored winner.
 It checks cache freshness and the address cooldown period exactly like single verification's
-`VerificationAdmissionService`, then calls `VerificationExecutionStore.claimOrJoin(...,
-{type: 'batch_group', id: batchId})` — the same method single verification uses, now accepting an optional
-funding-owner override (default `{type: 'single', id: newExecutionId}`, unchanged behavior for single
-verification). Every admission (single or batch) is additionally serialized per organization by a transaction-
-scoped `pg_advisory_xact_lock(hashtext(organizationId))` inside the transaction used by `claimOrJoin()`, so a batch upload
-freezing its manifest cannot race a concurrent single-verification submission for one of the same addresses. Once
-every address is resolved, it collects the `created` addresses' execution IDs and reserves them **all at once**
-through `CreditReservationService.reserveMany()` — one atomic, all-or-nothing group reservation, not one credit
-per address. On success, it calls `markQueued()` for each execution. On `InsufficientCreditsException`, it calls
-`cancelFundingFailure()` for each execution and `closeAdmissionMany()` with the same item list, fencing the whole
-group without funding any of it.
-Only then does it materialize one `VerificationRequestStore` row per unique address (`deliveryMode: 'batch'`),
-matching the per-outcome shape used by `VerificationAdmissionService` (`cache`/`cooldown` → free and immediately
-settled; `shared` → zero-reserved follower; `created` → `reservedCount: 1` if the group funded, or a free
-`finalReason: 'failed'` row if it didn't). Every step is idempotent on retry: `admit()` reentering after the
-group already reached `admitted`/`insufficient_credits` skips straight to materializing any request row a prior,
-interrupted attempt never reached. An assigned `payerRequestId` identifies the intended receipt; it does not prove
+`VerificationAdmissionService`, then calls `VerificationExecutionStore.claimOrJoinForBatchGroup()`, which owns the
+execution as `{type: 'batch_group', id: batchId}`. Every admission (single or batch) is serialized per organization
+by a transaction-scoped `pg_advisory_xact_lock(hashtext(organizationId))`, so a batch upload freezing its manifest
+cannot race a concurrent single-verification submission for one of the same addresses.
+
+One durable group owner coordinates each batch. `admit()` first takes the group's admission lease: a fresh owner
+UUID, a 60-second expiry, and an incremented `admissionGeneration`. It renews the lease serially every 5 seconds with
+the injected clock. Another live owner makes the call return `busy` with the lease's expiry. Every group
+transition carries a `BatchAdmissionFence` (owner, generation, and the caller's clock reading), and every adapter
+write verifies it under the group row lock. An expired, released, or superseded owner therefore cannot record an
+outcome, claim an execution, freeze the manifest, commit a decision, or queue and cancel executions. Lock order is
+the organization advisory lock, then the batch group row, then execution rows; no credit call, SMTP call, Redis
+operation, or wait runs inside those transactions.
+
+Each call is one bounded advancement of at most 100 address steps — resolution, queuing, cancellation, and receipt
+materialization each cost one — plus at most one indivisible whole-manifest credit call. When the budget runs out,
+it releases the lease (touching `updatedAt`) and returns a `continuation`; the next advancement restarts from the
+first incomplete persisted row, never from a stored cursor. The group moves through these phases:
+
+1. `validating` → `admitting`: resolve every address into the immutable manifest.
+2. `admitting` → `funding`: under the group row lock, verify the unique-address count, that every address is
+   resolved, and that every `created` address names an execution this batch owns. The outcomes and owned-operation
+   list are frozen from then on, including after lease takeover.
+3. `funding` with decision `pending`: call `CreditReservationService.reserveMany()` once for the whole frozen list.
+   Approval requires every returned reservation to be `reserved`. A `released` row means another generation already
+   closed the admission, so the group takes the denied path; a `captured` row fails as an invariant violation.
+   `InsufficientCreditsException` records `denied`; any other credit error stays retryable from `pending`.
+4. `approved`: queue each owned `funding_pending` execution through `markBatchGroupQueued()`, which requires the
+   approved decision under the current fence, then enter `admitted`.
+5. `denied`: cancel each owned `funding_pending` execution, call `closeAdmissionMany()` for the whole frozen list,
+   then enter `insufficient_credits`. A denied group repeats only closure, never reservation, even after a top-up.
+6. Materialize one `VerificationRequestStore` receipt per unique address (`deliveryMode: 'batch'`), matching the
+   per-outcome shape used by `VerificationAdmissionService` (`cache`/`cooldown` → free and immediately settled;
+   `shared` → zero-reserved follower; `created` → `reservedCount: 1` if the group was approved, or a free
+   `finalReason: 'failed'` row if it was denied). `finalizationState` becomes `ready` only once every manifest UUID
+   has its matching receipt; that means receipt attachment is complete, not that billing has settled.
+
+The workflow's `Admit` step advances to `Dispatch` only on `complete`; `busy` and `continuation` raise the existing
+`BatchAwaitingSettlementSignal` so the job is delayed rather than failed. `closed` is a terminal decision reserved
+for terminal batch-failure cleanup, which this service never reopens. An assigned `payerRequestId` identifies the intended receipt; it does not prove
 that the receipt has been inserted. The materialization pass reads every resolved address's receipt by UUID and
 organization, validates its immutable identity, and creates it when absent. An owned execution receives that same
 UUID as its payer, while a shared execution keeps its original payer and the batch receives a free follower.
 
 A crash between `claimOrJoin()` committing a new execution and this address's own outcome write leaves that
-execution real but unrecorded in the manifest. A retry's `claimOrJoin()` call for the same address then reports
+execution real but unrecorded in the manifest. A retried `claimOrJoin()` call for the same address then reports
 `joined`, not `created`, since the slot is already occupied — but when the returned execution's funding owner is
 this same batch, that is a resumed claim from the interrupted attempt, not another funder's work. The resolver
 classifies it as `created`, reusing the execution's own committed ID and payer request UUID (never a fresh
@@ -291,9 +314,10 @@ UUID reuse is now rejected. Cache and cooldown receipts retain the result record
 result appears later. The batch adapter no longer exposes an overwrite operation for payer UUIDs. Interrupted
 execution-claim and funding recovery remain separate hardening tasks.
 
-`VerificationExecutionStore.pageNonterminal`/`pageCanceledPendingCleanup` no longer exclude `batch_group`-owned
-rows — the existing `VerificationReconciler` recovers a batch-owned execution (crash recovery, lease takeover,
-deadline cancellation) exactly like a single-owned one; there is no separate batch-only recovery loop. A new
+`VerificationExecutionStore.pageNonterminal` excludes only `batch_group`-owned `funding_pending` rows, which are
+normal while a group resolves addresses and belong to group recovery. Once queued, the existing
+`VerificationReconciler` recovers a batch-owned execution (crash recovery, lease takeover, deadline cancellation)
+exactly like a single-owned one, and `pageCanceledPendingCleanup` still includes batch-owned rows. A
 `cancelBatchGroupUnstarted(batchId, organizationId)` cancels every `batch_group`-owned row still in
 `funding_pending`/`queued`/`awaiting_retry` in one pass (never a `running` one — a late worker is never bypassed),
 for terminal batch-upload failure fencing. `VerificationRequestSource` gained `'cooldown'`, written only by this
@@ -302,7 +326,9 @@ request row exists, so it never produces this source).
 
 Persistence entities live in `infrastructure/persistence/typeorm/`, with adapters in `infrastructure/persistence/`.
 `BatchAdmissionEntity` (`batch_admissions`, PK `batchId` — the same ID as the BullMQ job) holds the manifest state
-(`validating|admitting|admitted|insufficient_credits|invalid`) and row/address counts. It also reserves
+(`validating|admitting|funding|admitted|insufficient_credits|invalid`), row/address counts, and the group
+coordination fields: `fundingDecision` (`pending|approved|denied|closed`), `finalizationState` (`preparing|ready`),
+the nullable `admissionLeaseOwnerId`/`admissionLeaseExpiresAt`, and the integer `admissionGeneration`. It also reserves
 `clientRequestKey`/`contentDigest` for a future Idempotency-Key feature. `BatchUniqueAddressEntity`
 (`batch_unique_addresses`, unique on `(batchId, normalizedAddress)`) is the immutable per-address manifest:
 `admissionKind`, `executionId`, `resultId`, `payerRequestId`, and `firstSeenRow`. Its `admissionKind = 'created'` rows
@@ -392,7 +418,14 @@ already exists, since capture always wins. A deadline cancellation that actually
 its credit reservation and settles every linked request as a zero-charge `failed` outcome through
 `VerificationRequestStore.settleCanceled()`. This mirrors what `confirmSettlement` does for the normal path.
 A cancellation the reconciler replays as a no-op does neither, since the reservation was already released the first
-time. The reconciler then confirms every pending settlement intention through `VerificationSettlementService.settle()`.
+time. The reconciler then confirms every pending settlement intention through `VerificationSettlementService.settle()`
+and retries cancellation cleanup. Only after those single-execution stages does it call the
+`BatchAdmissionRecovery` port. `BatchAdmissionRecoveryService` pages at most 100 recoverable groups by
+`updatedAt ASC, batchId ASC`, skipping live leases, `closed` decisions, and groups whose finalization is `ready`.
+It gives each one bounded advancement through the same `BatchAdmissionService.admit()` entry point, so a large batch
+cannot starve single verification. Each lease release touches the group, so successive sweeps rotate through more
+than 100 groups. One group's retryable failure is counted and never stops the sweep; no customer address or credit
+detail is logged. Recovery does not depend on the batch queue being available.
 It runs on its own repeatable BullMQ job, this module's first periodic queue, under
 `infrastructure/queues/verification-reconciliation/`. `OnApplicationBootstrap` schedules it every 30 seconds
 through the `VerificationReconciliationScheduler` port and its `BullVerificationReconciliationScheduler` adapter,
@@ -411,7 +444,10 @@ evidence-observation time. `api/verification-operation-metadata.dto.ts` holds on
 in the application layer; only the decorated shape lives in the API layer.
 `EmailVerificationCoreModule` wires every store and service above as explicit factory providers (matching its
 existing convention of instantiating concrete stores inline rather than giving them their own DI token) and now
-imports `CreditsModule`. `EmailVerificationModule` (the root, one level up) imports bare `ConfigModule` directly.
+imports `CreditsModule`. The internal `infrastructure/batch-admission.module.ts` owns the batch admission store,
+`BatchAdmissionService`, and the `BatchAdmissionRecovery` port. Both the batch queue module and the reconciliation
+module import it, and the reconciliation module now wires `VerificationReconciler`, so core never depends on either
+queue module. `EmailVerificationModule` (the root, one level up) imports bare `ConfigModule` directly.
 Without it, none of its own `ConfigService`-injecting factories can resolve once the real application module tree
 is instantiated end to end. These include the async-service composition, both rate-limit configuration factories,
 and `RUN_SYNCHRONOUS_VERIFICATION`. `ConfigModule.forRoot()` is called once at the API composition root and is not `isGlobal`.
@@ -474,7 +510,7 @@ person attribution; verification and durable finding workflows remain separate w
 | -------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `verification-execution`  | `VerificationExecutionModule`                                | `VerificationExecutionProcessor` — the shared execution dispatch queue for single verification (sync/async) and, since `verification-billing/05`, batch's `created` addresses too |
 | `batch-email-verification` | `BatchEmailVerificationModule`                              | `BatchEmailVerificationProcessor` delegates to the pure `BatchEmailVerificationWorkflow`, a `Validate → Admit → Dispatch → AwaitSettlement → UploadResults → Finish` state machine driven by durable admission/execution/settlement state, not a BullMQ parent/child fan-out |
-| `verification-reconciliation` | `VerificationReconciliationModule` (one repeatable job every 30 seconds, scheduled via `OnApplicationBootstrap`) | `VerificationReconciliationProcessor` delegates to `VerificationReconciler.reconcile()`. This is the module's first periodic queue. It is the only dispatcher for both single and batch-owned executions in `queued` or due `awaiting_retry` states |
+| `verification-reconciliation` | `VerificationReconciliationModule` (one repeatable job every 30 seconds, scheduled via `OnApplicationBootstrap`) | `VerificationReconciliationProcessor` delegates to `VerificationReconciler.reconcile()`. This is the module's first periodic queue. It is the only dispatcher for both single and batch-owned executions in `queued` or due `awaiting_retry` states, and it finishes with one bounded batch group recovery sweep |
 
 ## Persistence
 
@@ -487,7 +523,7 @@ person attribution; verification and durable finding workflows remain separate w
 | `VerificationRequestEntity` | `verification_requests` | UUID request ID; partial unique index on `(organizationId, clientRequestKey)` where the key is not null; durable record of one caller submission |
 | `VerificationExecutionEntity` | `verification_executions` | UUID execution ID; partial unique index on `(organizationId, normalizedAddress)` for nonterminal states — at most one live execution per address |
 | `VerificationSettlementIntentionEntity` | `verification_settlement_intentions` | UUID execution ID as primary key — enforces at most one settlement intention, ever, per execution |
-| `BatchAdmissionEntity` | `batch_admissions` | UUID batch ID (same as the BullMQ job ID) as primary key; one admission manifest row per upload |
+| `BatchAdmissionEntity` | `batch_admissions` | UUID batch ID (same as the BullMQ job ID) as primary key; one admission manifest row per upload, including its fenced admission lease, generation, funding decision, and finalization state; indexed on `(updatedAt, batchId)` for recovery order |
 | `BatchUniqueAddressEntity` | `batch_unique_addresses` | Unique on `(batchId, normalizedAddress)`; the immutable per-address admission manifest, also the exact reservation list (`admissionKind = 'created'` rows) |
 | `BatchRowEntity` | `batch_rows` | Unique on `(batchId, sourceRow)`; the ordered, duplicate-preserving original CSV row registry |
 
@@ -579,9 +615,13 @@ Focused tests are grouped by behavior:
   submission, completed and repeated polling, single-credit reservation and capture, missing jobs, malformed IDs,
   authentication, and insufficient credits. Its launcher requires an SMTP stack owned by the current checkout.
 - **Batch admission**: `application/delivery/batch/batch-admission.service.spec.ts` covers cache/cooldown/shared/
-  created resolution, atomic group `reserveMany`/`closeAdmissionMany` funding and fencing, per-outcome request
-  materialization, and resuming an interrupted `admit()` after the group already reached a terminal state —
-  against fake ports, with no Nest, BullMQ, or S3 involved
+  created resolution, atomic group `reserveMany`/`closeAdmissionMany` funding and fencing, released and captured
+  reservation handling, per-outcome request materialization, lease busy/takeover/loss, stale-owner fencing, and the
+  100-step budget with resumption from persisted state. It runs against the contract-faithful in-memory fake in
+  `application/delivery/batch/__tests__/in-memory-batch-admission.ts`, with no Nest, BullMQ, or S3 involved.
+  `application/delivery/batch/batch-admission-recovery.service.spec.ts` covers the bounded, fair recovery sweep, and
+  `infrastructure/batch-admission.module.spec.ts` proves the admission and reconciliation modules compose without
+  a dependency cycle
 - **Batch application**: `application/delivery/batch/batch-email-verification.service.spec.ts` and
   `application/delivery/batch/batch-email-verification-workflow.spec.ts` cover upload/status/results and every
   `Validate → Admit → Dispatch → AwaitSettlement → UploadResults → Finish` transition — including the
@@ -607,7 +647,10 @@ Focused tests are grouped by behavior:
   address/row insertion, the unsettled-address and status-count aggregate queries. The real-Postgres
   `infrastructure/persistence/verification-billing.integration.spec.ts` (see below) additionally proves batch
   admission's group reservation, insufficient-funds fencing, and single/batch address sharing against a real
-  schema. Payer identity regressions compare the credit debit, receipt, status aggregate, and actual CSV cursor
+  schema. Group recovery scenarios cover a paused admission surviving reconciliation ticks and worker loss before and
+  after reservation. They also cover a stale owner on a second connection, both reserve-versus-close orders,
+  interrupted closure after a top-up, and released tombstones. The rest cover approved replay after capture, the
+  101-address budget, and single-first, fair sweeps over 101 groups. Payer identity regressions compare the credit debit, receipt, status aggregate, and actual CSV cursor
   output for conclusive, inconclusive, cached, cooldown, and shared outcomes. They also cover concurrent identity
   assignment and receipt insertion, foreign ownership, and interruptions before resolution and after insertion.
   Only the external object upload is replaced in these database tests.

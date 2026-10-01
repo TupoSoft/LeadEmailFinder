@@ -67,7 +67,16 @@ describe('BatchEmailVerificationWorkflow', () => {
             createOrReplay: jest.fn(),
             findById: jest.fn(),
             findByClientKey: jest.fn(),
-            updateState: jest.fn(),
+            claimAdmissionLease: jest.fn(),
+            renewAdmissionLease: jest.fn(),
+            releaseAdmissionLease: jest.fn(),
+            transitionState: jest.fn(),
+            pageRecoverableGroups: jest.fn(),
+            pageIncompleteAddresses: jest.fn(),
+            freezeFundingManifest: jest.fn(),
+            listOwnedExecutionIds: jest.fn(),
+            recordFundingDecision: jest.fn(),
+            markFinalizationReady: jest.fn(),
             insertUniqueAddresses: jest.fn(),
             pageUniqueAddresses: jest.fn().mockResolvedValue([]),
             recordAdmissionOutcome: jest.fn(),
@@ -75,7 +84,7 @@ describe('BatchEmailVerificationWorkflow', () => {
             countUnsettledAddresses: jest.fn().mockResolvedValue(0),
             getStatusCounts: jest.fn(),
         }
-        admissionService = { admit: jest.fn().mockResolvedValue(undefined) }
+        admissionService = { admit: jest.fn().mockResolvedValue({ kind: 'complete' }) }
         dispatcher = { dispatch: jest.fn().mockResolvedValue(undefined) }
         resultWriter = { write: jest.fn() }
         traceObserver = {
@@ -146,6 +155,25 @@ describe('BatchEmailVerificationWorkflow', () => {
         await workflow.advance(job, 'token')
 
         expect(admissionService.admit).toHaveBeenCalledWith('job-1', 'org-1')
+    })
+
+    it.each([
+        ['another owner holds the group', { kind: 'busy' as const, retryAt: new Date(10_000) }],
+        [
+            'the advancement spent its budget',
+            { kind: 'continuation' as const, retryAt: new Date(10_000), phase: 'resolution' as const, afterFirstSeenRow: 100 },
+        ],
+    ])('parks Admit without dispatching when %s', async (_case, outcome) => {
+        admissionService.admit.mockResolvedValue(outcome)
+        const job = fakeHandle({ step: BatchJobStep.Admit, bucket: 'bucket', key: 'key', organizationId: 'org-1', credentialId: 'cred-1' })
+
+        const error = await workflow.advance(job, 'token').catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(BatchAwaitingSettlementSignal)
+        expect((error as BatchAwaitingSettlementSignal).retryAtMs).toBe(10_000)
+        expect(job.data.step).toBe(BatchJobStep.Admit)
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
+        expect(traceObserver.failed).not.toHaveBeenCalled()
     })
 
     it('dispatches only newly created executions during Dispatch', async () => {

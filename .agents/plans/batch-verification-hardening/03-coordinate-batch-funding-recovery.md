@@ -12,10 +12,10 @@ A developer can pause admission across several reconciliation ticks and still ob
 
 ## Progress
 
-- [ ] (2026-09-15 16:57Z) Add durable group phases and deterministic active-owner and recovery regressions.
-- [ ] (2026-09-15 16:57Z) Implement fenced ownership, replayable funding, and bounded group reconciliation.
-- [ ] (2026-09-15 16:57Z) Wire acyclic providers and validate PostgreSQL and batch HTTP behavior.
-- [ ] (2026-09-15 16:57Z) Record actual checks, recovery evidence, and architectural trade-offs.
+- [x] (2026-09-27) Add durable group phases and deterministic active-owner and recovery regressions.
+- [x] (2026-09-27) Implement fenced ownership, replayable funding, and bounded group reconciliation.
+- [x] (2026-09-27) Wire acyclic providers and validate PostgreSQL and batch HTTP behavior.
+- [x] (2026-09-27) Record actual checks, recovery evidence, and architectural trade-offs.
 
 ## Plan dependencies
 
@@ -25,7 +25,17 @@ A developer can pause admission across several reconciliation ticks and still ob
 
 ## Surprises & Discoveries
 
-None yet.
+- Implementation started from master `686b5f1`, which already contains plans 01, 02, and 06 and the batch
+  admission classes this plan names. Its paths matched the plan, so no redesign was needed.
+- `corepack pnpm typecheck` fails in this checkout with only `TS5033` because the root-owned `dist/` directory
+  rejects `tsconfig.tsbuildinfo`; the same error occurs on unmodified master. Both projects type-check cleanly with
+  `--tsBuildInfoFile` redirected to a scratch path.
+- Recovery and `pageNonterminal()` sweep every organization. Because the PostgreSQL suite shares one schema across
+  tests, the fairness scenario first retires earlier scenarios' groups and nonterminal executions.
+- The live Bruno launcher needs the SMTP development overlay (`docker/compose.smtp-dev.yaml`) after
+  `dev:reset`; without it, the evidence-control reset fails at `fixture_bootstrap`.
+- Many touched files were not Prettier-formatted on master. Only new files and files that were formatted before
+  this change were formatted, to keep the diff reviewable.
 
 ## Decision Log
 
@@ -41,10 +51,60 @@ None yet.
 - Decision: Keep group recovery independent of BullMQ batch-job availability and preserve terminal cleanup for plan 05.
   Rationale: Database recovery must finish interrupted funding without introducing a dependency cycle or queue-driven locks.
   Date/author: 2026-09-15, Codex.
+- Decision: Add `claimOrJoinForBatchGroup()` instead of a guard parameter on `claimOrJoin()`, and remove the
+  unguarded `BatchAdmissionStore.updateState()`.
+  Rationale: The single-verification outcome union stays unchanged, and no unguarded group transition remains.
+  Date/author: 2026-09-27, Claude.
+- Decision: Put guarded queue and cancellation transitions on `VerificationExecutionStore`, sharing one
+  `lockFencedAdmission()` helper with the admission store.
+  Rationale: The execution store owns execution transitions; the helper keeps the group-row-then-execution-row
+  lock order in one place.
+  Date/author: 2026-09-27, Claude.
+- Decision: Map lost ownership (a stale guarded write or failed renewal) to `busy`, continue a budget-exhausted
+  call after 1 second, and fail an incomplete freeze, finalization, or phase-completion check as a retryable
+  invariant error.
+  Rationale: Lost ownership is normal after takeover; an incomplete persisted precondition after a completed phase
+  indicates a defect that must not be skipped silently.
+  Date/author: 2026-09-27, Claude.
+- Decision: Extend Bruno only with the insufficient-credit group. Requests 01–03 already prove the funded success
+  path, and a successful reset to zero proves no hold remains because the credits API rejects a balance below
+  held credits.
+  Rationale: Covers the changed public behavior without duplicating existing success coverage.
+  Date/author: 2026-09-27, Claude.
+- Decision: Share one contract-faithful in-memory admission fake under `application/delivery/batch/__tests__/`.
+  Rationale: Unit tests exercise the same lease, phase, and freeze rules as the adapter instead of scripted mocks.
+  Date/author: 2026-09-27, Claude.
+- Decision: Remove the batch queue module's now-unused `CreditsModule` import.
+  Rationale: Credits are consumed only through the new internal `BatchAdmissionModule`.
+  Date/author: 2026-09-27, Claude.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered as planned. A batch group now has one fenced admission owner: a 60-second lease renewed every 5 seconds,
+an incremented generation per acquisition, and guarded adapter writes for outcomes, claims, freezing, decisions,
+queuing, cancellation, state transitions, and finalization. `BatchAdmissionService.admit()` performs one bounded
+advancement of at most 100 address steps plus one whole-manifest credit call and returns `complete`, `busy`, or
+`continuation`; the workflow parks `Admit` through `BatchAwaitingSettlementSignal` until admission completes. The
+generic reconciler no longer touches batch-owned `funding_pending` rows. After single-execution work, it calls the new
+`BatchAdmissionRecovery` port, which advances at most 100 groups per sweep in `updatedAt, batchId` order.
+
+Validation evidence, all run on 2026-09-27 against the implementation working tree:
+
+- Focused Jest (admission, recovery, workflow, reconciler, both TypeORM store specs, module composition): all pass.
+  The complete `src/libs/modules` Jest run: 206 suites and 2,380 tests pass; 16 environment-gated suites skip.
+- `corepack pnpm test:verification-billing-postgres`: 32 tests passed, zero skipped. The new scenarios cover every
+  interruption boundary in the acceptance criteria, including both reserve-versus-close orders on real credits.
+- The real-Redis batch queue suites (`TEST_REDIS_URL` against a disposable `redis:7-alpine` container): 7 suites,
+  50 tests pass.
+- `node --test scripts/bruno/batch-verification-runner.test.mjs`: 4 tests pass, including rejection of a denied group
+  that reports a held credit or debits the balance.
+- `corepack pnpm bruno:batch-verification` after `corepack pnpm dev:reset --confirm-project=LEF` and the SMTP overlay:
+  `Bruno 4.1.0: 20 requests and 30 tests passed; no skipped requests`.
+- `corepack pnpm architecture:check`: 9 modules, 0 violations. ESLint on every changed TypeScript file: clean.
+  Type checking: clean (see the `TS5033` note above).
+
+Remaining work belongs to later plans: plan 04 adopts the shared admission-state contract for late attachment, and
+plan 05 adds terminal failure phases and uses the `closed` decision this plan reserves.
 
 ## Context and Orientation
 
