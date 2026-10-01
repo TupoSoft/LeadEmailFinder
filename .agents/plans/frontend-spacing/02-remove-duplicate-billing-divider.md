@@ -27,8 +27,8 @@ Initial mobile screenshot capture failed after the layout assertions passed beca
 the viewport. Full-page capture with the same clip now includes both panels; this was a test artifact issue.
 
 PRs #666 and #667 merged separately, leaving the original stacked commits in this branch. Its comparison with
-`master` therefore included 60 files and conflicts. The divider commit still applies to current `master` with
-unique matching context in every existing file.
+`master` therefore included 60 files and conflicts. Every existing file contains a unique match for
+the original divider patch context.
 
 ## Decision Log
 
@@ -42,8 +42,8 @@ unique matching context in every existing file.
 
 ## Publication Review
 
-This draft now targets `master`, including merged PRs #666 and #667. Its resolved tree contains only the divider
-fix, its guidance, browser coverage, and this plan relative to `master`. The divider fix has no dependency on
+This draft now targets `master`, including merged PRs #666 and #667. The PR contains only the divider fix,
+its guidance, browser coverage, and this plan relative to `master`. The divider fix has no dependency on
 verification accounting. Current validation remains pending.
 
 On September 16, all 22 billing browser cases passed on the original publication branch. The production build,
@@ -58,7 +58,8 @@ rebuild that container or mutate account data. The CSS change introduces no mate
 The October 1 conflict resolution preserves the current `master` files outside this fix. Exact patch-context checks
 passed for all six existing files, and the new plan remains the seventh changed file. Independent source review
 confirmed that the catalog fixtures and panel markup still support all six added browser cases. No local build,
-browser test, design audit, or Harper command has run in this session; hosted results remain pending.
+browser test, design audit, or Harper command has run locally in this session. Hosted run `36883654003` reported
+two Harper findings in this plan; both phrases were revised. Validation of the revised text remains pending.
 
 The following implementation and local delivery results were recorded on September 16.
 
