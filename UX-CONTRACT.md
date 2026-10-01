@@ -53,6 +53,8 @@ and reuse these primitives; navigation visibility follows effective capabilities
 | Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
 | Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
 | Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
+| Content spacing | `Stack` | `DESIGN.md` | Content groups and related controls; parent owns direct-child spacing | Static declaration checks and billing browser geometry |
+| Supporting text | `SupportingText` | `DESIGN.md` | Compact explanatory paragraphs | Static token checks and billing browser typography |
 | Detail list | `SignalDetails` | `DESIGN.md` | Evidence fields; supporting balance figures with regular-weight labels | Billing and verification component and browser tests |
 | Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
 | Form | `Form.module.css` | This contract | Email, role, password, description, and permission fields | Field validation and browser tests |

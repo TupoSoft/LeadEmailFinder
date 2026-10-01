@@ -6,7 +6,7 @@
     "designContract": "DESIGN.md",
     "canonicalMap": "UX-CONTRACT.md",
     "approvedConcept": "apps/web/design/concepts/public-entry-approved.png",
-    "requiredCapabilities": ["Scrollbar"],
+    "requiredCapabilities": ["Scrollbar", "Content spacing", "Supporting text"],
     "ownership": {
         "Data panel": "ProductPanel",
         "Detail list": "SignalDetails",
@@ -14,7 +14,9 @@
         "Select/Listbox": "native",
         "Dialog": "TeamDialog",
         "File upload": "native",
-        "Progress": "ProgressIndicator"
+        "Progress": "ProgressIndicator",
+        "Content spacing": "Stack",
+        "Supporting text": "SupportingText"
     },
     "requiredCommands": ["unit", "browser", "accessibility", "visual"],
     "commands": {
@@ -47,7 +49,8 @@
         "platformCreditRuntime": "apps/web/tests/e2e/platform-credits.spec.ts",
         "platformProxies": "apps/web/tests/e2e/platform-proxies-ui.spec.ts",
         "platformProxyRuntime": "apps/web/tests/e2e/platform-proxies.spec.ts",
-        "platformProxyPrivacy": "scripts/testing/proxy-browser-artifacts.spec.mjs"
+        "platformProxyPrivacy": "scripts/testing/proxy-browser-artifacts.spec.mjs",
+        "contentSpacing": "apps/web/tests/e2e/verification-billing-ui.spec.ts"
     },
     "tokenMapping": {
         "owner": "DESIGN.md",
@@ -288,6 +291,39 @@
         "components.form-control.size": {
             "reference": "spacing.control-height",
             "consumers": ["apps/web/src/shared/Form.module.css"]
+        },
+        "components.supporting-text.textColor": {
+            "reference": "colors.ink",
+            "consumers": ["apps/web/src/shared/SupportingText.module.css"],
+            "bindings": [
+                {
+                    "file": "apps/web/src/shared/SupportingText.module.css",
+                    "selector": ".text",
+                    "property": "color"
+                }
+            ]
+        },
+        "components.stack-content.size": {
+            "reference": "spacing.content-gap",
+            "consumers": ["apps/web/src/shared/Stack.module.css"],
+            "bindings": [
+                {
+                    "file": "apps/web/src/shared/Stack.module.css",
+                    "selector": ".content",
+                    "property": "gap"
+                }
+            ]
+        },
+        "components.stack-control.size": {
+            "reference": "spacing.control-gap",
+            "consumers": ["apps/web/src/shared/Stack.module.css"],
+            "bindings": [
+                {
+                    "file": "apps/web/src/shared/Stack.module.css",
+                    "selector": ".control",
+                    "property": "gap"
+                }
+            ]
         }
     }
 }

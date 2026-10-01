@@ -2,6 +2,8 @@ import { useSearchParams } from 'react-router-dom'
 import { billingCopy } from '../../content/billing'
 import { ProductPanel } from '../../shared/ProductPanel'
 import { SignalDetails } from '../../shared/SignalDetails'
+import { Stack } from '../../shared/Stack'
+import { SupportingText } from '../../shared/SupportingText'
 import action from '../../shared/Action.module.css'
 import type { CreditPurchase } from './billing-api'
 import { formatCredits, formatMoney, formatPurchaseDate } from './format-billing'
@@ -24,26 +26,28 @@ export function BalancePanel({ query }: { query: Queries['summary'] }) {
             reserveContent
         >
             {query.data ? (
-                <div aria-live="polite" aria-atomic="true">
-                    <p>{billingCopy.available}</p>
-                    <p className={styles.balance}>
-                        <strong>{formatCredits(query.data.available)}</strong> {creditUnit(query.data.available)}
-                    </p>
-                    <SignalDetails
-                        variant="balance"
-                        entries={[
-                            {
-                                label: billingCopy.reserved,
-                                value: `${formatCredits(query.data.reserved)} ${creditUnit(query.data.reserved)}`,
-                            },
-                            {
-                                label: billingCopy.total,
-                                value: `${formatCredits(query.data.balance)} ${creditUnit(query.data.balance)}`,
-                            },
-                        ]}
-                    />
-                    <p className={styles.reservationExplanation}>{billingCopy.reservationExplanation}</p>
-                </div>
+                <Stack gap="content" aria-live="polite" aria-atomic="true">
+                    <Stack gap="control">
+                        <p>{billingCopy.available}</p>
+                        <p className={styles.balance}>
+                            <strong>{formatCredits(query.data.available)}</strong> {creditUnit(query.data.available)}
+                        </p>
+                        <SignalDetails
+                            variant="balance"
+                            entries={[
+                                {
+                                    label: billingCopy.reserved,
+                                    value: `${formatCredits(query.data.reserved)} ${creditUnit(query.data.reserved)}`,
+                                },
+                                {
+                                    label: billingCopy.total,
+                                    value: `${formatCredits(query.data.balance)} ${creditUnit(query.data.balance)}`,
+                                },
+                            ]}
+                        />
+                    </Stack>
+                    <SupportingText>{billingCopy.reservationExplanation}</SupportingText>
+                </Stack>
             ) : null}
         </ProductPanel>
     )
