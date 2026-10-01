@@ -321,6 +321,10 @@ the shared primary and secondary treatments. The return notice uses sage with an
 the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
 changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
 
+At the boundary between credit packs and purchase history, `ProductPanel` owns the section rule. Pack dividers
+appear only between rows, with no trailing border after the final pack. Single-item and empty catalogs retain
+the panel rule without adding an extra list divider. Row padding and action placement remain unchanged.
+
 Available credits remain the billing summary's primary figure. The `balance` variant of `SignalDetails` presents
 reserved credits and total balance with regular-weight labels and compact typography. Reservation guidance also
 uses `SupportingText`, separated from the final detail rule by a content `Stack` gap of 1.5rem. A nested control

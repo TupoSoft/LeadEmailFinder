@@ -29,7 +29,7 @@ const purchase = {
 
 async function mockBilling(
     context: BrowserContext,
-    options: { status?: string; balance?: number; readOnly?: boolean; empty?: boolean } = {},
+    options: { status?: string; balance?: number; readOnly?: boolean; empty?: boolean; catalog?: typeof packs } = {},
 ) {
     await context.route('**/v1/auth/session', route =>
         route.fulfill({
@@ -39,7 +39,7 @@ async function mockBilling(
     await context.route('**/v1/billing/summary', route =>
         route.fulfill({ json: { balance: options.balance ?? 125, reserved: 0, available: options.balance ?? 125 } }),
     )
-    await context.route('**/v1/billing/credit-packs', route => route.fulfill({ json: packs }))
+    await context.route('**/v1/billing/credit-packs', route => route.fulfill({ json: options.catalog ?? packs }))
     await context.route('**/v1/credit-purchases', route =>
         route.fulfill({ json: options.empty ? [] : [{ ...purchase, status: options.status ?? 'pending' }] }),
     )
@@ -68,6 +68,61 @@ async function screenshot(page: Page, name: string) {
     await page.screenshot({
         path: join(process.env.BILLING_SCREENSHOT_DIR, `${name}-${page.viewportSize()?.width}.png`),
         fullPage: true,
+    })
+}
+
+for (const { label, catalog, suffix } of [
+    { label: 'two credit packs', catalog: packs, suffix: '' },
+    { label: 'one credit pack', catalog: packs.slice(0, 1), suffix: '-single' },
+    { label: 'an empty catalog', catalog: [], suffix: '-empty' },
+]) {
+    test(`one divider precedes purchase history with ${label}`, async ({ page, context }) => {
+        await mockBilling(context, { catalog })
+        const errors: string[] = []
+        page.on('pageerror', () => errors.push('pageerror'))
+        page.on('console', message => {
+            if (message.type() === 'error') errors.push('console error')
+        })
+        await page.goto('/app/billing')
+        await expect(page).toHaveTitle('Billing | Lead Email Finder')
+        const creditPacks = page.getByRole('region', { name: 'Credit packs', exact: true })
+        const history = page.getByRole('region', { name: 'Purchase history', exact: true })
+        const rows = creditPacks.getByRole('listitem')
+        await expect(rows).toHaveCount(catalog.length)
+        for (let index = 0; index < catalog.length; index++) {
+            const row = rows.nth(index)
+            await expect(row).toHaveCSS('border-bottom-width', index === catalog.length - 1 ? '0px' : '1px')
+            if (index < catalog.length - 1) await expect(row).toHaveCSS('border-bottom-style', 'solid')
+            await expect(row).toHaveCSS('padding-top', '24px')
+            await expect(row).toHaveCSS('padding-bottom', '24px')
+        }
+        if (catalog.length === 0) {
+            await expect(
+                creditPacks.getByText('No credit packs are currently available.', { exact: false }),
+            ).toBeVisible()
+            await expect(creditPacks.getByRole('button', { name: /^Buy / })).toHaveCount(0)
+        }
+        await expect(creditPacks).toHaveCSS('border-bottom-width', '0px')
+        await expect(creditPacks.getByRole('list')).toHaveCSS('border-bottom-width', '0px')
+        await expect(history).toHaveCSS('border-top-width', '1px')
+        await expect(history).toHaveCSS('border-top-style', 'solid')
+        await expect(history).toContainText('Pending')
+        await accessible(page)
+        await page.evaluate(() => document.fonts.ready)
+        const [packsBounds, historyBounds] = await Promise.all([creditPacks.boundingBox(), history.boundingBox()])
+        expect(packsBounds).not.toBeNull()
+        expect(historyBounds).not.toBeNull()
+        await page.screenshot({
+            path: `/tmp/lef-credit-pack-dividers-${page.viewportSize()!.width}${suffix}.png`,
+            fullPage: true,
+            clip: {
+                x: packsBounds!.x,
+                y: packsBounds!.y,
+                width: packsBounds!.width,
+                height: historyBounds!.y + historyBounds!.height - packsBounds!.y,
+            },
+        })
+        expect(errors).toEqual([])
     })
 }
 
