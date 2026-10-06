@@ -69,7 +69,8 @@ function renderBilling({
         if (custom !== undefined) return Promise.resolve(custom)
         const path = new URL(request.url).pathname
         if (path === '/v1/auth/session') return Promise.resolve(Response.json({ ...account, capabilities }))
-        if (path === '/v1/billing/summary') return Promise.resolve(Response.json({ balance: 25 }))
+        if (path === '/v1/billing/summary')
+            return Promise.resolve(Response.json({ balance: 25, reserved: 0, available: 25 }))
         if (path === '/v1/billing/credit-packs') return Promise.resolve(Response.json([pack]))
         if (path === '/v1/credit-purchases' && request.method === 'GET') return Promise.resolve(Response.json([]))
         if (path === '/v1/credit-purchases' && request.method === 'POST')
@@ -151,6 +152,31 @@ describe('billing routes', () => {
             expect(new URL(request.url).search).toBe('')
             expect(request.credentials).toBe('same-origin')
         }
+    })
+
+    it('separates availability from reservations and refreshes only server-confirmed amounts', async () => {
+        let summary = { balance: 10, reserved: 3, available: 7 }
+        const { session } = renderBilling({
+            intercept: request =>
+                new URL(request.url).pathname === '/v1/billing/summary'
+                    ? Response.json({ ...summary, internalLedger: 'private' })
+                    : undefined,
+        })
+        const panel = await screen.findByRole('region', { name: 'Credit balance' })
+        expect(await within(panel).findByText('7')).toBeInTheDocument()
+        expect(within(panel).getByText('Available credits')).toBeInTheDocument()
+        expect(within(panel).getByText('Reserved credits').nextElementSibling).toHaveTextContent('3 credits')
+        expect(within(panel).getByText('Total balance').nextElementSibling).toHaveTextContent('10 credits')
+        expect(within(panel).getByText(billingCopy.reservationExplanation)).toBeInTheDocument()
+        expect(session.queryClient.getQueryData(billingQueryKeys.summary(account.organization.id))).toEqual(summary)
+        summary = { balance: 1, reserved: 0, available: 1 }
+        await act(async () => {
+            await session.queryClient.invalidateQueries({ queryKey: billingQueryKeys.summary(account.organization.id) })
+        })
+        expect(await within(panel).findByText('1')).toBeInTheDocument()
+        expect(within(panel).getByText('Reserved credits').nextElementSibling).toHaveTextContent('0 credits')
+        expect(within(panel).getByText('Total balance').nextElementSibling).toHaveTextContent('1 credit')
+        expect(panel.querySelector('[aria-live="polite"][aria-atomic="true"]')).toHaveTextContent('1 credit')
     })
 
     it('keeps catalog and history usable when balance fails, then retries only the balance', async () => {

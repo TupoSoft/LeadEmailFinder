@@ -1,18 +1,23 @@
 import { useEffect, useRef } from 'react'
 import { skipToken, useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError } from '../../api/api-error'
+import { createVerificationRequestKey } from '../../shared/verification-request-key'
 import { useAuth } from '../auth/use-auth'
+import { billingQueryKeys, readBillingSummary } from '../billing/billing-api'
 import { useVerificationPolling } from './use-verification-polling'
 import { createVerification, readVerification, verificationQueryKeys } from './verification-api'
 
 export { verificationPolling } from './use-verification-polling'
 
+type SubmissionRequest = { email: string; requestKey: string }
 type SubmissionState =
-    | { phase: 'idle' | 'pending' | 'invalid' | 'insufficient' | 'uncertain' }
+    | { phase: 'idle' | 'invalid' | 'insufficient' | 'clock-rejected' }
+    | { phase: 'pending' | 'uncertain' | 'expired'; request: SubmissionRequest }
+    | { phase: 'rate-limited'; request: SubmissionRequest; retryAt?: number }
     | { phase: 'ready'; id: string }
 
 export function useVerificationSubmission(organizationId: string, onCreated: (id: string) => void) {
-    const { api, queryClient, mutationOptions } = useAuth()
+    const { api, queryClient, mutationOptions, state } = useAuth()
     const mounted = useRef(false)
     useEffect(() => {
         mounted.current = true
@@ -37,50 +42,86 @@ export function useVerificationSubmission(organizationId: string, onCreated: (id
     function write(value: SubmissionState) {
         if (read()) queryClient.setQueryData(queryKey, value)
     }
+    function refreshBilling() {
+        if (!read() || state.status !== 'authenticated' || !state.account.capabilities.includes('billing.read')) return
+        void queryClient
+            .fetchQuery({
+                queryKey: billingQueryKeys.summary(organizationId),
+                queryFn: ({ signal }) => readBillingSummary(api, signal),
+                staleTime: 0,
+                retry: false,
+            })
+            .catch(() => undefined)
+    }
     const mutation = useMutation(
         mutationOptions({
-            mutationFn: (email: string) => createVerification(api, email),
+            mutationFn: ({ email, requestKey }: SubmissionRequest) => createVerification(api, email, requestKey),
             networkMode: 'always',
             gcTime: 0,
+            retry: false,
             onSuccess: ({ id }) => {
+                if (!read()) return
                 write({ phase: 'ready', id })
                 if (mounted.current) {
                     onCreated(id)
                     write({ phase: 'idle' })
                 }
             },
-            onError: error => {
-                const phase =
-                    error instanceof ApiError
-                        ? error.status === 400
-                            ? 'invalid'
-                            : error.status === 402
-                              ? 'insufficient'
-                              : error.status === 401 || error.status === 403
-                                ? 'idle'
-                                : 'uncertain'
-                        : 'uncertain'
-                write({ phase })
+            onError: (error, request) => {
+                if (error instanceof ApiError) {
+                    if ([400, 402, 429].includes(error.status)) refreshBilling()
+                    switch (error.status) {
+                        case 400:
+                            return write({
+                                phase: error.code === 'idempotency_key_too_far_ahead' ? 'clock-rejected' : 'invalid',
+                            })
+                        case 402:
+                            return write({ phase: 'insufficient' })
+                        case 401:
+                        case 403:
+                            return write({ phase: 'idle' })
+                        case 429:
+                            return write({ phase: 'rate-limited', request, retryAt: error.retryAt })
+                        case 410:
+                            return write({ phase: 'expired', request })
+                    }
+                }
+                write({ phase: 'uncertain', request })
             },
         }),
     )
+    function send(request: SubmissionRequest) {
+        write({ phase: 'pending', request })
+        mutation.mutate(request)
+    }
     return {
         submission: submission ?? { phase: 'idle' as const },
-        start: (email: string, acknowledged: boolean) => {
+        start: (email: string) => {
             const current = read()
-            if (!current || current.phase === 'pending' || current.phase === 'ready' || !navigator.onLine) return
-            if (current.phase === 'uncertain' && !acknowledged) return
-            write({ phase: 'pending' })
-            mutation.mutate(email)
+            if (
+                !current ||
+                !['idle', 'invalid', 'insufficient', 'clock-rejected'].includes(current.phase) ||
+                !navigator.onLine
+            )
+                return
+            send({ email, requestKey: createVerificationRequestKey() })
+        },
+        recover: () => {
+            const current = read()
+            if (!current || !navigator.onLine || (current.phase !== 'uncertain' && current.phase !== 'rate-limited'))
+                return
+            if (current.phase === 'rate-limited' && current.retryAt !== undefined && current.retryAt > Date.now())
+                return
+            send(current.request)
         },
         resetReady: () => {
-            if (read()?.phase === 'ready') write({ phase: 'idle' })
+            if (read()?.phase === 'ready' || read()?.phase === 'expired') write({ phase: 'idle' })
         },
     }
 }
 
 export function useVerificationJob(organizationId: string, id: string) {
-    const { api } = useAuth()
+    const { api, queryClient, state } = useAuth()
     const query = useQuery({
         queryKey: verificationQueryKeys.job(organizationId, id),
         queryFn: ({ signal }) => readVerification(api, id, signal),
@@ -88,8 +129,23 @@ export function useVerificationJob(organizationId: string, id: string) {
         retry: false,
         networkMode: 'always',
     })
+    const status = query.data?.state
+    const operation = query.data && 'operation' in query.data ? query.data.operation : undefined
+    const billingState = operation?.billing.state
+    const canReadBilling = state.status === 'authenticated' && state.account.capabilities.includes('billing.read')
+    useEffect(() => {
+        if (!canReadBilling || (status !== 'completed' && status !== 'failed')) return
+        void queryClient
+            .fetchQuery({
+                queryKey: billingQueryKeys.summary(organizationId),
+                queryFn: ({ signal }) => readBillingSummary(api, signal),
+                staleTime: 0,
+                retry: false,
+            })
+            .catch(() => undefined)
+    }, [api, billingState, canReadBilling, id, organizationId, queryClient, status])
     const polling = useVerificationPolling({
-        active: query.data?.state === 'queued' || query.data?.state === 'running',
+        active: status === 'queued' || status === 'running',
         isFetching: query.isFetching,
         isError: query.isError,
         refetch: query.refetch,

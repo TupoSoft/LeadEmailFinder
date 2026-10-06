@@ -20,6 +20,13 @@
     margin: 0;
     padding-inline-start: var(--space-content-gap);
 }
+.balance {
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
+.balance dt {
+    font-weight: 400;
+}
 @media (max-width: 48rem) {
     .details > div {
         grid-template-columns: minmax(0, 1fr);

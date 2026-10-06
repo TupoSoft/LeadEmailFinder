@@ -12,6 +12,7 @@ import { verificationCopy } from '../features/verification/verification-copy'
 import { isVerificationId } from '../features/verification/verification-api'
 import { ProgressIndicator } from '../shared/ProgressIndicator'
 import { SignalDetails } from '../shared/SignalDetails'
+import { VerificationChargeDetails } from '../shared/VerificationChargeDetails'
 import { StateMessage } from '../shared/StateMessage'
 import action from '../shared/Action.module.css'
 import form from '../shared/Form.module.css'
@@ -97,11 +98,30 @@ function JobContent({
                         <ProgressIndicator label={copy.progress} value={counts.progress} />
                         <SignalDetails
                             entries={[
-                                { label: 'Processed', value: counts.processed.toLocaleString('en') },
-                                { label: 'Unprocessed', value: counts.unprocessed.toLocaleString('en') },
-                                { label: 'Total', value: counts.total.toLocaleString('en') },
+                                { label: copy.counts.total, value: counts.counts.totalRows.toLocaleString('en') },
+                                {
+                                    label: copy.counts.unique,
+                                    value: counts.counts.uniqueAddresses.toLocaleString('en'),
+                                },
+                                {
+                                    label: copy.counts.duplicate,
+                                    value: counts.counts.duplicateRows.toLocaleString('en'),
+                                },
+                                {
+                                    label: copy.counts.cached,
+                                    value: counts.counts.cachedAddresses.toLocaleString('en'),
+                                },
+                                {
+                                    label: copy.counts.shared,
+                                    value: counts.counts.sharedAddresses.toLocaleString('en'),
+                                },
+                                { label: copy.counts.processed, value: counts.processed.toLocaleString('en') },
+                                { label: copy.counts.unprocessed, value: counts.unprocessed.toLocaleString('en') },
                             ]}
                         />
+                        <p>{copy.rows}</p>
+                        {counts.billing.state === 'pending' ? <p>{copy.funding}</p> : null}
+                        <VerificationChargeDetails billing={counts.billing} />
                     </section>
                 ) : null}
                 {data?.status === 'failed' && data.failureCode === 'insufficient_credits' ? (
@@ -118,7 +138,8 @@ function JobContent({
                         <button
                             className={`${action.action} ${action.secondary}`}
                             type="button"
-                            disabled={!online || query.isFetching}
+                            disabled={!online}
+                            aria-disabled={!online || query.isFetching}
                             aria-busy={query.isFetching}
                             onClick={refresh}
                         >
@@ -128,7 +149,9 @@ function JobContent({
                     {data?.status === 'failed' && data.failureCode === 'invalid_csv' ? <FreshFileLink /> : null}
                 </div>
             </div>
-            {data?.status === 'completed' ? <BatchResultDownload id={id} online={online} /> : null}
+            {data?.resultsAvailable && data.status !== 'unavailable' ? (
+                <BatchResultDownload id={id} online={online} />
+            ) : null}
         </>
     )
 }

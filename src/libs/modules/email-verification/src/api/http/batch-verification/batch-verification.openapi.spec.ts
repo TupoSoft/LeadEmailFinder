@@ -78,6 +78,11 @@ describe('batch verification OpenAPI contract', () => {
             'billing',
         ])
         expect(status.properties!.progress).toMatchObject({ minimum: 0, maximum: 100 })
+        expect(status.properties!.resultsAvailable).toMatchObject({
+            type: 'boolean',
+            description:
+                'True only for a completed job with a valid retained result location. Status polling does not check storage; a later missing object returns 404, and storage failures can still prevent download.',
+        })
         expect(status.properties!.counts).toMatchObject({ $ref: '#/components/schemas/BatchStatusAddressCountsDto' })
         expect(status.properties!.billing).toMatchObject({ $ref: '#/components/schemas/BatchStatusBillingDto' })
         expect(document.components!.schemas!.BatchStatusAddressCountsDto).toBeDefined()

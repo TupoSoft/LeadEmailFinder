@@ -58,7 +58,10 @@ export interface VerificationRequestStore {
     findByClientKey(organizationId: string, clientRequestKey: string): Promise<VerificationRequestRecord | null>
 
     /** Inserts a new request, or replays the existing row for a repeated client key with matching input. A
-     *  repeated key with a different normalized address or delivery mode conflicts without mutation. */
+     *  repeated key with a different normalized address or delivery mode conflicts without mutation.
+     *  Request UUID reuse also replays the existing receipt when organization, address, mode, client key, source, and
+     *  execution identity match (including the recorded result for cache/cooldown). Conflicting UUID reuse
+     *  throws an internal invariant error; a compatible replay never resets settlement or financial fields. */
     insert(input: NewVerificationRequestInput): Promise<InsertRequestOutcome>
 
     findById(requestId: string, organizationId: string): Promise<VerificationRequestRecord | null>

@@ -88,6 +88,9 @@ describe('VerificationAdmissionService', () => {
             pageNonterminal: jest.fn(),
             pageCanceledPendingCleanup: jest.fn(),
             cancelBatchGroupUnstarted: jest.fn(),
+            claimOrJoinForBatchGroup: jest.fn(),
+            markBatchGroupQueued: jest.fn(),
+            cancelBatchGroupFundingPending: jest.fn(),
         }
         cacheReader = { findLatestCandidate: jest.fn().mockResolvedValue(null) }
         cooldownReader = { findLatestOutcome: jest.fn().mockResolvedValue(null) }

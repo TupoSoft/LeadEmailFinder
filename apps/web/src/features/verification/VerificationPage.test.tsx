@@ -9,7 +9,7 @@ import { VerificationJobPage } from '../../routes/VerificationJobPage'
 import { VerificationPage } from '../../routes/VerificationPage'
 import { AuthProvider } from '../auth/AuthProvider'
 import { AuthSession } from '../auth/auth-session'
-import { verificationQueryKeys, type VerificationResult } from './verification-api'
+import { verificationQueryKeys, type VerificationOperation, type VerificationResult } from './verification-api'
 
 const NativeRequest = globalThis.Request
 class BrowserRequest extends NativeRequest {
@@ -50,6 +50,14 @@ const result: VerificationResult = {
     catchAll: false,
     reason: 'accepted_email',
     sources: ['mx'],
+}
+
+const operation: VerificationOperation = {
+    id: jobId,
+    source: 'fresh',
+    observedAt: '2026-09-15T12:00:00.000Z',
+    cacheExpiresAt: '2026-09-16T12:00:00.000Z',
+    billing: { state: 'settled', reserved: 0, charged: 1, reason: 'conclusive' },
 }
 
 function deferred<T>() {
@@ -153,7 +161,7 @@ describe('single verification submission', () => {
         })
         const user = userEvent.setup()
         await user.type(await screen.findByRole('textbox', { name: 'Email address' }), result.email)
-        expect(screen.getByText(/may (?:use|consume) one credit/i)).toBeInTheDocument()
+        expect(screen.getByText(/new conclusive result costs one credit/i)).toBeInTheDocument()
         const button = screen.getByRole('button', { name: 'Verify email' })
         await user.dblClick(button)
         expect(button).toBeDisabled()
@@ -162,6 +170,9 @@ describe('single verification submission', () => {
         const request = requestsFor(fetch, createPath, 'POST')[0]
         expect(await request.clone().json()).toEqual({ email: result.email })
         expect(request.headers.get('x-csrf-token')).toBe('csrf-fixture')
+        expect(request.headers.get('Idempotency-Key')).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        )
         expect(request.credentials).toBe('same-origin')
         expect(new URL(request.url).search).toBe('')
         await act(async () => {
@@ -191,11 +202,45 @@ describe('single verification submission', () => {
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
     })
 
+    it('explains a rejected request clock without marking the email invalid and retries deliberately with a corrected key', async () => {
+        const serverTime = Date.parse('2026-09-16T12:00:00.000Z')
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime + 600_000)
+        let rejected = true
+        const { fetch } = renderVerification({
+            intercept: request =>
+                request.method === 'POST' && rejected
+                    ? Response.json(
+                          { statusCode: 400, message: 'idempotency_key_too_far_ahead', details: 'private-details' },
+                          { status: 400 },
+                      )
+                    : undefined,
+        })
+        const user = await submit()
+        expect(await screen.findByRole('heading', { name: 'Check your device clock' })).toBeInTheDocument()
+        expect(screen.getByText(/correct your device's date and time.*Verify email again/)).toBeInTheDocument()
+        const email = screen.getByRole('textbox', { name: 'Email address' })
+        expect(email).toHaveValue(result.email)
+        expect(email).toHaveAttribute('aria-invalid', 'false')
+        expect(email).not.toHaveAttribute('readonly')
+        expect(screen.queryByText(/Enter a valid email address/)).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Recover submission' })).not.toBeInTheDocument()
+        expect(screen.queryByText(/private-details/)).not.toBeInTheDocument()
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+        clock.mockReturnValue(serverTime)
+        rejected = false
+        await user.click(screen.getByRole('button', { name: 'Verify email' }))
+        expect(await screen.findByRole('heading', { name: 'Verification queued' })).toBeInTheDocument()
+        const [original, corrected] = requestsFor(fetch, createPath, 'POST')
+        expect(corrected.headers.get('Idempotency-Key')).not.toBe(original.headers.get('Idempotency-Key'))
+        expect(Number.parseInt(corrected.headers.get('Idempotency-Key')!.replaceAll('-', '').slice(0, 12), 16)).toBe(
+            serverTime,
+        )
+        expect(await corrected.clone().json()).toEqual({ email: result.email })
+    })
+
     it.each([true, false])('handles insufficient credit with billing access %s', async canReadBilling => {
         renderVerification({
-            capabilities: canReadBilling
-                ? account.capabilities
-                : ['verification.run', 'verification.read'],
+            capabilities: canReadBilling ? account.capabilities : ['verification.run', 'verification.read'],
             intercept: request => (request.method === 'POST' ? new Response(null, { status: 402 }) : undefined),
         })
         await submit()
@@ -209,30 +254,34 @@ describe('single verification submission', () => {
         }
     })
 
-    it.each([0, 500, 504])('requires explicit acknowledgement after uncertain submission %s', async status => {
-        const { fetch, router } = renderVerification({
-            intercept: request =>
-                request.method === 'POST'
-                    ? status === 0
-                        ? Promise.reject(new Error('private SMTP/provider details'))
-                        : new Response(null, { status })
-                    : undefined,
-        })
-        const user = await submit()
-        const acknowledgement = await screen.findByRole('checkbox', { name: /another credit/i })
-        expect(acknowledgement).not.toBeChecked()
-        const button = screen.getByRole('button', { name: 'Verify email' })
-        expect(button).toBeDisabled()
-        expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue(result.email)
-        expect(screen.getByText(/could not confirm|could not be confirmed/i)).toBeInTheDocument()
-        expect(screen.queryByText(/private SMTP/)).not.toBeInTheDocument()
-        expect(router.state.location.pathname).toBe(formRoute)
-        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
-        await user.click(acknowledgement)
-        await user.click(button)
-        await waitFor(() => expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(2))
-        await waitFor(() => expect(screen.getByRole('checkbox', { name: /another credit/i })).not.toBeChecked())
-    })
+    it.each([0, 500, 504])(
+        'recovers uncertain submission %s only by deliberately reusing its address and key',
+        async status => {
+            const { fetch, router } = renderVerification({
+                intercept: request =>
+                    request.method === 'POST'
+                        ? status === 0
+                            ? Promise.reject(new Error('private SMTP/provider details'))
+                            : new Response(null, { status })
+                        : undefined,
+            })
+            const user = await submit()
+            const button = await screen.findByRole('button', { name: 'Recover submission' })
+            expect(button).toBeEnabled()
+            expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue(result.email)
+            expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveAttribute('readonly')
+            expect(screen.getByText(/could not confirm|could not be confirmed/i)).toBeInTheDocument()
+            expect(screen.queryByText(/private SMTP/)).not.toBeInTheDocument()
+            expect(router.state.location.pathname).toBe(formRoute)
+            expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+            await user.click(button)
+            await waitFor(() => expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(2))
+            const [original, recovery] = requestsFor(fetch, createPath, 'POST')
+            expect(recovery.headers.get('Idempotency-Key')).toBe(original.headers.get('Idempotency-Key'))
+            expect(await recovery.clone().json()).toEqual(await original.clone().json())
+            expect(await screen.findByRole('button', { name: 'Recover submission' })).toBeEnabled()
+        },
+    )
 
     it.each([401, 403])('uses session recovery for authoritative submission rejection %s', async status => {
         const { router } = renderVerification({
@@ -251,7 +300,7 @@ describe('single verification submission', () => {
                 request.method === 'POST' ? Response.json({ id: 'unsafe-job-id' }, { status: 202 }) : undefined,
         })
         await submit()
-        expect(await screen.findByRole('checkbox', { name: /another credit/i })).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Recover submission' })).toBeInTheDocument()
         expect(router.state.location.pathname).toBe(formRoute)
         expect(requestsFor(fetch, `${createPath}/unsafe-job-id`)).toHaveLength(0)
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
@@ -276,25 +325,102 @@ describe('single verification submission', () => {
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
     })
 
-    it('preserves uncertain-submission acknowledgement across leaving and reopening the form', async () => {
+    it('preserves keyed recovery and the original input across leaving and reopening the form', async () => {
         const { fetch, router } = renderVerification({
-            intercept: request =>
-                request.method === 'POST' ? Promise.reject(new Error('disconnected')) : undefined,
+            intercept: request => (request.method === 'POST' ? Promise.reject(new Error('disconnected')) : undefined),
         })
         await submit()
-        expect(await screen.findByRole('checkbox', { name: /another credit/i })).toBeInTheDocument()
+        expect(await screen.findByRole('button', { name: 'Recover submission' })).toBeInTheDocument()
         await act(() => router.navigate('/outside'))
         await act(() => router.navigate(formRoute))
-        expect(await screen.findByRole('checkbox', { name: /another credit/i })).not.toBeChecked()
-        expect(screen.getByRole('button', { name: 'Verify email' })).toBeDisabled()
+        expect(await screen.findByRole('button', { name: 'Recover submission' })).toBeEnabled()
+        expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue(result.email)
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+    })
+
+    it('respects the retry time after correcting the device clock and resubmits only after a deliberate click', async () => {
+        const initialClock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-16T12:10:00.000Z'))
+        const { fetch } = renderVerification({
+            intercept: request =>
+                request.method === 'POST'
+                    ? new Response(null, { status: 429, headers: { 'Retry-After': '30' } })
+                    : undefined,
+        })
+        await userEvent.type(await screen.findByRole('textbox', { name: 'Email address' }), result.email)
+        initialClock.mockRestore()
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-09-16T12:00:00.000Z'))
+        act(() => screen.getByRole('button', { name: 'Verify email' }).click())
+        await tick(5)
+        const retry = screen.getByRole('button', { name: 'Retry verification' })
+        expect(retry).toBeDisabled()
+        expect(screen.getByText(/Sep 16, 2026, 12:00:30 PM UTC/)).toBeInTheDocument()
+        await tick(29_000)
+        expect(retry).toBeDisabled()
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+        await tick(1001)
+        expect(retry).toBeEnabled()
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+        act(() => retry.click())
+        await tick(5)
+        const [original, recovery] = requestsFor(fetch, createPath, 'POST')
+        expect(recovery.headers.get('Idempotency-Key')).toBe(original.headers.get('Idempotency-Key'))
+        expect(await recovery.clone().json()).toEqual({ email: result.email })
+    })
+
+    it('clears stored inputs and blocks late submissions after principal replacement', async () => {
+        const delayed = deferred<Response>()
+        let replacement = false
+        const { fetch, session, router } = renderVerification({
+            intercept: request => {
+                const path = new URL(request.url).pathname
+                if (path === createPath) return delayed.promise
+                if (path === '/v1/auth/session' && replacement)
+                    return Response.json({
+                        ...account,
+                        membership: { ...account.membership, id: 'owner-b' },
+                        organization: { ...account.organization, id: 'organization-b' },
+                    })
+            },
+        })
+        await submit()
+        expect(
+            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
+        ).toMatchObject({
+            phase: 'pending',
+            request: { email: result.email },
+        })
+        replacement = true
+        await act(() => session.bootstrap())
+        expect(await screen.findByRole('textbox', { name: 'Email address' })).toHaveValue('')
+        await act(async () => {
+            delayed.resolve(Response.json({ id: jobId }, { status: 202 }))
+            await delayed.promise
+        })
+        expect(router.state.location.pathname).toBe(formRoute)
+        expect(
+            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
+        ).toBeUndefined()
+        expect(requestsFor(fetch, statusPath)).toHaveLength(0)
+    })
+
+    it('requires a separate new action when the server says keyed recovery has expired', async () => {
+        const { fetch } = renderVerification({
+            intercept: request => (request.method === 'POST' ? new Response(null, { status: 410 }) : undefined),
+        })
+        const user = await submit()
+        expect(await screen.findByRole('heading', { name: 'Recovery has expired' })).toBeInTheDocument()
+        expect(screen.getByText(/previous charge is unknown/i)).toBeInTheDocument()
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+        await user.click(screen.getByRole('button', { name: 'Start a new verification' }))
+        expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('')
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
     })
 
     it('disables submission offline and clears authenticated state before a late submission resolves', async () => {
         const delayed = deferred<Response>()
         const { fetch, session, router } = renderVerification({
-            intercept: request =>
-                new URL(request.url).pathname === createPath ? delayed.promise : undefined,
+            intercept: request => (new URL(request.url).pathname === createPath ? delayed.promise : undefined),
         })
         const online = vi.spyOn(navigator, 'onLine', 'get')
         const button = await screen.findByRole('button', { name: 'Verify email' })
@@ -312,13 +438,153 @@ describe('single verification submission', () => {
         })
         expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
         expect(router.state.location.pathname).toBe(formRoute)
-        expect(session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id))).toBeUndefined()
+        expect(
+            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
+        ).toBeUndefined()
         expect(session.queryClient.getMutationCache().getAll()).toHaveLength(0)
         expect(requestsFor(fetch, statusPath)).toHaveLength(0)
     })
 })
 
 describe('single verification job status', () => {
+    it.each([
+        ['fresh', 'conclusive', 1, 'New verification', '1 credit charged'],
+        ['cache', 'cached', 0, 'Cached result', 'No credits charged'],
+        ['shared', 'shared', 0, 'Shared verification', 'No credits charged'],
+        ['fresh', 'inconclusive', 0, 'New verification', 'No credits charged'],
+    ] as const)(
+        'shows authoritative %s/%s billing with evidence times',
+        async (source, reason, charged, sourceLabel, chargeLabel) => {
+            const { fetch, session } = renderVerification({
+                path: jobRoute,
+                intercept: request =>
+                    new URL(request.url).pathname === statusPath
+                        ? Response.json({
+                              state: 'completed',
+                              result,
+                              operation: {
+                                  ...operation,
+                                  source,
+                                  billing: { state: 'settled', reserved: 0, charged, reason },
+                                  private: 'private-provider-detail',
+                              },
+                          })
+                        : new URL(request.url).pathname === '/v1/billing/summary'
+                          ? Response.json({ balance: 10, available: 10, reserved: 0 })
+                          : undefined,
+            })
+            expect(await screen.findByText(chargeLabel)).toBeInTheDocument()
+            expect(screen.getByText(sourceLabel)).toBeInTheDocument()
+            expect(screen.getByText('Sep 15, 2026, 12:00:00 PM UTC')).toBeInTheDocument()
+            expect(screen.getByText('Sep 16, 2026, 12:00:00 PM UTC')).toBeInTheDocument()
+            expect(screen.getByRole('region', { name: 'Verification charges' })).toHaveAttribute('aria-live', 'polite')
+            await waitFor(() => expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(1))
+            expect(
+                JSON.stringify(
+                    session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
+                ),
+            ).not.toContain('private-provider-detail')
+        },
+    )
+
+    it('keeps pending reservations separate from final charges and refreshes server balances after settlement', async () => {
+        let settled = false
+        const { fetch } = renderVerification({
+            path: jobRoute,
+            intercept: request => {
+                const path = new URL(request.url).pathname
+                if (path === statusPath)
+                    return Response.json({
+                        state: 'completed',
+                        result,
+                        operation: {
+                            ...operation,
+                            billing: settled ? operation.billing : { state: 'pending', reserved: 1, charged: 0 },
+                        },
+                    })
+                if (path === '/v1/billing/summary')
+                    return Response.json({ balance: 10, available: 9, reserved: settled ? 0 : 1 })
+            },
+        })
+        expect(await screen.findByText('Settlement pending')).toBeInTheDocument()
+        expect(screen.getByText('1 credit initially reserved')).toBeInTheDocument()
+        expect(screen.getByText('Final charge pending')).toBeInTheDocument()
+        expect(screen.queryByText('No credits charged')).not.toBeInTheDocument()
+        settled = true
+        await userEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
+        expect(await screen.findByText('1 credit charged')).toBeInTheDocument()
+        expect(screen.getByText('0 credits initially reserved')).toBeInTheDocument()
+        await waitFor(() => expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(2))
+    })
+
+    it('labels a released reservation as historical and preserves focus on manual completion', async () => {
+        let completed = false
+        renderVerification({
+            path: jobRoute,
+            intercept: request =>
+                new URL(request.url).pathname === statusPath
+                    ? Response.json(
+                          completed
+                              ? {
+                                    state: 'completed',
+                                    result,
+                                    operation: {
+                                        ...operation,
+                                        billing: { state: 'settled', reserved: 1, charged: 0, reason: 'inconclusive' },
+                                    },
+                                }
+                              : { state: 'running' },
+                      )
+                    : undefined,
+        })
+        expect(await screen.findByRole('heading', { name: 'Verification running' })).toBeInTheDocument()
+        completed = true
+        const refresh = screen.getByRole('button', { name: 'Refresh status' })
+        await userEvent.click(refresh)
+        expect(await screen.findByText('No credits charged')).toBeInTheDocument()
+        expect(screen.getByText('Original reservation')).toBeInTheDocument()
+        expect(screen.getByText('1 credit initially reserved')).toBeInTheDocument()
+        expect(screen.queryByText('1 credit reserved')).not.toBeInTheDocument()
+        expect(refresh).toHaveFocus()
+    })
+
+    it.each([undefined, { ...operation, billing: { state: 'settled', charged: -1, reserved: 0 } }])(
+        'preserves charge uncertainty for missing or invalid metadata',
+        async metadata => {
+            renderVerification({
+                path: jobRoute,
+                intercept: request =>
+                    new URL(request.url).pathname === statusPath
+                        ? Response.json({ state: 'completed', result, operation: metadata })
+                        : undefined,
+            })
+            expect(await screen.findByText('Charge details unavailable')).toBeInTheDocument()
+            expect(screen.queryByText('No credits charged')).not.toBeInTheDocument()
+        },
+    )
+
+    it('lets a zero-available-credit account submit cached work and displays its server-confirmed free result', async () => {
+        const { fetch } = renderVerification({
+            intercept: request => {
+                const path = new URL(request.url).pathname
+                if (path === statusPath)
+                    return Response.json({
+                        state: 'completed',
+                        result,
+                        operation: {
+                            ...operation,
+                            source: 'cache',
+                            billing: { state: 'settled', charged: 0, reserved: 0, reason: 'cached' },
+                        },
+                    })
+                if (path === '/v1/billing/summary') return Response.json({ balance: 0, available: 0, reserved: 0 })
+            },
+        })
+        await submit()
+        expect(await screen.findByText('No credits charged')).toBeInTheDocument()
+        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
+    })
+
     it('does not request job data without the read capability', async () => {
         const { fetch } = renderVerification({ path: jobRoute, capabilities: ['verification.run'] })
         expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
@@ -330,7 +596,9 @@ describe('single verification job status', () => {
         expect(await screen.findByRole('heading', { name: 'Verification queued' })).toBeInTheDocument()
         expect(requestsFor(fetch, statusPath)).toHaveLength(1)
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(0)
-        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))).toEqual({ state: 'queued' })
+        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))).toEqual({
+            state: 'queued',
+        })
     })
 
     it('rejects malformed route IDs before making a status request', async () => {
@@ -375,7 +643,11 @@ describe('single verification job status', () => {
             path: jobRoute,
             intercept: request =>
                 new URL(request.url).pathname === statusPath
-                    ? Response.json({ state, failureCode: 'verification_failed', failedReason: 'private queue failure' })
+                    ? Response.json({
+                          state,
+                          failureCode: 'verification_failed',
+                          failedReason: 'private queue failure',
+                      })
                     : undefined,
         })
         expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
@@ -454,7 +726,8 @@ describe('single verification job status', () => {
             path: jobRoute,
             intercept: request =>
                 new URL(request.url).pathname === statusPath
-                    ? Response.json({ state: 'completed', result: fail ? {} : result }) : undefined,
+                    ? Response.json({ state: 'completed', result: fail ? {} : result })
+                    : undefined,
         })
         expect(await screen.findByRole('heading', { name: 'Verification result' })).toHaveFocus()
         fail = true
@@ -465,31 +738,44 @@ describe('single verification job status', () => {
         expect(screen.getByText('Last confirmed status: Verification completed')).toBeInTheDocument()
         expect(screen.getByText(result.email)).toBeInTheDocument()
         expect(refresh).toHaveFocus()
-        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))).toMatchObject({
-            state: 'completed', result,
+        expect(
+            session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
+        ).toMatchObject({
+            state: 'completed',
+            result,
         })
     })
 
     it.each(['private-unrecognized', '__proto__', 'toString'])(
-        'renders unrecognized reason and source %s as Unknown without displaying raw values', async unknown => {
-        renderVerification({
-            path: jobRoute,
-            intercept: request =>
-                new URL(request.url).pathname === statusPath
-                    ? Response.json({ state: 'completed', result: {
-                        ...result, reason: unknown, sources: [unknown],
-                    } }) : undefined,
-        })
-        expect(await screen.findByRole('heading', { name: 'Verification completed' })).toBeInTheDocument()
-        expect(screen.getAllByText('Unknown')).toHaveLength(2)
-        expect(document.body.textContent).not.toContain(unknown)
-    })
+        'renders unrecognized reason and source %s as Unknown without displaying raw values',
+        async unknown => {
+            renderVerification({
+                path: jobRoute,
+                intercept: request =>
+                    new URL(request.url).pathname === statusPath
+                        ? Response.json({
+                              state: 'completed',
+                              result: {
+                                  ...result,
+                                  reason: unknown,
+                                  sources: [unknown],
+                              },
+                          })
+                        : undefined,
+            })
+            expect(await screen.findByRole('heading', { name: 'Verification completed' })).toBeInTheDocument()
+            expect(screen.getAllByText('Unknown')).toHaveLength(2)
+            expect(document.body.textContent).not.toContain(unknown)
+        },
+    )
 
     it('focuses completion once and preserves manual refresh focus on later reads', async () => {
         renderVerification({
             path: jobRoute,
             intercept: request =>
-                new URL(request.url).pathname === statusPath ? Response.json({ state: 'completed', result }) : undefined,
+                new URL(request.url).pathname === statusPath
+                    ? Response.json({ state: 'completed', result })
+                    : undefined,
         })
         expect(await screen.findByRole('heading', { name: 'Verification result' })).toHaveFocus()
         const refresh = screen.getByRole('button', { name: 'Refresh status' })
@@ -504,7 +790,8 @@ describe('single verification job status', () => {
             capabilities: ['verification.read'],
             intercept: request =>
                 new URL(request.url).pathname === statusPath
-                    ? Response.json({ state: 'completed', result: { ...result, sources: [] } }) : undefined,
+                    ? Response.json({ state: 'completed', result: { ...result, sources: [] } })
+                    : undefined,
         })
         expect(await screen.findByText('No sources reported')).toBeInTheDocument()
         expect(screen.queryByRole('link', { name: 'Verify another email' })).not.toBeInTheDocument()
@@ -515,7 +802,7 @@ describe('single verification job status', () => {
         const delayed = deferred<Response>()
         const { fetch, session } = renderVerification({
             path: jobRoute,
-            intercept: request => new URL(request.url).pathname === statusPath ? delayed.promise : undefined,
+            intercept: request => (new URL(request.url).pathname === statusPath ? delayed.promise : undefined),
         })
         await waitFor(() => expect(requestsFor(fetch, statusPath)).toHaveLength(1))
         await act(() => session.signOut())
@@ -525,7 +812,9 @@ describe('single verification job status', () => {
         })
         expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
         expect(screen.queryByText(result.email)).not.toBeInTheDocument()
-        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))).toBeUndefined()
+        expect(
+            session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
+        ).toBeUndefined()
     })
 
     it.each([
@@ -613,18 +902,29 @@ describe('single verification job status', () => {
                     : undefined,
         })
         expect(await screen.findByRole('heading', { name: 'Verification result' })).toBeInTheDocument()
-        for (const label of [/mail exchange check/i, /Microsoft account check 1/i, /Microsoft account check 2/i,
-            /Microsoft account check 4/i, /Mimecast account check/i, /LinkedIn/i, 'mail.lef.test', 'smtp.lef.test'])
+        for (const label of [
+            /mail exchange check/i,
+            /Microsoft account check 1/i,
+            /Microsoft account check 2/i,
+            /Microsoft account check 4/i,
+            /Mimecast account check/i,
+            /LinkedIn/i,
+            'mail.lef.test',
+            'smtp.lef.test',
+        ])
             expect(screen.getByText(label)).toBeInTheDocument()
-        expect(JSON.stringify(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))))
-            .not.toMatch(/private-/)
+        expect(
+            JSON.stringify(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))),
+        ).not.toMatch(/private-/)
         expect(document.body.textContent).not.toMatch(/private-/)
     })
 })
 
 // Advance timers in act while allowing the query notifications to commit between checks.
 async function tick(milliseconds = 1) {
-    await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds) })
+    await act(async () => {
+        await vi.advanceTimersByTimeAsync(milliseconds)
+    })
 }
 
 async function loadTimedJob(options: Parameters<typeof renderVerification>[0] = {}) {
@@ -641,8 +941,13 @@ describe('verification polling lifecycle', () => {
             intercept: request => {
                 if (new URL(request.url).pathname !== statusPath) return undefined
                 checks += 1
-                return Response.json(checks === 1 ? { state: 'queued' }
-                    : checks === 2 ? { state: 'running' } : { state: 'completed', result })
+                return Response.json(
+                    checks === 1
+                        ? { state: 'queued' }
+                        : checks === 2
+                          ? { state: 'running' }
+                          : { state: 'completed', result },
+                )
             },
         })
         expect(screen.getByRole('heading', { name: 'Verification queued' })).toBeInTheDocument()
@@ -660,7 +965,8 @@ describe('verification polling lifecycle', () => {
         const { fetch } = await loadTimedJob({
             intercept: request =>
                 new URL(request.url).pathname === statusPath
-                    ? Response.json({ state, failureCode: 'verification_failed' }) : undefined,
+                    ? Response.json({ state, failureCode: 'verification_failed' })
+                    : undefined,
         })
         expect(screen.getByRole('heading', { name: `Verification ${state}` })).toBeInTheDocument()
         await tick(60_000)

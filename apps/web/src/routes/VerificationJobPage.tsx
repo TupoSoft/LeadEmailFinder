@@ -5,8 +5,9 @@ import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
 import { useVerificationJob } from '../features/verification/use-verification'
 import { isVerificationId } from '../features/verification/verification-api'
-import { verificationCopy as copy } from '../features/verification/verification-copy'
+import { verificationChargeReasons, verificationCopy as copy } from '../features/verification/verification-copy'
 import { VerificationResultView } from '../features/verification/VerificationResultView'
+import { VerificationChargeDetails } from '../shared/VerificationChargeDetails'
 import { StateMessage } from '../shared/StateMessage'
 import action from '../shared/Action.module.css'
 import form from '../shared/Form.module.css'
@@ -38,6 +39,7 @@ function JobContent({ organizationId, id }: { organizationId: string; id: string
           ? 'Verification status out of date'
           : stateCopy.title
     useDocumentTitle(`${title} | Lead Email Finder`)
+    const operation = data && 'operation' in data ? data.operation : undefined
     const active = data?.state === 'queued' || data?.state === 'running'
     return (
         <>
@@ -66,7 +68,8 @@ function JobContent({ organizationId, id }: { organizationId: string; id: string
                         <button
                             className={`${action.action} ${action.secondary}`}
                             type="button"
-                            disabled={!online || query.isFetching}
+                            disabled={!online}
+                            aria-disabled={!online || query.isFetching}
                             aria-busy={query.isFetching}
                             onClick={refresh}
                         >
@@ -76,7 +79,13 @@ function JobContent({ organizationId, id }: { organizationId: string; id: string
                     <NewVerificationLink />
                 </div>
             </div>
-            {data?.state === 'completed' ? <VerificationResultView result={data.result} /> : null}
+            {data ? (
+                <VerificationChargeDetails
+                    billing={operation?.billing}
+                    reason={operation?.billing.reason ? verificationChargeReasons[operation.billing.reason] : undefined}
+                />
+            ) : null}
+            {data?.state === 'completed' ? <VerificationResultView result={data.result} operation={operation} /> : null}
         </>
     )
 }

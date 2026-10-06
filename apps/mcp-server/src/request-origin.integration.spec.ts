@@ -6,11 +6,21 @@ import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+/** This suite is about origin gating, not any particular tool's behavior, so it substitutes a
+ * trivial always-succeeding tool for the real one rather than depending on check_credit_balance's
+ * own upstream API. */
+function buildProbeServer(): McpServer {
+    const server = new McpServer({ name: 'request-origin-integration-test-server', version: '0.0.0' })
+    server.registerTool('probe', { description: 'Always succeeds.' }, () => ({ content: [{ type: 'text', text: 'ok' }] }))
+    return server
+}
 
 jest.mock('./create-server.js', () => {
     const actual = jest.requireActual<typeof import('./create-server.js')>('./create-server.js')
-    return { ...actual, createServer: jest.fn(actual.createServer) }
+    return { ...actual, createServer: jest.fn(buildProbeServer) }
 })
 
 import type { AccessTokenProvider } from './auth/token-cache.js'
@@ -58,7 +68,7 @@ describe('request origin integration (HTTP boundary)', () => {
     let port: number
 
     beforeAll(async () => {
-        server = createApp({ allowedOrigins: new Set(['https://client.example']), tokenCache: fakeTokenCache })
+        server = createApp({ allowedOrigins: new Set(['https://client.example']), tokenCache: fakeTokenCache, apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
@@ -71,41 +81,41 @@ describe('request origin integration (HTTP boundary)', () => {
         mockedCreateServer.mockClear()
     })
 
-    async function callPingViaSdk(origin?: string): Promise<unknown> {
+    async function callProbeViaSdk(origin?: string): Promise<unknown> {
         const client = new Client({ name: 'request-origin.spec', version: '0.0.0' })
         const headers: Record<string, string> = { Authorization: validAuthorizationHeader }
         if (origin !== undefined) headers.Origin = origin
         const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), { requestInit: { headers } })
         await client.connect(transport)
         try {
-            return await client.callTool({ name: 'ping', arguments: {} })
+            return await client.callTool({ name: 'probe', arguments: {} })
         } finally {
             await client.close()
         }
     }
 
     it('accepts a request with no Origin header', async () => {
-        const result = await callPingViaSdk()
+        const result = await callProbeViaSdk()
 
-        expect(result).toMatchObject({ content: [{ type: 'text', text: 'pong' }] })
+        expect(result).toMatchObject({ content: [{ type: 'text', text: 'ok' }] })
         expect(mockedCreateServer).toHaveBeenCalled()
     })
 
     it('accepts a request whose Origin header is on the allowlist', async () => {
-        const result = await callPingViaSdk('https://client.example')
+        const result = await callProbeViaSdk('https://client.example')
 
-        expect(result).toMatchObject({ content: [{ type: 'text', text: 'pong' }] })
+        expect(result).toMatchObject({ content: [{ type: 'text', text: 'ok' }] })
         expect(mockedCreateServer).toHaveBeenCalled()
     })
 
     it('rejects a request whose Origin header is not on the allowlist before it reaches the tool factory', async () => {
-        await expect(callPingViaSdk('https://untrusted.example')).rejects.toThrow()
+        await expect(callProbeViaSdk('https://untrusted.example')).rejects.toThrow()
 
         expect(mockedCreateServer).not.toHaveBeenCalled()
     })
 
     it('rejects a mismatched port before it reaches the tool factory', async () => {
-        await expect(callPingViaSdk('https://client.example:8443')).rejects.toThrow()
+        await expect(callProbeViaSdk('https://client.example:8443')).rejects.toThrow()
 
         expect(mockedCreateServer).not.toHaveBeenCalled()
     })
@@ -145,20 +155,20 @@ describe('request origin integration (HTTP boundary)', () => {
     })
 
     it('runs an allowed and a denied request concurrently without either affecting the other', async () => {
-        const [allowed, denied] = await Promise.allSettled([callPingViaSdk('https://client.example'), callPingViaSdk('https://untrusted.example')])
+        const [allowed, denied] = await Promise.allSettled([callProbeViaSdk('https://client.example'), callProbeViaSdk('https://untrusted.example')])
 
         expect(allowed.status).toBe('fulfilled')
         expect(denied.status).toBe('rejected')
     })
 
     it('keeps health and allowed calls working after a rejection', async () => {
-        await expect(callPingViaSdk('https://untrusted.example')).rejects.toThrow()
+        await expect(callProbeViaSdk('https://untrusted.example')).rejects.toThrow()
 
         const health = await fetch(`http://127.0.0.1:${port}/health`)
         expect(health.status).toBe(200)
 
-        const result = await callPingViaSdk('https://client.example')
-        expect(result).toMatchObject({ content: [{ type: 'text', text: 'pong' }] })
+        const result = await callProbeViaSdk('https://client.example')
+        expect(result).toMatchObject({ content: [{ type: 'text', text: 'ok' }] })
     })
 })
 
@@ -222,7 +232,7 @@ describe('process regression: MCP_ALLOWED_ORIGINS startup validation', () => {
             try {
                 child = fork(mainPath, [], {
                     cwd: tempDir,
-                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://client.example', OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1', PORT: '0' },
+                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://client.example', OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1', API_URL: 'http://127.0.0.1:1', PORT: '0' },
                     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
                 })
                 const stdout = await collectUntilMatch(child, 'stdout', /listening on port/, 5_000)
@@ -249,6 +259,7 @@ describe('process regression: MCP_ALLOWED_ORIGINS startup validation', () => {
                         ...process.env,
                         MCP_ALLOWED_ORIGINS: 'https://this-invalid-value-must-not-be-echoed.example/some/path',
                         OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1',
+                        API_URL: 'http://127.0.0.1:1',
                         PORT: '0',
                     },
                     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],

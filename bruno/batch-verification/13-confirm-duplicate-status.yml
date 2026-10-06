@@ -1,0 +1,51 @@
+info:
+    name: 13-confirm-duplicate-status
+    type: http
+    seq: 13
+
+http:
+    method: GET
+    url: '{{baseUrl}}/verifyBatch/{{duplicateBatchJobId}}'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+
+runtime:
+    scripts:
+        - type: before-request
+          code: |-
+              const statusUrl = `${bru.getEnvVar('baseUrl')}/verifyBatch/${bru.getVar('duplicateBatchJobId')}`;
+              for (let attempt = 0; attempt < 90; attempt++) {
+                const response = await fetch(statusUrl, {
+                  headers: { Authorization: `Bearer ${bru.getVar('serviceClientToken')}` },
+                });
+                const payload = await response.json();
+                if (!response.ok || !['queued', 'running', 'completed'].includes(payload.status)) {
+                  throw new Error('Duplicate batch did not satisfy the success contract');
+                }
+                if (payload.status === 'completed' && payload.billing?.state === 'settled') break;
+                if (attempt === 89) throw new Error('Duplicate batch did not settle within the bounded wait');
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+        - type: tests
+          code: |-
+              test('reports three completed rows and one conclusive unique address', function() {
+                expect(res.status).to.equal(200);
+                expect(res.body.status).to.equal('completed');
+                expect(res.body.progress).to.equal(100);
+                expect(res.body.total).to.equal(1);
+                expect(res.body.processed).to.equal(1);
+                expect(res.body.unprocessed).to.equal(0);
+                expect(res.body.resultsAvailable).to.equal(true);
+                expect(res.body.counts).to.deep.equal({
+                  totalRows: 3, uniqueAddresses: 1, duplicateRows: 2,
+                  cachedAddresses: 0, sharedAddresses: 0, cooldownAddresses: 0,
+                  completedAddresses: 1, conclusiveAddresses: 1,
+                  inconclusiveAddresses: 0, failedAddresses: 0,
+                });
+              });
+
+              test('reports exactly one settled credit charge', function() {
+                expect(res.body.billing).to.deep.equal({ state: 'settled', reserved: 1, charged: 1 });
+                bru.setVar('duplicateBatchCharged', res.body.billing.charged);
+              });

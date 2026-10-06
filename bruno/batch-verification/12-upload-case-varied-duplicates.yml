@@ -1,0 +1,29 @@
+info:
+    name: 12-upload-case-varied-duplicates
+    type: http
+    seq: 12
+
+http:
+    method: POST
+    url: '{{baseUrl}}/verifyBatch/csv'
+    headers:
+        - name: Authorization
+          value: 'Bearer {{serviceClientToken}}'
+    body:
+        type: multipart-form
+        data:
+            - name: file
+              type: file
+              value:
+                  - '{{duplicateCsvPath}}'
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('enqueues three case-varied rows for one fresh address', function() {
+                expect(res.status).to.equal(202);
+                expect(res.body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+                expect(Object.keys(res.body)).to.deep.equal(['id']);
+                bru.setVar('duplicateBatchJobId', res.body.id);
+              });

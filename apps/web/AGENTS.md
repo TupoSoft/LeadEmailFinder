@@ -57,6 +57,42 @@ new features, a redesign, or unrelated refactoring.
   layouts, and its [accessibility rules](../../UX-CONTRACT.md#accessibility-and-motion) for controls and feedback.
   Evaluate these rules within the affected workflow; report observed gaps without expanding an unrelated task.
 
+## Compose Product Content with Shared Spacing
+
+- Use [`Stack`](src/shared/Stack.tsx) for new or changed vertical content groups inside product panels. Use
+  `gap="content"` between logical groups and `gap="control"` within a related group. The default gap is content.
+  The existing roles resolve to 24 and 12 pixels at the default root font size; consume the tokens rather than literals.
+- The parent owns the spacing. `Stack` removes the outer margins of its direct children. Do not add margins or gap
+  overrides in feature styles, empty spacer elements, or line breaks to create space between those children. Nest
+  stacks when the grouping changes. Preserve internal padding and row separators in components such as `SignalDetails`.
+- Reuse [`SupportingText`](src/shared/SupportingText.tsx) for short explanatory paragraphs. It owns compact type,
+  regular weight, readable ink contrast, and zero outer margins. Keep customer-facing copy in its existing owner.
+- Keep `ProductPanel` responsible for its header, loading, feedback, and content reservation. Apply this contract
+  to the content being changed; leave unrelated existing screen layouts for their own tasks.
+- When a list ends at a panel boundary, draw item dividers only between rows. Let `ProductPanel` own the section
+  rule; do not duplicate it with a border after the final row. Check both single-item and empty lists.
+- Verify the affected screen at desktop and mobile widths, including its relevant loading and recovery states.
+  Assert important rendered gaps in the existing browser suite and run `design:lint` and `ui:audit`.
+- Inspect screenshots and review visual differences before updating any screenshot baseline. A passing static
+  audit or a newly recorded baseline does not establish visual correctness.
+
+Compose related values and their explanation like this, using the feature's existing values and copy:
+
+```tsx
+<Stack gap="content">
+    <Stack gap="control">
+        <p>{primaryValue}</p>
+        <SignalDetails entries={entries} />
+    </Stack>
+    <SupportingText>{explanation}</SupportingText>
+</Stack>
+```
+
+The [design contract](../../DESIGN.md#content-spacing-and-supporting-text) owns these roles. The billing summary in
+[`BillingPanels.tsx`](src/features/billing/BillingPanels.tsx) is the working example. The shared components accept
+`id`, `role`, `hidden`, `lang`, `dir`, `title`, and ARIA attributes, and omit local styling overrides. Add a justified
+shared variant and update the contracts if a new recurring layout requires one.
+
 ## Keep Shared Infrastructure Free of Feature Policy
 
 - Do not add product-feature imports or feature endpoint lists to shared authentication and transport code. Express

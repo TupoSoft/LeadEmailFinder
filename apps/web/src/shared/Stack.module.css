@@ -1,0 +1,17 @@
+.stack:not([hidden]) {
+    display: grid;
+}
+.stack {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+}
+.stack > * {
+    margin: 0;
+    min-width: 0;
+}
+.content {
+    gap: var(--space-content-gap);
+}
+.control {
+    gap: var(--space-control-gap);
+}

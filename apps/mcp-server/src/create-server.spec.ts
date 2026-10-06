@@ -13,7 +13,7 @@ describe('mcp-server scaffold', () => {
     let baseUrl: URL
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: fakeTokenCache })
+        server = createApp({ tokenCache: fakeTokenCache, apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolve => server.listen(0, resolve))
         const { port } = server.address() as AddressInfo
         baseUrl = new URL(`http://127.0.0.1:${port}/`)
@@ -30,7 +30,7 @@ describe('mcp-server scaffold', () => {
         expect(await response.json()).toEqual({ status: 'ok' })
     })
 
-    it('lists exactly one tool, ping, over the real MCP protocol', async () => {
+    it('lists exactly the eight registered tools over the real MCP protocol', async () => {
         const client = new Client({ name: 'create-server.spec', version: '0.0.0' })
         const transport = new StreamableHTTPClientTransport(new URL('mcp', baseUrl), {
             requestInit: { headers: { Authorization: validAuthorizationHeader } },
@@ -40,8 +40,16 @@ describe('mcp-server scaffold', () => {
         try {
             const { tools } = await client.listTools()
 
-            expect(tools).toHaveLength(1)
-            expect(tools[0]?.name).toBe('ping')
+            expect(tools.map(tool => tool.name).sort()).toEqual([
+                'check_async_verification',
+                'check_batch_verification',
+                'check_credit_balance',
+                'download_batch_results',
+                'get_verification_result',
+                'submit_async_verification',
+                'submit_batch_verification',
+                'verify_email',
+            ])
         } finally {
             await client.close()
         }

@@ -22,9 +22,6 @@
 .notice p {
     max-width: 65ch;
 }
-.balance {
-    margin: 0;
-}
 .balance strong {
     font-size: var(--font-size-product-heading);
     line-height: var(--line-height-product-heading);
@@ -41,6 +38,8 @@
     justify-content: space-between;
     gap: var(--space-content-gap);
     padding-block: var(--space-content-gap);
+}
+.packs > li:not(:last-child) {
     border-bottom: var(--rule-width) solid var(--color-rule-soft);
 }
 .packs p {

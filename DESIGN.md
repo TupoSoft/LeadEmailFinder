@@ -71,6 +71,12 @@ spacing:
     motion-fast-milliseconds: 140
     motion-reduced-milliseconds: 0.01
 components:
+    stack-content:
+        size: '{spacing.content-gap}'
+    stack-control:
+        size: '{spacing.control-gap}'
+    supporting-text:
+        textColor: '{colors.ink}'
     application-shell:
         backgroundColor: '{colors.canvas}'
         textColor: '{colors.ink}'
@@ -233,6 +239,25 @@ Use the spacing tokens as named roles. The 0.25rem unit supports optical adjustm
 arbitrary multiples in feature CSS. Reserve stable space for media, focus outlines, and feedback. The document owns
 page scrolling. Component-level overflow needs a named reason and must inherit the global scrollbar baseline.
 
+### Content Spacing and Supporting Text
+
+`Stack` owns vertical spacing between direct children of new or changed product-panel content groups. Use
+`gap="content"` for logical groups and `gap="control"` for related items within a group. These map to the existing
+1.5rem and 0.75rem tokens. Content is the default. Nest stacks to express grouping; the parent resets direct
+children's outer margins, while detail rows retain their internal padding and separators. Avoid extra margins,
+spacer elements, and line breaks for layout. Keep panel headers, feedback regions, and reserved content under
+`ProductPanel` ownership.
+
+`SupportingText` owns short explanatory paragraphs: compact type and leading, regular weight, the existing ink
+color, and no outer margin. Its containing stack supplies separation. Both primitives accept `id`, `role`, `hidden`,
+`lang`, `dir`, `title`, and ARIA attributes and omit local styling overrides. Hidden groups remain hidden. Billing is
+the first consumer; other screens adopt the contract as their content layout changes.
+
+The manifest binds the shared gap and supporting-text color tokens to exact CSS selectors and properties. The existing
+UI audit checks those declarations; browser tests check actual billing gaps and typography at desktop and phone
+widths. Review rendered screenshots before changing baselines. Static checks cannot prove visual quality or
+require every future screen to choose the correct content grouping.
+
 ## Elevation & Depth
 
 The visual system is almost flat. Fine ink rules, whitespace, and the sage supporting surface establish hierarchy.
@@ -295,6 +320,16 @@ packs, and purchase history in document order. Pack actions reuse
 the shared primary and secondary treatments. The return notice uses sage with an evergreen rule; its text states
 the payment status. Purchase history displays status labels as text and becomes labeled rows on narrow screens without
 changing the data order. These components reuse the existing palette, typography, spacing, and motion tokens.
+
+At the boundary between credit packs and purchase history, `ProductPanel` owns the section rule. Pack dividers
+appear only between rows, with no trailing border after the final pack. Single-item and empty catalogs retain
+the panel rule without adding an extra list divider. Row padding and action placement remain unchanged.
+
+Available credits remain the billing summary's primary figure. The `balance` variant of `SignalDetails` presents
+reserved credits and total balance with regular-weight labels and compact typography. Reservation guidance also
+uses `SupportingText`, separated from the final detail rule by a content `Stack` gap of 1.5rem. A nested control
+`Stack` separates the available label, primary figure, and detail list by 0.75rem. Keep the existing ink
+color for readable contrast; hierarchy comes from type size, weight, and spacing.
 
 ### Team Forms and Invitations
 

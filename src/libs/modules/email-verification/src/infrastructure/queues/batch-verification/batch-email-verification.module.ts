@@ -1,31 +1,22 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule, ConfigService } from '@nestjs/config'
+import { ConfigModule } from '@nestjs/config'
 import { BullModule } from '@nestjs/bullmq'
 import { MulterModule } from '@nestjs/platform-express'
 import { DataSource } from 'typeorm'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { CreditReservationService, CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { EmailVerificationCoreModule } from '../../email-verification-core.module'
+import { BatchAdmissionModule } from '../../batch-admission.module'
 import { VerificationExecutionModule } from '../verification-execution/verification-execution.module'
 import { VerificationTraceModule } from '../../verification-trace/verification-trace.module'
 import {
     VERIFICATION_TRACE_OBSERVER,
     VerificationTraceObserver,
 } from '../../../application/verification-trace/verification-trace-observer'
-import { VERIFICATION_CLOCK, VerificationClock } from '../../../application/ports/verification-clock'
-import { VERIFICATION_REQUEST_STORE, VerificationRequestStore } from '../../../application/ports/verification-request-store'
-import { VERIFICATION_EXECUTION_STORE, VerificationExecutionStore } from '../../../application/ports/verification-execution-store'
-import {
-    VERIFICATION_RESULT_CACHE_READER,
-    VerificationResultCacheReader,
-} from '../../../application/ports/verification-result-cache-reader'
-import { VERIFICATION_COOLDOWN_READER, VerificationCooldownReader } from '../../../application/ports/verification-cooldown-reader'
 import {
     VERIFICATION_EXECUTION_DISPATCHER,
     VerificationExecutionDispatcher,
 } from '../../../application/ports/verification-execution-dispatcher'
-import { VERIFICATION_EXECUTION_DEADLINE_MS, VERIFICATION_ADDRESS_COOLDOWN_MS } from '../../../application/operations/verification-execution-timing'
 import { BATCH_INPUT, BatchInput } from '../../../application/delivery/batch/batch-input'
 import { BATCH_ROW_STORE, BatchRowStore } from '../../../application/delivery/batch/batch-row-store'
 import { BATCH_ADMISSION_STORE, BatchAdmissionStore } from '../../../application/delivery/batch/batch-admission-store'
@@ -42,21 +33,17 @@ import { S3BatchInput } from '../../storage/batch-verification/s3-batch-input'
 import { S3BatchResultWriter } from '../../storage/batch-verification/s3-batch-result-writer'
 import { S3BatchResultReader } from '../../storage/batch-verification/s3-batch-result-reader'
 import { MulterOptionsFactoryImpl } from '../../storage/batch-verification/multer-options-factory-impl.service'
-import { TypeOrmBatchAdmissionStore } from '../../persistence/typeorm-batch-admission.store'
 import { TypeOrmBatchRowStore } from '../../persistence/typeorm-batch-row.store'
-import { BatchAdmissionEntity } from '../../persistence/typeorm/batch-admission.entity'
-import { BatchUniqueAddressEntity } from '../../persistence/typeorm/batch-unique-address.entity'
 import { BatchRowEntity } from '../../persistence/typeorm/batch-row.entity'
 import { BullBatchJobs } from './bull-batch-jobs'
 import { BatchEmailVerificationProcessor } from './batch-email-verification.processor'
 import { BATCH_EMAIL_VERIFICATION_QUEUE_NAME } from './batch-email-verification-queue.config'
 
-const DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS = 86_400
-
 @Module({
     imports: [
         VerificationTraceModule,
-        TypeOrmModule.forFeature([BatchAdmissionEntity, BatchUniqueAddressEntity, BatchRowEntity]),
+        TypeOrmModule.forFeature([BatchRowEntity]),
+        BatchAdmissionModule,
         BullModule.registerQueue({ name: BATCH_EMAIL_VERIFICATION_QUEUE_NAME }),
         MulterModule.registerAsync({
             imports: [ConfigModule],
@@ -64,7 +51,6 @@ const DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS = 86_400
         }),
         EmailVerificationCoreModule,
         VerificationExecutionModule,
-        CreditsModule,
         ConfigModule,
     ],
     providers: [
@@ -77,50 +63,9 @@ const DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS = 86_400
         { provide: BATCH_RESULT_READER, useExisting: S3BatchResultReader },
         { provide: BATCH_JOBS, useExisting: BullBatchJobs },
         {
-            provide: BATCH_ADMISSION_STORE,
-            inject: [DataSource],
-            useFactory: (dataSource: DataSource) => new TypeOrmBatchAdmissionStore(dataSource),
-        },
-        {
             provide: BATCH_ROW_STORE,
             inject: [DataSource],
             useFactory: (dataSource: DataSource) => new TypeOrmBatchRowStore(dataSource),
-        },
-        {
-            provide: BatchAdmissionService,
-            inject: [
-                BATCH_ADMISSION_STORE,
-                VERIFICATION_EXECUTION_STORE,
-                VERIFICATION_REQUEST_STORE,
-                VERIFICATION_RESULT_CACHE_READER,
-                VERIFICATION_COOLDOWN_READER,
-                CreditReservationService,
-                VERIFICATION_CLOCK,
-                ConfigService,
-            ],
-            useFactory: (
-                admissions: BatchAdmissionStore,
-                executions: VerificationExecutionStore,
-                requests: VerificationRequestStore,
-                cacheReader: VerificationResultCacheReader,
-                cooldownReader: VerificationCooldownReader,
-                credits: CreditReservationService,
-                clock: VerificationClock,
-                configService: ConfigService,
-            ) =>
-                new BatchAdmissionService(
-                    admissions,
-                    executions,
-                    requests,
-                    cacheReader,
-                    cooldownReader,
-                    credits,
-                    clock,
-                    (configService.get<number>('VERIFICATION_RESULT_CACHE_TTL_SECONDS') ??
-                        DEFAULT_VERIFICATION_RESULT_CACHE_TTL_SECONDS) * 1000,
-                    VERIFICATION_EXECUTION_DEADLINE_MS,
-                    VERIFICATION_ADDRESS_COOLDOWN_MS,
-                ),
         },
         {
             provide: BatchEmailVerificationWorkflow,

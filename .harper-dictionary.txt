@@ -32,15 +32,18 @@ ExecPlan
 ExecPlans
 ExecPlan's
 gitignored
+healthcheck
 ICP
 idempotence
 idempotently
 Idempotence
 IPs
+jq
 JSONB
 JWKS
 Keycloak
 LeadEmailFinder
+LEF
 libvirt
 lifecycle
 logout
@@ -418,6 +421,7 @@ DinD
 unrouted
 TTY
 submitters
+unmocked
 k3d
 K3s
 kubeconfig

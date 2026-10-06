@@ -19,7 +19,7 @@ const DESIGN_SECTIONS = [
     "Do's and Don'ts",
 ]
 const MAP_COLUMNS = ['Capability', 'Canonical owner', 'Source of truth', 'Allowed variants', 'Verification']
-const KNOWN_CAPABILITIES = new Set(['Scrollbar'])
+const KNOWN_CAPABILITIES = new Set(['Scrollbar', 'Content spacing', 'Supporting text'])
 const REQUIRED_COMMANDS = ['unit', 'browser', 'accessibility', 'visual']
 const REQUIRED_EVIDENCE = ['publicRoot', 'notFound', 'accessibility', 'visualRegression']
 const PRIMITIVE_TOKEN_GROUPS = new Set(['colors', 'rounded', 'spacing', 'typography'])
@@ -401,6 +401,105 @@ function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 
+function inspectComponentBindings(designPath, bindings, consumerSources, consumers, customProperty) {
+    const findings = []
+    if (bindings === undefined) return findings
+    if (!Array.isArray(bindings) || bindings.length === 0) {
+        return [
+            finding(
+                'components.bindings-invalid',
+                `${designPath} bindings must be a nonempty array when declared.`,
+                'Declare each binding with a consumer file, one selector, and one CSS property.',
+                { category: 'unresolved' },
+            ),
+        ]
+    }
+
+    const seen = new Set()
+    const expectedValue = new RegExp(`^var\\(\\s*${escapeRegExp(customProperty)}\\s*\\)(?:\\s*!important)?$`, 'u')
+    for (const binding of bindings) {
+        if (
+            !binding ||
+            typeof binding !== 'object' ||
+            Array.isArray(binding) ||
+            typeof binding.file !== 'string' ||
+            !consumers.has(binding.file) ||
+            typeof binding.selector !== 'string' ||
+            binding.selector.trim() === '' ||
+            /[{};]/u.test(binding.selector) ||
+            typeof binding.property !== 'string' ||
+            !/^[a-z][a-z-]*$/u.test(binding.property)
+        ) {
+            findings.push(
+                finding(
+                    'components.binding-invalid',
+                    `${designPath} has an invalid CSS binding.`,
+                    'Use a listed consumer file, a nonempty selector, and a lowercase CSS property name.',
+                    { category: 'unresolved' },
+                ),
+            )
+            continue
+        }
+
+        const selector = binding.selector.trim()
+        const identity = JSON.stringify([binding.file, selector, binding.property])
+        if (seen.has(identity)) {
+            findings.push(
+                finding(
+                    'components.binding-duplicate',
+                    `${designPath} binds ${binding.file} ${selector} ${binding.property} more than once.`,
+                    'Keep each CSS binding once.',
+                    { category: 'unresolved' },
+                ),
+            )
+            continue
+        }
+        seen.add(identity)
+
+        // Missing or unreadable consumers already have a finding from the file checks.
+        const source = consumerSources.get(binding.file)
+        if (source === undefined) continue
+        const rules = [...cssWithoutComments(source).matchAll(/([^{}]+)\{([^{}]*)\}/gu)].filter(match =>
+            match[1].split(',').some(value => value.trim() === selector),
+        )
+        if (rules.length === 0) {
+            findings.push(
+                finding(
+                    'components.binding-selector-missing',
+                    `${designPath} binds ${selector}, but that selector is missing from ${binding.file}.`,
+                    'Restore the declared selector or update its component binding.',
+                    { file: binding.file },
+                ),
+            )
+            continue
+        }
+
+        const declaration = new RegExp(`(?:^|;)\\s*${escapeRegExp(binding.property)}\\s*:\\s*([^;]+)`, 'gu')
+        const values = rules.flatMap(match => [...match[2].matchAll(declaration)].map(value => value[1].trim()))
+        if (values.length === 0) {
+            findings.push(
+                finding(
+                    'components.binding-property-missing',
+                    `${designPath} binds ${selector} ${binding.property}, but that property is missing.`,
+                    `Declare ${binding.property}: var(${customProperty}) on ${selector}.`,
+                    { file: binding.file },
+                ),
+            )
+        } else if (values.some(value => !expectedValue.test(value))) {
+            findings.push(
+                finding(
+                    'components.binding-value-drift',
+                    `${designPath} requires ${selector} ${binding.property} to use var(${customProperty}).`,
+                    'Keep every declaration for the bound selector and property aligned with its design token.',
+                    { file: binding.file },
+                ),
+            )
+        }
+    }
+
+    return findings
+}
+
 async function inspectComponentMapping(projectRoot, manifest, designData, tokenMap) {
     const findings = []
     if (!designData) return findings
@@ -529,6 +628,7 @@ async function inspectComponentMapping(projectRoot, manifest, designData, tokenM
 
         if (typeof customProperty !== 'string' || !/^--[\w-]+$/u.test(customProperty)) continue
         const propertyUse = new RegExp(`var\\s*\\(\\s*${escapeRegExp(customProperty)}(?:\\s*,[^)]*)?\\s*\\)`, 'u')
+        const consumerSources = new Map()
 
         for (const configuredPath of uniqueConsumers) {
             if (typeof configuredPath !== 'string') continue
@@ -566,6 +666,7 @@ async function inspectComponentMapping(projectRoot, manifest, designData, tokenM
                 )
                 continue
             }
+            consumerSources.set(configuredPath, source)
             if (!propertyUse.test(cssWithoutComments(source))) {
                 findings.push(
                     finding(
@@ -577,6 +678,15 @@ async function inspectComponentMapping(projectRoot, manifest, designData, tokenM
                 )
             }
         }
+        findings.push(
+            ...inspectComponentBindings(
+                designPath,
+                mappingEntry.bindings,
+                consumerSources,
+                uniqueConsumers,
+                customProperty,
+            ),
+        )
     }
 
     return findings

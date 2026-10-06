@@ -6,6 +6,10 @@ info:
 http:
   method: POST
   url: "{{baseUrl}}/mcp"
+  auth:
+    type: basic
+    username: "{{clientId}}"
+    password: "{{clientSecret}}"
   headers:
     - name: Content-Type
       value: application/json

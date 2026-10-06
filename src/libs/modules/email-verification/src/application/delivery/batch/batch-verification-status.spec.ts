@@ -1,5 +1,36 @@
 import { BatchVerificationSnapshot } from './batch-jobs'
-import { mapBatchVerificationStatus } from './batch-verification-status'
+import { getDownloadableBatchResultLocation, mapBatchVerificationStatus } from './batch-verification-status'
+
+describe('getDownloadableBatchResultLocation', () => {
+    it('returns the retained location only after completion, ignoring a prior failure marker', () => {
+        expect(
+            getDownloadableBatchResultLocation({
+                state: 'completed',
+                resultLocation: 's3://bucket/results/file.csv',
+                failureCode: 'processing_failed',
+            }),
+        ).toBe('s3://bucket/results/file.csv')
+    })
+
+    it.each(['queued', 'running', 'failed', 'unavailable'] as const)('rejects a retained location while %s', state => {
+        expect(
+            getDownloadableBatchResultLocation({ state, resultLocation: 's3://bucket/results/file.csv' }),
+        ).toBeUndefined()
+    })
+
+    it.each([undefined, ''])('rejects completion without an accepted location %#', resultLocation => {
+        expect(getDownloadableBatchResultLocation({ state: 'completed', resultLocation })).toBeUndefined()
+    })
+
+    it('rejects unknown future states even with a retained location', () => {
+        expect(
+            getDownloadableBatchResultLocation({
+                state: 'private-future-state',
+                resultLocation: 's3://bucket/results/file.csv',
+            } as unknown as BatchVerificationSnapshot),
+        ).toBeUndefined()
+    })
+})
 
 describe('mapBatchVerificationStatus', () => {
     it.each(['queued', 'running', 'unavailable'] as const)('returns only the public %s status', state => {

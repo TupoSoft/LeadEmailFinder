@@ -15,8 +15,19 @@ This plan delivers one implementation PR, with the proposed subject
 
 ## Progress
 
-- [ ] (2026-09-16) Implement the pinned proxy configuration, documentation, and automated transport checks.
-- [ ] (2026-09-16) Validate the documented configuration in Claude Desktop against the Compose service.
+- [x] (2026-09-24) Implemented the pinned proxy configuration, documentation, and automated transport checks:
+  `mcp-remote@0.14.2` pinned as a development dependency, `examples/claude-desktop.local.json` template,
+  `apps/mcp-server/src/desktop-bridge.integration.spec.ts` (real SDK client, real installed proxy, real fixture
+  HTTP server), and the Desktop/cloud-connector documentation in `apps/mcp-server/README.md`. Corrected
+  `mcp-connector/07`'s Plan of Work to stop promising an identical remote URL/header configuration for every
+  client.
+- [ ] (2026-09-24) **Outstanding**: validate the documented configuration in an actual Claude Desktop installation
+  against the deployed Compose service. No GUI/Desktop application is available in this implementation
+  environment (a headless CLI agent session) to perform this step. Per this plan's own Artifacts and Notes ("An
+  unavailable Desktop installation is an explicit outstanding acceptance criterion, not a successful validation
+  inferred from SDK tests"), this is reported honestly as not done rather than inferred from the automated
+  SDK-level proxy tests above. A human with an actual Desktop installation must complete this step before this
+  plan's second Acceptance Criterion bullet is fully satisfied; see Outcomes & Retrospective.
 
 ## Plan dependencies
 
@@ -26,7 +37,33 @@ This plan delivers one implementation PR, with the proposed subject
 
 ## Surprises & Discoveries
 
-None yet.
+- Reused the real connector's own `createApp()` (mocking only `create-server.js`'s tool registration, exactly the
+  established pattern already used by `request-origin.integration.spec.ts`) as the integration test's fixture HTTP
+  server, rather than hand-rolling a second, parallel HTTP server implementation. This means the fixture's
+  Basic-auth gate, `405` on non-`POST /mcp`, and catch-all `404` on every other path (including the OAuth
+  well-known discovery routes this plan's Plan of Work called out) are the *real*, already-shipped connector
+  code — not a reimplementation that could silently drift from it — and no new server-side code was needed to
+  satisfy the "OAuth discovery routes answer with 404" requirement, since the connector's existing catch-all
+  already does this for any unrecognized path.
+- Traced the pinned proxy's actual bundled source (`node_modules/mcp-remote/dist/chunk-EFMRUNOV.js`,
+  `dist/proxy.js`) to confirm the exact failure behavior for invalid/missing credentials, rather than guessing:
+  the proxy's own OAuth-discovery probe sends a bare `GET` to the server URL first; the real connector's `405`
+  response to a non-`POST /mcp` request (not a `401`) means that probe never reports an auth challenge, so the
+  interactive browser/callback flow is *not* attempted at that stage regardless of credential validity. The real
+  `401` only surfaces once the actual `POST`-based MCP handshake runs through `StreamableHTTPClientTransport`,
+  and in this repository's real configuration (`--transport http-only`, no `--debug`, no static OAuth client
+  metadata, no reachable authorization-server discovery since every well-known path 404s) that `401` propagates
+  as a clean, fast connection failure in practice — measured in low hundreds of milliseconds, not anywhere near
+  the proxy's own 30-second default `--auth-timeout`. The automated tests still pass an explicit short
+  `--auth-timeout 3` on the negative-path cases as a deliberate belt-and-braces bound, in case a future proxy
+  version changes this fast-failure behavior.
+- `StdioClientTransport` (the real SDK's stdio client transport) exposes a `stderr` stream but not a
+  corresponding standard-output hook — its own internal reader owns standard output to parse JSON-RPC framing.
+  The credential-leak scan therefore covers `stderr` and the temporary `MCP_REMOTE_CONFIG_DIR`'s file contents
+  directly; standard output's own freedom from leaked content is instead proven structurally by every successful
+  test in this suite completing a real MCP handshake and tool call at all -- a single stray line on standard
+  output (a leaked credential included) breaks the reader's line-buffered JSON-RPC parsing and would surface as
+  a connection failure, not a silent pass.
 
 ## Decision Log
 
@@ -53,7 +90,23 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+All three Decision Log choices held up unchanged through implementation: the pinned `mcp-remote@0.14.2` proxy,
+the development-only dependency placement, and the `http-only`/`--allow-http`/`--silent` transport selection all
+worked exactly as designed once exercised against a real fixture server. The automated acceptance criteria are
+fully met: a real SDK client through the real installed proxy can initialize, discover, and call the fixture
+tool; invalid and missing credentials never run the tool or yield an authenticated connection, bounded well
+under the 45-second test deadline; concurrent clients with different credentials never cross-contaminate; no
+credential or bearer-token sentinel appeared in captured output or the isolated proxy configuration directory
+across any test, success or failure; and the committed template parses as locked, secret-free JSON. `mcp-connector/07`
+no longer promises an identical remote URL/header configuration for every MCP client.
+
+**One acceptance criterion remains genuinely outstanding, not silently skipped**: an actual Claude Desktop
+installation exercising the documented configuration against the deployed Compose service. This implementation
+ran in a headless CLI environment with no Desktop application available, and the plan itself anticipates exactly
+this possibility, treating it as an explicit outstanding item rather than something to infer from the SDK-level
+proxy tests. A person with a real Desktop installation should follow `apps/mcp-server/README.md`'s "Connecting
+Claude Desktop" section end to end, recording the Desktop version, operating system, Node version, and the
+result of calling `check_credit_balance`, before this plan is considered fully complete.
 
 ## Context and Orientation
 

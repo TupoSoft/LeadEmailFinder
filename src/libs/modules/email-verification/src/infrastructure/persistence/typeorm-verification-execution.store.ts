@@ -1,5 +1,7 @@
-import { DataSource, In } from 'typeorm'
+import { Brackets, DataSource, EntityManager, In } from 'typeorm'
+import { BatchAdmissionFence, BatchAdmissionGuardedWrite } from '../../application/delivery/batch/batch-admission-store'
 import {
+    BatchGroupClaimOutcome,
     CachedResultCandidate,
     ClaimAddressOutcome,
     ExecutionFundingOwner,
@@ -7,6 +9,7 @@ import {
     VerificationExecutionStore,
 } from '../../application/ports/verification-execution-store'
 import { queryLatestCacheCandidate } from './verification-result-cache-query'
+import { lockFencedAdmission } from './batch-admission-fence'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
@@ -34,6 +37,13 @@ function toRecord(entity: VerificationExecutionEntity): VerificationExecutionRec
     }
 }
 
+/** Serializes every admission (single or batch) for this organization against every other one, so a batch upload
+ *  freezing its address manifest cannot race a concurrent single-verification submission for one of the same
+ *  addresses. Transaction-scoped: released automatically at commit/rollback, even across nested savepoints. */
+async function lockOrganizationAdmissions(manager: EntityManager, organizationId: string): Promise<void> {
+    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId])
+}
+
 function isUniqueViolation(error: unknown): boolean {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === POSTGRES_UNIQUE_VIOLATION
 }
@@ -51,74 +61,104 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         fundingOwner: ExecutionFundingOwner = { type: 'single', id: newExecutionId },
     ): Promise<ClaimAddressOutcome> {
         return this.dataSource.transaction(async manager => {
-            // Serializes every admission (single or batch) for this organization against every other one, so a
-            // batch upload freezing its address manifest cannot race a concurrent single-verification submission
-            // for one of the same addresses. Transaction-scoped: released automatically at commit/rollback, even
-            // across the nested savepoint transaction below.
-            await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId])
+            await lockOrganizationAdmissions(manager, organizationId)
+            return this.claimLocked(manager, organizationId, normalizedAddress, payerRequestId, newExecutionId, deadlineAt, isCandidateUsable, fundingOwner)
+        })
+    }
 
-            const existing = await manager.findOne(VerificationExecutionEntity, {
-                where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
+    async claimOrJoinForBatchGroup(
+        batchId: string,
+        fence: BatchAdmissionFence,
+        organizationId: string,
+        normalizedAddress: string,
+        payerRequestId: string,
+        newExecutionId: string,
+        deadlineAt: Date,
+        isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+    ): Promise<BatchGroupClaimOutcome> {
+        return this.dataSource.transaction(async manager => {
+            await lockOrganizationAdmissions(manager, organizationId)
+            // Lock order: organization advisory lock, then batch group row, then execution row.
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'read')
+            if (admission?.state !== 'admitting') return { kind: 'stale-admission' }
+            return this.claimLocked(manager, organizationId, normalizedAddress, payerRequestId, newExecutionId, deadlineAt, isCandidateUsable, {
+                type: 'batch_group',
+                id: batchId,
             })
+        })
+    }
 
-            if (existing) {
-                const locked = await manager.findOneOrFail(VerificationExecutionEntity, {
-                    where: { executionId: existing.executionId },
-                    lock: { mode: 'pessimistic_write' },
-                })
-                const candidate = await queryLatestCacheCandidate(manager, organizationId, normalizedAddress)
-                if (candidate && isCandidateUsable(candidate)) {
-                    return { kind: 'cache-available', resultId: candidate.resultId }
-                }
-                return { kind: 'joined', execution: toRecord(locked) }
-            }
+    private async claimLocked(
+        manager: EntityManager,
+        organizationId: string,
+        normalizedAddress: string,
+        payerRequestId: string,
+        newExecutionId: string,
+        deadlineAt: Date,
+        isCandidateUsable: (candidate: CachedResultCandidate) => boolean,
+        fundingOwner: ExecutionFundingOwner,
+    ): Promise<ClaimAddressOutcome> {
+        const existing = await manager.findOne(VerificationExecutionEntity, {
+            where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
+        })
 
-            let inserted: VerificationExecutionEntity
-            try {
-                // A caught unique-violation otherwise leaves the whole transaction unusable in Postgres (any
-                // further statement fails with "current transaction is aborted"); nesting the risky insert in its
-                // own `manager.transaction()` makes TypeORM issue a savepoint, so catching the violation here
-                // rolls back only the insert and leaves the outer transaction free to keep reading/locking.
-                inserted = await manager.transaction(async nested =>
-                    nested.save(
-                        VerificationExecutionEntity,
-                        nested.create(VerificationExecutionEntity, {
-                            executionId: newExecutionId,
-                            organizationId,
-                            normalizedAddress,
-                            payerRequestId,
-                            state: 'funding_pending',
-                            fundingOwnerType: fundingOwner.type,
-                            fundingOwnerId: fundingOwner.id,
-                            attemptGeneration: 0,
-                            leaseOwnerId: null,
-                            leaseExpiresAt: null,
-                            resultId: null,
-                            retryAt: null,
-                            deadlineAt,
-                        }),
-                    ),
-                )
-            } catch (error) {
-                if (!isUniqueViolation(error)) throw error
-                const winner = await manager.findOneOrFail(VerificationExecutionEntity, {
-                    where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
-                    lock: { mode: 'pessimistic_write' },
-                })
-                const candidate = await queryLatestCacheCandidate(manager, organizationId, normalizedAddress)
-                if (candidate && isCandidateUsable(candidate)) {
-                    return { kind: 'cache-available', resultId: candidate.resultId }
-                }
-                return { kind: 'joined', execution: toRecord(winner) }
-            }
-
+        if (existing) {
+            const locked = await manager.findOneOrFail(VerificationExecutionEntity, {
+                where: { executionId: existing.executionId },
+                lock: { mode: 'pessimistic_write' },
+            })
             const candidate = await queryLatestCacheCandidate(manager, organizationId, normalizedAddress)
             if (candidate && isCandidateUsable(candidate)) {
-                await manager.delete(VerificationExecutionEntity, { executionId: newExecutionId })
                 return { kind: 'cache-available', resultId: candidate.resultId }
             }
-            return { kind: 'created', execution: toRecord(inserted) }
-        })
+            return { kind: 'joined', execution: toRecord(locked) }
+        }
+
+        let inserted: VerificationExecutionEntity
+        try {
+            // A caught unique-violation otherwise leaves the whole transaction unusable in Postgres (any
+            // further statement fails with "current transaction is aborted"); nesting the risky insert in its
+            // own `manager.transaction()` makes TypeORM issue a savepoint, so catching the violation here
+            // rolls back only the insert and leaves the outer transaction free to keep reading/locking.
+            inserted = await manager.transaction(async nested =>
+                nested.save(
+                    VerificationExecutionEntity,
+                    nested.create(VerificationExecutionEntity, {
+                        executionId: newExecutionId,
+                        organizationId,
+                        normalizedAddress,
+                        payerRequestId,
+                        state: 'funding_pending',
+                        fundingOwnerType: fundingOwner.type,
+                        fundingOwnerId: fundingOwner.id,
+                        attemptGeneration: 0,
+                        leaseOwnerId: null,
+                        leaseExpiresAt: null,
+                        resultId: null,
+                        retryAt: null,
+                        deadlineAt,
+                    }),
+                ),
+            )
+        } catch (error) {
+            if (!isUniqueViolation(error)) throw error
+            const winner = await manager.findOneOrFail(VerificationExecutionEntity, {
+                where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
+                lock: { mode: 'pessimistic_write' },
+            })
+            const candidate = await queryLatestCacheCandidate(manager, organizationId, normalizedAddress)
+            if (candidate && isCandidateUsable(candidate)) {
+                return { kind: 'cache-available', resultId: candidate.resultId }
+            }
+            return { kind: 'joined', execution: toRecord(winner) }
+        }
+
+        const candidate = await queryLatestCacheCandidate(manager, organizationId, normalizedAddress)
+        if (candidate && isCandidateUsable(candidate)) {
+            await manager.delete(VerificationExecutionEntity, { executionId: newExecutionId })
+            return { kind: 'cache-available', resultId: candidate.resultId }
+        }
+        return { kind: 'created', execution: toRecord(inserted) }
     }
 
     async findById(executionId: string, organizationId: string): Promise<VerificationExecutionRecord | null> {
@@ -140,6 +180,51 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 await manager.save(VerificationExecutionEntity, execution)
             }
             return toRecord(execution)
+        })
+    }
+
+    async markBatchGroupQueued(
+        executionId: string,
+        organizationId: string,
+        batchId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.transitionOwnedFundingPending(executionId, organizationId, batchId, fence, 'approved', 'queued')
+    }
+
+    async cancelBatchGroupFundingPending(
+        executionId: string,
+        organizationId: string,
+        batchId: string,
+        fence: BatchAdmissionFence,
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.transitionOwnedFundingPending(executionId, organizationId, batchId, fence, 'denied', 'canceled')
+    }
+
+    private async transitionOwnedFundingPending(
+        executionId: string,
+        organizationId: string,
+        batchId: string,
+        fence: BatchAdmissionFence,
+        requiredDecision: 'approved' | 'denied',
+        next: 'queued' | 'canceled',
+    ): Promise<BatchAdmissionGuardedWrite> {
+        return this.dataSource.transaction(async manager => {
+            const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'read')
+            if (admission?.state !== 'funding' || admission.fundingDecision !== requiredDecision) return 'stale'
+
+            const execution = await manager.findOneOrFail(VerificationExecutionEntity, {
+                where: { executionId, organizationId },
+                lock: { mode: 'pessimistic_write' },
+            })
+            if (execution.fundingOwnerType !== 'batch_group' || execution.fundingOwnerId !== batchId) {
+                throw new Error('batch_admission_ownership_conflict')
+            }
+            if (execution.state === 'funding_pending') {
+                execution.state = next
+                await manager.save(VerificationExecutionEntity, execution)
+            }
+            return 'applied'
         })
     }
 
@@ -252,11 +337,19 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
     }
 
     async pageNonterminal(limit: number): Promise<readonly VerificationExecutionRecord[]> {
-        const rows = await this.dataSource.manager.find(VerificationExecutionEntity, {
-            where: { state: In(NONTERMINAL_STATES) },
-            order: { updatedAt: 'ASC' },
-            take: limit,
-        })
+        const rows = await this.dataSource.manager
+            .createQueryBuilder(VerificationExecutionEntity, 'execution')
+            .where('execution.state IN (:...states)', { states: NONTERMINAL_STATES })
+            .andWhere(
+                new Brackets(owner => {
+                    owner
+                        .where("execution.fundingOwnerType <> 'batch_group'")
+                        .orWhere("execution.state <> 'funding_pending'")
+                }),
+            )
+            .orderBy('execution.updatedAt', 'ASC')
+            .take(limit)
+            .getMany()
         return rows.map(toRecord)
     }
 

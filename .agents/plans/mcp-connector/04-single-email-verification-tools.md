@@ -13,7 +13,21 @@ clear pointer to poll asynchronously instead of a bare timeout).
 
 ## Progress
 
-- [ ] (2026-09-16) Not started.
+- [x] (2026-09-21) Added `verifySync`, `submitAsyncVerification`, `getAsyncVerificationStatus`, and
+  `getVerificationResult` to `apps/mcp-server/src/lef-api/client.ts`, each typed to the real DTO shapes read
+  directly from the `email-verification` module's controllers/DTOs.
+- [x] (2026-09-21) Extracted the shared `UpstreamRequestError -> isError` mapping (previously inline in
+  `check-credit-balance.ts`) into `apps/mcp-server/src/tools/upstream-error-result.ts`, reused by all five tools.
+- [x] (2026-09-21) Created `verify_email`, `submit_async_verification`, `check_async_verification`, and
+  `get_verification_result` tool modules with specs, and registered all four in `create-server.ts`.
+- [x] (2026-09-21) Unit-covered all four tools plus the four new `LefApiClient` methods (27 new/updated tests in
+  `client.spec.ts`, 14–16 across the four tool specs); full suite green (3532 passed / 121 skipped), typecheck and
+  lint clean.
+- [x] (2026-09-21) Live-validated against a real dev-stack customer credential via `@modelcontextprotocol/inspector
+  --cli`: an immediately-conclusive address through `verify_email`, `submit_async_verification` +
+  `check_async_verification` polling to a terminal state, `get_verification_result` for a real completed id, and a
+  nonexistent result id returning a clean `not_found`. Also incidentally observed a real `429 rate_limited` mapping
+  (see Surprises & Discoveries).
 
 ## Plan dependencies
 
@@ -22,7 +36,35 @@ clear pointer to poll asynchronously instead of a bare timeout).
 
 ## Surprises & Discoveries
 
-None yet.
+- `POST /verify`'s completed-vs-async-fallback discriminator is the HTTP status code itself (`201` completed vs
+  `202` accepted), not a body-level field — confirmed by reading
+  `sync-email-verification.controller.ts` directly. `verifySync()` branches on `response.status === 202` before
+  parsing the body, rather than inspecting the parsed JSON for a discriminator field.
+- `zod` was only a transitive dependency of `@modelcontextprotocol/sdk`, not resolvable from `apps/mcp-server`'s
+  own code under pnpm's strict isolation. Added `"zod": "^4.1.5"` directly to `apps/mcp-server/package.json`
+  (matching the version already pinned at the workspace root) and ran `corepack pnpm install`.
+- The MCP SDK's client-side `Client.callTool()` does not reject or throw when the server's Zod input-schema
+  validation rejects malformed arguments (JSON-RPC `-32602`); it resolves normally with `isError: true` and the
+  error text in `content[0].text`. Every "malformed input rejected at the protocol level" test asserts
+  `result.isError === true`, not `.rejects.toThrow()`.
+- Found and fixed a pre-existing, unrelated test-title bug in `client.spec.ts`: an `it.each` title had three `%s`
+  placeholders for a two-element array, garbling generated test names. Not part of this plan's scope but trivial
+  and adjacent, so corrected in passing.
+- Live validation surfaced a real `429 verification_cooldown` response (a genuine per-address terminal-inconclusive
+  cooldown from the dev-stack API, not a synthetic test), including a real `Retry-After` header. The connector's
+  `rate_limited` mapping reproduced the exact `retryAfterSeconds` from that real header — stronger confirmation
+  than a mocked unit test alone.
+- **Discovered a real, pre-existing, out-of-scope infrastructure bug**: `GET /verifications/:id` through the
+  public `web` origin (the address a customer's MCP connector is configured to use) returns nginx's SPA
+  fallback (`200 text/html`) instead of the real API response, because `docker/web/nginx.conf`'s `$safe_path`
+  location map has no rule matching `/verifications` — only `~^/verify(?:/|$)` (and the other verb paths), which
+  does not match `/verifications/...` since the character after `verify` is `a`, not `/` or end-of-string.
+  Confirmed the API itself is correct by running `docker compose exec api wget` directly against the container's
+  own port, which returned the exact expected JSON (including a correct `404` for a nonexistent id). This means
+  `get_verification_result` — and any other external caller of this documented, `verification:read`-gated
+  endpoint — is currently unreachable through the public origin, not just from the MCP connector. This is a bug in
+  a different module's ownership (`web`'s nginx config), so it was not fixed as part of this plan; it is flagged
+  here and in the PR description as a strong candidate for its own follow-up fix.
 
 ## Decision Log
 
@@ -41,7 +83,16 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+All four planned tools (`verify_email`, `submit_async_verification`, `check_async_verification`,
+`get_verification_result`) shipped exactly as scoped, backed by four new `LefApiClient` methods reusing plan 03's
+shared `request`/`parseOrThrow`/`mapUpstreamError` infrastructure. The `verify_email` async-fallback behavior
+(Decision Log's second entry) works as designed: a non-error result naming the id and pointing at
+`check_async_verification`, verified against a real slow-to-resolve address on the dev stack. All acceptance
+criteria were met, including via live validation against the real dev stack rather than mocks alone. The one
+unplanned finding — the nginx `/verifications` routing gap — is a genuine customer-facing bug in a different
+module's ownership; it is documented above and called out prominently in this PR's description rather than fixed
+here or silently worked around, since fixing it is out of this plan's scope and belongs to whoever owns
+`docker/web/nginx.conf`.
 
 ## Context and Orientation
 
@@ -119,8 +170,10 @@ may be implemented first once `03` is available.
   /verifyAsync/:id` directly would show.
 - `get_verification_result` against a real completed result's id returns that result; against a nonexistent or
   foreign id returns a clean `not_found` tool error, never another organization's data.
-- Each tool's `401`/`402`/`404`/`422`/`429` rejection paths (as relevant to that tool) are unit-covered using the
-  fake-client convention from plan 03.
+- Each tool's `400`/`401`/`402`/`403`/`404`/`422`/`429` rejection paths (as relevant to that tool, matching each
+  endpoint's actual documented responses — single-request validation and invalid-UUID-lookup failures are `400`
+  per `mcp-connector-hardening/02`'s correction, not `422`) are unit-covered using the fake-client convention
+  from plan 03.
 
 ## Validation
 

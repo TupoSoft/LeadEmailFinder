@@ -300,6 +300,130 @@ test('strict audit rejects component literals, reference drift, and missing cons
     }
 })
 
+async function configureBinding(root, bindings, consumers = ['src/link.css']) {
+    const manifest = structuredClone(validManifest)
+    manifest.componentMapping['components.link.textColor'] = {
+        reference: 'colors.canvas',
+        consumers,
+        bindings,
+    }
+    await writeFile(path.join(root, 'premium-ui.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
+const linkBinding = { file: 'src/link.css', selector: '.link', property: 'color' }
+
+test('optional component bindings accept grouped selectors and leave unrelated layout declarations alone', async () => {
+    const root = await createFixture()
+    try {
+        await configureBinding(root, [linkBinding])
+        await writeFile(
+            path.join(root, 'src', 'link.css'),
+            `.link, .secondary {
+    margin: 1rem;
+    color: var( --color-canvas );
+}
+.legacy { margin-top: 2rem; }
+@media (max-width: 40rem) { .link { color: var(--color-canvas); } }
+`,
+        )
+
+        const result = await auditProject(root, { mode: 'strict' })
+        assert.deepEqual(result.findings, [])
+        assert.equal(exitCodeFor(result), 0)
+    } finally {
+        await rm(root, { recursive: true, force: true })
+    }
+})
+
+test('component bindings reject token decoys and conflicting declarations', async context => {
+    for (const [name, css, ruleId] of [
+        ['wrong selector', '.other { color: var(--color-canvas); }', 'components.binding-selector-missing'],
+        ['wrong property', '.link { background: var(--color-canvas); }', 'components.binding-property-missing'],
+        [
+            'token on another property',
+            '.link { background: var(--color-canvas); color: inherit; }',
+            'components.binding-value-drift',
+        ],
+        [
+            'token on another selector',
+            '.other { color: var(--color-canvas); } .link { color: inherit; }',
+            'components.binding-value-drift',
+        ],
+        [
+            'commented binding',
+            '/* .link { color: var(--color-canvas); } */ .other { color: var(--color-canvas); }',
+            'components.binding-selector-missing',
+        ],
+        [
+            'later declaration',
+            '.link { color: var(--color-canvas); color: inherit; }',
+            'components.binding-value-drift',
+        ],
+        [
+            'media override',
+            '.link { color: var(--color-canvas); } @media (max-width: 40rem) { .link { color: inherit; } }',
+            'components.binding-value-drift',
+        ],
+        ['token fallback', '.link { color: var(--color-canvas, inherit); }', 'components.binding-value-drift'],
+    ]) {
+        await context.test(name, async () => {
+            const root = await createFixture()
+            try {
+                await configureBinding(root, [linkBinding])
+                await writeFile(path.join(root, 'src', 'link.css'), css)
+                const result = await auditProject(root, { mode: 'strict' })
+                assert.ok(result.findings.some(item => item.ruleId === ruleId))
+                assert.equal(exitCodeFor(result), 1)
+            } finally {
+                await rm(root, { recursive: true, force: true })
+            }
+        })
+    }
+})
+
+test('component bindings report malformed and duplicate declarations as unresolved configuration', async context => {
+    for (const [name, bindings, ruleId] of [
+        ['not an array', {}, 'components.bindings-invalid'],
+        ['empty array', [], 'components.bindings-invalid'],
+        ['not an object', [null], 'components.binding-invalid'],
+        ['missing file', [{ selector: '.link', property: 'color' }], 'components.binding-invalid'],
+        ['unlisted file', [{ ...linkBinding, file: 'src/other.css' }], 'components.binding-invalid'],
+        ['missing selector', [{ file: 'src/link.css', property: 'color' }], 'components.binding-invalid'],
+        ['empty selector', [{ ...linkBinding, selector: ' ' }], 'components.binding-invalid'],
+        ['missing property', [{ file: 'src/link.css', selector: '.link' }], 'components.binding-invalid'],
+        ['invalid property', [{ ...linkBinding, property: 'color: inherit' }], 'components.binding-invalid'],
+        ['duplicate binding', [linkBinding, { ...linkBinding }], 'components.binding-duplicate'],
+    ]) {
+        await context.test(name, async () => {
+            const root = await createFixture()
+            try {
+                await configureBinding(root, bindings)
+                const result = await auditProject(root, { mode: 'strict' })
+                assert.ok(result.findings.some(item => item.ruleId === ruleId))
+                assert.equal(exitCodeFor(result), 2)
+            } finally {
+                await rm(root, { recursive: true, force: true })
+            }
+        })
+    }
+})
+
+test('component bindings reuse missing-file and project-containment checks', async context => {
+    for (const file of ['src/missing.css', '../outside.css']) {
+        await context.test(file, async () => {
+            const root = await createFixture()
+            try {
+                await configureBinding(root, [{ ...linkBinding, file }], [file])
+                const result = await auditProject(root, { mode: 'strict' })
+                assert.ok(result.findings.some(item => item.ruleId === 'components.consumer-missing'))
+                assert.equal(exitCodeFor(result), 2)
+            } finally {
+                await rm(root, { recursive: true, force: true })
+            }
+        })
+    }
+})
+
 test('source inspection rejects raw component colors outside the token adapter', async () => {
     const root = await createFixture()
     try {
@@ -362,6 +486,59 @@ test('scrollbar checks require a document baseline and every global WebKit state
         assert.match(fallbackFinding.message, /track, thumb, thumb hover, thumb active/u)
     } finally {
         await rm(root, { recursive: true, force: true })
+    }
+})
+
+const contentCapabilityRows = {
+    'Content spacing': '| Content spacing | Stack | DESIGN.md | Content and control gaps | Browser geometry |\n',
+    'Supporting text': '| Supporting text | SupportingText | DESIGN.md | Compact paragraphs | Browser typography |\n',
+}
+
+test('complete canonical rows satisfy required content spacing and supporting text ownership', async () => {
+    const root = await createFixture()
+    try {
+        const manifest = structuredClone(validManifest)
+        manifest.requiredCapabilities.push(...Object.keys(contentCapabilityRows))
+        await writeFile(path.join(root, 'premium-ui.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+        await writeFile(
+            path.join(root, 'UX-CONTRACT.md'),
+            validUxContract + Object.values(contentCapabilityRows).join(''),
+        )
+
+        const result = await auditProject(root, { mode: 'strict' })
+        assert.deepEqual(result.findings, [])
+        assert.equal(exitCodeFor(result), 0)
+    } finally {
+        await rm(root, { recursive: true, force: true })
+    }
+})
+
+test('missing required content spacing or supporting text ownership fails the audit', async context => {
+    for (const missingCapability of Object.keys(contentCapabilityRows)) {
+        await context.test(missingCapability, async () => {
+            const root = await createFixture()
+            try {
+                const manifest = structuredClone(validManifest)
+                manifest.requiredCapabilities.push(...Object.keys(contentCapabilityRows))
+                const remainingRows = Object.entries(contentCapabilityRows)
+                    .filter(([capability]) => capability !== missingCapability)
+                    .map(([, row]) => row)
+                    .join('')
+                await writeFile(path.join(root, 'premium-ui.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+                await writeFile(path.join(root, 'UX-CONTRACT.md'), validUxContract + remainingRows)
+
+                const result = await auditProject(root, { mode: 'strict' })
+                assert.ok(
+                    result.findings.some(
+                        item => item.ruleId === 'canonical.owner-unresolved' && item.message.includes(missingCapability),
+                    ),
+                )
+                assert.ok(!result.findings.some(item => item.ruleId === 'config.capability-invalid'))
+                assert.equal(exitCodeFor(result), 2)
+            } finally {
+                await rm(root, { recursive: true, force: true })
+            }
+        })
     }
 })
 

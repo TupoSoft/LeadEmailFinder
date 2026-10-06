@@ -23,7 +23,8 @@
     background: var(--color-ink);
 }
 
-.action:disabled {
+.action:disabled,
+.action[aria-disabled='true'] {
     color: var(--color-ink);
     background: var(--color-sage);
     border-color: var(--color-rule);

@@ -1,4 +1,5 @@
-import { DataSource, EntityManager } from 'typeorm'
+import { Brackets, DataSource, EntityManager, WhereExpressionBuilder } from 'typeorm'
+import { BatchAdmissionEntity } from './typeorm/batch-admission.entity'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
 import { EmailVerificationEntity } from './typeorm/email-verification.entity'
 import { TypeOrmVerificationExecutionStore } from './typeorm-verification-execution.store'
@@ -271,12 +272,123 @@ describe('TypeOrmVerificationExecutionStore', () => {
         })
     })
 
-    it('pages nonterminal executions regardless of funding owner', async () => {
-        manager.find.mockResolvedValue([execution({ fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' })])
+    it('pages nonterminal executions except batch-owned rows still waiting for their group decision', async () => {
+        const queryBuilder = {
+            where: jest.fn(),
+            andWhere: jest.fn(),
+            orderBy: jest.fn(),
+            take: jest.fn(),
+            getMany: jest.fn().mockResolvedValue([execution({ state: 'queued', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' })]),
+        }
+        for (const method of ['where', 'andWhere', 'orderBy', 'take'] as const) queryBuilder[method].mockReturnValue(queryBuilder)
+        manager.createQueryBuilder.mockReturnValue(queryBuilder)
+
         const page = await store.pageNonterminal(100)
+
         expect(page).toHaveLength(1)
-        const [, options] = manager.find.mock.calls[0] as [unknown, { where: Record<string, unknown> }]
-        expect(options.where).not.toHaveProperty('fundingOwnerType')
+        expect(queryBuilder.where).toHaveBeenCalledWith('execution.state IN (:...states)', {
+            states: ['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling'],
+        })
+        const [ownerFilter] = queryBuilder.andWhere.mock.calls[0] as [Brackets]
+        const bracket = { where: jest.fn(), orWhere: jest.fn() }
+        bracket.where.mockReturnValue(bracket)
+        ownerFilter.whereFactory(bracket as unknown as WhereExpressionBuilder)
+        expect(bracket.where).toHaveBeenCalledWith("execution.fundingOwnerType <> 'batch_group'")
+        expect(bracket.orWhere).toHaveBeenCalledWith("execution.state <> 'funding_pending'")
+        expect(queryBuilder.orderBy).toHaveBeenCalledWith('execution.updatedAt', 'ASC')
+        expect(queryBuilder.take).toHaveBeenCalledWith(100)
+    })
+
+    describe('batch group fencing', () => {
+        const now = new Date('2026-09-15T00:00:00.000Z')
+        const fence = { ownerId: 'owner-1', generation: 2, now }
+        const group = (overrides: Partial<BatchAdmissionEntity> = {}): BatchAdmissionEntity =>
+            ({
+                batchId: 'batch-1',
+                organizationId,
+                state: 'admitting',
+                fundingDecision: 'pending',
+                admissionLeaseOwnerId: 'owner-1',
+                admissionLeaseExpiresAt: new Date(now.getTime() + 1),
+                admissionGeneration: 2,
+                ...overrides,
+            }) as BatchAdmissionEntity
+        const owned = (overrides: Partial<VerificationExecutionEntity> = {}): VerificationExecutionEntity =>
+            execution({ state: 'funding_pending', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1', ...overrides })
+
+        it('locks the organization, then the fenced group, before claiming for a batch', async () => {
+            const order: string[] = []
+            manager.query.mockImplementation(() => {
+                order.push('organization')
+                return Promise.resolve(undefined)
+            })
+            manager.findOne.mockImplementation((entity: unknown) => {
+                order.push(entity === BatchAdmissionEntity ? 'group' : 'execution')
+                return Promise.resolve(entity === BatchAdmissionEntity ? group() : null)
+            })
+
+            const outcome = await store.claimOrJoinForBatchGroup('batch-1', fence, organizationId, 'person@example.test', 'request-1', 'execution-1', now, neverUsable)
+
+            expect(outcome.kind).toBe('created')
+            expect(order.slice(0, 3)).toEqual(['organization', 'group', 'execution'])
+            expect(manager.save).toHaveBeenCalledWith(
+                VerificationExecutionEntity,
+                expect.objectContaining({ fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1', state: 'funding_pending' }),
+            )
+        })
+
+        it.each([
+            ['an expired lease', { admissionLeaseExpiresAt: now }],
+            ['a superseded generation', { admissionGeneration: 3 }],
+            ['a frozen group', { state: 'funding' as const }],
+        ])('claims nothing for %s', async (_case, overrides) => {
+            manager.findOne.mockResolvedValue(group(overrides))
+
+            await expect(
+                store.claimOrJoinForBatchGroup('batch-1', fence, organizationId, 'person@example.test', 'request-1', 'execution-1', now, neverUsable),
+            ).resolves.toEqual({ kind: 'stale-admission' })
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('queues an owned funding_pending execution only for an approved group', async () => {
+            manager.findOne.mockResolvedValue(group({ state: 'funding', fundingDecision: 'approved' }))
+            manager.findOneOrFail.mockResolvedValue(owned())
+
+            await expect(store.markBatchGroupQueued('execution-1', organizationId, 'batch-1', fence)).resolves.toBe('applied')
+
+            expect(manager.save).toHaveBeenCalledWith(VerificationExecutionEntity, expect.objectContaining({ state: 'queued' }))
+        })
+
+        it.each([
+            ['a pending decision', { state: 'funding' as const, fundingDecision: 'pending' as const }],
+            ['a denied decision', { state: 'funding' as const, fundingDecision: 'denied' as const }],
+            ['an expired owner', { state: 'funding' as const, fundingDecision: 'approved' as const, admissionLeaseExpiresAt: now }],
+        ])('refuses to queue under %s', async (_case, overrides) => {
+            manager.findOne.mockResolvedValue(group(overrides))
+
+            await expect(store.markBatchGroupQueued('execution-1', organizationId, 'batch-1', fence)).resolves.toBe('stale')
+
+            expect(manager.findOneOrFail).not.toHaveBeenCalled()
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('cancels only a still-pending owned execution for a denied group', async () => {
+            manager.findOne.mockResolvedValue(group({ state: 'funding', fundingDecision: 'denied' }))
+            manager.findOneOrFail.mockResolvedValue(owned({ state: 'queued' }))
+
+            await expect(store.cancelBatchGroupFundingPending('execution-1', organizationId, 'batch-1', fence)).resolves.toBe('applied')
+
+            expect(manager.save).not.toHaveBeenCalled()
+        })
+
+        it('rejects an execution the group does not own', async () => {
+            manager.findOne.mockResolvedValue(group({ state: 'funding', fundingDecision: 'denied' }))
+            manager.findOneOrFail.mockResolvedValue(owned({ fundingOwnerId: 'other-batch' }))
+
+            await expect(store.cancelBatchGroupFundingPending('execution-1', organizationId, 'batch-1', fence)).rejects.toThrow(
+                'batch_admission_ownership_conflict',
+            )
+        })
     })
 
     describe('cancelBatchGroupUnstarted', () => {

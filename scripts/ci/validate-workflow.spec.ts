@@ -174,6 +174,7 @@ const smtpAttachment = `docker compose -f docker/compose.yaml down
     test "$verification_bootstrap_exit" = 0`
 const healthReport = 'docker compose -f docker/compose.yaml ps'
 const stackCleanup = 'docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans'
+const startupDiagnostics = 'node scripts/testing/dev-stack-diagnostics.mjs'
 const browserCommands: Record<(typeof browserWorkers)[number], string[]> = {
     'browser-artifacts': [
         'test:privileged-artifacts',
@@ -186,6 +187,8 @@ const browserCommands: Record<(typeof browserWorkers)[number], string[]> = {
     'browser-live': [
         'corepack pnpm test:gateway',
         'corepack pnpm dev:reset -- --confirm-project=LEF',
+        startupDiagnostics,
+        'corepack pnpm test:mcp-server-live',
         'corepack pnpm test:web-live',
         'corepack pnpm bruno:bff-sessions',
         `${webCommand} browser-fixtures:bootstrap`,
@@ -216,7 +219,7 @@ function expectBrowserInventory(jobs: Record<string, Job>, id: (typeof browserWo
     expect(actual.map((step) => command(step.run))).toEqual(browserCommands[id].map(command))
     for (const step of actual) {
         expect(step.name).toEqual(expect.any(String))
-        expect(step['continue-on-error']).not.toBe(true)
+        expect(step['continue-on-error'] === true).toBe(command(step.run) === startupDiagnostics)
     }
     const allCommands = [...browserWorkers, 'browser'].flatMap((worker) => jobs[worker].steps.map((step) => command(step.run)))
     for (const expected of browserCommands[id]) {
@@ -300,14 +303,28 @@ const preservedCommands: Record<string, string[]> = {
 
 describe('Validate workflow syntax and structure', () => {
     it.each(['validate.yml', 'sync-execplans.yml'])(
-        '%s routes every job to the ARC scale set',
+        '%s routes every job to the shared ARC runner pool',
         (file) => {
             const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))
             for (const job of Object.values(declared.jobs)) {
-                expect(job['runs-on']).toBe('tuposoft-pc-wsl')
+                expect(job['runs-on']).toBe('tuposoft-ci')
             }
         },
     )
+
+    it('passes the shared runner label to the reusable build workflow', () => {
+        const documents = parseAllDocuments(readFileSync(resolve(root, '.github/workflows/build.yml'), 'utf8'))
+        expect(documents).toHaveLength(1)
+        expect(documents[0].errors).toEqual([])
+        const declared: unknown = documents[0].toJS()
+        if (!isRecord(declared) || !isRecord(declared.jobs) || !isRecord(declared.jobs['build-push'])) {
+            throw new Error('Expected a reusable build job.')
+        }
+        const build = declared.jobs['build-push']
+        expect(build.uses).toBe('TupoSoft/GitHubActions/.github/workflows/build-push.yml@master')
+        expect(build.with).toEqual({ runner: 'tuposoft-ci' })
+        expect(build['runs-on']).toBeUndefined()
+    })
 
     it.each(['images', 'browser-live'])('%s provisions Compose before starting Docker builds or services', (id) => {
         const steps = workflow.jobs[id].steps
@@ -391,7 +408,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-pc-wsl')
+            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-ci')
         }
     })
 
@@ -458,10 +475,11 @@ describe('Validate workflow syntax and structure', () => {
         for (const step of job.steps.slice(1).filter((step) => step !== noOps[0] && step !== prerequisite)) {
             const selected = `needs.changes.outputs.${flag} == 'true'`
             const cleanup = id === 'browser-live' && [healthReport, stackCleanup].includes(command(step.run))
+            const diagnostics = id === 'browser-live' && command(step.run) === startupDiagnostics
             expect(condition(step.if)).toBe(cleanup
                 ? `always() && ${selected} && steps.browser-live-checkout.outcome == 'success'`
-                : selected)
-            if (command(step.run) !== 'corepack pnpm docs:lint:changed' && step.uses !== 'actions/cache@v4') {
+                : diagnostics ? `always() && ${selected} && steps.dev-reset.outcome == 'failure'` : selected)
+            if (!diagnostics && command(step.run) !== 'corepack pnpm docs:lint:changed' && step.uses !== 'actions/cache@v4') {
                 expect(step['continue-on-error']).not.toBe(true)
             }
         }
@@ -593,6 +611,7 @@ describe('Validate workflow syntax and structure', () => {
                 ['Dockerfile', 'lead-email-finder:ci', 'lef-production'],
                 ['docker/Dockerfile', 'lead-email-finder-api:frontend-06', 'lef-api'],
                 ['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web'],
+                ['docker/mcp-server.Dockerfile', 'lead-email-finder-mcp-server:frontend-06', 'lef-mcp-server'],
             ]
             : [['docker/web.Dockerfile', 'lead-email-finder-web:frontend-06', 'lef-web']]
         expect(setups).toHaveLength(1)
@@ -744,10 +763,16 @@ describe('Validate workflow syntax and structure', () => {
             && step.with?.tags === 'lead-email-finder-web:frontend-06')
         expect(webBuildIndex).toBeGreaterThanOrEqual(0)
         expect(commands.indexOf('corepack pnpm test:gateway')).toBeGreaterThan(webBuildIndex)
-        for (const run of browserCommands['browser-live'].slice(2)) {
+        const devResetCommand = command('corepack pnpm dev:reset -- --confirm-project=LEF')
+        const devResetIndex = browserCommands['browser-live'].map(command).indexOf(devResetCommand)
+        expect(devResetIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(devResetIndex + 1)) {
             before('corepack pnpm dev:reset -- --confirm-project=LEF', run)
         }
-        for (const run of browserCommands['browser-live'].slice(5)) {
+        const bootstrapCommand = command(`${webCommand} browser-fixtures:bootstrap`)
+        const bootstrapIndex = browserCommands['browser-live'].map(command).indexOf(bootstrapCommand)
+        expect(bootstrapIndex).toBeGreaterThanOrEqual(0)
+        for (const run of browserCommands['browser-live'].slice(bootstrapIndex + 1)) {
             before(`${webCommand} browser-fixtures:bootstrap`, run)
         }
         for (const run of [
@@ -791,6 +816,88 @@ describe('Validate workflow syntax and structure', () => {
         expect(step?.if).toBeUndefined()
         expect(step?.['continue-on-error']).not.toBe(true)
         expect(step?.env?.VALIDATION_NEEDS_JSON).toBe('${{ toJSON(needs) }}')
+    })
+})
+
+describe('browser startup diagnostics', () => {
+    const steps = workflow.jobs['browser-live'].steps
+    const reset = steps.find((step) => step.id === 'dev-reset')!
+    const diagnostics = steps.find((step) => command(step.run) === startupDiagnostics)!
+
+    it('collects immediately after reset with a bounded advisory step before health reporting and cleanup', () => {
+        expect(command(reset?.run)).toBe('corepack pnpm dev:reset -- --confirm-project=LEF')
+        expect(reset['continue-on-error']).not.toBe(true)
+        expect(steps.indexOf(diagnostics)).toBe(steps.indexOf(reset) + 1)
+        expect(diagnostics['continue-on-error']).toBe(true)
+        expect(diagnostics['timeout-minutes']).toBe(1)
+        expect(steps.slice(-2).map((step) => command(step.run))).toEqual([healthReport, stackCleanup])
+    })
+
+    it.each([
+        ['failed reset', 'true', 'failure', true],
+        ['successful reset', 'true', 'success', false],
+        ['cancelled reset', 'true', 'cancelled', false],
+        ['skipped reset after failed discovery', 'true', 'skipped', false],
+        ['reset not reached', 'true', '', false],
+        ['unselected browser work', 'false', 'skipped', false],
+        ['unselected work with failed reset', 'false', 'failure', false],
+        ['missing discovery output', '', 'failure', false],
+    ] as const)('collects only for selected reset failure: %s', (_name, selected, resetOutcome, expected) => {
+        const expression = condition(diagnostics.if)
+            .replace('always()', 'true')
+            .replace('needs.changes.outputs.browser', JSON.stringify(selected))
+            .replace('steps.dev-reset.outcome', JSON.stringify(resetOutcome))
+        const execution = spawnSync('bash', ['--noprofile', '--norc', '-c', `if [[ ${expression} ]]; then echo run; else echo skip; fi`], {
+            encoding: 'utf8',
+            timeout: 5000,
+        })
+        expect(execution.error).toBeUndefined()
+        expect(execution.status).toBe(0)
+        expect(execution.stderr).toBe('')
+        expect(execution.stdout).toBe(expected ? 'run\n' : 'skip\n')
+    })
+
+    it.each([0, 19])('retains reset failure through both aggregates and cleanup when diagnostics exit %i', (diagnosticsExit) => {
+        // Execute declared shell commands with substitutes; Actions scheduling remains a hosted check.
+        const execution = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', `
+            corepack() { return 23; }
+            ${reset.run}
+        `], { encoding: 'utf8', timeout: 5000 })
+        expect(execution.error).toBeUndefined()
+        expect(execution.status).toBe(23)
+
+        const collection = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', `
+            node() { return ${diagnosticsExit}; }
+            ${diagnostics.run}
+        `], { encoding: 'utf8', timeout: 5000 })
+        expect(collection.error).toBeUndefined()
+        expect(collection.status).toBe(diagnosticsExit)
+        expect(diagnostics['continue-on-error']).toBe(true)
+
+        for (const run of [healthReport, stackCleanup]) {
+            const step = steps.find((candidate) => command(candidate.run) === run)!
+            const expression = condition(step.if)
+                .replace('always()', 'true')
+                .replace('needs.changes.outputs.browser', "'true'")
+                .replace('steps.browser-live-checkout.outcome', "'success'")
+            const cleanup = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', `
+                docker() { printf '%s\\n' "$*"; }
+                if [[ ${expression} ]]; then
+                    ${step.run}
+                fi
+            `], { encoding: 'utf8', timeout: 5000 })
+            expect(cleanup.error).toBeUndefined()
+            expect(cleanup.status).toBe(0)
+            expect(cleanup.stdout).toBe(`${run.slice('docker '.length)}\n`)
+        }
+
+        const browserNeeds = successfulBrowserNeeds()
+        browserNeeds['browser-live'].result = execution.status === 0 ? 'success' : 'failure'
+        const browser = runBrowserSummary(browserNeeds)
+        expect(browser.status).toBe(1)
+        const finalNeeds = successfulNeeds()
+        finalNeeds.browser.result = browser.status === 0 ? 'success' : 'failure'
+        expect(runSummary(finalNeeds).status).toBe(1)
     })
 })
 
@@ -863,7 +970,7 @@ describe('browser workspace build reuse', () => {
     })
 
     it.each([
-        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts'],
+        ['test:e2e', 'playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts'],
         ['test:a11y', 'playwright test tests/e2e/accessibility.spec.ts'],
         ['test:visual', 'playwright test tests/e2e/visual.spec.ts'],
     ])('%s retains its selectors and builds before delegating to the prebuilt suite', (suite, selector) => {
