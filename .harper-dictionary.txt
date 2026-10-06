@@ -433,3 +433,5 @@ ConfigMap
 ConfigMaps
 UID
 PyYAML
+cgroup
+ripgrep

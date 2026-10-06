@@ -16,8 +16,11 @@ inside the cluster. Vagrant, SSH staging, Swarm joining, and WireGuard provision
 The existing implementations remain in the repository for their separate deployment target.
 
 This document records a design and proposed lifecycle. It adds no Kubernetes manifests, network bootstrap tool,
-application bundle, or reconciler adapter. No cluster, fixture, or application scenario has run. Creating the k3d
-cluster alone does not supply the application or the required network configuration.
+application bundle, or reconciler adapter. At the 2026-09-18 design revision, no cluster, fixture, or application
+scenario had run. A separate Compose-aligned feasibility experiment passed twice on 2026-10-01 using retained WSL
+artifacts and the original application snapshot. The [manual runbook](k3d-manual-runbook.md) documents that replay,
+its recorded evidence, and its narrower coverage. The repository still does not package that harness; creating
+the k3d cluster alone does not supply the application or the required network configuration.
 
 ### Relationship to the Existing Validation Plan
 
@@ -27,7 +30,7 @@ results cannot satisfy those infrastructure criteria. Before runtime implementat
 road map to the selected Kubernetes scope or create a separate Kubernetes ExecPlan with explicit dependencies.
 Do not mark the old infrastructure checks passed or close #424 on the strength of this document.
 
-Plan 19 and issue #619 deliver this documentation handoff. The current change updates this document, plan 19, and the documentation spelling dictionary. The later Kubernetes implementation must retain the application and proxy behavior below while defining
+Plan 19 and issue #619 deliver this documentation handoff. The current change updates this document, the manual runbook, plan 19, and the documentation spelling dictionary. The later Kubernetes implementation must retain the application and proxy behavior below while defining
 its own deployment, recovery, and cleanup evidence. It is an architecture change, not a Vagrant provider switch.
 
 ## Cluster Topology

@@ -8,7 +8,8 @@ Give the owner a reviewable design for a self-contained Kubernetes integration l
 maintains `deploy/proxy-fleet/validation-decisions.md`, with repository evidence, selected topology, networking
 requirements, lifecycle procedures, and explicit limits. The selected lab uses k3d with one server and three agents:
 two proxy workers and one application and fixture worker. The application, its dependencies, the reconciler,
-Mailpit, and the peer probe run inside the cluster.
+Mailpit, and the peer probe run inside the cluster. A companion manual runbook describes replaying the separate,
+retained Compose-aligned feasibility harness and distinguishes its evidence from the full target.
 
 This replaces the previously selected Vagrant, Swarm, and controller-tunnel path for the integration lab. It does
 not implement Kubernetes packaging or validate the existing Swarm deployment. Plan 16 and issue #424 still describe
@@ -26,6 +27,8 @@ ExecPlan with its own pull request. This preparation remains documentation only.
 - [x] (2026-09-18) Validate the Kubernetes documentation revision and update its evidence and handoff record.
 - [x] (2026-09-18) Clarify preparation with an input table, four labeled steps, and readable validation errors.
 - [x] (2026-09-19) Simplify validation notes and remove environment-specific command prefixes.
+- [x] (2026-10-07) Add and statically validate a manual runbook for the retained Compose-aligned harness, with
+  expected results, fresh evidence, interruption guidance, cleanup, and recreation checks.
 
 ## Plan dependencies
 
@@ -99,9 +102,12 @@ The Kubernetes revision passed Harper, the repository-plan test, shell syntax ch
 embedded configuration against the k3d version 5.9.0 schema. Earlier documentation checks below are historical.
 These static checks do not validate runtime behavior.
 
-No cluster, container workload, network alias, route, registry, or application scenario has been created or changed
-by this preparation. Kubernetes implementation and live source, privacy, capacity, restart, and cleanup proof remain
-future work. Plan 16 and issue #424 are not satisfied by this revision.
+Repository changes remain documentation only. A separate feasibility experiment passed on 2026-10-01 using
+retained WSL artifacts: the original application snapshot, three SOCKS5 listeners, Compose SMTP fixtures, real
+API registration, verified TLS and plaintext rejection, and complete recreation. The companion manual runbook
+records how to replay those artifacts without claiming portable packaging or coverage of the HTTP fleet engine.
+Capacity, full fleet recovery, and reusable Kubernetes packaging remain future work. Plan 16 and issue #424 are
+not satisfied by those narrower results. This documentation update does not rerun the experiment.
 
 ## Context and Orientation
 
@@ -136,9 +142,10 @@ controller's routes or unrelated Docker networks.
 
 ## Scope and Non-Goals
 
-Maintain `deploy/proxy-fleet/validation-decisions.md`, this implementation record, and legitimate terms in the
-documentation spelling dictionary in the existing pull request. Replace stale selected execution procedures with the Kubernetes decision and document
-what can be reused, what must be implemented, and which evidence remains missing.
+Maintain `deploy/proxy-fleet/validation-decisions.md`, `deploy/proxy-fleet/k3d-manual-runbook.md`, this implementation
+record, and legitimate terms in the documentation spelling dictionary in the existing pull request. Replace stale
+selected execution procedures with the Kubernetes decision and document what can be reused, what must be
+implemented, and which evidence remains missing.
 
 Do not create a cluster, change deployment code, add Kubernetes manifests, build images, install tools, bootstrap
 networking, contact a proxy registry, or run live scenarios. Do not edit plan 16, close issue #424, or imply that
@@ -176,8 +183,9 @@ evidence and run the focused checks without creating infrastructure.
 
 ## Interfaces and Dependencies
 
-The interface delivered here is a design document. Existing proxy registry APIs, listener authentication, desired
-listener identities, source checks, and application verification behavior remain unchanged. Plans 12, 13, and 17
+The interface delivered here is a design document and a manual replay runbook for retained external artifacts.
+Existing proxy registry APIs, listener authentication, desired listener identities, source checks, and application
+verification behavior remain unchanged. Plans 12, 13, and 17
 supply source evidence for reusable contracts and the earlier topology.
 
 Future implementation needs Kubernetes workload and dependency packaging, a reconciler configuration adapter,
@@ -187,6 +195,9 @@ firewall recovery, and restart behavior. This preparation adds no runtime or pac
 
 ## Acceptance Criteria
 
+- The manual runbook identifies its external harness dependency and original application snapshot. It provides
+  ordered commands, observable results, private-log handling, a new evidence archive per attempt, guarded cleanup,
+  and fresh-cluster comparison, while distinguishing recorded runtime evidence from newly run static checks.
 - The document selects k3d with one server and three agents and identifies all workload placements, including the
   application, dependencies, reconciler, two proxy workers, Mailpit, and peer probe.
 - The document preserves all three listener endpoints and egress identities and identifies their repository
@@ -209,7 +220,7 @@ firewall recovery, and restart behavior. This preparation adds no runtime or pac
 Run these commands from the repository root after writing the document and updating this plan:
 
 ```sh
-corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md
+corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md deploy/proxy-fleet/k3d-manual-runbook.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md
 corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts
 git diff --check
 ```
@@ -222,17 +233,18 @@ no HTTP behavior.
 
 ## Idempotence and Recovery
 
-Preparation edits the proposal document, this plan, and legitimate terms in the documentation spelling dictionary.
-Reread their current contents before updating them;
+Preparation edits the proposal document, manual runbook, this plan, and legitimate terms in the documentation
+spelling dictionary. Reread their current contents before updating them;
 preserve unrelated work and retain the distinction between evidence, assumptions, and decisions on every revision.
 After interruption, resume from the unchecked progress item. Recovery requires correcting or reverting only this
 pull request's documentation; no guest, cluster, service, registry, credential, or controller state is changed.
 
 ## Artifacts and Notes
 
-The handoff is `deploy/proxy-fleet/validation-decisions.md`. Record inspected revisions and sanitized source
-references. Do not commit kubeconfigs, captured SSH files, credentials, private keys, machine identities, or absolute
-controller paths. Completion records the selected Kubernetes design without starting its implementation.
+The handoff is `deploy/proxy-fleet/validation-decisions.md`, with the retained-harness replay procedure in
+`deploy/proxy-fleet/k3d-manual-runbook.md`. Record inspected revisions and sanitized source references.
+Do not commit kubeconfigs, captured SSH files, credentials, private keys, machine identities, or absolute controller
+paths. Completion records the selected Kubernetes design without starting its implementation.
 
 The earlier revisions inspected `e3ae79e4e8eb5442930b29da1158b38efbb228e2` and
 `d13134d243e38b192991c204210527c26743b9ed`. The Kubernetes revision started from
@@ -270,7 +282,21 @@ Static validation of the Kubernetes documentation revision on 2026-09-18:
 - A readability revision grouped preparation into four steps and explained each input and check. Directory
   creation now runs before its separate export so a failed `mktemp` command stops the procedure.
 
-No Kubernetes manifest, cluster, image, bootstrap procedure, or application scenario has been implemented or run.
+Static validation of the manual runbook on 2026-10-07:
+
+- Harper passed the runbook, design document, and this plan with the updated spelling dictionary.
+- The ExecPlan repository fixture passed one suite and seven tests.
+- All 23 shell blocks across these documents passed `bash -n`; the two embedded Python blocks compiled.
+  Relative Markdown links and referenced retained-harness paths resolved, and `git diff --check` passed.
+- Independent review checked command order, fresh evidence, source observations, fixture switching, cleanup,
+  recreation assertions, and the boundary between the archived proof and future fleet implementation.
+- The original API image ID is checked before replay. New logs use a unique private archive instead of overwriting
+  the original two runs. The raw API log stays private.
+- No cluster, image import, network bootstrap, registry mutation, or live scenario ran during this documentation
+  update. The recorded runtime results belong to the separate 2026-10-01 experiment.
+
+At the 2026-09-18 documentation revision, no Kubernetes manifest, cluster, image, bootstrap procedure, or
+application scenario had been implemented or run. The separate 2026-10-01 experiment is described above.
 The material operational trade-offs are privileged setup inside disposable node containers, host-network isolation
 limits, and the need to restore aliases and routes after node lifecycle events.
 
