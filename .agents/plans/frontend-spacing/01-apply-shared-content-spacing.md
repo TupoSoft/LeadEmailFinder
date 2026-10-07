@@ -12,8 +12,9 @@ AI-generated and maintained product panels use the same spacing owner. A develop
 - [x] (2026-09-29) Confirmed that PR #666 is merged and the shared spacing owners are still absent from `master`.
 - [x] (2026-09-29) Prepared the conflict resolution from current `master` plus the original 15-file spacing change.
   Preserved the later billing fixes and the current UX contract. Every original spacing patch matched its context.
-- [ ] (2026-09-29) Run validation on the resolved branch. Local execution is unavailable in this session;
-  the historical results below do not validate the new merge commit.
+- [x] (2026-10-07) Verified successful hosted validation for the final PR #667 commit,
+  `9dec5e7c57106867edef184f3a1f818ae93e3a9b`, in [run 36873176744](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/36873176744).
+  PR #667 merged into `master` on October 1, 2026. This evidence completes the validation left pending on September 29.
 
 - [x] (2026-09-16) Inspected the design tokens, agent guidance, billing layout, audit, and browser coverage. The synced issue search for `frontend-spacing/01` returned no issue.
 - [x] (2026-09-16) Added shared owners, the billing consumer, and synchronized design and agent contracts.
@@ -41,6 +42,10 @@ now applies only to stacks without that attribute, and the browser test checks h
 
 ## Decision Log
 
+- 2026-10-07, Codex: Complete the pending validation item using the successful hosted run for the final PR commit.
+  Preserve the September 16 local checks and screenshots as historical evidence; this update makes no new local
+  execution, screenshot inspection, or deployment claim.
+
 - 2026-09-29, Codex: Preserve branch history with a merge commit whose tree starts from current `master` and applies
   only the original spacing change. This keeps the later billing fixes and avoids replaying the stale dependency.
 
@@ -53,9 +58,17 @@ now applies only to stacks without that attribute, and the browser test checks h
 
 ## Publication Review
 
-PR #666 merged on September 27, 2026. This draft now targets `master` directly. The September 29 conflict resolution
-uses `06563e6f923fa7673ec676f5deab61da3d33cf29` as its base and preserves the original spacing change from `ee4af068`.
-It keeps the current verification, accounting, download, and recovery behavior from `master`.
+[PR #667](https://github.com/TupoSoft/LeadEmailFinder/pull/667) merged into `master` on October 1, 2026,
+with merge commit `0ada6049540c374b711c4d5edcd902eff1ba520f`. Its prerequisite, PR #666, merged on September 27.
+The September 29 conflict resolution used `06563e6f923fa7673ec676f5deab61da3d33cf29` as its base and preserved the
+original spacing change from `ee4af068`, together with the later verification, accounting, download, and recovery behavior.
+
+[Hosted validation run 36873176744](https://github.com/TupoSoft/LeadEmailFinder/actions/runs/36873176744)
+succeeded for final PR commit `9dec5e7c57106867edef184f3a1f818ae93e3a9b`. The workflow tested its merge
+with the base branch at `55d9fd64335e202e75998bc71110a128489e688d`. The web job ran and passed tests,
+type checking, the build, lint, design lint, and the strict UI audit. The browser jobs passed billing geometry and recovery checks at desktop and phone widths, accessibility checks,
+public-page visual baseline tests, artifact protection checks, and live integration checks. The repository policy job
+passed Harper and architecture checks, and the image builds and final validation gate passed.
 
 Historical validation on the September 16 publication branch passed:
 
@@ -70,11 +83,14 @@ container or mutate billing data. The shared owners retain their presentation-on
 
 ## Outcomes & Retrospective
 
-Conflict resolution review (2026-09-29): the spacing work remains relevant. Current `master` has neither shared
-owner nor the exact CSS binding and browser geometry checks. The resolution preserves the original spacing
-implementation and the later UX contract changes. The local shell fails before starting a process, and the Node
-runtime rejects the workspace path. Local unit, browser, build, design, UI audit, and Harper checks therefore remain
-unverified for this resolution. The earlier validation and local delivery results below are historical evidence.
+Completion review (2026-10-07): the implementation is merged and hosted validation for the final PR commit passed.
+All seven progress items are complete. The earlier validation gap was caused by unavailable local execution on
+September 29; the successful hosted run supplies the missing evidence. No implementation work remains in this plan.
+
+On September 29, `master` still lacked the shared owners and their CSS binding and browser geometry checks.
+The conflict resolution preserved the spacing implementation and later UX contract changes, but the local shell
+could not start and the Node runtime rejected the workspace path. Those limits describe that session, not the
+subsequent hosted validation. The local validation and delivery results below describe the September 16 checkout.
 
 The shared owners and agent guidance are implemented. Billing now demonstrates control spacing within related
 values and content spacing before explanatory text. Validation passed: 23 billing component tests, 40 audit tests,
@@ -96,8 +112,9 @@ were resolved before PR #666 merged.
 
 `DESIGN.md` owns spacing roles: content is 1.5rem and control is 0.75rem. The runtime adapter is
 `apps/web/src/styles/tokens.css`; `premium-ui.json` records ownership and mappings. `ProductPanel` reserves loading
-and feedback space, but its children currently choose their own content margins. `BalancePanel` in
-`apps/web/src/features/billing/BillingPanels.tsx` adds a local margin and compact type to reservation guidance.
+and feedback space. Before this change, its children chose their own content margins, and `BalancePanel` in
+`apps/web/src/features/billing/BillingPanels.tsx` added a local margin and compact type to reservation guidance.
+The completed change uses `Stack` and `SupportingText` in that billing summary.
 The shared `SignalDetails` owns labeled values. `apps/web/AGENTS.md` is read before frontend changes.
 
 ## Scope and Non-Goals
@@ -105,7 +122,7 @@ The shared `SignalDetails` owns labeled values. `apps/web/AGENTS.md` is read bef
 Add shared vertical spacing and supporting text, demonstrate them in the billing summary, document their use,
 and guard the shared CSS contract and rendered billing spacing. Existing API calls, accounting, authorization,
 loading, retry, and live-region behavior stay with their current owners. This plan makes no database, backend,
-Compose, public-page redesign, or repository-wide layout changes. Publication uses the existing draft PR #667 against `master`; its verification-charge UI dependency is merged.
+Compose, public-page redesign, or repository-wide layout changes. PR #667 delivered this scope to `master`; its verification-charge UI dependency is also merged.
 
 ## Plan of Work
 
@@ -169,8 +186,10 @@ all unrelated work. Do not reset local authentication, credits, or Docker volume
 
 ## Artifacts and Notes
 
-No issue matched `gh issue list --repo TupoSoft/LeadEmailFinder --label execplan --search 'frontend-spacing/01 in:body'`.
-A GitHub issue search for the same label and plan marker again returned no issue on September 29, 2026.
+The September 16 and September 29 searches for the `frontend-spacing/01` marker found no synced issue.
+[Issue #742](https://github.com/TupoSoft/LeadEmailFinder/issues/742) was created on October 1, 2026,
+at 14:59:47 UTC, after PR #667 merged at 14:57:46 UTC. The PR had no closing reference to the later issue.
+The generated issue retained the old six-of-seven progress count. This correction records the missing completion evidence.
 The accounting and download fixes from PR #666 remain part of the base. This spacing change adds no HTTP behavior.
 
 Rendered evidence is stored outside the repository:
