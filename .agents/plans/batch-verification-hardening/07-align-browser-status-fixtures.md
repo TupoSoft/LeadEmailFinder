@@ -11,10 +11,14 @@ An engineer observes success when the unchanged workflows pass in both desktop a
 
 ## Progress
 
-- [ ] (2026-09-15) Confirm the prerequisite contract and inventory every mocked batch status response.
-- [ ] (2026-09-15) Type valid browser fixtures and supply coherent status, address counts, and billing fields.
-- [ ] (2026-09-15) Run focused static/component checks, build once, and execute both browser projects.
-- [ ] (2026-09-15) Record validation evidence, review the test-only diff, and prepare the single pull request.
+- [x] (2026-10-12) Confirmed the prerequisite contract and inventoried mocked batch status responses. Merged PR #633
+  had already added `resultsAvailable`, `counts`, and `billing` to the browser `snapshot()` fixture, so the reviewed
+  `ApiError(502)` rejection no longer reproduces. The fixture remained untyped and its states were incoherent.
+  Issue #650 is assigned and moved to `In Progress`.
+- [x] (2026-10-12) Replaced `snapshot(status, extra)` with fixtures typed by the generated `GET /verifyBatch/{id}`
+  response and gave each state coherent status, address counts, and billing fields.
+- [x] (2026-10-12) Ran focused static and component checks, built once, and executed both browser projects.
+- [x] (2026-10-12) Recorded validation evidence, reviewed the test-only diff, and prepared the single pull request.
 
 ## Plan dependencies
 
@@ -22,7 +26,19 @@ An engineer observes success when the unchanged workflows pass in both desktop a
 
 ## Surprises & Discoveries
 
-None yet.
+- The reviewed defect was fixed before merge: PR #633 added the required fields to the browser fixture, and PR #666
+  later added the settled `processing_failed` billing override. On `master` at `6b1ab4a`, every mocked status
+  passed runtime validation. The remaining gaps were acceptance criteria 1 and 2. A `snapshot(status: string, extra = {})`
+  factory let the compiler accept missing fields. Its states were also incoherent: the completed fixture charged 60
+  credits with zero completed or conclusive addresses and a zero original reservation, queued reported 37.5 percent
+  progress, and both `invalid_csv` and `insufficient_credits` reported an 80-credit reservation.
+- The server derives `total`, `processed`, and `unprocessed` from the admission's unique addresses and unsettled
+  count, so a job with no admission reports zero totals. `billing.reserved` is the cumulative original reservation
+  and stays set after settlement. `billing.state` becomes `settled` only once every unique address completes.
+- The repeated inventory found no other successful batch status mock under `apps/web/tests`. The `verification-billing-ui`
+  browser spec mocks only single verification and billing. The component and adapter fixtures already carry every field;
+  the adapter's malformed payloads remain untyped.
+- `test:e2e:prebuilt` passes its own fixed spec list to Playwright, so a trailing file argument does not narrow it.
 
 ## Decision Log
 
@@ -34,10 +50,27 @@ None yet.
   defensive transport tests from exercising malformed input. Date/Author: 2026-09-15, Codex planning.
 - Decision: Keep the fixture helper local to the browser test unless inspection finds another actual consumer.
   Rationale: A shared fixture framework adds no value for one owner. Date/Author: 2026-09-15, Codex planning.
+- Decision: Model the `processing_failed` example as a failure after every address settled, such as a result file
+  that could not be written, rather than a failure before admission. Rationale: The existing assertion that the
+  failed page shows 30 settled credits keeps its observable purpose. The server reports `settled` only after every
+  unique address completes. The plan permitted either shape. Date/Author: 2026-10-12, Claude implementation.
+- Decision: For the queued state, assert the existing validation copy instead of the `80` row count.
+  Rationale: The corrected queued fixture has zero counts, so the page shows its validation message. Asserting that
+  message preserves the check that server-provided counts reach the screen. Date/Author: 2026-10-12, Claude implementation.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered as a test-only change to `apps/web/tests/e2e/batch-verification-ui.spec.ts`. Its fixtures are now typed
+`Record` maps of the generated successful response, with no casts. Temporarily deleting `resultsAvailable` from the queued
+fixture made `typecheck` fail with `TS2741`; the field was then restored. Queued, running, completed, unavailable,
+and the three failure examples carry coherent counts and billing. Application code, API contracts, visual tokens,
+copy, and screenshot baselines are unchanged. Validation on 2026-10-12:
+
+- `eslint tests/e2e/batch-verification-ui.spec.ts` and the web `typecheck` passed.
+- `test:ci` for the batch adapter and page tests passed: 2 files, 98 tests.
+- `corepack pnpm ui:audit` reported 0 violations and 0 unresolved findings; the web build succeeded.
+- `test:e2e:prebuilt --project=desktop-chromium --project=narrow-chromium` passed 142 tests, including 12 batch UI
+  cases per project, with none skipped or flaky.
 
 ## Context and Orientation
 
