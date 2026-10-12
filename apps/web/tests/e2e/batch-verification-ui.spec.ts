@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import type { paths } from '@tuposoft/lead-email-finder-api-client'
 
 const id = '725d7b63-6a47-4d14-8709-f2966f5a0948'
 const capabilities = ['verification.run', 'verification.read', 'billing.read']
@@ -19,7 +20,9 @@ async function account(context: BrowserContext, allowed = capabilities) {
         }),
     )
 }
-const zeroCounts = {
+type BatchStatus = paths['/verifyBatch/{id}']['get']['responses'][200]['content']['application/json']
+type FailureCode = NonNullable<BatchStatus['failureCode']>
+const zeroCounts: BatchStatus['counts'] = {
     totalRows: 0,
     uniqueAddresses: 0,
     duplicateRows: 0,
@@ -31,22 +34,65 @@ const zeroCounts = {
     inconclusiveAddresses: 0,
     failedAddresses: 0,
 }
-const snapshot = (status: string, extra = {}) => ({
+const parsed: BatchStatus['counts'] = { ...zeroCounts, totalRows: 80, uniqueAddresses: 80 }
+const nothingCharged: BatchStatus['billing'] = { state: 'pending', reserved: 0, charged: 0 }
+// 80 fresh unique addresses each reserve one credit; only conclusive results are charged.
+const running: BatchStatus = {
     id,
-    status,
-    progress: status === 'completed' ? 100 : 37.5,
+    status: 'running',
+    progress: 37.5,
     total: 80,
-    processed: status === 'completed' ? 80 : 30,
-    unprocessed: status === 'completed' ? 0 : 50,
-    resultsAvailable: status === 'completed',
-    counts: { ...zeroCounts, totalRows: 80, uniqueAddresses: 80 },
-    billing: {
-        state: status === 'completed' ? 'settled' : 'pending',
-        reserved: status === 'completed' ? 0 : 80,
-        charged: status === 'completed' ? 60 : 0,
+    processed: 30,
+    unprocessed: 50,
+    resultsAvailable: false,
+    counts: { ...parsed, completedAddresses: 30, conclusiveAddresses: 24, inconclusiveAddresses: 6 },
+    billing: { state: 'pending', reserved: 80, charged: 24 },
+}
+const settled: BatchStatus = {
+    ...running,
+    progress: 100,
+    processed: 80,
+    unprocessed: 0,
+    counts: { ...parsed, completedAddresses: 80, conclusiveAddresses: 60, inconclusiveAddresses: 20 },
+    billing: { state: 'settled', reserved: 80, charged: 60 },
+}
+const snapshots: Record<'queued' | 'running' | 'completed' | 'unavailable', BatchStatus> = {
+    queued: {
+        id,
+        status: 'queued',
+        progress: 0,
+        total: 0,
+        processed: 0,
+        unprocessed: 0,
+        resultsAvailable: false,
+        counts: zeroCounts,
+        billing: nothingCharged,
     },
-    ...extra,
-})
+    running,
+    completed: { ...settled, status: 'completed', resultsAvailable: true },
+    // An unknown server state keeps the last running counts and never advertises a result.
+    unavailable: { ...running, status: 'unavailable' },
+}
+// resultsAvailable is true only for completed jobs, so no failed job advertises a download.
+const failures: Record<FailureCode, BatchStatus> = {
+    invalid_csv: { ...snapshots.queued, status: 'failed', failureCode: 'invalid_csv' },
+    insufficient_credits: {
+        ...snapshots.queued,
+        status: 'failed',
+        failureCode: 'insufficient_credits',
+        total: 80,
+        unprocessed: 80,
+        counts: parsed,
+    },
+    // Every address settled before the result file could be written.
+    processing_failed: {
+        ...settled,
+        status: 'failed',
+        failureCode: 'processing_failed',
+        counts: { ...settled.counts, conclusiveAddresses: 30, inconclusiveAddresses: 50 },
+        billing: { state: 'settled', reserved: 80, charged: 30 },
+    },
+}
 async function accessible(page: Page) {
     const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
     expect(result.violations.filter(value => ['serious', 'critical'].includes(value.impact ?? ''))).toEqual([])
@@ -56,7 +102,7 @@ async function accessible(page: Page) {
     await expect(page.locator('vite-error-overlay')).toHaveCount(0)
 }
 
-for (const status of ['queued', 'running', 'completed', 'unavailable']) {
+for (const status of ['queued', 'running', 'completed', 'unavailable'] as const) {
     test(`${status} uses server progress with accessible geometry and bounded reads`, async ({ page, context }) => {
         await account(context)
         let reads = 0
@@ -67,15 +113,16 @@ for (const status of ['queued', 'running', 'completed', 'unavailable']) {
         })
         await context.route(`**/verifyBatch/${id}`, route => {
             reads++
-            return route.fulfill({ json: snapshot(status) })
+            return route.fulfill({ json: snapshots[status] })
         })
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.goto(`/app/verifications/batches/${id}`)
         await expect(page.getByRole('heading', { name: `Batch verification ${status}`, exact: true })).toBeVisible()
         await expect(page).toHaveTitle(`Batch verification ${status} | Lead Email Finder`)
         const progress = page.getByRole('progressbar', { name: 'Batch verification progress' })
-        await expect(progress).toHaveAttribute('aria-valuenow', String(status === 'completed' ? 100 : 37.5))
-        await expect(page.getByText('80', { exact: true }).first()).toBeVisible()
+        await expect(progress).toHaveAttribute('aria-valuenow', String(snapshots[status].progress))
+        if (status === 'queued') await expect(page.getByText(/^The file is being validated/)).toBeVisible()
+        else await expect(page.getByText('80', { exact: true }).first()).toBeVisible()
         await accessible(page)
         expect(errors).toEqual([])
         if (['completed', 'unavailable'].includes(status)) {
@@ -100,7 +147,7 @@ for (const [failureCode, title] of [
     ['invalid_csv', 'CSV validation failed'],
     ['insufficient_credits', 'Insufficient credits'],
     ['processing_failed', 'Batch processing failed'],
-]) {
+] as const) {
     test(`${failureCode} explains safe recovery without resubmission`, async ({ page, context }) => {
         await account(context)
         let posts = 0
@@ -115,14 +162,7 @@ for (const [failureCode, title] of [
         })
         await context.route(`**/verifyBatch/${id}`, route => {
             reads++
-            return route.fulfill({
-                json: snapshot('failed', {
-                    failureCode,
-                    ...(failureCode === 'processing_failed'
-                        ? { billing: { state: 'settled', reserved: 80, charged: 30 } }
-                        : {}),
-                }),
-            })
+            return route.fulfill({ json: failures[failureCode] })
         })
         await page.goto(`/app/verifications/batches/${id}`)
         await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
@@ -164,7 +204,7 @@ test('native picker validates, removes, uploads once, and reacquires the real jo
         await pending
         await route.fulfill({ status: 202, json: { id } })
     })
-    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshot('running') }))
+    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshots.running }))
     await page.goto('/app/verifications/batches/new')
     const picker = page.getByLabel('CSV file', { exact: true })
     await picker.setInputFiles({
@@ -247,7 +287,7 @@ test('uncertain upload clears selection and requires deliberate acknowledgment a
 
 test('download retries only GET and a later missing result keeps completion truthful', async ({ page, context }) => {
     await account(context)
-    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshot('completed') }))
+    await context.route(`**/verifyBatch/${id}`, route => route.fulfill({ json: snapshots.completed }))
     let downloads = 0
     let missing = false
     await context.route(`**/verifyBatch/${id}/results`, route => {
@@ -272,7 +312,7 @@ test('offline and failed reads preserve confirmed counts and manual recovery', a
     await account(context)
     let fail = false
     await context.route(`**/verifyBatch/${id}`, route =>
-        route.fulfill({ status: fail ? 503 : 200, json: fail ? {} : snapshot('running') }),
+        route.fulfill({ status: fail ? 503 : 200, json: fail ? {} : snapshots.running }),
     )
     await page.goto(`/app/verifications/batches/${id}`)
     await expect(page.getByText('80', { exact: true }).first()).toBeVisible()
@@ -296,9 +336,9 @@ test('keyboard refresh preserves focus while pending and when completed results 
     })
     await context.route(`**/verifyBatch/${id}`, async route => {
         reads++
-        if (reads === 1) return route.fulfill({ json: snapshot('running') })
+        if (reads === 1) return route.fulfill({ json: snapshots.running })
         await pending
-        await route.fulfill({ json: snapshot('completed') })
+        await route.fulfill({ json: snapshots.completed })
     })
     await page.goto(`/app/verifications/batches/${id}`)
     await expect(page.getByRole('heading', { name: 'Batch verification running', exact: true })).toBeVisible()
