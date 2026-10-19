@@ -12,10 +12,10 @@ guidance above the native picker without uploading anything.
 
 ## Progress
 
-- [ ] (2026-09-18) Add the shared fictional CSV example and concise format guidance to the existing page.
-- [ ] (2026-09-18) Cover initial guidance, accessible description, and unchanged selection behavior.
-- [ ] (2026-09-18) Update the UX contract and execute the focused static, component, and browser checks.
-- [ ] (2026-09-18) Record results, review scope and architecture, and prepare the single implementation PR.
+- [x] (2026-10-19) Add the shared fictional CSV example and concise format guidance to the existing page.
+- [x] (2026-10-19) Cover initial guidance, accessible description, and unchanged selection behavior.
+- [x] (2026-10-19) Update the UX contract and execute the focused static, component, and browser checks.
+- [x] (2026-10-19) Record results, review scope and architecture, and prepare the single implementation PR.
 
 ## Plan dependencies
 
@@ -23,7 +23,10 @@ guidance above the native picker without uploading anything.
 
 ## Surprises & Discoveries
 
-None yet.
+- The browser's default `code` style rendered the example in a monospace face even with `font: inherit` on the
+  `pre`. `DESIGN.md` avoids artificial monospace styling and defines no code typeface, so the nested `code` also
+  inherits the product typeface. Evidence: desktop and 320-pixel screenshots captured during implementation.
+- `Stack` accepts ARIA attributes and `role`, so the example is a labeled `group` without a new wrapper component.
 
 ## Decision Log
 
@@ -37,7 +40,16 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered on 2026-10-19. The upload page shows the lowercase `email` header instruction, the one-address-per-row rule,
+and the unchanged size limit in the picker's accessible description. A labeled `CSV format example` group between
+that help and the picker contains the replacement instruction and a selectable `pre`/`code` block rendered from
+`apps/web/src/features/verification/batch-csv-example.ts`. Validation rules, API calls, and upload behavior are
+unchanged. `batch-csv-guidance/02` can download the same constant.
+
+Local results on 2026-10-19: the component suite passed 43 tests; the batch browser suite passed 26 tests across
+`desktop-chromium` and `narrow-chromium`, including the new initial-guidance scenario; web lint, typecheck, and build
+passed; `design:lint` reported zero errors and warnings; `ui:audit` reported zero errors. Hosted CI is recorded
+separately on the pull request. No remaining work belongs to this plan.
 
 ## Context and Orientation
 

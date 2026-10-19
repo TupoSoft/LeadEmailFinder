@@ -472,8 +472,12 @@ The source contract is `.agents/plans/frontend/12-run-batch-email-verification.m
 `/app/verifications/batches/new` requires `verification.run`; the job URL at `/app/verifications/batches/:id`
 requires `verification.read`. The browser reuses the generated same-origin transport and authentication boundary.
 
-The visible native picker explains the email column and 100-megabyte limit before selection. Extension and size checks
-provide early feedback; server validation remains authoritative. The selected file and filename stay local to the
+The visible native picker explains the lowercase `email` header, one address per row, and the 100-megabyte limit
+before selection. That concise format help stays in the picker's accessible description. A labeled CSV format example
+above the picker displays selectable literal bytes from the feature-local `batchCsvExample` constant, which is the
+single source for any later sample download, and asks customers to replace its fictional `example.com` addresses.
+Reading the guidance makes no request. Extension and size checks provide early feedback; server validation remains
+authoritative. The selected file and filename stay local to the
 mounted form. Acceptance, invalid-file rejection, removal, page hide, or route disposal clears file references and the native input.
 A definite credit or rate-limit rejection retains the selection for a deliberate retry. No
 file, multipart body, filename, or downloaded CSV enters shared caches, persistent storage, or diagnostics.

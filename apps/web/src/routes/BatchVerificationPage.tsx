@@ -5,6 +5,7 @@ import { ForbiddenPage } from '../app/AuthRoutes'
 import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
 import { billingQueryKeys, readBillingSummary } from '../features/billing/billing-api'
+import { batchCsvExample } from '../features/verification/batch-csv-example'
 import { createBatchVerification } from '../features/verification/batch-verification-api'
 import { batchVerificationCopy as copy } from '../features/verification/batch-verification-copy'
 import { verificationCopy } from '../features/verification/verification-copy'
@@ -13,6 +14,8 @@ import { useRetryTime } from '../shared/use-retry-time'
 import { formatVerificationTime } from '../shared/verification-time'
 import { ProductPanel } from '../shared/ProductPanel'
 import { ProgressIndicator } from '../shared/ProgressIndicator'
+import { Stack } from '../shared/Stack'
+import { SupportingText } from '../shared/SupportingText'
 import action from '../shared/Action.module.css'
 import form from '../shared/Form.module.css'
 import styles from '../features/verification/VerificationView.module.css'
@@ -194,6 +197,15 @@ function BatchForm({ organizationId, canReadBilling }: { organizationId: string;
                         <p id="batch-file-help" className={form.help}>
                             {copy.format}
                         </p>
+                        <Stack gap="control" role="group" aria-labelledby="batch-csv-example-heading">
+                            <h3 id="batch-csv-example-heading" className={styles.exampleHeading}>
+                                {copy.exampleHeading}
+                            </h3>
+                            <SupportingText>{copy.exampleInstruction}</SupportingText>
+                            <pre className={styles.example}>
+                                <code>{batchCsvExample}</code>
+                            </pre>
+                        </Stack>
                         <input
                             ref={input}
                             id="batch-verification-file"
