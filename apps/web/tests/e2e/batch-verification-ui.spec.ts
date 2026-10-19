@@ -222,9 +222,67 @@ test('format guidance shows a copyable example before selection without contacti
     expect(codeBox.height).toBeGreaterThan(pickerBox.height)
     await page.getByRole('heading', { name: 'CSV format example', exact: true }).click()
     await page.keyboard.press('Tab')
+    await expect(page.getByRole('link', { name: 'Download sample CSV', exact: true })).toBeFocused()
+    await page.keyboard.press('Tab')
     await expect(picker).toBeFocused()
     await accessible(page)
     expect(verificationRequests).toBe(0)
+})
+
+const sampleCsv = 'email\nalice@example.com\nbob@example.com\n'
+async function downloadSample(page: Page, activate: () => Promise<void>) {
+    const [download] = await Promise.all([page.waitForEvent('download'), activate()])
+    expect(download.suggestedFilename()).toBe('batch-verification-sample.csv')
+    const chunks: Buffer[] = []
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk as Buffer)
+    expect(Buffer.concat(chunks).equals(Buffer.from(sampleCsv, 'utf8'))).toBe(true)
+}
+
+test('sample download repeats from the keyboard and preserves selection, errors, and acknowledgment', async ({
+    page,
+    context,
+}) => {
+    await account(context)
+    let posts = 0
+    let otherRequests = 0
+    await context.route('**/verifyBatch/**', route => {
+        if (route.request().method() === 'POST') posts++
+        else otherRequests++
+        return route.abort()
+    })
+    await page.goto('/app/verifications/batches/new')
+    const picker = page.getByLabel('CSV file', { exact: true })
+    const sample = page.getByRole('link', { name: 'Download sample CSV', exact: true })
+    const code = page.getByRole('group', { name: 'CSV format example', exact: true }).locator('pre > code')
+    expect(await code.textContent()).toBe(sampleCsv)
+
+    await picker.setInputFiles({ name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(sampleCsv) })
+    await sample.focus()
+    await downloadSample(page, () => page.keyboard.press('Enter'))
+    await downloadSample(page, () => page.keyboard.press('Enter'))
+    await expect(page).toHaveURL('/app/verifications/batches/new')
+    await expect(page.getByText(/synthetic\.csv/)).toBeVisible()
+    expect(await picker.evaluate((node: HTMLInputElement) => node.files?.[0]?.name)).toBe('synthetic.csv')
+
+    await picker.setInputFiles({ name: 'wrong.txt', mimeType: 'text/plain', buffer: Buffer.from(sampleCsv) })
+    await expect(picker).toHaveAttribute('aria-invalid', 'true')
+    await downloadSample(page, () => sample.click())
+    await expect(picker).toHaveAttribute('aria-invalid', 'true')
+    await expect(picker).toHaveAccessibleDescription(/\.csv extension/)
+
+    await picker.setInputFiles({ name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(sampleCsv) })
+    await page.getByRole('button', { name: 'Upload and verify CSV', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Upload could not be confirmed', exact: true })).toBeVisible()
+    await downloadSample(page, () => sample.click())
+    await expect(page.getByRole('checkbox')).not.toBeChecked()
+    await accessible(page)
+
+    await context.setOffline(true)
+    await downloadSample(page, () => sample.click())
+    await context.setOffline(false)
+    await expect(page).toHaveURL('/app/verifications/batches/new')
+    expect(posts).toBe(1)
+    expect(otherRequests).toBe(0)
 })
 
 test('native picker validates, removes, uploads once, and reacquires the real job after reload', async ({

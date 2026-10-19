@@ -475,8 +475,11 @@ requires `verification.read`. The browser reuses the generated same-origin trans
 The visible native picker explains the lowercase `email` header, one address per row, and the 100-megabyte limit
 before selection. That concise format help stays in the picker's accessible description. A labeled CSV format example
 above the picker displays selectable literal bytes from the feature-local `batchCsvExample` constant, which is the
-single source for any later sample download, and asks customers to replace its fictional `example.com` addresses.
-Reading the guidance makes no request. Extension and size checks provide early feedback; server validation remains
+single source for the sample download, and asks customers to replace its fictional `example.com` addresses. Its
+Download sample CSV link is a native anchor whose encoded `text/csv;charset=utf-8` data URL saves exactly those bytes
+as `batch-verification-sample.csv`. The link stays available while a file is selected, during pending or uncertain
+uploads, and offline after load. Downloading never reads the selected file, clears validation feedback, changes the
+uncertainty acknowledgment, navigates, or contacts the server. Reading the guidance makes no request. Extension and size checks provide early feedback; server validation remains
 authoritative. The selected file and filename stay local to the
 mounted form. Acceptance, invalid-file rejection, removal, page hide, or route disposal clears file references and the native input.
 A definite credit or rate-limit rejection retains the selection for a deliberate retry. No

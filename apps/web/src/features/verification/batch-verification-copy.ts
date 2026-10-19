@@ -4,6 +4,7 @@ export const batchVerificationCopy = {
     format: 'Choose one .csv file, up to 100 MB (104,857,600 bytes). Use a header named email (lowercase), followed by one email address per row.',
     exampleHeading: 'CSV format example',
     exampleInstruction: 'Replace the example addresses with your own.',
+    downloadSample: 'Download sample CSV',
     cost: 'One credit is charged for each new conclusive result. Cached, shared, and inconclusive results are free. Duplicate rows do not create extra checks. Credits are reserved after validation; uploading does not confirm a charge.',
     rows: 'The result CSV retains every original row, including duplicates. Each unique address is checked once.',
     funding:

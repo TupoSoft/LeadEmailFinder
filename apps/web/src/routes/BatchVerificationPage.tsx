@@ -21,6 +21,8 @@ import form from '../shared/Form.module.css'
 import styles from '../features/verification/VerificationView.module.css'
 
 const maxCsvBytes = 104857600
+// The sample is shipped static text, so a data URL needs no request or object URL lifetime.
+const batchCsvSampleHref = `data:text/csv;charset=utf-8,${encodeURIComponent(batchCsvExample)}`
 const fileSizeFormat = new Intl.NumberFormat('en', { maximumFractionDigits: 2 })
 function formatFileSize(bytes: number): string {
     return bytes < 1024
@@ -205,6 +207,15 @@ function BatchForm({ organizationId, canReadBilling }: { organizationId: string;
                             <pre className={styles.example}>
                                 <code>{batchCsvExample}</code>
                             </pre>
+                            <div className={form.actions}>
+                                <a
+                                    className={`${action.action} ${action.secondary}`}
+                                    href={batchCsvSampleHref}
+                                    download="batch-verification-sample.csv"
+                                >
+                                    {copy.downloadSample}
+                                </a>
+                            </div>
                         </Stack>
                         <input
                             ref={input}

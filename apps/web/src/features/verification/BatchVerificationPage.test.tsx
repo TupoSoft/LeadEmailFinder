@@ -198,6 +198,14 @@ describe('CSV batch selection and upload', () => {
         expect(code?.textContent).toBe(batchCsvExample)
         expect(batchCsvExample.split('\n')).toEqual(['email', 'alice@example.com', 'bob@example.com', ''])
         expect(example.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        const sample = within(example).getByRole('link', { name: 'Download sample CSV' })
+        expect(sample).toHaveAttribute('download', 'batch-verification-sample.csv')
+        const href = sample.getAttribute('href')!
+        const prefix = 'data:text/csv;charset=utf-8,'
+        expect(href.startsWith(prefix)).toBe(true)
+        const downloaded = decodeURIComponent(href.slice(prefix.length))
+        expect(downloaded).toBe('email\nalice@example.com\nbob@example.com\n')
+        expect(downloaded).toBe(code?.textContent)
         await select()
         expect(screen.getByText(/synthetic.csv.*bytes/)).toBeInTheDocument()
         expectNoFilesInCaches(session)
@@ -205,6 +213,36 @@ describe('CSV batch selection and upload', () => {
         expect(input).toHaveValue('')
         expect(input).toHaveFocus()
         expect(screen.queryByText(/synthetic.csv/)).not.toBeInTheDocument()
+    })
+    const sampleLink = () => screen.getByRole('link', { name: 'Download sample CSV' })
+    it('keeps the sample download available after going offline', async () => {
+        renderBatch()
+        await screen.findByLabelText('CSV file')
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+        await act(() => window.dispatchEvent(new Event('offline')))
+        expect(screen.getByText(/You are offline/)).toBeInTheDocument()
+        expect(sampleLink()).toHaveAttribute('download', 'batch-verification-sample.csv')
+    })
+    it('keeps the sample download available while uploading', async () => {
+        const pending = deferred<Response>()
+        renderBatch({
+            intercept: request => (new URL(request.url).pathname === uploadPath ? pending.promise : undefined),
+        })
+        await submit()
+        expect(await screen.findByRole('progressbar', { name: 'Uploading CSV' })).toBeInTheDocument()
+        expect(sampleLink()).toHaveAttribute('download', 'batch-verification-sample.csv')
+        expect(sampleLink()).not.toHaveAttribute('aria-disabled')
+    })
+    it('keeps the sample download available after an uncertain upload', async () => {
+        const { fetch } = renderBatch({
+            intercept: request =>
+                new URL(request.url).pathname === uploadPath ? Promise.reject(new Error('disconnect')) : undefined,
+        })
+        await submit()
+        expect(await screen.findByRole('heading', { name: 'Upload could not be confirmed' })).toBeInTheDocument()
+        expect(sampleLink()).toHaveAttribute('download', 'batch-verification-sample.csv')
+        expect(screen.getByRole('checkbox')).not.toBeChecked()
+        expect(requestsFor(fetch, uploadPath, 'POST')).toHaveLength(1)
     })
     it.each(['synthetic.txt', 'synthetic.csv.exe'])('rejects the wrong extension %s before POST', async name => {
         const { fetch } = renderBatch()

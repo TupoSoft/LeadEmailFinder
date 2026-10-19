@@ -11,10 +11,10 @@ exactly the displayed example without selecting a file, starting verification, o
 
 ## Progress
 
-- [ ] (2026-09-18) Add a native download link backed by the shared CSV example.
-- [ ] (2026-09-18) Cover downloaded bytes, filename, keyboard activation, and preservation of upload state.
-- [ ] (2026-09-18) Update the UX contract and execute focused static, component, and browser checks.
-- [ ] (2026-09-18) Record results, review scope and architecture, and prepare the single implementation PR.
+- [x] (2026-10-20) Add a native download link backed by the shared CSV example.
+- [x] (2026-10-20) Cover downloaded bytes, filename, keyboard activation, and preservation of upload state.
+- [x] (2026-10-20) Update the UX contract and execute focused static, component, and browser checks.
+- [x] (2026-10-20) Record results, review scope and architecture, and prepare the single implementation PR.
 
 ## Plan dependencies
 
@@ -22,7 +22,13 @@ exactly the displayed example without selecting a file, starting verification, o
 
 ## Surprises & Discoveries
 
-None yet.
+- Native data-URL downloads work in both Chromium projects under the unchanged preview security headers. The
+  policy does not restrict top-level download navigations, so no header change was needed.
+- Dispatching `offline` in the component suite leaves the TanStack Query `onlineManager` offline until the shared
+  `afterEach` reset, so later renders in the same test never finish loading the session. Offline, pending, and
+  uncertain availability are therefore separate component tests.
+- The new link sits between the example and the picker in tab order. The plan 01 keyboard scenario now asserts that
+  focus reaches the link before the picker.
 
 ## Decision Log
 
@@ -37,7 +43,17 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered on 2026-10-20. The example section on `/app/verifications/batches/new` now ends with a secondary-styled
+"Download sample CSV" anchor. Its `href` is the encoded `batchCsvExample` data URL and its `download` attribute is the
+fixed `batch-verification-sample.csv`. No state, Effect, request, or new abstraction was added.
+
+Local results on 2026-10-20: the component suite passed 46 tests. They cover the link name, filename, media type,
+decoded bytes against an independent literal and the displayed text, and availability while offline, uploading, and
+uncertain. The batch browser suite passed 28 tests across `desktop-chromium` and `narrow-chromium`. The new scenario
+reads real download bytes, repeats keyboard activation, and preserves the selected file, validation error, unchecked
+acknowledgment, and route. It also downloads offline and asserts no verification request beyond the one deliberate
+upload. Web lint, typecheck, and build passed, and `design:lint` and `ui:audit` reported zero errors. Hosted CI is
+recorded separately on the pull request. This completes the batch CSV guidance road map.
 
 ## Context and Orientation
 
