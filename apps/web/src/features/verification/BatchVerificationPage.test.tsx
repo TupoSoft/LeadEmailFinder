@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { onlineManager } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom'
@@ -9,6 +9,7 @@ import { BatchVerificationJobPage } from '../../routes/BatchVerificationJobPage'
 import { BatchVerificationPage } from '../../routes/BatchVerificationPage'
 import { AuthProvider } from '../auth/AuthProvider'
 import { AuthSession } from '../auth/auth-session'
+import { batchCsvExample } from './batch-csv-example'
 import { batchVerificationQueryKeys } from './batch-verification-api'
 import { billingQueryKeys } from '../billing/billing-api'
 
@@ -188,7 +189,15 @@ describe('CSV batch selection and upload', () => {
         const { session } = renderBatch()
         const input = await screen.findByLabelText('CSV file')
         expect(input).toHaveAttribute('accept', '.csv,text/csv')
-        expect(input).toHaveAccessibleDescription(/100 MB.*email column/)
+        expect(input).toHaveAccessibleDescription(
+            'Choose one .csv file, up to 100 MB (104,857,600 bytes). Use a header named email (lowercase), followed by one email address per row.',
+        )
+        const example = screen.getByRole('group', { name: 'CSV format example' })
+        expect(within(example).getByText('Replace the example addresses with your own.')).toBeInTheDocument()
+        const code = example.querySelector('pre > code')
+        expect(code?.textContent).toBe(batchCsvExample)
+        expect(batchCsvExample.split('\n')).toEqual(['email', 'alice@example.com', 'bob@example.com', ''])
+        expect(example.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
         await select()
         expect(screen.getByText(/synthetic.csv.*bytes/)).toBeInTheDocument()
         expectNoFilesInCaches(session)

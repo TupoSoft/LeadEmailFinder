@@ -14,6 +14,23 @@
     gap: var(--space-content-gap);
     max-width: 40rem;
 }
+.exampleHeading {
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+}
+.example {
+    padding: var(--space-control-gap);
+    border: var(--rule-width) solid var(--color-rule-soft);
+    border-radius: var(--radius-control);
+    font: inherit;
+    font-size: var(--font-size-compact);
+    line-height: var(--line-height-compact);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.example code {
+    font: inherit;
+}
 .feedback {
     min-height: var(--control-height);
 }

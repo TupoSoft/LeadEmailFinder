@@ -188,6 +188,45 @@ for (const [failureCode, title] of [
     })
 }
 
+test('format guidance shows a copyable example before selection without contacting verification', async ({
+    page,
+    context,
+}) => {
+    await account(context)
+    let verificationRequests = 0
+    await context.route('**/verifyBatch/**', route => {
+        verificationRequests++
+        return route.abort()
+    })
+    await page.goto('/app/verifications/batches/new')
+    const picker = page.getByLabel('CSV file', { exact: true })
+    await expect(picker).toHaveAccessibleDescription(
+        'Choose one .csv file, up to 100 MB (104,857,600 bytes). Use a header named email (lowercase), followed by one email address per row.',
+    )
+    const example = page.getByRole('group', { name: 'CSV format example', exact: true })
+    await expect(example.getByText('Replace the example addresses with your own.', { exact: true })).toBeVisible()
+    const code = example.locator('pre > code')
+    await expect(code).toBeVisible()
+    const selected = await code.evaluate(node => {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const selection = window.getSelection()!
+        selection.removeAllRanges()
+        selection.addRange(range)
+        return selection.toString()
+    })
+    expect(selected.split(/\r?\n/).filter(Boolean)).toEqual(['email', 'alice@example.com', 'bob@example.com'])
+    const codeBox = (await code.boundingBox())!
+    const pickerBox = (await picker.boundingBox())!
+    expect(codeBox.y + codeBox.height).toBeLessThanOrEqual(pickerBox.y)
+    expect(codeBox.height).toBeGreaterThan(pickerBox.height)
+    await page.getByRole('heading', { name: 'CSV format example', exact: true }).click()
+    await page.keyboard.press('Tab')
+    await expect(picker).toBeFocused()
+    await accessible(page)
+    expect(verificationRequests).toBe(0)
+})
+
 test('native picker validates, removes, uploads once, and reacquires the real job after reload', async ({
     page,
     context,
