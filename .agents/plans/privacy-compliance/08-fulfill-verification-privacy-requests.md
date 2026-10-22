@@ -361,7 +361,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/08-fulfill-verification-privacy-requests.md
     corepack pnpm exec prettier --check config/privacy/verification-writer-manifest.yaml src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/08-fulfill-verification-privacy-requests.md
     git diff --check
 

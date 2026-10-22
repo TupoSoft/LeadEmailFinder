@@ -214,7 +214,6 @@ Finish with these exact repository-root commands:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/credits/README.md src/libs/modules/payments/README.md src/libs/modules/controller-privacy/README.md .agents/plans/privacy-compliance/17-add-financial-and-provider-privacy-adapters.md
     corepack pnpm exec prettier --check src/libs/modules/credits/README.md src/libs/modules/payments/README.md src/libs/modules/controller-privacy/README.md .agents/plans/privacy-compliance/17-add-financial-and-provider-privacy-adapters.md
     git diff --check
 

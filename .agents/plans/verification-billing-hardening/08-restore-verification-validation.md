@@ -123,7 +123,6 @@ corepack pnpm openapi:check
 node --test scripts/openapi/*.test.mjs
 node --test scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm test:oidc-runners
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/08-restore-verification-validation.md
 git diff --check
 ```
 

@@ -112,7 +112,6 @@ corepack pnpm exec jest validate-workflow select-validation execplan-repository-
 corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 actionlint .github/workflows/validate.yml
-corepack pnpm docs:lint -- docs/development/ci-cache-benchmark.md .agents/plans/ci-performance
 git diff --check
 ```
 

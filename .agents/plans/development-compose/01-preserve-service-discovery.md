@@ -59,7 +59,7 @@ constraint remains outside the networking repair.
 
 Publication validation used an isolated worktree based on `e4c1062`. The topology test command passed all four
 tests. Both Compose configuration commands and `corepack pnpm exec eslint docker/smtp-dev/compose-network.test.mjs`
-exited zero. The exact documentation lint command in Validation passed all five files, and `git diff --check`
+exited zero. The then-current documentation lint command passed all five files, and `git diff --check`
 passed. The live results above came from the original checkout with identical Compose and test files;
 publication validation did not start services or change the running stack.
 
@@ -98,7 +98,7 @@ relevant as integration validation; their expected results do not change.
 - Redis, Garage, PostgreSQL, and Keycloak resolve by service name; fixture MX and address records still resolve.
 - DNS reset and proxy bootstrap finish successfully, and the public application health endpoint responds.
 - SMTP fixture ports remain unpublished, with the existing authenticated proxy and TLS behavior.
-- Focused tests and documentation lint pass. Record any unavailable runtime validation explicitly.
+- Focused tests pass. Record any unavailable runtime validation explicitly.
 
 ## Validation
 
@@ -109,8 +109,7 @@ Use a disposable Compose project to compare network and container identities acr
 startup, and return to base. On the owned stack, run the overlay startup twice, inspect aliases and one-shot exit
 codes. Check fixture DNS through the API and SMTP through the proxy. Request `http://localhost:53000/health`.
 Run the existing SMTP Bruno collection when its isolated fixture prerequisites are available; do not reset the
-user's balances to make it runnable. Run `corepack pnpm docs:lint -- README.md docker/README.md bruno/smtp-dev/README.md
-.agents/plans/development-compose/README.md .agents/plans/development-compose/01-preserve-service-discovery.md`.
+user's balances to make it runnable.
 
 ## Idempotence and Recovery
 

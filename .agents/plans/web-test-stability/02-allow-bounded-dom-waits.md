@@ -128,7 +128,6 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm --filter @tuposoft/lead-email-finde
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
 corepack pnpm --filter @tuposoft/lead-email-finder-web lint
 corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
-corepack pnpm docs:lint -- .agents/plans/web-test-stability/02-allow-bounded-dom-waits.md
 ```
 
 To prove the new regression exercises the shared budget, run only its name with the focused command below in

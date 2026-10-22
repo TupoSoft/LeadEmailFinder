@@ -55,4 +55,4 @@ to shared module factories even when their plans are otherwise independent.
   repository's safe collection launchers and distinguish static tests from live runtime evidence.
 - Keep every progress item unchecked until implementation starts. `Ready to implement` describes a complete
   design; prerequisite plans still determine scheduling. Validate this road map with the repository ExecPlan
-  fixture and `corepack pnpm docs:lint -- .agents/plans/dependency-inversion`.
+  fixture.

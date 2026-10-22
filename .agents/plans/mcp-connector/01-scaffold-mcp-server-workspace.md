@@ -240,7 +240,6 @@ corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server start &
 sleep 1 && curl -sf http://localhost:3002/health
 npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport http --method tools/list
 npx --yes @modelcontextprotocol/inspector --cli http://localhost:3002/mcp --transport http --method tools/call --tool-name ping
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/01-scaffold-mcp-server-workspace.md
 ```
 
 Stop the server process running in the background after manual validation. No container or database is required for this plan.

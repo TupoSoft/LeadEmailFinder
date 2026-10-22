@@ -255,7 +255,6 @@ Run the exact repository checks:
     corepack pnpm privacy:california-data-broker-check
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/privacy/california-data-broker-governance.spec.ts --runInBand
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/privacy/california-data-broker-incident-crosscheck.spec.ts --runInBand
-    corepack pnpm docs:lint -- docs/privacy/california-data-broker-account-lifecycle.md .agents/plans/privacy-compliance/24-govern-california-data-broker-account-lifecycle.md
     corepack pnpm exec prettier --check config/privacy/california-data-broker-governance.yaml docs/privacy/california-data-broker-account-lifecycle.md .agents/plans/privacy-compliance/24-govern-california-data-broker-account-lifecycle.md
     git diff --check
 

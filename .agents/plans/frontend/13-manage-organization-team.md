@@ -343,9 +343,7 @@ are available.
     corepack pnpm --filter ./apps/web exec playwright test tests/e2e/team-and-invitations.spec.ts --project=chromium
     corepack pnpm ui:audit
 
-Run
-`corepack pnpm docs:lint -- .agents/plans/frontend/13-manage-organization-team.md src/libs/modules/organization-onboarding/README.md bruno/organization-onboarding/README.md`
-after prose changes, adjusting the file list to the English Markdown files actually changed. Record exact commands,
+Record exact commands,
 counts, skips, browser widths, and runtime limitations rather than predicting success.
 
 Complete the frontend premium audit against `DESIGN.md`: navigation consistency, hierarchy comprehension, secret

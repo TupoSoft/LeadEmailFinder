@@ -100,7 +100,6 @@ Run the plan repository fixture separately with
 `corepack pnpm exec jest execplan-repository-fixture --runInBand --cacheDirectory=/tmp/lef-shared-ci-jest`.
 Run `corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts`.
 Run actionlint against all three workflows when available, plus `git diff --check`.
-Run `corepack pnpm docs:lint -- .agents/plans/shared-ci-runners`.
 For the startup adjustment, run
 `node --test docker/smtp-dev/compose-network.test.mjs scripts/testing/dev-reset.test.mjs` and the focused CI
 workflow suites above. Validate the merged Compose configuration when Docker Compose is available. Push the

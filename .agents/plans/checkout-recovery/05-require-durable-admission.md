@@ -117,7 +117,6 @@ corepack pnpm --filter ./apps/web test:ci src/features/billing src/routes/Billin
 corepack pnpm --filter ./apps/web typecheck
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/payments/README.md docker/paddle-dev/README.md bruno/credit-purchases/README.md .agents/plans/checkout-recovery/05-require-durable-admission.md
 git diff --check
 ```
 

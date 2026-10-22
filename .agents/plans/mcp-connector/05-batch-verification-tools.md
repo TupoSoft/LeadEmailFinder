@@ -205,10 +205,6 @@ two addresses, or `evidence.lef.test`-style addresses for a conclusive/charged r
 download results in at least two paginated windows to confirm offset/limit behavior, via
 `@modelcontextprotocol/inspector --cli`.
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/05-batch-verification-tools.md
-```
-
 ## Idempotence and Recovery
 
 No persisted state in the connector itself. A submitted batch is a real, billed operation against the dev stack;

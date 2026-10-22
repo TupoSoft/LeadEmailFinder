@@ -175,7 +175,6 @@ corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci src/features/veri
 corepack pnpm ui:audit
 corepack pnpm --filter @tuposoft/lead-email-finder-web build
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt --project=desktop-chromium --project=narrow-chromium
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/07-align-browser-status-fixtures.md
 ```
 
 The build runs once before the existing prebuilt browser command. That command includes the batch suite and
@@ -186,7 +185,6 @@ Report the executed projects, case counts, and any remaining environment failure
 passing result and do not relax the acceptance criteria. These mocked tests need no API, database, or SMTP stack.
 
 Bruno: not applicable — this implementation changes browser test fixtures only and preserves HTTP API behavior.
-Report the exact Harper command and outcome when maintaining this Markdown plan.
 
 ## Idempotence and Recovery
 

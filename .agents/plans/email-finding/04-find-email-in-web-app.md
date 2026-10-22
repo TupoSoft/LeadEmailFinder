@@ -321,15 +321,13 @@ run:
 corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
 node --test scripts/testing/email-finder-browser-artifacts.spec.mjs
 corepack pnpm test:email-finder-web
-corepack pnpm docs:lint -- UX-CONTRACT.md apps/web/tests/README.md .agents/plans/email-finding/04-find-email-in-web-app.md
 ```
 
 The live suite submits one synthetic name/domain, refreshes its confirmed URL, reads a non-unknown expected SMTP
 result, and compares charged/reserved values with the server ledger-backed summary. It then submits the same
 candidate request with a new key and zero maximum to verify cache reuse without a charge. It also verifies a
 credit-limited incomplete search, safe insufficient-credit recovery, and session loss. Queue completion alone is
-insufficient runtime evidence. Add any other changed Markdown files, including `DESIGN.md` if edited, to the Harper
-command. Record each actual result; static or mocked browser checks cannot stand in for live SMTP and accounting
+insufficient runtime evidence. Record each actual result; static or mocked browser checks cannot stand in for live SMTP and accounting
 evidence. If the Browser plugin is available, use it for rendered inspection; otherwise record the reason for using
 the repository Playwright tooling.
 

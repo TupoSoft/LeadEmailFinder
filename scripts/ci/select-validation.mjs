@@ -34,7 +34,7 @@ function consumersForPath(path) {
     if (webInputs.has(path)) return ['web', 'images', 'browser']
     if (path.startsWith('apps/web/') || path.startsWith('scripts/frontend/')) return ['web', 'images', 'browser']
     // Documentation has no runtime consumers, including module README and plan files.
-    if (/\.md$/i.test(path) || path === '.harper-dictionary.txt' || path.startsWith('.agents/')) return []
+    if (/\.md$/i.test(path) || path.startsWith('.agents/')) return []
     if (path.startsWith('packages/api-client/') || path.startsWith('scripts/openapi/')) return consumers
     // HTTP schemas consume domain models and constants as well as DTO annotations.
     if (path.startsWith('src/lead-email-finder-api/')

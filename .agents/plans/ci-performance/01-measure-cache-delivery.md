@@ -135,7 +135,6 @@ corepack pnpm exec eslint scripts/ci/benchmark-cache.mjs scripts/ci/benchmark-ca
 corepack pnpm exec jest select-validation validate-workflow execplan-repository-fixture --runInBand --cacheDirectory=/tmp/lef-ci-performance-jest
 corepack pnpm test:ci-paths
 actionlint .github/workflows/benchmark-ci-cache.yml .github/workflows/validate.yml
-corepack pnpm docs:lint -- docs/development/ci-cache-benchmark.md .agents/plans/ci-performance
 git diff --check
 ```
 

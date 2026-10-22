@@ -90,7 +90,7 @@ Update `src/libs/better-auth/README.md`, `docker/README.md`, and `docs/auth/READ
 - An authentication test message reaches the owned base Mailpit service without requiring `compose.smtp-dev.yaml`; no authentication token or SMTP credential appears in captured logs.
 - Repeated `auth:seed -- --native-only` keeps native user and external-identity IDs stable, preserves enrollment, grants no new credits or memberships, and refuses a foreign checkout or unsafe metadata path.
 - Existing Keycloak BFF and bearer smoke tests still execute their required cases successfully. Existing browser routes and OpenAPI output are unchanged.
-- The focused tests, architecture gate, type checking, build, documentation lint, and runner contract checks pass, or a precise environment blocker is recorded without claiming success.
+- The focused tests, architecture gate, type checking, build, and runner contract checks pass, or a precise environment blocker is recorded without claiming success.
 
 ## Validation
 
@@ -108,7 +108,6 @@ corepack pnpm auth:seed -- --native-only
 corepack pnpm test:bff-live
 corepack pnpm bruno:bff-sessions
 corepack pnpm test:ci-paths
-corepack pnpm docs:lint -- .agents/plans/better-auth/01-runtime-and-development-fixtures.md src/libs/better-auth/README.md docker/README.md docs/auth/README.md
 git diff --check
 ```
 

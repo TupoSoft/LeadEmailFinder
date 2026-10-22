@@ -230,8 +230,7 @@ scripts/plans/execplan-repository-fixture.spec.ts scripts/plans/sync.spec.ts --r
 the checked-in plan graph. Inspect Project 9 status option names and the existing `execplan`-labeled issue markers
 with read-only GitHub queries. Record counts and identifiers, not tokens or private body content.
 
-After editing, run `corepack pnpm docs:lint -- .agents/plans/plan-sync/README.md
-.agents/plans/plan-sync/05-adopt-reusable-execplan-sync-action.md`, `corepack pnpm lint`, `corepack pnpm typecheck`,
+After editing, run `corepack pnpm lint`, `corepack pnpm typecheck`,
 `corepack pnpm test -- scripts/workflows/execplan-sync-workflows.spec.ts --runInBand`, `corepack pnpm test:ci`, and
 `git diff --check`. Inspect the workflow YAML and every `uses:` value; use the pull-request checks as the authoritative
 execution proof for the SHA-pinned validation workflow. Run the repository's broader required validation if removing

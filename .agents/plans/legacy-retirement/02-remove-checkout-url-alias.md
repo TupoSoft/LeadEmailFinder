@@ -132,7 +132,7 @@ checkout setting.
 - Duplicate inline and optional secret-file sources still fail with their existing messages and no secret disclosure.
 - Existing payment composition and purchase-service tests pass. HTTP routes, authorization, credit accounting,
   provider behavior, concurrency, and idempotency retain their existing contracts.
-- The architecture gate, type checking, build, and documentation lint pass. Runtime results are recorded separately.
+- The architecture gate, type checking, and build pass. Runtime results are recorded separately.
 
 ## Validation
 
@@ -143,7 +143,6 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test src/lead-email-finder-api/src/
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm build
-corepack pnpm docs:lint -- .agents/plans/legacy-retirement/02-remove-checkout-url-alias.md src/libs/modules/payments/README.md
 git diff --check
 rg -n 'PAYMENTS_CHECKOUT_RETURN_URL|normalizePaymentCheckoutUrlConfiguration' src scripts docker bruno README.md
 ```
@@ -180,7 +179,7 @@ Implementation evidence recorded on 2026-09-11:
   before implementation, demonstrating that the tests detect the removed compatibility behavior.
 - `corepack pnpm architecture:check` passed with 9 modules and 0 violations; `corepack pnpm typecheck` passed.
 - `corepack pnpm build` passed: the type checker found 0 issues and SWC compiled 670 files.
-- The Harper command above passed both changed Markdown files. Its initial findings were corrected, including
+- The then-current Harper command passed both changed Markdown files. Its initial findings were corrected, including
   splitting a long existing sentence about adjustment debits without changing its meaning.
 - Focused ESLint and Prettier checks passed for the three changed TypeScript files. `git diff --check` passed.
 - The reference search above found only the explicit rejection, its tests, and the removal explanation. No source,

@@ -142,7 +142,6 @@ corepack pnpm test -- --testPathPatterns='service-client-management/src/applicat
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm openapi:check
-corepack pnpm docs:lint -- .agents/plans/dependency-inversion/06-decouple-service-client-controllers.md src/libs/modules/service-client-management/README.md
 ```
 
 Update `bruno/service-client-management/01-create-service-client-unauthorized-rejected.yml` to require exactly

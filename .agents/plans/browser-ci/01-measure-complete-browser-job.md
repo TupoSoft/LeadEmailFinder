@@ -131,7 +131,6 @@ corepack pnpm test -- select-validation validate-workflow execplan-repository-fi
 corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 actionlint .github/workflows/validate.yml
-corepack pnpm docs:lint -- .agents/plans/browser-ci/01-measure-complete-browser-job.md
 git diff --check
 ```
 

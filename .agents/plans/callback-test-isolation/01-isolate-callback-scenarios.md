@@ -107,7 +107,6 @@ corepack pnpm --filter @tuposoft/lead-email-finder-web exec eslint tests/e2e/aut
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- execplan-repository-fixture --runInBand
 corepack pnpm design:lint
 corepack pnpm ui:audit
-corepack pnpm docs:lint -- .agents/plans/callback-test-isolation
 git diff --check
 ```
 

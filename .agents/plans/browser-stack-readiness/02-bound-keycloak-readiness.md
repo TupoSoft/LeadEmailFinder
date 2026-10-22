@@ -136,7 +136,6 @@ sh -n docker/scripts/dev-reset.sh
 node --test scripts/testing/wait-container-healthy.test.mjs scripts/testing/dev-reset.test.mjs
 corepack pnpm exec eslint scripts/testing/wait-container-healthy.mjs scripts/testing/wait-container-healthy.test.mjs scripts/testing/dev-reset.test.mjs
 corepack pnpm test -- validate-workflow execplan-repository-fixture --runInBand
-corepack pnpm docs:lint -- docker/README.md .agents/plans/browser-stack-readiness
 git diff --check
 ```
 

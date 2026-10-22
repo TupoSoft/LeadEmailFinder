@@ -87,6 +87,5 @@ changed during planning. Remote deployment existence and health remain unverifie
 
 ## Validation Boundary
 
-The planning change requires Harper on all changed Markdown, the repository ExecPlan graph test, and
-`git diff --check`. Each implementation plan specifies its own focused tests, contract checks, and applicable Bruno
-coverage. A ready plan is decision-complete; it does not claim implementation or runtime validation has succeeded.
+The planning change requires the repository ExecPlan graph test and `git diff --check`. Each implementation plan
+specifies its own focused tests, contract checks, and applicable Bruno coverage. A ready plan is decision-complete; it does not claim implementation or runtime validation has succeeded.

@@ -150,7 +150,7 @@ capability, and a production `none` record. It prints store IDs and stable reaso
 rewrites the duration of excluded controller/security/legal categories.
 
 Add `privacy:managed-data-check` and run it in `.github/workflows/validate.yml`. YAML is checked by the schema command
-and Prettier, not Harper. Keep plan-10 register cross-checking deterministic and source-controlled.
+and Prettier. Keep plan-10 register cross-checking deterministic and source-controlled.
 
 For each in-scope policy boundary, apply the provider-native policy through its approved workflow. Independently
 inspect policy metadata, send only synthetic verification data, and create only provider-approved synthetic backup
@@ -246,7 +246,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm typecheck
-    corepack pnpm docs:lint -- docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/11-enforce-managed-log-and-backup-controls.md
     corepack pnpm exec prettier --check config/privacy/managed-data-stores.yaml docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/11-enforce-managed-log-and-backup-controls.md
     git diff --check
 

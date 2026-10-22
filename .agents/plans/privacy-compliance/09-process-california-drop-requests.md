@@ -413,7 +413,6 @@ Return to the repository root and finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/privacy-requests/README.md .agents/plans/privacy-compliance/09-process-california-drop-requests.md
     git diff --check
 
 Bruno: do not encode Agency credentials or production DROP calls in Bruno. Rerun `bruno/privacy-requests` because

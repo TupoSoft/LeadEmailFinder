@@ -235,7 +235,6 @@ git diff --check
 corepack pnpm bruno:organization-onboarding
 corepack pnpm --filter ./apps/web build
 corepack pnpm --filter ./apps/web exec playwright test --config playwright.auth.config.ts tests/e2e/public-signup.spec.ts
-corepack pnpm docs:lint -- .agents/plans/better-auth/04-public-signup-and-trial-credits.md src/libs/modules/identity/README.md src/libs/modules/organization-onboarding/README.md src/libs/modules/bff-session/README.md UX-CONTRACT.md
 ```
 
 Add `self-service-organization-registration.integration.spec.ts` to the existing credits PostgreSQL launcher's

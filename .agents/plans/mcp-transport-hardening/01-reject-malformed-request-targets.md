@@ -166,7 +166,7 @@ Retain the existing authentication fixture requirements if that bridge has lande
   waits and leaves no child process, socket, or temporary directory after success or failure.
 - The Bruno collection passes against a standalone scaffold, or the existing authenticated fixture if that bridge has landed. Its README
   accurately distinguishes its routing checks from the raw socket regression.
-- Focused tests, type checks, build, lint, plan validation, and Harper pass. The final diff preserves the
+- Focused tests, type checks, build, lint, and plan validation pass. The final diff preserves the
   separation between HTTP handling and tool registration.
 
 ## Validation
@@ -181,7 +181,6 @@ corepack pnpm typecheck
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
 corepack pnpm exec eslint apps/mcp-server/src/main.ts apps/mcp-server/src/main.spec.ts
 corepack pnpm exec jest --runInBand scripts/plans/execplan-repository-fixture.spec.ts
-corepack pnpm docs:lint -- .agents/plans/mcp-transport-hardening/01-reject-malformed-request-targets.md bruno/mcp-request-routing/README.md
 ```
 
 The Jest command covers the isolated process regression, real SDK calls, route behavior, and the focused error

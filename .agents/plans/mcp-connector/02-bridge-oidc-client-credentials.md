@@ -222,10 +222,6 @@ the dev stack's Keycloak, and exercise both the missing-header and valid-credent
 `@modelcontextprotocol/inspector --cli --transport streamable-http --header "Authorization: Basic <base64>"
 --method tools/call --tool-name ping`.
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/02-bridge-oidc-client-credentials.md
-```
-
 ## Idempotence and Recovery
 
 The token cache is purely in-memory and process-scoped; restarting the connector clears it with no cleanup

@@ -213,7 +213,7 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml exec -T sm
 - The launcher resets the fixture before execution and after success or failure, fails on an unsuccessful
   or stalled reset within the specified timeout, and performs no
   control mutation if ownership validation fails. Existing full-suite data prerequisites remain documented.
-- Focused tests, architecture validation, plan validation, and documentation lint pass. Missing runtime
+- Focused tests, architecture validation, and plan validation pass. Missing runtime
   prerequisites are reported as unverified runtime coverage, never as a passing Bruno run.
 
 ## Validation
@@ -226,7 +226,6 @@ node --test scripts/bruno/run-collection.test.mjs scripts/bruno/failure-diagnost
 corepack pnpm exec eslint docker/smtp-dev/evidence-server.mjs docker/smtp-dev/evidence-server.test.mjs scripts/bruno/run-collection.mjs scripts/bruno/run-collection.test.mjs
 corepack pnpm architecture:check
 corepack pnpm exec jest --runInBand scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts
-corepack pnpm docs:lint -- README.md docker/README.md bruno/smtp-dev/README.md .agents/plans/smtp-recipient-allowlist
 git diff --check
 ```
 

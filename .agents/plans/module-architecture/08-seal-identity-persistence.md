@@ -244,7 +244,7 @@ email-verification core extraction in `module-architecture/10`.
   verification HTTP contracts remain unchanged.
 - `corepack pnpm architecture:baseline` removes all identity compatibility violations without adding or renaming a
   violation, and `corepack pnpm architecture:check` passes afterward.
-- TypeScript, lint, focused tests, the full Jest suite, the production build, documentation lint, and diff checks pass.
+- TypeScript, lint, focused tests, the full Jest suite, the production build, and diff checks pass.
 
 ## Validation
 
@@ -282,7 +282,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/identity/README.md .agents/plans/module-architecture/08-seal-identity-persistence.md
     git diff --check
 
 Bruno is required because module-export and adapter wiring changes can break externally visible workflows even

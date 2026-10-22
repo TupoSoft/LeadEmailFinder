@@ -213,7 +213,7 @@ current interfaces. No new dependency or replacement deployment entry point is i
   deleted descriptor as current evidence and makes no remote shutdown or data-deletion claim.
 - The maintained base Compose configuration validates, both current images build, and the existing gateway tests pass
   without changes to the gateway or proxy-fleet behavior.
-- Frozen dependency installation, type checking, application build, JSON validation, Harper, and diff checks pass.
+- Frozen dependency installation, type checking, application build, JSON validation, and diff checks pass.
 - The implementation outcome identifies any unresolved preexisting deployment run and records the required read-only
   post-merge follow-up. Repository deletion is not reported as evidence of remote stack shutdown.
 
@@ -259,11 +259,8 @@ it; avoid unrelated fixture expansion.
 Finish with:
 
 ```bash
-corepack pnpm docs:lint -- README.md docs/privacy/email-verification-processing-contract.md .agents/plans/legacy-retirement/03-retire-obsolete-deployment-tooling.md
 git diff --check
 ```
-
-Include `docker/README.md` in the Harper command if it was edited.
 
 Bruno: not applicable — this plan removes obsolete deployment/editor tooling and an unused command-line dependency
 without changing an HTTP API or a stateful API workflow.
@@ -289,7 +286,7 @@ the prior two inspected runs were canceled; and the reusable workflow defaulted 
 those states.
 
 Record exact deleted paths, direct/transitive dependency changes, the JSON validation result, image/gateway checks,
-Harper results, and GitHub observation times. After merge, attach read-only default-branch and prior-run evidence to
+and GitHub observation times. After merge, attach read-only default-branch and prior-run evidence to
 the operator follow-up. Keep remote shutdown and credential/log retirement explicitly unresolved unless a separately
 authorized operation supplies evidence. Never record secret values, private key material, or bearer tokens.
 

@@ -98,7 +98,6 @@ corepack pnpm test:credits-postgres
 corepack pnpm bruno:credit-purchases
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/payments/README.md .agents/plans/checkout-recovery/01-preserve-paid-purchases.md
 git diff --check
 ```
 

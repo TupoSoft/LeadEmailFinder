@@ -247,7 +247,7 @@ use `node:tls` and the existing socket library.
 - The client never sends `DATA`, a message body, or authentication credentials.
 - The secure and plaintext Bruno requests, proxy drain/restore, and deprecated-route credit scenarios all pass in
   the local Docker network.
-- Architecture, focused trust/socket/SMTP tests, typecheck, lint, full tests, build, documentation lint, and diff
+- Architecture, focused trust/socket/SMTP tests, typecheck, lint, full tests, build, and diff
   validation pass without a migration.
 
 ## Validation
@@ -281,7 +281,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/privacy-compliance/05-require-starttls-for-smtp-probes.md
     git diff --check
 
 Bruno: add the deterministic plaintext rejection request, update the secure success request as needed, and require

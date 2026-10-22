@@ -305,7 +305,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/batch-verification/README.md .agents/plans/privacy-compliance/07-enforce-verification-data-retention.md
     git diff --check
 
 Bruno: update `bruno/batch-verification` with the shortest deterministic expiry check supported by the runtime fixture

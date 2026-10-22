@@ -183,8 +183,7 @@ bruno:service-client-rejections`, `corepack pnpm bruno:organization-onboarding`,
 for initialize/list as well as a tool call, including a verification-only key. Keep human session success as real
 browser evidence. Run the SMTP/Paddle affected fixture checks when those opt-in dependencies are available.
 
-Run `corepack pnpm design:lint`, `corepack pnpm ui:audit`, and `git diff --check`. Run `corepack pnpm docs:lint --
-<changed-markdown-files>` with the actual changed Markdown paths and record the exact expanded command/result.
+Run `corepack pnpm design:lint`, `corepack pnpm ui:audit`, and `git diff --check`.
 Report missing external-runtime evidence precisely. Bruno is applicable and must be updated and executed through
 the existing local collection launcher when its disposable dependencies are available.
 

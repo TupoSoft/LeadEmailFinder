@@ -186,9 +186,6 @@ importers:
       globals:
         specifier: ^16.3.0
         version: 16.3.0
-      harper.js:
-        specifier: 2.7.0
-        version: 2.7.0
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -4745,9 +4742,6 @@ packages:
     resolution: {integrity: sha512-4E71E0rpOaQuJR2A3xDZ+GM1HyWYv1clR58tC8emQNeQe3RH7MAzSbat+V0wG78LQBo6m6bzSG/L4pBuCsgnUQ==}
     engines: {node: '>=0.4.7'}
     hasBin: true
-
-  harper.js@2.7.0:
-    resolution: {integrity: sha512-INDnUMNJvQzv5Zv9lhgGuIRYNIpDvOXcieCbo5ED/dwn8V/02zVW5kKvU6jSJJHq1MpY0VDyg+5RjE7z5D+FeA==}
 
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
@@ -13387,10 +13381,6 @@ snapshots:
       wordwrap: 1.0.0
     optionalDependencies:
       uglify-js: 3.19.3
-
-  harper.js@2.7.0:
-    dependencies:
-      fflate: 0.8.2
 
   has-bigints@1.1.0: {}
 

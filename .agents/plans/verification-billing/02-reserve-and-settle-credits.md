@@ -370,7 +370,6 @@ corepack pnpm openapi:generate
 corepack pnpm openapi:check
 corepack pnpm bruno:platform-credits
 corepack pnpm bruno:credit-purchases
-corepack pnpm docs:lint -- .agents/plans/verification-billing/02-reserve-and-settle-credits.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md src/libs/modules/payments/README.md bruno/platform-credits/README.md bruno/credit-purchases/README.md
 ```
 
 Add reservation concurrency and rollback scenarios to the existing `credits.service.integration.spec.ts`, which

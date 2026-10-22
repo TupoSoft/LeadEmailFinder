@@ -386,7 +386,6 @@ corepack pnpm run openapi:export
 corepack pnpm run openapi:generate
 corepack pnpm run openapi:check
 corepack pnpm test:verification-billing-postgres                # 10/10, real Postgres
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/batch-verification/README.md .agents/plans/verification-billing/05-charge-unique-batch-results.md
 ```
 
 New/updated focused spec files exercised throughout (not an exhaustive list — see the Validation section of the module `README.md` for the complete mapping): `application/delivery/batch/batch-admission.service.spec.ts`,

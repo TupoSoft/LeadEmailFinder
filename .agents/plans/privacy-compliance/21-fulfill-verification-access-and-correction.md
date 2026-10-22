@@ -298,7 +298,6 @@ root before final checks.
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- docs/privacy/email-verification-processing-contract.md docs/privacy/controller-data-contract.md src/libs/modules/email-verification/README.md bruno/privacy-requests/README.md .agents/plans/privacy-compliance/21-fulfill-verification-access-and-correction.md
     corepack pnpm exec prettier --check config/privacy/verification-access-policy.yaml docs/privacy/email-verification-processing-contract.md docs/privacy/controller-data-contract.md src/libs/modules/email-verification/README.md bruno/privacy-requests/README.md .agents/plans/privacy-compliance/21-fulfill-verification-access-and-correction.md
     git diff --check
 

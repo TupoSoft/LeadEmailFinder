@@ -103,7 +103,7 @@ There are no new interfaces. Use the existing rule tokens, CSS Modules, `Product
 - A single pack and an empty catalog create no trailing row divider.
 - The Purchase history panel retains its section rule at desktop and phone widths.
 - Purchase controls, accessible empty states, and keyboard interaction keep working, with no unintended overflow.
-- Build, focused browser coverage, ESLint, design lint, UI audit, documentation lint, and diff checks pass.
+- Build, focused browser coverage, ESLint, design lint, UI audit, and diff checks pass.
 
 ## Validation
 
@@ -114,7 +114,6 @@ Run from the repository root:
 - `corepack pnpm --filter @tuposoft/lead-email-finder-web exec eslint tests/e2e/billing-ui.spec.ts`
 - `corepack pnpm design:lint`
 - `corepack pnpm ui:audit`
-- `corepack pnpm docs:lint -- apps/web/AGENTS.md DESIGN.md .agents/plans/frontend-spacing/README.md .agents/plans/frontend-spacing/02-remove-duplicate-billing-divider.md`
 - `git diff --check`
 
 Review rendered evidence at 1440 and 320 pixels. The browser checks use synthetic responses; no live purchase is

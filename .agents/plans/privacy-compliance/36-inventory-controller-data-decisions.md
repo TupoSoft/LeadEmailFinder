@@ -130,7 +130,6 @@ There is no new runtime interface, provider integration, package, or persistence
 From the repository root, run these commands after creating the packet:
 
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- docs/privacy/controller-data-decision-inputs.md .agents/plans/privacy-compliance/36-inventory-controller-data-decisions.md
     corepack pnpm exec prettier --check docs/privacy/controller-data-decision-inputs.md .agents/plans/privacy-compliance/36-inventory-controller-data-decisions.md
     git diff --check
     git diff --name-only

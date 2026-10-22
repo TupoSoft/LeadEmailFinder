@@ -165,7 +165,6 @@ corepack pnpm bruno:batch-verification
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/04-attach-batch-requests-to-settled-executions.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 Substitute a disposable Redis port owned by the test checkout; do not use an unrelated running stack. Extend

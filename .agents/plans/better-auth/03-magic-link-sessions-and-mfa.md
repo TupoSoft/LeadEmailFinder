@@ -152,7 +152,6 @@ corepack pnpm test:web-live
 corepack pnpm design:lint
 corepack pnpm ui:audit
 corepack pnpm test:ci-paths
-corepack pnpm docs:lint -- .agents/plans/better-auth/03-magic-link-sessions-and-mfa.md src/libs/modules/auth/README.md src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md src/libs/modules/organization-onboarding/README.md UX-CONTRACT.md docs/auth/README.md
 git diff --check
 ```
 

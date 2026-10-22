@@ -127,7 +127,6 @@ corepack pnpm test:verification-billing-postgres
 corepack pnpm exec eslint src/libs/modules/email-verification/src/application/operations/verification-execution-runner.{ts,spec.ts} src/libs/modules/email-verification/src/infrastructure/persistence/verification-billing.integration.spec.ts
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/06-release-permits-on-lease-errors.md src/libs/modules/email-verification/README.md
 ```
 
 Use the dedicated disposable Postgres fixture already owned by `test:verification-billing-postgres`; do not reset

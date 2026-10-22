@@ -245,7 +245,7 @@ delivery work; it neither reimplements that refactor nor changes the prerequisit
 - The architecture baseline is unchanged unless newly verified retirement-owned stale debt requires a documented,
   shrink-only removal. Current documentation and request examples describe
   supported behavior; no schema, job protocol, provider approval, historical row, or completed-plan history changes.
-- Focused tests, architecture checks, type checking, lint, full tests, build, OpenAPI checks, Harper, and diff checks
+- Focused tests, architecture checks, type checking, lint, full tests, build, OpenAPI checks, and diff checks
   pass. Any unavailable runtime evidence is reported separately from these checks.
 
 ## Validation
@@ -286,7 +286,6 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm typecheck
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm lint
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm build
-corepack pnpm docs:lint -- .agents/plans/legacy-retirement/01-retire-deprecated-verification.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md
 git diff --check
 ```
 
@@ -302,9 +301,8 @@ corepack pnpm bruno:smtp-dev
 
 Record all 30 executed requests and the actual passing test count. This proves local HTTP, credit, and SMTP fixture
 wiring, not real-world provider acceptance. If dependencies are unavailable, record the cause and leave Bruno
-execution explicitly unverified. The implementation's final response must state `Bruno: added/updated and <result>`
-and give the exact Harper command and its result. Planning-time prose validation does not count as these future
-implementation checks.
+execution explicitly unverified. The implementation's final response must state `Bruno: added/updated and <result>`.
+Planning-time validation does not count as these future implementation checks.
 
 ## Idempotence and Recovery
 
@@ -319,7 +317,7 @@ rebuild only containers whose ownership matches this checkout.
 
 Record the prerequisite's merged revision, eight removed files, unchanged baseline or justified exact removals,
 final dependency inventory, counts from HTTP and runtime OpenAPI tests,
-unchanged browser artifacts, 30-request Bruno report, and exact Harper result. The observable outcome fits one PR:
+unchanged browser artifacts, and 30-request Bruno report. The observable outcome fits one PR:
 retired GET behavior and the removal of its exclusive support. No additional product choice is required, and all
 automated contract checks can run without provider activation. The required structural work belongs to the merged
 prerequisite and is retained. Inspection of merged PR #553 supplied planning evidence only; its reported test results are

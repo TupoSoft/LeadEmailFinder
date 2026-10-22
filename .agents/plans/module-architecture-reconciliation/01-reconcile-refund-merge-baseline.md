@@ -145,7 +145,7 @@ is what CI runs. Keep normal growth rejection, shrink behavior, exact current-tr
 idempotency unchanged. Run the guarded updater against `f80d596a525f279822c4a86031f139ff9264ddbd` to update
 `scripts/architecture/module-architecture-baseline.json` from 221 to 229 sorted entries.
 
-Finally, run focused architecture tests, the updater twice, the default and base-aware gates, formatting, Harper,
+Finally, run focused architecture tests, the updater twice, the default and base-aware gates, formatting,
 lint, type checking, the full Jest suite, and the production build. Review the diff for accidental runtime or SOLID
 scope expansion, update this living plan, synchronize its issue, and deliver one follow-up pull request.
 
@@ -169,7 +169,7 @@ remains the only configuration input. No package or lockfile change is planned.
 - Unavailable base context retains its documented limited behavior, while malformed history and Git inspection
   failures remain fail-closed.
 - No runtime application, API contract, database schema, package dependency, or business-module documentation changes.
-- Focused tests, lint, type checking, the full Jest suite, production build, formatting, Harper, and whitespace checks
+- Focused tests, lint, type checking, the full Jest suite, production build, formatting, and whitespace checks
   pass.
 
 ## Validation
@@ -197,9 +197,8 @@ Run repository validation:
     env COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     env COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm build
 
-Run prose, formatting, and whitespace checks:
+Run formatting and whitespace checks:
 
-    env COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm docs:lint -- .agents/plans/module-architecture-reconciliation/README.md .agents/plans/module-architecture-reconciliation/01-reconcile-refund-merge-baseline.md
     env PLANS_DRY_RUN=true COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm plans:sync
     env COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm exec prettier --check scripts/architecture/check-module-architecture.ts scripts/architecture/module-architecture.spec.ts scripts/architecture/module-architecture-baseline.json .agents/plans/module-architecture-reconciliation/README.md .agents/plans/module-architecture-reconciliation/01-reconcile-refund-merge-baseline.md
     git diff --name-only f80d596a525f279822c4a86031f139ff9264ddbd

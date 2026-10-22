@@ -87,7 +87,6 @@ node --test scripts/testing/dev-stack-diagnostics.test.mjs scripts/testing/dev-r
 corepack pnpm exec eslint scripts/testing/dev-stack-diagnostics.mjs scripts/testing/dev-stack-diagnostics.test.mjs scripts/ci/validate-workflow.spec.ts
 TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm exec jest validate-workflow execplan-repository-fixture --runInBand
 actionlint .github/workflows/validate.yml
-corepack pnpm docs:lint -- README.md .agents/plans/browser-stack-readiness/01-capture-startup-diagnostics.md
 git diff --check
 ```
 

@@ -148,7 +148,7 @@ This work does not depend on deployment or future verification tools.
 - An accepted-origin request without credentials returns HTTP 401; denied origins still receive HTTP 403 before authentication.
 - The examples obtain the customer secret from its real source and contain no literal secret or privileged MCP identity.
 - Stopping the example leaves no owned connector child listening on the chosen port.
-- Harper passes on every edited Markdown file. Runtime and live Keycloak evidence are reported separately.
+- Runtime and live Keycloak evidence are reported separately.
 
 ## Validation
 
@@ -181,10 +181,6 @@ If the owned stack is unavailable, check examples statically and report live val
 Do not mark the runtime acceptance criteria complete in that case.
 After stopping the documented launcher, verify that its child exited and the listener closed.
 From the repository root, run:
-
-```sh
-corepack pnpm docs:lint -- apps/mcp-server/README.md bruno/mcp-request-routing/README.md bruno/mcp-request-origins/README.md .agents/plans/mcp-connector-hardening/06-document-authenticated-local-startup.md
-```
 
 ## Idempotence and Recovery
 
