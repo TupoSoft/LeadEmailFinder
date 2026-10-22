@@ -48,7 +48,7 @@ The secret restrictions in `apps/web/tests/README.md`, `docs/platform-credits.md
 
 ## Scope and Non-Goals
 
-Change only startup diagnostics, workflow integration, focused tests, and explanatory CI documentation. Add no endpoint, response, business-module, provider, browser assertion, or schema change. `browser-stack-readiness/02` owns readiness budgets. Preserve the current `tuposoft-ci` runner, job isolation, existing health requirements, confirmation, ownership checks, and cleanup commands. Do not capture unrelated containers, whole Docker inspection objects, environment variables, secret files, arbitrary command output, or authentication artifacts.
+Change only startup diagnostics, workflow integration, focused tests, and explanatory CI documentation. Add no endpoint, response, business-module, provider, browser assertion, or schema change. The replacement plan, `better-auth/05`, owns readiness budgets after the authentication cutover. Preserve the current `tuposoft-ci` runner, job isolation, existing health requirements, confirmation, ownership checks, and cleanup commands. Do not capture unrelated containers, whole Docker inspection objects, environment variables, secret files, arbitrary command output, or authentication artifacts.
 
 ## Plan of Work
 
@@ -93,7 +93,7 @@ git diff --check
 
 The Node test command exercises the real CLI against fake Docker processes, including poisoned output and an enforced subprocess timeout; it creates no live stack. When Docker CLI is installed, a temporary mock daemon also exercises the actual inspection template, including secret exclusion, five-probe retention, and services without health checks. That template check skips when Docker CLI is absent. The workflow suite proves structural failure and cleanup contracts, not GitHub's runtime expression evaluation.
 
-When an owned disposable stack is already available, run `node scripts/testing/dev-stack-diagnostics.mjs` as a read-only runtime smoke check and record whether service metadata was collected. Do not break a shared stack to manufacture failure evidence. A later naturally failing CI reset must show the summary before cleanup; otherwise record that this failure path in Actions remains unverified. The companion readiness plan owns rerunning browser validation. Bruno: not applicable because HTTP behavior does not change; existing collections remain unchanged.
+When an owned disposable stack is already available, run `node scripts/testing/dev-stack-diagnostics.mjs` as a read-only runtime smoke check and record whether service metadata was collected. Do not break a shared stack to manufacture failure evidence. A later naturally failing CI reset must show the summary before cleanup; otherwise record that this failure path in Actions remains unverified. The replacement plan, `better-auth/05`, owns browser validation after the authentication cutover. Bruno: not applicable because HTTP behavior does not change; existing collections remain unchanged.
 
 ## Idempotence and Recovery
 
