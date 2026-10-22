@@ -7,11 +7,12 @@ Each ExecPlan follows `.agents/PLANS.md` and delivers one pull request.
 | Order | Plan | Dependency |
 | --- | --- | --- |
 | 1 | [Capture safe startup diagnostics](01-capture-startup-diagnostics.md) | None |
-| 2 | [Bound Keycloak readiness waits](02-bound-keycloak-readiness.md) | None |
 
-Implement diagnostics first when practical so subsequent failures retain useful evidence. Both changes
-are independently reviewable; this order is a recommendation rather than a plan dependency. Regression
-tests and CI verification belong to each implementation rather than separate implementation PRs.
+The diagnostics plan is complete. On 2026-10-22, the user chose to retire the unimplemented
+`browser-stack-readiness/02` plan, tracked by [issue #626](https://github.com/TupoSoft/LeadEmailFinder/issues/626),
+as superseded by the [Better Auth cleanup plan](../better-auth/05-remove-keycloak-and-validate.md).
+The original proposal remains in Git history. Its Keycloak-specific timeout setting will not be implemented;
+`better-auth/05` preserves bounded readiness checks for the remaining services.
 
 ## Shared Constraints
 
@@ -26,7 +27,7 @@ tests and CI verification belong to each implementation rather than separate imp
 - Run reset and live checks only on a disposable Docker daemon isolated to the implementation checkout.
   Fixed `LEF` names and ports must never target the normal developer stack or another job's resources.
 - Record the implementation head, tested merge commit, runner, job links, and terminal results. An old-commit
-  rerun or local fixture pass does not establish CI recovery. After both changes are available, verify the
+  rerun or local fixture pass does not establish CI recovery. After diagnostics changes, verify the
   complete selected browser run and required aggregate. Report skipped live and Bruno checks separately.
 - The billing browser assertion that passed on retry remains a separate investigation. Existing
   `web-test-stability` plans address Vitest, and `browser-ci` owns browser scheduling and total runtime.
