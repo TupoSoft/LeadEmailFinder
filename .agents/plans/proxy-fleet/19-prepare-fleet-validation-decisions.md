@@ -9,6 +9,9 @@ fixture. One documentation pull request produces `deploy/proxy-fleet/validation-
 evidence, proposed lifecycle commands, trade-offs, and explicit questions. A developer can prepare this proposal
 without a running fleet or an installed VM provider. Choosing and proving the execution models remains in plan 16.
 
+MVP scope decision (2026-10-22): verification workers will connect directly to mail servers. This task is deferred
+to the post-MVP backlog and can resume after an explicit decision to adopt a proxy fleet.
+
 ## Progress
 
 - [ ] (2026-09-11) Trace the listener, registry, application, and SMTP fixture paths against the current repository.
@@ -27,6 +30,10 @@ None yet.
 
 ## Decision Log
 
+- Decision: Defer this task to the post-MVP backlog until an explicit decision to adopt a proxy fleet.
+  Rationale: MVP verification workers will connect directly to mail servers, so fleet validation preparation is
+  outside the MVP scope. Preserve the planned work and its dependencies for reconsideration after the MVP.
+  Date/Author: 2026-10-22, project owner.
 - Decision: Deliver one proposal document without selecting or validating the fleet execution models.
   Rationale: Gathering evidence and preparing commands can start now; plan 16 still requires an explicit execution
   choice before live work. A documented unresolved question does not prevent completion of this preparation.
@@ -153,4 +160,4 @@ Completion supplies a proposal for plan 16 to consume; it neither starts that pl
 
 ## Plan readiness
 
-Ready to implement
+Ready after a post-MVP decision to adopt a proxy fleet
