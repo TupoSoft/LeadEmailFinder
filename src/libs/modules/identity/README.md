@@ -8,7 +8,8 @@ who is acting and what they are allowed to do.
 ## Responsibility
 
 - Organizations, their memberships, and the roles/status of each membership.
-- External human identities (one row per Keycloak subject) and service credentials (one row per M2M client).
+- External human identities (one row per Keycloak subject, or per native Better Auth user under the fixed
+  `AUTH_IDENTITY_ISSUER` namespace `urn:lead-email-finder:auth`) and service credentials (one row per M2M client).
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
 - A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, `ActiveServiceCredentialReader`, and
@@ -80,6 +81,7 @@ application contracts and the entity classes used for test fixtures form two sup
 `ServiceCredentialDetailRecord`, `OrganizationRecord`, `OrganizationInvitationRecord`,
 `OrganizationMembershipDetailRecord`, `InvitationPreviewRecord`), and the domain enums/types (`AuthPrincipal`, `AuthCredentialKind`,
 `AuthRole`, `AuthPermission`, `AuditOutcome`, `InvitationStatus`, `MembershipStatus`, `ServiceCredentialStatus`).
+The framework-free `AUTH_IDENTITY_ISSUER` constant is the issuer that native identity adapters use.
 The ledger port also exports `CreditDebitOutcome`, `CreditGrantPersistenceResult`, `CreditBalanceSnapshot`, and
 `SetBalanceOutcome`. The grant result contains the `inserted` or `existing` disposition, the recorded grant
 amount, and the current authoritative balance. `CreditBalanceSnapshot` carries `balance` and `reserved`;
@@ -89,13 +91,13 @@ active hold. Identity does not interpret amount mismatches or platform reference
 The reservation port also exports `CreditReservationState`, `CreditReservationItem`, `CreditReservationRecord`,
 `CreditReservationAdmission`, `CreditReservationSettlement`, and the `kind`-discriminated
 `CreditReservationAdmissionOutcome`, `CreditReservationSettlementOutcome`, and `CreditReservationClosureOutcome`
-unions. `reserveMany` admits a complete group atomically: an existing reservation with a matching amount is
-observed, not recreated; a different amount conflicts the whole group; and if the aggregate amount needed for
-missing operation IDs exceeds available credit, no reservation and no balance change occur. `capture` and
+unions. `reserveMany` admits a complete group atomically. An existing reservation with a matching amount is
+observed rather than recreated. A different amount conflicts the whole group. If the aggregate amount needed for
+missing operation IDs exceeds available credit, neither a reservation nor a balance change occurs. `capture` and
 `release` each report `settled` (with an `applied`/`replayed` disposition), `missing`, or `conflict` (the
 opposite terminal transition, or — for capture — an unexpected preexisting debit under the reservation's private
-reference). `closeAdmissionMany` inspects every ID in the batch before mutating any row: an existing captured
-receipt or amount mismatch conflicts the whole closure; otherwise a reserved receipt is released, a missing ID
+reference). `closeAdmissionMany` inspects every ID in the batch before mutating any row. An existing captured
+receipt or amount mismatch conflicts the whole closure. Otherwise, a reserved receipt is released, a missing ID
 gets a durable released receipt with no preceding hold (blocking a later delayed reserve), and a replay of an
 already-released ID returns the same record. Closure and release never touch `balance` and never insert a grant
 or debit.

@@ -47,55 +47,64 @@ describe('EnvironmentVariablesDto', (): void => {
         },
     )
 
-    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
-        'accepts %s from a validated secret-file path',
-        property => {
-            const environment = plainToInstance(EnvironmentVariablesDto, {
-                [`${property}_FILE`]: `/run/secrets/${property.toLowerCase()}`,
+    it.each([
+        'POSTGRES_TLS_CA',
+        'REDIS_TLS_CA',
+        'S3_KMS_KEY_ID',
+        'BETTER_AUTH_SECRET',
+        'AUTH_MAIL_SMTP_PASSWORD',
+    ] as const)('accepts %s from a validated secret-file path', property => {
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            [`${property}_FILE`]: `/run/secrets/${property.toLowerCase()}`,
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
+    })
+
+    it.each([
+        'POSTGRES_TLS_CA',
+        'REDIS_TLS_CA',
+        'S3_KMS_KEY_ID',
+        'BETTER_AUTH_SECRET',
+        'AUTH_MAIL_SMTP_PASSWORD',
+    ] as const)('rejects %s from outside the secret-file directory', property => {
+        const fileProperty = `${property}_FILE`
+        const environment = plainToInstance(EnvironmentVariablesDto, {
+            [fileProperty]: `/tmp/${property.toLowerCase()}`,
+        })
+
+        expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            fileProperty,
+        )
+    })
+
+    it.each([
+        'POSTGRES_TLS_CA',
+        'REDIS_TLS_CA',
+        'S3_KMS_KEY_ID',
+        'BETTER_AUTH_SECRET',
+        'AUTH_MAIL_SMTP_PASSWORD',
+    ] as const)('rejects duplicate inline and file sources for %s without exposing either value', property => {
+        const secretValue = 'sensitive-inline-value'
+        const secretFile = `/run/secrets/${property.toLowerCase()}`
+
+        expect(() =>
+            normalizeEnvironmentConfiguration({
+                [property]: secretValue,
+                [`${property}_FILE`]: secretFile,
+            }),
+        ).toThrow(`${property}: multiple-sources`)
+
+        try {
+            normalizeEnvironmentConfiguration({
+                [property]: secretValue,
+                [`${property}_FILE`]: secretFile,
             })
-
-            expect(validateSync(environment, { skipMissingProperties: true })).toHaveLength(0)
-        },
-    )
-
-    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
-        'rejects %s from outside the secret-file directory',
-        property => {
-            const fileProperty = `${property}_FILE`
-            const environment = plainToInstance(EnvironmentVariablesDto, {
-                [fileProperty]: `/tmp/${property.toLowerCase()}`,
-            })
-
-            expect(validateSync(environment, { skipMissingProperties: true }).map(error => error.property)).toContain(
-                fileProperty,
-            )
-        },
-    )
-
-    it.each(['POSTGRES_TLS_CA', 'REDIS_TLS_CA', 'S3_KMS_KEY_ID'] as const)(
-        'rejects duplicate inline and file sources for %s without exposing either value',
-        property => {
-            const secretValue = 'sensitive-inline-value'
-            const secretFile = `/run/secrets/${property.toLowerCase()}`
-
-            expect(() =>
-                normalizeEnvironmentConfiguration({
-                    [property]: secretValue,
-                    [`${property}_FILE`]: secretFile,
-                }),
-            ).toThrow(`${property}: multiple-sources`)
-
-            try {
-                normalizeEnvironmentConfiguration({
-                    [property]: secretValue,
-                    [`${property}_FILE`]: secretFile,
-                })
-            } catch (error) {
-                expect(String(error)).not.toContain(secretValue)
-                expect(String(error)).not.toContain(secretFile)
-            }
-        },
-    )
+        } catch (error) {
+            expect(String(error)).not.toContain(secretValue)
+            expect(String(error)).not.toContain(secretFile)
+        }
+    })
 
     it('keeps production-only security settings optional for local development', (): void => {
         const environment = plainToInstance(EnvironmentVariablesDto, {})
@@ -109,6 +118,37 @@ describe('EnvironmentVariablesDto', (): void => {
         const errors = validateSync(environment).map(error => error.property)
 
         expect(errors).not.toEqual(expect.arrayContaining(productionSecurityProperties))
+    })
+
+    it('keeps native authentication settings optional until a process composes the runtime', (): void => {
+        const errors = validateSync(plainToInstance(EnvironmentVariablesDto, {})).map(error => error.property)
+
+        expect(errors).not.toEqual(
+            expect.arrayContaining([
+                'BETTER_AUTH_SECRET',
+                'AUTH_MAIL_SMTP_HOST',
+                'AUTH_MAIL_SMTP_PORT',
+                'AUTH_MAIL_SMTP_SECURE',
+                'AUTH_MAIL_SMTP_USER',
+                'AUTH_MAIL_SMTP_PASSWORD',
+                'AUTH_MAIL_FROM',
+            ]),
+        )
+    })
+
+    it('transforms native authentication mail settings from environment variables', (): void => {
+        const environment = plainToInstance(
+            EnvironmentVariablesDto,
+            { AUTH_MAIL_SMTP_PORT: '1025', AUTH_MAIL_SMTP_SECURE: 'true' },
+            { enableImplicitConversion: true },
+        )
+
+        expect(environment.AUTH_MAIL_SMTP_PORT).toBe(1025)
+        expect(environment.AUTH_MAIL_SMTP_SECURE).toBe(true)
+        const invalid = plainToInstance(EnvironmentVariablesDto, { AUTH_MAIL_SMTP_PORT: '70000' })
+        expect(validateSync(invalid, { skipMissingProperties: true }).map(error => error.property)).toContain(
+            'AUTH_MAIL_SMTP_PORT',
+        )
     })
 
     it('transforms proxy capacity values from environment variables', (): void => {

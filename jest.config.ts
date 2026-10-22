@@ -35,6 +35,7 @@ const config: Config = {
         '@tuposoft/lead-email-finder/modules/payments/(.*)': '<rootDir>/src/libs/modules/payments/src/$1',
         '@tuposoft/lead-email-finder/modules/proxy/(.*)': '<rootDir>/src/libs/modules/proxy/src/$1',
         '@tuposoft/lead-email-finder/config/(.*)': '<rootDir>/src/libs/config/src/$1',
+        '@tuposoft/lead-email-finder/better-auth': '<rootDir>/src/libs/better-auth/src',
         '@tuposoft/lead-email-finder/redis': '<rootDir>/src/libs/redis/src',
         '@tuposoft/lead-email-finder/keycloak-admin-http': '<rootDir>/src/libs/keycloak-admin-http/src',
         '@tuposoft/lead-email-finder/socket': '<rootDir>/src/libs/socket/src',

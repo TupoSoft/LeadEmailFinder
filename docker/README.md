@@ -26,10 +26,18 @@ health on a separate loopback listener at port 8081. It does not call the API. T
 services to be healthy.
 
 For a fresh disposable development stack, `corepack pnpm dev:reset -- --confirm-project=LEF` rebuilds the services,
-provisions Keycloak, seeds development fixtures, waits for web and API health, and checks the public product and an
-authenticated credit balance. Reset refuses another checkout's containers or an unexpected Compose configuration,
+provisions Keycloak, seeds development and native authentication fixtures, waits for web and API health, and checks
+the public product and an authenticated credit balance. Reset refuses another checkout's containers or an unexpected Compose configuration,
 and validates the project labels and exact allowlisted volume names before deletion. Stop overlays before reset.
 The command removes development data; inspect its printed targets before confirming it.
+
+## Authentication Mail
+
+The base stack's `auth-mail` service captures transactional authentication mail from the Better Auth runtime and never
+relays it. Containers send to `auth-mail:1025`. The host reaches the Mailpit interface at `http://127.0.0.1:8025` and
+SMTP at `127.0.0.1:51025`; set `AUTH_MAIL_HTTP_PORT` or `AUTH_MAIL_PUBLISHED_SMTP_PORT` to choose other loopback
+ports. It does not depend on the SMTP verification overlay. Reset recreates it, which clears captured messages.
+[The authentication guide](../docs/auth/README.md) describes its ownership checks and the native fixture seed.
 
 ## Recover an Older SMTP Network
 
@@ -120,7 +128,8 @@ credentials are disabled. The Bruno launcher executes `bru run --env local` with
 requires all requests and tests to run.
 
 For a separately named stack, set `COMPOSE_PROJECT_NAME` when invoking the live launchers. The optional Compose
-variables `WEB_PORT`, `KEYCLOAK_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, and `BULLBOARD_PORT` retain their
+variables `WEB_PORT`, `KEYCLOAK_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, `BULLBOARD_PORT`,
+`AUTH_MAIL_HTTP_PORT`, and `AUTH_MAIL_PUBLISHED_SMTP_PORT` retain their
 usual defaults but allow another checkout to use free host ports. Web and Keycloak public URLs follow those port
 settings. When provisioning such a stack, set `KEYCLOAK_URL`, `KEYCLOAK_BFF_REDIRECT_URIS`, and
 `KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS` to its public URLs. Host-run fixture scripts also need its `API_URL` and

@@ -15,7 +15,12 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { assertDevelopmentMetadataPath, loadDevelopmentStack } from './development-stack.mjs'
+import {
+    assertCheckoutPrivateFile,
+    assertDevelopmentMetadataPath,
+    loadDevelopmentStack,
+    loopbackPort,
+} from './development-stack.mjs'
 
 const safeError = /Development stack metadata must use a private regular file inside this checkout\./
 
@@ -194,4 +199,40 @@ test('an explicit project refresh replaces stale selection for later commands wi
     assert.deepEqual(loadDevelopmentStack(root, { persistMetadata: false }), metadata)
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).composeProject, 'lef')
     assert.equal(statSync(file).mode & 0o777, 0o600)
+})
+
+test('validates private authentication metadata only below the checkout .dev directory', t => {
+    const root = checkout(t)
+    assert.equal(assertCheckoutPrivateFile(root, '.dev/auth/native-users.json'), join(root, '.dev/auth/native-users.json'))
+    for (const relative of ['package.json', '.dev', '.dev/../package.json', '.dev//native-users.json', 'docker/.dev/x']) {
+        assert.throws(() => assertCheckoutPrivateFile(root, relative), safeError)
+    }
+    mkdirSync(join(root, '.dev/auth'), { recursive: true })
+    const file = join(root, '.dev/auth/native-users.json')
+    writeFileSync(file, '{}', { mode: 0o600 })
+    assert.equal(assertCheckoutPrivateFile(root, '.dev/auth/native-users.json'), file)
+    chmodSync(file, 0o640)
+    assert.throws(() => assertCheckoutPrivateFile(root, '.dev/auth/native-users.json'), safeError)
+})
+
+test('rejects a symbolic-link authentication metadata directory', t => {
+    const root = checkout(t)
+    const foreign = checkout(t)
+    mkdirSync(join(root, '.dev'), { recursive: true })
+    symlinkSync(foreign, join(root, '.dev/auth'), 'dir')
+    assert.throws(() => assertCheckoutPrivateFile(root, '.dev/auth/native-users.json'), safeError)
+})
+
+test('accepts only one IPv4 loopback binding for authentication mail', () => {
+    const container = ports => ({ NetworkSettings: { Ports: { '8025/tcp': ports } } })
+    assert.equal(loopbackPort(container([{ HostIp: '127.0.0.1', HostPort: '8025' }]), '8025/tcp'), 8025)
+    for (const ports of [
+        undefined,
+        [],
+        [{ HostIp: '0.0.0.0', HostPort: '8025' }],
+        [{ HostIp: '127.0.0.1', HostPort: '8025' }, { HostIp: '::1', HostPort: '8025' }],
+        [{ HostIp: '127.0.0.1', HostPort: '' }],
+    ]) {
+        assert.throws(() => loopbackPort(container(ports), '8025/tcp'), /exactly one loopback port/)
+    }
 })
