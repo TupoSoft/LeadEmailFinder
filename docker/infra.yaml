@@ -62,6 +62,26 @@ services:
       - s3_access_key_id
       - s3_secret_key
 
+  # Transactional authentication mail for development. It captures every message and never relays it; the SMTP
+  # verification fixture in compose.smtp-dev.yaml is a separate service on its own network.
+  auth-mail:
+    image: axllent/mailpit:v1.30.7
+    restart: unless-stopped
+    environment:
+      MP_DISABLE_VERSION_CHECK: true
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_SMTP_DISABLE_RDNS: true
+      MP_MAX_MESSAGES: 500
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    ports:
+      - '127.0.0.1:${AUTH_MAIL_HTTP_PORT:-8025}:8025'
+      - '127.0.0.1:${AUTH_MAIL_PUBLISHED_SMTP_PORT:-51025}:1025'
+
   keycloak-postgres:
     image: postgres:18-alpine
     restart: unless-stopped

@@ -10,10 +10,10 @@ A developer can initialize the pinned Better Auth library against disposable Pos
 
 ## Progress
 
-- [ ] (2026-10-19) Add the singleton runtime, configuration, mapped schema, and native ESM loading.
-- [ ] (2026-10-19) Add authentication mail capture, compiled seed tooling, and checkout ownership validation.
-- [ ] (2026-10-19) Run focused unit, disposable PostgreSQL, compiled-runtime, and existing authentication regression checks.
-- [ ] (2026-10-19) Update runtime documentation and record validation and outcomes.
+- [x] (2026-10-22) Added the singleton runtime, configuration, mapped schema, and native ESM loading. Issue #751 was assigned and moved to In Progress.
+- [x] (2026-10-22) Added authentication mail capture, compiled seed tooling, and checkout ownership validation.
+- [x] (2026-10-22) Ran focused unit, disposable PostgreSQL, compiled-runtime, and existing authentication regression checks (see Outcomes).
+- [x] (2026-10-22) Updated runtime documentation and recorded validation and outcomes.
 
 ## Plan dependencies
 
@@ -21,7 +21,13 @@ None.
 
 ## Surprises & Discoveries
 
-None yet.
+- A global SWC `ignoreDynamic: true` would break the generated `src/metadata.ts`, whose `import()` calls without file extensions of local CommonJS files fail under native ESM resolution. Nest's programmatic SWC options also override a path-scoped `.swcrc` entry, so the setting cannot be limited to the new library.
+- Node 22.12 and later load ESM through `require(esm)`. Better Auth 1.7.11 and its plugins have no top-level await, so the CommonJS `require()` rewrite produced by SWC of `import()` loads them. The compiled-process suite proves this on Node 24; the API image also uses Node 24.
+- Jest cannot load the ESM-only package, so tests needing the real library run as compiled `node --test` files.
+- Better Auth validates its schema when it starts. Before the module ordered startup after TypeORM, the first seed logged a spurious "schema mismatch" while synchronization was still pending.
+- The installed `twoFactor` plugin declares its user reference without a delete action. Its schema also includes `verified`, `failedVerificationCount`, and `lockedUntil`.
+- A `node:test` file must not replace `process.stdout.write`; the runner reports through that stream. Log-redaction checks capture `console` and the Nest logger instead.
+- Local `dist/` is owned by root from a container build. `pnpm build` and incremental `tsc` cannot write there, so validation built into an ignored directory and ran `tsc --incremental false`.
 
 ## Decision Log
 
@@ -30,10 +36,30 @@ None yet.
 - (2026-10-19, planning agent) Use `src/libs/better-auth/src/` as a technical library with one `BetterAuthRuntimeModule`; use PostgreSQL through the already installed `pg` driver. TypeORM owns disposable schema synchronization; Better Auth owns authentication operations.
 - (2026-10-19, planning agent) Pin `better-auth` to `1.7.11`, whose official package and documentation were inspected during planning. Verify the installed version's schema and APIs in contract tests before use; a changed dependency contract requires updating this plan, not silently substituting a version.
 - (2026-10-19, planning agent) Use the fixed internal identity namespace `urn:lead-email-finder:auth`, defined in identity's domain and exported through its public barrel as `AUTH_IDENTITY_ISSUER`. Do not derive persistence identity from an application URL or expose a configurable issuer.
+- (2026-10-22, implementation agent) Do not set SWC `ignoreDynamic`. Keep `import()` in one loader and rely on Node `require(esm)`, proven by `test:auth-runtime`. This replaces the planned SWC setting because of the metadata-loader discovery above.
+- (2026-10-22, implementation agent) Compile tooling with `@swc/core` into ignored `.dev/auth-tools`, using the application's decorator settings and `tsconfig.json` path aliases. `auth:seed` and `test:auth-runtime` execute the emitted JavaScript with Node.
+- (2026-10-22, implementation agent) `test:auth-runtime` owns a separate Compose project (`docker/compose.auth-runtime-test.yaml`) that extends the base `auth-mail` service with ephemeral loopback ports. It allows only `@lef.test` recipients so the suite can observe a permanent SMTP rejection.
+- (2026-10-22, implementation agent) The runtime waits for the TypeORM data source, so native startup follows synchronization. Fixture-only verification marking lives in `scripts/better-auth`, outside the runtime library.
+- (2026-10-22, implementation agent) Magic links store hashed tokens and expire after five minutes. Native log messages pass through a redaction step; SMTP transport logging is disabled.
+- (2026-10-22, implementation agent) `dev:reset` recreates `auth-mail`, removes `.dev/auth/native-users.json`, keeps the runtime secret, and finishes with the native-only seed. The session MFA marker remains in `better-auth/03`, which defines it.
 
 ## Outcomes & Retrospective
 
-Not started.
+Implemented on 2026-10-22. The pull request adds `src/libs/better-auth` with the mapped `better_auth_*` entities. It also adds the `auth-mail` base service, `auth:seed -- --native-only`, and `test:auth-runtime`. No route, guard, accepted credential, or OpenAPI output changed, and Keycloak remains active.
+
+Local validation on 2026-10-22, recorded as local evidence and not as CI results:
+
+- `corepack pnpm test -- src/libs/better-auth scripts/better-auth src/lead-email-finder-api/src/environment-variables.dto.spec.ts scripts/ci --runInBand`: 490 tests passed.
+- `corepack pnpm test:ci`: Jest passed 3716 tests and skipped 135 environment-gated integration tests that existed before this change. The node runner suites passed 132 tests with zero skipped.
+- `node --test scripts/testing/development-stack.test.mjs scripts/testing/dev-reset.test.mjs scripts/testing/auth-runtime.test.mjs`: 15, 13, and 5 tests passed.
+- `corepack pnpm test:auth-runtime`: 8 required compiled-process tests passed with zero skipped. They ran against a random schema in `auth_runtime_test` and the test project's `auth-mail` service.
+- Two consecutive runs of `corepack pnpm auth:seed -- --native-only` produced identical metadata. Four verified native users were linked under `urn:lead-email-finder:auth` with zero memberships. A synthetic TOTP enrollment survived a rerun and was then removed. The seed refused foreign metadata, a 0644 metadata file, and an invocation without the `--native-only` flag.
+- A message sent through the compiled SMTP adapter reached the base-stack `auth-mail` service at its owned loopback port and was then deleted.
+- `corepack pnpm test:bff-live`: 4 tests passed with zero skipped. `corepack pnpm bruno:bff-sessions`: 15 requests and 16 tests passed. `corepack pnpm openapi:check` passed.
+- `corepack pnpm architecture:check` reported 9 modules and 0 violations. `corepack pnpm lint` reported zero errors. `tsc --noEmit --incremental false` passed for both projects, and `corepack pnpm test:ci-paths` passed.
+- `nest build` passed with zero type issues when built into an ignored directory. The default `corepack pnpm build` could not delete the root-owned `dist/` directory in this checkout.
+
+Remaining gaps: CI does not run `test:auth-runtime`, because it needs Docker for Mailpit and PostgreSQL. The API container's `node_modules` volume needs an image rebuild before it contains the new dependencies; the API does not import them yet.
 
 ## Context and Orientation
 

@@ -26,6 +26,18 @@ function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheri
         resolve(checkoutRoot, 'docker/scripts/dev-reset.sh'),
         resolve(testCheckout, 'docker/scripts/dev-reset.sh'),
     )
+    mkdirSync(resolve(testCheckout, '.dev/auth'), { recursive: true })
+    const nativeUsers = resolve(testCheckout, '.dev/auth/native-users.json')
+    const nativeSecret = resolve(testCheckout, '.dev/auth/better-auth-secret.txt')
+    writeFileSync(nativeUsers, 'synthetic native fixture identifiers')
+    writeFileSync(nativeSecret, 'synthetic runtime secret')
+    if (scenario === 'auth-symlink-directory') {
+        rmSync(resolve(testCheckout, '.dev/auth'), { recursive: true })
+        const external = resolve(directory, 'external-auth')
+        mkdirSync(external)
+        writeFileSync(resolve(external, 'native-users.json'), 'synthetic native fixture identifiers')
+        symlinkSync(external, resolve(testCheckout, '.dev/auth'))
+    }
     const browserUsers = resolve(testCheckout, '.dev/keycloak/browser-users.json')
     const seedMetadata = resolve(testCheckout, '.dev/keycloak/browser-seed.json')
     writeFileSync(browserUsers, 'synthetic enrollment metadata')
@@ -116,7 +128,8 @@ function ownedContainer(service) {
 if (args.includes('config')) console.log(JSON.stringify({ name: 'lef', services: {
     web: { ports: [{ target: 8080, published: scenario === 'alternate-ports' ? '53101' : '53000' }] },
     keycloak: { ports: [{ target: 8080, published: '58080' }] },
-    postgres: { ports: [{ target: 5432, published: '55432' }] }
+    postgres: { ports: [{ target: 5432, published: '55432' }] },
+    'auth-mail': { ports: [{ target: 8025, published: scenario === 'alternate-mail-port' ? '8125' : '8025' }] }
 } }));
 else if (args[0] === 'ps') {
     const serviceFilter = args.find(arg => arg.startsWith('label=com.docker.compose.service='));
@@ -162,6 +175,8 @@ else if (args.includes('up') && scenario !== 'complete') process.exit(77);
             tail: existsSync(tailLog) ? readFileSync(tailLog, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [],
             developmentStack: existsSync(developmentStackFile) ? JSON.parse(readFileSync(developmentStackFile, 'utf8')) : undefined,
             browserUsersPreserved: existsSync(browserUsers),
+            nativeUsersPreserved: existsSync(nativeUsers),
+            nativeSecretPreserved: existsSync(nativeSecret),
             seedMetadataPreserved: existsSync(seedMetadata),
         }
     } finally {
@@ -176,7 +191,9 @@ for (const scenario of [
     'partial-volumes',
     'orphan-volumes',
     'alternate-ports',
+    'alternate-mail-port',
     'symlink-directory',
+    'auth-symlink-directory',
 ]) {
     test(`reset refuses ${scenario} before stopping containers or deleting volumes`, () => {
         const result = runReset(scenario)
@@ -185,6 +202,7 @@ for (const scenario of [
         assert.ok(!result.calls.some(args => args.includes('down') || args.includes('rm') || args.includes('up')))
         assert.ok(result.browserUsersPreserved)
         assert.ok(result.seedMetadataPreserved)
+        assert.ok(result.nativeUsersPreserved)
     })
 }
 
@@ -205,8 +223,11 @@ test('an owned reset deletes only its fixed volume list before starting the stac
     )
     assert.ok(result.calls.some(args => args.includes('up')))
     assert.match(result.stdout, /lef-web-1/)
+    assert.match(result.stdout, /lef-auth-mail-1/)
     assert.equal(result.browserUsersPreserved, false)
     assert.ok(result.seedMetadataPreserved)
+    assert.equal(result.nativeUsersPreserved, false)
+    assert.ok(result.nativeSecretPreserved)
 })
 
 test('a confirmed first reset removes only the browser enrollment file before recreating the realm', () => {
@@ -245,6 +266,7 @@ test('a successful default reset replaces stale isolated metadata before human s
         'keycloak:bootstrap-credential',
         'keycloak:bootstrap-operator',
         'keycloak:seed-customer-fixture',
+        'auth:seed',
         'keycloak:smoke',
     ])
     for (const command of commands) assert.deepEqual(command.environment, expectedEnvironment)

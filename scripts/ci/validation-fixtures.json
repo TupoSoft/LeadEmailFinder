@@ -45,6 +45,36 @@
     }
   },
   {
+    "name": "backend-auth-tooling",
+    "paths": [
+      "scripts/better-auth/seed-development.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
+    "name": "backend-auth-runtime-library",
+    "paths": [
+      "src/libs/better-auth/src/native/create-native-auth.ts"
+    ],
+    "comparisonTrusted": true,
+    "expected": {
+      "repositoryPolicy": true,
+      "backend": true,
+      "web": false,
+      "contract": false,
+      "images": true,
+      "browser": true
+    }
+  },
+  {
     "name": "mcp-server",
     "paths": [
       "apps/mcp-server/src/main.ts"

@@ -34,6 +34,8 @@ const OPTIONAL_FILE_VARIABLES = [
     'REDIS_TLS_CA',
     'S3_KMS_KEY_ID',
     'CATCH_ALL_HTTP_PROXY_URL',
+    'BETTER_AUTH_SECRET',
+    'AUTH_MAIL_SMTP_PASSWORD',
 ] as const
 
 interface AccountDiscoveryProviderEnvironment {
@@ -221,6 +223,43 @@ export class EnvironmentVariablesDto {
 
     @IsUrl({ require_protocol: true, require_tld: false })
     APP_BASE_URL: string
+
+    // Native authentication settings stay optional here; BetterAuthRuntimeModule validates the complete set only in
+    // a process that composes it, so unrelated processes never need them.
+    @IsFileVar(isOptionalFileVariableConfigured('BETTER_AUTH_SECRET'))
+    @IsOptional()
+    @IsString()
+    BETTER_AUTH_SECRET?: string
+
+    @IsOptional()
+    @IsString()
+    AUTH_MAIL_SMTP_HOST?: string
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(65535)
+    AUTH_MAIL_SMTP_PORT?: number
+
+    @IsOptional()
+    @IsBoolean()
+    @Type(() => String)
+    @Transform(({ value }) => transformBoolean(value))
+    AUTH_MAIL_SMTP_SECURE?: boolean
+
+    @IsOptional()
+    @IsString()
+    AUTH_MAIL_SMTP_USER?: string
+
+    @IsFileVar(isOptionalFileVariableConfigured('AUTH_MAIL_SMTP_PASSWORD'))
+    @IsOptional()
+    @IsString()
+    AUTH_MAIL_SMTP_PASSWORD?: string
+
+    @IsOptional()
+    @IsString()
+    AUTH_MAIL_FROM?: string
 
     @IsString()
     BFF_CLIENT_ID: string
