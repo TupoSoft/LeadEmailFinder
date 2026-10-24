@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { compileAuthTools } from './compile-auth-tools.mjs'
 
 // Compiles authentication tooling, then runs the requested entry point as plain Node CommonJS from the checkout.
-const TOOLS = new Set(['seed-development'])
+const TOOLS = new Set(['seed-development', 'seed-api-key'])
 const [tool, ...args] = process.argv.slice(2)
 if (!TOOLS.has(tool)) {
     process.stderr.write(`Unknown authentication tool; expected one of: ${[...TOOLS].join(', ')}\n`)

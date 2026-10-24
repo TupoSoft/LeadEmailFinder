@@ -649,18 +649,18 @@ test('service-client operations publish exact session, UUID, secret and error co
     assert.deepEqual(schemas.CreateServiceClientDto.required, ['permissions'])
     assert.equal(schemas.CreateServiceClientDto.properties.description.maxLength, 200)
     const response = schemas.ServiceClientResponseDto
-    assert.deepEqual(Object.keys(response.properties).sort(), ['clientId', 'createdAt', 'description', 'id', 'permissions', 'status', 'updatedAt'])
+    assert.deepEqual(Object.keys(response.properties).sort(), ['createdAt', 'description', 'id', 'keyPrefix', 'permissions', 'status', 'updatedAt'])
     assert.deepEqual(response.properties.status.enum, ['active', 'disabled'])
     assert.equal(response.properties.description.nullable, true)
     assert.equal(response.properties.id.format, 'uuid')
     assert.deepEqual(response.properties.permissions.items.enum, schemas.CreateServiceClientDto.properties.permissions.items.enum)
-    assert.equal(schemas.ServiceClientSecretResponseDto.properties.clientSecret.type, 'string')
+    assert.equal(schemas.ServiceClientSecretResponseDto.properties.apiKey.type, 'string')
     assert.deepEqual(browser.paths[base].get.responses['200'].content['application/json'].schema, {
         type: 'array', items: { $ref: '#/components/schemas/ServiceClientResponseDto' },
     })
 })
 
-test('generated service-client list types exclude clientSecret and preserve permission and status unions', async () => {
+test('generated service-client list types exclude apiKey and preserve permission and status unions', async () => {
     const ts = require('typescript')
     const file = resolve(directory, 'service-client-contract.ts')
     await writeFile(file, `
@@ -671,15 +671,15 @@ test('generated service-client list types exclude clientSecret and preserve perm
         type Created = paths['/v1/organizations/{organizationId}/service-clients']['post']['responses'][201]['content']['application/json']
         type Rotated = paths['/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate']['post']['responses'][200]['content']['application/json']
         type Assertions = [
-            Assert<Equal<Extract<'clientSecret', keyof List[number]>, never>>,
+            Assert<Equal<Extract<'apiKey', keyof List[number]>, never>>,
             Assert<Equal<List[number], components['schemas']['ServiceClientResponseDto']>>,
             Assert<Equal<List[number]['status'], 'active' | 'disabled'>>,
             Assert<Equal<List[number]['description'], string | null>>,
             Assert<Equal<List[number]['permissions'][number], components['schemas']['CreateServiceClientDto']['permissions'][number]>>,
-            Assert<Equal<Created['clientSecret'], string>>,
-            Assert<Equal<Rotated['clientSecret'], string>>,
-            Assert<Equal<keyof Created, keyof List[number] | 'clientSecret'>>,
-            Assert<Equal<keyof Rotated, keyof List[number] | 'clientSecret'>>
+            Assert<Equal<Created['apiKey'], string>>,
+            Assert<Equal<Rotated['apiKey'], string>>,
+            Assert<Equal<keyof Created, keyof List[number] | 'apiKey'>>,
+            Assert<Equal<keyof Rotated, keyof List[number] | 'apiKey'>>
         ]
     `)
     const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
@@ -855,4 +855,14 @@ test('generated proxy responses cannot contain authentication and preserve reque
     `)
     const program = ts.createProgram([file], { strict: true, noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.ES2022 })
     assert.deepEqual(ts.getPreEmitDiagnostics(program).map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), [])
+})
+
+
+test('machine API-key validation is permission independent, empty, and excluded from the browser contract', () => {
+    const operation = runtime.paths['/v1/auth/api-key'].get
+    assert.deepEqual(Object.keys(operation.responses).sort(), ['204', '401', '403'])
+    assert.deepEqual(operation.security, [{ oidc: [] }])
+    assert.equal(operation.responses['204'].content, undefined)
+    assert.deepEqual(operation.responses['204'].headers['Cache-Control'].schema.enum, ['no-store'])
+    assert.equal(browser.paths['/v1/auth/api-key'], undefined)
 })

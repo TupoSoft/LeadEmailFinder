@@ -19,8 +19,8 @@ corepack pnpm bruno:organization-onboarding
 
 For an isolated stack, include its `COMPOSE_PROJECT_NAME` environment variable. Provision the development service
 credential and customer fixture first with the documented Keycloak bootstrap workflow. The launcher validates container ownership and
-loads the ignored `.dev/keycloak/service-client.json` and `.dev/keycloak/service-credential.json` internally.
-The customer credential is read from the owned Keycloak fixture and stays in the child environment.
+loads `.dev/auth/platform-api-key.json` and `.dev/auth/customer-api-key.json` internally.
+These ignored files require matching checkout and stack ownership and mode 0600. Keys stay in the child environment.
 Credentials never enter command arguments. It runs `bru run --env local --sandbox developer` using pinned Bruno
 4.1.0 and rejects missing, skipped, failed, or zero-execution results.
 

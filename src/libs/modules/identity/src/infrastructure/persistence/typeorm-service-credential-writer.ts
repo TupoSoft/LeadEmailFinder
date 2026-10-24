@@ -51,15 +51,19 @@ export class TypeOrmServiceCredentialWriter implements ServiceCredentialWriter {
     async rotateWithAudit(
         credential: ServiceCredentialDetailRecord,
         actor: AuthPrincipal,
+        replacement: { readonly keyHash: string; readonly keyPrefix: string },
     ): Promise<ServiceCredentialRotationOutcome> {
         return this.dataSource.transaction(async manager => {
-            // A full save of the pre-Keycloak snapshot could undo a concurrent disable or recreate a concurrently
-            // deleted credential. Update only the rotation timestamp, and let a concurrent disable remain
-            // authoritative while preserving the external-first provider ordering.
+            // The conditional UPDATE locks the current row. A concurrent disable or delete stays terminal;
+            // only current active rows can receive replacement material, in the same transaction as the audit.
             const result = await manager.update(
                 ServiceCredential,
                 { id: credential.id, organizationId: credential.organizationId, status: 'active' },
-                { updatedAt: () => 'CURRENT_TIMESTAMP' },
+                {
+                    keyHash: replacement.keyHash,
+                    keyPrefix: replacement.keyPrefix,
+                    updatedAt: () => 'CURRENT_TIMESTAMP',
+                },
             )
 
             if (result.affected !== 1) {
@@ -165,7 +169,7 @@ function toRecord(credential: ServiceCredential): ServiceCredentialDetailRecord 
         organizationId: credential.organizationId,
         issuer: credential.issuer,
         subject: credential.subject,
-        keycloakClientId: credential.keycloakClientId,
+        keyPrefix: credential.keyPrefix,
         description: credential.description,
         permissions: [...credential.permissions],
         status: credential.status,

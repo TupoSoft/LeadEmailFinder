@@ -2,26 +2,20 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { NestFactory } from '@nestjs/core'
 import { DataSource } from 'typeorm'
 import { z } from 'zod'
 import { CreditReservationService } from '@tuposoft/lead-email-finder/modules/credits'
-import { bootstrapServiceCredential } from '../keycloak/bootstrap-service-credential'
-import { obtainClientCredentialsToken } from '../keycloak/customer-fixture'
-import { KeycloakAdminApi } from '../keycloak/keycloak-admin-api'
-import { REALM } from '../keycloak/provisioning'
+import { bootstrapDevelopmentApiKey } from '../keycloak/bootstrap-service-credential'
+import { ApiKeyFixture } from '../better-auth/api-key-fixtures'
 import { assertExecutedBrunoReport, loadPlatformCreditsStack } from './platform-credits-runner'
 import { createReservationBootstrapModule } from './reservation-bootstrap-module'
 
 const HELD_RESERVATION_AMOUNT = 20
 const HELD_STARTING_BALANCE = 50
 
-const credentialSchema = z.object({
-    issuer: z.string().url(),
-    clientId: z.string().min(1),
-    clientSecret: z.string().min(1),
-})
 let phase = 'discovering the checkout-owned development stack'
 
 async function readJson(file: string): Promise<unknown> {
@@ -31,55 +25,24 @@ async function readJson(file: string): Promise<unknown> {
 async function main(): Promise<void> {
     const checkoutRoot = resolve(__dirname, '../..')
     const metadata = loadPlatformCreditsStack(checkoutRoot)
-    const serviceClient = credentialSchema.parse(
-        await readJson(resolve(checkoutRoot, '.dev/keycloak/service-client.json')),
-    )
-    const customer = z
-        .object({ keycloakClientId: z.string().min(1) })
-        .parse(await readJson(resolve(checkoutRoot, '.dev/keycloak/customer-fixture.json')))
-    if (
-        new URL(serviceClient.issuer).origin !== new URL(metadata.keycloakUrl).origin ||
-        new URL(serviceClient.issuer).pathname !== `/realms/${REALM}`
-    ) {
-        throw new Error('The platform credential issuer does not match the local Keycloak endpoint')
+    const platform = await bootstrapDevelopmentApiKey('platform')
+    const { readApiKeyFixture } = createRequire(resolve(checkoutRoot, 'package.json'))(
+        './scripts/better-auth/api-key-files.mjs',
+    ) as {
+        readApiKeyFixture: (root: string, stack: { composeProject: string }, kind: 'customer') => Promise<ApiKeyFixture>
     }
+    const customer = await readApiKeyFixture(checkoutRoot, metadata, 'customer')
     const cliPackageFile = require.resolve('@usebruno/cli/package.json')
     const cliPackage = z.object({ version: z.literal('4.1.0') }).parse(await readJson(cliPackageFile))
     phase = 'bootstrapping the local platform credential'
-    const api = new KeycloakAdminApi({
-        baseUrl: metadata.keycloakUrl,
-        username: metadata.keycloakAdminUsername,
-        password: metadata.keycloakAdminPassword,
-    })
-    await api.authenticate()
     const dataSource = new DataSource({ type: 'postgres', url: metadata.postgresUrl })
     await dataSource.initialize()
     const organizationIds = Array.from({ length: 6 }, () => randomUUID())
     const heldOrganizationId = organizationIds[5]
     const reportDirectory = await mkdtemp(resolve(tmpdir(), 'lef-platform-credits-'))
     try {
-        await bootstrapServiceCredential(api, dataSource, serviceClient)
-        phase = 'minting local platform and customer credentials'
-        const [client] = await api.request<Array<{ id: string; clientId: string }>>(
-            'GET',
-            `/admin/realms/${REALM}/clients?clientId=${encodeURIComponent(customer.keycloakClientId)}`,
-        )
-        if (!client || client.clientId !== customer.keycloakClientId) {
-            throw new Error('The seeded customer credential is unavailable')
-        }
-        const { value: customerSecret } = await api.request<{ value: string }>(
-            'GET',
-            `/admin/realms/${REALM}/clients/${client.id}/client-secret`,
-        )
-        const [platformToken, customerToken] = await Promise.all([
-            obtainClientCredentialsToken(
-                serviceClient.issuer,
-                serviceClient.clientId,
-                serviceClient.clientSecret,
-                fetch,
-            ),
-            obtainClientCredentialsToken(serviceClient.issuer, customer.keycloakClientId, customerSecret, fetch),
-        ])
+        const platformToken = platform.apiKey
+        const customerToken = customer.apiKey
         phase = 'creating synthetic organizations without credit accounts'
         for (const id of organizationIds) {
             await dataSource.query('INSERT INTO organizations (id, name) VALUES ($1, $2)', [

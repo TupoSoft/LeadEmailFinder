@@ -1,0 +1,19 @@
+info:
+  name: 07-validate-active-api-key
+  type: http
+  seq: 7
+http:
+  method: GET
+  url: '{{baseUrl}}/v1/auth/api-key'
+  headers:
+    - name: Authorization
+      value: 'Bearer {{serviceClientToken}}'
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('validates an active machine key without disclosing metadata', function() {
+          expect(res.status).to.equal(204);
+          expect(res.body === '' || res.body === null || typeof res.body === 'undefined').to.equal(true);
+          expect(res.getHeader('cache-control')).to.equal('no-store');
+        });

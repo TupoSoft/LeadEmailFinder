@@ -7,21 +7,4 @@ request:
     scripts:
         - type: before-request
           code: |-
-              if (!bru.getVar('serviceClientToken')) {
-                const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/x-www-form-urlencoded' },
-                  body: new URLSearchParams({
-                    grant_type: 'client_credentials',
-                    client_id: bru.getEnvVar('serviceClientId'),
-                    client_secret: bru.getEnvVar('serviceClientSecret'),
-                  }),
-                });
-                const payload = await response.json();
-                if (!response.ok || !payload.access_token) {
-                  throw new Error('Fixture token request failed');
-                }
-                const claims = JSON.parse(Buffer.from(payload.access_token.split('.')[1], 'base64url').toString('utf8'));
-                if (claims.iss !== bru.getEnvVar('oidcIssuerUrl')) throw new Error('Fixture issuer did not match');
-                bru.setVar('serviceClientToken', payload.access_token);
-              }
+              bru.setVar('serviceClientToken', bru.getEnvVar('customerApiKey'));

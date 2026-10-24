@@ -6,7 +6,7 @@ export interface ServiceCredentialRecord {
     readonly organizationId: string
     readonly issuer: string
     readonly subject: string
-    readonly keycloakClientId: string
+    readonly keyPrefix: string
     readonly permissions: readonly AuthPermission[]
     readonly status: ServiceCredentialStatus
 }

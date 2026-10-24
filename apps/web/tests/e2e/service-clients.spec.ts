@@ -15,8 +15,9 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
     const description = `Browser lifecycle ${randomUUID()}`
     await owner.goto(`${origin}/app/service-clients`)
     await expect(owner.getByRole('heading', { name: copy.title, exact: true })).toBeVisible()
-    await expect(owner).toHaveTitle('Service clients | Lead Email Finder')
-    let clientId: string | undefined
+    await expect(owner).toHaveTitle('API keys | Lead Email Finder')
+    let keyPrefix: string | undefined
+    let issuedApiKey: string | null = null
     try {
         await owner.getByLabel(copy.descriptionLabel, { exact: true }).fill(description)
         await owner.getByRole('checkbox', { name: 'verification:run', exact: true }).check()
@@ -27,8 +28,17 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
         await owner.getByRole('button', { name: copy.create, exact: true }).click()
         const created = await createdResponse
         // Retain only metadata immediately so even an export or accessibility failure can clean up.
-        const issuedId = ((await created.json()) as { clientId?: unknown }).clientId
-        clientId = typeof issuedId === 'string' ? issuedId : undefined
+        const issuance = (await created.json()) as { keyPrefix?: unknown; apiKey?: unknown }
+        keyPrefix = typeof issuance.keyPrefix === 'string' ? issuance.keyPrefix : undefined
+        issuedApiKey = typeof issuance.apiKey === 'string' ? issuance.apiKey : null
+        expect(issuedApiKey !== null && /^lef_[A-Za-z0-9_-]{43}$/.test(issuedApiKey)).toBe(true)
+        expect(
+            (
+                await owner.request.get(`${origin}/v1/auth/api-key`, {
+                    headers: { authorization: `Bearer ${issuedApiKey}` },
+                })
+            ).status(),
+        ).toBe(204)
         expect(created.status()).toBe(201)
         expect(created.headers()['cache-control'] === 'no-store').toBe(true)
         const dialog = owner.getByRole('dialog', { name: copy.secretTitle, exact: true })
@@ -50,16 +60,16 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
         )
         await owner.getByRole('button', { name: copy.refresh, exact: true }).click()
         const listed = (await (await listedResponse).json()) as {
-            clientId: string
+            keyPrefix: string
             description: string
-            clientSecret?: unknown
+            apiKey?: unknown
         }[]
-        expect(listed.every(item => !Object.hasOwn(item, 'clientSecret'))).toBe(true)
-        clientId = listed.find(item => item.description === description)?.clientId
-        expect(typeof clientId === 'string').toBe(true)
+        expect(listed.every(item => !Object.hasOwn(item, 'apiKey') && !Object.hasOwn(item, 'keyHash'))).toBe(true)
+        keyPrefix = listed.find(item => item.description === description)?.keyPrefix
+        expect(typeof keyPrefix === 'string').toBe(true)
         const row = owner.getByRole('row').filter({ hasText: description })
         await expect(row).toContainText('Active')
-        await owner.getByRole('button', { name: `Rotate secret for ${clientId}`, exact: true }).click()
+        await owner.getByRole('button', { name: `Rotate API key ${keyPrefix}`, exact: true }).click()
         const rotation = owner.getByRole('dialog', { name: copy.rotateTitle, exact: true })
         await expect(rotation.getByRole('button', { name: copy.cancel, exact: true })).toBeFocused()
         const rotatedResponse = owner.waitForResponse(
@@ -67,11 +77,29 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
         )
         await rotation.getByRole('button', { name: copy.rotate, exact: true }).click()
         const rotated = await rotatedResponse
+        const replacement = (await rotated.json()) as { keyPrefix?: unknown; apiKey?: unknown }
+        keyPrefix = typeof replacement.keyPrefix === 'string' ? replacement.keyPrefix : keyPrefix
+        expect(
+            (
+                await owner.request.get(`${origin}/v1/auth/api-key`, {
+                    headers: { authorization: `Bearer ${issuedApiKey}` },
+                })
+            ).status(),
+        ).toBe(401)
+        issuedApiKey = typeof replacement.apiKey === 'string' ? replacement.apiKey : null
+        expect(issuedApiKey !== null && /^lef_[A-Za-z0-9_-]{43}$/.test(issuedApiKey)).toBe(true)
+        expect(
+            (
+                await owner.request.get(`${origin}/v1/auth/api-key`, {
+                    headers: { authorization: `Bearer ${issuedApiKey}` },
+                })
+            ).status(),
+        ).toBe(204)
         expect(rotated.status()).toBe(200)
         expect(rotated.headers()['cache-control'] === 'no-store').toBe(true)
         await expect(dialog).toBeVisible()
         await dialog.getByRole('button', { name: copy.close, exact: true }).click()
-        await owner.getByRole('button', { name: `Disable client ${clientId}`, exact: true }).click()
+        await owner.getByRole('button', { name: `Disable API key ${keyPrefix}`, exact: true }).click()
         const disable = owner.getByRole('dialog', { name: copy.disableTitle, exact: true })
         await expect(disable).toContainText(copy.disableConsequence)
         const disabledResponse = owner.waitForResponse(
@@ -79,12 +107,19 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
         )
         await disable.getByRole('button', { name: copy.disable, exact: true }).click()
         expect((await disabledResponse).status()).toBe(204)
+        expect(
+            (
+                await owner.request.get(`${origin}/v1/auth/api-key`, {
+                    headers: { authorization: `Bearer ${issuedApiKey}` },
+                })
+            ).status(),
+        ).toBe(401)
         await expect(row).toContainText('Disabled')
-        const rotate = owner.getByRole('button', { name: `Rotate secret for ${clientId}`, exact: true })
+        const rotate = owner.getByRole('button', { name: `Rotate API key ${keyPrefix}`, exact: true })
         expect((await rotate.count()) === 0 || (await rotate.isDisabled())).toBe(true)
-        await owner.getByRole('button', { name: `Delete client ${clientId}`, exact: true }).click()
+        await owner.getByRole('button', { name: `Delete API key ${keyPrefix}`, exact: true }).click()
         const deletion = owner.getByRole('dialog', { name: copy.deleteTitle, exact: true })
-        await expect(deletion).toContainText(clientId!)
+        await expect(deletion).toContainText(keyPrefix!)
         const deletedResponse = owner.waitForResponse(
             response =>
                 response.request().method() === 'DELETE' &&
@@ -93,7 +128,7 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
         await deletion.getByRole('button', { name: copy.delete, exact: true }).click()
         expect((await deletedResponse).status()).toBe(204)
         await expect(row).toHaveCount(0)
-        clientId = undefined
+        keyPrefix = undefined
         await owner.reload()
         await expect(owner.getByLabel(copy.secretLabel, { exact: true })).toHaveCount(0)
         expect(
@@ -102,9 +137,10 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
             ),
         ).toBe(true)
     } finally {
+        issuedApiKey = null
         // Clean only the uniquely described client from this test, through the same authorized UI.
         // Closing the browser clears all test-local export buffers regardless of cleanup outcome.
-        if (clientId) {
+        if (keyPrefix) {
             // End the previous document before observing the new authoritative read.
             await owner.goto(`${origin}/`)
             const cleanupList = owner.waitForResponse(
@@ -120,7 +156,10 @@ test('seeded human owner creates, lists, explicitly exports, rotates, disables, 
                 'aria-busy',
                 'false',
             )
-            const remove = owner.getByRole('button', { name: `Delete client ${clientId}`, exact: true })
+            const remove = owner
+                .getByRole('row')
+                .filter({ hasText: description })
+                .getByRole('button', { name: /^Delete API key / })
             if (await remove.count()) {
                 await expect(remove).toBeVisible()
                 await remove.click()

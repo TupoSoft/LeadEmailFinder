@@ -126,6 +126,8 @@ remove_browser_fixture_state() {
     rm -f -- .dev/keycloak/browser-users.json
     # Native fixture identifiers name rows in the deleted database. The ignored runtime secret is kept.
     rm -f -- .dev/auth/native-users.json
+    # Raw API-key fixtures refer to deleted credentials and must be reseeded, never silently reused.
+    rm -f -- .dev/auth/platform-api-key.json .dev/auth/customer-api-key.json .dev/auth/mcp-live-api-key.json
 }
 
 wait_healthy() {
@@ -146,26 +148,12 @@ wait_healthy() {
 
 run_api_smoke_test() {
     api_url="${API_URL:-http://localhost:53000}"
-    service_client_file=".dev/keycloak/service-client.json"
     customer_fixture_file=".dev/keycloak/customer-fixture.json"
-
-    issuer="$(jq -r .issuer "${service_client_file}")"
-    client_id="$(jq -r .clientId "${service_client_file}")"
-    client_secret="$(jq -r .clientSecret "${service_client_file}")"
+    api_key="$(jq -r .apiKey .dev/auth/platform-api-key.json)"
     customer_org_id="$(jq -r .organizationId "${customer_fixture_file}")"
 
-    token="$(
-        curl --fail --silent --show-error \
-            --data-urlencode "grant_type=client_credentials" \
-            --data-urlencode "client_id=${client_id}" \
-            --data-urlencode "client_secret=${client_secret}" \
-            "${issuer}/protocol/openid-connect/token" \
-            | jq -r .access_token
-    )"
-
     balance="$(
-        curl --fail --silent --show-error \
-            --header "Authorization: Bearer ${token}" \
+        printf 'Authorization: Bearer %s\n' "${api_key}" | curl --fail --silent --show-error --header @- \
             "${api_url}/credits/${customer_org_id}" \
             | jq -r .balance
     )"

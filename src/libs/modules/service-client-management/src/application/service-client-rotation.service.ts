@@ -9,18 +9,18 @@ import {
     ServiceClientAccessDeniedError,
     ServiceClientNotFoundError,
 } from '../domain/service-client-management.errors'
-import { KeycloakServiceClientAdmin } from './ports/keycloak-service-client-admin'
+import { ApiKeyGenerator } from './ports/api-key-generator'
 
 export interface ServiceClientRotationResult {
     readonly credential: ServiceCredentialDetailRecord
-    readonly secret: string
+    readonly apiKey: string
 }
 
 export class ServiceClientRotationService {
     constructor(
         private readonly credentialDirectory: ServiceCredentialDirectory,
         private readonly credentialWriter: ServiceCredentialWriter,
-        private readonly keycloakAdmin: KeycloakServiceClientAdmin,
+        private readonly generateApiKey: ApiKeyGenerator,
     ) {}
 
     async rotate(
@@ -46,8 +46,8 @@ export class ServiceClientRotationService {
             throw new DisabledServiceClientRotationError()
         }
 
-        const secret = await this.keycloakAdmin.rotateSecret(credential.keycloakClientId)
-        const outcome = await this.credentialWriter.rotateWithAudit(credential, actor)
+        const { apiKey, keyHash, keyPrefix } = this.generateApiKey()
+        const outcome = await this.credentialWriter.rotateWithAudit(credential, actor, { keyHash, keyPrefix })
         if (outcome.kind === 'not-found') {
             throw new ServiceClientNotFoundError()
         }
@@ -55,6 +55,6 @@ export class ServiceClientRotationService {
             throw new DisabledServiceClientRotationError()
         }
 
-        return { credential: outcome.credential, secret }
+        return { credential: outcome.credential, apiKey }
     }
 }

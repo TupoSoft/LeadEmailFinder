@@ -7,9 +7,8 @@ http:
   method: POST
   url: "{{baseUrl}}/mcp"
   auth:
-    type: basic
-    username: "{{clientId}}"
-    password: "{{clientSecret}}"
+    type: bearer
+    token: "{{apiKey}}"
   headers:
     - name: Content-Type
       value: application/json

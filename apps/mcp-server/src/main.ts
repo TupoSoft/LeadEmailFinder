@@ -3,8 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { parseBasicCredentials } from './auth/basic-credentials.js'
-import { TokenCache, type AccessTokenProvider } from './auth/token-cache.js'
+import { validateApiKey, type ApiKeyValidator } from './auth/api-key.js'
 import { createServer } from './create-server.js'
 import { isRequestOriginAllowed, parseAllowedOrigins } from './request-origin.js'
 
@@ -20,7 +19,7 @@ async function handleMcpRequest(
     req: IncomingMessage,
     res: ServerResponse,
     allowedOrigins: ReadonlySet<string>,
-    tokenCache: AccessTokenProvider,
+    validateKey: ApiKeyValidator,
     apiBaseUrl: string,
 ): Promise<void> {
     if (!isRequestOriginAllowed(req.rawHeaders, allowedOrigins)) {
@@ -30,22 +29,34 @@ async function handleMcpRequest(
     if (req.method !== 'POST') {
         sendJson(res, 405, {
             jsonrpc: '2.0',
-            error: { code: -32000, message: 'Method not allowed. This server is stateless and only accepts POST /mcp.' },
+            error: {
+                code: -32000,
+                message: 'Method not allowed. This server is stateless and only accepts POST /mcp.',
+            },
             id: null,
         })
         return
     }
 
-    const parsedCredentials = parseBasicCredentials(req.headers.authorization)
-    if (!parsedCredentials.ok) {
+    const authorization = req.rawHeaders.flatMap((name, index) =>
+        index % 2 === 0 && name.toLowerCase() === 'authorization' ? [req.rawHeaders[index + 1]] : [],
+    )
+    const match = authorization.length === 1 ? /^Bearer (lef_[A-Za-z0-9_-]{43})$/.exec(authorization[0] ?? '') : null
+    if (!match) {
         sendJson(res, 401, { error: 'authentication_required' })
         return
     }
-    let accessToken: string
+    const apiKey = match[1]
+    let outcome: Awaited<ReturnType<ApiKeyValidator>>
     try {
-        accessToken = await tokenCache.getAccessToken(parsedCredentials.credentials)
+        outcome = await validateKey(apiBaseUrl, apiKey)
     } catch {
-        sendJson(res, 401, { error: 'authentication_required' })
+        outcome = 'unavailable'
+    }
+    if (outcome !== 'valid') {
+        sendJson(res, outcome === 'rejected' ? 401 : 503, {
+            error: outcome === 'rejected' ? 'authentication_required' : 'service_unavailable',
+        })
         return
     }
 
@@ -57,19 +68,19 @@ async function handleMcpRequest(
     })
     await server.connect(transport)
     const authenticatedReq = req as IncomingMessage & { auth?: AuthInfo }
-    authenticatedReq.auth = { token: accessToken, clientId: parsedCredentials.credentials.clientId, scopes: [] }
+    authenticatedReq.auth = { token: apiKey, clientId: 'api-key', scopes: [] }
     await transport.handleRequest(authenticatedReq, res)
 }
 
 export interface CreateAppOptions {
     allowedOrigins?: ReadonlySet<string>
-    tokenCache: AccessTokenProvider
+    validateKey?: ApiKeyValidator
     apiBaseUrl: string
 }
 
 export function createApp(options: CreateAppOptions): Server {
     const allowedOrigins = new Set(options.allowedOrigins ?? [])
-    const { tokenCache, apiBaseUrl } = options
+    const { apiBaseUrl, validateKey = validateApiKey } = options
     return createHttpServer((req, res) => {
         let url: URL
         try {
@@ -83,9 +94,13 @@ export function createApp(options: CreateAppOptions): Server {
             return
         }
         if (url.pathname === '/mcp') {
-            handleMcpRequest(req, res, allowedOrigins, tokenCache, apiBaseUrl).catch(() => {
+            handleMcpRequest(req, res, allowedOrigins, validateKey, apiBaseUrl).catch(() => {
                 if (!res.headersSent) {
-                    sendJson(res, 500, { jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null })
+                    sendJson(res, 500, {
+                        jsonrpc: '2.0',
+                        error: { code: -32603, message: 'Internal server error' },
+                        id: null,
+                    })
                 }
             })
             return
@@ -102,18 +117,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         console.error('Invalid MCP_ALLOWED_ORIGINS configuration.')
         process.exit(1)
     }
-    const tokenEndpointBaseUrl = process.env.OIDC_BACKCHANNEL_URL
-    if (!tokenEndpointBaseUrl) {
-        console.error('OIDC_BACKCHANNEL_URL is required.')
-        process.exit(1)
-    }
     const apiBaseUrl = process.env.API_URL
     if (!apiBaseUrl) {
         console.error('API_URL is required.')
         process.exit(1)
     }
-    const tokenCache = new TokenCache(tokenEndpointBaseUrl)
-    createApp({ allowedOrigins, tokenCache, apiBaseUrl }).listen(port, () => {
+    createApp({ allowedOrigins, apiBaseUrl }).listen(port, () => {
         console.log(`mcp-server listening on port ${port}`)
     })
 }

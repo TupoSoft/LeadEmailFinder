@@ -4,10 +4,6 @@ variables:
       value: http://localhost:53000
     - name: oidcIssuerUrl
       value: '{{process.env.OIDC_ISSUER_URL}}'
-    - name: serviceClientId
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_ID}}'
-    - name: serviceClientSecret
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}'
     - name: organizationId
       value: '{{process.env.PLATFORM_ORGANIZATION_ID}}'
     - name: webhookSecret
@@ -28,3 +24,5 @@ variables:
       value: '{{process.env.CUSTOMER_HELD_BALANCE}}'
     - name: customerHeldReserved
       value: '{{process.env.CUSTOMER_HELD_RESERVED}}'
+    - name: platformApiKey
+      value: '{{process.env.PLATFORM_API_KEY}}'

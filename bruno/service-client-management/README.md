@@ -1,9 +1,10 @@
 # Service Client Management Bruno Collection
 
-This rejection-only collection sends six requests: create without authentication, followed by create, list, rotate,
-disable, and delete with a provisioned M2M credential. Every management operation requires a genuine human browser
-session, so an M2M credential must be rejected even for its own organization. Create and rotate also assert
-`Cache-Control: no-store`, including rejection responses. No request creates or rotates a client.
+Ten requests cover human-only management and direct API-key authentication. Create without authentication returns
+401; create, list, rotate, disable, and delete with a machine key return 403 even for its own organization. Active
+keys validate at `GET /v1/auth/api-key` with an empty 204 response. Missing, malformed, and legacy JWT credentials
+return 401. Validation and issuance responses use `Cache-Control: no-store`, including rejection responses.
+No request creates or rotates a key.
 
 Run the pinned launcher against the development stack owned by this checkout:
 
@@ -12,7 +13,7 @@ corepack pnpm bruno:service-client-rejections
 ```
 
 The launcher verifies stack ownership, reads the ignored development credential internally, and runs
-`bru run --env local --sandbox developer` with the pinned CLI. It requires all six requests and six tests to execute
+`bru run --env local --sandbox developer` with the pinned CLI. It requires all ten requests and ten tests to execute
 successfully. Credentials stay outside command arguments. The count-only reporter prevents headers, bodies,
 assertion details, and raw CLI output from reaching artifacts or logs, including failure paths.
 

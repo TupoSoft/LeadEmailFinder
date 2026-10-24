@@ -4,12 +4,6 @@ variables:
       value: http://localhost:53000
     - name: oidcIssuerUrl
       value: '{{process.env.OIDC_ISSUER_URL}}'
-    - name: oidcBackchannelUrl
-      value: '{{process.env.OIDC_BACKCHANNEL_URL}}'
-    - name: serviceClientId
-      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_ID}}'
-    - name: serviceClientSecret
-      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_SECRET}}'
     - name: organizationId
       value: '{{process.env.CUSTOMER_ORGANIZATION_ID}}'
     - name: evidenceControlUrl
@@ -20,3 +14,7 @@ variables:
       value: '{{process.env.BATCH_DUPLICATE_CSV_PATH}}'
     - name: insufficientGroupCsvPath
       value: '{{process.env.BATCH_INSUFFICIENT_GROUP_CSV_PATH}}'
+    - name: platformApiKey
+      value: '{{process.env.PLATFORM_API_KEY}}'
+    - name: customerApiKey
+      value: '{{process.env.CUSTOMER_API_KEY}}'

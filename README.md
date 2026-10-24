@@ -220,7 +220,7 @@ locally and never commit real production credentials.
 
 `OIDC_ISSUER_URL` is the public Keycloak realm URL used by browser redirects and token issuer validation.
 `OIDC_BACKCHANNEL_URL` optionally selects the realm URL for server-side code exchange, refresh, and logout.
-`OIDC_JWKS_URI` optionally selects the key retrieval URL for both bearer and BFF ID-token verification.
+`OIDC_JWKS_URI` optionally selects the key retrieval URL for BFF ID-token verification.
 When omitted, these retrieval addresses fall back to the public issuer's protocol endpoints.
 
 The local stack uses `http://localhost:58080/realms/lead-email-finder` as its public issuer and
@@ -415,12 +415,15 @@ Each run seeds:
 
 | Fixture                   | Identity                                       | Notes                                                                                                |
 | ------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Platform M2M credential   | `lef-development-service` (Client Credentials) | `platform:admin`; see `scripts/keycloak/bootstrap-credential.ts`                                     |
+| Platform API key | `.dev/auth/platform-api-key.json` | Development-only `platform:admin`; see `scripts/keycloak/bootstrap-credential.ts` |
 | Platform operator (human) | `platform-operator@lef.test`                   | `platform_admin`; password is the fixed dev-only constant in `scripts/keycloak/platform-operator.ts` |
 | Customer organization     | "Acme Development Customer"                    | Owner `owner@acme.lef.test`, 1000 starting credits                                                   |
-| Customer M2M credential   | `lef-svc-dev-fixture` (Client Credentials)     | Scoped to `verification:run`/`verification:read` only                                                |
+| Customer API key | `.dev/auth/customer-api-key.json` | Scoped to `verification:run`, `verification:read`, and `billing:read` |
 
-Generated secrets (Keycloak client secrets, id summaries) are written only to the gitignored `.dev/keycloak/*.json` files, never printed in full.
+Generated API keys live only in checkout-owned, ignored `.dev/auth/platform-api-key.json` and
+`.dev/auth/customer-api-key.json` files with mode 0600. Keycloak human fixture summaries remain under
+`.dev/keycloak/`. Tooling never prints raw API keys. Machine callers send `Authorization: Bearer <apiKey>` directly;
+there is no OAuth token exchange. See [authentication development](docs/auth/README.md) for issuance and revocation.
 
 The two privileged human fixtures request TOTP enrollment on their first browser login. Run
 `corepack pnpm --filter ./apps/web browser-fixtures:bootstrap` after the reset, then use the shared MFA-aware

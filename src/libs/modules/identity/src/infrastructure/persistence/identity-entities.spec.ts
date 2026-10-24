@@ -74,13 +74,17 @@ describe('identity and organization entities', () => {
         expect(permissions?.options).toEqual(expect.objectContaining({ enumName: 'auth_permission', array: true }))
     })
 
-    it('uniquely identifies a service credential by issuer and Keycloak client id', () => {
+    it('uniquely identifies API key hashes and excludes hashes from default entity reads', () => {
         const uniqueIndex = metadata.indices.find(
-            index =>
-                index.target === ServiceCredential && index.name === 'UQ_service_credentials_issuer_keycloak_client_id',
+            index => index.target === ServiceCredential && index.name === 'UQ_service_credentials_key_hash',
         )
 
-        expect(uniqueIndex?.columns).toEqual(['issuer', 'keycloakClientId'])
+        expect(uniqueIndex?.columns).toEqual(['keyHash'])
+        const hash = metadata.columns.find(
+            column => column.target === ServiceCredential && column.propertyName === 'keyHash',
+        )
+        expect(hash?.options).toMatchObject({ select: false, length: 64 })
+        expect(hash?.options.nullable).not.toBe(true)
     })
 
     it('uses one non-negative credit account per organization, with reserved bounded by balance', () => {

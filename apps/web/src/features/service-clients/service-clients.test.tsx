@@ -50,7 +50,7 @@ const account: CurrentAccount = {
 }
 const activeClient: ServiceClient = {
     id: 'client-a',
-    clientId: 'application-a',
+    keyPrefix: 'lef_abcd1234',
     description: 'Production integration',
     permissions: ['verification:run'],
     status: 'active',
@@ -60,7 +60,7 @@ const activeClient: ServiceClient = {
 const disabledClient: ServiceClient = {
     ...activeClient,
     id: 'client-b',
-    clientId: 'application-b',
+    keyPrefix: 'lef_efgh5678',
     description: null,
     status: 'disabled',
 }
@@ -74,7 +74,13 @@ function deferred<T>() {
     return { promise, resolve }
 }
 function issuedResponse(status = 201) {
-    return Response.json({ ...activeClient, clientSecret: crypto.randomUUID() }, { status })
+    return Response.json(
+        {
+            ...activeClient,
+            apiKey: `lef_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '').slice(0, 11)}`,
+        },
+        { status },
+    )
 }
 function renderClients({
     capabilities = account.capabilities,
@@ -141,7 +147,7 @@ async function create(user = userEvent.setup()) {
     return user
 }
 async function confirmRotate() {
-    await userEvent.click(await screen.findByRole('button', { name: `Rotate secret for ${activeClient.clientId}` }))
+    await userEvent.click(await screen.findByRole('button', { name: `Rotate API key ${activeClient.keyPrefix}` }))
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: copy.rotate }))
 }
 function cachesAreSecretFree(session: AuthSession) {
@@ -151,23 +157,37 @@ function cachesAreSecretFree(session: AuthSession) {
                 .getQueryCache()
                 .getAll()
                 .map(query => query.state.data),
-        ).includes('clientSecret') && session.queryClient.getMutationCache().getAll().length === 0
+        ).match(/apiKey|keyHash|clientSecret/) && session.queryClient.getMutationCache().getAll().length === 0
     )
 }
 
 describe('service-clients', () => {
     it('preserves server order, includes disabled clients and only displays server grant choices', async () => {
         const { session } = renderClients()
-        expect(await screen.findByText('Service clients 1–2 of 2')).toBeInTheDocument()
+        expect(await screen.findByText('API keys 1–2 of 2')).toBeInTheDocument()
         expect(screen.getAllByRole('checkbox').map(input => input.parentElement?.textContent)).toEqual(
             account.grantableServiceClientPermissions,
         )
-        const disabled = screen.getByText(disabledClient.clientId).closest('tr')!
+        const disabled = screen.getByText(disabledClient.keyPrefix).closest('tr')!
         expect(within(disabled).getByText('Disabled')).toBeInTheDocument()
         expect(within(disabled).getAllByRole('button')).toHaveLength(1)
         expect(session.queryClient.getQueryData(serviceClientsQueryKey(account.organization.id))).toEqual([
             activeClient,
             disabledClient,
+        ])
+        expect(cachesAreSecretFree(session)).toBe(true)
+    })
+
+    it('projects only safe list metadata before caching an unexpected issuance value or hash', async () => {
+        const { session } = renderClients({
+            intercept: request =>
+                new URL(request.url).pathname === collection && request.method === 'GET'
+                    ? Response.json([{ ...activeClient, apiKey: crypto.randomUUID(), keyHash: crypto.randomUUID() }])
+                    : undefined,
+        })
+        expect(await screen.findByText(activeClient.keyPrefix)).toBeInTheDocument()
+        expect(session.queryClient.getQueryData(serviceClientsQueryKey(account.organization.id))).toEqual([
+            activeClient,
         ])
         expect(cachesAreSecretFree(session)).toBe(true)
     })
@@ -252,7 +272,7 @@ describe('service-clients', () => {
     })
 
     it('exports credentials only on explicit download and immediately revokes a secret-free object URL', async () => {
-        const createObjectURL = vi.fn(() => 'blob:download')
+        const createObjectURL = vi.fn<(blob: Blob) => string>().mockReturnValue('blob:download')
         const revokeObjectURL = vi.fn()
         Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
         Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
@@ -266,8 +286,26 @@ describe('service-clients', () => {
         expect(createObjectURL).not.toHaveBeenCalled()
         await userEvent.click(within(dialog).getByRole('button', { name: copy.download }))
         expect(await within(dialog).findByText(copy.downloaded)).toBeInTheDocument()
-        expect(filename).toBe('service-client-credentials.json')
+        expect(filename).toBe('api-key.json')
         expect(createObjectURL).toHaveBeenCalledTimes(1)
+        const payload = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+                if (typeof reader.result === 'string') resolve(reader.result)
+                else reject(new Error('Invalid API key export'))
+            }
+            reader.onerror = () => reject(new Error('Cannot read exported API key'))
+            reader.readAsText(createObjectURL.mock.calls[0][0])
+        })
+        const exported: unknown = JSON.parse(payload)
+        expect(
+            typeof exported === 'object' &&
+                exported !== null &&
+                Object.keys(exported).length === 1 &&
+                Object.hasOwn(exported, 'apiKey') &&
+                Reflect.get(exported, 'apiKey') ===
+                    within(dialog).getByLabelText<HTMLInputElement>(copy.secretLabel).value,
+        ).toBe(true)
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:download')
         expect(document.querySelector('a[download]')).toBeNull()
     })
@@ -289,13 +327,13 @@ describe('service-clients', () => {
             const { fetch } = renderClients()
             const accessibleName =
                 kind === 'rotate'
-                    ? `Rotate secret for ${activeClient.clientId}`
-                    : `${kind === 'disable' ? 'Disable' : 'Delete'} client ${activeClient.clientId}`
+                    ? `Rotate API key ${activeClient.keyPrefix}`
+                    : `${kind === 'disable' ? 'Disable' : 'Delete'} API key ${activeClient.keyPrefix}`
             const button = await screen.findByRole('button', { name: accessibleName })
             await userEvent.click(button)
             const dialog = screen.getByRole('dialog')
             expect(within(dialog).getByRole('button', { name: copy.cancel })).toHaveFocus()
-            expect(dialog.textContent?.includes(activeClient.clientId)).toBe(true)
+            expect(dialog.textContent?.includes(activeClient.keyPrefix)).toBe(true)
             expect(
                 requests(
                     fetch,
@@ -318,10 +356,10 @@ describe('service-clients', () => {
                     return Response.json([{ ...activeClient, status: 'disabled' }])
             },
         })
-        await userEvent.click(await screen.findByRole('button', { name: `Disable client ${activeClient.clientId}` }))
+        await userEvent.click(await screen.findByRole('button', { name: `Disable API key ${activeClient.keyPrefix}` }))
         await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: copy.disable }))
         expect(screen.getByText('Active')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: `Disable client ${activeClient.clientId}` })).toBeDisabled()
+        expect(screen.getByRole('button', { name: `Disable API key ${activeClient.keyPrefix}` })).toBeDisabled()
         disabled = true
         await act(async () => {
             delayed.resolve(new Response(null, { status: 204 }))
@@ -330,7 +368,7 @@ describe('service-clients', () => {
         expect(await screen.findByText(copy.disabled)).toBeInTheDocument()
         await waitFor(() =>
             expect(
-                screen.queryByRole('button', { name: `Rotate secret for ${activeClient.clientId}` }),
+                screen.queryByRole('button', { name: `Rotate API key ${activeClient.keyPrefix}` }),
             ).not.toBeInTheDocument(),
         )
         expect(requests(fetch, `${collection}/${activeClient.id}/disable`, 'POST')).toHaveLength(1)
@@ -454,7 +492,7 @@ describe('service-clients', () => {
                         Array.from({ length: 11 }, (_, index) => ({
                             ...activeClient,
                             id: `client-${index}`,
-                            clientId: `application-${index}`,
+                            keyPrefix: `lef_key${String(index).padStart(5, '0')}`,
                         })),
                     )
             },
@@ -463,10 +501,10 @@ describe('service-clients', () => {
         expect(await screen.findByText(copy.unknown)).toBeInTheDocument()
         await waitFor(() => expect(screen.getByRole('button', { name: copy.next })).toBeEnabled())
         await userEvent.click(screen.getByRole('button', { name: copy.next }))
-        expect(await screen.findByText('Service clients 11–11 of 11')).toBeInTheDocument()
+        expect(await screen.findByText('API keys 11–11 of 11')).toBeInTheDocument()
         expect(screen.getByText(copy.unknown)).toBeInTheDocument()
         expect(screen.getByRole('button', { name: copy.create })).toBeDisabled()
-        expect(screen.getByRole('button', { name: 'Rotate secret for application-10' })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Rotate API key lef_key00010' })).toBeDisabled()
         expect(requests(fetch, collection, 'POST')).toHaveLength(1)
         await userEvent.click(screen.getByRole('button', { name: copy.reviewed }))
         expect(screen.getByRole('button', { name: copy.create })).toBeEnabled()

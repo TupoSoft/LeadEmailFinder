@@ -22,7 +22,7 @@ const principal: AuthPrincipal = {
     subject: 'human-1',
     organizationId: 'org-1',
     membershipRole: 'owner',
-    permissions: [],
+    permissions: ['credentials:manage'],
     credentialId: 'identity-1',
 }
 
@@ -32,7 +32,7 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
         organizationId: 'org-1',
         issuer: 'https://issuer',
         subject: 'sa-1',
-        keycloakClientId: 'lef-svc-1',
+        keyPrefix: 'lef-svc-1',
         description: null,
         permissions: ['verification:run'],
         status: 'active',
@@ -75,7 +75,7 @@ describe('ServiceClientsController', () => {
     })
 
     it('creates a service client and returns the secret once', async () => {
-        creation.create.mockResolvedValue({ credential: credentialFixture(), secret: 'a-secret' })
+        creation.create.mockResolvedValue({ credential: credentialFixture(), apiKey: 'a-secret' })
 
         const result = await controller.create(
             { organizationId: 'org-1' },
@@ -84,11 +84,11 @@ describe('ServiceClientsController', () => {
         )
 
         expect(creation.create).toHaveBeenCalledWith(principal, 'org-1', 'ci', ['verification:run'])
-        expect(result).toMatchObject({ id: 'sc-1', clientId: 'lef-svc-1', clientSecret: 'a-secret' })
+        expect(result).toMatchObject({ id: 'sc-1', keyPrefix: 'lef-svc-1', apiKey: 'a-secret' })
     })
 
     it('defaults a missing description to null', async () => {
-        creation.create.mockResolvedValue({ credential: credentialFixture(), secret: 'a-secret' })
+        creation.create.mockResolvedValue({ credential: credentialFixture(), apiKey: 'a-secret' })
 
         await controller.create({ organizationId: 'org-1' }, { permissions: ['verification:run'] }, principal)
 
@@ -101,17 +101,17 @@ describe('ServiceClientsController', () => {
         const result = await controller.list({ organizationId: 'org-1' }, principal)
 
         expect(listing.list).toHaveBeenCalledWith(principal, 'org-1')
-        expect(result).toEqual([expect.objectContaining({ id: 'sc-1', clientId: 'lef-svc-1', status: 'disabled' })])
-        expect(result[0]).not.toHaveProperty('clientSecret')
+        expect(result).toEqual([expect.objectContaining({ id: 'sc-1', keyPrefix: 'lef-svc-1', status: 'disabled' })])
+        expect(result[0]).not.toHaveProperty('apiKey')
     })
 
     it('rotates a service client and returns the new secret once', async () => {
-        rotation.rotate.mockResolvedValue({ credential: credentialFixture(), secret: 'new-secret' })
+        rotation.rotate.mockResolvedValue({ credential: credentialFixture(), apiKey: 'new-secret' })
 
         const result = await controller.rotate({ organizationId: 'org-1', serviceClientId: 'sc-1' }, principal)
 
         expect(rotation.rotate).toHaveBeenCalledWith(principal, 'org-1', 'sc-1')
-        expect(result).toMatchObject({ clientSecret: 'new-secret' })
+        expect(result).toMatchObject({ apiKey: 'new-secret' })
     })
 
     it('disables a service client', async () => {

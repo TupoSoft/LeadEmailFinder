@@ -4,15 +4,9 @@ variables:
       value: http://localhost:53000
     - name: oidcIssuerUrl
       value: '{{process.env.OIDC_ISSUER_URL}}'
-    - name: oidcBackchannelUrl
-      value: '{{process.env.OIDC_BACKCHANNEL_URL}}'
-    - name: serviceClientId
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_ID}}'
-    - name: serviceClientSecret
-      value: '{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}'
-    - name: customerClientId
-      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_ID}}'
-    - name: customerClientSecret
-      value: '{{process.env.CUSTOMER_SERVICE_CLIENT_SECRET}}'
     - name: organizationId
       value: '{{process.env.CUSTOMER_ORGANIZATION_ID}}'
+    - name: platformApiKey
+      value: '{{process.env.PLATFORM_API_KEY}}'
+    - name: customerApiKey
+      value: '{{process.env.CUSTOMER_API_KEY}}'

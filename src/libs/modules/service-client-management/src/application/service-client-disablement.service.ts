@@ -27,8 +27,7 @@ export class ServiceClientDisablementService {
             throw new ServiceClientNotFoundError()
         }
 
-        // Deliberately no Keycloak call here: ServiceCredentialResolver checks local status on every request with no
-        // caching, so a disabled credential is rejected on its very next use regardless of JWT validity or expiry.
+        // Authentication reads committed credential status on every request; disablement has no cache delay.
         const outcome = await this.credentialWriter.disableWithAudit(credential, actor)
         if (outcome === 'not-found') {
             throw new ServiceClientNotFoundError()

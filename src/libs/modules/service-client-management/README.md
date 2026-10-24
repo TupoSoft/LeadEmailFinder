@@ -1,127 +1,101 @@
 # Service Client Management
 
-Lets an organization's human members create, list, rotate, disable, and delete their own M2M (OAuth Client
-Credentials) service clients, with the Keycloak client itself as the provider of record and local persistence
-kept consistent through compensation on partial failure.
+Organization owners and administrators create, list, rotate, disable, and delete application-owned API keys.
+The resource paths and internal `service_client` kind remain stable while machine callers use each key directly
+as a Bearer credential.
 
 ## Responsibility
 
-- Self-service life cycle for organization-owned M2M service clients: create, list, rotate the client secret,
-  disable, and delete.
-- Authoritative rejection of requested service-client permissions outside the auth-owned grant ceiling for the
-  caller's membership role.
-- Keeping the local `ServiceCredential` record and the corresponding Keycloak client consistent, including
-  compensating (reverting the Keycloak-side change) when the paired local mutation fails.
+- API-key issuance and lifecycle authorization, restricted to human owner/admin sessions with `credentials:manage`.
+- Nonempty, unique permission grants within the auth-owned ceiling for the caller's membership role.
+- One-time disclosure after identity commits the corresponding credential and audit transaction.
 
 ## Non-Responsibilities
 
-- No `ServiceCredential` persistence of its own (owned by [`identity`](../identity/README.md)); this module only
-  requests purpose-specific reads and atomic credential/audit writes through identity's public ports.
-- No request-time M2M authentication (owned by [`auth`](../auth/README.md)); this module only manages the
-  credentials auth later authenticates.
+- Persistence belongs to [`identity`](../identity/README.md), accessed through its purpose-specific public ports.
+- Request authentication belongs to [`auth`](../auth/README.md), which reads current credential state on every request.
+- Human login remains in `bff-session`; this module performs no external provider administration.
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports only `ServiceClientManagementModule`. Every service, the Keycloak admin
-client, and every DTO are internal.
+[`src/index.ts`](src/index.ts) exports only `ServiceClientManagementModule`. Services, DTOs, the key generator,
+and its injection token remain internal.
 
 ## Architecture
 
-Layered per `module-architecture/07`. `api/` holds the controller, DTOs, HTTP integration test, and mapping from
-typed service-client errors to the unchanged Nest HTTP exceptions. `application/` holds the five life-cycle use
-cases and the private `KeycloakServiceClientAdmin` port. `domain/` holds the framework-free service-client error
-vocabulary. `infrastructure/config/` adapts Nest configuration to the plain application contract, while
-`infrastructure/keycloak/` holds the `KeycloakServiceClientAdminClient` adapter together with live-Keycloak coverage.
-
-Application and domain import neither Nest nor TypeORM. `service-client-management.module.ts` constructs each use
-case through an explicit factory, injecting identity's directory/writer ports, the private Keycloak port, the
-framework-free auth-owned service-client grant policy, and the issuer as plain configuration. The controller alone
-translates application/domain failures to HTTP behavior.
+The API layer maps application errors to HTTP responses and exposes safe metadata. Application use cases inject
+the identity directory/writer ports, the auth grant policy, and a small key-generation function. The infrastructure
+generator uses Node cryptography: `lef_` plus 32 random bytes encoded as base64url, for 47 ASCII characters total.
+It hashes the complete key using SHA-256 and exposes the first 12 characters as display metadata. Application and
+domain code import neither Nest nor TypeORM. The composition root connects these capabilities through explicit factories.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthPermission`, `ServiceCredentialDetailRecord`, and the
-  `ServiceCredentialDirectory`/`ServiceCredentialWriter` persistence ports with their injection tokens. This module
-  imports no identity TypeORM entity, repository, or `DataSource`.
-- [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `RequirePermissions`,
-  and the shared `ServiceClientGrantPolicy` contract and injection token.
-- `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
-  (`KeycloakAdminHttpModule`, `KEYCLOAK_ADMIN_HTTP`), also imported by
-  [`organization-onboarding`](../organization-onboarding/README.md). This module's own
-  `KeycloakServiceClientAdminClient` adapter, its business port, and its provider registration stay private and
-  not shared.
+- [`identity`](../identity/README.md): principal and permission types, safe credential records, the stable
+  `AUTH_IDENTITY_ISSUER`, and the directory/writer ports. This module imports no identity entity or database client.
+- [`auth`](../auth/README.md): guards, controller decorators, role policy, and the shared service-client grant policy.
 
 ## HTTP Surface
 
-`ServiceClientsController` at `v1/organizations/:organizationId/service-clients`, published in runtime and browser OpenAPI, every
-route requiring `credentials:manage`:
+`v1/organizations/:organizationId/service-clients` retains these resource paths:
 
-| Method   | Path                                           | Notes                    |
-| -------- | ---------------------------------------------- | ------------------------ |
-| `POST`   | `.../service-clients`                          | `201`; secret returned once |
-| `GET`    | `.../service-clients`                          | List                     |
-| `POST`   | `.../service-clients/:serviceClientId/rotate`  | `200`; replacement secret returned once |
-| `POST`   | `.../service-clients/:serviceClientId/disable` | `204 No Content`         |
-| `DELETE` | `.../service-clients/:serviceClientId`         | `204 No Content`         |
+| Method   | Path                                           | Result                                        |
+| -------- | ---------------------------------------------- | --------------------------------------------- |
+| `POST`   | `.../service-clients`                          | `201`, safe metadata and one-time `apiKey`    |
+| `GET`    | `.../service-clients`                          | Safe metadata list                            |
+| `POST`   | `.../service-clients/:serviceClientId/rotate`  | `200`, safe metadata and replacement `apiKey` |
+| `POST`   | `.../service-clients/:serviceClientId/disable` | Empty `204`                                   |
+| `DELETE` | `.../service-clients/:serviceClientId`         | Empty `204`                                   |
 
-Every route additionally requires a `human_session` credential kind at the service layer — an M2M bearer token
-can never call these endpoints, regardless of its permissions. Cookie mutations also require the existing Origin
-and CSRF checks. Organization and service-client parameters must be UUIDs. Create accepts an optional description
-of 1–200 characters and at least one unique permission from the current account's
-`grantableServiceClientPermissions`; the auth-owned grant ceiling remains authoritative for stale or forged requests.
-Duplicate permissions are rejected at both the DTO and application boundaries.
+Every operation requires a human owner/admin session and `credentials:manage`. The application checks the
+human credential kind and owner/admin role; both roles carry that capability in the auth role policy. The HTTP
+permission guard enforces the same policy. Human principals carry an empty explicit permission array, so it is not
+used to authorize these operations. API keys cannot manage keys,
+regardless of their permissions. Cookie mutations retain Origin and CSRF validation. Organization and credential
+parameters must be UUIDs. Create accepts an optional description of 1–200 characters and at least one unique
+permission within `grantableServiceClientPermissions`.
 
-Create and rotate return the one-time `clientSecret`. List returns only `id`, `clientId`, nullable `description`,
-`permissions`, `status`, `createdAt`, and `updatedAt`. Create and rotate responses carry `Cache-Control: no-store` for every success and failure. API-host middleware sets
-the header before body parsing, authentication guards, and validation.
-No endpoint retrieves an existing secret. Disabled clients cannot rotate, and there is no re-enable route.
+Metadata contains `id`, `keyPrefix`, nullable `description`, `permissions`, `status`, `createdAt`, and `updatedAt`.
+The `apiKey` field appears only in successful create/rotate responses. Neither metadata nor HTTP DTOs expose
+`keyHash`. Existing secrets cannot be retrieved. All create/rotate responses, including failures before parsing,
+carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer` through API-host middleware.
 
-Invalid inputs return `400`; missing authentication returns `401`; disallowed credentials, roles, permissions, or
-browser requests return `403`. A missing client and a client outside the caller's organization both return `404`
-for rotate, disable, and delete. Create/list reject a different organization with `403`. Disabled rotation returns
-`409`. Provider or persistence failures return `500`; a lost create or rotate response requires explicit
-reconciliation because the operation may already have taken effect. Disable and delete return empty `204` responses.
-No schema change, migration, reset, or reseed is required.
+Invalid inputs return `400`; missing authentication returns `401`; disallowed credential kinds, roles,
+permissions, or browser checks return `403`. Create/list reject a foreign organization with `403`. Mutations
+return indistinguishable `404` responses for missing and foreign targets. Disabled rotation returns `409`;
+disablement is terminal, and there is no re-enable endpoint. Persistence failures return `500`. A lost issuance
+response requires explicit reconciliation using safe metadata before rotating, disabling, or deleting; never
+retry creation or rotation automatically.
 
 ## Persistence
 
-None owned. This module operates entirely through `ServiceCredentialDirectory` and `ServiceCredentialWriter`,
-whose TypeORM adapters are owned by `identity`. The directory performs organization-scoped lookups and lists
-credentials in `createdAt DESC, id DESC` order, including disabled credentials. The writer keeps each create, rotate, disable, or delete mutation atomic
-with its corresponding audit entry in the `ServiceCredential` and `AuditLogEntry` tables. Its conditional,
-organization-scoped mutation outcomes prevent a stale pre-provider snapshot from re-enabling or recreating a
-credential that was concurrently disabled or deleted.
+Identity owns the credential and audit tables. Each mutation and its audit commit in one local transaction.
+Rotation conditionally updates only an active scoped row and preserves its ID and permissions. Concurrent
+disablement or deletion cannot be undone by a stale rotation. Disablement remains idempotent; deleting an absent
+credential returns `404`. Lists include disabled credentials in `createdAt DESC, id DESC` order.
+
+The credential schema replaces the provider client ID with a unique non-null hash and display prefix. Existing
+OAuth machine credentials are discarded with disposable development data. No migration or backfill is introduced.
+Stop only the checkout-owned stack, follow the guarded reset in [`docker/README.md`](../../../../docker/README.md),
+synchronize with `TYPEORM_SYNCHRONIZE=true`, and rerun the application seed. Preserve Keycloak human fixtures until
+the later browser-login cutover.
 
 ## Configuration
 
-- `OIDC_ISSUER_URL`
-- `KEYCLOAK_ADMIN_API_BASE_URL` (optional — overrides where the Keycloak Admin API is reached from)
-- `KEYCLOAK_ORG_ADMIN_CLIENT_ID`
-- `KEYCLOAK_ORG_ADMIN_CLIENT_SECRET`
+None. Issuance uses application-owned cryptography and the stable identity issuer; no provider credentials are required.
 
 ## Validation
 
-Focused tests live in `src/`: `application/service-client-creation.service.spec.ts`,
-`application/service-client-listing.service.spec.ts`, `application/service-client-rotation.service.spec.ts`,
-`application/service-client-disablement.service.spec.ts`, `application/service-client-deletion.service.spec.ts`,
-`api/service-clients.controller.spec.ts`, `api/service-client-management-http.integration.spec.ts`,
-`api/service-client-lifecycle-http.integration.spec.ts`,
-`service-client-management.module.spec.ts` (factory-provider wiring),
-`infrastructure/config/service-client-management-configuration.spec.ts`,
-`infrastructure/keycloak/keycloak-service-client-admin-client.service.spec.ts`, and the live-Keycloak-gated
-`infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts`. Identity's adapter behavior
-is covered by `infrastructure/persistence/typeorm-service-credential-directory.spec.ts` and
-`infrastructure/persistence/typeorm-service-credential-writer.spec.ts` in the identity module.
+Focused application tests cover authorization, grant validation, one-time disclosure, uncertain outcomes, and
+concurrent persistence outcomes. Controller and HTTP suites cover DTO serialization, status codes, authorization,
+and cache headers. `infrastructure/api-key-generator.spec.ts` checks the cryptographic wire format and full-key hashing.
 
-The creation service tests cover ordered grant-policy choices and reject duplicate, forged, or stale broader
-permission selections before any Keycloak side effect. HTTP tests verify serialization, lifecycle authorization,
-validation, and cache prevention on successful responses and failures from body parsing, guards, and applications.
-The generated contract suite in `scripts/openapi/contracts.test.mjs` checks the five browser operations, exact status
-codes, UUID parameters, permission enums, and secret-free list types.
+Identity's `api-key-credential-postgres.integration.spec.ts` exercises real local transactions in a randomly named
+schema of an owned disposable database selected through `TEST_POSTGRES_URL` (database name ending in `_test`).
+It covers hash uniqueness, safe projections, uncached permission lookup, rotation/disable/delete races, and rollback
+when audit writes fail. The former provider administration tests were removed with that adapter.
 
 [`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) covers unauthenticated
-creation and M2M rejection for all five operations, including cache prevention on create and rotate failures.
-Bruno cannot mint a genuine human session. The dedicated live browser suite instead exercises the successful human
-lifecycle, and `infrastructure/keycloak/service-client-management.live-keycloak.integration.spec.ts` covers the
-provider lifecycle. Provider and persistence ports are substituted in the focused HTTP suite, so passing that suite
-alone does not establish live Keycloak or PostgreSQL behavior.
+requests and machine-key rejection. The live browser credential suite supplies human-session success evidence.
+Run focused suites, the module architecture gate, type checking, OpenAPI checks, and relevant Bruno/browser runners;
+passing substituted HTTP tests alone does not establish PostgreSQL or live human-login behavior.

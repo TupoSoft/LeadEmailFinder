@@ -19,20 +19,38 @@ test('proxy registry requires every request and uses the pinned private host lau
     const requests = await Promise.all(files.map(async file => parse(await readFile(resolve(directory, file), 'utf8'))))
     const registered = registeredCollection('proxy-registry')
     assert.deepEqual(registered, { requests: 27, tests: 27, sandbox: 'developer', network: 'host', countOnly: true })
-    assert.deepEqual(requests.map(request => request.info.seq), Array.from({ length: 27 }, (_, index) => index + 1))
+    assert.deepEqual(
+        requests.map(request => request.info.seq),
+        Array.from({ length: 27 }, (_, index) => index + 1),
+    )
     const script = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')).scripts['bruno:proxy-registry']
     assert.equal(script, 'node scripts/bruno/run-collection.mjs proxy-registry')
     const creation = requests.find(request => request.info.name.endsWith('-create-proxy'))
     assert.equal(Object.hasOwn(JSON.parse(creation.http.body.data), 'state'), false)
     const ordinaryUpdate = requests.find(request => request.info.name.endsWith('-update-without-auth'))
     assert.equal(Object.hasOwn(JSON.parse(ordinaryUpdate.http.body.data), 'auth'), false)
-    const metadata = { apiUrl: 'http://localhost:53000', keycloakUrl: 'http://localhost:58080' }
+    const metadata = {
+        checkoutRoot: root,
+        composeProject: 'lef-test',
+        apiUrl: 'http://localhost:53000',
+        keycloakUrl: 'http://localhost:58080',
+    }
     const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    const secret = randomUUID()
+    const secret = 'lef_' + randomBytes(32).toString('base64url')
     const environment = collectionEnvironment(
         'proxy-registry',
         metadata,
-        { issuer, clientId: 'local-service', clientSecret: secret },
+        {
+            version: 1,
+            kind: 'platform',
+            checkoutRoot: root,
+            composeProject: 'lef-test',
+            issuer: 'urn:lead-email-finder:auth',
+            apiKey: secret,
+            keyPrefix: secret.slice(0, 12),
+            credentialId: randomUUID(),
+            organizationId: randomUUID(),
+        },
         { organizationId: randomUUID(), keycloakClientId: 'local-service', issuers: [issuer] },
     )
     assert.equal(environment.BRUNO_API_URL, metadata.apiUrl)
@@ -49,8 +67,15 @@ test('proxy credential markers never reach CLI logs or reporter files on failure
     const reportFile = resolve(directory, 'report.json')
     const markers = [randomBytes(32).toString('hex'), randomBytes(32).toString('hex')]
     try {
-        await assert.rejects(execute(process.execPath, [
-            '--import', resolve(root, 'scripts/bruno/count-only-reporter.mjs'), '--input-type=module', '-e', `
+        await assert.rejects(
+            execute(
+                process.execPath,
+                [
+                    '--import',
+                    resolve(root, 'scripts/bruno/count-only-reporter.mjs'),
+                    '--input-type=module',
+                    '-e',
+                    `
                 import fs from 'node:fs';
                 const [user, pass] = JSON.parse(process.env.TEST_PROXY_MARKERS);
                 console.log(user); console.error(pass);
@@ -61,12 +86,22 @@ test('proxy credential markers never reach CLI logs or reporter files on failure
                 }]));
                 throw new Error(pass);
             `,
-        ], { env: { ...process.env, LEF_BRUNO_COUNTS_REPORT: reportFile, TEST_PROXY_MARKERS: JSON.stringify(markers) } }), error => {
-            assert.equal(error.stdout, '')
-            assert.equal(error.stderr, '')
-            for (const marker of markers) assert.equal(error.message.includes(marker), false)
-            return true
-        })
+                ],
+                {
+                    env: {
+                        ...process.env,
+                        LEF_BRUNO_COUNTS_REPORT: reportFile,
+                        TEST_PROXY_MARKERS: JSON.stringify(markers),
+                    },
+                },
+            ),
+            error => {
+                assert.equal(error.stdout, '')
+                assert.equal(error.stderr, '')
+                for (const marker of markers) assert.equal(error.message.includes(marker), false)
+                return true
+            },
+        )
         assert.deepEqual(await readdir(directory), ['report.json'])
         const report = await readFile(reportFile, 'utf8')
         for (const marker of markers) assert.equal(report.includes(marker), false)
@@ -128,7 +163,11 @@ test('pinned proxy CLI covers cursors, lifecycle, credential omission, blacklist
         }
         if (pathname === '/v1/proxies' && request.method === 'POST') {
             const body = JSON.parse(raw)
-            if (Object.hasOwn(body, 'auth') && (!body.auth || Array.isArray(body.auth) || !body.auth.user || !body.auth.pass)) return reply(400, {})
+            if (
+                Object.hasOwn(body, 'auth') &&
+                (!body.auth || Array.isArray(body.auth) || !body.auth.user || !body.auth.pass)
+            )
+                return reply(400, {})
             const proxy = { ...body, id: randomUUID(), state: body.state ?? 'disabled', blacklists: [] }
             if (body.auth) markers.push(body.auth.user, body.auth.pass)
             proxies.set(proxy.id, proxy)
@@ -140,7 +179,11 @@ test('pinned proxy CLI covers cursors, lifecycle, credential omission, blacklist
         assert.notEqual(proxy.id, originalId, 'The collection must leave unrelated proxies untouched')
         if (request.method === 'PATCH') {
             const body = JSON.parse(raw)
-            if (Object.hasOwn(body, 'auth') && (!body.auth || Array.isArray(body.auth) || !body.auth.user || !body.auth.pass)) return reply(400, {})
+            if (
+                Object.hasOwn(body, 'auth') &&
+                (!body.auth || Array.isArray(body.auth) || !body.auth.user || !body.auth.pass)
+            )
+                return reply(400, {})
             const previousAuth = proxy.auth
             Object.assign(proxy, body)
             if (body.maxConcurrent === 2) {
@@ -164,8 +207,7 @@ test('pinned proxy CLI covers cursors, lifecycle, credential omission, blacklist
     const environment = {
         BRUNO_API_URL: baseUrl,
         OIDC_ISSUER_URL: baseUrl,
-        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: secret,
+        PLATFORM_API_KEY: secret,
     }
     const directory = await mkdtemp(resolve(tmpdir(), 'lef-proxy-cli-'))
     const previous = process.env.TMPDIR

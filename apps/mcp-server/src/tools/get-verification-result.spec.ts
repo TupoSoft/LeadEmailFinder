@@ -2,7 +2,6 @@ import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { TokenCache } from '../auth/token-cache.js'
 import { createApp } from '../main.js'
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -15,7 +14,7 @@ function requestUrl(input: string | URL | Request): string {
     return input.url
 }
 
-const validAuthorizationHeader = `Basic ${Buffer.from('good-client:good-secret').toString('base64')}`
+const validAuthorizationHeader = `Bearer lef_${'a'.repeat(43)}`
 const resultId = '11111111-1111-4111-8111-111111111111'
 
 const result = {
@@ -37,19 +36,20 @@ describe('get_verification_result over real HTTP and the real SDK transport', ()
     const realFetch = global.fetch
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: new TokenCache('https://issuer'), apiBaseUrl: 'https://lef-api.example' })
+        server = createApp({ validateKey: () => Promise.resolve('valid'), apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
 
     afterAll(async () => {
-        await new Promise<void>((resolvePromise, reject) => server.close(error => (error ? reject(error) : resolvePromise())))
+        await new Promise<void>((resolvePromise, reject) =>
+            server.close(error => (error ? reject(error) : resolvePromise())),
+        )
     })
 
     beforeEach(() => {
         fetchMock = jest.fn((input: string | URL | Request, init?: RequestInit) => {
             const url = requestUrl(input)
-            if (url.startsWith('https://issuer')) return Promise.resolve(jsonResponse(200, { access_token: 'a-token', expires_in: 300 }))
             if (url.startsWith('https://lef-api.example')) return Promise.resolve(lookupResponse())
             return realFetch(input, init)
         })
@@ -60,7 +60,9 @@ describe('get_verification_result over real HTTP and the real SDK transport', ()
         global.fetch = realFetch
     })
 
-    async function callGetVerificationResult(id: string): Promise<{ isError?: boolean; content: Array<{ type: string; text: string }> }> {
+    async function callGetVerificationResult(
+        id: string,
+    ): Promise<{ isError?: boolean; content: Array<{ type: string; text: string }> }> {
         const client = new Client({ name: 'get-verification-result.spec', version: '0.0.0' })
         const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
             requestInit: { headers: { Authorization: validAuthorizationHeader } },
@@ -81,7 +83,9 @@ describe('get_verification_result over real HTTP and the real SDK transport', ()
 
         expect(callResult.isError).toBeFalsy()
         expect(JSON.parse(callResult.content[0]?.text ?? '')).toEqual(result)
-        const [url] = fetchMock.mock.calls.find(([input]: [string]) => requestUrl(input).startsWith('https://lef-api.example')) as [string]
+        const [url] = fetchMock.mock.calls.find(([input]: [string]) =>
+            requestUrl(input).startsWith('https://lef-api.example'),
+        ) as [string]
         expect(url).toBe(`https://lef-api.example/verifications/${resultId}`)
     })
 
@@ -89,7 +93,9 @@ describe('get_verification_result over real HTTP and the real SDK transport', ()
         const callResult = await callGetVerificationResult('not-a-uuid')
 
         expect(callResult.isError).toBe(true)
-        expect(fetchMock.mock.calls.some(([input]: [string]) => requestUrl(input).startsWith('https://lef-api.example'))).toBe(false)
+        expect(
+            fetchMock.mock.calls.some(([input]: [string]) => requestUrl(input).startsWith('https://lef-api.example')),
+        ).toBe(false)
     })
 
     it('never returns another organization data: a foreign or missing id maps to a clean not_found result', async () => {

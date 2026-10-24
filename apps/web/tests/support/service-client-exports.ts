@@ -30,7 +30,14 @@ export async function installServiceClientExportSink(page: Page) {
             if (blob instanceof Blob) {
                 const secret = currentSecret()
                 void blob.text().then(text => {
-                    state.downloaded = secret.length > 0 && text.includes(secret)
+                    const payload: unknown = JSON.parse(text)
+                    state.downloaded =
+                        secret.length > 0 &&
+                        typeof payload === 'object' &&
+                        payload !== null &&
+                        Object.keys(payload).length === 1 &&
+                        Object.hasOwn(payload, 'apiKey') &&
+                        Reflect.get(payload, 'apiKey') === secret
                 })
             }
             return create(blob)
@@ -45,7 +52,8 @@ export async function installServiceClientExportSink(page: Page) {
         HTMLAnchorElement.prototype.click = function () {
             if (this.download) {
                 const secret = currentSecret()
-                state.filenameSafe = secret.length > 0 && !this.download.includes(secret) && !this.href.includes(secret)
+                state.filenameSafe =
+                    secret.length > 0 && this.download === 'api-key.json' && !this.href.includes(secret)
                 return
             }
             click.call(this)

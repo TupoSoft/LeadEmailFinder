@@ -60,7 +60,7 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
         organizationId,
         issuer: 'https://issuer',
         subject: 'sa-1',
-        keycloakClientId: 'lef-svc-1',
+        keyPrefix: 'lef-svc-1',
         description: null,
         permissions: ['verification:run'],
         status: 'active',
@@ -160,7 +160,7 @@ describe('service client management HTTP boundary', () => {
 
         it('creates a service client and returns exactly the expected JSON shape, including the one-time secret', async () => {
             authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
-            creationMock.create.mockResolvedValue({ credential: credentialFixture(), secret: 'a-secret' })
+            creationMock.create.mockResolvedValue({ credential: credentialFixture(), apiKey: 'a-secret' })
 
             const response = await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients`)
@@ -170,13 +170,13 @@ describe('service client management HTTP boundary', () => {
 
             expect(response.body).toEqual({
                 id: serviceClientId,
-                clientId: 'lef-svc-1',
+                keyPrefix: 'lef-svc-1',
                 description: null,
                 permissions: ['verification:run'],
                 status: 'active',
                 createdAt: '2026-01-01T00:00:00.000Z',
                 updatedAt: '2026-01-01T00:00:00.000Z',
-                clientSecret: 'a-secret',
+                apiKey: 'a-secret',
             })
         })
     })
@@ -199,7 +199,7 @@ describe('service client management HTTP boundary', () => {
             expect(response.body).toEqual([
                 {
                     id: serviceClientId,
-                    clientId: 'lef-svc-1',
+                    keyPrefix: 'lef-svc-1',
                     description: null,
                     permissions: ['verification:run'],
                     status: 'active',
@@ -207,21 +207,21 @@ describe('service client management HTTP boundary', () => {
                     updatedAt: '2026-01-01T00:00:00.000Z',
                 },
             ])
-            expect(JSON.stringify(response.body)).not.toContain('clientSecret')
+            expect(JSON.stringify(response.body)).not.toContain('apiKey')
         })
     })
 
     describe(`POST /v1/organizations/:organizationId/service-clients/:serviceClientId/rotate`, () => {
         it('returns the rotated credential with a new one-time secret', async () => {
             authenticationServiceMock.authenticate.mockResolvedValue(principalFixture())
-            rotationMock.rotate.mockResolvedValue({ credential: credentialFixture(), secret: 'new-secret' })
+            rotationMock.rotate.mockResolvedValue({ credential: credentialFixture(), apiKey: 'new-secret' })
 
             const response = await request(app.getHttpServer())
                 .post(`/v1/organizations/${organizationId}/service-clients/${serviceClientId}/rotate`)
                 .expect('Cache-Control', 'no-store')
                 .expect(200)
 
-            expect(response.body).toMatchObject({ clientSecret: 'new-secret' })
+            expect(response.body).toMatchObject({ apiKey: 'new-secret' })
         })
     })
 

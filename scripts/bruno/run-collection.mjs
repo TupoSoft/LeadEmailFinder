@@ -10,12 +10,11 @@ import { z } from 'zod'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
 import { withExpiredInvitation } from './invitation-expiry-fixture.mjs'
 import {
-    customerClientSecret,
     validateCustomerFixture,
     withAsyncVerificationFixture,
     withRestoredBalance,
 } from './async-verification-fixture.mjs'
-import { withBillingReadForCustomerFixture } from './customer-billing-read-fixture.mjs'
+import { readApiKeyFixture, validateApiKeyFixture } from '../better-auth/api-key-files.mjs'
 import {
     brunoFailure,
     formatFailureDiagnostic,
@@ -40,8 +39,8 @@ const registry = Object.freeze({
         countOnly: true,
     }),
     'service-client-management': Object.freeze({
-        requests: 6,
-        tests: 6,
+        requests: 10,
+        tests: 10,
         sandbox: 'developer',
         network: 'host',
         countOnly: true,
@@ -110,50 +109,15 @@ export function assertExecutedReport(report, expectedRequests, expectedTests) {
     return { requests: summary.totalRequests, tests: summary.totalTests }
 }
 
-const serviceClientSchema = z.object({
-    issuer: z.string().url(),
-    clientId: z.string().min(1),
-    clientSecret: z.string().min(1),
-})
-const serviceCredentialSchema = z.object({
-    organizationId: z.string().uuid(),
-    keycloakClientId: z.string().min(1),
-    issuers: z.array(z.string().url()),
-})
-
-export function collectionEnvironment(name, metadata, serviceClient, serviceCredential) {
+export function collectionEnvironment(name, metadata, apiKeyFixture) {
     const collection = registeredCollection(name)
-    const publicIssuer = `${metadata.keycloakUrl.replace(/\/$/, '')}/realms/lead-email-finder`
-    const client = serviceClientSchema.safeParse(serviceClient)
-    const credential = serviceCredentialSchema.safeParse(serviceCredential)
-    if (
-        !client.success ||
-        !credential.success ||
-        client.data.issuer !== publicIssuer ||
-        credential.data.keycloakClientId !== client.data.clientId ||
-        !credential.data.issuers.includes(publicIssuer)
-    ) {
-        throw new Error('Bruno requires matching provisioned local service-client and service-credential metadata')
-    }
-    if (collection.network === 'host') {
-        return {
-            BRUNO_API_URL: metadata.apiUrl,
-            OIDC_ISSUER_URL: publicIssuer,
-            KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
-            KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
-            ...(name === 'credit-purchases' ? { PLATFORM_ORGANIZATION_ID: credential.data.organizationId } : {}),
-            ...(name === 'service-client-management'
-                ? { SERVICE_CLIENT_ORGANIZATION_ID: credential.data.organizationId }
-                : {}),
-        }
-    }
+    const fixture = validateApiKeyFixture(apiKeyFixture, metadata.checkoutRoot, metadata, 'platform')
     return {
-        BRUNO_API_URL: 'http://api:3000',
-        OIDC_ISSUER_URL: publicIssuer,
-        OIDC_BACKCHANNEL_URL: 'http://keycloak:8080/realms/lead-email-finder',
-        KEYCLOAK_SERVICE_CLIENT_ID: client.data.clientId,
-        KEYCLOAK_SERVICE_CLIENT_SECRET: client.data.clientSecret,
-        PLATFORM_ORGANIZATION_ID: credential.data.organizationId,
+        BRUNO_API_URL: collection.network === 'host' ? metadata.apiUrl : 'http://api:3000',
+        OIDC_ISSUER_URL: `${metadata.keycloakUrl.replace(/\/$/, '')}/realms/lead-email-finder`,
+        PLATFORM_API_KEY: fixture.apiKey,
+        PLATFORM_ORGANIZATION_ID: fixture.organizationId,
+        ...(name === 'service-client-management' ? { SERVICE_CLIENT_ORGANIZATION_ID: fixture.organizationId } : {}),
         ...(name === 'batch-verification' ? { EVIDENCE_CONTROL_URL: 'http://smtp-evidence:8025' } : {}),
     }
 }
@@ -163,16 +127,11 @@ export function cliArguments(name, environment, reportFile) {
     if (
         !environment.BRUNO_API_URL ||
         !environment.OIDC_ISSUER_URL ||
-        !environment.KEYCLOAK_SERVICE_CLIENT_ID ||
-        !environment.KEYCLOAK_SERVICE_CLIENT_SECRET ||
+        !environment.PLATFORM_API_KEY ||
         (['async-verification', 'batch-verification'].includes(name) &&
-            (!environment.CUSTOMER_ORGANIZATION_ID ||
-                !environment.CUSTOMER_SERVICE_CLIENT_ID ||
-                !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
+            (!environment.CUSTOMER_ORGANIZATION_ID || !environment.CUSTOMER_API_KEY)) ||
         (name === 'organization-onboarding' &&
-            (!environment.BRUNO_EXPIRED_INVITATION_TOKEN ||
-                !environment.CUSTOMER_SERVICE_CLIENT_ID ||
-                !environment.CUSTOMER_SERVICE_CLIENT_SECRET)) ||
+            (!environment.BRUNO_EXPIRED_INVITATION_TOKEN || !environment.CUSTOMER_API_KEY)) ||
         (name === 'service-client-management' && !environment.SERVICE_CLIENT_ORGANIZATION_ID) ||
         (name === 'batch-verification' && !environment.EVIDENCE_CONTROL_URL) ||
         (name === 'credit-purchases' &&
@@ -181,8 +140,7 @@ export function cliArguments(name, environment, reportFile) {
                 !environment.CUSTOMER_BILLING_TOKEN ||
                 !environment.CUSTOMER_HELD_BALANCE ||
                 !environment.CUSTOMER_HELD_RESERVED)) ||
-        (collection.network === 'compose' &&
-            (!environment.OIDC_BACKCHANNEL_URL || !environment.PLATFORM_ORGANIZATION_ID))
+        (collection.network === 'compose' && !environment.PLATFORM_ORGANIZATION_ID)
     ) {
         throw new Error('Bruno collection prerequisites are missing')
     }
@@ -351,22 +309,6 @@ export async function stubPaymentEnvironment(container, checkoutRoot, apiUrl) {
 const CREDIT_PURCHASES_HELD_BALANCE = 500
 const CREDIT_PURCHASES_HELD_RESERVED = 75
 
-async function mintClientCredentialsToken(issuer, clientId, clientSecret) {
-    const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
-        method: 'POST',
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: clientId,
-            client_secret: clientSecret,
-        }),
-        signal: AbortSignal.timeout(15_000),
-    })
-    if (!response.ok) throw new Error('Failed to mint a client-credentials token for the reservation fixture')
-    const { access_token: token } = await response.json()
-    if (typeof token !== 'string' || !token) throw new Error('Reservation fixture token is missing')
-    return token
-}
-
 async function runReservationFixture(checkoutRoot, metadata, organizationId, operationId, action, amount) {
     await execFileAsync(
         process.execPath,
@@ -394,25 +336,25 @@ async function runReservationFixture(checkoutRoot, metadata, organizationId, ope
 async function withCreditPurchasesReservationFixture(checkoutRoot, metadata, environment, execute) {
     const readMetadata = async name => JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', name), 'utf8'))
     const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    const credential = await readMetadata('service-credential.json')
+    const credential = await readApiKeyFixture(checkoutRoot, metadata, 'platform')
     const customer = validateCustomerFixture(
         await readMetadata('customer-fixture.json'),
         issuer,
         credential.organizationId,
     )
-    const customerSecret = await customerClientSecret(metadata, customer.keycloakClientId)
+    const customerKey = await readApiKeyFixture(checkoutRoot, metadata, 'customer')
+    if (customerKey.organizationId !== customer.organizationId || customerKey.credentialId !== customer.credentialId)
+        throw new Error('Customer API-key fixture does not match seed metadata')
     const lock = resolve(checkoutRoot, '.dev/async-verification.lock')
     await mkdir(lock, { mode: 0o700 })
     try {
         const creditRequest = async (method, amount) => {
-            const platformToken = await mintClientCredentialsToken(
-                issuer,
-                environment.KEYCLOAK_SERVICE_CLIENT_ID,
-                environment.KEYCLOAK_SERVICE_CLIENT_SECRET,
-            )
             const response = await fetch(`${metadata.apiUrl}/credits/${customer.organizationId}`, {
                 method,
-                headers: { authorization: `Bearer ${platformToken}`, 'content-type': 'application/json' },
+                headers: {
+                    authorization: `Bearer ${environment.PLATFORM_API_KEY}`,
+                    'content-type': 'application/json',
+                },
                 ...(method === 'PUT' ? { body: JSON.stringify({ amount }) } : {}),
                 signal: AbortSignal.timeout(15_000),
             })
@@ -431,24 +373,12 @@ async function withCreditPurchasesReservationFixture(checkoutRoot, metadata, env
                 CREDIT_PURCHASES_HELD_RESERVED,
             )
             try {
-                return await withBillingReadForCustomerFixture(
-                    metadata,
-                    issuer,
-                    customer.keycloakClientId,
-                    async () => {
-                        const customerToken = await mintClientCredentialsToken(
-                            issuer,
-                            customer.keycloakClientId,
-                            customerSecret,
-                        )
-                        return execute({
-                            ...environment,
-                            CUSTOMER_BILLING_TOKEN: customerToken,
-                            CUSTOMER_HELD_BALANCE: String(CREDIT_PURCHASES_HELD_BALANCE),
-                            CUSTOMER_HELD_RESERVED: String(CREDIT_PURCHASES_HELD_RESERVED),
-                        })
-                    },
-                )
+                return await execute({
+                    ...environment,
+                    CUSTOMER_BILLING_TOKEN: customerKey.apiKey,
+                    CUSTOMER_HELD_BALANCE: String(CREDIT_PURCHASES_HELD_BALANCE),
+                    CUSTOMER_HELD_RESERVED: String(CREDIT_PURCHASES_HELD_RESERVED),
+                })
             } finally {
                 await runReservationFixture(checkoutRoot, metadata, customer.organizationId, operationId, 'release')
             }
@@ -456,27 +386,6 @@ async function withCreditPurchasesReservationFixture(checkoutRoot, metadata, env
     } finally {
         await rm(lock, { recursive: true })
     }
-}
-
-async function bootstrapCreditPurchaseCredential(checkoutRoot, metadata) {
-    await execFileAsync(
-        process.execPath,
-        [require.resolve('ts-node/dist/bin.js'), 'scripts/keycloak/bootstrap-credential.ts'],
-        {
-            cwd: checkoutRoot,
-            env: {
-                ...process.env,
-                KEYCLOAK_URL: metadata.keycloakUrl,
-                KEYCLOAK_ADMIN_USERNAME: metadata.keycloakAdminUsername,
-                KEYCLOAK_ADMIN_PASSWORD: metadata.keycloakAdminPassword,
-                POSTGRES_URL: metadata.postgresUrl,
-                KEYCLOAK_DEV_SECRETS_FILE: resolve(checkoutRoot, '.dev/keycloak/service-client.json'),
-                KEYCLOAK_DEV_BOOTSTRAP_FILE: resolve(checkoutRoot, '.dev/keycloak/service-credential.json'),
-            },
-            timeout: 120_000,
-            maxBuffer: 1024 * 1024,
-        },
-    )
 }
 
 export async function runCollection(args, checkoutRoot) {
@@ -491,33 +400,35 @@ export async function runCollection(args, checkoutRoot) {
     await inspectDevelopmentService(checkoutRoot, metadata, 'keycloak', '8080/tcp', metadata.keycloakUrl)
     const paymentEnvironment =
         name === 'credit-purchases' ? await stubPaymentEnvironment(api.container, checkoutRoot, metadata.apiUrl) : {}
-    if (name === 'credit-purchases') await bootstrapCreditPurchaseCredential(checkoutRoot, metadata)
     const readMetadata = async metadataFile =>
         JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', metadataFile), 'utf8'))
     const environment = collectionEnvironment(
         name,
         metadata,
-        await readMetadata('service-client.json'),
-        await readMetadata('service-credential.json'),
+        await readApiKeyFixture(checkoutRoot, metadata, 'platform'),
     )
     Object.assign(environment, paymentEnvironment)
     if (name === 'organization-onboarding') {
         await inspectDevelopmentService(checkoutRoot, metadata, 'postgres', '5432/tcp', metadata.postgresUrl)
-        const credential = await readMetadata('service-credential.json')
+        const credential = await readApiKeyFixture(checkoutRoot, metadata, 'platform')
         const customer = validateCustomerFixture(
             await readMetadata('customer-fixture.json'),
             environment.OIDC_ISSUER_URL,
             credential.organizationId,
         )
-        const customerSecret = await customerClientSecret(metadata, customer.keycloakClientId)
+        const customerKey = await readApiKeyFixture(checkoutRoot, metadata, 'customer')
+        if (
+            customerKey.organizationId !== customer.organizationId ||
+            customerKey.credentialId !== customer.credentialId
+        )
+            throw new Error('Customer API-key fixture does not match seed metadata')
         return withExpiredInvitation(metadata, credential.organizationId, environment.OIDC_ISSUER_URL, token =>
             executeCollection(
                 name,
                 {
                     ...environment,
                     BRUNO_EXPIRED_INVITATION_TOKEN: token,
-                    CUSTOMER_SERVICE_CLIENT_ID: customer.keycloakClientId,
-                    CUSTOMER_SERVICE_CLIENT_SECRET: customerSecret,
+                    CUSTOMER_API_KEY: customerKey.apiKey,
                 },
                 checkoutRoot,
             ),
@@ -572,14 +483,10 @@ export async function runCollection(args, checkoutRoot) {
             }
         }
         if (['async-verification', 'batch-verification'].includes(name)) {
-            return withAsyncVerificationFixture(
-                checkoutRoot,
-                async fixture => {
-                    if (name === 'batch-verification') await fixture.setBalance(2)
-                    return runCompose({ ...environment, ...fixture.environment })
-                },
-                { useOrganizationAdmin: name === 'batch-verification' },
-            )
+            return withAsyncVerificationFixture(checkoutRoot, async fixture => {
+                if (name === 'batch-verification') await fixture.setBalance(2)
+                return runCompose({ ...environment, ...fixture.environment })
+            })
         }
         return runCompose(environment)
     }

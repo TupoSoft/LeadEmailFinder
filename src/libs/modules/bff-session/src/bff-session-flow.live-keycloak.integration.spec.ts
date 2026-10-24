@@ -22,7 +22,7 @@ import {
     AuthGuard,
     AuthModule,
     CredentialExtractor,
-    OidcCredentialAuthenticator,
+    ApiKeyCredentialAuthenticator,
 } from '@tuposoft/lead-email-finder/modules/auth'
 import {
     BffSessionCredentialAuthenticator,
@@ -318,10 +318,10 @@ describeWithKeycloakRedisAndPostgres('BFF session flow against a live Keycloak r
                     provide: AuthenticationService,
                     useFactory: (
                         extractor: CredentialExtractor,
-                        oidc: OidcCredentialAuthenticator,
+                        apiKey: ApiKeyCredentialAuthenticator,
                         bffSession: BffSessionCredentialAuthenticator,
-                    ) => new AuthenticationService(extractor, [oidc, bffSession]),
-                    inject: [CredentialExtractor, OidcCredentialAuthenticator, BffSessionCredentialAuthenticator],
+                    ) => new AuthenticationService(extractor, [apiKey, bffSession]),
+                    inject: [CredentialExtractor, ApiKeyCredentialAuthenticator, BffSessionCredentialAuthenticator],
                 },
                 AuthGuard,
                 { provide: APP_GUARD, useExisting: AuthGuard },

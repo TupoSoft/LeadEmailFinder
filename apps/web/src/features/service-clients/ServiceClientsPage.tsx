@@ -174,11 +174,11 @@ function ClientList({
                     <table className={styles.table}>
                         <caption
                             className={styles.caption}
-                        >{`Service clients ${start + 1}–${Math.min(start + 10, clients.length)} of ${clients.length}`}</caption>
+                        >{`API keys ${start + 1}–${Math.min(start + 10, clients.length)} of ${clients.length}`}</caption>
                         <thead>
                             <tr>
                                 {[
-                                    copy.clientId,
+                                    copy.keyPrefix,
                                     'Description',
                                     copy.permissions,
                                     'Status',
@@ -194,7 +194,7 @@ function ClientList({
                         <tbody>
                             {clients.slice(start, start + 10).map(client => (
                                 <tr key={client.id}>
-                                    <Cell label={copy.clientId}>{client.clientId}</Cell>
+                                    <Cell label={copy.keyPrefix}>{client.keyPrefix}</Cell>
                                     <Cell label="Description">{client.description || copy.noDescription}</Cell>
                                     <Cell label={copy.permissions}>
                                         <ul className={styles.permissionList}>
@@ -222,7 +222,7 @@ function ClientList({
                                                         type="button"
                                                         className={`${action.action} ${action.secondary}`}
                                                         disabled={busy || feature.operation.unknown !== null}
-                                                        aria-label={`Rotate secret for ${client.clientId}`}
+                                                        aria-label={`Rotate API key ${client.keyPrefix}`}
                                                         onClick={() => requestConfirmation({ kind: 'rotate', client })}
                                                     >
                                                         {copy.rotate}
@@ -231,7 +231,7 @@ function ClientList({
                                                         type="button"
                                                         className={`${action.action} ${action.secondary}`}
                                                         disabled={busy}
-                                                        aria-label={`Disable client ${client.clientId}`}
+                                                        aria-label={`Disable API key ${client.keyPrefix}`}
                                                         onClick={() => requestConfirmation({ kind: 'disable', client })}
                                                     >
                                                         {copy.disable}
@@ -242,7 +242,7 @@ function ClientList({
                                                 type="button"
                                                 className={`${action.action} ${action.secondary}`}
                                                 disabled={busy}
-                                                aria-label={`Delete client ${client.clientId}`}
+                                                aria-label={`Delete API key ${client.keyPrefix}`}
                                                 onClick={() => requestConfirmation({ kind: 'delete', client })}
                                             >
                                                 {copy.delete}
@@ -254,7 +254,7 @@ function ClientList({
                         </tbody>
                     </table>
                     {lastPage > 1 ? (
-                        <nav className={styles.pagination} aria-label="Service client pages">
+                        <nav className={styles.pagination} aria-label="API key pages">
                             <button
                                 type="button"
                                 className={`${action.action} ${action.secondary}`}
@@ -297,7 +297,7 @@ function ConfirmationDialog({
               ? copy.disableConsequence
               : copy.deleteConsequence
     return (
-        <TeamDialog title={title} description={`${value.client.clientId}: ${consequence}`} onDismiss={dismiss}>
+        <TeamDialog title={title} description={`${value.client.keyPrefix}: ${consequence}`} onDismiss={dismiss}>
             <div className={form.actions}>
                 <button
                     type="button"
@@ -330,7 +330,7 @@ function SecretDialog({ feature }: { feature: ReturnType<typeof useServiceClient
     return (
         <TeamDialog title={copy.secretTitle} description={copy.secretDescription} onDismiss={feature.dismiss}>
             <p>
-                {copy.clientId}: {feature.operation.issuedClientId}
+                {copy.keyPrefix}: {feature.operation.issuedKeyPrefix}
             </p>
             <div className={form.field}>
                 <label className={form.label} htmlFor={id}>
@@ -427,12 +427,12 @@ function ServiceClientsContent({ account }: { account: CurrentAccount }) {
     useLayoutEffect(() => {
         if (feature.operation.notice === copy.closed) {
             if (!feature.clients.isFetching && operationTrigger.current?.isConnected) operationTrigger.current.focus()
-        } else if (!feature.operation.issuedClientId && (feature.operation.notice || feature.operation.unknown))
+        } else if (!feature.operation.issuedKeyPrefix && (feature.operation.notice || feature.operation.unknown))
             feedback.current?.focus()
     }, [
         feature.operation.notice,
         feature.operation.unknown,
-        feature.operation.issuedClientId,
+        feature.operation.issuedKeyPrefix,
         feature.clients.isFetching,
     ])
     return (
@@ -505,7 +505,7 @@ function ServiceClientsContent({ account }: { account: CurrentAccount }) {
                                 </button>
                             </>
                         ) : null}
-                        {!feature.operation.issuedClientId ? feature.operation.notice : null}
+                        {!feature.operation.issuedKeyPrefix ? feature.operation.notice : null}
                     </div>
                 }
             >
@@ -532,7 +532,7 @@ function ServiceClientsContent({ account }: { account: CurrentAccount }) {
                     }}
                 />
             ) : null}
-            {feature.operation.issuedClientId ? <SecretDialog feature={feature} /> : null}
+            {feature.operation.issuedKeyPrefix ? <SecretDialog feature={feature} /> : null}
         </>
     )
 }

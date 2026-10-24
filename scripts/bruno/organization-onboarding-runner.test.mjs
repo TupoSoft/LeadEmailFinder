@@ -31,18 +31,16 @@ test('organization collection requires every executed request in order and keeps
     const environment = {
         BRUNO_API_URL: 'http://localhost:53000',
         OIDC_ISSUER_URL: 'http://localhost:58080',
-        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(),
+        PLATFORM_API_KEY: randomUUID(),
         BRUNO_EXPIRED_INVITATION_TOKEN: randomUUID(),
-        CUSTOMER_SERVICE_CLIENT_ID: 'customer',
-        CUSTOMER_SERVICE_CLIENT_SECRET: randomUUID(),
+        CUSTOMER_API_KEY: randomUUID(),
     }
     const args = cliArguments('organization-onboarding', environment, '/tmp/report.json')
     assert.equal(args[4], 'developer')
     for (const secret of [
-        environment.KEYCLOAK_SERVICE_CLIENT_SECRET,
+        environment.PLATFORM_API_KEY,
         environment.BRUNO_EXPIRED_INVITATION_TOKEN,
-        environment.CUSTOMER_SERVICE_CLIENT_SECRET,
+        environment.CUSTOMER_API_KEY,
     ]) {
         assert.equal(
             JSON.stringify(args).includes(secret),
@@ -58,11 +56,7 @@ test('organization collection requires every executed request in order and keeps
         ),
     )
     assert.throws(() =>
-        cliArguments(
-            'organization-onboarding',
-            { ...environment, CUSTOMER_SERVICE_CLIENT_SECRET: '' },
-            '/tmp/report.json',
-        ),
+        cliArguments('organization-onboarding', { ...environment, CUSTOMER_API_KEY: '' }, '/tmp/report.json'),
     )
 })
 
@@ -71,8 +65,15 @@ test('invitation CLI reporter writes only counts and emits no secrets on its fai
     const reportFile = resolve(directory, 'report.json')
     const marker = randomBytes(32).toString('hex')
     try {
-        await assert.rejects(execute(process.execPath, [
-            '--import', resolve(root, 'scripts/bruno/count-only-reporter.mjs'), '--input-type=module', '-e', `
+        await assert.rejects(
+            execute(
+                process.execPath,
+                [
+                    '--import',
+                    resolve(root, 'scripts/bruno/count-only-reporter.mjs'),
+                    '--input-type=module',
+                    '-e',
+                    `
                 import fs from 'node:fs';
                 const marker = process.env.TEST_SECRET_MARKER;
                 console.log(marker); console.error(marker);
@@ -82,12 +83,16 @@ test('invitation CLI reporter writes only counts and emits no secrets on its fai
                 }]));
                 throw new Error(marker);
             `,
-        ], { env: { ...process.env, LEF_BRUNO_COUNTS_REPORT: reportFile, TEST_SECRET_MARKER: marker } }), error => {
-            assert.ok(error.stdout.length === 0, 'CLI stdout must stay empty')
-            assert.ok(error.stderr.length === 0, 'CLI stderr must stay empty')
-            assert.equal(error.message.includes(marker), false, 'Failure output must not contain secret markers')
-            return true
-        })
+                ],
+                { env: { ...process.env, LEF_BRUNO_COUNTS_REPORT: reportFile, TEST_SECRET_MARKER: marker } },
+            ),
+            error => {
+                assert.ok(error.stdout.length === 0, 'CLI stdout must stay empty')
+                assert.ok(error.stderr.length === 0, 'CLI stderr must stay empty')
+                assert.equal(error.message.includes(marker), false, 'Failure output must not contain secret markers')
+                return true
+            },
+        )
         const persisted = await readFile(reportFile, 'utf8')
         assert.equal(persisted.includes(marker), false, 'Reporter output must omit secrets before writing')
         const [report] = JSON.parse(persisted)
@@ -104,17 +109,32 @@ test('expired fixture hashes its runtime token and removes only its exact invita
     let ended = false
     const organizationId = randomUUID()
     const client = {
-        async connect() { connected = true },
-        async query(sql, parameters) { queries.push({ sql, parameters }) },
-        async end() { ended = true },
+        async connect() {
+            connected = true
+        },
+        async query(sql, parameters) {
+            queries.push({ sql, parameters })
+        },
+        async end() {
+            ended = true
+        },
     }
-    await assert.rejects(withExpiredInvitation({ postgresUrl: 'unused' }, organizationId, 'http://issuer', async token => {
-        assert.equal(connected, true)
-        assert.equal(queries[0].parameters.includes(token), false, 'Only token hash reaches persistence')
-        assert.equal(queries[0].parameters[1], organizationId)
-        assert.equal(queries[0].parameters[4].getTime(), 0)
-        throw new Error('fixture failure')
-    }, () => client), /fixture failure/)
+    await assert.rejects(
+        withExpiredInvitation(
+            { postgresUrl: 'unused' },
+            organizationId,
+            'http://issuer',
+            async token => {
+                assert.equal(connected, true)
+                assert.equal(queries[0].parameters.includes(token), false, 'Only token hash reaches persistence')
+                assert.equal(queries[0].parameters[1], organizationId)
+                assert.equal(queries[0].parameters[4].getTime(), 0)
+                throw new Error('fixture failure')
+            },
+            () => client,
+        ),
+        /fixture failure/,
+    )
     assert.match(queries[1].sql, /WHERE id = \$1 AND "organizationId" = \$2/)
     assert.deepEqual(queries[1].parameters, [queries[0].parameters[0], organizationId])
     assert.equal(ended, true)
@@ -212,11 +232,9 @@ test('pinned CLI executes invitation preview, replay, expiry, and header asserti
     const environment = {
         BRUNO_API_URL: baseUrl,
         OIDC_ISSUER_URL: baseUrl,
-        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: randomUUID(),
+        PLATFORM_API_KEY: platformToken,
         BRUNO_EXPIRED_INVITATION_TOKEN: expiredToken,
-        CUSTOMER_SERVICE_CLIENT_ID: 'customer',
-        CUSTOMER_SERVICE_CLIENT_SECRET: randomUUID(),
+        CUSTOMER_API_KEY: customerToken,
     }
     const directory = await mkdtemp(resolve(tmpdir(), 'lef-invitation-cli-'))
     const previous = process.env.TMPDIR

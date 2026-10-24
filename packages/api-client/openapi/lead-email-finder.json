@@ -1189,9 +1189,6 @@
       },
       "ServiceClientResponseDto": {
         "properties": {
-          "clientId": {
-            "type": "string"
-          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1202,6 +1199,11 @@
           },
           "id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "keyPrefix": {
+            "maxLength": 12,
+            "minLength": 12,
             "type": "string"
           },
           "permissions": {
@@ -1233,7 +1235,7 @@
         },
         "required": [
           "id",
-          "clientId",
+          "keyPrefix",
           "description",
           "permissions",
           "status",
@@ -1244,10 +1246,7 @@
       },
       "ServiceClientSecretResponseDto": {
         "properties": {
-          "clientId": {
-            "type": "string"
-          },
-          "clientSecret": {
+          "apiKey": {
             "description": "Returned only by this create or rotate response. Cannot be retrieved later.",
             "type": "string"
           },
@@ -1263,6 +1262,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "keyPrefix": {
+            "maxLength": 12,
+            "minLength": 12,
+            "type": "string"
+          },
           "permissions": {
             "items": {
               "enum": [
@@ -1292,13 +1296,13 @@
         },
         "required": [
           "id",
-          "clientId",
+          "keyPrefix",
           "description",
           "permissions",
           "status",
           "createdAt",
           "updatedAt",
-          "clientSecret"
+          "apiKey"
         ],
         "type": "object"
       },
@@ -1508,7 +1512,7 @@
         "type": "apiKey"
       },
       "oidc": {
-        "bearerFormat": "JWT",
+        "bearerFormat": "API key",
         "scheme": "bearer",
         "type": "http"
       },
@@ -3300,7 +3304,7 @@
     },
     "/v1/organizations/{organizationId}/service-clients": {
       "get": {
-        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.",
+        "description": "Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.",
         "operationId": "ServiceClientsController_list",
         "parameters": [
           {
@@ -3351,7 +3355,7 @@
         ]
       },
       "post": {
-        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.",
+        "description": "Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.",
         "operationId": "ServiceClientsController_create",
         "parameters": [
           {
@@ -3439,7 +3443,7 @@
             }
           },
           "500": {
-            "description": "Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.",
+            "description": "Persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.",
             "headers": {
               "Cache-Control": {
                 "description": "Prevents storage of all create and rotate responses, including failures.",
@@ -3459,7 +3463,7 @@
             "x-csrf-token": []
           }
         ],
-        "summary": "Create an organization service client and reveal its secret once",
+        "summary": "Create an organization API key and reveal it once",
         "tags": [
           "ServiceClients"
         ]
@@ -3467,7 +3471,7 @@
     },
     "/v1/organizations/{organizationId}/service-clients/{serviceClientId}": {
       "delete": {
-        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the provider client and local credential. An already-missing provider client is treated as success.",
+        "description": "Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the local credential immediately.",
         "operationId": "ServiceClientsController_remove",
         "parameters": [
           {
@@ -3506,7 +3510,7 @@
             "description": "Service client not found, including a client outside the caller organization."
           },
           "500": {
-            "description": "Provider or persistence failure."
+            "description": "Persistence failure."
           }
         },
         "security": [
@@ -3515,7 +3519,7 @@
             "x-csrf-token": []
           }
         ],
-        "summary": "Delete a service client and its provider client",
+        "summary": "Delete an organization API key",
         "tags": [
           "ServiceClients"
         ]
@@ -3523,7 +3527,7 @@
     },
     "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable": {
       "post": {
-        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.",
+        "description": "Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.",
         "operationId": "ServiceClientsController_disable",
         "parameters": [
           {
@@ -3579,7 +3583,7 @@
     },
     "/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate": {
       "post": {
-        "description": "Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.",
+        "description": "Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.",
         "operationId": "ServiceClientsController_rotate",
         "parameters": [
           {
@@ -3694,7 +3698,7 @@
             }
           },
           "500": {
-            "description": "Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying.",
+            "description": "Persistence failure. The secret may already have changed; reconcile before explicitly retrying.",
             "headers": {
               "Cache-Control": {
                 "description": "Prevents storage of all create and rotate responses, including failures.",

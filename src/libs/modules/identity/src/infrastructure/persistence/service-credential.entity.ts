@@ -14,7 +14,7 @@ import { Organization } from './organization.entity'
 
 @Entity('service_credentials')
 @Index('UQ_service_credentials_issuer_subject', ['issuer', 'subject'], { unique: true })
-@Index('UQ_service_credentials_issuer_keycloak_client_id', ['issuer', 'keycloakClientId'], { unique: true })
+@Index('UQ_service_credentials_key_hash', ['keyHash'], { unique: true })
 export class ServiceCredential {
     @PrimaryGeneratedColumn('uuid')
     id: string
@@ -32,12 +32,12 @@ export class ServiceCredential {
     @Column()
     subject: string
 
-    // The literal Keycloak clientId string (e.g. 'lef-svc-<uuid>'), distinct from `subject` (the service-account
-    // user UUID). Needed to address /admin/realms/{realm}/clients?clientId= for rotate/delete. Unique per issuer,
-    // not globally: the same underlying Keycloak client can legitimately be seeded under more than one issuer
-    // (e.g. a dev-only credential reachable as both the host-facing and a container-internal Keycloak hostname).
-    @Column()
-    keycloakClientId: string
+    // Hashes are authentication lookup material; safe projections never include them.
+    @Column({ type: 'varchar', length: 64, select: false })
+    keyHash: string
+
+    @Column({ type: 'varchar', length: 12 })
+    keyPrefix: string
 
     @Column({ type: 'varchar', nullable: true })
     description: string | null

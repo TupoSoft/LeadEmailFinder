@@ -88,7 +88,7 @@ docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --bu
 
 The base stack must already be provisioned. For fresh disposable data, run
 `pnpm dev:reset -- --confirm-project=LEF` first; it deletes development data, provisions Keycloak, and seeds the
-platform service credential before the overlay mounts the generated `.dev/keycloak/service-client.json` file.
+platform API key before the overlay mounts the generated `.dev/auth/platform-api-key.json` file with mode 0600.
 The overlay leaves the base network unchanged and adds a separate fixture network, so no `down` is needed.
 For a stack created by an older overlay, first follow the [network recovery instructions](../../docker/README.md#recover-an-older-smtp-network).
 If the credentials file is missing, the overlay fails without creating a
@@ -102,10 +102,10 @@ one-shot service clears the shared Redis `DNS_CACHE:*` namespace so answers cach
 override the overlay's CoreDNS fixture. It is safe when the cache is already empty; DNS answers are populated
 again on demand.
 
-`keycloak:bootstrap-credential` seeds a `Platform Operations (development)` organization. It grants the
-pre-provisioned `lef-development-service` M2M client every permission, including `platform:admin`, under the
-public Keycloak issuer. Both `bootstrap-proxy.sh` and this collection authenticate through the internal token
-endpoint, whose tokens still carry that public issuer. The collection checks this claim before each API request.
+`keycloak:bootstrap-credential` seeds the development-only `Platform Operations (development)` organization and
+its API key through the application credential port, including transactional audit persistence. The key has platform
+permissions. The proxy bootstrap and collection send it directly as a Bearer credential. The private file is never
+printed; repeating the seed preserves a working key.
 
 Run the pinned collection launcher from the repository root:
 

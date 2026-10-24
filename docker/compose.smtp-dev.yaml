@@ -102,6 +102,7 @@ services:
         fi
 
   smtp-dev-proxy-bootstrap:
+    user: "0:0"
     image: curlimages/curl:8.16.0
     restart: "no"
     networks:
@@ -123,18 +124,17 @@ services:
     entrypoint: ["/bin/sh", "/bootstrap-proxy.sh", "reconcile"]
     volumes:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
-      # Written by `pnpm keycloak:provision` (clientId/clientSecret for the seeded lef-development-service
-      # M2M client), not a fixed checked-in Docker secret: run `pnpm keycloak:provision` and
-      # `pnpm keycloak:bootstrap-credential` before bringing this overlay up. Disabling implicit host-path
-      # creation keeps Docker from turning a missing credentials file into a directory.
+      # The host bootstrap writes a checkout-owned 0600 platform API key. The fixed-purpose curl
+      # container runs as root only to read that private bind mount. Missing files fail closed.
       - type: bind
-        source: ../.dev/keycloak/service-client.json
-        target: /service-client.json
+        source: ../.dev/auth/platform-api-key.json
+        target: /api-key.json
         read_only: true
         bind:
           create_host_path: false
 
   smtp-dev-proxy-cleanup:
+    user: "0:0"
     image: curlimages/curl:8.16.0
     profiles: ["smtp-dev-cleanup"]
     restart: "no"
@@ -145,8 +145,8 @@ services:
     volumes:
       - ./smtp-dev/bootstrap-proxy.sh:/bootstrap-proxy.sh:ro
       - type: bind
-        source: ../.dev/keycloak/service-client.json
-        target: /service-client.json
+        source: ../.dev/auth/platform-api-key.json
+        target: /api-key.json
         read_only: true
         bind:
           create_host_path: false

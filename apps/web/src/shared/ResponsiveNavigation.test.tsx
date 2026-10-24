@@ -9,7 +9,7 @@ const destinations: ApplicationDestination[] = [
     { path: '/app', label: 'Home' },
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
     { path: '/app/billing', label: 'Billing', capability: 'billing.read' },
-    { path: '/app/service-clients', label: 'Service clients', capability: 'service_clients.manage' },
+    { path: '/app/service-clients', label: 'API keys', capability: 'service_clients.manage' },
 ]
 
 describe('application navigation', () => {
@@ -22,7 +22,7 @@ describe('application navigation', () => {
         ])
         expect(visibleDestinations(['service_clients.manage'], destinations).map(item => item.label)).toEqual([
             'Home',
-            'Service clients',
+            'API keys',
         ])
     })
 

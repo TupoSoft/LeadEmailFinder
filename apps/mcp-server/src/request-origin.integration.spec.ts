@@ -14,7 +14,9 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
  * own upstream API. */
 function buildProbeServer(): McpServer {
     const server = new McpServer({ name: 'request-origin-integration-test-server', version: '0.0.0' })
-    server.registerTool('probe', { description: 'Always succeeds.' }, () => ({ content: [{ type: 'text', text: 'ok' }] }))
+    server.registerTool('probe', { description: 'Always succeeds.' }, () => ({
+        content: [{ type: 'text', text: 'ok' }],
+    }))
     return server
 }
 
@@ -23,13 +25,13 @@ jest.mock('./create-server.js', () => {
     return { ...actual, createServer: jest.fn(buildProbeServer) }
 })
 
-import type { AccessTokenProvider } from './auth/token-cache.js'
+import type { ApiKeyValidator } from './auth/api-key.js'
 import { createServer } from './create-server.js'
 import { createApp } from './main.js'
 
 const mockedCreateServer = createServer as jest.MockedFunction<typeof createServer>
-const fakeTokenCache: AccessTokenProvider = { getAccessToken: () => Promise.resolve('fake-access-token') }
-const validAuthorizationHeader = `Basic ${Buffer.from('test-client:test-secret').toString('base64')}`
+const validateKey: ApiKeyValidator = () => Promise.resolve('valid')
+const validAuthorizationHeader = `Bearer lef_${'a'.repeat(43)}`
 
 function rawPost(port: number, headers: Record<string, string | string[]>): Promise<{ status: number; body: string }> {
     return new Promise((resolvePromise, reject) => {
@@ -51,7 +53,9 @@ function rawPost(port: number, headers: Record<string, string | string[]>): Prom
             res => {
                 const chunks: Buffer[] = []
                 res.on('data', chunk => chunks.push(chunk))
-                res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
+                res.on('end', () =>
+                    resolvePromise({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }),
+                )
             },
         )
         req.on('error', reject)
@@ -68,13 +72,19 @@ describe('request origin integration (HTTP boundary)', () => {
     let port: number
 
     beforeAll(async () => {
-        server = createApp({ allowedOrigins: new Set(['https://client.example']), tokenCache: fakeTokenCache, apiBaseUrl: 'https://lef-api.example' })
+        server = createApp({
+            allowedOrigins: new Set(['https://client.example']),
+            validateKey,
+            apiBaseUrl: 'https://lef-api.example',
+        })
         await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
         port = (server.address() as AddressInfo).port
     })
 
     afterAll(async () => {
-        await new Promise<void>((resolvePromise, reject) => server.close(error => (error ? reject(error) : resolvePromise())))
+        await new Promise<void>((resolvePromise, reject) =>
+            server.close(error => (error ? reject(error) : resolvePromise())),
+        )
     })
 
     afterEach(() => {
@@ -85,7 +95,9 @@ describe('request origin integration (HTTP boundary)', () => {
         const client = new Client({ name: 'request-origin.spec', version: '0.0.0' })
         const headers: Record<string, string> = { Authorization: validAuthorizationHeader }
         if (origin !== undefined) headers.Origin = origin
-        const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), { requestInit: { headers } })
+        const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
+            requestInit: { headers },
+        })
         await client.connect(transport)
         try {
             return await client.callTool({ name: 'probe', arguments: {} })
@@ -155,7 +167,10 @@ describe('request origin integration (HTTP boundary)', () => {
     })
 
     it('runs an allowed and a denied request concurrently without either affecting the other', async () => {
-        const [allowed, denied] = await Promise.allSettled([callProbeViaSdk('https://client.example'), callProbeViaSdk('https://untrusted.example')])
+        const [allowed, denied] = await Promise.allSettled([
+            callProbeViaSdk('https://client.example'),
+            callProbeViaSdk('https://untrusted.example'),
+        ])
 
         expect(allowed.status).toBe('fulfilled')
         expect(denied.status).toBe('rejected')
@@ -180,7 +195,9 @@ function buildIsolatedExecutable(): { tempDir: string; mainPath: string } {
     const tscBin = resolve(packageRoot, '..', '..', 'node_modules', '.bin', 'tsc')
     const tempDir = mkdtempSync(join(tmpdir(), 'mcp-origin-config-'))
 
-    execFileSync(tscBin, ['-p', join(packageRoot, 'tsconfig.json'), '--outDir', join(tempDir, 'dist')], { timeout: 30_000 })
+    execFileSync(tscBin, ['-p', join(packageRoot, 'tsconfig.json'), '--outDir', join(tempDir, 'dist')], {
+        timeout: 30_000,
+    })
     writeFileSync(join(tempDir, 'package.json'), JSON.stringify({ type: 'module' }))
     symlinkSync(join(packageRoot, 'node_modules'), join(tempDir, 'node_modules'), 'dir')
 
@@ -202,10 +219,18 @@ function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<void>
     })
 }
 
-function collectUntilMatch(child: ChildProcess, stream: 'stdout' | 'stderr', pattern: RegExp, timeoutMs: number): Promise<string> {
+function collectUntilMatch(
+    child: ChildProcess,
+    stream: 'stdout' | 'stderr',
+    pattern: RegExp,
+    timeoutMs: number,
+): Promise<string> {
     return new Promise((resolvePromise, reject) => {
         let collected = ''
-        const timer = setTimeout(() => reject(new Error(`timed out waiting for ${String(pattern)} on ${stream}: ${collected}`)), timeoutMs)
+        const timer = setTimeout(
+            () => reject(new Error(`timed out waiting for ${String(pattern)} on ${stream}: ${collected}`)),
+            timeoutMs,
+        )
         const onData = (chunk: Buffer): void => {
             collected += chunk.toString('utf8')
             if (pattern.test(collected)) {
@@ -224,58 +249,56 @@ function collectUntilMatch(child: ChildProcess, stream: 'stdout' | 'stderr', pat
 describe('process regression: MCP_ALLOWED_ORIGINS startup validation', () => {
     jest.setTimeout(60_000)
 
-    it(
-        'starts successfully with a valid MCP_ALLOWED_ORIGINS value',
-        async () => {
-            const { tempDir, mainPath } = buildIsolatedExecutable()
-            let child: ChildProcess | undefined
-            try {
-                child = fork(mainPath, [], {
-                    cwd: tempDir,
-                    env: { ...process.env, MCP_ALLOWED_ORIGINS: 'https://client.example', OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1', API_URL: 'http://127.0.0.1:1', PORT: '0' },
-                    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-                })
-                const stdout = await collectUntilMatch(child, 'stdout', /listening on port/, 5_000)
+    it('starts successfully with a valid MCP_ALLOWED_ORIGINS value', async () => {
+        const { tempDir, mainPath } = buildIsolatedExecutable()
+        let child: ChildProcess | undefined
+        try {
+            child = fork(mainPath, [], {
+                cwd: tempDir,
+                env: {
+                    ...process.env,
+                    MCP_ALLOWED_ORIGINS: 'https://client.example',
+                    OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1',
+                    API_URL: 'http://127.0.0.1:1',
+                    PORT: '0',
+                },
+                stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+            })
+            const stdout = await collectUntilMatch(child, 'stdout', /listening on port/, 5_000)
 
-                expect(stdout).toMatch(/listening on port/)
-                expect(child.exitCode).toBeNull()
-            } finally {
-                if (child) await waitForChildExit(child, 5_000)
-                rmSync(tempDir, { recursive: true, force: true })
-            }
-        },
-        40_000,
-    )
+            expect(stdout).toMatch(/listening on port/)
+            expect(child.exitCode).toBeNull()
+        } finally {
+            if (child) await waitForChildExit(child, 5_000)
+            rmSync(tempDir, { recursive: true, force: true })
+        }
+    }, 40_000)
 
-    it(
-        'refuses to start and never binds a listener with an invalid MCP_ALLOWED_ORIGINS value',
-        async () => {
-            const { tempDir, mainPath } = buildIsolatedExecutable()
-            let child: ChildProcess | undefined
-            try {
-                child = fork(mainPath, [], {
-                    cwd: tempDir,
-                    env: {
-                        ...process.env,
-                        MCP_ALLOWED_ORIGINS: 'https://this-invalid-value-must-not-be-echoed.example/some/path',
-                        OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1',
-                        API_URL: 'http://127.0.0.1:1',
-                        PORT: '0',
-                    },
-                    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-                })
-                const stderr = await collectUntilMatch(child, 'stderr', /MCP_ALLOWED_ORIGINS/, 5_000)
-                await waitForChildExit(child, 5_000)
+    it('refuses to start and never binds a listener with an invalid MCP_ALLOWED_ORIGINS value', async () => {
+        const { tempDir, mainPath } = buildIsolatedExecutable()
+        let child: ChildProcess | undefined
+        try {
+            child = fork(mainPath, [], {
+                cwd: tempDir,
+                env: {
+                    ...process.env,
+                    MCP_ALLOWED_ORIGINS: 'https://this-invalid-value-must-not-be-echoed.example/some/path',
+                    OIDC_BACKCHANNEL_URL: 'http://127.0.0.1:1',
+                    API_URL: 'http://127.0.0.1:1',
+                    PORT: '0',
+                },
+                stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+            })
+            const stderr = await collectUntilMatch(child, 'stderr', /MCP_ALLOWED_ORIGINS/, 5_000)
+            await waitForChildExit(child, 5_000)
 
-                expect(child.exitCode).not.toBe(0)
-                expect(stderr).toContain('MCP_ALLOWED_ORIGINS')
-                expect(stderr).not.toContain('this-invalid-value-must-not-be-echoed')
-                expect(stderr).not.toMatch(/listening on port/)
-            } finally {
-                if (child) await waitForChildExit(child, 5_000)
-                rmSync(tempDir, { recursive: true, force: true })
-            }
-        },
-        40_000,
-    )
+            expect(child.exitCode).not.toBe(0)
+            expect(stderr).toContain('MCP_ALLOWED_ORIGINS')
+            expect(stderr).not.toContain('this-invalid-value-must-not-be-echoed')
+            expect(stderr).not.toMatch(/listening on port/)
+        } finally {
+            if (child) await waitForChildExit(child, 5_000)
+            rmSync(tempDir, { recursive: true, force: true })
+        }
+    }, 40_000)
 })

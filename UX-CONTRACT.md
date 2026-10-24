@@ -45,41 +45,41 @@ authentication, or email-verification business decision.
 The shared owners below apply to public and authenticated routes. Later features register their own working routes
 and reuse these primitives; navigation visibility follows effective capabilities returned by the API.
 
-| Capability | Canonical owner               | Source of truth | Allowed variants                             | Verification                      |
-| ---------- | ----------------------------- | --------------- | -------------------------------------------- | --------------------------------- |
-| Scrollbar  | Global application stylesheet | `DESIGN.md`     | Document baseline; named geometry exceptions | Computed style and browser review |
-| Navigation | `ResponsiveNavigation` | This contract | Desktop navigation; inline narrow disclosure | Component focus tests and Playwright |
-| Session | `AuthProvider` and `AuthSession` | `frontend/08` | Bootstrap, expiry, account failure, sign-out | Generation, cache, and browser tests |
-| Action | `Action.module.css` | `DESIGN.md` | Primary and secondary | Browser focus and state checks |
-| Recovery | `StateMessage` | This contract | Pending, failure, signed-out, and forbidden | Route, accessibility, and browser tests |
-| Data panel | `ProductPanel` | This contract | Independent loading, retained data, read retry, and optional header action | Billing and team component and browser tests |
-| Content spacing | `Stack` | `DESIGN.md` | Content groups and related controls; parent owns direct-child spacing | Static declaration checks and billing browser geometry |
-| Supporting text | `SupportingText` | `DESIGN.md` | Compact explanatory paragraphs | Static token checks and billing browser typography |
-| Detail list | `SignalDetails` | `DESIGN.md` | Evidence fields; supporting balance figures with regular-weight labels | Billing and verification component and browser tests |
-| Billing | `BillingView` and billing query adapters | `frontend/10` | Catalog, summary, history, and payment return | Component, API, Bruno, and stub browser tests |
-| Form | `Form.module.css` | This contract | Email, role, password, description, and permission fields | Field validation and browser tests |
-| Select/Listbox | Native select | This contract | Operating-system role popup | Keyboard and narrow browser tests |
-| Dialog | `TeamDialog` | This contract | Permission and lifecycle confirmations; one-time invitation and client secret | Focus, dismissal, and restoration tests |
-| Team | `TeamPage` | `frontend/13` | Active and disabled memberships | Component, API, Bruno, and browser tests |
-| Verification | `VerificationPage`, `VerificationJobPage`, and `SignalDetails` | `frontend/11` | Single submission, bounded job reads, and evidence fields | API, component, Bruno, and browser tests |
-| File upload | Native file input and `BatchVerificationPage` | `frontend/12` | One CSV; local selection and explicit replacement/removal | Cache-boundary, component, and browser tests |
-| Progress | `ProgressIndicator` | `frontend/12` | Indeterminate upload or exact finite server progress | Semantic and narrow browser tests |
-| Batch verification | `BatchVerificationJobPage` and shared polling policy | `frontend/12` | Validation, counts, safe failures, and retained CSV download | API, Bruno, component, and browser tests |
-| Service clients | `ServiceClientsPage` | `frontend/14` | Server-ordered list, create, rotate, disable, and delete | Contract, component, privacy, and live browser tests |
-| Platform organizations | `PlatformOrganizationsPage` | `frontend/15` | Cursor directory, tenant creation, and one-time owner invitation | API, PostgreSQL, component, Bruno, and browser tests |
-| Platform credits | `PlatformCreditsPage` | `frontend/17` | Authoritative balance, confirmed add and absolute set, and explicit recovery | API, component, Bruno, accessibility, and browser tests |
-| Platform proxies | `PlatformProxiesPage` | `frontend/18` | Cursor registry, credential-safe forms, and confirmed lifecycle actions | API, component, Bruno, privacy, accessibility, and live browser tests |
-| Invitation | `InvitationPage` and invitation bootstrap | `frontend/13` | Pending preview and generic terminal recovery | Secret lifecycle and live browser tests |
+| Capability             | Canonical owner                                                | Source of truth | Allowed variants                                                             | Verification                                                          |
+| ---------------------- | -------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Scrollbar              | Global application stylesheet                                  | `DESIGN.md`     | Document baseline; named geometry exceptions                                 | Computed style and browser review                                     |
+| Navigation             | `ResponsiveNavigation`                                         | This contract   | Desktop navigation; inline narrow disclosure                                 | Component focus tests and Playwright                                  |
+| Session                | `AuthProvider` and `AuthSession`                               | `frontend/08`   | Bootstrap, expiry, account failure, sign-out                                 | Generation, cache, and browser tests                                  |
+| Action                 | `Action.module.css`                                            | `DESIGN.md`     | Primary and secondary                                                        | Browser focus and state checks                                        |
+| Recovery               | `StateMessage`                                                 | This contract   | Pending, failure, signed-out, and forbidden                                  | Route, accessibility, and browser tests                               |
+| Data panel             | `ProductPanel`                                                 | This contract   | Independent loading, retained data, read retry, and optional header action   | Billing and team component and browser tests                          |
+| Content spacing        | `Stack`                                                        | `DESIGN.md`     | Content groups and related controls; parent owns direct-child spacing        | Static declaration checks and billing browser geometry                |
+| Supporting text        | `SupportingText`                                               | `DESIGN.md`     | Compact explanatory paragraphs                                               | Static token checks and billing browser typography                    |
+| Detail list            | `SignalDetails`                                                | `DESIGN.md`     | Evidence fields; supporting balance figures with regular-weight labels       | Billing and verification component and browser tests                  |
+| Billing                | `BillingView` and billing query adapters                       | `frontend/10`   | Catalog, summary, history, and payment return                                | Component, API, Bruno, and stub browser tests                         |
+| Form                   | `Form.module.css`                                              | This contract   | Email, role, password, description, and permission fields                    | Field validation and browser tests                                    |
+| Select/Listbox         | Native select                                                  | This contract   | Operating-system role popup                                                  | Keyboard and narrow browser tests                                     |
+| Dialog                 | `TeamDialog`                                                   | This contract   | Permission and lifecycle confirmations; one-time invitation and API key      | Focus, dismissal, and restoration tests                               |
+| Team                   | `TeamPage`                                                     | `frontend/13`   | Active and disabled memberships                                              | Component, API, Bruno, and browser tests                              |
+| Verification           | `VerificationPage`, `VerificationJobPage`, and `SignalDetails` | `frontend/11`   | Single submission, bounded job reads, and evidence fields                    | API, component, Bruno, and browser tests                              |
+| File upload            | Native file input and `BatchVerificationPage`                  | `frontend/12`   | One CSV; local selection and explicit replacement/removal                    | Cache-boundary, component, and browser tests                          |
+| Progress               | `ProgressIndicator`                                            | `frontend/12`   | Indeterminate upload or exact finite server progress                         | Semantic and narrow browser tests                                     |
+| Batch verification     | `BatchVerificationJobPage` and shared polling policy           | `frontend/12`   | Validation, counts, safe failures, and retained CSV download                 | API, Bruno, component, and browser tests                              |
+| API keys               | `ServiceClientsPage`                                           | `frontend/14`   | Server-ordered list, create, rotate, disable, and delete                     | Contract, component, privacy, and live browser tests                  |
+| Platform organizations | `PlatformOrganizationsPage`                                    | `frontend/15`   | Cursor directory, tenant creation, and one-time owner invitation             | API, PostgreSQL, component, Bruno, and browser tests                  |
+| Platform credits       | `PlatformCreditsPage`                                          | `frontend/17`   | Authoritative balance, confirmed add and absolute set, and explicit recovery | API, component, Bruno, accessibility, and browser tests               |
+| Platform proxies       | `PlatformProxiesPage`                                          | `frontend/18`   | Cursor registry, credential-safe forms, and confirmed lifecycle actions      | API, component, Bruno, privacy, accessibility, and live browser tests |
+| Invitation             | `InvitationPage` and invitation bootstrap                      | `frontend/13`   | Pending preview and generic terminal recovery                                | Secret lifecycle and live browser tests                               |
 
 ## Route and Copy Ownership
 
-| Route or target | Owner                    | Document title                                            | Primary heading                      | Recovery or destination |
-| --------------- | ------------------------ | --------------------------------------------------------- | ------------------------------------ | ----------------------- |
-| `/`             | Public-entry route       | `Lead Email Finder \| Verify the signal before you send.` | `Verify the signal before you send.` | In-page section links   |
-| Unknown UI path | Not-found route          | `Page not found \| Lead Email Finder`                     | `This signal ends here.`             | Working link to `/`     |
-| `#how-it-works` | Public-entry route       | Inherits the root title                                   | `Verify the signal before you send.` | Remains on `/`          |
-| `#signals`      | Signal-path component    | Inherits the root title                                   | `Verification signals` (visually hidden) | Remains on `/`      |
-| `#principles`   | Principles component     | Inherits the root title                                   | `Our principles guide every signal.` | Remains on `/`          |
+| Route or target | Owner                 | Document title                                            | Primary heading                          | Recovery or destination |
+| --------------- | --------------------- | --------------------------------------------------------- | ---------------------------------------- | ----------------------- |
+| `/`             | Public-entry route    | `Lead Email Finder \| Verify the signal before you send.` | `Verify the signal before you send.`     | In-page section links   |
+| Unknown UI path | Not-found route       | `Page not found \| Lead Email Finder`                     | `This signal ends here.`                 | Working link to `/`     |
+| `#how-it-works` | Public-entry route    | Inherits the root title                                   | `Verify the signal before you send.`     | Remains on `/`          |
+| `#signals`      | Signal-path component | Inherits the root title                                   | `Verification signals` (visually hidden) | Remains on `/`          |
+| `#principles`   | Principles component  | Inherits the root title                                   | `Our principles guide every signal.`     | Remains on `/`          |
 
 English copy lives outside `JSX` in the public-entry product-area copy module. Route components compose that copy and
 must not create local synonyms for navigation, signal names, principles, recovery actions, skip navigation, or the
@@ -98,11 +98,11 @@ receive pointer handlers, button semantics, or focus stops.
 
 ## Flow Ledger
 
-| Operation           | Trigger                           | Pending | Success destination  | Success feedback                                   | Failure recovery                                                 | Focus outcome                                             | Source ref    |
-| ------------------- | --------------------------------- | ------- | -------------------- | -------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------- | ------------- |
+| Operation           | Trigger                           | Pending | Success destination  | Success feedback                                              | Failure recovery                                                 | Focus outcome                                             | Source ref    |
+| ------------------- | --------------------------------- | ------- | -------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------- | ------------- |
 | Navigate to section | Activate a header or section link | None    | Named section on `/` | URL fragment and the named section or visible signal sequence | Browser-native fragment behavior leaves the full document usable | Logical link order continues into the destination section | `frontend/01` |
-| Open unknown path   | Navigate to an unmatched UI URL   | None    | Not-found route      | Specific title, heading, and explanation           | Home link returns to `/`                                         | Main content precedes the recovery link in document order | `frontend/01` |
-| Return home         | Activate the not-found home link  | None    | `/`                  | Root title and public entry replace the error view | Browser back remains available                                   | Root landmark and heading retain logical reading order    | `frontend/01` |
+| Open unknown path   | Navigate to an unmatched UI URL   | None    | Not-found route      | Specific title, heading, and explanation                      | Home link returns to `/`                                         | Main content precedes the recovery link in document order | `frontend/01` |
+| Return home         | Activate the not-found home link  | None    | `/`                  | Root title and public entry replace the error view            | Browser back remains available                                   | Root landmark and heading retain logical reading order    | `frontend/01` |
 
 These routes perform no API request and expose no loading, stale, empty, mutation, optimistic, retry, or conflict
 state. A later API-backed plan must define those states before adding the corresponding workflow.
@@ -197,7 +197,6 @@ ship. Team invitations use the one-time clipboard behavior defined below.
   runtime commands declared in `premium-ui.json`.
 - **Design contract lint:** `corepack pnpm design:lint` must exit zero with no warnings.
 
-
 ## Browser Origin and Route Ownership
 
 The built product is served at `http://localhost:53000/` by the web gateway. Hard refreshes of UI routes preserve
@@ -210,7 +209,6 @@ headers. The gateway itself introduces no authentication controls; the applicati
 `.agents/plans/frontend/06-serve-web-and-api-from-one-origin.md`; browser verification is owned by
 `apps/web/tests/gateway` and the `corepack pnpm test:web-live` launcher.
 
-
 ## Authentication and Application Navigation
 
 The source contract is `.agents/plans/frontend/08-sign-in-and-navigate-application-shell.md`. The browser uses the
@@ -218,26 +216,26 @@ existing generated API client and BFF cookies. It never handles OAuth tokens. Th
 identity and effective capabilities; roles are not interpreted as frontend permissions. Missing email uses the exact
 copy `Email unavailable`. Organization and account information wrap in full and appear in the main content on phones.
 
-| Route | Heading and document title prefix | Recovery |
-| --- | --- | --- |
-| `/app` | `Your workspace` | Refresh account or sign out |
-| `/app/session-expired` | `Your session has expired` | Sign in to the preserved safe destination |
-| `/app/account-unavailable` | `Account unavailable` | Start a fresh sign-in attempt |
-| `/app/forbidden` | `Access denied` | Back to workspace; keep the authenticated context |
-| `/auth/error` | `Sign-in did not complete` | Start a fresh sign-in attempt |
-| Unknown `/app/**` | `Page not found` | Back to workspace |
+| Route                      | Heading and document title prefix | Recovery                                          |
+| -------------------------- | --------------------------------- | ------------------------------------------------- |
+| `/app`                     | `Your workspace`                  | Refresh account or sign out                       |
+| `/app/session-expired`     | `Your session has expired`        | Sign in to the preserved safe destination         |
+| `/app/account-unavailable` | `Account unavailable`             | Start a fresh sign-in attempt                     |
+| `/app/forbidden`           | `Access denied`                   | Back to workspace; keep the authenticated context |
+| `/auth/error`              | `Sign-in did not complete`        | Start a fresh sign-in attempt                     |
+| Unknown `/app/**`          | `Page not found`                  | Back to workspace                                 |
 
 Every title ends with ` | Lead Email Finder` and contains no account information. Pending, unavailable, signing-out,
 signed-out, and uncertain sign-out states use their own heading as the title prefix. The callback-error page uses only the
 three public error codes to select stable copy; unknown codes receive generic recovery copy. They never render provider
 messages or replay callback parameters. Public and callback-error routes do not request the session on mount.
 
-| Operation | Pending | Success | Failure and recovery |
-| --- | --- | --- | --- |
-| Open a protected route | Stable session-check region | Account and shell | Initial unauthenticated state starts sign-in; transient failure offers Try again |
-| Refresh account | Stable session-check region | Fresh current-account value | Session loss leads to session expired; unusable context leads to account unavailable |
-| Sign out | Account and caches disappear immediately | A confirmed 204 renders You are signed out | Uncertain completion keeps data hidden and offers Retry sign-out or a fresh sign-in |
-| Restore a cached page | Protected content is hidden before restoration | Fresh account bootstrap | Normal session recovery; no restored account snapshot |
+| Operation                      | Pending                                                | Success                                     | Failure and recovery                                                                        |
+| ------------------------------ | ------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Open a protected route         | Stable session-check region                            | Account and shell                           | Initial unauthenticated state starts sign-in; transient failure offers Try again            |
+| Refresh account                | Stable session-check region                            | Fresh current-account value                 | Session loss leads to session expired; unusable context leads to account unavailable        |
+| Sign out                       | Account and caches disappear immediately               | A confirmed 204 renders You are signed out  | Uncertain completion keeps data hidden and offers Retry sign-out or a fresh sign-in         |
+| Restore a cached page          | Protected content is hidden before restoration         | Fresh account bootstrap                     | Normal session recovery; no restored account snapshot                                       |
 | Receive another tab's boundary | Clear caches, abort old work, and hide account context | Fresh bootstrap after principal replacement | During sign-out, a still-valid old session is withheld and sign-out retry remains available |
 
 The single application QueryClient defaults to no retries. Session bootstrap explicitly permits one retry for a
@@ -282,11 +280,11 @@ The `page` query parameter preserves history navigation and is clamped to the av
 Dates use English formatting with an explicit UTC timezone. Money uses the server currency code and its
 `Intl.NumberFormat` fraction digits, including zero-decimal currencies. Status always appears as text.
 
-| Operation | Pending | Confirmed response | Failure and recovery |
-| --- | --- | --- | --- |
-| Start checkout | Keep the selected action busy and prevent a second POST | Save only a temporary purchase hint, then navigate to the validated URL | An unavailable pack reloads the catalog; a provider failure reloads history; an uncertain result reloads history and balance before a deliberate retry |
-| Return from payment | Refresh history and summary | Render the status from history and the balance from summary | A missing or unknown hint shows a generic notice and history; failed and expired purchases offer a return to billing |
-| Monitor pending payment | Read every five seconds, at most twelve times | Stop on a terminal status | Pause while hidden or offline; offer manual refresh after the bounded checks |
+| Operation               | Pending                                                 | Confirmed response                                                      | Failure and recovery                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Start checkout          | Keep the selected action busy and prevent a second POST | Save only a temporary purchase hint, then navigate to the validated URL | An unavailable pack reloads the catalog; a provider failure reloads history; an uncertain result reloads history and balance before a deliberate retry |
+| Return from payment     | Refresh history and summary                             | Render the status from history and the balance from summary             | A missing or unknown hint shows a generic notice and history; failed and expired purchases offer a return to billing                                   |
+| Monitor pending payment | Read every five seconds, at most twelve times           | Stop on a terminal status                                               | Pause while hidden or offline; offer manual refresh after the bounded checks                                                                           |
 
 The checkout request sends only `packId` and never retries automatically. A redirect, query parameter, or local hint cannot mark
 a purchase paid or increment the balance. URL validation uses the same pure origin policy in the API and browser;
@@ -305,7 +303,6 @@ from the URL and finds it within the current organization's history. Terminal st
 return navigation focuses the notice once; polling preserves the user's focus. Offline notices and partial errors
 remain readable alongside previously loaded data.
 
-
 ## Verification Credit Accounting
 
 The source contract is `.agents/plans/verification-billing/06-explain-verification-charges.md`. Billing leads with
@@ -322,11 +319,11 @@ types. Navigation uses `team.manage`; direct authenticated navigation always req
 server's permission result. Team mutation rejections remain local so the form can explain hierarchy conflicts and
 refresh authoritative data. Account and session failures retain the shared session recovery behavior.
 
-| Route | Owner | Title and heading | Recovery |
-| --- | --- | --- | --- |
-| `/app/team` | `TeamPage` | `Team` | Refresh members, inline mutation failures, or access denied |
-| `/accept-invitation/:token` | Invitation bootstrap | Sanitized before router initialization | Replace the current history entry with `/accept-invitation` |
-| `/accept-invitation` | `InvitationPage` | `Accept invitation` with state-specific heading | Reopen the original link or sign in |
+| Route                       | Owner                | Title and heading                               | Recovery                                                    |
+| --------------------------- | -------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
+| `/app/team`                 | `TeamPage`           | `Team`                                          | Refresh members, inline mutation failures, or access denied |
+| `/accept-invitation/:token` | Invitation bootstrap | Sanitized before router initialization          | Replace the current history entry with `/accept-invitation` |
+| `/accept-invitation`        | `InvitationPage`     | `Accept invitation` with state-specific heading | Reopen the original link or sign in                         |
 
 `Form.module.css` owns shared field, label, validation, and action-group styling. Forms use explicit labels,
 application-owned validation, first-error focus, and duplicate-submit prevention. Native role selects use the
@@ -345,14 +342,14 @@ member read is pending, or the browser is offline. It reloads authoritative memb
 current list. Team operation feedback stays mounted within the panel's reserved live region; confirmed role changes
 and disabled access retain their existing feedback focus behavior.
 
-| Operation | Pending | Confirmed result | Failure and recovery |
-| --- | --- | --- | --- |
-| Issue invitation | One request; safe email and role remain visible | One local dialog contains the URL | Explain rejection or uncertainty and refresh members |
-| Copy invitation | Prevent duplicate copy | Remove the dialog and announce that the link was copied | Keep the current dialog available for manual copy |
-| Change owner role or disable access | Confirm object and consequence before one request | Refresh server data and announce completion | Keep server state authoritative and explain the rejection |
-| Preview invitation | Stable loading region, no shared query | Show organization, email, role, and UTC expiry | Unknown, expired, and used states contain no invitation details |
-| Accept invitation | Clear the entered password after dispatch and prevent duplicate submission | Remove preview and authority; offer sign-in | Clear all authority and password data; explain how to reopen or seek help |
-| Restore a cached page | Clear private data synchronously on page hide | A restored invitation asks for the original link | No automatic preview, acceptance, or restored issued-link dialog |
+| Operation                           | Pending                                                                    | Confirmed result                                        | Failure and recovery                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Issue invitation                    | One request; safe email and role remain visible                            | One local dialog contains the URL                       | Explain rejection or uncertainty and refresh members                      |
+| Copy invitation                     | Prevent duplicate copy                                                     | Remove the dialog and announce that the link was copied | Keep the current dialog available for manual copy                         |
+| Change owner role or disable access | Confirm object and consequence before one request                          | Refresh server data and announce completion             | Keep server state authoritative and explain the rejection                 |
+| Preview invitation                  | Stable loading region, no shared query                                     | Show organization, email, role, and UTC expiry          | Unknown, expired, and used states contain no invitation details           |
+| Accept invitation                   | Clear the entered password after dispatch and prevent duplicate submission | Remove preview and authority; offer sign-in             | Clear all authority and password data; explain how to reopen or seek help |
+| Restore a cached page               | Clear private data synchronously on page hide                              | A restored invitation asks for the original link        | No automatic preview, acceptance, or restored issued-link dialog          |
 
 Preview, issue, and acceptance use direct generated-client requests with feature-local generation and abort control.
 They never enter the shared MutationCache or query cache. Team issuance also retains the authenticated transport's
@@ -374,7 +371,6 @@ output disabled throughout invitation operations. Safe team-list screenshots are
 issues no invitations. Test fixtures generate authority at runtime; committed fixtures and validation artifacts
 contain no real invitation token or password.
 
-
 ## Single Email Verification
 
 The source contract is `.agents/plans/frontend/11-run-single-email-verification.md`. The form at
@@ -394,14 +390,14 @@ on return. Authentication boundaries clear the coordinator and fence late respon
 A request rejected because the device clock is ahead explains how to correct that clock. The email remains valid,
 and only a deliberate new submission creates a fresh request key after correction.
 
-| Operation | Pending | Confirmed response | Failure and recovery |
-| --- | --- | --- | --- |
-| Verify email | One request; prevent duplicate activation | Navigate using the returned job UUID | Preserve the address; associate validation errors with the field |
-| Insufficient credits | Keep entered values | No verification is claimed | Billing link only with `billing.read`; otherwise contact an organization owner |
-| Uncertain submission | Never repeat the POST automatically | No invented identifier or history entry | Recover deliberately with the original key and input; preserve uncertainty until the server confirms the result |
-| Read job status | Retain the last confirmed response | Show queued, running, completed, failed, or unavailable | Mark retained data stale and offer Refresh status; never submit again |
-| Monitor active job | One read every five seconds, at most sixty checks | Stop for completed, failed, and unavailable states | Pause while hidden or offline; after a read error require a manual refresh |
-| Open or refresh job URL | Validate UUID shape, then read that job | Restore the same organization-scoped status | Missing and cross-organization jobs share Verification not found |
+| Operation               | Pending                                           | Confirmed response                                      | Failure and recovery                                                                                            |
+| ----------------------- | ------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Verify email            | One request; prevent duplicate activation         | Navigate using the returned job UUID                    | Preserve the address; associate validation errors with the field                                                |
+| Insufficient credits    | Keep entered values                               | No verification is claimed                              | Billing link only with `billing.read`; otherwise contact an organization owner                                  |
+| Uncertain submission    | Never repeat the POST automatically               | No invented identifier or history entry                 | Recover deliberately with the original key and input; preserve uncertainty until the server confirms the result |
+| Read job status         | Retain the last confirmed response                | Show queued, running, completed, failed, or unavailable | Mark retained data stale and offer Refresh status; never submit again                                           |
+| Monitor active job      | One read every five seconds, at most sixty checks | Stop for completed, failed, and unavailable states      | Pause while hidden or offline; after a read error require a manual refresh                                      |
+| Open or refresh job URL | Validate UUID shape, then read that job           | Restore the same organization-scoped status             | Missing and cross-organization jobs share Verification not found                                                |
 
 Each state has an explicit heading and document title without email or account data. Hidden or offline pauses keep
 confirmed data visible. Status announcements change only when the state or recovery instruction changes, rather
@@ -423,42 +419,44 @@ for accounts with `billing.read`; the browser never subtracts credits locally. U
 the job cache or markup. The shared `useBrowserAvailability` hook owns visibility and connectivity subscriptions for billing
 and verification. Desktop, narrow, keyboard, reduced-motion, stale, error, and accessibility checks cover the routes.
 
+## Organization API Keys
 
-## Organization Service Clients
-
-The source contracts are `.agents/plans/frontend/14-manage-service-clients.md` and
+The source contracts are `.agents/plans/better-auth/02-organization-api-keys.md`,
+`.agents/plans/frontend/14-manage-service-clients.md`, and
 `src/libs/modules/service-client-management/README.md`. The page at `/app/service-clients` uses the title and heading
-`Service clients`. Navigation and route access require `service_clients.manage`. The server remains authoritative
+`API keys`. Navigation and route access require `service_clients.manage`. The server remains authoritative
 for human-session authorization, tenant ownership, and grantable permissions. The create form renders exactly
 `grantableServiceClientPermissions` from account context, preserving their order. It accepts an optional description
 and requires at least one unique permission; backend validation also rejects stale or forged selections.
 
-The list retains the complete server order and displays active and disabled clients. It shows ten rows per local
-page, stores the page in the URL, and clamps after deletion or a refresh. Identifiers, descriptions, permissions,
-status, and UTC timestamps wrap fully. Loading, empty, offline, stale refresh, validation, access denial, and provider
+The list retains the complete server order and displays active and disabled keys. It shows ten rows per local
+page, stores the page in the URL, and clamps after deletion or a refresh. Safe key prefixes, descriptions, permissions,
+status, and UTC timestamps wrap fully. Loading, empty, offline, stale refresh, validation, access denial, and persistence
 failures reuse the existing panel and state owners. Changes appear only after an authoritative list refresh.
 
-| Operation | Pending | Confirmed result | Recovery |
-| --- | --- | --- | --- |
-| Create client | One request; prevent duplicate submission | Open the one-time secret dialog and refresh clients | Correct definite rejection or reconcile an unknown outcome |
-| Rotate secret | Confirm that the current secret stops working | Open the new secret once and refresh clients | Review the client before explicitly rotating again |
-| Disable client | Confirm permanent disablement | Refresh the status; offer no rotation or re-enable control | Refresh before deciding what to do next |
-| Delete client | Name the identifier and explain provider deletion | Refresh and clamp the visible page | Refresh before another explicit action |
-| Copy or download | Only after an explicit user action | Announce completion without the secret | Keep the dialog open on failure for an explicit retry |
-| Close or leave the page | Invalidate pending work and scrub local references | Show no secret when returning | A lost value cannot be retrieved again |
+| Operation               | Pending                                            | Confirmed result                                           | Recovery                                                   |
+| ----------------------- | -------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| Create API key          | One request; prevent duplicate submission          | Open the one-time key dialog and refresh keys              | Correct definite rejection or reconcile an unknown outcome |
+| Rotate API key          | Confirm that the current key stops working         | Open the new key once and refresh keys                     | Review the key before explicitly rotating again            |
+| Disable API key         | Confirm permanent disablement                      | Refresh the status; offer no rotation or re-enable control | Refresh before deciding what to do next                    |
+| Delete API key          | Name the key prefix and explain permanent deletion | Refresh and clamp the visible page                         | Refresh before another explicit action                     |
+| Copy or download        | Only after an explicit user action                 | Announce completion without the key                        | Keep the dialog open on failure for an explicit retry      |
+| Close or leave the page | Invalidate pending work and scrub local references | Show no key when returning                                 | A lost value cannot be retrieved again                     |
 
-One-time responses use direct generated-client requests and feature-local abort and generation control. They never
+Create and rotate return safe metadata and `apiKey` once; lists contain `keyPrefix`, never `apiKey` or `keyHash`.
+The frontend selects only safe metadata fields before caching them. An API key authenticates directly as a Bearer credential;
+there is no client ID or OAuth token exchange. One-time responses use direct generated-client requests and feature-local abort and generation control. They never
 enter query data, MutationCache, React state, storage, URLs, feedback, or telemetry. The dialog uses a local
-reference and renders the secret only in its uncontrolled, initially masked field. Show and Hide are explicit
+reference and renders the API key only in its uncontrolled, initially masked field. Show and Hide are explicit
 keyboard-operable controls. Clipboard export uses only the user-requested value. Download creates a temporary object
-URL on demand, uses a credential-free filename, revokes the URL, and explains that the file contains sensitive data.
+URL on demand, downloads `api-key.json` containing only `{ apiKey }`, revokes the URL, and explains that the file contains sensitive data.
 The operating system owns explicitly exported clipboard and download data.
 
 Dismissal, unmount, authentication boundaries, `pagehide`, and persisted `pageshow` invalidate the operation generation,
 abort requests, and synchronously clear the secret field and local references before a restored page can paint.
 Late responses cannot reopen the dialog. Create and rotate never retry automatically, including on reconnect.
 Canceling the wait or losing a response after dispatch leaves the outcome unknown and refreshes the list; another
-creation requires an explicit acknowledgment. A user may reconcile a newly listed client through delete or a fresh,
+creation requires an explicit acknowledgment. A user may reconcile a newly listed key through delete or a fresh,
 confirmed rotation. No recovery action silently repeats a mutation.
 
 `TeamDialog` remains the canonical modal owner, with native background isolation, focus containment, Escape,
@@ -482,13 +480,13 @@ mounted form. Acceptance, invalid-file rejection, removal, page hide, or route d
 A definite credit or rate-limit rejection retains the selection for a deliberate retry. No
 file, multipart body, filename, or downloaded CSV enters shared caches, persistent storage, or diagnostics.
 
-| Operation | Pending | Confirmed response | Failure and recovery |
-| --- | --- | --- | --- |
-| Upload CSV | Disable duplicate submission and replacement; indeterminate Uploading CSV | Open the returned batch UUID route | Associate a rejected file with correction guidance; clear selection |
-| Uncertain upload | Never retry the POST automatically | No invented job link | Explain possible job creation and charging; require acknowledgment and fresh selection |
-| Read batch | Shared five-second polling with at most sixty checks | Show exact server progress and counts | Pause when hidden or offline; retain stale values and offer manual refresh |
-| Terminal status | Stop automatic polling | The server’s `resultsAvailable` flag enables result download only for eligible completed jobs | Failure uses a safe code; unavailable makes no outcome or charging claim |
-| Download result | Disable duplicate activation during the authenticated GET | Start the CSV download and revoke its object URL | Retry only the GET; a later 404 renders Result no longer available |
+| Operation        | Pending                                                                   | Confirmed response                                                                            | Failure and recovery                                                                   |
+| ---------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Upload CSV       | Disable duplicate submission and replacement; indeterminate Uploading CSV | Open the returned batch UUID route                                                            | Associate a rejected file with correction guidance; clear selection                    |
+| Uncertain upload | Never retry the POST automatically                                        | No invented job link                                                                          | Explain possible job creation and charging; require acknowledgment and fresh selection |
+| Read batch       | Shared five-second polling with at most sixty checks                      | Show exact server progress and counts                                                         | Pause when hidden or offline; retain stale values and offer manual refresh             |
+| Terminal status  | Stop automatic polling                                                    | The server’s `resultsAvailable` flag enables result download only for eligible completed jobs | Failure uses a safe code; unavailable makes no outcome or charging claim               |
+| Download result  | Disable duplicate activation during the authenticated GET                 | Start the CSV download and revoke its object URL                                              | Retry only the GET; a later 404 renders Result no longer available                     |
 
 `ProgressIndicator` owns determinate and indeterminate semantics. Job progress uses the finite server value without
 smoothing, estimates, or upload percentages. Zero counts during validation do not mean that the input is empty.
@@ -509,7 +507,6 @@ settlement states stay visible, and neither row counts nor success counts predic
 disable upload. Status refresh, reload, and download only read existing work. Rate limits expose the supplied retry
 time and require a deliberate retry. Terminal or settled accounting refreshes the billing summary with the existing
 permission and session guards.
-
 
 ## Platform Organization Bootstrap
 
@@ -578,7 +575,6 @@ the key. Closing the tab or clearing browser storage also loses recovery. The op
 before making a separate adjustment; a balance read alone cannot establish causality. See
 `docs/platform-credits.md` for the operator procedure.
 
-
 ## Platform Proxy Fleet
 
 The source contract is `.agents/plans/frontend/18-operate-proxy-fleet.md`. The route `/app/platform/proxies`, its
@@ -611,14 +607,14 @@ controller and operation generation fence late results. Settlement, dismissal, u
 pageshow clear credentials and close the form. Browser-restored values cannot submit automatically. Public reads
 apply an explicit field projection before entering the query cache.
 
-| Operation | Confirmation and pending behavior | Confirmed result | Recovery |
-| --- | --- | --- | --- |
-| Create proxy | Starts disabled; prevent duplicate requests | Refresh the registry | Reconcile an unconfirmed creation before another write |
-| Edit visible fields | Read current detail; omit authentication and lifecycle | Refresh the registry | Correct a rejection through a fresh form |
-| Replace authentication | Explain loss of old values and connectivity risk; initially focus Cancel | Clear input and refresh | A redacted response cannot establish which credentials were stored |
-| Activate, Drain, Disable | Name source, target, and allocation consequence; initially focus Cancel | Refresh server state | Never infer that active leases or connections ended |
-| Report MX blacklist | Validate one nonempty MX host | Read the server's deduplicated array | Retry explicitly; no removal control |
-| Delete proxy | Name the exact endpoint and registry deletion; initially focus Cancel | Refresh directory membership | Reconcile before another explicit action |
+| Operation                | Confirmation and pending behavior                                        | Confirmed result                     | Recovery                                                           |
+| ------------------------ | ------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------ |
+| Create proxy             | Starts disabled; prevent duplicate requests                              | Refresh the registry                 | Reconcile an unconfirmed creation before another write             |
+| Edit visible fields      | Read current detail; omit authentication and lifecycle                   | Refresh the registry                 | Correct a rejection through a fresh form                           |
+| Replace authentication   | Explain loss of old values and connectivity risk; initially focus Cancel | Clear input and refresh              | A redacted response cannot establish which credentials were stored |
+| Activate, Drain, Disable | Name source, target, and allocation consequence; initially focus Cancel  | Refresh server state                 | Never infer that active leases or connections ended                |
+| Report MX blacklist      | Validate one nonempty MX host                                            | Read the server's deduplicated array | Retry explicitly; no removal control                               |
+| Delete proxy             | Name the exact endpoint and registry deletion; initially focus Cancel    | Refresh directory membership         | Reconcile before another explicit action                           |
 
 No row changes optimistically. Mutations pause while a required read is pending, failed, or offline. Unexpected server
 or network failure after dispatch is an unconfirmed outcome. Cancellation stops waiting but cannot undo a server write.

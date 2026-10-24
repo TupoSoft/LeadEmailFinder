@@ -1,4 +1,5 @@
-import { BFF_SESSION_COOKIE_NAME, CredentialExtractor, isJwtShapedToken } from './credential-extractor'
+import { CredentialRejectedError } from './credential-authenticator'
+import { BFF_SESSION_COOKIE_NAME, CredentialExtractor } from './credential-extractor'
 
 describe('CredentialExtractor', () => {
     const extractor = new CredentialExtractor()
@@ -9,16 +10,17 @@ describe('CredentialExtractor', () => {
         expect(credential).toEqual({ scheme: 'bearer', token: 'token-value' })
     })
 
-    it('takes the first value when a header is repeated', () => {
-        const credential = extractor.extract({ authorization: ['Bearer first-value', 'Bearer second-value'] })
-
-        expect(credential).toEqual({ scheme: 'bearer', token: 'first-value' })
-    })
-
-    it('returns undefined when the Authorization header has no Bearer prefix', () => {
-        const credential = extractor.extract({ authorization: 'Basic dXNlcjpwYXNz' })
-
-        expect(credential).toBeUndefined()
+    it.each([
+        ['Bearer first-value', 'Bearer second-value'],
+        'Basic dXNlcjpwYXNz',
+        '',
+        'Bearer ',
+        'Bearer a,b',
+        'Bearer a b',
+    ])('rejects malformed or duplicate authorization without cookie fallback: %s', authorization => {
+        expect(() => extractor.extract({ authorization, cookie: `${BFF_SESSION_COOKIE_NAME}=valid-session` })).toThrow(
+            CredentialRejectedError,
+        )
     })
 
     it('returns undefined when no credential header is present', () => {
@@ -68,15 +70,5 @@ describe('CredentialExtractor', () => {
         })
 
         expect(credential).toEqual({ scheme: 'session-cookie', token: 'valid-session' })
-    })
-})
-
-describe('isJwtShapedToken', () => {
-    it('returns true for a three-segment token', () => {
-        expect(isJwtShapedToken('header.payload.signature')).toBe(true)
-    })
-
-    it.each(['not-a-jwt', 'header.payload', 'a.b.c.d'])('returns false for %s', token => {
-        expect(isJwtShapedToken(token)).toBe(false)
     })
 })

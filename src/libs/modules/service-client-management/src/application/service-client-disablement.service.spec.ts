@@ -26,9 +26,9 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
         organizationId: 'org-1',
         issuer: 'https://issuer',
         subject: 'sa-1',
-        keycloakClientId: 'lef-svc-1',
+        keyPrefix: 'lef-svc-1',
         description: null,
-        permissions: [],
+        permissions: ['credentials:manage'],
         status: 'active',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -103,8 +103,6 @@ describe('ServiceClientDisablementService', () => {
         directory.findByIdForOrganization.mockResolvedValue(credentialFixture())
         writer.disableWithAudit.mockResolvedValue('not-found')
 
-        await expect(service.disable(principalFixture(), 'org-1', 'sc-1')).rejects.toThrow(
-            ServiceClientNotFoundError,
-        )
+        await expect(service.disable(principalFixture(), 'org-1', 'sc-1')).rejects.toThrow(ServiceClientNotFoundError)
     })
 })

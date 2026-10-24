@@ -23,5 +23,6 @@ runtime:
         test('rejects an M2M credential before client management', function() {
           expect(res.status).to.equal(403);
           expect(res.headers['cache-control']).to.equal('no-store');
-          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'apiKey')).to.equal(false);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'keyHash')).to.equal(false);
         });

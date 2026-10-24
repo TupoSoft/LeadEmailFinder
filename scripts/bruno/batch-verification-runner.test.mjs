@@ -8,122 +8,18 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { cliArguments, executeCollection, registeredCollection } from './run-collection.mjs'
 import { failureDiagnostic } from './failure-diagnostic.mjs'
-import { customerClientSecret } from './async-verification-fixture.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
-const customerClient = 'lef-svc-dev-fixture'
-
-test('batch customer secret uses the provisioned organization service identity and read-only admin requests', async () => {
-    const metadata = { keycloakUrl: 'http://localhost:58106' }
-    const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    const orgAdmin = { issuer, clientId: 'lef-org-admin-service', clientSecret: 'synthetic-admin-secret' }
-    const claims = Buffer.from(JSON.stringify({ iss: issuer, azp: orgAdmin.clientId })).toString('base64url')
-    const calls = []
-    const responses = [
-        { access_token: `synthetic.${claims}.signature` },
-        [{ clientId: customerClient, id: 'seeded-customer' }],
-        { value: 'synthetic-customer-secret' },
-    ]
-    const secret = await customerClientSecret(
-        metadata,
-        customerClient,
-        async (url, options) => {
-            calls.push({ url, options })
-            return { ok: true, json: async () => responses.shift() }
-        },
-        { orgAdmin },
-    )
-    assert.equal(secret, 'synthetic-customer-secret')
-    assert.deepEqual(
-        calls.map(call => call.options.method ?? 'GET'),
-        ['POST', 'GET', 'GET'],
-    )
-    assert.equal(calls[0].url, `${issuer}/protocol/openid-connect/token`)
-    assert.deepEqual(Object.fromEntries(calls[0].options.body), {
-        grant_type: 'client_credentials',
-        client_id: orgAdmin.clientId,
-        client_secret: orgAdmin.clientSecret,
-    })
-    assert.equal(
-        calls[1].url,
-        `${metadata.keycloakUrl}/admin/realms/lead-email-finder/clients?clientId=${customerClient}`,
-    )
-    assert.equal(
-        calls[2].url,
-        `${metadata.keycloakUrl}/admin/realms/lead-email-finder/clients/seeded-customer/client-secret`,
-    )
-})
-
-test('organization administrator identity mismatches fail before reading a customer secret', async () => {
-    const metadata = { keycloakUrl: 'http://localhost:58106' }
-    const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    const valid = { issuer, clientId: 'lef-org-admin-service', clientSecret: 'synthetic-admin-secret' }
-    for (const orgAdmin of [
-        null,
-        { ...valid, issuer: 'http://unexpected.test' },
-        { ...valid, clientId: 'platform' },
-        { ...valid, clientSecret: '' },
-    ]) {
-        await assert.rejects(
-            customerClientSecret(
-                metadata,
-                customerClient,
-                () => {
-                    assert.fail('Unexpected network request')
-                },
-                { orgAdmin },
-            ),
-            /matching organization/,
-        )
-    }
-    await assert.rejects(
-        customerClientSecret(
-            metadata,
-            'arbitrary-client',
-            () => {
-                assert.fail('Unexpected network request')
-            },
-            { orgAdmin: valid },
-        ),
-        /matching organization/,
-    )
-    for (const claims of [
-        { iss: 'http://unexpected.test', azp: valid.clientId },
-        { iss: issuer, azp: 'platform' },
-    ]) {
-        let calls = 0
-        await assert.rejects(
-            customerClientSecret(
-                metadata,
-                customerClient,
-                async () => {
-                    calls++
-                    return {
-                        ok: true,
-                        json: async () => ({
-                            access_token: `synthetic.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`,
-                        }),
-                    }
-                },
-                { orgAdmin: valid },
-            ),
-            /token identity did not match/,
-        )
-        assert.equal(calls, 1)
-    }
-})
 
 function fixtureEnvironment(origin) {
     return {
         BRUNO_API_URL: origin,
         OIDC_ISSUER_URL: origin,
         OIDC_BACKCHANNEL_URL: origin,
-        KEYCLOAK_SERVICE_CLIENT_ID: 'platform',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-platform-secret',
+        PLATFORM_API_KEY: 'synthetic-platform-secret',
         PLATFORM_ORGANIZATION_ID: randomUUID(),
         CUSTOMER_ORGANIZATION_ID: randomUUID(),
-        CUSTOMER_SERVICE_CLIENT_ID: customerClient,
-        CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
+        CUSTOMER_API_KEY: 'synthetic-customer-secret',
         EVIDENCE_CONTROL_URL: origin,
     }
 }
@@ -160,12 +56,9 @@ test('batch registry pins every ordered request, test count, sandbox and distinc
     assert.doesNotMatch(JSON.stringify(args), /synthetic-/)
     for (const field of [
         'CUSTOMER_ORGANIZATION_ID',
-        'CUSTOMER_SERVICE_CLIENT_ID',
-        'CUSTOMER_SERVICE_CLIENT_SECRET',
+        'CUSTOMER_API_KEY',
         'PLATFORM_ORGANIZATION_ID',
-        'KEYCLOAK_SERVICE_CLIENT_ID',
-        'KEYCLOAK_SERVICE_CLIENT_SECRET',
-        'OIDC_BACKCHANNEL_URL',
+        'PLATFORM_API_KEY',
         'EVIDENCE_CONTROL_URL',
     ]) {
         assert.throws(
@@ -234,7 +127,7 @@ test('pinned CLI verifies duplicate accounting, group denial, fresh fixtures, sa
             unauthorized++
             return reply(401, {})
         }
-        const client = JSON.parse(Buffer.from(authorization.split('.')[1], 'base64url').toString()).client
+        const client = authorization === 'Bearer synthetic-platform-secret' ? 'platform' : 'customer'
         if (pathname.startsWith('/credits/')) {
             assert.equal(client, 'platform')
             if (request.method === 'PUT') {
@@ -247,7 +140,7 @@ test('pinned CLI verifies duplicate accounting, group denial, fresh fixtures, sa
             return reply(200, { balance })
         }
         if (pathname === '/verifyBatch/csv' && request.method === 'POST') {
-            if (client !== customerClient) return reply(403, {})
+            if (client !== 'customer') return reply(403, {})
             assert.match(request.headers['content-type'], /^multipart\/form-data; boundary=/)
             assert.equal((raw.match(/Content-Disposition: form-data; name="file"/g) ?? []).length, 1)
             if (raw.includes('filename="not-csv.txt"')) {
@@ -292,7 +185,7 @@ test('pinned CLI verifies duplicate accounting, group denial, fresh fixtures, sa
             successfulUploads++
             return reply(202, { id: job })
         }
-        if (client !== customerClient) {
+        if (client !== 'customer') {
             foreignReads++
             return reply(404, {})
         }

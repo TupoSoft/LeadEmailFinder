@@ -4,7 +4,5 @@ variables:
     value: "{{process.env.BRUNO_API_URL}}"
   - name: oidcIssuerUrl
     value: "{{process.env.OIDC_ISSUER_URL}}"
-  - name: serviceClientId
-    value: "{{process.env.KEYCLOAK_SERVICE_CLIENT_ID}}"
-  - name: serviceClientSecret
-    value: "{{process.env.KEYCLOAK_SERVICE_CLIENT_SECRET}}"
+  - name: platformApiKey
+    value: '{{process.env.PLATFORM_API_KEY}}'

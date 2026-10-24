@@ -7,58 +7,23 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import { cliArguments, executeCollection, registeredCollection } from './run-collection.mjs'
-import { customerClientSecret, validateCustomerFixture, withRestoredBalance } from './async-verification-fixture.mjs'
+import { validateCustomerFixture, withRestoredBalance } from './async-verification-fixture.mjs'
 import { brunoFailure, failureDiagnostic } from './failure-diagnostic.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 const organizationId = randomUUID()
 const issuer = 'http://localhost:58106/realms/lead-email-finder'
-const customer = { issuer, issuers: [issuer], organizationId, keycloakClientId: 'lef-svc-dev-fixture' }
+const customer = { issuer, issuers: [issuer], organizationId, credentialId: randomUUID(), keyPrefix: 'lef_abcdefgh' }
 
 test('async fixture requires the distinct seeded customer and matching public identity', () => {
     assert.deepEqual(validateCustomerFixture(customer, issuer, randomUUID()), customer)
     for (const [value, platform] of [
-        [{ ...customer, keycloakClientId: 'arbitrary-client' }, randomUUID()],
+        [{ ...customer, credentialId: 'not-a-uuid' }, randomUUID()],
         [{ ...customer, issuer: 'http://keycloak:8080/realms/lead-email-finder' }, randomUUID()],
         [{ ...customer, issuers: [] }, randomUUID()],
         [customer, organizationId],
     ])
         assert.throws(() => validateCustomerFixture(value, issuer, platform))
-})
-
-test('customer bootstrap only reads the exact seeded client secret', async () => {
-    const calls = []
-    const replies = [
-        { access_token: 'synthetic-admin-token' },
-        [{ clientId: customer.keycloakClientId, id: 'client-id' }],
-        { value: 'synthetic-customer-secret' },
-    ]
-    const result = await customerClientSecret(
-        {
-            keycloakUrl: 'http://localhost:58106',
-            keycloakAdminUsername: 'admin',
-            keycloakAdminPassword: 'synthetic-password',
-        },
-        customer.keycloakClientId,
-        async (url, options) => {
-            calls.push({ url, method: options.method ?? 'GET' })
-            return { ok: true, json: async () => replies.shift() }
-        },
-    )
-    assert.equal(result, 'synthetic-customer-secret')
-    assert.deepEqual(
-        calls.map(call => call.method),
-        ['POST', 'GET', 'GET'],
-    )
-    assert.match(calls[1].url, /clients\?clientId=lef-svc-dev-fixture$/)
-    assert.match(calls[2].url, /clients\/client-id\/client-secret$/)
-    await assert.rejects(
-        customerClientSecret({}, customer.keycloakClientId, async () => ({ ok: false, status: 403 })),
-        error => {
-            assert.deepEqual(failureDiagnostic(error), { stage: 'fixture_bootstrap', status: 403 })
-            return true
-        },
-    )
 })
 
 test('credit fixture restores and verifies the original balance after success or failure', async () => {
@@ -104,17 +69,15 @@ test('async collection registry requires every ordered request, developer sandbo
         BRUNO_API_URL: 'http://api:3000',
         OIDC_ISSUER_URL: issuer,
         OIDC_BACKCHANNEL_URL: 'http://keycloak:8080/realms/lead-email-finder',
-        KEYCLOAK_SERVICE_CLIENT_ID: 'platform',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-platform-secret',
+        PLATFORM_API_KEY: 'synthetic-platform-secret',
         PLATFORM_ORGANIZATION_ID: randomUUID(),
         CUSTOMER_ORGANIZATION_ID: organizationId,
-        CUSTOMER_SERVICE_CLIENT_ID: customer.keycloakClientId,
-        CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
+        CUSTOMER_API_KEY: 'synthetic-customer-secret',
     }
     const args = cliArguments('async-verification', environment, '/tmp/report.json')
     assert.deepEqual(args.slice(0, 5), ['run', '--env', 'local', '--sandbox', 'developer'])
     assert.ok(!JSON.stringify(args).includes('synthetic-'))
-    for (const field of ['CUSTOMER_ORGANIZATION_ID', 'CUSTOMER_SERVICE_CLIENT_ID', 'CUSTOMER_SERVICE_CLIENT_SECRET']) {
+    for (const field of ['CUSTOMER_ORGANIZATION_ID', 'CUSTOMER_API_KEY']) {
         assert.throws(
             () => cliArguments('async-verification', { ...environment, [field]: '' }, '/tmp/report.json'),
             /prerequisites/,
@@ -249,7 +212,7 @@ test('pinned CLI verifies async settlement, cooldown and idempotency and rejects
         }
         const authorization = request.headers.authorization
         if (!authorization) return reply(401, {})
-        const client = JSON.parse(Buffer.from(authorization.split('.')[1], 'base64url').toString()).client
+        const client = authorization === 'Bearer synthetic-platform-secret' ? 'platform' : 'customer'
         if (pathname.startsWith('/credits/')) {
             if (client !== 'platform') return reply(403, {})
             if (request.method === 'PUT') balance = JSON.parse(raw).amount
@@ -287,7 +250,7 @@ test('pinned CLI verifies async settlement, cooldown and idempotency and rejects
         }
         const id = pathname.split('/').at(-1)
         if (id === 'not-a-uuid') return reply(400, {})
-        if (id !== job || client !== customer.keycloakClientId) return reply(404, {})
+        if (id !== job || client !== 'customer') return reply(404, {})
         reads++
         if (rawQueueState) return reply(200, { state: 'waiting', failedReason: 'private exception' })
         if (reads < 2) return reply(200, { state: 'queued' })
@@ -303,12 +266,10 @@ test('pinned CLI verifies async settlement, cooldown and idempotency and rejects
         BRUNO_API_URL: origin,
         OIDC_ISSUER_URL: origin,
         OIDC_BACKCHANNEL_URL: origin,
-        KEYCLOAK_SERVICE_CLIENT_ID: 'platform',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-platform-secret',
+        PLATFORM_API_KEY: 'synthetic-platform-secret',
         PLATFORM_ORGANIZATION_ID: randomUUID(),
         CUSTOMER_ORGANIZATION_ID: organizationId,
-        CUSTOMER_SERVICE_CLIENT_ID: customer.keycloakClientId,
-        CUSTOMER_SERVICE_CLIENT_SECRET: 'synthetic-customer-secret',
+        CUSTOMER_API_KEY: 'synthetic-customer-secret',
     }
     try {
         assert.deepEqual(await executeCollection('async-verification', environment, root), { requests: 22, tests: 22 })

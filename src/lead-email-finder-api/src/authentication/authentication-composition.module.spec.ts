@@ -5,9 +5,13 @@ import {
     AuthGuard,
     AuthModule,
     CredentialExtractor,
-    OidcCredentialAuthenticator,
+    ApiKeyCredentialAuthenticator,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { BffSessionCredentialAuthenticator, BffSessionModule, BrowserSessionMutationGuard } from '@tuposoft/lead-email-finder/modules/bff-session'
+import {
+    BffSessionCredentialAuthenticator,
+    BffSessionModule,
+    BrowserSessionMutationGuard,
+} from '@tuposoft/lead-email-finder/modules/bff-session'
 import { AuthenticationCompositionModule } from './authentication-composition.module'
 
 describe('AuthenticationCompositionModule', () => {
@@ -26,7 +30,7 @@ describe('AuthenticationCompositionModule', () => {
 
         expect(authenticationServiceProvider?.inject).toEqual([
             CredentialExtractor,
-            OidcCredentialAuthenticator,
+            ApiKeyCredentialAuthenticator,
             BffSessionCredentialAuthenticator,
         ])
     })
@@ -38,6 +42,9 @@ describe('AuthenticationCompositionModule', () => {
         }>
         const appGuardProviders = providers.filter(provider => provider.provide === APP_GUARD)
 
-        expect(appGuardProviders.map(provider => provider.useExisting)).toEqual([AuthGuard, BrowserSessionMutationGuard])
+        expect(appGuardProviders.map(provider => provider.useExisting)).toEqual([
+            AuthGuard,
+            BrowserSessionMutationGuard,
+        ])
     })
 })

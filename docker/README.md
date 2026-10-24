@@ -31,6 +31,15 @@ the public product and an authenticated credit balance. Reset refuses another ch
 and validates the project labels and exact allowlisted volume names before deletion. Stop overlays before reset.
 The command removes development data; inspect its printed targets before confirming it.
 
+Machine callers use direct Bearer API keys. `keycloak:bootstrap-credential` invokes the compiled application seed
+for `.dev/auth/platform-api-key.json`; `keycloak:seed-customer-fixture` creates `.dev/auth/customer-api-key.json`.
+Both files are ignored, checkout-owned regular files with mode 0600. Repeating the seed preserves active keys.
+Reset removes the files after ownership checks because their credential rows are discarded with development data.
+For this incompatible credential schema, reset and reseed disposable data before starting callers. The SMTP
+overlay mounts the platform file privately; stop that overlay before resetting. Human browser fixtures continue
+using Keycloak until the browser authentication cutover.
+
+
 ## Authentication Mail
 
 The base stack's `auth-mail` service captures transactional authentication mail from the Better Auth runtime and never

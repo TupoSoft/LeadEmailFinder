@@ -1,83 +1,36 @@
 import { MODULE_METADATA } from '@nestjs/common/constants'
-import { ConfigService } from '@nestjs/config'
 import { SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule, SERVICE_CLIENT_GRANT_POLICY } from '@tuposoft/lead-email-finder/modules/auth'
-import { KEYCLOAK_SERVICE_CLIENT_ADMIN } from './application/ports/keycloak-service-client-admin'
+import { API_KEY_GENERATOR } from './application/ports/api-key-generator'
 import { ServiceClientCreationService } from './application/service-client-creation.service'
 import { ServiceClientDeletionService } from './application/service-client-deletion.service'
 import { ServiceClientDisablementService } from './application/service-client-disablement.service'
-import { SERVICE_CLIENT_MANAGEMENT_CONFIGURATION } from './application/service-client-management-configuration'
 import { ServiceClientListingService } from './application/service-client-listing.service'
 import { ServiceClientRotationService } from './application/service-client-rotation.service'
-import { createServiceClientManagementConfiguration } from './infrastructure/config/service-client-management-configuration'
-import { KeycloakServiceClientAdminClient } from './infrastructure/keycloak/keycloak-service-client-admin-client.service'
 import { ServiceClientManagementModule } from './service-client-management.module'
-
-interface ProviderMetadata {
-    provide?: unknown
-    inject?: readonly unknown[]
-    useExisting?: unknown
-    useFactory?: unknown
-}
+import { generateApiKey } from './infrastructure/api-key-generator'
 
 describe('ServiceClientManagementModule', () => {
-    const providers = Reflect.getMetadata(
-        MODULE_METADATA.PROVIDERS,
-        ServiceClientManagementModule,
-    ) as ProviderMetadata[]
-
-    function providerFor(token: unknown): ProviderMetadata | undefined {
-        return providers.find(provider => provider.provide === token)
-    }
-
-    it('imports auth to consume its shared service-client grant policy', () => {
-        const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, ServiceClientManagementModule) as unknown[]
-
-        expect(imports).toContain(AuthModule)
-    })
-
-    it('binds the feature configuration and private Keycloak port', () => {
-        expect(providerFor(SERVICE_CLIENT_MANAGEMENT_CONFIGURATION)).toEqual(
-            expect.objectContaining({
-                inject: [ConfigService],
-                useFactory: createServiceClientManagementConfiguration,
-            }),
-        )
-        expect(providerFor(KEYCLOAK_SERVICE_CLIENT_ADMIN)).toEqual(
-            expect.objectContaining({ useExisting: KeycloakServiceClientAdminClient }),
-        )
-    })
-
-    it('constructs every framework-free use case through an explicit factory', () => {
+    const providers: { provide?: unknown; inject?: unknown[]; useValue?: unknown; useFactory?: unknown }[] =
+        Reflect.getMetadata(MODULE_METADATA.PROVIDERS, ServiceClientManagementModule)
+    const providerFor = (token: unknown): (typeof providers)[number] | undefined =>
+        providers.find(provider => provider.provide === token)
+    it('composes local persistence, the auth grant policy, and the crypto generator', () => {
+        expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, ServiceClientManagementModule)).toContain(AuthModule)
+        expect(providerFor(API_KEY_GENERATOR)?.useValue).toBe(generateApiKey)
         expect(providerFor(ServiceClientCreationService)?.inject).toEqual([
             SERVICE_CREDENTIAL_WRITER,
-            KEYCLOAK_SERVICE_CLIENT_ADMIN,
-            SERVICE_CLIENT_MANAGEMENT_CONFIGURATION,
             SERVICE_CLIENT_GRANT_POLICY,
+            API_KEY_GENERATOR,
         ])
-        expect(providerFor(ServiceClientListingService)?.inject).toEqual([SERVICE_CREDENTIAL_DIRECTORY])
         expect(providerFor(ServiceClientRotationService)?.inject).toEqual([
             SERVICE_CREDENTIAL_DIRECTORY,
             SERVICE_CREDENTIAL_WRITER,
-            KEYCLOAK_SERVICE_CLIENT_ADMIN,
+            API_KEY_GENERATOR,
         ])
-        expect(providerFor(ServiceClientDisablementService)?.inject).toEqual([
-            SERVICE_CREDENTIAL_DIRECTORY,
-            SERVICE_CREDENTIAL_WRITER,
-        ])
-        expect(providerFor(ServiceClientDeletionService)?.inject).toEqual([
-            SERVICE_CREDENTIAL_DIRECTORY,
-            SERVICE_CREDENTIAL_WRITER,
-            KEYCLOAK_SERVICE_CLIENT_ADMIN,
-        ])
-
-        for (const token of [
-            ServiceClientCreationService,
-            ServiceClientListingService,
-            ServiceClientRotationService,
-            ServiceClientDisablementService,
-            ServiceClientDeletionService,
-        ]) {
+        expect(providerFor(ServiceClientListingService)?.inject).toEqual([SERVICE_CREDENTIAL_DIRECTORY])
+        for (const token of [ServiceClientDisablementService, ServiceClientDeletionService]) {
+            expect(providerFor(token)?.inject).toEqual([SERVICE_CREDENTIAL_DIRECTORY, SERVICE_CREDENTIAL_WRITER])
             expect(providerFor(token)?.useFactory).toEqual(expect.any(Function))
         }
     })

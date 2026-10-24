@@ -2,18 +2,16 @@ import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { AccessTokenProvider } from './auth/token-cache.js'
 import { createApp } from './main.js'
 
-const fakeTokenCache: AccessTokenProvider = { getAccessToken: () => Promise.resolve('fake-access-token') }
-const validAuthorizationHeader = `Basic ${Buffer.from('test-client:test-secret').toString('base64')}`
+const validAuthorizationHeader = `Bearer lef_${'a'.repeat(43)}`
 
 describe('mcp-server scaffold', () => {
     let server: Server
     let baseUrl: URL
 
     beforeAll(async () => {
-        server = createApp({ tokenCache: fakeTokenCache, apiBaseUrl: 'https://lef-api.example' })
+        server = createApp({ validateKey: () => Promise.resolve('valid'), apiBaseUrl: 'https://lef-api.example' })
         await new Promise<void>(resolve => server.listen(0, resolve))
         const { port } = server.address() as AddressInfo
         baseUrl = new URL(`http://127.0.0.1:${port}/`)
