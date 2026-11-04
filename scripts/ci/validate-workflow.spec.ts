@@ -303,16 +303,16 @@ const preservedCommands: Record<string, string[]> = {
 
 describe('Validate workflow syntax and structure', () => {
     it.each(['validate.yml', 'sync-execplans.yml'])(
-        '%s routes every job to the shared ARC runner pool',
+        '%s routes every job to GitHub-hosted Ubuntu runners',
         (file) => {
             const declared = parseWorkflow(readFileSync(resolve(root, '.github/workflows', file), 'utf8'))
             for (const job of Object.values(declared.jobs)) {
-                expect(job['runs-on']).toBe('tuposoft-ci')
+                expect(job['runs-on']).toBe('ubuntu-24.04')
             }
         },
     )
 
-    it('passes the shared runner label to the reusable build workflow', () => {
+    it('passes the GitHub-hosted runner to the reusable build workflow', () => {
         const documents = parseAllDocuments(readFileSync(resolve(root, '.github/workflows/build.yml'), 'utf8'))
         expect(documents).toHaveLength(1)
         expect(documents[0].errors).toEqual([])
@@ -322,7 +322,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         const build = declared.jobs['build-push']
         expect(build.uses).toBe('TupoSoft/GitHubActions/.github/workflows/build-push.yml@master')
-        expect(build.with).toEqual({ runner: 'tuposoft-ci' })
+        expect(build.with).toEqual({ runner: 'ubuntu-24.04' })
         expect(build['runs-on']).toBeUndefined()
     })
 
@@ -408,7 +408,7 @@ describe('Validate workflow syntax and structure', () => {
         }
         expect(workflow.jobs.browser['timeout-minutes']).toBe(10)
         for (const id of [...browserWorkers, 'browser']) {
-            expect(workflow.jobs[id]['runs-on']).toBe('tuposoft-ci')
+            expect(workflow.jobs[id]['runs-on']).toBe('ubuntu-24.04')
         }
     })
 
