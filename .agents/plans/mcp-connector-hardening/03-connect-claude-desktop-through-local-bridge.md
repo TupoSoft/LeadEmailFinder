@@ -275,7 +275,6 @@ corepack pnpm exec jest --runInBand apps/mcp-server/src/desktop-bridge.integrati
 corepack pnpm typecheck
 corepack pnpm lint
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-corepack pnpm docs:lint -- apps/mcp-server/README.md .agents/plans/mcp-connector/07-live-validation-and-docs.md .agents/plans/mcp-connector-hardening/03-connect-claude-desktop-through-local-bridge.md
 ```
 
 The integration spec loads and validates the configuration template as part of its run. Root backend CI already

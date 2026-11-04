@@ -249,7 +249,6 @@ Run repository checks:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/06-layer-organization-onboarding.md src/libs/modules/organization-onboarding/README.md src/libs/modules/identity/README.md bruno/organization-onboarding/README.md
     git diff --check
 
 No Bruno requests should change, but provider and persistence wiring do. Before touching Compose, inspect the

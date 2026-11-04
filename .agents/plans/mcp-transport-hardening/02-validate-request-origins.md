@@ -177,7 +177,7 @@ This correction establishes the transport policy for later tools without requiri
 - Invalid allowlist configuration stops executable startup before opening a listener and does not echo the value.
 - Concurrent allowed and denied requests produce their own expected outcomes; later health and allowed calls still succeed.
 - Existing health, stateless cleanup, method rejection, and authentication behavior remain covered and passing.
-- Focused tests, typecheck, targeted lint, build, and the Bruno collection pass, and Harper passes for all changed Markdown.
+- Focused tests, typecheck, targeted lint, build, and the Bruno collection pass.
 
 ## Validation
 
@@ -188,7 +188,6 @@ corepack pnpm exec jest --runInBand apps/mcp-server/src/request-origin.spec.ts a
 corepack pnpm typecheck
 corepack pnpm exec eslint apps/mcp-server/src
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-corepack pnpm docs:lint -- apps/mcp-server/README.md bruno/mcp-request-origins/README.md .agents/plans/mcp-transport-hardening/02-validate-request-origins.md
 git diff --check
 ```
 

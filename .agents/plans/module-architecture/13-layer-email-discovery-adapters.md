@@ -182,7 +182,6 @@ Finish with:
     corepack pnpm lint
     corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/module-architecture/13-layer-email-discovery-adapters.md
     git diff --check
 
 Bruno: reuse the existing SMTP collection for changed integration wiring, update only materially affected assertions

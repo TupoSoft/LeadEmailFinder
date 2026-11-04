@@ -238,7 +238,7 @@ dependencies are the existing disposable Keycloak/PostgreSQL/Redis/API/web stack
   callbacks and current-account roles.
 - Later privileged Playwright suites can import one shared role-based login fixture and need no direct Keycloak API,
   service credential, cookie injection, or password-only workaround.
-- Focused tests, fresh-reset bootstrap, repeat bootstrap, live Chromium login, documentation lint, architecture, and
+- Focused tests, fresh-reset bootstrap, repeat bootstrap, live Chromium login, architecture, and
   repository checks pass in exactly one pull request.
 
 ## Validation
@@ -267,12 +267,10 @@ bootstrap twice:
 Assert the first run enrolled exactly two OTP credentials and the second enrolled none. Force one sanitized auth
 failure and assert the configured output directories contain no trace, screenshot, video, HTML snapshot, or auth
 attachment at all. Inspect the committed diff and console/Playwright summaries for secret-bearing output, and check
-the local file mode without printing its contents. Run Harper on every changed English Markdown file, including this
-plan and the development/testing documentation:
+the local file mode without printing its contents.
 
-    corepack pnpm docs:lint -- .agents/plans/frontend/09-provision-mfa-aware-browser-test-identities.md README.md apps/web/tests/README.md
 
-Append any other English Markdown file actually changed and record exact commands and results. A mocked Keycloak page
+Record exact commands and results. A mocked Keycloak page
 does not satisfy the live acceptance gate.
 
 ## Idempotence and Recovery
@@ -312,7 +310,7 @@ Validation recorded on 2026-09-07:
 - Type checks and ESLint passed for both packages. The `architecture:check`, `design:lint`, `ui:audit`, CI path-selection
   fixtures, web Docker image build, and `git diff --check` checks passed. Root ESLint retains one preexisting warning in
   `src/libs/config/src/load-secrets.spec.ts`. The architecture gate retains its 20 baselined violations.
-- Harper passed the exact documentation command in Validation. Bruno is not applicable because this work changes
+- The then-current Harper command passed. Bruno is not applicable because this work changes
   only development seeding and internal browser-test tooling, with no HTTP API behavior change.
 
 Architecture review keeps account seeding, filesystem metadata, TOTP computation, hosted authentication, and reporter

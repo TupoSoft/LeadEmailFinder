@@ -365,7 +365,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- src/libs/modules/privacy-control-authority/README.md src/libs/modules/privacy-operations/README.md docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/33-establish-durable-privacy-control-authority.md
     corepack pnpm exec prettier --check config/privacy/privacy-control-authority.yaml config/privacy/restore-reconciliation.yaml config/privacy/managed-data-stores.yaml src/libs/modules/privacy-control-authority/README.md src/libs/modules/privacy-operations/README.md docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/33-establish-durable-privacy-control-authority.md
     git diff --check
 

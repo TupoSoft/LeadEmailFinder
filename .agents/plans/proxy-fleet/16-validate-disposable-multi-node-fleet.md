@@ -279,7 +279,7 @@ listing, syntax checks, whole-inventory validation, plaintext-secret scan, focus
 rendering, and `docker stack config`. Add focused tests for owned firewall insertion/removal, verifier SMTP rules,
 role-gated and ordered reset, explicit Swarm addresses, WireGuard endpoint and `AllowedIPs` rendering, exact
 remote-Docker selection, and the selected reachability mechanism and fixture cleanup. Then run repository lint,
-typecheck, tests, build, documentation lint, plan-sync dry run, and `git diff --check`.
+typecheck, tests, build, plan-sync dry run, and `git diff --check`.
 
 Before implementation, insert the exact selected listener-reachability and verifier-fixture commands here. The live
 evidence must include readiness, a reconciler health check that preserves the inventory `bindIp` and port as the

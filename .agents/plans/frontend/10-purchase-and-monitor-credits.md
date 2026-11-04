@@ -369,7 +369,6 @@ Focused merge validation on 2026-09-07 used these commands:
     corepack pnpm typecheck
     corepack pnpm architecture:check
     corepack pnpm exec eslint scripts/bruno/run-collection.mjs scripts/bruno/run-collection.test.mjs scripts/openapi/contracts.test.mjs
-    corepack pnpm docs:lint -- .agents/plans/frontend/10-purchase-and-monitor-credits.md
 
 Run focused payments/credits query service, controller, DTO serialization, permission, and Swagger tests. Run web
 billing queries, currency formatting, pack selection, return-state, history, capability, error, and accessibility
@@ -417,8 +416,7 @@ Run the premium static audit and inspect desktop and narrow screenshots and inte
     corepack pnpm ui:audit
 
 Verify keyboard pack selection, focus after return, long localized currency/date values, text-only status meaning,
-stable polling, reduced motion, and no overflow. If `DESIGN.md` or `UX-CONTRACT.md` changes, run
-`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md` and record the result.
+stable polling, reduced motion, and no overflow.
 
 ## Idempotence and Recovery
 

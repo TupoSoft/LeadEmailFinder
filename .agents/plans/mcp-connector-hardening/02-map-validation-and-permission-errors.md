@@ -191,12 +191,6 @@ and controlled dependencies rather than requiring a disposable stack:
 corepack pnpm exec jest --runInBand src/libs/modules/email-verification/src/api/http/asynchronous-verification/async-email-verification-http.integration.spec.ts src/libs/modules/credits/src/api/billing-summary-http.integration.spec.ts
 ```
 
-Run Harper for the documentation changed by the implementation PR:
-
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/02-map-validation-and-permission-errors.md .agents/plans/mcp-connector/03-api-client-error-mapping-credit-balance.md .agents/plans/mcp-connector/04-single-email-verification-tools.md
-```
-
 Bruno: not applicable — this change maps upstream errors inside the connector, below its HTTP transport boundary;
 it changes no API endpoint, request validation, authentication, authorization, or existing Bruno workflow. The API
 keeps its current responses, and focused client/tool tests verify their translation. No container-runtime or live

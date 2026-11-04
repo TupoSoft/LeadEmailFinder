@@ -251,10 +251,8 @@ function expectWorkspaceBuildPrerequisite(steps: Step[]): void {
 // here so reorganizing the workflow cannot silently remove a validation or narrow its arguments.
 const preservedCommands: Record<string, string[]> = {
     'repository-policy': [
-        'corepack pnpm test:docs-lint',
         'corepack pnpm privacy:account-discovery-approvals-check',
         'corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree',
-        'corepack pnpm docs:lint:changed',
         'corepack pnpm architecture:check',
         'corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand',
         'corepack pnpm test:ci-paths',
@@ -479,7 +477,7 @@ describe('Validate workflow syntax and structure', () => {
             expect(condition(step.if)).toBe(cleanup
                 ? `always() && ${selected} && steps.browser-live-checkout.outcome == 'success'`
                 : diagnostics ? `always() && ${selected} && steps.dev-reset.outcome == 'failure'` : selected)
-            if (!diagnostics && command(step.run) !== 'corepack pnpm docs:lint:changed' && step.uses !== 'actions/cache@v4') {
+            if (!diagnostics && step.uses !== 'actions/cache@v4') {
                 expect(step['continue-on-error']).not.toBe(true)
             }
         }
@@ -492,17 +490,13 @@ describe('Validate workflow syntax and structure', () => {
         }
     })
 
-    it('retains the comparison base for documentation and approval ratchets', () => {
+    it('retains the comparison base for the approval ratchet', () => {
         const policy = workflow.jobs['repository-policy']
         expect(policy.steps.find((step) => step.uses === 'actions/checkout@v4')?.with?.['fetch-depth']).toBe(0)
-        for (const [run, variable] of [
-            ['corepack pnpm docs:lint:changed', 'HARPER_BASE_SHA'],
-            ['corepack pnpm privacy:account-discovery-approvals-check', 'ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA'],
-        ]) {
-            expect(policy.steps.find((step) => step.run === run)?.env?.[variable]).toBe(
-                '${{ github.event.pull_request.base.sha || github.event.before }}',
-            )
-        }
+        const approvals = policy.steps.find((step) => step.run === 'corepack pnpm privacy:account-discovery-approvals-check')
+        expect(approvals?.env?.ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA).toBe(
+            '${{ github.event.pull_request.base.sha || github.event.before }}',
+        )
     })
 
     it('runs the architecture check without a comparison base, now that the check is a permanent zero-violation gate', () => {

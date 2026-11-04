@@ -188,10 +188,6 @@ each tool via `@modelcontextprotocol/inspector --cli` for at least one immediate
 async-fallback/slow address, and one nonexistent result id, confirming each matches the equivalent direct API
 call.
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/04-single-email-verification-tools.md
-```
-
 ## Idempotence and Recovery
 
 No persisted state in the connector itself. Re-running tests or the manual verification is always safe; a

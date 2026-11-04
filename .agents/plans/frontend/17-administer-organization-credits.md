@@ -255,9 +255,6 @@ interaction. Run the premium audit against `DESIGN.md`.
     corepack pnpm --filter ./apps/web exec playwright test tests/e2e/platform-credits.spec.ts --project=chromium
     corepack pnpm ui:audit
 
-Run Harper on every changed English Markdown file, including:
-
-    corepack pnpm docs:lint -- .agents/plans/frontend/17-administer-organization-credits.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md src/libs/modules/organization-onboarding/README.md
 
 Record exact balances before/after, statuses, redacted key suffixes only when needed, test/Bruno counts, browser
 widths, and cleanup using synthetic identifiers.

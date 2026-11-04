@@ -241,7 +241,7 @@ contracts; application and domain code import neither Nest nor infrastructure.
   guide retain the retired prefix, architecture checks pass, and no baseline entry is added or broadened.
 - The business module still publicly exports only `EmailVerificationModule`. Existing HTTP, queue, persistence,
   configuration, and SMTP contracts remain unchanged. Current documentation points to the owned provider paths.
-- Focused tests, type checking, lint, full tests, build, and Harper pass. The existing local SMTP Bruno collection
+- Focused tests, type checking, lint, full tests, and build pass. The existing local SMTP Bruno collection
   passes when its disposable dependencies are available; any unavailable runtime validation is explicitly recorded.
 
 ## Validation
@@ -286,7 +286,6 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm typecheck
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm lint
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm build
-corepack pnpm docs:lint -- .agents/plans/account-discovery/02-internalize-provider-adapters.md src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md
 git diff --check
 ```
 
@@ -311,7 +310,7 @@ collection; do not create a new collection or add provider activation to the dev
 implementation response, report `Bruno: added/updated and <result>` if assertions change. Otherwise, report
 `Bruno: not applicable — no definition change; existing smtp-dev coverage reused`, followed by the actual launcher
 result. If dependencies are unavailable, report static and unit evidence and state that Bruno execution remains
-unverified. Report the exact Harper command and its result.
+unverified.
 
 ## Idempotence and Recovery
 

@@ -127,7 +127,6 @@ Add the named observer suites, then run:
 corepack pnpm test -- src/libs/modules/payments/src/infrastructure/paddle/paddle-checkout-observer.spec.ts src/libs/modules/payments/src/infrastructure/stub-checkout-observer.spec.ts src/libs/modules/payments/src/infrastructure/paddle/paddle-payment-provider.spec.ts src/libs/modules/payments/src/infrastructure/stub-payment-provider.spec.ts src/libs/modules/payments/src/payments.module.spec.ts --runInBand
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/payments/README.md docker/paddle-dev/README.md .agents/plans/checkout-recovery/02-observe-provider-checkouts.md
 git diff --check
 ```
 

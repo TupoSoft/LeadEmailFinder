@@ -123,7 +123,6 @@ corepack pnpm test -- src/libs/keycloak-admin-http/src/keycloak-admin-http.modul
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm build
-corepack pnpm docs:lint -- .agents/plans/legacy-retirement/04-remove-api-key-resolution-aliases.md
 git diff --check
 git diff --stat
 ```

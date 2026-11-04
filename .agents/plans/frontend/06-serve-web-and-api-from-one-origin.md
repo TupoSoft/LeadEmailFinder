@@ -265,7 +265,6 @@ one Try-it-out request through port 53000. Assert the exact security headers on 
 Send synthetic callback query, invitation-token, and email-path markers, then search the gateway/API logs and prove they are
 absent. Then run:
 
-    corepack pnpm docs:lint -- README.md docker/README.md .agents/plans/frontend/06-serve-web-and-api-from-one-origin.md
     git diff --check
 
 Capture exact build, health, route, required-CI, and Playwright results. A Vite-only check does not satisfy the Nginx

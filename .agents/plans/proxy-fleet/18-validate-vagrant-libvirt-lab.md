@@ -165,7 +165,7 @@ provider networks, cached boxes, or resources belonging to another Vagrant envir
 - Vagrant destruction reports all four machines absent. Clean recreation passes the same functional and Ansible
   checks. Final destruction again reports all four absent, without deleting unrelated resources.
 - Evidence identifies the tested host, software versions, and pinned box without secrets or machine identifiers.
-  Any scoped fixes pass relevant regression and repository checks, and changed Markdown passes Harper. Untested or
+  Any scoped fixes pass relevant regression and repository checks. Untested or
   failed steps remain explicitly incomplete.
 
 ## Validation
@@ -344,7 +344,6 @@ information, or boot identifiers.
 
 From the repository root, run the documentation checks for this plan and any updated operator documentation:
 
-    corepack pnpm docs:lint -- .agents/plans/proxy-fleet/18-validate-vagrant-libvirt-lab.md deploy/proxy-fleet/vagrant/README.md
     PLANS_DRY_RUN=true corepack pnpm plans:sync
     git diff --check
 

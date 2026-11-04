@@ -142,7 +142,6 @@ corepack pnpm test:verification-billing-postgres
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/03-serialize-request-attachment-with-settlement.md src/libs/modules/email-verification/README.md bruno/async-verification/README.md
 node --test scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm bruno:async-verification
 ```

@@ -263,7 +263,6 @@ Finish with:
     corepack pnpm lint
     corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/03-prevent-email-addresses-in-logs.md bruno/smtp-dev/README.md
     git diff --check
 
 Bruno: update `bruno/smtp-dev/13-reject-missing-email-update.yml` and add

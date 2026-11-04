@@ -246,7 +246,6 @@ Reconcile each contract row against the cited source field and provider contract
 
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
     corepack pnpm architecture:check
-    corepack pnpm docs:lint -- docs/privacy/controller-data-contract.md docs/privacy/email-verification-processing-contract.md README.md src/libs/modules/identity/README.md src/libs/modules/auth/README.md src/libs/modules/bff-session/README.md src/libs/modules/organization-onboarding/README.md src/libs/modules/service-client-management/README.md src/libs/modules/credits/README.md src/libs/modules/payments/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/12-define-controller-data-contract.md
     corepack pnpm exec prettier --check docs/privacy/controller-data-contract.md docs/privacy/email-verification-processing-contract.md README.md src/libs/modules/identity/README.md src/libs/modules/auth/README.md src/libs/modules/bff-session/README.md src/libs/modules/organization-onboarding/README.md src/libs/modules/service-client-management/README.md src/libs/modules/credits/README.md src/libs/modules/payments/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/12-define-controller-data-contract.md
     git diff --check
 
@@ -259,7 +258,7 @@ Plan 19 owns HTTP/runtime notice publication and its Bruno coverage.
 
 ## Idempotence and Recovery
 
-Inventory generation and prose validation are safe to repeat. Each data item and notice has a stable ID; an approved
+Inventory generation is safe to repeat. Each data item and notice has a stable ID; an approved
 revision is superseded with a new version/effective date instead of silently rewritten. If source or counsel review
 invalidates a row, mark it pending, correct it, and block downstream implementation rather than preserving a false
 answer.

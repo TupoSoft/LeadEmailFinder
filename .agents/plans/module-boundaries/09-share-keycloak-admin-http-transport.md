@@ -304,7 +304,6 @@ Run repository-wide static and automated checks:
     COREPACK_HOME=/tmp/lef-corepack corepack pnpm lint
     COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- --runInBand
     COREPACK_HOME=/tmp/lef-corepack TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- .agents/plans/module-boundaries/README.md .agents/plans/module-boundaries/09-share-keycloak-admin-http-transport.md src/libs/modules/organization-onboarding/README.md src/libs/modules/service-client-management/README.md
     git diff --check
 
 Search for stale copies and boundary violations. The old feature paths and tokens must have no matches, there must be

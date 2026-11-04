@@ -311,7 +311,7 @@ trigger, and `src/libs/modules/AGENTS.md`, which defines the scoped workflow whi
   without claiming GitHub blocks merge or direct push under the repository's current private-plan limitation.
 - `package.json` gains no dependency, `pnpm-lock.yaml` is unchanged, and application TypeScript/runtime files are
   unchanged.
-- Existing lint, typecheck, Jest, build, documentation lint, formatting, and whitespace checks pass.
+- Existing lint, typecheck, Jest, build, formatting, and whitespace checks pass.
 
 ## Validation
 
@@ -341,9 +341,8 @@ Run repository validation:
     corepack pnpm build
     git diff --check
 
-Validate all materially edited English Markdown with Harper and check its formatting:
+Check formatting for all materially edited English Markdown:
 
-    corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md
     corepack pnpm exec prettier --check AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/01-ratchet-business-module-architecture.md
 
 Inspect the instruction bridge and scoped workflow directly:
@@ -383,7 +382,7 @@ comparison.
 ## Artifacts and Notes
 
 Record the final baseline count grouped by rule, the stable checker output, focused-test count, full validation
-results, the final root/scoped agent workflow, exact Harper command/result, and the live workflow result. Keep one
+results, the final root/scoped agent workflow, and the live workflow result. Keep one
 concise note that the GitHub protection and rule set APIs returned HTTP 403 for this private repository so later work
 does not mistake a green workflow for a merge policy that cannot be bypassed. Do not record tokens, absolute
 developer-specific paths in the baseline, or unrelated repository state.

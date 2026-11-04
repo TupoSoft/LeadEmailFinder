@@ -185,10 +185,9 @@ corepack pnpm test:ci-paths
 node --check scripts/ci/browser-summary.mjs
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts scripts/ci/browser-summary.mjs
 actionlint .github/workflows/validate.yml
-corepack pnpm docs:lint -- .agents/plans/browser-ci/03-separate-browser-validation.md
 ```
 
-Use the repository's current `actionlint` configuration and installed executable. If unavailable, report that limitation separately from the YAML parser and executable tests. Adjust the documentation command to the final plan filename if necessary. If the road map README changes, include it in the same Harper command. Do not claim container or live checks from the static suite.
+Use the repository's current `actionlint` configuration and installed executable. If unavailable, report that limitation separately from the YAML parser and executable tests. Do not claim container or live checks from the static suite.
 
 On the PR workflow, verify a selected run executes the command inventory above and compare suite counts with every available prerequisite result and the preserved source inventory for previously unrun suites. Repeat on the same head to provide the two measurements required for the final budgets. For a no-op runtime case, use a documentation-only comparison fixture through the selector and the executable worker guards. Where a documentation-only PR workflow is available, verify all three worker no-op results and the stable required aggregates there too. Do not create an unrelated PR solely to obtain that evidence.
 

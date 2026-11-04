@@ -304,7 +304,6 @@ Run the plan parser/dependency graph and architecture gate:
 
 Run prose, formatting, whitespace, and read-only sync validation:
 
-    corepack pnpm docs:lint -- docs/privacy/email-verification-processing-contract.md README.md src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/01-define-processing-and-lifecycle-contract.md
     corepack pnpm exec prettier --check docs/privacy/email-verification-processing-contract.md README.md src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/01-define-processing-and-lifecycle-contract.md
     git diff --check
     PLANS_DRY_RUN=true corepack pnpm plans:sync

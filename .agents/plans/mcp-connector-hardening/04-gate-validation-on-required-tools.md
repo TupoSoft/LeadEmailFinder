@@ -139,7 +139,6 @@ Each other corrective plan retains the prerequisites recorded in its own depende
 - The original credit tool requires corrected credential binding; both verification tool plans require corrected error mapping.
 - Existing generic scheduling tests pass without changes to scheduler behavior.
 - Simulated progress exists only in test memory. No unrelated document or project item is marked complete.
-- Harper passes for every Markdown file changed by the implementation PR.
 
 ## Validation
 
@@ -149,14 +148,11 @@ Run from the repository root after applying the metadata correction:
 corepack pnpm exec jest --runInBand scripts/plans/execplan-repository-fixture.spec.ts scripts/plans/execplan.spec.ts
 corepack pnpm exec eslint scripts/plans/execplan-repository-fixture.spec.ts
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/mcp-connector .agents/plans/mcp-connector-hardening
 git diff --check
 ```
 
 The Jest commands exercise metadata and the scheduling algorithm without writing to GitHub.
 Do not run a live synchronization merely to prove this change.
-The original Markdown contains existing Harper diagnostics; correct findings in documents materially edited by this PR.
-If the directory-wide command reports untouched files, also run Harper on the exact changed Markdown paths and report both results.
 
 Bruno: not applicable because this implementation changes planning metadata and regression tests, with no HTTP behavior change.
 No MCP service or database is required for these checks.

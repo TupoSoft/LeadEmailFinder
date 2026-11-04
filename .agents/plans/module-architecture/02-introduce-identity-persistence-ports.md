@@ -245,7 +245,6 @@ Run repository checks:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/02-introduce-identity-persistence-ports.md src/libs/modules/identity/README.md
     git diff --check
 
 Bruno is not applicable because this plan adds unused internal ports/adapters and preserves every current consumer

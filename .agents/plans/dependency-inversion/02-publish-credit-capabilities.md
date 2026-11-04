@@ -197,7 +197,6 @@ corepack pnpm test -- src/libs/modules/email-verification/src/application/operat
 corepack pnpm test:credits-postgres
 corepack pnpm test -- src/libs/modules/email-verification/src/infrastructure/account-discovery/account-discovery-wiring.spec.ts src/libs/modules/email-verification/src/infrastructure/queues/batch-verification/batch-email-verification-queue.integration.spec.ts --runInBand
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/credits/README.md src/libs/modules/payments/README.md src/libs/modules/email-verification/README.md .agents/plans/dependency-inversion/02-publish-credit-capabilities.md
 ```
 
 The two new verification module suites and the new reservation bootstrap suite are part of this PR. They must

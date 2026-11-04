@@ -90,7 +90,6 @@ node --test scripts/testing/dev-reset.test.mjs
 corepack pnpm exec jest --runInBand --cacheDirectory=/tmp/lef-ci-performance-jest --runTestsByPath scripts/ci/validate-workflow.spec.ts scripts/ci/select-validation.spec.ts
 corepack pnpm test:ci-paths
 docker compose -f docker/compose.yaml config --quiet
-corepack pnpm docs:lint -- docker/README.md .agents/plans/ci-performance/03-reuse-browser-web-image.md
 git diff --check
 ```
 

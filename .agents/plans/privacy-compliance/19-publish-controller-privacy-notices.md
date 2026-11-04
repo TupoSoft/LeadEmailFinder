@@ -104,7 +104,7 @@ public boundaries and provider adapters.
 ## Validation
 
 Run the strict notice-manifest tests plus focused tests for every selected surface, then architecture, typecheck, lint,
-full suite, build, Markdown Harper, YAML/Markdown Prettier, and `git diff --check`. Add/run the nearest Bruno collection
+full suite, build, YAML/Markdown Prettier, and `git diff --check`. Add/run the nearest Bruno collection
 for every changed HTTP route/schema/status and a dedicated notice collection only if plan 12 selects a distinct API
 workflow. Record the exact commands in this plan after the surfaces are selected and before implementation.
 

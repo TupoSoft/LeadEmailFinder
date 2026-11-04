@@ -205,7 +205,6 @@ corepack pnpm --filter ./apps/web build
 corepack pnpm --filter ./apps/web exec playwright test tests/e2e/verification-ui.spec.ts
 corepack pnpm design:lint
 corepack pnpm ui:audit
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/02-enforce-domain-prohibitions.md src/libs/modules/email-verification/README.md bruno/async-verification/README.md UX-CONTRACT.md
 ```
 
 Use controlled policy flips and injected cleanup failure to test queued cancellation and intention races.

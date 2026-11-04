@@ -165,10 +165,6 @@ to allow a truly absent `Plan dependencies` section only when every progress ite
 nonempty `Plan readiness` section for all plans. Preserve current dependency-entry validation, duplicate checks,
 cycle detection, readiness classification, and completed-status precedence.
 
-Update the Markdown prose validator with a narrow, source-aware allowance for exact `## Plan dependencies` and
-`## Plan readiness` lines. Keep `UseTitleCase` active everywhere else, and add a regression fixture proving a normal
-sentence or incorrectly capitalized heading still receives the rule's diagnostic.
-
 Add focused unit tests for exact headings, each near-match, missing readiness, incomplete missing dependencies,
 completed legacy omission, and rendered dependencies/readiness. Add a repository-fixture test that discovers every
 checked-in plan and proves parsing and dependency-state resolution succeed, so a malformed real plan cannot be hidden
@@ -178,7 +174,7 @@ behind synthetic unit fixtures.
 
 No public API changes. Internal parser validation becomes stricter: `parseExecPlan()` throws before GitHub access when
 a required heading is incorrectly capitalized, readiness is missing or empty, or an incomplete plan omits structured
-dependencies. Documentation lint gains a narrow canonical-heading allowance. The existing `ExecPlan`,
+dependencies. The existing `ExecPlan`,
 `ExecPlanState`, GitHub port, project fields, labels, and environment variables remain unchanged.
 
 This plan depends on plan-sync/03 because it preserves all established synchronization behavior while tightening
@@ -192,8 +188,6 @@ source validation and repairing generated metadata.
 - An incomplete plan without `Plan dependencies` fails; a fully completed legacy plan without that section remains
   accepted with no inferred dependencies.
 - A missing or empty `Plan readiness` section fails for both incomplete and completed plans.
-- Documentation lint accepts the two exact canonical headings but continues to report `UseTitleCase` for unrelated
-  non-title-case headings.
 - Generated issues for `auth/13`, `module-boundaries/07`, `module-boundaries/08`, and `proxy-fleet/15` contain the
   dependencies and readiness recorded in their source files.
 - Proxy-fleet plans and road map identify PRs #373, #374, #419, and #417 as merged, while preserving all recorded live
@@ -209,8 +203,7 @@ Run `TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan
 scripts/plans/sync.spec.ts --runInBand`, then the repository-fixture parser test. Run changed-file ESLint,
 `corepack pnpm typecheck`, the full Jest suite, and `git diff --check`.
 
-Run the prose-validator regression tests, then `corepack pnpm docs:lint --` with every changed Markdown file and
-require zero diagnostics. With live GitHub credentials, run
+With live GitHub credentials, run
 `PLANS_DRY_RUN=true corepack pnpm plans:sync` and inspect the four repaired issue-body diffs plus the corrected plan
 states. Do not run a write sync from a feature branch. After merge and the ordinary workflow sync, rerun the dry run
 and require zero updates. Bruno is not applicable because neither application HTTP behavior nor a Bruno collection

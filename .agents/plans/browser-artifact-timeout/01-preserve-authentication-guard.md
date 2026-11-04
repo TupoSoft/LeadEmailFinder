@@ -101,7 +101,6 @@ PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-playwright-browsers corepack pnpm --filter @tu
 PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-playwright-browsers node --test --test-name-pattern=runner-timeout-slow-setup scripts/testing/browser-fixture-artifacts.spec.mjs
 corepack pnpm exec eslint scripts/testing/browser-fixture-artifacts.spec.mjs
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- execplan-repository-fixture --runInBand
-corepack pnpm docs:lint -- .agents/plans/browser-artifact-timeout
 git diff --check
 ```
 

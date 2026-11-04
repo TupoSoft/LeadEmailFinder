@@ -159,7 +159,7 @@ public barrel. No dependency or package installation is required.
   with the specified reason, and every returned address meets both length bounds.
 - No input can produce more than 16 unique candidates, expand a different domain, or trigger network or storage
   activity. Existing single-email and batch contracts remain unchanged.
-- Focused tests, semantic type checking, the module architecture gate, and documentation lint pass.
+- Focused tests, semantic type checking, and the module architecture gate pass.
 
 ## Validation
 
@@ -171,7 +171,6 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src/domain/finding-input.ts src/libs/modules/email-verification/src/application/finding/*.ts
 corepack pnpm test -- scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/email-finding/01-generate-email-candidates.md
 ```
 
 Bruno is not applicable to this pull request: the capability is private and changes no HTTP behavior. Unit tests

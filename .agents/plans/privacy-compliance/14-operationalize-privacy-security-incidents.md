@@ -236,7 +236,6 @@ Run the readiness parser and documentation checks:
     corepack pnpm privacy:incident-readiness-check
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/privacy/incident-readiness --runInBand
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- docs/privacy/security-incident-response.md docs/privacy/incident-data-map.md docs/privacy/incident-contact-tree.md docs/privacy/incident-evidence-and-tabletop.md docs/privacy/email-verification-processing-contract.md docs/privacy/controller-data-contract.md docs/privacy/subprocessor-register.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/14-operationalize-privacy-security-incidents.md
     corepack pnpm exec prettier --check docs/privacy/security-incident-response.md docs/privacy/incident-data-map.md docs/privacy/incident-contact-tree.md docs/privacy/incident-evidence-and-tabletop.md config/privacy/incident-response.yaml docs/privacy/email-verification-processing-contract.md docs/privacy/controller-data-contract.md docs/privacy/subprocessor-register.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/14-operationalize-privacy-security-incidents.md
     git diff --check
 

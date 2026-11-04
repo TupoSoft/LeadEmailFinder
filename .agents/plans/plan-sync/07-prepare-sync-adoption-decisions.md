@@ -110,9 +110,7 @@ changes. `plan-sync/04` supplies the existing metadata contract; this plan does 
 
 ## Validation
 
-Run `corepack pnpm docs:lint -- docs/maintenance/execplan-sync-adoption-inputs.md
-.agents/plans/plan-sync/README.md .agents/plans/plan-sync/07-prepare-sync-adoption-decisions.md` and
-`corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`. Run `git diff --check`.
+Run `corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts`. Run `git diff --check`.
 
 Inspect `gh api repos/TupoSoft/execplan-sync/releases` and `gh api repos/TupoSoft/execplan-sync/tags` with existing
 read access. Summarize the relevant release identifiers and dates; record unavailable evidence without adding

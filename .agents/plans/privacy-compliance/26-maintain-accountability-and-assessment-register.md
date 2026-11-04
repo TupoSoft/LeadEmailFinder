@@ -301,7 +301,6 @@ Run the exact repository checks:
     corepack pnpm privacy:accountability-check
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/privacy/accountability-obligations.spec.ts scripts/privacy/accountability-cross-reference.spec.ts --runInBand
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/privacy/accountability-deadlines.spec.ts --runInBand
-    corepack pnpm docs:lint -- docs/privacy/accountability-register.md docs/privacy/assessment-and-audit-governance.md .agents/plans/privacy-compliance/26-maintain-accountability-and-assessment-register.md
     corepack pnpm exec prettier --check config/privacy/accountability-obligations.yaml docs/privacy/accountability-register.md docs/privacy/assessment-and-audit-governance.md .agents/plans/privacy-compliance/26-maintain-accountability-and-assessment-register.md
     git diff --check
 

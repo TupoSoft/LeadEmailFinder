@@ -175,7 +175,6 @@ corepack pnpm typecheck
 corepack pnpm openapi:export
 corepack pnpm openapi:generate
 corepack pnpm openapi:check
-corepack pnpm docs:lint -- .agents/plans/domain-verification-policy/01-block-forbidden-batch-addresses.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 The PostgreSQL harness resets its own test schema and reseeds test organizations; add `DomainPolicyEntity` to its

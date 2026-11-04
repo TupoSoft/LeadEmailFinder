@@ -118,7 +118,7 @@ inputs and a common scope. GitHub's normal expiration and storage limits apply t
 - The image and browser web builds share a scope; production and API builds use distinct scopes.
 - Every cache and builder step retains the appropriate selected-consumer condition. Failed installs, builds, and
   checks remain failures. Existing unselected, failed-discovery, summary, and cleanup behavior remains intact.
-- Focused workflow, selection, and real-plan tests, selection fixtures, ESLint, actionlint, and Harper pass.
+- Focused workflow, selection, and real-plan tests, selection fixtures, ESLint, and actionlint pass.
 - Repeated eligible Actions runs show pnpm cache restoration and cached Docker steps without changing validation
   results. Record measured times and any remaining uncached operations separately from local evidence.
 
@@ -132,7 +132,6 @@ TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- select-validation execplan-
 corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 actionlint .github/workflows/validate.yml
-corepack pnpm docs:lint -- README.md .agents/plans/ci-caching
 git diff --check
 ```
 

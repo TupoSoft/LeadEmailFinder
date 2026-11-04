@@ -142,7 +142,6 @@ corepack pnpm typecheck
 corepack pnpm openapi:check
 corepack pnpm test:verification-billing-postgres
 node --test scripts/bruno/async-verification-runner.test.mjs scripts/bruno/batch-verification-runner.test.mjs
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/dependency-inversion/09-decouple-verification-delivery.md
 git diff --check
 ```
 

@@ -263,9 +263,6 @@ outcome-unknown UI through deterministic browser fixtures. Bootstrap the MFA-awa
 Run the premium static audit and inspect desktop and narrow states, including pagehide and back/forward-cache
 restoration.
 
-Run Harper over the actual changed prose, including:
-
-    corepack pnpm docs:lint -- .agents/plans/frontend/15-bootstrap-customer-organizations.md src/libs/modules/identity/README.md src/libs/modules/organization-onboarding/README.md
 
 Record exact test counts, cursor cases, browser widths, cleanup, and runtime limitations without invitation tokens or
 customer data.

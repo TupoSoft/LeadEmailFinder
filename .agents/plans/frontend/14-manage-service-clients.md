@@ -299,9 +299,7 @@ lifecycle remains browser-verified because Bruno cannot mint a human session.
     corepack pnpm --filter ./apps/web exec playwright test tests/e2e/service-clients.spec.ts --project=chromium
     corepack pnpm ui:audit
 
-Run
-`corepack pnpm docs:lint -- .agents/plans/frontend/14-manage-service-clients.md src/libs/modules/service-client-management/README.md bruno/service-client-management/README.md`
-with the final changed Markdown list. Record exact results and skips without placing any credential in output.
+Record exact results and skips without placing any credential in output.
 
 Complete the frontend premium audit against `DESIGN.md`: hierarchy and labels, secret-modal comprehension, focus
 trap/return, Clipboard failure recovery, download failure recovery, touch targets, responsive information equivalence, status

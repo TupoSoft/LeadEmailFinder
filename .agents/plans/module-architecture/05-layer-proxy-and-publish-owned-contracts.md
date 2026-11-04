@@ -235,7 +235,6 @@ Run boundary and repository checks:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/05-layer-proxy-and-publish-owned-contracts.md src/libs/modules/proxy/README.md src/libs/modules/email-verification/README.md
     git diff --check
 
 No Bruno request definitions should change, but integration wiring does. Before touching Compose, inspect the

@@ -86,7 +86,6 @@ corepack pnpm test -- select-validation validate-workflow execplan-repository-fi
 corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 /tmp/lef-ci-caching-tools/actionlint .github/workflows/*.yml
-corepack pnpm docs:lint -- .agents/plans/ci-cancellation
 git diff --check
 ```
 

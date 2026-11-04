@@ -333,7 +333,6 @@ bounded batch completion, durable result download, and a healthy API after all c
 
 Finish documentation and repository checks:
 
-    corepack pnpm docs:lint -- AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md
     corepack pnpm exec prettier --check AGENTS.md src/libs/modules/AGENTS.md src/libs/modules/README.md .agents/plans/module-architecture/README.md .agents/plans/module-architecture/12-retire-module-architecture-baseline.md
     git diff --check
 

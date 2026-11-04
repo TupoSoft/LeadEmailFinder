@@ -218,10 +218,6 @@ confirming the returned balance matches what `GET /v1/billing/summary` returns d
 Rerun any existing browser-live suite that depends on `scripts/keycloak/customer-fixture.ts` to confirm it still
 passes after the additive permission widening — name the exact suite(s) when implementing.
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/03-api-client-error-mapping-credit-balance.md
-```
-
 ## Idempotence and Recovery
 
 No persisted state. Rerunning the connector or the tests is always safe. If the dev stack's fixture state

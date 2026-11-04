@@ -253,7 +253,6 @@ the null-email case, guard-level unusable-membership `401`, and service-client `
     corepack pnpm bruno:bff-sessions
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md src/libs/modules/auth/README.md src/libs/modules/service-client-management/README.md bruno/bff-sessions/README.md .agents/plans/frontend/03-publish-browser-current-account-contract.md
     git diff --check
 
 Record exact test counts, HTTP status/code pairs, serialized field names, skipped live gates, and Bruno results.

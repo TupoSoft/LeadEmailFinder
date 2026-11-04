@@ -492,9 +492,7 @@ Run the premium static audit and inspect all route/state screenshots and interac
     corepack pnpm ui:audit
 
 Verify long email/domain/reason/source values, no sensitive console or URL data, keyboard submission, first-error
-focus, live-region restraint, offline/hidden polling, narrow overflow, and reduced motion. If the implementation
-changes `DESIGN.md` or `UX-CONTRACT.md`, run
-`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md` and record the result.
+focus, live-region restraint, offline/hidden polling, narrow overflow, and reduced motion.
 
 ## Idempotence and Recovery
 

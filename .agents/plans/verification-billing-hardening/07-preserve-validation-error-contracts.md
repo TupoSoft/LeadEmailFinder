@@ -117,13 +117,12 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm lint
 corepack pnpm bruno:async-verification
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/07-preserve-validation-error-contracts.md
 git diff --check
 ```
 
 Bruno: update the nearest existing invalid-email assertion. The launcher runs the pinned CLI with the owned
 local environment. When that fixture is unavailable, report the static assertions and HTTP tests separately
-and leave live Bruno execution explicitly unverified. Include any other changed Markdown files in Harper.
+and leave live Bruno execution explicitly unverified.
 These are implementation commands, not results already obtained for this plan.
 
 ## Idempotence and Recovery

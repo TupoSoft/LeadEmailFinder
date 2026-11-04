@@ -206,7 +206,6 @@ Validate the plan graph and source-controlled contract package:
 
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
     corepack pnpm privacy:account-discovery-approvals-check
-    corepack pnpm docs:lint -- docs/privacy/customer-data-processing-addendum.md docs/privacy/subprocessor-register.md docs/privacy/subprocessor-governance.md docs/privacy/email-verification-processing-contract.md README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/10-establish-customer-data-processing-terms.md
     corepack pnpm exec prettier --check config/privacy/account-discovery-approvals.yaml docs/privacy/customer-data-processing-addendum.md docs/privacy/subprocessor-register.md docs/privacy/subprocessor-governance.md docs/privacy/email-verification-processing-contract.md README.md .agents/plans/privacy-compliance/README.md .agents/plans/privacy-compliance/10-establish-customer-data-processing-terms.md
     git diff --check
 

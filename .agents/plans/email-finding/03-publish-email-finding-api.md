@@ -239,13 +239,11 @@ corepack pnpm openapi:check
 corepack pnpm test:gateway
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/email-finding/README.md .agents/plans/email-finding/03-publish-email-finding-api.md
 ```
 
 The guarded wrapper runs the new collection using `bru run --env local` in its selected fixture context. It must
 fail if dependencies or scenario assertions are unavailable; unit stubs are not live SMTP proof. Run existing
-SMTP coverage to protect unchanged verification behavior and trust enforcement. Include other changed Markdown
-files in Harper. Report static and local-runtime results separately, and state explicitly if Bruno could not run.
+SMTP coverage to protect unchanged verification behavior and trust enforcement. Report static and local-runtime results separately, and state explicitly if Bruno could not run.
 
 ## Idempotence and Recovery
 

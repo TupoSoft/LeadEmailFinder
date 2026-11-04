@@ -221,7 +221,6 @@ token issuer. Rerun each overlay whose issuer workaround was removed. Then run:
 
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/bff-session/README.md bruno/bff-sessions/README.md .agents/plans/frontend/02-route-oidc-provider-traffic-safely.md
     git diff --check
 
 Record exact nonzero live test counts, skipped external gates, Compose ownership, and Bruno results. Host-only mocks do not satisfy the

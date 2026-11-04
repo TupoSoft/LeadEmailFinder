@@ -220,8 +220,7 @@ artifact is reference evidence, not a runtime dependency.
   changing the information hierarchy.
 - Component tests, accessibility checks, both browser projects, and approved visual snapshots pass from a clean
   checkout.
-- Root `DESIGN.md` passes the `Design.md` linter, the premium UI audit passes in strict mode, and changed English
-  Markdown passes the repository Harper command.
+- Root `DESIGN.md` passes the `Design.md` linter, and the premium UI audit passes in strict mode.
 
 ## Validation
 
@@ -251,7 +250,6 @@ Validate the durable contracts and prose:
 
     corepack pnpm design:lint
     corepack pnpm ui:audit
-    corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/README.md .agents/plans/frontend/01-establish-product-experience-and-public-entry.md
     git diff --check
 
 Do not mark browser or visual checks complete from component tests alone. Record snapshot-update rationale rather

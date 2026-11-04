@@ -163,7 +163,6 @@ corepack pnpm bruno:batch-verification
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/01-preserve-payer-request-identity.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 Extend `infrastructure/persistence/verification-billing.integration.spec.ts` with real TypeORM and credits adapters,

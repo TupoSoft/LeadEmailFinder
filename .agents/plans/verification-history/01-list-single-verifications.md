@@ -177,7 +177,6 @@ corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
 node --test scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm bruno:async-verification
-corepack pnpm docs:lint -- .agents/plans/verification-history/01-list-single-verifications.md src/libs/modules/email-verification/README.md bruno/async-verification/README.md docs/privacy/email-verification-processing-contract.md
 ```
 
 Extend `src/libs/modules/email-verification/src/infrastructure/persistence/verification-billing.integration.spec.ts`

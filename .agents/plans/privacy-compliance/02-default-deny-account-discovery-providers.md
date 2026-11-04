@@ -288,7 +288,6 @@ Then run:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- README.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md
     corepack pnpm exec prettier --check .agents/plans/privacy-compliance/02-default-deny-account-discovery-providers.md config/privacy/account-discovery-approvals.yaml README.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md docs/privacy/email-verification-processing-contract.md
     corepack pnpm exec prettier --check --tab-width 2 .github/workflows/validate.yml bruno/smtp-dev/02-verify-local-email.yml bruno/smtp-dev/opencollection.yml
     git diff --check

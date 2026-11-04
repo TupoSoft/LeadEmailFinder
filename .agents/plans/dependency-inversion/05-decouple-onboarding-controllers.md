@@ -139,7 +139,7 @@ instance. No new package, module dependency, runtime configuration, endpoint, or
 - Membership role/removal operations retain hierarchy checks, cross-organization isolation, final-owner protection,
   session cleanup, audit behavior, and Keycloak compensation. Controller error mapping preserves each existing code.
 - Cache/referrer headers, browser mutation guards, public invitation handling, and OpenAPI remain unchanged.
-  Focused suites, architecture, type checking, and documentation lint pass.
+  Focused suites, architecture, and type checking pass.
 
 ## Validation
 
@@ -151,7 +151,6 @@ corepack pnpm test -- --testPathPatterns='organization-onboarding/src/applicatio
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm openapi:check
-corepack pnpm docs:lint -- .agents/plans/dependency-inversion/05-decouple-onboarding-controllers.md src/libs/modules/organization-onboarding/README.md
 ```
 
 If transaction or provider code changes unexpectedly, stop expanding this refactor and revisit scope; those changes

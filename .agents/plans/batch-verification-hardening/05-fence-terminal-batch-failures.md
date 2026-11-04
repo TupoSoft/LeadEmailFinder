@@ -193,7 +193,6 @@ node --test scripts/bruno/batch-verification-runner.test.mjs
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm bruno:batch-verification
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/05-fence-terminal-batch-failures.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 The PostgreSQL launcher owns a disposable synchronized database and rejects zero/skipped execution. Put its race
@@ -212,7 +211,7 @@ reconciliation; it completes missing closure or settlement without admitting new
 For incompatible development state, inspect the checkout-owned targets and use
 `corepack pnpm dev:reset -- --confirm-project=LEF` to rebuild, reset, and reseed the disposable stack. Use
 `TYPEORM_SYNCHRONIZE=true` there and the existing test launcher for its isolated database. Do not add migrations,
-production backfills, or reset another checkout. Record actual validation and Harper results before completion.
+production backfills, or reset another checkout. Record actual validation results before completion.
 
 ## Artifacts and Notes
 

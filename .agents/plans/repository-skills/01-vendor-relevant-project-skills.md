@@ -103,8 +103,7 @@ adapter, development fixture, and Bruno workflow. No new runtime dependency is r
 
 Run the Skill Creator metadata validator against each copied skill. Check local Markdown references and agent
 asset paths for missing resources. Run the premium companion resolver and the image generation helper in dry-run
-mode, without provider calls. Run `corepack pnpm docs:lint -- AGENTS.md .agents/plans/repository-skills .agents/skills`
-and review the findings without automatically rewriting code examples or quoted external material. Run
+mode, without provider calls. Run
 `corepack pnpm design:lint`, `corepack pnpm ui:audit`, and `git diff --check` to verify the existing contracts and
 patch formatting. Bruno is not applicable because only agent guidance and supporting resources change.
 

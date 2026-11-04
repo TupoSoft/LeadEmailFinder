@@ -194,7 +194,6 @@ Run repository checks:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/07-layer-service-client-management.md src/libs/modules/service-client-management/README.md src/libs/modules/identity/README.md bruno/service-client-management/README.md
     git diff --check
 
 No Bruno requests should change, but controller/provider/persistence wiring does. Before touching Compose, inspect

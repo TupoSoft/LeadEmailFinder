@@ -265,7 +265,6 @@ Run focused source and browser-transport checks, then package/repository validat
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
     corepack pnpm architecture:check
-    corepack pnpm docs:lint -- README.md src/libs/modules/bff-session/README.md .agents/plans/frontend/05-publish-browser-api-contracts.md
     git diff --check
 
 Start the API directly only when required by the exporter and capture `/docs` and `/openapi.json` status/content type.

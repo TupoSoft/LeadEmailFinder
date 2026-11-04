@@ -312,7 +312,6 @@ corepack pnpm test:verification-billing-postgres
 corepack pnpm test:credits-postgres
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/verification-billing/03-recover-operations-and-cache-results.md
 ```
 
 The plan's original command block named `verification-operations.spec.ts`, `verification-settlement.spec.ts`, and

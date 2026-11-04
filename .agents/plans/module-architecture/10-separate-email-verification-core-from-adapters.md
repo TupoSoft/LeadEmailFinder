@@ -233,7 +233,6 @@ files only, alongside the existing ones). Then run:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/10-separate-email-verification-core-from-adapters.md
     git diff --check
 
 No runtime/Docker/Bruno validation is needed — this plan changes no running behavior. Bruno: not applicable —

@@ -201,7 +201,7 @@ dependency, hosted service, schema, or external data store.
 - `Validate / validate` keeps its existing name, runs after all consumers even on failure, and fails on any failed,
   canceled, skipped, or missing dependency result.
 - Existing backend, architecture, docs, OpenAPI, web, image, route, and browser commands remain intact when selected.
-- Workflow syntax, classifier tests, fixture matrix, documentation lint, and repository checks pass in one pull request.
+- Workflow syntax, classifier tests, fixture matrix, and repository checks pass in one pull request.
 
 ## Validation
 
@@ -226,7 +226,6 @@ Run the full command set once to prove selection did not alter the underlying va
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
     corepack pnpm openapi:check
-    corepack pnpm docs:lint -- README.md .agents/plans/frontend/07-make-validation-path-aware.md
     git diff --check
 
 Record the fixture flags, consumer conclusions, aggregate conclusion, exact command counts, and any live workflow

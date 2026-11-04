@@ -188,7 +188,6 @@ Finish with these exact repository-root commands:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/organization-onboarding/README.md src/libs/modules/identity/README.md src/libs/modules/controller-privacy/README.md .agents/plans/privacy-compliance/27-add-human-organization-privacy-adapter.md
     corepack pnpm exec prettier --check src/libs/modules/organization-onboarding/README.md src/libs/modules/identity/README.md src/libs/modules/controller-privacy/README.md .agents/plans/privacy-compliance/27-add-human-organization-privacy-adapter.md
     git diff --check
 

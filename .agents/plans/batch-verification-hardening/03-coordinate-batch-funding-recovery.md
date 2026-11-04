@@ -281,7 +281,6 @@ node --test scripts/bruno/batch-verification-runner.test.mjs
 corepack pnpm bruno:batch-verification
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/03-coordinate-batch-funding-recovery.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 Extend the existing billing integration suite so its pinned PostgreSQL runner executes the new cases without skips.

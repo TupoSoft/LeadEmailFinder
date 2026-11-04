@@ -62,10 +62,9 @@ skipped, or missing dependency fails the summary. Branch protection continues to
 All repository workflows select GitHub-hosted Ubuntu 24.04 runners (`ubuntu-24.04`), including the reusable
 image-publishing workflow. Each validation job has its own virtual machine and Docker daemon.
 
-Repository policy runs for every comparison. It retains documentation tooling tests, changed-document Harper lint,
-account-discovery approval validation, the session-material scanner, the module architecture ratchet, the ExecPlan
-repository test, and CI selection tests. Harper's existing advisory CI setting is preserved. The remaining consumers follow this matrix; multiple
-changed paths select the union of their consumers:
+Repository policy runs for every comparison. It retains account-discovery approval validation, the session-material
+scanner, the module architecture ratchet, the ExecPlan repository test, and CI selection tests. The remaining
+consumers follow this matrix; multiple changed paths select the union of their consumers:
 
 | Changed paths | Additional consumers |
 | --- | --- |

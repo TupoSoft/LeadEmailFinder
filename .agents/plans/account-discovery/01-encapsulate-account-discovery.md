@@ -200,7 +200,6 @@ Run application, caller, composition, and provider regression coverage:
     corepack pnpm typecheck
     corepack pnpm lint
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/account-discovery/01-encapsulate-account-discovery.md
     git diff --check
 
 Inspect any stale baseline entries before running `corepack pnpm architecture:baseline`; rerun the architecture gate
@@ -243,7 +242,7 @@ No database reset, migration, or reseed is required by this refactor.
   with no skipped requests. The base stack also passed Keycloak and authenticated API smoke tests. The first proxy
   bootstrap encountered a transient API connection refusal; retrying that idempotent fixture service after API
   health returned `200` succeeded. No real account-discovery provider was configured.
-- The exact documentation command under Validation passed both Markdown files. `git diff --check` passed.
+- The then-current documentation command passed both Markdown files. `git diff --check` passed.
 
 ## Plan readiness
 

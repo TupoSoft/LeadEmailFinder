@@ -337,7 +337,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- docs/privacy/active-datastore-controls.md docs/privacy/email-verification-processing-contract.md docs/privacy/subprocessor-register.md docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/23-enforce-active-datastore-safeguards.md
     corepack pnpm exec prettier --check config/privacy/active-data-stores.yaml docs/privacy/active-datastore-controls.md docs/privacy/email-verification-processing-contract.md docs/privacy/subprocessor-register.md docs/privacy/managed-log-and-backup-controls.md .agents/plans/privacy-compliance/23-enforce-active-datastore-safeguards.md .github/workflows/validate.yml .github/workflows/deploy.yml
     git diff --check
 

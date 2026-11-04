@@ -183,7 +183,6 @@ Run these commands from the repository root; these are required future checks, n
     corepack pnpm design:lint
     corepack pnpm ui:audit
     corepack pnpm architecture:check
-    corepack pnpm docs:lint -- UX-CONTRACT.md .agents/plans/checkout-recovery/04-resume-browser-checkouts.md
     git diff --check
 
 Extend `apps/web/tests/e2e/billing-ui.spec.ts` at its configured 1440 by 900 and 320 by 720 viewports. Cover keyboard
