@@ -24,7 +24,7 @@ plan 04. Plan 04 intentionally remains pending until the measured policy is expl
 
 ## Shared Constraints
 
-- Preserve self-hosted runner selection, private Docker daemons, required check names, frozen installs, test
+- Preserve GitHub-hosted Ubuntu 24.04 runner selection, independent Docker daemons, required check names, frozen installs, test
   coverage, browser artifact prerequisites, reset ownership checks, and cleanup. Do not add runner capacity or
   test workers as part of these plans.
 - Preserve the completed `ci-caching/01`, `browser-ci/02`, and `browser-ci/03` behavior. Existing issues #615,

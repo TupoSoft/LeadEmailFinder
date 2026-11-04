@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   changes:
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -34,7 +34,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -108,7 +108,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -218,7 +218,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -290,7 +290,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -347,7 +347,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -436,7 +436,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -504,7 +504,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -587,7 +587,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -761,7 +761,7 @@ jobs:
       - browser-ui
       - browser-live
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -785,7 +785,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
