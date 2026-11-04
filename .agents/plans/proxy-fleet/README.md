@@ -2,6 +2,10 @@
 
 This road map scales SMTP verification by treating every 3proxy listener and egress IP as one independently limited proxy-registry member. Application allocation, capacity enforcement, local SMTP verification, and drain observability are already merged. New implementation starts with the fleet image and proceeds through disposable host provisioning to a Swarm reference deployment.
 
+MVP scope decision (2026-10-22): verification workers will connect directly to mail servers. The proxy fleet is
+outside the MVP scope. Plans 18 and 19 are deferred to the post-MVP backlog until an explicit decision to adopt a
+proxy fleet. Plan 18 also requires a decision to use native Linux/libvirt.
+
 Implement the remaining plans according to their declared dependencies and readiness. Plan 19 prepares the execution
 decisions for plan 16; plan 18 remains independent of that preparation. Each plan follows `.agents/PLANS.md` and
 represents exactly one pull request with its own acceptance criteria and validation.
@@ -35,14 +39,16 @@ Vagrant-native development lab with Windows WSL2/VirtualBox validation:
 17. [Provision a Vagrant-native proxy-fleet development lab](17-provision-vagrant-native-development-lab.md) — initial
     implementation merged in PR #518; VirtualBox validation completed in follow-up PR #549
 
-Native Linux provider validation, independently deliverable after plan 17:
+Native Linux provider validation, deferred beyond the MVP:
 
-18. [Validate the Vagrant lab on native Linux with libvirt](18-validate-vagrant-libvirt-lab.md) — depends on plan 17
+18. [Validate the Vagrant lab on native Linux with libvirt](18-validate-vagrant-libvirt-lab.md) — deferred to the
+    post-MVP backlog; depends on plan 17. Reopen issue #551 if we adopt a proxy fleet and need native Linux/libvirt.
 
 Preparation for live validation, independently deliverable after plans 12, 13, and 17:
 
-19. [Fleet validation decision preparation](19-prepare-fleet-validation-decisions.md) — documents proposed listener
-    reachability and fixture execution models; completion does not require a live lab or approve either model.
+19. [Fleet validation decision preparation](19-prepare-fleet-validation-decisions.md) — deferred to the post-MVP
+    backlog until a decision to adopt a proxy fleet. Documents proposed listener reachability and fixture execution
+    models; completion does not require a live lab or approve either model.
 
 Live-validation follow-up, dependent on plans 12, 13, 17, and 19:
 

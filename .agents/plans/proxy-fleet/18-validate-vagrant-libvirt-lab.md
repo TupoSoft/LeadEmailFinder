@@ -4,6 +4,10 @@ This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
 ## Purpose / Big Picture
 
+MVP scope decision (2026-10-24): verification workers will connect directly to mail servers. Native Linux/libvirt
+validation is deferred to the post-MVP backlog. Resume after an explicit decision to adopt a proxy fleet and use
+this provider.
+
 Establish that the shared four-machine Vagrant lab works on native AMD64 Linux with libvirt and KVM. A developer
 must be able to create the lab, connect through Vagrant and Ansible, provision its declared guest networking without
 changing unrelated network settings, reboot without provisioning, destroy it, and create a clean replacement.
@@ -31,6 +35,10 @@ None yet.
 
 ## Decision Log
 
+- Decision: Defer native Linux/libvirt validation beyond the MVP and close GitHub issue #551 as not planned.
+  Rationale: MVP workers will connect directly to mail servers. Preserve the unfinished validation matrix and its
+  dependency on plan 17; reopen the issue if we adopt a proxy fleet and need this provider.
+  Date/Author: 2026-10-24, project owner and Codex.
 - Decision: Separate native Linux/libvirt validation from plan 17 without changing the shared implementation.
   Rationale: The operator currently has no native Linux host. A separate plan preserves the complete provider matrix
   while allowing plan 17 to finish against its own VirtualBox criteria. The dependency points from this plan to
@@ -51,7 +59,8 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Deferred on 2026-10-24. GitHub issue #551 is closed as not planned. No native Linux/libvirt validation has run,
+and all six progress items remain incomplete. The matrix is preserved for reconsideration after the MVP.
 
 ## Context and Orientation
 
@@ -389,4 +398,4 @@ their own plans. The current documentation split itself neither executes this ma
 
 ## Plan readiness
 
-Ready to implement.
+Ready after a post-MVP decision to adopt a proxy fleet and use native Linux/libvirt

@@ -151,3 +151,6 @@ tmp
 # Protobuf
 **/*.proto
 !proto/**/*.proto
+.dev/auth/
+.dev/auth-tools/
+.dev/auth-runtime/

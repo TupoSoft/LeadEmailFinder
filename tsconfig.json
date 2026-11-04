@@ -7,6 +7,7 @@
     "compilerOptions": {
         "baseUrl": "./",
         "paths": {
+            "@tuposoft/lead-email-finder/better-auth": ["src/libs/better-auth/src"],
             "@tuposoft/lead-email-finder/common": ["src/libs/common/src"],
             "@tuposoft/lead-email-finder/common/*": ["src/libs/common/src/*"],
             "@tuposoft/lead-email-finder/config": ["src/libs/config/src"],

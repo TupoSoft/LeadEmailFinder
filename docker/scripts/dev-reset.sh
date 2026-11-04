@@ -1,7 +1,7 @@
 #!/bin/sh
 # Tears down and recreates the entire disposable LeadEmailFinder development stack: PostgreSQL, Keycloak's
-# own PostgreSQL, Redis, and the Garage/S3 container, then reprovisions Keycloak, seeds deterministic
-# application fixtures, and runs an authenticated smoke test. See
+# own PostgreSQL, Redis, the Garage/S3 container, and the authentication mail capture, then reprovisions Keycloak,
+# seeds deterministic application and native Better Auth fixtures, and runs an authenticated smoke test. See
 # .agents/plans/auth/10-development-reset-workflow.md for the full rationale.
 set -eu
 
@@ -19,7 +19,7 @@ PROJECT_NAME="LEF"
 COMPOSE_PROJECT_ID="lef"
 COMPOSE="docker compose -p ${COMPOSE_PROJECT_ID} -f ${COMPOSE_FILE}"
 
-CONTAINERS="lef-postgres-1 lef-redis-1 lef-garage-1 lef-keycloak-postgres-1 lef-keycloak-1 lef-api-1 lef-web-1 lef-bullboard-1"
+CONTAINERS="lef-postgres-1 lef-redis-1 lef-garage-1 lef-keycloak-postgres-1 lef-keycloak-1 lef-auth-mail-1 lef-api-1 lef-web-1 lef-bullboard-1"
 VOLUME_PATTERN="^lef_(postgres-data|redis-data|keycloak-postgres-data)\$"
 EXPECTED_VOLUME_COUNT=3
 
@@ -30,7 +30,8 @@ print_targets() {
     printf '\nIt will delete the following named volumes (all application, Keycloak, and queue state):\n'
     printf '  lef_postgres-data  lef_redis-data  lef_keycloak-postgres-data\n'
     printf '\nObject storage (garage) has no named volume; its data is already ephemeral inside the\n'
-    printf 'container and is cleared simply by recreating that container.\n'
+    printf 'container and is cleared simply by recreating that container. Captured authentication mail is\n'
+    printf 'likewise held only inside the auth-mail container.\n'
     printf '\nCompose project: %s (%s)\n\n' "${PROJECT_NAME}" "${COMPOSE_FILE}"
 }
 
@@ -116,13 +117,15 @@ verify_and_delete_volumes() {
 }
 
 remove_browser_fixture_state() {
-    if [ -L .dev ] || [ -L .dev/keycloak ]; then
+    if [ -L .dev ] || [ -L .dev/keycloak ] || [ -L .dev/auth ]; then
         printf 'Refusing to remove browser fixture state through a symbolic-link directory.\n' >&2
         exit 1
     fi
     # Only the enrollment keys are reset here, after confirmation and every ownership/volume check.
     # Routine seed commands preserve this file. Removing a file symlink never follows its target.
     rm -f -- .dev/keycloak/browser-users.json
+    # Native fixture identifiers name rows in the deleted database. The ignored runtime secret is kept.
+    rm -f -- .dev/auth/native-users.json
 }
 
 wait_healthy() {
@@ -187,7 +190,7 @@ if [ "${resolved_name}" != "${COMPOSE_PROJECT_ID}" ]; then
 fi
 if ! printf '%s' "${resolved_config}" | jq -e '
     . as $config | all([
-        ["web", 8080, "53000"], ["keycloak", 8080, "58080"], ["postgres", 5432, "55432"]
+        ["web", 8080, "53000"], ["keycloak", 8080, "58080"], ["postgres", 5432, "55432"], ["auth-mail", 8025, "8025"]
     ][]; . as $port | any($config.services[$port[0]].ports[];
         .target == $port[1] and (.published | tostring) == $port[2]))
     ' > /dev/null; then
@@ -207,6 +210,7 @@ wait_healthy lef-redis-1
 wait_healthy lef-garage-1
 wait_healthy lef-keycloak-postgres-1
 wait_healthy lef-keycloak-1
+wait_healthy lef-auth-mail-1
 
 # Every provisioning command must target the same fixed project and public endpoints as this reset.
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_ID}"
@@ -230,6 +234,7 @@ export POSTGRES_URL="postgresql://postgres:${postgres_password}@localhost:55432/
 pnpm keycloak:bootstrap-credential
 pnpm keycloak:bootstrap-operator
 pnpm keycloak:seed-customer-fixture
+pnpm auth:seed -- --native-only
 
 pnpm keycloak:smoke
 run_api_smoke_test

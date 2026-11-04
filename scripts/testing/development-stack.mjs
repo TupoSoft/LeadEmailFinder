@@ -7,9 +7,19 @@ const UNSAFE_METADATA = 'Development stack metadata must use a private regular f
 // Validate before either reading cached credentials or discovering fresh provider credentials. In particular,
 // an ignored directory symlink is not permission to read or overwrite a different checkout's local secrets.
 export function assertDevelopmentMetadataPath(checkoutRoot) {
+    return assertCheckoutPrivateFile(checkoutRoot, '.dev/keycloak/development-stack.json')
+}
+
+// A checkout-owned private file: every ancestor is a real directory, and an existing file is a single-link 0600
+// regular file. The relative path stays below `.dev/` so callers cannot address a tracked or foreign location.
+export function assertCheckoutPrivateFile(checkoutRoot, relativePath) {
     try {
         const root = resolve(checkoutRoot)
         if (root !== checkoutRoot || root === parse(root).root) throw new Error(UNSAFE_METADATA)
+        const segments = relativePath.split('/')
+        if (segments[0] !== '.dev' || segments.length < 2 || segments.some(part => !part || part === '.' || part === '..')) {
+            throw new Error(UNSAFE_METADATA)
+        }
         const ancestors = []
         for (let current = root; current !== parse(current).root; current = dirname(current)) ancestors.unshift(current)
         for (const directory of ancestors) {
@@ -18,8 +28,9 @@ export function assertDevelopmentMetadataPath(checkoutRoot) {
                 throw new Error(UNSAFE_METADATA)
             }
         }
-        const file = resolve(root, '.dev/keycloak/development-stack.json')
-        for (const directory of [resolve(root, '.dev'), resolve(root, '.dev/keycloak')]) {
+        const file = resolve(root, relativePath)
+        for (let depth = 1; depth < segments.length; depth += 1) {
+            const directory = resolve(root, ...segments.slice(0, depth))
             let entry
             try {
                 entry = lstatSync(directory)
@@ -151,6 +162,27 @@ export function inspectDevelopmentService(checkoutRoot, metadata, service, inter
     const container = inspected[0]
     assertOwnedDevelopmentContainer(container, metadata, service, internalPort, endpoint)
     return { id, container }
+}
+
+// Authentication mail is published only on IPv4 loopback; a wildcard binding is not an owned private endpoint.
+export function loopbackPort(container, internalPort) {
+    const bindings = container.NetworkSettings?.Ports?.[internalPort] ?? []
+    if (bindings.length !== 1 || bindings[0].HostIp !== '127.0.0.1' || !/^\d+$/.test(bindings[0].HostPort)) {
+        throw new Error('Development authentication mail must publish exactly one loopback port')
+    }
+    return Number(bindings[0].HostPort)
+}
+
+/**
+ * Locates the checkout-owned `auth-mail` service after the same label and checkout-path checks as every other
+ * development service. Callers read or delete captured messages only through the endpoints returned here.
+ */
+export function inspectAuthMail(checkoutRoot, ownership) {
+    const { container } = inspectDevelopmentService(checkoutRoot, ownership, 'auth-mail')
+    return {
+        httpUrl: `http://127.0.0.1:${loopbackPort(container, '8025/tcp')}`,
+        smtpPort: loopbackPort(container, '1025/tcp'),
+    }
 }
 
 function publishedEndpoint(container, internalPort, protocol) {

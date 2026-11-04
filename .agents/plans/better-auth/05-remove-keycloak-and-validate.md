@@ -42,6 +42,12 @@ None yet.
   exercise native persistence, local API keys, magic-link/MFA login, and public trial onboarding together.
   Date: 2026-10-19. Author: user and Codex.
 
+- Decision: Retire the unimplemented `browser-stack-readiness/02` plan and close
+  [issue #626](https://github.com/TupoSoft/LeadEmailFinder/issues/626) as not planned because this replacement
+  removes Keycloak. Preserve bounded readiness checks for the remaining services in this pull request.
+  Rationale: removing Keycloak eliminates its dedicated startup budget, while Docker inspection can stall
+  regardless of the authentication provider. Date: 2026-10-22. Author: user and Codex.
+
 ## Outcomes & Retrospective
 
 Not started.
@@ -109,6 +115,14 @@ and queue volumes already owned by the reset. Keep explicit project confirmation
 containers/volumes, unexpected ports/configuration, partial unexplained volume sets, and symlink metadata roots.
 Never use global deletion, `docker compose down -v`, or deletion based solely on a matching volume name.
 
+Replace the sleep-counting `wait_healthy` loop in `docker/scripts/dev-reset.sh` with
+`scripts/testing/wait-container-healthy.mjs`, using only Node's standard library. Keep the shell wrapper and the existing
+120-second service budgets. Use one monotonic deadline that includes Docker inspection and polling sleeps;
+cap each inspection at five seconds or the remaining budget, whichever is smaller, and terminate stalled children.
+Bound buffered output and emit only safe status categories. Only a healthy result observed before the deadline
+can succeed. On expiry, exit nonzero and stop dependent provisioning, seeding, and smoke checks. Add no
+Keycloak-specific timeout setting. Keep service health probes and reset ownership protections unchanged.
+
 Verify the base stack's `auth-mail` service established by `better-auth/01`, using Mailpit `v1.30.7`, internal SMTP
 1025, and inbox/API 8025. Retain loopback publication through `AUTH_MAIL_HTTP_PORT` (default 8025) and
 `AUTH_MAIL_PUBLISHED_SMTP_PORT` (default 51025), with actual bindings recorded in owned metadata.
@@ -167,6 +181,10 @@ active instructions and executable runtime paths must describe the final system.
 
 - Starting from confirmed disposable old development data, one reset succeeds without a Keycloak container,
   provider endpoint, provider secret, or hidden provider database; native schema and fixture metadata are created.
+- A service that becomes healthy before its readiness deadline succeeds. Services that remain unready and
+  stalled Docker inspections fail within the service budget plus at most one second of process teardown tolerance;
+  late healthy responses cannot turn expiry into success. Failed readiness prevents dependent provisioning,
+  seeding, and smoke checks, while successful readiness preserves their order.
 - Rerunning the seed preserves identities, MFA enrollment, key validity, membership counts, and credit balances.
   A fresh public account receives 100 trial credits once; the explicit fresh customer fixture has exactly 1000.
 - Real captured-email login, cross-device verification, required owner/operator MFA, sign-out, disabled access,
@@ -179,6 +197,18 @@ active instructions and executable runtime paths must describe the final system.
   configuration and package scripts contain no required Keycloak/OIDC client or duplicate BFF session machinery.
 
 ## Validation
+
+Add `scripts/testing/wait-container-healthy.test.mjs` with fake clocks to test delayed readiness, expiry,
+late success, and inspection budgets. Use a synthetic Docker executable to prove a stalled inspection is
+terminated within a short real deadline. Extend `scripts/testing/dev-reset.test.mjs` to copy the helper and prove
+that successful readiness preserves command order and failed readiness prevents provisioning, seeds, and smoke
+checks. Tests with long budgets must use fake time rather than waiting 120 real seconds. Run the focused checks:
+
+```bash
+node --check scripts/testing/wait-container-healthy.mjs
+sh -n docker/scripts/dev-reset.sh
+node --test scripts/testing/wait-container-healthy.test.mjs scripts/testing/dev-reset.test.mjs
+```
 
 Run these core/static commands from the repository root after updating the package scripts and fixtures:
 

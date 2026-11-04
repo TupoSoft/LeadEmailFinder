@@ -11,6 +11,7 @@ export default tseslint.config(
             'apps/web/**',
             'docker/scripts/**',
             '**/dist/**',
+            '.dev/**',
             'deploy/**',
             '**/metadata.ts',
             'packages/api-client/src/schema.d.ts',
@@ -75,6 +76,7 @@ export default tseslint.config(
         files: [
             'scripts/ci/*.mjs',
             'scripts/bruno/*.mjs',
+            'scripts/better-auth/*.mjs',
             'scripts/testing/*.mjs',
             'scripts/frontend/*.mjs',
             'scripts/openapi/*.mjs',
