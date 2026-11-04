@@ -291,7 +291,6 @@ corepack pnpm openapi:generate
 corepack pnpm openapi:check
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- bruno/smtp-dev/README.md bruno/async-verification/README.md .agents/plans/verification-billing/04-charge-single-verification-outcomes.md
 ```
 
 Extend the real-Redis queue suite for shared work, lost dispatch, permits, token buckets, and temporary-block retries.

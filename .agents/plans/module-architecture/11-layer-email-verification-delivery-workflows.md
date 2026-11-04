@@ -178,7 +178,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md .agents/plans/module-architecture/11-layer-email-verification-delivery-workflows.md
     git diff --check
 
 Bruno: update only stale source and fixture-configuration references, then require the existing SMTP collection to pass
@@ -231,7 +230,7 @@ Validation evidence collected on 2026-09-07:
   `accepted_email` and `secure_transport_unavailable`; proxy restore and deprecated zero-balance/debit checks passed.
 - `corepack pnpm architecture:baseline` and `corepack pnpm architecture:check` passed; a set comparison confirmed
   zero added baseline keys and removals confined to the two old synchronous directories.
-- The exact typecheck, lint, build, and Harper commands under Validation passed. `corepack pnpm openapi:check`
+- The exact typecheck, lint, and build commands under Validation and the then-current Harper command passed. `corepack pnpm openapi:check`
   passed, confirming unchanged generated API contracts. `git diff --check` passed.
 
 The owned fixture remains available for local review. No database schema, migration, provider, queue protocol, or

@@ -60,11 +60,8 @@ reference guides remain available beside the compiled guides. No original global
 To update a skill, compare the recorded source snapshot with the new upstream version, retain the repository
 scope guidance, and review resource changes together. Verify its name and description, relative references,
 companion skills, and helper behavior. Do not replace project-owned audits, tokens, providers, or framework choices
-with generic source examples. Record the new source version and adaptations, then run Harper on changed Markdown:
-
-```bash
-corepack pnpm docs:lint -- AGENTS.md .agents/plans/repository-skills .agents/skills
-```
+with generic source examples. Record the new source version and adaptations, then proofread changed Markdown
+for grammar, spelling, and clarity.
 
 Run the helpers only for their documented purpose. Image generation dry runs make no provider request. Keep
 optional Python packages and transient output outside committed source, and report missing host capabilities

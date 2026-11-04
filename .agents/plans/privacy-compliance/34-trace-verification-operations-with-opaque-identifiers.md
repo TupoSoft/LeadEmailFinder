@@ -347,7 +347,6 @@ Run repository checks:
     corepack pnpm lint
     corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/privacy-compliance/34-trace-verification-operations-with-opaque-identifiers.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md bruno/batch-verification/README.md
     git diff --check
 
 Extend the nearest `bruno/smtp-dev` sequence. Assert a UUID `X-Request-ID` on success and rejection, assert that a
@@ -387,8 +386,8 @@ The focused PostgreSQL command was:
 
     TEST_POSTGRES_URL=<disposable-database-url-ending-in-_test> corepack pnpm test -- src/libs/modules/email-verification/src/verification-organization-ownership.integration.spec.ts --runInBand
 
-This passed all three ownership scenarios, including owned, foreign, and missing verification-ID lookup. The Harper
-command in Validation passed for all four changed Markdown files. Bruno runtime remains unverified as described above.
+This passed all three ownership scenarios, including owned, foreign, and missing verification-ID lookup. The then-current Harper
+command passed for all four changed Markdown files. Bruno runtime remains unverified as described above.
 
 
 Record only synthetic request, job, batch, and verification UUIDs; fixed event/mode/stage/reason codes; captured event

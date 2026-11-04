@@ -412,9 +412,7 @@ Run the premium static audit and inspect every state interactively:
 Verify visible native file access, keyboard replacement/removal, long filename wrapping, and the exactly stated
 100-megabyte limit. Also verify the absence of fake upload percentages, truthful progress semantics, restrained live
 regions, focus after errors/completion, offline and hidden polling, safe blob cleanup, download headers, narrow
-overflow, and reduced motion. If implementation changes
-`DESIGN.md` or `UX-CONTRACT.md`, run
-`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md` and record the result.
+overflow, and reduced motion.
 
 ## Idempotence and Recovery
 

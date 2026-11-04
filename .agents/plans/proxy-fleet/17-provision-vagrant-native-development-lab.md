@@ -313,7 +313,7 @@ normal creation or cleanup.
   again.
 - Interrupted commands are recoverable through `vagrant status` and a direct retry or documented manual diagnosis; no
   acceptance criterion claims atomic rollback, concurrent command safety, or automatic foreign-resource cleanup.
-- Vagrant validation, shell syntax checks, direct guest probes, Ansible inventory validation, documentation lint,
+- Vagrant validation, shell syntax checks, direct guest probes, Ansible inventory validation,
   secret scanning, repository tests, and diff checks pass. No externally observable application or HTTP behavior
   changes.
 
@@ -341,7 +341,6 @@ Run static and repository checks:
     corepack pnpm typecheck
     corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/proxy-fleet/README.md .agents/plans/proxy-fleet/16-validate-disposable-multi-node-fleet.md .agents/plans/proxy-fleet/17-provision-vagrant-native-development-lab.md deploy/proxy-fleet/vagrant/README.md
     PLANS_DRY_RUN=true corepack pnpm plans:sync
     git diff --check
 

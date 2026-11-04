@@ -155,7 +155,6 @@ corepack pnpm test:ci-paths
 corepack pnpm exec eslint scripts/ci/backend-image-inputs.test.mjs
 corepack pnpm build
 corepack pnpm architecture:check
-corepack pnpm docs:lint -- README.md .agents/plans/ci-performance/02-narrow-backend-image-inputs.md
 git diff --check
 ```
 

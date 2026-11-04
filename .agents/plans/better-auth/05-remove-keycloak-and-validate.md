@@ -251,8 +251,7 @@ browser launchers and require real email capture and MFA evidence. Run `corepack
 
 Review a targeted `rg` inventory for `keycloak`, `OIDC_`, `BFF_CLIENT_`, old metadata paths, and obsolete package
 script names. Classify historical documentation separately; every active reference needs removal or an explicit
-remaining non-Keycloak purpose. Run `git diff --check` and `corepack pnpm docs:lint -- <changed-markdown-files>`
-with actual expanded paths. Record the exact Harper command and result. Bruno is applicable: report each updated
+remaining non-Keycloak purpose. Run `git diff --check`. Bruno is applicable: report each updated
 collection's actual local result, distinguishing skipped/unavailable external Paddle sandbox evidence from stub
 payment coverage and from a successful final native-auth cutover.
 

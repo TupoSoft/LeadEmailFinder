@@ -161,7 +161,6 @@ node --test scripts/openapi/contracts.test.mjs
 node --test scripts/bruno/proxy-registry-runner.test.mjs scripts/bruno/organization-onboarding-runner.test.mjs
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/dependency-inversion/07-decouple-proxy-administration.md src/libs/modules/proxy/README.md bruno/proxy-registry/README.md
 git diff --check
 ```
 

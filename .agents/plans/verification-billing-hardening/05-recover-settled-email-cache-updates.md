@@ -144,7 +144,6 @@ corepack pnpm test:verification-billing-postgres
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/05-recover-settled-email-cache-updates.md src/libs/modules/email-verification/README.md bruno/smtp-dev/README.md
 corepack pnpm bruno:smtp-dev
 ```
 

@@ -228,7 +228,6 @@ After confirming the Compose project belongs to this checkout, run the live prov
     corepack pnpm bruno:bff-sessions
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md bruno/bff-sessions/README.md .agents/plans/frontend/04-harden-authorization-callbacks.md
     git diff --check
 
 Record exact concurrency counts, HTTP statuses, redirect hosts/codes, cookie/header assertions, nonzero live-test
@@ -275,7 +274,7 @@ Validation on 2026-09-05 produced these nonsecret results:
 - Type checking, the 604-file build, the module architecture gate (nine modules and 108 baselined violations), and
   `git diff --check` passed. ESLint passed with one preexisting warning in
   `src/libs/config/src/load-secrets.spec.ts`.
-- Harper passed the four changed Markdown files with the exact command in Validation.
+- The then-current Harper command passed the four changed Markdown files.
 
 No provider query values, authorization codes, state values, cookies, CSRF values, tokens, Redis values, passwords,
 or real user data were retained in these artifacts. The uniquely named `lef499` Compose containers, network, and

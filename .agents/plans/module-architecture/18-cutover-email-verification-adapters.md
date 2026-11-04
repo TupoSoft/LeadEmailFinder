@@ -214,7 +214,6 @@ Then run the full suite and real integration validation:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/18-cutover-email-verification-adapters.md .agents/plans/module-architecture/13-layer-email-discovery-adapters.md .agents/plans/module-architecture/14-layer-smtp-mailbox-adapter.md .agents/plans/module-architecture/README.md
     git diff --check
 
 Rebuild and restart the live dev stack, then run every Bruno collection touching email verification against it:

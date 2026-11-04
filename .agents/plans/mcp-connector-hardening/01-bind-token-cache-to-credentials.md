@@ -258,17 +258,7 @@ Inspect its five executed results; discovery without execution is not a pass. If
 is unavailable, validate the collection's YAML and report Bruno execution as unverified. Container deployment is
 not a prerequisite, and no production validation is claimed.
 
-From the repository root, validate all Markdown changed by the implementation PR:
-
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/01-bind-token-cache-to-credentials.md .agents/plans/mcp-connector/02-bridge-oidc-client-credentials.md .agents/plans/mcp-connector/README.md bruno/mcp-authentication/README.md
-```
-
-During planning, the new tests and collection remain proposed artifacts. Run its focused prose command separately:
-
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/01-bind-token-cache-to-credentials.md
-```
+During planning, the new tests and collection remain proposed artifacts.
 
 ## Idempotence and Recovery
 
@@ -285,12 +275,10 @@ shape into a shared HTTP service needs an explicit credential identity. This doc
 and preserves the distinction between existing repository code and proposed connector files.
 
 The 2026-09-18 review also found 29 Harper diagnostics in the updated original authentication plan.
-When this implementation revises that document, fix actionable findings and require the focused prose check to pass.
-Do not classify a failing check as passed because some diagnostics existed before this change.
 
 Before implementation, follow root `AGENTS.md` for assigning the synced issue and moving it to In Progress. At
-delivery, link that issue with `Closes` in the single implementation PR, report Bruno's actual result, and record
-the exact Harper command and result. Creating this plan alone implements no runtime behavior.
+delivery, link that issue with `Closes` in the single implementation PR and report Bruno's actual result. Creating this
+plan alone implements no runtime behavior.
 
 ## Plan readiness
 

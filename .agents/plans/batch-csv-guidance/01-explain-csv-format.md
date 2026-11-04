@@ -148,7 +148,6 @@ corepack pnpm design:lint
 corepack pnpm ui:audit
 corepack pnpm --filter ./apps/web build
 corepack pnpm --filter ./apps/web exec playwright test tests/e2e/batch-verification-ui.spec.ts --project=desktop-chromium --project=narrow-chromium --output=/tmp/batch-csv-guidance-01-browser
-corepack pnpm docs:lint -- UX-CONTRACT.md .agents/plans/batch-csv-guidance
 git diff --check
 ```
 

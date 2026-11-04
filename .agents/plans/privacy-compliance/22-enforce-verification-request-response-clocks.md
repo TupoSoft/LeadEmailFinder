@@ -437,7 +437,6 @@ Return to the repository root and finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- docs/privacy/email-verification-processing-contract.md docs/privacy/customer-data-processing-addendum.md src/libs/modules/email-verification/README.md bruno/privacy-requests/README.md .agents/plans/privacy-compliance/22-enforce-verification-request-response-clocks.md
     corepack pnpm exec prettier --check config/privacy/verification-response-rules.yaml docs/privacy/email-verification-processing-contract.md docs/privacy/customer-data-processing-addendum.md src/libs/modules/email-verification/README.md bruno/privacy-requests/README.md .agents/plans/privacy-compliance/22-enforce-verification-request-response-clocks.md
     git diff --check
 

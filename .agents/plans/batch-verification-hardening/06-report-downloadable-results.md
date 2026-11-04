@@ -183,7 +183,6 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 node --test scripts/bruno/batch-verification-runner.test.mjs
 corepack pnpm bruno:batch-verification
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/06-report-downloadable-results.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 Update registered collection totals and the fake workflow in `scripts/bruno/batch-verification-runner.test.mjs`
@@ -193,8 +192,8 @@ healthy disposable API, gateway, Keycloak, SMTP fixture, and seeded credentials.
 `bru run --env local --sandbox developer` and rejects skipped or zero execution. Do not replace that launcher
 with an unrelated stack. If dependencies are unavailable, record Bruno as unverified and retain static checks.
 
-Record exact commands and results in Progress and Outcomes. Fix actionable Harper findings and rerun the exact
-documentation command. Do not claim that the future implementation or its runtime checks have already passed.
+Record exact commands and results in Progress and Outcomes. Do not claim that the future implementation or its runtime
+checks have already passed.
 
 ## Idempotence and Recovery
 
@@ -224,7 +223,7 @@ Validation on 2026-09-22:
 - Focused ESLint on all changed TypeScript and runner JavaScript files passed. `git diff --check` passed.
 - `corepack pnpm exec jest --passWithNoTests -o --runInBand --modulePathIgnorePatterns '<rootDir>/.claude/'`
   passed all 7 affected suites and 125 tests with zero skips.
-- The exact `corepack pnpm docs:lint --` command above passed Harper for all three edited Markdown files.
+- The then-current `corepack pnpm docs:lint --` command passed Harper for all three edited Markdown files.
 - Independent diff review found no actionable defects or material architectural trade-offs.
 - `node --test scripts/bruno/batch-verification-runner.test.mjs` passed all 4 tests with zero skips. The pinned
   CLI successfully executed 16 requests and 25 collection tests against the synthetic server, and rejected

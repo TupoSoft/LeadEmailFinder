@@ -245,7 +245,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md bruno/smtp-dev/README.md .agents/plans/privacy-compliance/04-own-verification-state-by-organization.md
     git diff --check
 
 Bruno: extend the SMTP collection for the changed admin-cache success and rejection behavior, then rerun both

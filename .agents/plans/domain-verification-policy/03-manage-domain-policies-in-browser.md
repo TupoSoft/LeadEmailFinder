@@ -207,7 +207,6 @@ On a confirmed owned disposable stack, set `COMPOSE_PROJECT_NAME` to its existin
 corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
 corepack pnpm bruno:domain-verification-policies
 corepack pnpm --filter ./apps/web test:platform-domains-live
-corepack pnpm docs:lint -- .agents/plans/domain-verification-policy/03-manage-domain-policies-in-browser.md DESIGN.md UX-CONTRACT.md src/libs/modules/bff-session/README.md
 ```
 
 The Bruno launcher comes from plan 02. Extend its current-account capability assertion in this PR and rerun
@@ -217,7 +216,7 @@ blocks, verifies rejection and unchanged balance, allows, and proves restored ad
 that operation to settle before cleaning its owned records; do not claim a mailbox verdict from admission. Restore
 only that policy fixture in `finally`. Record missing dependencies rather than resetting another stack. Use the
 Browser plugin when available; otherwise record why repository Playwright was used. Manually check focus, reduced
-motion, 200% zoom, and console errors at both widths. Append other edited Markdown paths to the Harper command.
+motion, 200% zoom, and console errors at both widths.
 
 ## Idempotence and Recovery
 

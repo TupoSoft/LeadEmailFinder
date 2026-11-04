@@ -197,7 +197,6 @@ corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
 node --test scripts/bruno/batch-verification-runner.test.mjs
 corepack pnpm bruno:batch-verification
-corepack pnpm docs:lint -- .agents/plans/verification-history src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/privacy-compliance/07-enforce-verification-data-retention.md bruno/batch-verification/README.md
 ```
 
 Add focused port/adapter tests at the named files. Extend the real PostgreSQL suite

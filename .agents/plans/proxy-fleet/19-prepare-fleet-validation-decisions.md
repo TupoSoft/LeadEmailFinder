@@ -135,7 +135,6 @@ runtime or package dependency for this preparation beyond the repository's docum
 Run these commands from the repository root after writing the document and updating this plan:
 
 ```sh
-corepack pnpm docs:lint -- deploy/proxy-fleet/validation-decisions.md .agents/plans/proxy-fleet/19-prepare-fleet-validation-decisions.md
 corepack pnpm test --runInBand --runTestsByPath scripts/plans/execplan-repository-fixture.spec.ts
 git diff --check
 ```

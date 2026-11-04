@@ -249,7 +249,6 @@ corepack pnpm openapi:check
 corepack pnpm bruno:credit-purchases
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/payments/README.md bruno/credit-purchases/README.md docker/paddle-dev/README.md .agents/plans/checkout-recovery/03-run-durable-checkouts.md
 git diff --check
 ```
 

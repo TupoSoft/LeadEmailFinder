@@ -142,7 +142,6 @@ corepack pnpm test -- src/libs/modules/email-verification/src/application/operat
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm test:verification-billing-postgres
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/dependency-inversion/08-decouple-verification-execution.md
 git diff --check
 ```
 

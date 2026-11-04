@@ -371,9 +371,7 @@ record a narrow, evidence-backed exception in this plan:
     corepack pnpm ui:audit
 
 Inspect desktop and narrow screenshots for stable layout, focus, overflow, long/error copy, reduced motion, and all
-loading and recovery states. If implementation materially changes root `DESIGN.md` or `UX-CONTRACT.md`, run
-`corepack pnpm docs:lint -- DESIGN.md UX-CONTRACT.md .agents/plans/frontend/08-sign-in-and-navigate-application-shell.md src/libs/modules/bff-session/README.md bruno/bff-sessions/README.md docker/README.md`
-and record the result. Do not claim the live Keycloak scenario passed from mocked component tests.
+loading and recovery states. Do not claim the live Keycloak scenario passed from mocked component tests.
 
 ## Idempotence and Recovery
 
@@ -423,7 +421,7 @@ Validation recorded on 2026-09-07:
   navigation, cross-tab sign-out, and replacement by another membership in the same organization. Two distinct
   valid callbacks raced against one old cookie: exactly one succeeded, the loser received `login_state_invalid`,
   the old cookie received `401`, and Redis contained exactly one new session, removed by winner sign-out.
-- The six-file Harper command in Validation passed with no findings. The final live-launcher regression run passed
+- The then-current six-file Harper command passed with no findings. The final live-launcher regression run passed
   all five tests, including accurate redacted failure locations for both browser spec files.
 
 Stable callback codes remain

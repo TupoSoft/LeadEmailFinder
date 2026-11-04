@@ -267,7 +267,6 @@ Finish with these exact repository-root commands:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/controller-legal-holds/README.md src/libs/modules/controller-privacy/README.md bruno/controller-legal-holds/README.md .agents/plans/privacy-compliance/32-enforce-controller-legal-holds.md
     corepack pnpm exec prettier --check config/privacy/controller-hold-policy.yaml src/libs/modules/controller-legal-holds/README.md src/libs/modules/controller-privacy/README.md bruno/controller-legal-holds/README.md .agents/plans/privacy-compliance/32-enforce-controller-legal-holds.md
     git diff --check
 

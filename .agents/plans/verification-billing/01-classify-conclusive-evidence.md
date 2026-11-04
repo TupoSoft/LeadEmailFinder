@@ -305,7 +305,7 @@ client inputs cannot establish it.
 - The fixture and Bruno collection prove positive, missing-recipient, sender-rejection, ambiguous-rejection,
   catch-all, plaintext, and cleanup-failure behavior through HTTP. Existing deduction timing remains unchanged until
   the later cutover and is documented accurately.
-- Architecture, focused tests, type checking, documentation lint, and static collection checks pass. Record runtime
+- Architecture, focused tests, type checking, and static collection checks pass. Record runtime
   validation separately from isolated tests.
 
 ## Validation
@@ -348,8 +348,7 @@ request and a nonzero passing test count. Run target acceptance, target `550 5.1
 evidence. Retain plaintext STARTTLS rejection. Test simulated DNS failure through the existing DNS composition;
 do not claim that the SMTP fixture exercised a real DNS outage.
 
-Run `corepack pnpm docs:lint --` with this plan, the module README, the SMTP collection README, and every other
-changed English Markdown file as explicit arguments; fix findings and rerun. If PostgreSQL or the owned fixture
+If PostgreSQL or the owned fixture
 stack is unavailable, record the exact prerequisite and leave runtime acceptance unverified instead of substituting
 passing mocks.
 

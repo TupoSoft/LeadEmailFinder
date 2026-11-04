@@ -157,7 +157,7 @@ endpoint, customer-supplied actor field, or organization authorization rule is i
    Constraints reject partial pairs and
    unknown kinds; no identity lifecycle operation cascades into verification records.
 6. Public contracts, permissions, CSV columns, logs, billing, and organization isolation remain unchanged. Focused
-   tests, real PostgreSQL, real Redis, architecture, type checks, and Harper pass. Bruno passes when its disposable
+   tests, real PostgreSQL, real Redis, architecture, and type checks pass. Bruno passes when its disposable
    stack is available; missing runtime evidence is explicitly reported.
 
 ## Validation
@@ -179,7 +179,6 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm exec eslint src/libs/modules/email-verification/src
 corepack pnpm openapi:check
-corepack pnpm docs:lint -- .agents/plans/verification-submitter src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/privacy-compliance/07-enforce-verification-data-retention.md
 ```
 
 Extend `infrastructure/persistence/verification-billing.integration.spec.ts` for manifest/request round trips,

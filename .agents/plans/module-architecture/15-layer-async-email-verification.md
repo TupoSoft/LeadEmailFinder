@@ -239,7 +239,6 @@ Finish with:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md .agents/plans/module-architecture/15-layer-async-email-verification.md
     git diff --check
 
 Bruno: extend `bruno/smtp-dev` with credit, repeated polling, missing-job, validation, authentication, and

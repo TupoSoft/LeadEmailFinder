@@ -165,10 +165,6 @@ Confirm seven executed requests and zero failures on each run. Do not enable ver
 that include headers. If the connector or Keycloak is unavailable, inspect YAML and scripts for static validity
 and report Bruno execution as unverified. Discovery alone is not a runtime pass. From the repository root, run:
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector-hardening/05-update-authenticated-origin-checks.md bruno/mcp-request-origins/README.md
-```
-
 ## Idempotence and Recovery
 
 Initialization and health checks create no product data. Repeating the collection is safe and needs no cleanup.
@@ -178,8 +174,7 @@ needed. Leave the shared development stack and fixture credentials intact; no re
 ## Artifacts and Notes
 
 Record the implementation head, exact validation results, and any unavailable runtime dependencies here.
-Follow root `AGENTS.md` when opening the one implementation PR. Report Bruno's actual result and the exact
-Harper command. Broader setup documentation in plan 06 depends on this plan to preserve the repaired requests.
+Follow root `AGENTS.md` when opening the one implementation PR. Report Bruno's actual result. Broader setup documentation in plan 06 depends on this plan to preserve the repaired requests.
 
 ## Plan readiness
 

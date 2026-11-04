@@ -161,7 +161,6 @@ corepack pnpm bruno:credit-purchases
 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost corepack pnpm --filter ./apps/web exec playwright test tests/e2e/billing-ui.spec.ts
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- docker/checkout-recovery-test/README.md docker/paddle-dev/README.md src/libs/modules/payments/README.md bruno/credit-purchases/README.md .agents/plans/checkout-recovery/06-exercise-checkout-crashes.md
 git diff --check
 ```
 

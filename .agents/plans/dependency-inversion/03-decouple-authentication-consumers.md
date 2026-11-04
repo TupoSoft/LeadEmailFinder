@@ -136,7 +136,6 @@ corepack pnpm test -- src/libs/modules/auth src/lead-email-finder-api/src/authen
 corepack pnpm test -- src/libs/modules/bff-session/src/application/human-membership-resolver.service.spec.ts src/libs/modules/bff-session/src/application/bff-session-credential-authenticator.spec.ts src/libs/modules/bff-session/src/application/bff-session-flow.service.spec.ts src/libs/modules/bff-session/src/bff-session.module.spec.ts src/libs/modules/bff-session/src/bff-session-guard-wiring.integration.spec.ts --runInBand
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/dependency-inversion/03-decouple-authentication-consumers.md src/libs/modules/auth/README.md src/libs/modules/bff-session/README.md
 ```
 
 Live-Keycloak suites remain gated and must be reported separately from unit and in-process HTTP results.

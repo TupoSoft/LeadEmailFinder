@@ -299,7 +299,6 @@ Finish from the repository root:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md bruno/batch-verification/README.md .agents/plans/module-architecture/16-layer-batch-email-verification.md
     git diff --check
 
 Bruno: update only stale source and fixture-configuration references, then require the existing batch collection to pass in full.

@@ -152,7 +152,6 @@ corepack pnpm exec eslint src/libs/modules/email-verification/src
 corepack pnpm openapi:check
 node --test scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm bruno:async-verification
-corepack pnpm docs:lint -- .agents/plans/verification-submitter src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/privacy-compliance/07-enforce-verification-data-retention.md bruno/async-verification/README.md
 ```
 
 Extend HTTP suites with human/service principals and spoofed actor fields. They prove transport mapping, not

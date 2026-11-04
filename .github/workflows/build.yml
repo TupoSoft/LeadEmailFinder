@@ -7,7 +7,7 @@ jobs:
   build-push:
     uses: TupoSoft/GitHubActions/.github/workflows/build-push.yml@master
     with:
-      runner: tuposoft-ci
+      runner: ubuntu-24.04
     permissions:
       packages: write
       contents: read

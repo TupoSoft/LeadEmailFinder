@@ -312,9 +312,7 @@ Bootstrap the MFA-aware platform operator, run the updated Bruno collection from
     docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
     corepack pnpm bruno:smtp-dev
 
-Run
-`corepack pnpm docs:lint -- .agents/plans/frontend/18-operate-proxy-fleet.md src/libs/modules/proxy/README.md bruno/proxy-registry/README.md`
-with any other changed English Markdown files appended. Record exact results, cleanup, and limits without credentials
+Record exact results, cleanup, and limits without credentials
 or unredacted external infrastructure data.
 
 Complete the frontend premium audit against `DESIGN.md`: platform navigation consistency, dense-data hierarchy,

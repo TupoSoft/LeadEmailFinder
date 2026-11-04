@@ -204,7 +204,6 @@ corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright test test
 corepack pnpm openapi:check
 corepack pnpm design:lint
 corepack pnpm ui:audit
-corepack pnpm docs:lint -- .agents/plans/verification-history/03-browse-verification-history.md UX-CONTRACT.md
 ```
 
 Add adapter/component tests at these paths for delayed page/type responses, null email, statuses, authorization,
@@ -213,7 +212,7 @@ the explicit `test:e2e:prebuilt` list in `apps/web/package.json`; default discov
 Extend `BatchVerificationPage.test.tsx` with uploading and uncertain navigation, identity replacement, late-response,
 acknowledgment-reset, and file-release scenarios. Exercise History and return in the browser as well.
 Use synthetic fixtures in desktop/narrow projects, check WCAG rules with `@axe-core/playwright`, focus, no POST requests from browsing,
-long values, zoom/reflow, and safe list screenshots. Add `DESIGN.md` to Harper's command if materially edited.
+long values, zoom/reflow, and safe list screenshots.
 
 With disposable API fixtures available, confirm list-to-detail behavior for a known single request and CSV job.
 Stub browser tests prove presentation/transport handling; prerequisite integration/Bruno cases prove real server

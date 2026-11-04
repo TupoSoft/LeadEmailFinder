@@ -108,7 +108,6 @@ Correct the README explanation: the double slash path can be sent by Bruno and n
 Explain that literal malformed absolute URLs and same-process MCP recovery remain covered by the raw socket test.
 Correct the corresponding discovery, rationale, and instruction passages in plan 01 without erasing its historical validation evidence.
 Replace its prohibition on claiming that Bruno sends the malformed target with the verified distinction between the two targets.
-Resolve actionable Harper findings in these touched documents, including long sentences, without changing commands or identifiers.
 
 Review the final diff for unrelated changes and record local results separately from CI evidence.
 Both new plans touch the README; preserve the other change when rebasing, but neither plan depends on the other.
@@ -131,7 +130,7 @@ This task makes the rejection contract repeatable through the normal HTTP client
 - The existing process tests still prove recovery after both malformed targets, including a real `ping` call.
 - The README and plan 01 no longer claim that ordinary HTTP clients cannot send the double slash path.
 - Documentation explains why the raw socket regression remains useful and preserves any current credential requirements for valid MCP calls.
-- Focused Jest tests, the plan fixture, the live collection, Harper, and whitespace validation pass.
+- Focused Jest tests, the plan fixture, the live collection, and whitespace validation pass.
 - Application source, package scripts, and runtime contracts remain unchanged.
 
 ## Validation
@@ -142,7 +141,6 @@ From the repository root after installing the locked dependencies, run:
 ```sh
 corepack pnpm exec jest --runInBand apps/mcp-server/src/main.spec.ts apps/mcp-server/src/create-server.spec.ts scripts/plans/execplan-repository-fixture.spec.ts
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-corepack pnpm docs:lint -- bruno/mcp-request-routing/README.md .agents/plans/mcp-transport-hardening/01-reject-malformed-request-targets.md .agents/plans/mcp-transport-hardening/03-cover-malformed-targets-with-bruno.md
 git diff --check
 ```
 

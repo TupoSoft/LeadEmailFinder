@@ -163,10 +163,6 @@ endpoint from the host, and run `@modelcontextprotocol/inspector --cli` against 
 (rather than a locally-run `node dist/main.js` process as in earlier plans) to confirm the containerized service
 behaves identically to the locally-run one used for manual verification in plans 02–05.
 
-```sh
-corepack pnpm docs:lint -- .agents/plans/mcp-connector/06-deploy-mcp-server.md
-```
-
 ## Idempotence and Recovery
 
 `docker compose up -d mcp-server` is safe to repeat. Removing the service (`docker compose down mcp-server`, or a

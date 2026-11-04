@@ -126,7 +126,6 @@ corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt --list
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt --list
 corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt --list
 corepack pnpm --filter @tuposoft/lead-email-finder-web build
-corepack pnpm docs:lint -- .agents/plans/browser-ci/02-reuse-web-build.md
 git diff --check
 ```
 

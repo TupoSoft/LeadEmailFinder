@@ -238,7 +238,6 @@ bindings in isolated module tests, and both AWS mappings. Then run:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm lint
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
-    corepack pnpm docs:lint -- README.md src/libs/common/README.md src/libs/modules/email-verification/README.md .agents/plans/privacy-compliance/06-require-secure-storage-transport.md
     git diff --check
 
 Inspect Compose ownership before runtime work. Against an owned disposable `LEF` stack, run the existing SMTP and batch

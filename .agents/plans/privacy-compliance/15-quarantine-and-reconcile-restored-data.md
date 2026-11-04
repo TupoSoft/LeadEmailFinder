@@ -351,7 +351,6 @@ Finish with these exact repository-root commands:
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm build
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- src/libs/modules/privacy-operations/README.md bruno/privacy-operations/README.md .agents/plans/privacy-compliance/15-quarantine-and-reconcile-restored-data.md
     corepack pnpm exec prettier --check config/privacy/restore-reconciliation.yaml src/libs/modules/privacy-operations/README.md bruno/privacy-operations/README.md .agents/plans/privacy-compliance/15-quarantine-and-reconcile-restored-data.md
     git diff --check
 

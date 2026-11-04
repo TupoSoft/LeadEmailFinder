@@ -139,7 +139,6 @@ corepack pnpm test -- src/libs/modules/bff-session/src/session-store.contract.sp
 corepack pnpm architecture:check
 corepack pnpm typecheck
 corepack pnpm openapi:check
-corepack pnpm docs:lint -- .agents/plans/dependency-inversion/04-decouple-browser-session-consumers.md src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md
 ```
 
 Redis contract execution requires `TEST_BFF_REDIS_URL`; record whether those cases actually ran. Live-Keycloak

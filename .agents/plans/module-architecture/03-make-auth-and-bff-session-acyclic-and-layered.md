@@ -322,7 +322,6 @@ Prove the source and alias boundaries:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/03-make-auth-and-bff-session-acyclic-and-layered.md src/libs/modules/auth/README.md src/libs/modules/bff-session/README.md src/libs/modules/identity/README.md src/libs/modules/README.md
     git diff --check
 
 Run the existing HTTP regressions against the normal local Compose stack:

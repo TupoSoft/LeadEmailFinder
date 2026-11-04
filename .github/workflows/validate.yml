@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   changes:
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     outputs:
       repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
       backend: ${{ steps.select.outputs.backend }}
@@ -34,7 +34,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
@@ -78,9 +78,6 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
         if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Test documentation linter
-        run: corepack pnpm test:docs-lint
-        if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Validate account-discovery approvals
         env:
           ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -88,12 +85,6 @@ jobs:
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Scan for LinkedIn session material
         run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Lint changed documentation with Harper
-        continue-on-error: true
-        env:
-          HARPER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: corepack pnpm docs:lint:changed
         if: needs.changes.outputs.repositoryPolicy == 'true'
       - name: Check module architecture
         run: corepack pnpm architecture:check
@@ -108,7 +99,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
@@ -218,7 +209,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
@@ -290,7 +281,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
@@ -347,7 +338,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -436,7 +427,7 @@ jobs:
     needs:
       - changes
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -504,7 +495,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
@@ -587,7 +578,7 @@ jobs:
       - changes
       - browser-artifacts
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -761,7 +752,7 @@ jobs:
       - browser-ui
       - browser-live
     if: ${{ !cancelled() }}
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -785,7 +776,7 @@ jobs:
       - contract
       - images
       - browser
-    runs-on: tuposoft-ci
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:

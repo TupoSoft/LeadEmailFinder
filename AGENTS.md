@@ -58,10 +58,7 @@
 - When opening the pull request for an ExecPlan, assign it to the requesting user (`gh pr create --assignee "@me"`, or `gh pr edit <number> --add-assignee @me` after the fact). Put its synced issue in the PR's Development section by including a closing keyword (`Closes #<issue-number>`) in the PR body, so the issue auto-closes on merge. The installed `gh` CLI (`gh --version`) may be old enough that `gh pr edit --body` itself fails with a `projectCards`/Projects-classic GraphQL error; `gh pr create` does not hit that code path, so set both flags on the initial `gh pr create` call rather than editing afterward. If a body edit is still needed later, use `gh api repos/<owner>/<repo>/pulls/<number> -X PATCH -f body="<text>"` instead.
 - Give the pull request the same title as the conventional-commit subject line of its commit (e.g. `fix(plans): enforce truthful ExecPlan metadata`), not a plain restatement of the ExecPlan title. Match the actual `type(scope):` prefix used in the commit message, not a generic guess.
 
-# Prose Validation
+# Prose Quality
 
-- After creating or materially editing English prose in Markdown documentation, run `corepack pnpm docs:lint -- <changed-files>`.
-- Fix actionable grammar and spelling findings, then rerun Harper until it passes.
-- Add legitimate project terminology to `.harper-dictionary.txt`; do not suppress genuine errors.
+- Proofread materially edited English documentation for grammar, spelling, and clarity.
 - Do not automatically rewrite code blocks, commands, identifiers, API field names, or quoted external text.
-- In the final response, state the exact Harper command and result. If Harper could not run, explain why.

@@ -171,7 +171,6 @@ Run from the repository root unless stated otherwise:
 - `PLAYWRIGHT_BROWSERS_PATH=/tmp/lef577-ui-playwright WEB_API_PROXY_TARGET=http://127.0.0.1:9 corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright test tests/e2e/billing-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts --workers=2 --output=/tmp/lef-shared-spacing-results`
 - After the hidden-content fix: `PLAYWRIGHT_BROWSERS_PATH=/tmp/lef577-ui-playwright WEB_API_PROXY_TARGET=http://127.0.0.1:9 corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright test tests/e2e/verification-billing-ui.spec.ts --grep 'billing spacing survives' --workers=2 --output=/tmp/lef-shared-spacing-hidden-results`
 - `corepack pnpm exec eslint scripts/frontend/audit-premium-ui.mjs scripts/frontend/audit-premium-ui.test.mjs`
-- `corepack pnpm docs:lint -- apps/web/AGENTS.md DESIGN.md UX-CONTRACT.md .agents/plans/frontend-spacing/README.md .agents/plans/frontend-spacing/01-apply-shared-content-spacing.md`
 - `git diff --check`
 
 Browser fixtures use synthetic API responses at the local preview, not live customer data. Inspect 1440-pixel and 320-pixel

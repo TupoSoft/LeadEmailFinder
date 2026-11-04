@@ -169,7 +169,6 @@ Run from the repository root after implementation. These are required commands, 
 corepack pnpm architecture:check
 corepack pnpm test -- src/libs/modules/payments/src/application/credit-pack-catalog.spec.ts src/libs/modules/payments/src/application/credit-purchase.service.spec.ts src/libs/modules/payments/src/application/payment-event.handler.spec.ts src/libs/modules/payments/src/application/payment-adjustment.handler.spec.ts src/libs/modules/payments/src/api/http/billing-credit-packs.controller.spec.ts src/libs/modules/payments/src/api/http/credit-purchase.controller.spec.ts src/libs/modules/payments/src/api/http/payment-webhook.controller.spec.ts src/libs/modules/payments/src/api/http/billing-http.integration.spec.ts src/libs/modules/payments/src/payments.module.spec.ts --runInBand
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/payments/README.md .agents/plans/dependency-inversion/01-decouple-payment-consumers.md
 ```
 
 The module test must exercise the real provider graph, not only inspect decorator metadata. Retain static checks

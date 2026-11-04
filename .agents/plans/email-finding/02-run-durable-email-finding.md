@@ -270,7 +270,6 @@ corepack pnpm test:verification-billing-postgres
 corepack pnpm test:credits-postgres
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- src/libs/modules/email-verification/README.md docs/privacy/email-verification-processing-contract.md .agents/plans/email-finding/02-run-durable-email-finding.md
 ```
 
 Real PostgreSQL tests cover constraints, permit consumption, concurrent cursor transitions, balance races, and crash

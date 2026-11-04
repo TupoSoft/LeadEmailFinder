@@ -2,6 +2,11 @@
 
 This ExecPlan is a living document maintained according to `.agents/PLANS.md`.
 
+Runner update (2026-11-04): LeadEmailFinder now selects GitHub-hosted Ubuntu 24.04 runners (`ubuntu-24.04`).
+Before implementation, rebase the remaining workflow, tooling, and benchmark requirements on that environment,
+including replacing the obsolete `tuposoft-pc-wsl` selection below. Preserve the dated ARC observations as historical
+evidence and collect a new hosted baseline before making cache-policy recommendations.
+
 ## Purpose / Big Picture
 
 Deliver one LeadEmailFinder pull request, `ci(cache): measure cache transfer and build costs`, that makes
@@ -135,7 +140,6 @@ corepack pnpm exec eslint scripts/ci/benchmark-cache.mjs scripts/ci/benchmark-ca
 corepack pnpm exec jest select-validation validate-workflow execplan-repository-fixture --runInBand --cacheDirectory=/tmp/lef-ci-performance-jest
 corepack pnpm test:ci-paths
 actionlint .github/workflows/benchmark-ci-cache.yml .github/workflows/validate.yml
-corepack pnpm docs:lint -- docs/development/ci-cache-benchmark.md .agents/plans/ci-performance
 git diff --check
 ```
 

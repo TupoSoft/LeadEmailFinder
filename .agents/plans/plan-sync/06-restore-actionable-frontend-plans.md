@@ -75,12 +75,11 @@ GitHub CLI. GitHub state remains generated from repository plans.
 - `frontend/01`, `frontend/02`, and `frontend/16` resolve to `Todo`; the other 15 frontend plans remain in Backlog.
 - The repository fixture rejects the original 18 malformed sections and accepts the corrected sections.
 - Completed legacy plans and assigned In Progress work retain their existing behavior.
-- Harper and focused tests pass; a read-only sync proposes only the intended metadata changes.
+- Focused tests pass; a read-only sync proposes only the intended metadata changes.
 
 ## Validation
 
 Run `corepack pnpm exec jest --runInBand scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts scripts/plans/sync.spec.ts`.
-Run `corepack pnpm docs:lint -- .agents/PLANS.md .agents/plans/frontend/[0-9]*.md .agents/plans/plan-sync/README.md .agents/plans/plan-sync/06-restore-actionable-frontend-plans.md`.
 Run `corepack pnpm exec eslint scripts/plans/execplan-repository-fixture.spec.ts`,
 `NODE_PATH=./node_modules/.pnpm/tsconfig-paths@4.2.0/node_modules PLANS_DRY_RUN=true corepack pnpm plans:sync`, and `git diff --check`.
 
@@ -100,7 +99,7 @@ changed. Tracking issue: #528, assigned to the requesting user and placed In Pro
 Validation on 2026-09-04:
 
 - The focused Jest command passed all 59 tests across three suites after normalization.
-- The Harper command above passed all 21 changed Markdown files. Required prose cleanup also corrected existing
+- The then-current Harper command passed all 21 changed Markdown files. Required prose cleanup also corrected existing
   heading capitalization, requirement-list punctuation, and road map spelling in `.agents/PLANS.md`.
 - Focused ESLint and `git diff --check` passed.
 - The read-only sync evaluated 128 plans, proposed zero creations and 19 updates, and left all unrelated plans

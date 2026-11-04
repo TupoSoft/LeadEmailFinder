@@ -124,7 +124,6 @@ corepack pnpm exec eslint scripts/ci/validate-workflow.spec.ts
 actionlint .github/workflows/validate.yml
 corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
 TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
-corepack pnpm docs:lint -- .agents/plans/web-test-stability/01-limit-ci-test-workers.md
 git diff --check
 ```
 

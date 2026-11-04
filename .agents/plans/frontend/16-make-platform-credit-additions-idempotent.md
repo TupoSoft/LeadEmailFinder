@@ -220,7 +220,6 @@ additive endpoint, including relevant SMTP development setup. Then run:
     corepack pnpm bruno:platform-credits
     TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/frontend/16-make-platform-credit-additions-idempotent.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md
     git diff --check
 
 Record before/after balances, status codes, account/grant row counts, exact nonzero PostgreSQL/Bruno counts, and skipped external gates

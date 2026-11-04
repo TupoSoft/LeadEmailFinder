@@ -194,7 +194,6 @@ corepack pnpm bruno:domain-verification-policies
 corepack pnpm bruno:async-verification
 corepack pnpm bruno:batch-verification
 node --test scripts/bruno/domain-verification-policies-runner.test.mjs
-corepack pnpm docs:lint -- .agents/plans/domain-verification-policy/02-manage-domain-policies.md src/libs/modules/email-verification/README.md bruno/domain-verification-policies/README.md
 ```
 
 The new launcher runs `bru run --env local` with temporary environment values and report redaction. Cover the

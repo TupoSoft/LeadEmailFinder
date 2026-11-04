@@ -251,7 +251,6 @@ corepack pnpm test:verification-billing-web
 corepack pnpm openapi:check
 corepack pnpm design:lint
 corepack pnpm ui:audit
-corepack pnpm docs:lint -- UX-CONTRACT.md .agents/plans/verification-billing/06-explain-verification-charges.md
 ```
 
 Add focused component cases beside billing and the delivered verification/batch features. Add a focused Playwright
@@ -266,7 +265,7 @@ evidence does not replace that local API/SMTP/ledger check.
 
 Bruno is not applicable to this UI-only implementation because the backend contracts remain unchanged. If implementation
 finds a missing HTTP behavior, update the owning backend plan and nearest collection rather than hiding the change
-inside this UI PR. Include any additionally edited Markdown files in the Harper invocation.
+inside this UI PR.
 
 ## Idempotence and Recovery
 
@@ -318,8 +317,7 @@ Validation recorded on 2026-09-16:
   retained failure is `verification-billing.spec.ts:168`, which expects two charged credits. Actual SMTP evidence
   was verified: fresh evidence had observation/expiry timestamps, cache reuse retained its observation timestamp,
   and the inconclusive result was `accepted_email` with `catchAll: true`.
-- Harper passed all five changed Markdown files. Include both prerequisite frontend plans and the owning batch
-  backend plan in the command in Validation after any further prose edits.
+- Harper passed all five changed Markdown files.
 - Browser plugin not available. The repository Playwright workflow used Chromium from
   `PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-577-playwright`; artifacts are outside the repository under `/tmp`.
 

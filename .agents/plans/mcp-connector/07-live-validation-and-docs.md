@@ -183,7 +183,6 @@ depends only on plan 03 — so each of those was a genuinely separate, previousl
   direct API call for the same credential would show.
 - The script's output contains no literal client secret or bearer token under any pass or fail path (verify by
   deliberately forcing a failure path during implementation and inspecting the output).
-- `corepack pnpm docs:lint -- apps/mcp-server/README.md` passes.
 - A person given only `apps/mcp-server/README.md`'s Customer Setup section (no other context) can configure a real
   MCP client and successfully call `check_credit_balance` — validate this literally, not just by inspection, by
   having someone (or a fresh agent session with no prior context on this feature) follow only that section.
@@ -193,7 +192,6 @@ depends only on plan 03 — so each of those was a genuinely separate, previousl
 
 ```sh
 corepack pnpm test:mcp-server-live
-corepack pnpm docs:lint -- apps/mcp-server/README.md .agents/plans/mcp-connector/07-live-validation-and-docs.md README.md
 ```
 
 Manual: run through the README's Customer Setup section from scratch (a clean checkout, no prior state) end to

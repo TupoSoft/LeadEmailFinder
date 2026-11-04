@@ -136,7 +136,6 @@ corepack pnpm architecture:check
 corepack pnpm typecheck
 node --test scripts/bruno/async-verification-runner.test.mjs
 corepack pnpm bruno:async-verification
-corepack pnpm docs:lint -- .agents/plans/verification-billing-hardening/04-bound-async-execution-dispatch.md src/libs/modules/email-verification/README.md bruno/async-verification/README.md
 ```
 
 For HTTP timing assertions, inject a short deterministic budget and allow scheduling tolerance; do not encode

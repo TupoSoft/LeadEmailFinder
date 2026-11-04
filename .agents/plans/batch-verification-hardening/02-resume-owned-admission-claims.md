@@ -182,7 +182,6 @@ node --test scripts/bruno/batch-verification-runner.test.mjs
 corepack pnpm bruno:batch-verification
 corepack pnpm architecture:check
 corepack pnpm typecheck
-corepack pnpm docs:lint -- .agents/plans/batch-verification-hardening/02-resume-owned-admission-claims.md src/libs/modules/email-verification/README.md bruno/batch-verification/README.md
 ```
 
 Update the registered collection totals in `scripts/bruno/run-collection.mjs` and the fake workflow in

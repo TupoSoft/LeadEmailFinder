@@ -263,7 +263,6 @@ Run affected consumer and repository checks:
     corepack pnpm lint
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test:ci
     corepack pnpm build
-    corepack pnpm docs:lint -- .agents/plans/module-architecture/04-layer-credits-behind-persistence-ports.md src/libs/modules/credits/README.md src/libs/modules/identity/README.md
     git diff --check
 
 No Bruno request change is expected, but this refactor changes Nest/provider integration used by three workflows.

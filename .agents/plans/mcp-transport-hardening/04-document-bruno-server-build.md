@@ -133,8 +133,7 @@ has landed, use its existing disposable fixture credentials without changing the
   Its request count may include changes already delivered by plan 03.
 - The instructions retain consistent port configuration, existing credential guidance, and a clear
   shutdown step. Runtime code, package scripts, collection requests, and unrelated README sections do not change.
-- Validation preserves build output and running processes outside the disposable fixture. Harper and
-  the focused ExecPlan repository check pass.
+- Validation preserves build output and running processes outside the disposable fixture. The focused ExecPlan repository check passes.
 
 ## Validation
 
@@ -188,11 +187,10 @@ From the implementation checkout, run the focused static checks:
 
 ```sh
 corepack pnpm exec jest --runInBand scripts/plans/execplan-repository-fixture.spec.ts
-corepack pnpm docs:lint -- bruno/mcp-request-routing/README.md .agents/plans/mcp-transport-hardening/04-document-bruno-server-build.md
 git diff --check
 ```
 
-Fix actionable Harper findings and rerun the command. No new unit tests are needed for this documentation
+No new unit tests are needed for this documentation
 change. Bruno coverage changes are not applicable because no HTTP behavior changes; executing the
 existing collection verifies the documented setup. Distinguish that runtime result from static checks.
 

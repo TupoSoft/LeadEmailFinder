@@ -121,7 +121,6 @@ There is no new endpoint, service, package, persistence type, configuration valu
 From the repository root, run these commands after creating the packet:
 
     TMPDIR=/tmp TMP=/tmp TEMP=/tmp corepack pnpm test -- scripts/plans/execplan.spec.ts scripts/plans/execplan-repository-fixture.spec.ts --runInBand
-    corepack pnpm docs:lint -- docs/privacy/customer-processing-decision-inputs.md .agents/plans/privacy-compliance/35-prepare-customer-processing-decisions.md
     corepack pnpm exec prettier --check docs/privacy/customer-processing-decision-inputs.md .agents/plans/privacy-compliance/35-prepare-customer-processing-decisions.md
     git diff --check
     git diff --name-only
