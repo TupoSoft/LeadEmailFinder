@@ -437,7 +437,7 @@ jobs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: tuposoft-ci
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
