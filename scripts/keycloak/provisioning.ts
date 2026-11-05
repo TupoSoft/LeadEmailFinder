@@ -16,7 +16,6 @@ export const BFF_CLIENT_ID = 'lef-web-bff'
 // own auto-generated per-realm client secret is not known until provisioning runs against a live Keycloak
 // instance. Setting an explicit secret on the client sidesteps that chicken-and-egg problem entirely.
 export const BFF_CLIENT_DEV_SECRET = 'lef-web-bff-development-only-client-secret'
-export const SERVICE_CLIENT_ID = 'lef-development-service'
 export const ORG_ADMIN_CLIENT_ID = 'lef-org-admin-service'
 // Same fixed-dev-secret trick as BFF_CLIENT_DEV_SECRET: the running api service needs
 // KEYCLOAK_ORG_ADMIN_CLIENT_SECRET to call Keycloak's Admin API, but Keycloak's own auto-generated
@@ -40,13 +39,6 @@ export interface ProvisioningOptions {
     bffPostLogoutRedirectUris: string[]
 }
 
-export interface ServiceClientCredentials {
-    issuer: string
-    clientId: string
-    clientSecret: string
-    audience: string
-}
-
 export interface BffClientCredentials {
     issuer: string
     clientId: string
@@ -62,7 +54,6 @@ export interface OrgAdminClientCredentials {
 }
 
 export interface ProvisioningResult {
-    service: ServiceClientCredentials
     bff: BffClientCredentials
     orgAdmin: OrgAdminClientCredentials
 }
@@ -107,20 +98,6 @@ export function createBffClient(options: ProvisioningOptions): ClientRepresentat
             'pkce.code.challenge.method': 'S256',
             'post.logout.redirect.uris': options.bffPostLogoutRedirectUris.join('##'),
         },
-    }
-}
-
-export function createServiceClient(): ClientRepresentation {
-    return {
-        clientId: SERVICE_CLIENT_ID,
-        name: 'Lead Email Finder development service',
-        enabled: true,
-        protocol: 'openid-connect',
-        publicClient: false,
-        standardFlowEnabled: false,
-        implicitFlowEnabled: false,
-        directAccessGrantsEnabled: false,
-        serviceAccountsEnabled: true,
     }
 }
 
@@ -169,22 +146,12 @@ export class KeycloakProvisioner {
         await this.ensureClient(this.audienceClient())
         const audienceScope = await this.ensureClientScope(API_AUDIENCE)
         const bffClient = await this.ensureClient(createBffClient(this.options))
-        const serviceClient = await this.ensureClient(createServiceClient())
         const orgAdminClient = await this.ensureClient(createOrgAdminClient())
         await this.assignDefaultScope(bffClient.id as string, audienceScope.id as string)
-        await this.assignDefaultScope(serviceClient.id as string, audienceScope.id as string)
         await this.ensurePrivilegedBrowserFlow()
         await this.ensureOrgAdminServiceAccountRoles(orgAdminClient.id as string)
 
         const issuer = `${this.baseUrl}/realms/${REALM}`
-
-        const serviceSecret = await this.api.request<{ value: string }>(
-            'GET',
-            `/admin/realms/${REALM}/clients/${serviceClient.id}/client-secret`,
-        )
-        if (!serviceSecret.value) {
-            throw new Error('Keycloak did not return a service client secret')
-        }
 
         const bffSecret = await this.api.request<{ value: string }>(
             'GET',
@@ -203,12 +170,6 @@ export class KeycloakProvisioner {
         }
 
         return {
-            service: {
-                issuer,
-                clientId: SERVICE_CLIENT_ID,
-                clientSecret: serviceSecret.value,
-                audience: API_AUDIENCE,
-            },
             bff: {
                 issuer,
                 clientId: BFF_CLIENT_ID,

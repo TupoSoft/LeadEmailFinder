@@ -3,7 +3,7 @@
 Deploys the plan-11 3proxy image as one Docker Swarm service per declared proxy node, then reconciles
 healthy listeners into the application's proxy registry. See
 `.agents/plans/proxy-fleet/13-swarm-fleet-reconciliation.md` for the full ExecPlan. This is the last
-piece of the proxy-fleet roadmap: plan 11 built the image, plan 12 provisions the hosts, and this plan
+piece of the proxy-fleet road map: plan 11 built the image, plan 12 provisions the hosts, and this plan
 deploys and registers them.
 
 The actual renderer, deployment wrapper, and reconcile engine live under `scripts/proxy-fleet-swarm/`
@@ -25,11 +25,11 @@ README.
   Collecting these onto the machine running the renderer/reconciler (`scp`, a configuration-management
   pull, or equivalent) is the operator's responsibility, the same way plan 12 leaves VM/IP provisioning
   to the operator. Place each node's file at `<credentials-dir>/<proxy_node_id>.json`.
-- **M2M credentials**: a JSON file shaped `{"issuer", "clientId", "clientSecret"}` for a service client
-  holding the `platform:admin` permission (see `src/libs/modules/service-client-management`). The
-  original ExecPlan text called this an "admin key file"; the API authentication has since moved from
-  static API keys to OIDC (`.agents/plans/auth/09-remove-api-key-authentication.md`), so the reconciler
-  exchanges these credentials for a bearer token itself instead of reading a static key.
+- **API key**: a private JSON file containing `{ "apiKey": "..." }` for an active application credential
+  with `platform:admin`. Use the checkout-owned `.dev/auth/platform-api-key.json` fixture during disposable
+  development. Keep the file at mode `0600` or stricter. The reconciler reads it afresh for each API request and
+  sends the key directly as Bearer authentication; it performs no OAuth exchange or authentication caching.
+  Replacing the file takes effect on the next request, and server-side rotation or revocation applies immediately.
 - **SMTP probe**: an endpoint the fleet listeners are allowed to reach (its port must be one of
   `proxy_fleet_allowed_destination_ports`) that reports the peer address of its most recent connection.
   `pnpm proxy-fleet:smtp-peer-probe` starts a disposable one; run it somewhere reachable from every
@@ -55,7 +55,7 @@ pnpm proxy-fleet:deploy
 PROXY_FLEET_ANSIBLE_INVENTORY=deploy/proxy-fleet/ansible/inventory/<file>.yml \
 PROXY_FLEET_CREDENTIALS_DIR=<path to collected per-node credential files> \
 PROXY_FLEET_API_BASE_URL=https://<api host> \
-PROXY_FLEET_M2M_CREDENTIALS_FILE=<path to {issuer,clientId,clientSecret} file> \
+PROXY_FLEET_API_KEY_FILE=<path to private apiKey JSON file> \
 PROXY_FLEET_SMTP_PROBE_HOST=<probe WireGuard address> \
 PROXY_FLEET_SMTP_PROBE_STATUS_URL=http://<probe host>:9000/last-peer \
   pnpm proxy-fleet:reconcile

@@ -1,20 +1,15 @@
-import { chmod, readFile, writeFile } from 'node:fs/promises'
+import { chmod, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { DataSource } from 'typeorm'
 import { bootstrapPlatformOperator, PLATFORM_OPERATOR_EMAIL, PLATFORM_OPERATOR_PASSWORD } from './platform-operator'
-import { ServiceClientCredentials } from './bootstrap-service-credential'
 import { KeycloakAdminApi } from './keycloak-admin-api'
 import { readPreviousFixture } from './browser-seed-files'
 import { loadOwnedBrowserSeedStack } from './owned-browser-seed-stack'
 
 async function main(): Promise<void> {
     const stack = loadOwnedBrowserSeedStack()
-    const serviceClientFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
-    const { issuer } = JSON.parse(await readFile(serviceClientFile, 'utf8')) as ServiceClientCredentials
-
     const expectedIssuer = `${stack.keycloakUrl}/realms/lead-email-finder`
-    if (issuer !== expectedIssuer)
-        throw new Error('Seed credentials do not match the checkout-owned development issuer.')
+    const issuer = expectedIssuer
     const api = new KeycloakAdminApi({
         baseUrl: stack.keycloakUrl,
         username: stack.keycloakAdminUsername,

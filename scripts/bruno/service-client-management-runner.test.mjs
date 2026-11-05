@@ -10,30 +10,45 @@ import { cliArguments, collectionEnvironment, executeCollection, registeredColle
 
 const root = resolve(import.meta.dirname, '../..')
 
-test('service-client launcher owns six rejection requests, private reports, and internally loaded organization metadata', async () => {
+test('service-client launcher owns management rejections and key validation requests, private reports, and internally loaded organization metadata', async () => {
     const directory = resolve(root, 'bruno/service-client-management')
     const files = (await readdir(directory)).filter(file => /^\d.+\.yml$/.test(file)).sort()
     const requests = await Promise.all(files.map(async file => parse(await readFile(resolve(directory, file), 'utf8'))))
     const registered = registeredCollection('service-client-management')
-    assert.equal(registered.requests, 6)
-    assert.equal(registered.tests, 6)
+    assert.equal(registered.requests, 10)
+    assert.equal(registered.tests, 10)
     assert.equal(registered.countOnly, true)
     assert.deepEqual(
         requests.map(request => request.info.seq),
-        [1, 2, 3, 4, 5, 6],
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     )
     assert.equal(
-        requests.every(request => !/to\.equal\(20\d\)/.test(request.runtime.scripts[0].code)),
+        requests.slice(0, 6).every(request => !/to\.equal\(20\d\)/.test(request.runtime.scripts[0].code)),
         true,
     )
-    const metadata = { apiUrl: 'http://localhost:53000', keycloakUrl: 'http://localhost:58080' }
+    const metadata = {
+        checkoutRoot: root,
+        composeProject: 'lef-test',
+        apiUrl: 'http://localhost:53000',
+        keycloakUrl: 'http://localhost:58080',
+    }
     const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    const secret = randomUUID()
+    const secret = 'lef_' + randomBytes(32).toString('base64url')
     const organizationId = randomUUID()
     const environment = collectionEnvironment(
         'service-client-management',
         metadata,
-        { issuer, clientId: 'local-service', clientSecret: secret },
+        {
+            version: 1,
+            kind: 'platform',
+            checkoutRoot: root,
+            composeProject: 'lef-test',
+            issuer: 'urn:lead-email-finder:auth',
+            apiKey: secret,
+            keyPrefix: secret.slice(0, 12),
+            credentialId: randomUUID(),
+            organizationId: organizationId,
+        },
         { organizationId, keycloakClientId: 'local-service', issuers: [issuer] },
     )
     assert.equal(environment.SERVICE_CLIENT_ORGANIZATION_ID, organizationId)
@@ -67,12 +82,17 @@ test('pinned CLI executes each rejection and fails closed without retaining secr
             response.end(JSON.stringify({ access_token: token }))
             return
         }
+        if (pathname === '/v1/auth/api-key') {
+            response.statusCode = request.headers.authorization === `Bearer ${secret}` ? 204 : 401
+            response.end()
+            return
+        }
         seen.push([request.method, pathname, Boolean(request.headers.authorization)])
         if (!pathname.startsWith(`/v1/organizations/${organizationId}/service-clients`)) response.statusCode = 404
         else response.statusCode = request.headers.authorization ? 403 : 401
         if (failRejection) {
             response.statusCode = 201
-            response.end(JSON.stringify({ clientSecret: secret }))
+            response.end(JSON.stringify({ apiKey: secret }))
         } else response.end('{}')
     })
     await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
@@ -80,8 +100,7 @@ test('pinned CLI executes each rejection and fails closed without retaining secr
     const environment = {
         BRUNO_API_URL: baseUrl,
         OIDC_ISSUER_URL: baseUrl,
-        KEYCLOAK_SERVICE_CLIENT_ID: 'local-service',
-        KEYCLOAK_SERVICE_CLIENT_SECRET: secret,
+        PLATFORM_API_KEY: secret,
         SERVICE_CLIENT_ORGANIZATION_ID: organizationId,
     }
     const directory = await mkdtemp(resolve(tmpdir(), 'lef-service-client-cli-'))
@@ -89,8 +108,8 @@ test('pinned CLI executes each rejection and fails closed without retaining secr
     process.env.TMPDIR = directory
     try {
         assert.deepEqual(await executeCollection('service-client-management', environment, root), {
-            requests: 6,
-            tests: 6,
+            requests: 10,
+            tests: 10,
         })
         assert.deepEqual(
             seen.map(value => [value[0], value[2]]),

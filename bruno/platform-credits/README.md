@@ -30,22 +30,21 @@ corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
 corepack pnpm bruno:platform-credits
 ```
 
-The platform service client and customer fixture must exist in the ignored `.dev/keycloak/service-client.json` and
-`.dev/keycloak/customer-fixture.json` files created by development provisioning. The launcher respects
+The platform and customer API keys must exist in the ignored `.dev/auth/platform-api-key.json` and
+`.dev/auth/customer-api-key.json` files created by development provisioning. Both files require mode 0600. The launcher respects
 `COMPOSE_PROJECT_NAME` through the shared discovery contract. It never starts or resets a stack and rejects
 containers belonging to another checkout before any fixture mutation.
 
-The launcher bootstraps the platform credential internally, obtains platform and customer tokens, and creates six
+The launcher bootstraps the platform credential internally, loads platform and customer API keys, and creates six
 unique synthetic organizations without credit accounts. Each logical grant gets a UUID; equivalent and conflicting
-replays reuse the original key. Tokens travel through child-process environment variables. The launcher withholds
+replays reuse the original key. Keys travel through child-process environment variables. The launcher withholds
 raw CLI output, omits headers and bodies from temporary reports, and prints only counts and synthetic fixture
 balances. It checks account counts, grant counts, reserved amounts, and exact balances directly in PostgreSQL, then
 deletes only its synthetic organizations and removes the temporary report directory, including after a failed
 collection run. The fifth organization isolates absolute-set tests from the additive replay fixtures and finishes
-at zero without grants. The sixth organization is funded through the real `POST /credits/:id` endpoint and then
-given an active hold through the real `CreditReservationService` — a short-lived Nest application context built
-from `IdentityModule`, never raw SQL — so its `reserved` balance reflects an actual application-level reservation
-rather than a fixture shortcut.
+at zero without grants. The sixth organization is funded through the real `POST /credits/:id` endpoint. A short-lived Nest application
+context built from `IdentityModule` creates an active reservation through `CreditReservationService`. The `reserved` balance
+therefore reflects an application reservation.
 
 No migration or schema reset is required. Tests use the current synchronized development schema. If a process is
 forcibly terminated, inspect organizations named `Bruno platform credit fixture` in this disposable database before

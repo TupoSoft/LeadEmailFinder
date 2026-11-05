@@ -1,13 +1,15 @@
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
+import { readApiKeyFixture } from '../better-auth/api-key-files.mjs'
 import { inspectDevelopmentService, loadDevelopmentStack } from '../testing/development-stack.mjs'
 import { baseFailureDiagnostic, brunoFailure, failureDiagnostic } from './failure-diagnostic.mjs'
 
 const customerSchema = z.object({
     issuer: z.string().url(),
     organizationId: z.string().uuid(),
-    keycloakClientId: z.literal('lef-svc-dev-fixture'),
+    credentialId: z.string().uuid(),
+    keyPrefix: z.string().length(12),
     issuers: z.array(z.string().url()),
 })
 
@@ -34,64 +36,6 @@ async function jsonResponse(response) {
         })
     }
     return response.json()
-}
-
-export async function customerClientSecret(metadata, clientId, fetchImpl = fetch, { orgAdmin } = {}) {
-    const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    if (
-        orgAdmin !== undefined &&
-        (!orgAdmin ||
-            orgAdmin.issuer !== issuer ||
-            orgAdmin.clientId !== 'lef-org-admin-service' ||
-            typeof orgAdmin.clientSecret !== 'string' ||
-            !orgAdmin.clientSecret ||
-            clientId !== 'lef-svc-dev-fixture')
-    )
-        throw new Error('Batch verification requires matching organization administration credentials')
-    const tokenIssuer = orgAdmin ? issuer : `${metadata.keycloakUrl}/realms/master`
-    const credentials = orgAdmin
-        ? { grant_type: 'client_credentials', client_id: orgAdmin.clientId, client_secret: orgAdmin.clientSecret }
-        : {
-              grant_type: 'password',
-              client_id: 'admin-cli',
-              username: metadata.keycloakAdminUsername,
-              password: metadata.keycloakAdminPassword,
-          }
-    const { access_token: token } = await jsonResponse(
-        await fetchImpl(`${tokenIssuer}/protocol/openid-connect/token`, {
-            method: 'POST',
-            body: new URLSearchParams(credentials),
-            signal: AbortSignal.timeout(15_000),
-        }),
-    )
-    if (typeof token !== 'string' || !token) throw new Error('Async verification fixture admin token is missing')
-    if (orgAdmin) {
-        let claims
-        try {
-            claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
-        } catch {
-            throw new Error('Organization administration token identity could not be confirmed')
-        }
-        if (claims?.iss !== issuer || claims.azp !== orgAdmin.clientId)
-            throw new Error('Organization administration token identity did not match')
-    }
-    const headers = { authorization: `Bearer ${token}` }
-    const clients = await jsonResponse(
-        await fetchImpl(
-            `${metadata.keycloakUrl}/admin/realms/lead-email-finder/clients?clientId=${encodeURIComponent(clientId)}`,
-            { headers, signal: AbortSignal.timeout(15_000) },
-        ),
-    )
-    const matches = Array.isArray(clients) ? clients.filter(client => client.clientId === clientId) : []
-    if (matches.length !== 1 || typeof matches[0].id !== 'string') throw new Error('Seeded customer client is missing')
-    const { value } = await jsonResponse(
-        await fetchImpl(
-            `${metadata.keycloakUrl}/admin/realms/lead-email-finder/clients/${encodeURIComponent(matches[0].id)}/client-secret`,
-            { headers, signal: AbortSignal.timeout(15_000) },
-        ),
-    )
-    if (typeof value !== 'string' || !value) throw new Error('Seeded customer client secret is missing')
-    return value
 }
 
 export async function withRestoredBalance(creditRequest, execute) {
@@ -135,53 +79,32 @@ export async function withRestoredBalance(creditRequest, execute) {
 
 // Ownership is verified before reading seed material or changing credits. The exclusive lock prevents the
 // Bruno and live browser suites from changing the seeded customer's balance concurrently.
-export async function withAsyncVerificationFixture(checkoutRoot, execute, { useOrganizationAdmin = false } = {}) {
+export async function withAsyncVerificationFixture(checkoutRoot, execute) {
     const metadata = loadDevelopmentStack(checkoutRoot)
     for (const service of ['smtp-evidence', 'plaintext-mailpit', 'coredns', 'smtp-dev-proxy']) {
         inspectDevelopmentService(checkoutRoot, metadata, service)
     }
     const readMetadata = async name => JSON.parse(await readFile(resolve(checkoutRoot, '.dev/keycloak', name), 'utf8'))
-    const platform = await readMetadata('service-client.json')
-    const credential = await readMetadata('service-credential.json')
+    const platform = await readApiKeyFixture(checkoutRoot, metadata, 'platform')
+    const customerKey = await readApiKeyFixture(checkoutRoot, metadata, 'customer')
     const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-    if (
-        platform.issuer !== issuer ||
-        credential.keycloakClientId !== platform.clientId ||
-        !credential.issuers?.includes(issuer) ||
-        typeof platform.clientSecret !== 'string' ||
-        !platform.clientSecret
-    ) {
-        throw new Error('Async verification requires matching platform credential metadata')
-    }
     const customer = validateCustomerFixture(
         await readMetadata('customer-fixture.json'),
         issuer,
-        credential.organizationId,
+        platform.organizationId,
     )
-    const secret = await customerClientSecret(metadata, customer.keycloakClientId, fetch, {
-        ...(useOrganizationAdmin ? { orgAdmin: await readMetadata('org-admin-client.json') } : {}),
-    })
+    if (customer.credentialId !== customerKey.credentialId || customer.organizationId !== customerKey.organizationId) {
+        throw new Error('Customer API-key fixture does not match customer seed metadata')
+    }
     const lock = resolve(checkoutRoot, '.dev/async-verification.lock')
     await mkdir(lock, { mode: 0o700 })
     try {
         const creditRequest = async (method, amount) => {
             inspectDevelopmentService(checkoutRoot, metadata, 'api')
-            const { access_token: token } = await jsonResponse(
-                await fetch(`${issuer}/protocol/openid-connect/token`, {
-                    method: 'POST',
-                    body: new URLSearchParams({
-                        grant_type: 'client_credentials',
-                        client_id: platform.clientId,
-                        client_secret: platform.clientSecret,
-                    }),
-                    signal: AbortSignal.timeout(15_000),
-                }),
-            )
-            if (typeof token !== 'string' || !token) throw new Error('Fixture platform token is missing')
             return jsonResponse(
                 await fetch(`${metadata.apiUrl}/credits/${customer.organizationId}`, {
                     method,
-                    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+                    headers: { authorization: `Bearer ${platform.apiKey}`, 'content-type': 'application/json' },
                     ...(method === 'PUT' ? { body: JSON.stringify({ amount }) } : {}),
                     signal: AbortSignal.timeout(15_000),
                 }),
@@ -193,8 +116,7 @@ export async function withAsyncVerificationFixture(checkoutRoot, execute, { useO
                 organizationId: customer.organizationId,
                 environment: {
                     CUSTOMER_ORGANIZATION_ID: customer.organizationId,
-                    CUSTOMER_SERVICE_CLIENT_ID: customer.keycloakClientId,
-                    CUSTOMER_SERVICE_CLIENT_SECRET: secret,
+                    CUSTOMER_API_KEY: customerKey.apiKey,
                 },
                 setBalance,
             }),

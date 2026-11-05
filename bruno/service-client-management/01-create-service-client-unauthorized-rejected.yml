@@ -21,5 +21,6 @@ runtime:
         test('rejects a missing credential', function() {
           expect(res.status).to.equal(401);
           expect(res.headers['cache-control']).to.equal('no-store');
-          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'clientSecret')).to.equal(false);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'apiKey')).to.equal(false);
+          expect(Object.prototype.hasOwnProperty.call(res.body || {}, 'keyHash')).to.equal(false);
         });

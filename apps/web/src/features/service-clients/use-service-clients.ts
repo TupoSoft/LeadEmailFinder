@@ -18,11 +18,11 @@ import { serviceClientsCopy as copy } from './service-clients-copy'
 type OperationKind = 'create' | 'rotate' | 'disable' | 'delete'
 interface OperationState {
     pending: OperationKind | 'copy' | null
-    issuedClientId: string | null
+    issuedKeyPrefix: string | null
     unknown: 'create' | 'rotate' | null
     notice: string
 }
-const emptyState: OperationState = { pending: null, issuedClientId: null, unknown: null, notice: '' }
+const emptyState: OperationState = { pending: null, issuedKeyPrefix: null, unknown: null, notice: '' }
 
 function failure(error: unknown, kind: OperationKind): Pick<OperationState, 'notice' | 'unknown'> {
     if (error instanceof ApiError) {
@@ -92,10 +92,10 @@ export function useServiceClients(organizationId: string) {
             if (!current()) return
             // Direct generated requests never enter MutationCache, including their variables and errors.
             // The one-time value lives only in this ref and the mounted dialog's uncontrolled input.
-            secret.current = result?.clientSecret ?? null
+            secret.current = result?.apiKey ?? null
             setOperation({
                 ...emptyState,
-                issuedClientId: result?.clientId ?? null,
+                issuedKeyPrefix: result?.keyPrefix ?? null,
                 unknown: previousUnknown,
                 notice: kind === 'disable' ? copy.disabled : kind === 'delete' ? copy.deleted : '',
             })
@@ -114,7 +114,7 @@ export function useServiceClients(organizationId: string) {
     function dismiss() {
         const pending = operation.pending
         const unknown = pending === 'create' || pending === 'rotate' ? pending : operation.unknown
-        const hadSecret = operation.issuedClientId !== null
+        const hadSecret = operation.issuedKeyPrefix !== null
         clear()
         setOperation({ ...emptyState, unknown, notice: hadSecret ? copy.closed : '' })
         if (pending && pending !== 'copy') void clients.refetch()
@@ -138,17 +138,14 @@ export function useServiceClients(organizationId: string) {
     }
 
     function download() {
-        if (!secret.current || !operation.issuedClientId || lifetime.current.busy) return
+        if (!secret.current || !operation.issuedKeyPrefix || lifetime.current.busy) return
         let anchor: HTMLAnchorElement | undefined
         try {
-            const blob = new Blob(
-                [JSON.stringify({ clientId: operation.issuedClientId, clientSecret: secret.current })],
-                { type: 'application/json' },
-            )
+            const blob = new Blob([JSON.stringify({ apiKey: secret.current })], { type: 'application/json' })
             objectUrl.current = URL.createObjectURL(blob)
             anchor = document.createElement('a')
             anchor.href = objectUrl.current
-            anchor.download = 'service-client-credentials.json'
+            anchor.download = 'api-key.json'
             document.body.append(anchor)
             anchor.click()
             setOperation(value => ({ ...value, notice: copy.downloaded }))

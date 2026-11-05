@@ -2,7 +2,5 @@ name: local
 variables:
   - name: baseUrl
     value: '{{process.env.MCP_AUTH_BASE_URL}}'
-  - name: mcpAuthClientId
-    value: '{{process.env.MCP_AUTH_CLIENT_ID}}'
-  - name: mcpAuthClientSecret
-    value: '{{process.env.MCP_AUTH_CLIENT_SECRET}}'
+  - name: mcpAuthApiKey
+    value: '{{process.env.MCP_AUTH_API_KEY}}'

@@ -35,7 +35,7 @@ function toRecord(credential: ServiceCredential): ServiceCredentialDetailRecord 
         organizationId: credential.organizationId,
         issuer: credential.issuer,
         subject: credential.subject,
-        keycloakClientId: credential.keycloakClientId,
+        keyPrefix: credential.keyPrefix,
         description: credential.description,
         permissions: [...credential.permissions],
         status: credential.status,

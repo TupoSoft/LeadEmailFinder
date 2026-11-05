@@ -1,10 +1,6 @@
-import { ExtractedCredential } from './credential-authenticator'
+import { CredentialRejectedError, ExtractedCredential } from './credential-authenticator'
 
 export const BFF_SESSION_COOKIE_NAME = 'lef_session'
-
-export function isJwtShapedToken(token: string): boolean {
-    return token.split('.').length === 3
-}
 
 function parseCookieHeader(header: string | undefined): Record<string, string> {
     if (!header) {
@@ -35,11 +31,16 @@ function parseCookieHeader(header: string | undefined): Record<string, string> {
 
 export class CredentialExtractor {
     extract(headers: Record<string, string | string[] | undefined>): ExtractedCredential | undefined {
-        const authorization = this.firstValue(headers['authorization'])
-        const bearerToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined
-
-        if (bearerToken) {
-            return { scheme: 'bearer', token: bearerToken }
+        const authorization = headers['authorization']
+        if (authorization !== undefined) {
+            if (typeof authorization !== 'string') {
+                throw new CredentialRejectedError('Authorization must occur exactly once')
+            }
+            const bearer = /^Bearer ([^\s,]+)$/.exec(authorization)
+            if (!bearer) {
+                throw new CredentialRejectedError('Authorization is malformed')
+            }
+            return { scheme: 'bearer', token: bearer[1] }
         }
 
         const sessionId = parseCookieHeader(this.firstValue(headers['cookie']))[BFF_SESSION_COOKIE_NAME]

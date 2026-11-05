@@ -43,11 +43,9 @@ export class ServiceClientResponseDto {
     @Expose()
     id: string
 
-    // The literal Keycloak clientId string. `subject` (the service-account user UUID) and `issuer` are
-    // internal identifiers with no product meaning to the caller and are never exposed here.
-    @ApiProperty({ type: String })
+    @ApiProperty({ type: String, minLength: 12, maxLength: 12 })
     @Expose()
-    clientId: string
+    keyPrefix: string
 
     @ApiProperty({ type: String, nullable: true })
     @Expose()
@@ -77,5 +75,5 @@ export class ServiceClientSecretResponseDto extends ServiceClientResponseDto {
         description: 'Returned only by this create or rotate response. Cannot be retrieved later.',
     })
     @Expose()
-    clientSecret: string
+    apiKey: string
 }

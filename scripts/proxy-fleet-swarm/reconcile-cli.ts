@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { parseFleetInventory } from './inventory'
 import { verifyListenerEgress } from './listener-health-check'
-import { OidcClientCredentialsTokenProvider, readM2mCredentialsFile } from './m2m-token-provider'
+import { readApiKeyFile } from './api-key-file'
 import { HttpProxyRegistryAdmin } from './proxy-registry-admin'
 import { desiredListenersFrom, reconcile } from './reconcile'
 
@@ -20,12 +20,14 @@ async function main(): Promise<void> {
     const ansibleInventoryPath = requireEnv('PROXY_FLEET_ANSIBLE_INVENTORY')
     const credentialsDir = requireEnv('PROXY_FLEET_CREDENTIALS_DIR')
     const apiBaseUrl = requireEnv('PROXY_FLEET_API_BASE_URL')
-    const m2mCredentialsFile = requireEnv('PROXY_FLEET_M2M_CREDENTIALS_FILE')
+    const apiKeyFile = requireEnv('PROXY_FLEET_API_KEY_FILE')
     const probeHost = requireEnv('PROXY_FLEET_SMTP_PROBE_HOST')
     const probePort = Number(process.env.PROXY_FLEET_SMTP_PROBE_PORT ?? 2525)
     const probeStatusUrl = requireEnv('PROXY_FLEET_SMTP_PROBE_STATUS_URL')
 
-    const { stdout } = await run('ansible-inventory', ['-i', ansibleInventoryPath, '--list'], { maxBuffer: 32 * 1024 * 1024 })
+    const { stdout } = await run('ansible-inventory', ['-i', ansibleInventoryPath, '--list'], {
+        maxBuffer: 32 * 1024 * 1024,
+    })
     const inventory = parseFleetInventory(JSON.parse(stdout))
 
     const credentialsByNode = new Map<string, Record<string, { user: string; pass: string }>>()
@@ -35,8 +37,10 @@ async function main(): Promise<void> {
     }
 
     const desired = desiredListenersFrom(inventory, credentialsByNode)
-    const tokenProvider = new OidcClientCredentialsTokenProvider(await readM2mCredentialsFile(m2mCredentialsFile))
-    const registry = new HttpProxyRegistryAdmin({ baseUrl: apiBaseUrl, getBearerToken: () => tokenProvider.getToken() })
+    const registry = new HttpProxyRegistryAdmin({
+        baseUrl: apiBaseUrl,
+        getBearerToken: () => readApiKeyFile(apiKeyFile),
+    })
 
     const summary = await reconcile(desired, {
         registry,

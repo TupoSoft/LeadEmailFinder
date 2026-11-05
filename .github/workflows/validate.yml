@@ -428,7 +428,7 @@ jobs:
       - changes
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       DISCOVERY_RESULT: ${{ needs.changes.result }}
       VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}

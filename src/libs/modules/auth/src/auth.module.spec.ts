@@ -2,13 +2,12 @@ import { MODULE_METADATA } from '@nestjs/common/constants'
 import { ACTIVE_SERVICE_CREDENTIAL_READER } from '@tuposoft/lead-email-finder/modules/identity'
 import { AuthModule } from './auth.module'
 import { CredentialExtractor } from './application/credential-extractor'
-import { OidcCredentialAuthenticator } from './application/oidc-credential-authenticator'
+import { ApiKeyCredentialAuthenticator } from './application/api-key-credential-authenticator'
 import { RolePermissionPolicy } from './application/role-permission-policy.service'
 import { SERVICE_CLIENT_GRANT_POLICY } from './application/service-client-grant-policy'
-import { ServiceCredentialResolver } from './application/service-credential-resolver.service'
 
 describe('AuthModule', () => {
-    it('provides the OIDC authenticator chain via explicit factories', () => {
+    it('provides the API-key authenticator chain via explicit factories', () => {
         const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, AuthModule) as Array<{
             provide?: unknown
             inject?: unknown[]
@@ -23,10 +22,9 @@ describe('AuthModule', () => {
                     useFactory: expect.any(Function),
                 }),
                 expect.objectContaining({
-                    provide: ServiceCredentialResolver,
+                    provide: ApiKeyCredentialAuthenticator,
                     inject: [ACTIVE_SERVICE_CREDENTIAL_READER],
                 }),
-                expect.objectContaining({ provide: OidcCredentialAuthenticator }),
             ]),
         )
     })
@@ -43,11 +41,11 @@ describe('AuthModule', () => {
         ).toBe(false)
     })
 
-    it('exports the OIDC authenticator ingredients and service-client grant policy', () => {
+    it('exports the API-key authenticator ingredients and service-client grant policy', () => {
         const exports = Reflect.getMetadata(MODULE_METADATA.EXPORTS, AuthModule) as unknown[]
 
         expect(exports).toEqual(
-            expect.arrayContaining([CredentialExtractor, OidcCredentialAuthenticator, SERVICE_CLIENT_GRANT_POLICY]),
+            expect.arrayContaining([CredentialExtractor, ApiKeyCredentialAuthenticator, SERVICE_CLIENT_GRANT_POLICY]),
         )
     })
 })

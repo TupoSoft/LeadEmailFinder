@@ -22,193 +22,130 @@ jest.mock('../create-server.js', () => {
 
 import { createServer } from '../create-server.js'
 import { createApp } from '../main.js'
-import { TokenCache } from './token-cache.js'
+import { createServer as createHttpServer } from 'node:http'
 
 const mockedCreateServer = createServer as jest.MockedFunction<typeof createServer>
+const keyA = `lef_${'a'.repeat(43)}`
+const keyB = `lef_${'b'.repeat(43)}`
 
-function jsonResponse(status: number, body: unknown): Response {
-    return { ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) } as Response
+async function listen(server: Server): Promise<number> {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    return (server.address() as AddressInfo).port
+}
+async function close(server: Server): Promise<void> {
+    await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
 }
 
-interface Deferred<T> {
-    promise: Promise<T>
-    resolve: (value: T) => void
-}
-
-function deferred<T>(): Deferred<T> {
-    let resolve!: (value: T) => void
-    const promise = new Promise<T>(r => {
-        resolve = r
-    })
-    return { promise, resolve }
-}
-
-interface RawPostResult {
-    status: number
-    body: string
-}
-
-/** Uses `node:http` directly (not the global `fetch`) so mocking `global.fetch` for the token endpoint
- * below never intercepts this test's own request to the server under test. */
-function rawPost(port: number, headers: Record<string, string>): Promise<RawPostResult> {
-    return new Promise((resolvePromise, reject) => {
-        const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 })
-        const req = httpRequest(
-            {
-                host: '127.0.0.1',
-                port,
-                path: '/mcp',
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
-                timeout: 5_000,
-            },
-            res => {
-                const chunks: Buffer[] = []
-                res.on('data', chunk => chunks.push(chunk))
-                res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
-            },
-        )
-        req.on('error', reject)
-        req.on('timeout', () => {
-            req.destroy()
-            reject(new Error('raw request timed out'))
-        })
-        req.end(body)
-    })
-}
-
-function basicAuth(clientId: string, clientSecret: string): string {
-    return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
-}
-
-function requestUrl(input: string | URL | Request): string {
-    if (typeof input === 'string') return input
-    if (input instanceof URL) return input.href
-    return input.url
-}
-
-describe('MCP authentication over real HTTP and the real SDK transport', () => {
+describe('MCP API-key authentication through real HTTP and SDK transport', () => {
     let server: Server
+    let upstream: Server
     let port: number
-    let fetchMock: jest.Mock
-    const realFetch = global.fetch
-    /** Maps `"clientId:clientSecret"` to a canned grant outcome; unlisted pairs are rejected. */
-    const grantOutcomes = new Map<string, { status: number; body: unknown }>([
-        ['client-a:right-secret-a', { status: 200, body: { access_token: 'token-for-client-a', expires_in: 300 } }],
-        ['client-b:right-secret-b', { status: 200, body: { access_token: 'token-for-client-b', expires_in: 300 } }],
-    ])
-    /** Optional per-credential delay so a test can hold a grant pending while it fires other requests. */
-    const grantDelays = new Map<string, Deferred<void>>()
-
+    let status: number
+    let validations: string[]
     beforeAll(async () => {
-        server = createApp({ tokenCache: new TokenCache('https://issuer'), apiBaseUrl: 'https://lef-api.example' })
-        await new Promise<void>(resolvePromise => server.listen(0, resolvePromise))
-        port = (server.address() as AddressInfo).port
-    })
-
-    afterAll(async () => {
-        await new Promise<void>((resolvePromise, reject) => server.close(error => (error ? reject(error) : resolvePromise())))
-    })
-
-    beforeEach(() => {
-        fetchMock = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
-            if (!requestUrl(input).startsWith('https://issuer')) return realFetch(input, init)
-
-            const params = new URLSearchParams((init?.body as URLSearchParams | undefined)?.toString())
-            const key = `${params.get('client_id')}:${params.get('client_secret')}`
-            const delay = grantDelays.get(key)
-            if (delay) await delay.promise
-
-            const outcome = grantOutcomes.get(key) ?? { status: 401, body: { error: 'invalid_client' } }
-            return jsonResponse(outcome.status, outcome.body)
+        upstream = createHttpServer((req, res) => {
+            validations.push(req.headers.authorization ?? '')
+            expect(req.url).toBe('/v1/auth/api-key')
+            const accepted = [keyA, keyB].some(key => req.headers.authorization === `Bearer ${key}`)
+            res.writeHead(accepted ? status : 401)
+            res.end(status === 204 ? undefined : 'private upstream details')
         })
-        global.fetch = fetchMock as unknown as typeof fetch
+        const upstreamPort = await listen(upstream)
+        server = createApp({ apiBaseUrl: `http://127.0.0.1:${upstreamPort}` })
+        port = await listen(server)
     })
-
-    afterEach(() => {
-        global.fetch = realFetch
-        grantDelays.clear()
+    beforeEach(() => {
+        status = 204
+        validations = []
         mockedCreateServer.mockClear()
     })
+    afterAll(async () => {
+        await close(server)
+        await close(upstream)
+    })
 
-    async function callEchoTokenViaSdk(clientId: string, clientSecret: string): Promise<string> {
-        const client = new Client({ name: 'auth-http.spec', version: '0.0.0' })
+    async function rawPost(
+        authorization?: string | string[],
+        method = 'tools/list',
+    ): Promise<{ status: number; body: string }> {
+        return new Promise((resolve, reject) => {
+            const req = httpRequest(
+                {
+                    host: '127.0.0.1',
+                    port,
+                    path: '/mcp',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json, text/event-stream',
+                        ...(authorization ? { Authorization: authorization } : {}),
+                    },
+                },
+                res => {
+                    const chunks: Buffer[] = []
+                    res.on('data', chunk => chunks.push(chunk))
+                    res.on('end', () =>
+                        resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() }),
+                    )
+                },
+            )
+            req.on('error', reject)
+            req.end(JSON.stringify({ jsonrpc: '2.0', method, id: 1 }))
+        })
+    }
+    async function echo(key: string): Promise<string> {
+        const client = new Client({ name: 'api-key-test', version: '0.0.0' })
         const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
-            requestInit: { headers: { Authorization: basicAuth(clientId, clientSecret) } },
+            requestInit: { headers: { Authorization: `Bearer ${key}` } },
         })
         await client.connect(transport)
         try {
             const result = await client.callTool({ name: 'echo-token', arguments: {} })
-            const content = result.content as Array<{ type: string; text: string }>
-            return content[0]?.text ?? ''
+            return (result.content as Array<{ text: string }>)[0].text
         } finally {
             await client.close()
         }
     }
 
-    it('authenticates with a valid credential and dispatches to the tool', async () => {
-        const token = await callEchoTokenViaSdk('client-a', 'right-secret-a')
-
-        expect(token).toBe('token-for-client-a')
-        expect(mockedCreateServer).toHaveBeenCalled()
+    it('validates initialize, notifications, list, and tool calls separately without caching', async () => {
+        expect(await echo(keyA)).toBe(keyA)
+        const firstCount = validations.length
+        expect(firstCount).toBeGreaterThanOrEqual(3)
+        expect(await echo(keyA)).toBe(keyA)
+        expect(validations.length).toBeGreaterThan(firstCount)
+        expect(validations.every(value => value === `Bearer ${keyA}`)).toBe(true)
     })
-
-    it('rejects an incorrect secret for an already-authenticated client ID without dispatching to any tool', async () => {
-        await callEchoTokenViaSdk('client-a', 'right-secret-a')
-        mockedCreateServer.mockClear()
-
-        const response = await rawPost(port, { Authorization: basicAuth('client-a', 'wrong-secret') })
-
-        expect(response.status).toBe(401)
-        expect(JSON.parse(response.body)).toEqual({ error: 'authentication_required' })
+    it('keeps concurrent caller keys isolated', async () => {
+        expect(await Promise.all([echo(keyA), echo(keyB)])).toEqual([keyA, keyB])
+    })
+    it.each([
+        undefined,
+        'Basic old-secret',
+        'Bearer header.payload.signature',
+        `Bearer ${keyA},${keyB}`,
+        [`Bearer ${keyA}`, `Bearer ${keyB}`],
+    ])('rejects malformed, missing, and duplicate credentials before validation and dispatch', async authorization => {
+        expect((await rawPost(authorization)).status).toBe(401)
+        expect(validations).toHaveLength(0)
         expect(mockedCreateServer).not.toHaveBeenCalled()
     })
-
-    it('rejects an empty secret for an already-authenticated client ID without dispatching to any tool', async () => {
-        await callEchoTokenViaSdk('client-a', 'right-secret-a')
-        mockedCreateServer.mockClear()
-
-        const response = await rawPost(port, { Authorization: basicAuth('client-a', '') })
-
-        expect(response.status).toBe(401)
-        expect(JSON.parse(response.body)).toEqual({ error: 'authentication_required' })
+    it.each(['initialize', 'notifications/initialized', 'tools/list', 'tools/call'])(
+        'rejects revoked keys before dispatching %s',
+        async method => {
+            await echo(keyA)
+            mockedCreateServer.mockClear()
+            status = 401
+            const response = await rawPost(`Bearer ${keyA}`, method)
+            expect(response).toEqual({ status: 401, body: JSON.stringify({ error: 'authentication_required' }) })
+            expect(mockedCreateServer).not.toHaveBeenCalled()
+        },
+    )
+    it.each([403, 500, 200])('maps validation status %s to a safe rejection without dispatch', async upstreamStatus => {
+        status = upstreamStatus
+        const response = await rawPost(`Bearer ${keyA}`)
+        expect(response.status).toBe(upstreamStatus === 403 ? 401 : 503)
+        expect(response.body).not.toContain('private upstream details')
+        expect(response.body).not.toContain(keyA)
         expect(mockedCreateServer).not.toHaveBeenCalled()
-    })
-
-    it('reuses the cached grant for a repeated valid credential, minting no extra token', async () => {
-        function countGrantCalls(): number {
-            return fetchMock.mock.calls.filter(([input]) => requestUrl(input as string | URL | Request).startsWith('https://issuer')).length
-        }
-
-        await callEchoTokenViaSdk('client-a', 'right-secret-a')
-        const grantCallsAfterFirst = countGrantCalls()
-
-        await callEchoTokenViaSdk('client-a', 'right-secret-a')
-
-        expect(countGrantCalls()).toBe(grantCallsAfterFirst)
-    })
-
-    it('rejects an incorrect secret sent while the valid grant for the same client ID is still pending', async () => {
-        const holdValidGrant = deferred<void>()
-        grantDelays.set('client-a:right-secret-a', holdValidGrant)
-
-        const validCall = callEchoTokenViaSdk('client-a', 'right-secret-a')
-        const invalidResponse = await rawPost(port, { Authorization: basicAuth('client-a', 'wrong-secret') })
-
-        expect(invalidResponse.status).toBe(401)
-        expect(JSON.parse(invalidResponse.body)).toEqual({ error: 'authentication_required' })
-
-        holdValidGrant.resolve()
-        await expect(validCall).resolves.toBe('token-for-client-a')
-    })
-
-    it('gives each concurrent valid client only its own bearer token', async () => {
-        const [tokenA, tokenB] = await Promise.all([
-            callEchoTokenViaSdk('client-a', 'right-secret-a'),
-            callEchoTokenViaSdk('client-b', 'right-secret-b'),
-        ])
-
-        expect(tokenA).toBe('token-for-client-a')
-        expect(tokenB).toBe('token-for-client-b')
     })
 })

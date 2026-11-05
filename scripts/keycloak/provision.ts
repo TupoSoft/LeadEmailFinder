@@ -27,13 +27,7 @@ async function main(): Promise<void> {
             'http://localhost:53000/',
         ),
     })
-    const { service, bff, orgAdmin } = await provisioner.provision()
-
-    // World-readable (not 0o600 like the other secrets files here): docker/compose.smtp-dev.yaml bind-mounts
-    // this file read-only into the smtp-dev-proxy-bootstrap/cleanup containers, which run as their own
-    // non-root image user and need to read it.
-    const secretsFile = resolve(process.env.KEYCLOAK_DEV_SECRETS_FILE ?? '.dev/keycloak/service-client.json')
-    await writeDevelopmentSecretFile(secretsFile, `${JSON.stringify(service, undefined, 2)}\n`, 0o644)
+    const { bff, orgAdmin } = await provisioner.provision()
 
     const bffSecretsFile = resolve(process.env.KEYCLOAK_DEV_BFF_SECRETS_FILE ?? '.dev/keycloak/bff-client.json')
     await writeDevelopmentSecretFile(bffSecretsFile, `${JSON.stringify(bff, undefined, 2)}\n`, 0o600)
@@ -44,7 +38,7 @@ async function main(): Promise<void> {
     await writeDevelopmentSecretFile(orgAdminSecretsFile, `${JSON.stringify(orgAdmin, undefined, 2)}\n`, 0o600)
 
     console.log(
-        `Keycloak realm provisioned; development service credentials written to ${secretsFile}, BFF credentials written to ${bffSecretsFile}, and organization administration credentials written to ${orgAdminSecretsFile}`,
+        `Keycloak realm provisioned; BFF credentials written to ${bffSecretsFile}, and organization administration credentials written to ${orgAdminSecretsFile}`,
     )
 }
 

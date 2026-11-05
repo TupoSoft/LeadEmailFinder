@@ -2,20 +2,17 @@ import { Controller, Get, INestApplication, Module, UseGuards } from '@nestjs/co
 import { APP_GUARD, Reflector } from '@nestjs/core'
 import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
-import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
+import { ActiveServiceCredentialReader, AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
+import { ApiKeyCredentialAuthenticator } from './application/api-key-credential-authenticator'
 import { AuthenticationService } from './application/authentication.service'
 import { CredentialRejectedError } from './application/credential-authenticator'
 import { CredentialExtractor } from './application/credential-extractor'
-import { OidcCredentialAuthenticator } from './application/oidc-credential-authenticator'
-import { OidcTokenVerifier } from './application/oidc-token-verifier'
 import { RolePermissionPolicy } from './application/role-permission-policy.service'
-import { ServiceCredentialResolver } from './application/service-credential-resolver.service'
 import { AuthGuard } from './api/auth.guard'
 import { CurrentPrincipal } from './api/current-principal.decorator'
 import { PermissionsGuard } from './api/permissions.guard'
 import { Public } from './api/public.decorator'
 import { RequirePermissions } from './api/require-permissions.decorator'
-import { JoseOidcTokenVerifier } from './infrastructure/jose/jose-oidc-token-verifier'
 
 const authenticationServiceMock: jest.Mocked<Pick<AuthenticationService, 'authenticate'>> = {
     authenticate: jest.fn(),
@@ -74,14 +71,8 @@ function principalWith(overrides: Partial<AuthPrincipal>): AuthPrincipal {
     }
 }
 
-function authenticationServiceUsing(tokenVerifier: OidcTokenVerifier): AuthenticationService {
-    const serviceCredentialResolver = {
-        resolveActive: jest.fn(),
-    } as unknown as ServiceCredentialResolver
-
-    return new AuthenticationService(new CredentialExtractor(), [
-        new OidcCredentialAuthenticator(tokenVerifier, serviceCredentialResolver),
-    ])
+function authenticationServiceUsing(reader: ActiveServiceCredentialReader): AuthenticationService {
+    return new AuthenticationService(new CredentialExtractor(), [new ApiKeyCredentialAuthenticator(reader, key => key)])
 }
 
 describe('AuthGuard + CurrentPrincipal wiring', () => {
@@ -122,7 +113,9 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
 
     it('treats malformed session-cookie encoding as an exact code-only 401 without leaking the parser error', async () => {
         const authenticationService = new AuthenticationService(new CredentialExtractor(), [])
-        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
+        authenticationServiceMock.authenticate.mockImplementation(headers =>
+            authenticationService.authenticate(headers),
+        )
 
         await request(app.getHttpServer())
             .get('/auth-integration-test/protected')
@@ -150,46 +143,32 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
         expect(response.body).toEqual(principal)
     })
 
-    it('rejects an unauthenticated request to a permission-gated route with 401, not 403', async () => {
-        const authenticationService = authenticationServiceUsing(
-            new JoseOidcTokenVerifier({
-                issuer: 'https://issuer.example.test',
-                audience: 'lead-email-finder-api',
-                jwksUri: 'https://issuer.example.test/jwks',
-            }),
+    it('rejects a legacy JWT with 401 before persistence lookup', async () => {
+        const reader = { findByKeyHash: jest.fn(), findByIssuerAndSubject: jest.fn() }
+        const authenticationService = authenticationServiceUsing(reader)
+        authenticationServiceMock.authenticate.mockImplementation(headers =>
+            authenticationService.authenticate(headers),
         )
-        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
-
         await request(app.getHttpServer())
             .get('/auth-integration-test/admin-only')
             .set('authorization', 'Bearer header.payload.signature')
             .expect(401, { code: 'authentication_required' })
+        expect(reader.findByKeyHash).not.toHaveBeenCalled()
     })
 
-    it('preserves an unexpected verifier fault as a redacted 500', async () => {
-        const tokenVerifier: OidcTokenVerifier = {
-            verify: jest.fn().mockRejectedValue(new Error('JWKS endpoint secret failed')),
+    it('preserves an unexpected persistence fault as a redacted 500', async () => {
+        const reader = {
+            findByKeyHash: jest.fn().mockRejectedValue(new Error('private database fault')),
+            findByIssuerAndSubject: jest.fn(),
         }
-        const authenticationService = authenticationServiceUsing(tokenVerifier)
-        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
-
+        const authenticationService = authenticationServiceUsing(reader)
+        authenticationServiceMock.authenticate.mockImplementation(headers =>
+            authenticationService.authenticate(headers),
+        )
         await request(app.getHttpServer())
             .get('/auth-integration-test/protected')
-            .set('authorization', 'Bearer header.payload.signature')
+            .set('authorization', `Bearer lef_${'a'.repeat(43)}`)
             .expect(500, { statusCode: 500, message: 'Internal server error' })
-    })
-
-    it('rejects an opaque bearer token through the real authentication chain without invoking OIDC verification', async () => {
-        const tokenVerifier: OidcTokenVerifier = { verify: jest.fn() }
-        const authenticationService = authenticationServiceUsing(tokenVerifier)
-        authenticationServiceMock.authenticate.mockImplementation(headers => authenticationService.authenticate(headers))
-
-        await request(app.getHttpServer())
-            .get('/auth-integration-test/protected')
-            .set('authorization', 'Bearer opaque-token')
-            .expect(401, { code: 'authentication_required' })
-
-        expect(tokenVerifier.verify).not.toHaveBeenCalled()
     })
 
     it('rejects a member-role principal from a platform:admin-gated route with 403 (privilege escalation)', async () => {
@@ -203,7 +182,11 @@ describe('AuthGuard + CurrentPrincipal wiring', () => {
 
     it('rejects a narrow-scope service_client principal from a members:manage-gated route with 403 (privilege escalation)', async () => {
         authenticationServiceMock.authenticate.mockResolvedValue(
-            principalWith({ credentialKind: 'service_client', membershipRole: 'admin', permissions: ['verification:run'] }),
+            principalWith({
+                credentialKind: 'service_client',
+                membershipRole: 'admin',
+                permissions: ['verification:run'],
+            }),
         )
 
         await request(app.getHttpServer())

@@ -1,217 +1,107 @@
 import {
+    AUTH_IDENTITY_ISSUER,
     AuthPrincipal,
-    AuthRole,
-    ServiceCredentialDetailRecord,
     ServiceCredentialWriter,
 } from '@tuposoft/lead-email-finder/modules/identity'
-import { ServiceClientGrantablePermission, ServiceClientGrantPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { ServiceClientGrantPolicy } from '@tuposoft/lead-email-finder/modules/auth'
+import { ApiKeyGenerator } from './ports/api-key-generator'
+import { ServiceClientCreationService } from './service-client-creation.service'
 import {
     DuplicateServiceClientPermissionsError,
+    EmptyServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientPermissionCeilingExceededError,
 } from '../domain/service-client-management.errors'
-import { KeycloakServiceClientAdmin } from './ports/keycloak-service-client-admin'
-import { ServiceClientCreationService } from './service-client-creation.service'
 
-function principalFixture(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal {
-    return {
-        credentialKind: 'human_session',
-        issuer: 'https://issuer',
-        subject: 'human-1',
-        organizationId: 'org-1',
-        membershipRole: 'owner',
-        permissions: [],
-        credentialId: 'identity-1',
-        ...overrides,
-    }
-}
-
-function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {}): ServiceCredentialDetailRecord {
-    return {
-        id: 'sc-1',
-        organizationId: 'org-1',
-        issuer: 'https://issuer',
-        subject: 'sa-1',
-        keycloakClientId: 'lef-svc-1',
-        description: null,
-        permissions: [],
-        status: 'active',
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        ...overrides,
-    }
+const actor: AuthPrincipal = {
+    credentialKind: 'human_session',
+    issuer: 'https://issuer',
+    subject: 'human',
+    organizationId: 'org',
+    membershipRole: 'owner',
+    permissions: [],
+    credentialId: 'human',
 }
 
 describe('ServiceClientCreationService', () => {
-    let credentialWriter: jest.Mocked<ServiceCredentialWriter>
-    let keycloakAdmin: jest.Mocked<KeycloakServiceClientAdmin>
-    let serviceClientGrantPolicy: jest.Mocked<ServiceClientGrantPolicy>
+    let writer: jest.Mocked<ServiceCredentialWriter>
+    let grantPolicy: jest.Mocked<ServiceClientGrantPolicy>
+    let generator: jest.MockedFunction<ApiKeyGenerator>
     let service: ServiceClientCreationService
-
-    const grantablePermissionsByRole: Readonly<Record<AuthRole, readonly ServiceClientGrantablePermission[]>> = {
-        member: [],
-        admin: ['verification:run', 'verification:read', 'members:manage', 'credentials:manage'],
-        owner: [
-            'verification:run',
-            'verification:read',
-            'members:manage',
-            'credentials:manage',
-            'billing:read',
-            'billing:manage',
-        ],
-        platform_admin: [],
-    }
+    const material = { apiKey: 'lef_disclosed-once', keyHash: 'a'.repeat(64), keyPrefix: 'lef_prefix12' }
 
     beforeEach(() => {
-        credentialWriter = {
+        writer = {
             createWithAudit: jest.fn(),
             rotateWithAudit: jest.fn(),
             disableWithAudit: jest.fn(),
             deleteWithAudit: jest.fn(),
         }
-        keycloakAdmin = {
-            provisionClient: jest.fn(),
-            rotateSecret: jest.fn(),
-            deleteClient: jest.fn(),
-        }
-        serviceClientGrantPolicy = {
-            grantablePermissionsFor: jest.fn(role => grantablePermissionsByRole[role]),
-        }
-        service = new ServiceClientCreationService(
-            credentialWriter,
-            keycloakAdmin,
-            { issuer: 'https://issuer' },
-            serviceClientGrantPolicy,
+        grantPolicy = { grantablePermissionsFor: jest.fn() }
+        grantPolicy.grantablePermissionsFor.mockReturnValue(['verification:run', 'verification:read'])
+        generator = jest.fn(() => material)
+        service = new ServiceClientCreationService(writer, grantPolicy, generator)
+    })
+
+    it.each([
+        { organizationId: 'foreign' },
+        { credentialKind: 'service_client' as const },
+        { membershipRole: 'member' as const },
+        { membershipRole: 'platform_admin' as const },
+    ])('denies unauthorized issuance before generating or storing key material: %j', async overrides => {
+        await expect(service.create({ ...actor, ...overrides }, 'org', null, ['verification:run'])).rejects.toThrow(
+            ServiceClientAccessDeniedError,
         )
+        expect(generator).not.toHaveBeenCalled()
+        expect(writer.createWithAudit).not.toHaveBeenCalled()
     })
 
-    it('rejects an actor who does not belong to the target organization', async () => {
-        const actor = principalFixture({ organizationId: 'a-different-org' })
-
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow(ServiceClientAccessDeniedError)
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
+    it.each([
+        [[], EmptyServiceClientPermissionsError],
+        [['verification:run', 'verification:run'], DuplicateServiceClientPermissionsError],
+        [['platform:admin'], ServiceClientPermissionCeilingExceededError],
+    ] as const)('rejects invalid grants %j before issuing a key', async (permissions, ErrorType) => {
+        await expect(service.create(actor, 'org', null, permissions)).rejects.toThrow(ErrorType)
+        expect(generator).not.toHaveBeenCalled()
     })
 
-    it('rejects a non-human-session actor even with credentials:manage', async () => {
-        const actor = principalFixture({ credentialKind: 'service_client', permissions: ['credentials:manage'] })
+    it.each(['owner', 'admin'] as const)(
+        'accepts the real human projection with role-derived grants and discloses only after commit for %s',
+        async membershipRole => {
+            writer.createWithAudit.mockImplementation(command =>
+                Promise.resolve({
+                    id: command.id,
+                    organizationId: command.organizationId,
+                    issuer: command.issuer,
+                    subject: command.subject,
+                    keyPrefix: command.keyPrefix,
+                    description: command.description,
+                    permissions: command.permissions,
+                    status: 'active',
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                }),
+            )
+            const result = await service.create({ ...actor, membershipRole }, 'org', 'integration', [
+                'verification:run',
+            ])
+            const command = writer.createWithAudit.mock.calls[0][0]
+            expect(command).toMatchObject({
+                issuer: AUTH_IDENTITY_ISSUER,
+                subject: command.id,
+                keyHash: material.keyHash,
+                keyPrefix: material.keyPrefix,
+                permissions: ['verification:run'],
+            })
+            expect(command).not.toHaveProperty('apiKey')
+            expect(result.apiKey).toBe(material.apiKey)
+            expect(grantPolicy.grantablePermissionsFor).toHaveBeenCalledWith(membershipRole)
+        },
+    )
 
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow(ServiceClientAccessDeniedError)
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
-    })
-
-    it('rejects a member (non owner/admin) from creating a service client', async () => {
-        const actor = principalFixture({ membershipRole: 'member' })
-
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow(ServiceClientAccessDeniedError)
-    })
-
-    it('authoritatively rejects an admin forged broader grant', async () => {
-        const actor = principalFixture({ membershipRole: 'admin' })
-
-        await expect(service.create(actor, 'org-1', null, ['billing:manage'])).rejects.toMatchObject({
-            excessPermissions: ['billing:manage'],
-        })
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
-    })
-
-    it('rejects duplicate permissions in direct service calls before any provider or persistence side effect', async () => {
-        await expect(
-            service.create(principalFixture(), 'org-1', null, ['verification:run', 'verification:run']),
-        ).rejects.toBeInstanceOf(DuplicateServiceClientPermissionsError)
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
-        expect(credentialWriter.createWithAudit).not.toHaveBeenCalled()
-    })
-
-    it.each(['owner', 'admin'] as const)('accepts the ordered server grant choices for %s unchanged', async role => {
-        const choices = serviceClientGrantPolicy.grantablePermissionsFor(role)
-        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
-        credentialWriter.createWithAudit.mockResolvedValue(credentialFixture())
-
-        await service.create(principalFixture({ membershipRole: role }), 'org-1', null, choices)
-
-        expect(credentialWriter.createWithAudit).toHaveBeenCalledWith(expect.objectContaining({ permissions: choices }))
-    })
-
-    it('authoritatively rejects an owner forged platform grant', async () => {
-        const actor = principalFixture({ membershipRole: 'owner' })
-
-        await expect(service.create(actor, 'org-1', null, ['platform:admin'])).rejects.toBeInstanceOf(
-            ServiceClientPermissionCeilingExceededError,
-        )
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
-    })
-
-    it('rejects a stale broader selection against the injected grant policy', async () => {
-        const actor = principalFixture({ membershipRole: 'owner' })
-        serviceClientGrantPolicy.grantablePermissionsFor.mockReturnValue(['verification:run'])
-
-        await expect(
-            service.create(actor, 'org-1', null, ['verification:run', 'billing:manage']),
-        ).rejects.toMatchObject({
-            excessPermissions: ['billing:manage'],
-        })
-        expect(keycloakAdmin.provisionClient).not.toHaveBeenCalled()
-    })
-
-    it('allows an admin to grant a subset of their own permissions', async () => {
-        const actor = principalFixture({ membershipRole: 'admin' })
-        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
-        credentialWriter.createWithAudit.mockResolvedValue(credentialFixture())
-
-        await expect(
-            service.create(actor, 'org-1', null, ['verification:run', 'credentials:manage']),
-        ).resolves.toBeDefined()
-        expect(serviceClientGrantPolicy.grantablePermissionsFor).toHaveBeenCalledWith('admin')
-    })
-
-    it('leaves no local row when the Keycloak call fails', async () => {
-        const actor = principalFixture()
-        keycloakAdmin.provisionClient.mockRejectedValue(new Error('keycloak unreachable'))
-
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow('keycloak unreachable')
-        expect(credentialWriter.createWithAudit).not.toHaveBeenCalled()
-    })
-
-    it('deletes the newly provisioned Keycloak client when the local transaction fails', async () => {
-        const actor = principalFixture()
-        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
-        credentialWriter.createWithAudit.mockRejectedValue(new Error('database unavailable'))
-
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toThrow('database unavailable')
-        expect(keycloakAdmin.deleteClient).toHaveBeenCalledWith(expect.stringMatching(/^lef-svc-/))
-    })
-
-    it('preserves the local transaction error when compensating Keycloak deletion also fails', async () => {
-        const actor = principalFixture()
-        const persistenceError = new Error('database unavailable')
-        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
-        credentialWriter.createWithAudit.mockRejectedValue(persistenceError)
-        keycloakAdmin.deleteClient.mockRejectedValue(new Error('cleanup unavailable'))
-
-        await expect(service.create(actor, 'org-1', null, [])).rejects.toBe(persistenceError)
-    })
-
-    it('creates the local row and audit through the identity writer on success', async () => {
-        const actor = principalFixture()
-        const credential = credentialFixture({
-            description: 'my integration',
-            permissions: ['verification:run'],
-        })
-        keycloakAdmin.provisionClient.mockResolvedValue({ subject: 'sa-1', secret: 'a-secret' })
-        credentialWriter.createWithAudit.mockResolvedValue(credential)
-
-        const result = await service.create(actor, 'org-1', 'my integration', ['verification:run'])
-
-        expect(result).toEqual({ credential, secret: 'a-secret' })
-        expect(credentialWriter.createWithAudit).toHaveBeenCalledWith({
-            id: expect.any(String),
-            organizationId: 'org-1',
-            issuer: 'https://issuer',
-            subject: 'sa-1',
-            keycloakClientId: expect.stringMatching(/^lef-svc-/),
-            description: 'my integration',
-            permissions: ['verification:run'],
-            actor,
-        })
+    it('propagates transaction failure without returning a key', async () => {
+        const failure = new Error('audit unavailable')
+        writer.createWithAudit.mockRejectedValue(failure)
+        await expect(service.create(actor, 'org', null, ['verification:run'])).rejects.toBe(failure)
     })
 })

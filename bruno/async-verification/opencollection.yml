@@ -5,20 +5,5 @@ request:
     scripts:
         - type: before-request
           code: |-
-              // Fresh tokens preserve public issuer identity through the Compose back channel.
-              for (const [prefix, tokenName] of [['service', 'platformToken'], ['customer', 'customerToken']]) {
-                const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
-                  method: 'POST',
-                  body: new URLSearchParams({
-                    grant_type: 'client_credentials',
-                    client_id: bru.getEnvVar(`${prefix}ClientId`),
-                    client_secret: bru.getEnvVar(`${prefix}ClientSecret`),
-                  }),
-                });
-                if (!response.ok) throw new Error('Fixture token request failed');
-                const payload = await response.json();
-                if (typeof payload.access_token !== 'string') throw new Error('Fixture token is missing');
-                const claims = JSON.parse(Buffer.from(payload.access_token.split('.')[1], 'base64url').toString('utf8'));
-                if (claims.iss !== bru.getEnvVar('oidcIssuerUrl')) throw new Error('Fixture issuer did not match');
-                bru.setVar(tokenName, payload.access_token);
-              }
+              bru.setVar('platformToken', bru.getEnvVar('platformApiKey'));
+              bru.setVar('customerToken', bru.getEnvVar('customerApiKey'));

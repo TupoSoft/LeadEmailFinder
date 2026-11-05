@@ -20,8 +20,12 @@ import type { NextFunction, Request, Response } from 'express'
 import type { DestinationStream } from 'pino'
 import { Logger, LoggerModule } from 'pino-nestjs'
 import request from 'supertest'
+import { QueryFailedError } from 'typeorm'
 import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
 import { configurePiiSafeRequestLogging } from './configure-pii-safe-request-logging'
+
+const API_KEY_MARKER = `lef_${'a'.repeat(43)}`
+const KEY_HASH_MARKER = 'c7'.repeat(32)
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const capturedLines: Record<string, unknown>[] = []
@@ -69,6 +73,17 @@ class PiiSafeRequestLoggingTestController {
     @Get('unexpected')
     unexpected(): never {
         throw new Error('Private provider response')
+    }
+
+    @Get('credential-database-error')
+    credentialDatabaseError(): never {
+        throw new QueryFailedError(
+            'INSERT credential',
+            [KEY_HASH_MARKER],
+            Object.assign(new Error(`duplicate key ${KEY_HASH_MARKER}`), {
+                detail: `Key (key_hash)=(${KEY_HASH_MARKER}) already exists`,
+            }),
+        )
     }
 
     @Post('raw-body')
@@ -212,20 +227,19 @@ describe('PII-safe request logging', () => {
         preexistingRequestId = 'middleware-secret-' + randomUUID()
         const attackerHeader = 'header-secret-' + randomUUID()
 
-        const response = await request(app.getHttpServer())
-            .get(path)
-            .set('X-Request-ID', attackerHeader)
-            .expect(status)
+        const response = await request(app.getHttpServer()).get(path).set('X-Request-ID', attackerHeader).expect(status)
         await new Promise<void>(resolve => setImmediate(resolve))
 
         const responseId: unknown = response.headers['x-request-id']
         expect(responseId).toEqual(expect.stringMatching(UUID_PATTERN))
         const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
         expect(automaticLogs).toHaveLength(1)
-        expect(automaticLogs[0]).toEqual(expect.objectContaining({
-            req: { id: responseId, method: 'GET', path },
-            res: { statusCode: status },
-        }))
+        expect(automaticLogs[0]).toEqual(
+            expect.objectContaining({
+                req: { id: responseId, method: 'GET', path },
+                res: { statusCode: status },
+            }),
+        )
         if (path === '/query-logging') {
             expect((response.body as { requestId: string }).requestId).toBe(responseId)
             expect(capturedLines.find(line => line.msg === 'query_logging_test_handler')).toEqual(
@@ -257,10 +271,12 @@ describe('PII-safe request logging', () => {
         expect(responseId).not.toBe(preexistingRequestId)
         const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
         expect(automaticLogs).toHaveLength(1)
-        expect(automaticLogs[0]).toEqual(expect.objectContaining({
-            req: { id: responseId, method: 'GET', path: '/verify' },
-            res: { statusCode: 404 },
-        }))
+        expect(automaticLogs[0]).toEqual(
+            expect.objectContaining({
+                req: { id: responseId, method: 'GET', path: '/verify' },
+                res: { statusCode: 404 },
+            }),
+        )
 
         const completeOutput = JSON.stringify(capturedLines)
         expect(completeOutput).not.toContain(sentinel)
@@ -279,10 +295,24 @@ describe('PII-safe request logging', () => {
         expect(response.headers['x-request-id']).toEqual(expect.stringMatching(UUID_PATTERN))
         const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
         expect(automaticLogs).toHaveLength(1)
-        expect(automaticLogs[0]).toEqual(expect.objectContaining({
-            req: { id: response.headers['x-request-id'], method: 'PATCH', path: '/emails/:sensitive' },
-            res: { statusCode: 400 },
-        }))
+        expect(automaticLogs[0]).toEqual(
+            expect.objectContaining({
+                req: { id: response.headers['x-request-id'], method: 'PATCH', path: '/emails/:sensitive' },
+                res: { statusCode: 400 },
+            }),
+        )
+    })
+
+    it('conceals API keys and credential hashes in database exception logs and responses', async () => {
+        const response = await request(app.getHttpServer())
+            .get('/credential-database-error')
+            .set('Authorization', `Bearer ${API_KEY_MARKER}`)
+            .expect(500)
+        await new Promise<void>(resolve => setImmediate(resolve))
+        for (const marker of [API_KEY_MARKER, KEY_HASH_MARKER]) {
+            expect(JSON.stringify(capturedLines)).not.toContain(marker)
+            expect(response.text).not.toContain(marker)
+        }
     })
 
     it('preserves the exact raw body used to validate webhook signatures', async () => {
@@ -311,9 +341,11 @@ describe('PII-safe request logging', () => {
 
         const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
         expect(automaticLogs).toHaveLength(1)
-        expect(automaticLogs[0]).toEqual(expect.objectContaining({
-            req: { id: response.headers['x-request-id'], method: 'GET', path: prefix + ':sensitive' + suffix },
-        }))
+        expect(automaticLogs[0]).toEqual(
+            expect.objectContaining({
+                req: { id: response.headers['x-request-id'], method: 'GET', path: prefix + ':sensitive' + suffix },
+            }),
+        )
         expect(JSON.stringify(capturedLines)).not.toContain(privateValue)
     })
 
@@ -329,14 +361,16 @@ describe('PII-safe request logging', () => {
 
             const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
             expect(automaticLogs).toHaveLength(1)
-            expect(automaticLogs[0]).toEqual(expect.objectContaining({
-                req: {
-                    id: response.headers['x-request-id'],
-                    method: 'GET',
-                    path: prefix + ':sensitive',
-                },
-                res: { statusCode: 404 },
-            }))
+            expect(automaticLogs[0]).toEqual(
+                expect.objectContaining({
+                    req: {
+                        id: response.headers['x-request-id'],
+                        method: 'GET',
+                        path: prefix + ':sensitive',
+                    },
+                    res: { statusCode: 404 },
+                }),
+            )
             expect(response.headers['x-request-id']).toEqual(expect.stringMatching(UUID_PATTERN))
             const output = JSON.stringify(capturedLines)
             for (const marker of [token, code, state]) expect(output).not.toContain(marker)
@@ -354,9 +388,13 @@ describe('PII-safe request logging', () => {
 
         const output = JSON.stringify(capturedLines)
         for (const marker of [token, password]) expect(output.includes(marker)).toBe(false)
-        expect(capturedLines.some(line =>
-            (line.req as { path?: string } | undefined)?.path === '/v1/organizations/invitations/:sensitive/accept',
-        )).toBe(true)
+        expect(
+            capturedLines.some(
+                line =>
+                    (line.req as { path?: string } | undefined)?.path ===
+                    '/v1/organizations/invitations/:sensitive/accept',
+            ),
+        ).toBe(true)
     })
 
     it.each([
@@ -374,14 +412,18 @@ describe('PII-safe request logging', () => {
         ['/api%2FverifyBatch/csv%252F', '/api%2FverifyBatch/:sensitive'],
     ])('conceals protected path values when encoded separators reach %s', async (prefix, path) => {
         const privateValue = 'encoded-sensitive-' + randomUUID()
-        const response = await request(app.getHttpServer()).get(prefix + privateValue).expect(404)
+        const response = await request(app.getHttpServer())
+            .get(prefix + privateValue)
+            .expect(404)
 
         const automaticLogs = capturedLines.filter(line => typeof line.responseTime === 'number')
         expect(automaticLogs).toHaveLength(1)
-        expect(automaticLogs[0]).toEqual(expect.objectContaining({
-            req: { id: response.headers['x-request-id'], method: 'GET', path },
-            res: { statusCode: 404 },
-        }))
+        expect(automaticLogs[0]).toEqual(
+            expect.objectContaining({
+                req: { id: response.headers['x-request-id'], method: 'GET', path },
+                res: { statusCode: 404 },
+            }),
+        )
         expect(JSON.stringify(capturedLines)).not.toContain(privateValue)
     })
 })

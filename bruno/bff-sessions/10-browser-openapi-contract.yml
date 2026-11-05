@@ -47,8 +47,8 @@ runtime:
           expect(Object.keys(res.body.paths[serviceClients]).sort()).to.deep.equal(['get', 'post']);
           expect(res.body.paths[serviceClients].get.security).to.deep.equal([{ lef_session: [] }]);
           expect(res.body.paths[serviceClients].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }]);
-          expect(res.body.components.schemas.ServiceClientResponseDto.properties).not.to.have.property('clientSecret');
-          expect(res.body.components.schemas.ServiceClientSecretResponseDto.properties).to.have.property('clientSecret');
+          expect(res.body.components.schemas.ServiceClientResponseDto.properties).not.to.have.property('apiKey');
+          expect(res.body.components.schemas.ServiceClientSecretResponseDto.properties).to.have.property('apiKey');
           expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}'])).to.deep.equal(['delete']);
           expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/rotate'])).to.deep.equal(['post']);
           expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/disable'])).to.deep.equal(['post']);

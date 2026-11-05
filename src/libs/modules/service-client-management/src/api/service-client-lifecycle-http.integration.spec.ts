@@ -20,7 +20,7 @@ import {
 } from '@tuposoft/lead-email-finder/modules/auth'
 import { configureApiSerialization } from '../../../../../lead-email-finder-api/src/configure-api-serialization'
 import { configureServiceClientResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-service-client-response-headers'
-import { KeycloakServiceClientAdmin } from '../application/ports/keycloak-service-client-admin'
+import { generateApiKey } from '../infrastructure/api-key-generator'
 import { ServiceClientCreationService } from '../application/service-client-creation.service'
 import { ServiceClientDeletionService } from '../application/service-client-deletion.service'
 import { ServiceClientDisablementService } from '../application/service-client-disablement.service'
@@ -39,7 +39,6 @@ describe('service-client HTTP application lifecycle', () => {
     let app: INestApplication
     let actor: AuthPrincipal
     let grantPolicy: ServiceClientGrantPolicy
-    let provider: jest.Mocked<KeycloakServiceClientAdmin>
     const records = new Map<string, ServiceCredentialDetailRecord>()
 
     beforeAll(async () => {
@@ -52,16 +51,6 @@ describe('service-client HTTP application lifecycle', () => {
         grantPolicy = policyModule.get<ServiceClientGrantPolicy>(SERVICE_CLIENT_GRANT_POLICY)
         await policyModule.close()
 
-        provider = {
-            provisionClient: jest.fn(({ keycloakClientId }) =>
-                Promise.resolve({
-                    subject: keycloakClientId,
-                    secret: 'test-create-secret',
-                }),
-            ),
-            rotateSecret: jest.fn<Promise<string>, [string]>().mockResolvedValue('test-rotated-secret'),
-            deleteClient: jest.fn<Promise<void>, [string]>().mockResolvedValue(undefined),
-        }
         const directory: ServiceCredentialDirectory = {
             listForOrganization(org) {
                 return Promise.resolve([...records.values()].filter(row => row.organizationId === org))
@@ -78,7 +67,7 @@ describe('service-client HTTP application lifecycle', () => {
                     organizationId: command.organizationId,
                     issuer: command.issuer,
                     subject: command.subject,
-                    keycloakClientId: command.keycloakClientId,
+                    keyPrefix: command.keyPrefix,
                     description: command.description,
                     permissions: command.permissions,
                     status: 'active',
@@ -109,17 +98,12 @@ describe('service-client HTTP application lifecycle', () => {
                 { provide: APP_GUARD, useClass: AuthGuard },
                 {
                     provide: ServiceClientCreationService,
-                    useValue: new ServiceClientCreationService(
-                        writer,
-                        provider,
-                        { issuer: 'https://issuer' },
-                        grantPolicy,
-                    ),
+                    useValue: new ServiceClientCreationService(writer, grantPolicy, generateApiKey),
                 },
                 { provide: ServiceClientListingService, useValue: new ServiceClientListingService(directory) },
                 {
                     provide: ServiceClientRotationService,
-                    useValue: new ServiceClientRotationService(directory, writer, provider),
+                    useValue: new ServiceClientRotationService(directory, writer, generateApiKey),
                 },
                 {
                     provide: ServiceClientDisablementService,
@@ -127,7 +111,7 @@ describe('service-client HTTP application lifecycle', () => {
                 },
                 {
                     provide: ServiceClientDeletionService,
-                    useValue: new ServiceClientDeletionService(directory, writer, provider),
+                    useValue: new ServiceClientDeletionService(directory, writer),
                 },
             ],
         }).compile()
@@ -165,7 +149,7 @@ describe('service-client HTTP application lifecycle', () => {
                 .send({ permissions: choices })
                 .expect(201)
             expect(created.body.permissions).toEqual(choices)
-            expect(created.body.clientSecret).toBe('test-create-secret')
+            expect(created.body.apiKey).toMatch(/^lef_[A-Za-z0-9_-]{43}$/)
             expect(choices).toEqual(
                 role === 'admin'
                     ? ['verification:run', 'verification:read', 'members:manage', 'credentials:manage']
@@ -184,7 +168,6 @@ describe('service-client HTTP application lifecycle', () => {
                 .send({ permissions: [...choices, role === 'admin' ? 'billing:manage' : 'platform:admin'] })
                 .expect('Cache-Control', 'no-store')
                 .expect(400)
-            expect(provider.provisionClient).toHaveBeenCalledTimes(1)
         },
     )
 
@@ -200,23 +183,22 @@ describe('service-client HTTP application lifecycle', () => {
             .expect(200)
         expect(listed.body).toHaveLength(1)
         expect(listed.body[0].status).toBe('active')
-        expect(JSON.stringify(listed.body)).not.toContain('clientSecret')
+        expect(JSON.stringify(listed.body)).not.toContain('apiKey')
         const rotated: { body: ServiceClientSecretResponseDto } = await request(app.getHttpServer())
             .post(`${memberPath}/rotate`)
             .expect('Cache-Control', 'no-store')
             .expect(200)
-        expect(rotated.body.clientSecret).toBe('test-rotated-secret')
+        expect(rotated.body.apiKey).toMatch(/^lef_[A-Za-z0-9_-]{43}$/)
+        expect(rotated.body.apiKey).not.toBe(created.body.apiKey)
         await request(app.getHttpServer()).post(`${memberPath}/disable`).expect(204)
         await request(app.getHttpServer()).post(`${memberPath}/disable`).expect(204)
         const disabled: { body: ServiceClientResponseDto[] } = await request(app.getHttpServer())
             .get(basePath)
             .expect(200)
         expect(disabled.body[0].status).toBe('disabled')
-        expect(JSON.stringify(disabled.body)).not.toContain('clientSecret')
+        expect(JSON.stringify(disabled.body)).not.toContain('apiKey')
         await request(app.getHttpServer()).post(`${memberPath}/rotate`).expect('Cache-Control', 'no-store').expect(409)
-        expect(provider.rotateSecret).toHaveBeenCalledTimes(1)
         await request(app.getHttpServer()).delete(memberPath).expect(204)
-        expect(provider.deleteClient).toHaveBeenCalledWith(created.body.clientId)
         expect((await request(app.getHttpServer()).get(basePath).expect(200)).body).toEqual([])
     })
 
@@ -241,8 +223,6 @@ describe('service-client HTTP application lifecycle', () => {
             .post(otherBase)
             .send({ permissions: ['verification:run'] })
             .expect(403)
-        expect(provider.rotateSecret).not.toHaveBeenCalled()
-        expect(provider.deleteClient).not.toHaveBeenCalled()
     })
 
     it.each(['service_client', 'member', 'platform_admin'] as const)(
@@ -264,9 +244,6 @@ describe('service-client HTTP application lifecycle', () => {
             await request(app.getHttpServer()).post(`${basePath}/${created.body.id}/rotate`).expect(403)
             await request(app.getHttpServer()).post(`${basePath}/${created.body.id}/disable`).expect(403)
             await request(app.getHttpServer()).delete(`${basePath}/${created.body.id}`).expect(403)
-            expect(provider.provisionClient).toHaveBeenCalledTimes(1)
-            expect(provider.rotateSecret).not.toHaveBeenCalled()
-            expect(provider.deleteClient).not.toHaveBeenCalled()
         },
     )
 })

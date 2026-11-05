@@ -8,7 +8,8 @@ export interface CreateServiceCredentialCommand {
     readonly organizationId: string
     readonly issuer: string
     readonly subject: string
-    readonly keycloakClientId: string
+    readonly keyHash: string
+    readonly keyPrefix: string
     readonly description: string | null
     readonly permissions: readonly AuthPermission[]
     readonly actor: AuthPrincipal
@@ -30,6 +31,7 @@ export interface ServiceCredentialWriter {
     rotateWithAudit(
         credential: ServiceCredentialDetailRecord,
         actor: AuthPrincipal,
+        replacement: { readonly keyHash: string; readonly keyPrefix: string },
     ): Promise<ServiceCredentialRotationOutcome>
 
     disableWithAudit(

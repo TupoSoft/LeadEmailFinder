@@ -34,3 +34,10 @@ export class DisabledServiceClientRotationError extends Error {
         this.name = DisabledServiceClientRotationError.name
     }
 }
+
+export class EmptyServiceClientPermissionsError extends Error {
+    constructor() {
+        super('Service client permissions must not be empty')
+        this.name = EmptyServiceClientPermissionsError.name
+    }
+}

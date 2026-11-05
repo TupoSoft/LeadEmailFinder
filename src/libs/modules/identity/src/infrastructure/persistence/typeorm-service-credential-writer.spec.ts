@@ -23,7 +23,7 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
         organizationId: 'org-1',
         issuer: 'https://issuer',
         subject: 'service-account-1',
-        keycloakClientId: 'lef-svc-1',
+        keyPrefix: 'lef-svc-1',
         description: 'CI integration',
         permissions: ['verification:run'],
         status: 'active',
@@ -34,9 +34,7 @@ function credentialFixture(overrides: Partial<ServiceCredentialDetailRecord> = {
 }
 
 describe('TypeOrmServiceCredentialWriter', () => {
-    let managerMock: jest.Mocked<
-        Pick<EntityManager, 'create' | 'save' | 'insert' | 'update' | 'findOneBy' | 'delete'>
-    >
+    let managerMock: jest.Mocked<Pick<EntityManager, 'create' | 'save' | 'insert' | 'update' | 'findOneBy' | 'delete'>>
     let dataSourceMock: { transaction: jest.Mock }
     let writer: TypeOrmServiceCredentialWriter
 
@@ -74,7 +72,8 @@ describe('TypeOrmServiceCredentialWriter', () => {
             organizationId: 'org-1',
             issuer: 'https://issuer',
             subject: 'service-account-1',
-            keycloakClientId: 'lef-svc-1',
+            keyHash: 'a'.repeat(64),
+            keyPrefix: 'lef-svc-1',
             description: 'CI integration',
             permissions: ['verification:run'],
             actor,
@@ -117,7 +116,8 @@ describe('TypeOrmServiceCredentialWriter', () => {
                 organizationId: 'org-1',
                 issuer: 'https://issuer',
                 subject: 'service-account-1',
-                keycloakClientId: 'lef-svc-1',
+                keyHash: 'a'.repeat(64),
+                keyPrefix: 'lef-svc-1',
                 description: null,
                 permissions: [],
                 actor: actorFixture(),
@@ -130,12 +130,15 @@ describe('TypeOrmServiceCredentialWriter', () => {
         const rotatedAt = new Date('2026-01-02T00:00:00.000Z')
         managerMock.findOneBy.mockResolvedValueOnce({ ...credential, updatedAt: rotatedAt } as ServiceCredential)
 
-        const result = await writer.rotateWithAudit(credential, actorFixture())
+        const result = await writer.rotateWithAudit(credential, actorFixture(), {
+            keyHash: 'b'.repeat(64),
+            keyPrefix: 'lef_replaced',
+        })
 
         expect(managerMock.update).toHaveBeenCalledWith(
             ServiceCredential,
             { id: 'sc-1', organizationId: 'org-1', status: 'active' },
-            { updatedAt: expect.any(Function) },
+            { keyHash: 'b'.repeat(64), keyPrefix: 'lef_replaced', updatedAt: expect.any(Function) },
         )
         expect(managerMock.save).not.toHaveBeenCalled()
         expect(managerMock.insert).toHaveBeenCalledWith(AuditLogEntry, {
@@ -154,11 +157,14 @@ describe('TypeOrmServiceCredentialWriter', () => {
 
     it('returns disabled when a concurrent disable wins the conditional rotation update', async () => {
         managerMock.update.mockResolvedValueOnce({ affected: 0, generatedMaps: [], raw: [] })
-        managerMock.findOneBy.mockResolvedValueOnce(
-            credentialFixture({ status: 'disabled' }) as ServiceCredential,
-        )
+        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }) as ServiceCredential)
 
-        await expect(writer.rotateWithAudit(credentialFixture(), actorFixture())).resolves.toEqual({
+        await expect(
+            writer.rotateWithAudit(credentialFixture(), actorFixture(), {
+                keyHash: 'b'.repeat(64),
+                keyPrefix: 'lef_replaced',
+            }),
+        ).resolves.toEqual({
             kind: 'disabled',
         })
         expect(managerMock.insert).not.toHaveBeenCalled()
@@ -168,7 +174,12 @@ describe('TypeOrmServiceCredentialWriter', () => {
         managerMock.update.mockResolvedValueOnce({ affected: 0, generatedMaps: [], raw: [] })
         managerMock.findOneBy.mockResolvedValueOnce(null)
 
-        await expect(writer.rotateWithAudit(credentialFixture(), actorFixture())).resolves.toEqual({
+        await expect(
+            writer.rotateWithAudit(credentialFixture(), actorFixture(), {
+                keyHash: 'b'.repeat(64),
+                keyPrefix: 'lef_replaced',
+            }),
+        ).resolves.toEqual({
             kind: 'not-found',
         })
         expect(managerMock.insert).not.toHaveBeenCalled()
@@ -176,9 +187,7 @@ describe('TypeOrmServiceCredentialWriter', () => {
 
     it('returns already-disabled transactionally without duplicating the audit entry', async () => {
         managerMock.update.mockResolvedValueOnce({ affected: 0, generatedMaps: [], raw: [] })
-        managerMock.findOneBy.mockResolvedValueOnce(
-            credentialFixture({ status: 'disabled' }) as ServiceCredential,
-        )
+        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }) as ServiceCredential)
 
         const result = await writer.disableWithAudit(credentialFixture({ status: 'disabled' }), actorFixture())
 

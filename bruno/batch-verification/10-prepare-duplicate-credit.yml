@@ -20,16 +20,8 @@ runtime:
     scripts:
         - type: before-request
           code: |-
-              const response = await fetch(`${bru.getEnvVar('oidcBackchannelUrl')}/protocol/openid-connect/token`, {
-                method: 'POST', body: new URLSearchParams({ grant_type: 'client_credentials',
-                  client_id: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_ID'),
-                  client_secret: bru.getProcessEnv('KEYCLOAK_SERVICE_CLIENT_SECRET'),
-                }),
-              });
-              const payload = await response.json();
-              if (!response.ok || !payload.access_token) throw new Error('Fixture token request failed');
-              bru.setVar('platformToken', payload.access_token);
-              req.setHeader('Authorization', `Bearer ${payload.access_token}`);
+              req.setHeader('Authorization', `Bearer ${bru.getProcessEnv('PLATFORM_API_KEY')}`);
+              bru.setVar('platformToken', bru.getProcessEnv('PLATFORM_API_KEY'));
         - type: tests
           code: |-
               test('prepares one credit for one fresh unique address', function() {

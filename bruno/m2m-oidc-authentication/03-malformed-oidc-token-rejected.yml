@@ -22,6 +22,6 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('a JWT-shaped but invalid bearer token is rejected by the OIDC verification path', function() {
+        test('legacy JWT-shaped machine credentials are rejected', function() {
           expect(res.status).to.equal(401);
         });

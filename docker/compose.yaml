@@ -116,7 +116,6 @@ services:
     environment:
       PORT: 3002
       API_URL: http://api:3000
-      OIDC_BACKCHANNEL_URL: http://keycloak:8080/realms/lead-email-finder
     depends_on:
       api:
         condition: service_healthy

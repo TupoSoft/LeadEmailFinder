@@ -9,7 +9,7 @@ who is acting and what they are allowed to do.
 
 - Organizations, their memberships, and the roles/status of each membership.
 - External human identities (one row per Keycloak subject, or per native Better Auth user under the fixed
-  `AUTH_IDENTITY_ISSUER` namespace `urn:lead-email-finder:auth`) and service credentials (one row per M2M client).
+  `AUTH_IDENTITY_ISSUER` namespace `urn:lead-email-finder:auth`) and service credentials (one row per organization API key).
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
 - A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, `ActiveServiceCredentialReader`, and
@@ -46,7 +46,7 @@ who is acting and what they are allowed to do.
 - Organization-scoped service-credential lookup/listing and atomic credential/audit mutation
   (`ServiceCredentialDirectory`, `ServiceCredentialWriter`) — used by `service-client-management` since
   `module-architecture/07`. The directory returns persistence-independent credential records; the writer owns the
-  TypeORM transactions while service-client management owns authorization, provider sequencing, and compensation.
+  TypeORM transactions while service-client management owns authorization and one-time key issuance.
 
 ## Non-Responsibilities
 
@@ -115,13 +115,12 @@ its own disposable database (`dropSchema`/`synchronize`) and create/assert fixtu
 without this module owning that test. `module-architecture/08` sealed everything else. `IdentityModule` no longer
 exports `TypeOrmModule` or any repository token at the Nest DI level. A repository-wide audit confirmed zero
 production, non-test files import an identity entity by name, so no production code path can obtain an identity
-repository through this module. The eight legitimate consumers of this surface, all `.spec.ts` files that
-construct their own disposable schema, are: `oidc-permission-check.live-keycloak.integration.spec.ts` (`auth`),
+repository through this module. Supported consumers of this surface are `.spec.ts` files that
+construct disposable schemas, including: `oidc-permission-check.live-keycloak.integration.spec.ts` (`auth`),
 `bff-session-flow.live-keycloak.integration.spec.ts` (`bff-session`), `credits.service.integration.spec.ts`
 (`credits`), `membership-mutation-concurrency.integration.spec.ts` and
 `keycloak-organization-admin.live-keycloak.integration.spec.ts` (`organization-onboarding`),
-`payments.module.spec.ts` and `payment-event.handler.integration.spec.ts` (`payments`), and
-`service-client-management.live-keycloak.integration.spec.ts` (`service-client-management`). Building a
+`payments.module.spec.ts` and `payment-event.handler.integration.spec.ts` (`payments`). Building a
 port-based replacement for this — schema bootstrap plus arbitrary fixture creation/assertion across several
 tables — would mean identity growing a second, broad "testing query" surface, directly against the narrow-ports
 rationale above. So this plan kept the entity-class exports rather than inventing one.
@@ -174,7 +173,21 @@ pending, expired, and consumed interpretation. `MembershipDirectory` returns act
 `createdAt ASC, id ASC` order. Acceptance sessions return only generic accepted status when another request has
 already consumed the invitation; the first acceptance retains its existing organization, email, and role result.
 `ServiceCredentialDirectory` includes active and disabled credentials in `createdAt DESC, id DESC` order, with the
-ID providing a deterministic tie-breaker for equal timestamps. No schema change or reset is required.
+ID providing a deterministic tie-breaker for equal timestamps. Safe credential records carry `keyPrefix`, never
+`keyHash`. `ActiveServiceCredentialReader.findByKeyHash` performs an uncached lookup of the complete SHA-256 hash
+and returns that safe record, including current permissions and status. The issuer/subject read remains available
+for explicit identity lookup; machine authentication uses hashes exclusively.
+
+`ServiceCredential` stores a unique non-null `keyHash` (excluded from default entity reads) and a non-null
+12-character `keyPrefix`. Machine issuer is `AUTH_IDENTITY_ISSUER`; subject equals the stable credential UUID.
+Create and rotation accept hash/prefix material only; raw keys never enter these ports or audit details. Rotation
+conditionally replaces hash/prefix only on an active organization-scoped row. The database serializes concurrent
+updates, so disablement and deletion remain terminal. Audit failure rolls back each accompanying mutation.
+
+This schema intentionally discards OAuth machine credentials in disposable development data. Do not add migrations
+or backfills. Use the guarded checkout-owned reset described in [`docker/README.md`](../../../../docker/README.md),
+synchronize with `TYPEORM_SYNCHRONIZE=true`, and rerun development seeding. Human Keycloak identities remain intact
+in the reproducible fixture workflow until the later browser cutover.
 
 `OrganizationDirectoryReader` orders by `date_trunc('milliseconds', createdAt) DESC, id DESC`. The selected
 creation time and tuple seek predicate use that same expression, so PostgreSQL microseconds cannot disagree
@@ -243,3 +256,8 @@ it never resets another test suite's tables. Run it with:
 
 No Bruno collection targets identity directly — its persistence is exercised indirectly through every other
 module's collection (see the [root README](../../../../README.md) for the full list).
+
+`infrastructure/persistence/api-key-credential-postgres.integration.spec.ts` uses a unique schema inside an owned
+disposable `_test` database selected by `TEST_POSTGRES_URL`. It verifies hash uniqueness, safe records, uncached
+permissions, committed replacement, concurrent rotation/disable/delete, organization isolation, and rollback of
+create/rotate/disable/delete when audit insertion fails. The suite drops only its own schema during cleanup.

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import type { BrowserContext, Page } from '@playwright/test'
 import { test, expect } from '../support/privileged-login'
@@ -14,7 +14,7 @@ const collection = `/v1/organizations/${organizationId}/service-clients`
 const clients = [
     {
         id: 'b9965cfa-6f52-4faa-a7e8-ebcd0b875aaa',
-        clientId: 'client-newer',
+        keyPrefix: 'lef_abcd1234',
         description: 'Research delivery worker',
         permissions: ['verification:run'],
         status: 'active',
@@ -23,7 +23,7 @@ const clients = [
     },
     {
         id: '29965cfa-6f52-4faa-a7e8-ebcd0b875aaa',
-        clientId: 'client-disabled-with-a-long-identifier-for-responsive-layout',
+        keyPrefix: 'lef_efgh5678',
         description: 'Archived research integration',
         permissions: ['verification:read'],
         status: 'disabled',
@@ -76,17 +76,17 @@ test('server permission choices and ordered active/disabled metadata remain acce
         if (message.type() === 'error') errors.push(1)
     })
     await page.goto('/app/service-clients')
-    await expect(page).toHaveTitle('Service clients | Lead Email Finder')
+    await expect(page).toHaveTitle('API keys | Lead Email Finder')
     await expect(page.getByRole('heading', { name: copy.title, exact: true })).toBeVisible()
     await expect(page.getByRole('checkbox')).toHaveCount(grants.length)
     for (let index = 0; index < grants.length; index++) {
         await expect(page.getByRole('checkbox').nth(index)).toHaveAccessibleName(grants[index])
     }
     const rows = page.getByRole('row')
-    await expect(rows.nth(1)).toContainText(clients[0].clientId)
-    await expect(rows.nth(2)).toContainText(clients[1].clientId)
+    await expect(rows.nth(1)).toContainText(clients[0].keyPrefix)
+    await expect(rows.nth(2)).toContainText(clients[1].keyPrefix)
     await expect(rows.nth(2)).toContainText('Disabled')
-    const disabledRotate = page.getByRole('button', { name: `Rotate secret for ${clients[1].clientId}`, exact: true })
+    const disabledRotate = page.getByRole('button', { name: `Rotate API key ${clients[1].keyPrefix}`, exact: true })
     expect((await disabledRotate.count()) === 0 || (await disabledRotate.isDisabled())).toBe(true)
     await expect(page.getByLabel(copy.secretLabel, { exact: true })).toHaveCount(0)
     await accessible(page)
@@ -99,7 +99,7 @@ test('create validates and reveals once; explicit exports recover safely and des
 }) => {
     await mockAccount(context)
     await installServiceClientExportSink(page)
-    const issued = { ...clients[0], id: randomUUID(), clientId: `client-${randomUUID()}` }
+    const issued = { ...clients[0], id: randomUUID(), keyPrefix: `lef_${randomUUID().slice(0, 8)}` }
     let items = [clients[1]]
     let creates = 0
     let rotates = 0
@@ -111,8 +111,10 @@ test('create validates and reveals once; explicit exports recover safely and des
         if (request.method() === 'GET') return route.fulfill({ json: items })
         if (path.endsWith('/rotate')) {
             rotates++
+            issued.keyPrefix = `lef_${randomUUID().slice(0, 8)}`
+            items = items.map(item => (item.id === issued.id ? { ...issued } : item))
             return route.fulfill({
-                json: { ...issued, clientSecret: randomUUID() },
+                json: { ...issued, apiKey: `lef_${randomBytes(32).toString('base64url')}` },
                 headers: { 'cache-control': 'no-store' },
             })
         }
@@ -130,7 +132,7 @@ test('create validates and reveals once; explicit exports recover safely and des
         items = [issued, ...items]
         return route.fulfill({
             status: 201,
-            json: { ...issued, clientSecret: randomUUID() },
+            json: { ...issued, apiKey: `lef_${randomBytes(32).toString('base64url')}` },
             headers: { 'cache-control': 'no-store' },
         })
     })
@@ -161,7 +163,7 @@ test('create validates and reveals once; explicit exports recover safely and des
     ).toBe(true)
     await dialog.getByRole('button', { name: copy.close, exact: true }).click()
     await expect(page.getByLabel(copy.secretLabel, { exact: true })).toHaveCount(0)
-    const rotate = page.getByRole('button', { name: `Rotate secret for ${issued.clientId}`, exact: true })
+    const rotate = page.getByRole('button', { name: `Rotate API key ${issued.keyPrefix}`, exact: true })
     await rotate.click()
     const confirmation = page.getByRole('dialog', { name: copy.rotateTitle, exact: true })
     await expect(confirmation.getByRole('button', { name: copy.cancel, exact: true })).toBeFocused()
@@ -175,18 +177,18 @@ test('create validates and reveals once; explicit exports recover safely and des
     await confirmation.getByRole('button', { name: copy.rotate, exact: true }).click()
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: copy.close, exact: true }).click()
-    await page.getByRole('button', { name: `Disable client ${issued.clientId}`, exact: true }).click()
+    await page.getByRole('button', { name: `Disable API key ${issued.keyPrefix}`, exact: true }).click()
     const disable = page.getByRole('dialog', { name: copy.disableTitle, exact: true })
     await expect(disable).toContainText(copy.disableConsequence)
     expect(disables).toBe(0)
     await disable.getByRole('button', { name: copy.disable, exact: true }).click()
-    await expect(page.getByRole('row').filter({ hasText: issued.clientId })).toContainText('Disabled')
-    await page.getByRole('button', { name: `Delete client ${issued.clientId}`, exact: true }).click()
+    await expect(page.getByRole('row').filter({ hasText: issued.keyPrefix })).toContainText('Disabled')
+    await page.getByRole('button', { name: `Delete API key ${issued.keyPrefix}`, exact: true }).click()
     const deletion = page.getByRole('dialog', { name: copy.deleteTitle, exact: true })
-    await expect(deletion).toContainText(issued.clientId)
+    await expect(deletion).toContainText(issued.keyPrefix)
     expect(deletes).toBe(0)
     await deletion.getByRole('button', { name: copy.delete, exact: true }).click()
-    await expect(page.getByRole('row').filter({ hasText: issued.clientId })).toHaveCount(0)
+    await expect(page.getByRole('row').filter({ hasText: issued.keyPrefix })).toHaveCount(0)
     expect([creates, rotates, disables, deletes]).toEqual([1, 1, 1, 1])
     await accessible(page)
 })
@@ -234,11 +236,11 @@ for (const operation of ['create', 'rotate'] as const) {
             return route.abort('connectionreset')
         })
         await page.goto('/app/service-clients')
-        await expect(page.getByText(clients[0].clientId, { exact: true })).toBeVisible()
+        await expect(page.getByText(clients[0].keyPrefix, { exact: true })).toBeVisible()
         const before = reads
         if (operation === 'create') await create(page)
         else {
-            await page.getByRole('button', { name: `Rotate secret for ${clients[0].clientId}`, exact: true }).click()
+            await page.getByRole('button', { name: `Rotate API key ${clients[0].keyPrefix}`, exact: true }).click()
             await page
                 .getByRole('dialog', { name: copy.rotateTitle })
                 .getByRole('button', { name: copy.rotate, exact: true })
@@ -274,7 +276,7 @@ for (const operation of ['create', 'rotate'] as const) {
             await route
                 .fulfill({
                     status: operation === 'create' ? 201 : 200,
-                    json: { ...clients[0], clientSecret: randomUUID() },
+                    json: { ...clients[0], apiKey: `lef_${randomBytes(32).toString('base64url')}` },
                 })
                 .catch(() => undefined)
             finish()
@@ -282,7 +284,7 @@ for (const operation of ['create', 'rotate'] as const) {
         await page.goto('/app/service-clients')
         if (operation === 'create') await create(page)
         else {
-            await page.getByRole('button', { name: `Rotate secret for ${clients[0].clientId}`, exact: true }).click()
+            await page.getByRole('button', { name: `Rotate API key ${clients[0].keyPrefix}`, exact: true }).click()
             await page
                 .getByRole('dialog', { name: copy.rotateTitle })
                 .getByRole('button', { name: copy.rotate, exact: true })
@@ -316,7 +318,10 @@ test('full-page Back and Forward and forced reload clear issued secrets before r
     await context.route(`**${collection}`, route => {
         if (route.request().method() === 'GET') return route.fulfill({ json: clients })
         creates++
-        return route.fulfill({ status: 201, json: { ...clients[0], clientSecret: randomUUID() } })
+        return route.fulfill({
+            status: 201,
+            json: { ...clients[0], apiKey: `lef_${randomBytes(32).toString('base64url')}` },
+        })
     })
     await page.goto('/app/service-clients')
     await create(page)

@@ -16,7 +16,7 @@ export const applicationDestinations: readonly ApplicationDestination[] = [
     { path: '/app/verifications/batches/new', label: 'Verify a CSV file', capability: 'verification.run' },
     { path: '/app/billing', label: billingCopy.title, capability: 'billing.read' },
     { path: '/app/team', label: 'Team', capability: 'team.manage' },
-    { path: '/app/service-clients', label: 'Service clients', capability: 'service_clients.manage' },
+    { path: '/app/service-clients', label: 'API keys', capability: 'service_clients.manage' },
     { path: '/app/platform/organizations', label: 'Organizations', capability: 'platform.organizations.manage' },
     { path: '/app/platform/proxies', label: 'Proxy fleet', capability: 'platform.proxies.manage' },
 ]

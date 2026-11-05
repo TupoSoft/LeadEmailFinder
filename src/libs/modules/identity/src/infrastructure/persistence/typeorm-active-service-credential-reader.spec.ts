@@ -16,7 +16,7 @@ describe('TypeOrmActiveServiceCredentialReader', () => {
         organizationId: 'org-1',
         issuer: 'iss',
         subject: 'sub',
-        keycloakClientId: 'client-1',
+        keyPrefix: 'client-1',
         description: null,
         permissions: ['platform:admin'],
         status: 'active',
@@ -33,10 +33,19 @@ describe('TypeOrmActiveServiceCredentialReader', () => {
             organizationId: 'org-1',
             issuer: 'iss',
             subject: 'sub',
-            keycloakClientId: 'client-1',
+            keyPrefix: 'client-1',
             permissions: ['platform:admin'],
             status: 'active',
         })
+    })
+
+    it('looks up the complete hash on every attempt and never returns it', async () => {
+        repoMock.findOne.mockResolvedValue(credential)
+        const hash = 'a'.repeat(64)
+        await expect(reader.findByKeyHash(hash)).resolves.not.toHaveProperty('keyHash')
+        await reader.findByKeyHash(hash)
+        expect(repoMock.findOne).toHaveBeenCalledTimes(2)
+        expect(repoMock.findOne).toHaveBeenLastCalledWith({ where: { keyHash: hash } })
     })
 
     it('returns a disabled credential as-is, without filtering it out', async () => {

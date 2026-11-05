@@ -19,14 +19,25 @@ import {
 } from './run-collection.mjs'
 
 const checkoutRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const metadata = { apiUrl: 'http://localhost:53000', keycloakUrl: 'http://localhost:58080' }
-const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
-const serviceClient = { issuer, clientId: 'local-service', clientSecret: 'synthetic-secret-never-log' }
-const serviceCredential = {
-    organizationId: '2ea277e5-954a-4c3d-9464-cfbb0b2e1779',
-    keycloakClientId: serviceClient.clientId,
-    issuers: [issuer],
+const metadata = {
+    checkoutRoot,
+    composeProject: 'lef-test',
+    apiUrl: 'http://localhost:53000',
+    keycloakUrl: 'http://localhost:58080',
 }
+const issuer = `${metadata.keycloakUrl}/realms/lead-email-finder`
+const serviceClient = {
+    version: 1,
+    kind: 'platform',
+    checkoutRoot,
+    composeProject: metadata.composeProject,
+    issuer: 'urn:lead-email-finder:auth',
+    apiKey: 'lef_' + 'a'.repeat(43),
+    keyPrefix: 'lef_' + 'a'.repeat(8),
+    organizationId: '2ea277e5-954a-4c3d-9464-cfbb0b2e1779',
+    credentialId: randomUUID(),
+}
+const serviceCredential = serviceClient
 
 function report() {
     return [
@@ -209,8 +220,7 @@ test('pinned CLI executes all billing scripts, signatures, and rejection asserti
             {
                 BRUNO_API_URL: baseUrl,
                 OIDC_ISSUER_URL: baseUrl,
-                KEYCLOAK_SERVICE_CLIENT_ID: 'synthetic-client',
-                KEYCLOAK_SERVICE_CLIENT_SECRET: 'synthetic-client-key',
+                PLATFORM_API_KEY: 'synthetic-client-key',
                 PLATFORM_ORGANIZATION_ID: serviceCredential.organizationId,
                 PAYMENTS_STUB_WEBHOOK_SECRET: secret,
                 CUSTOMER_BILLING_TOKEN: 'synthetic-customer-token',
@@ -231,61 +241,55 @@ test('pinned CLI executes all billing scripts, signatures, and rejection asserti
     }
 })
 
-test('selects public host endpoints for BFF and internal transport with public identity for SMTP', () => {
-    assert.deepEqual(collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential), {
-        BRUNO_API_URL: metadata.apiUrl,
-        OIDC_ISSUER_URL: issuer,
-        KEYCLOAK_SERVICE_CLIENT_ID: serviceClient.clientId,
-        KEYCLOAK_SERVICE_CLIENT_SECRET: serviceClient.clientSecret,
-    })
-    const environment = collectionEnvironment('smtp-dev', metadata, serviceClient, serviceCredential)
-    assert.equal(environment.BRUNO_API_URL, 'http://api:3000')
-    assert.equal(environment.OIDC_BACKCHANNEL_URL, 'http://keycloak:8080/realms/lead-email-finder')
-    assert.equal(environment.OIDC_ISSUER_URL, issuer)
-    assert.equal(environment.KEYCLOAK_SERVICE_CLIENT_SECRET, serviceClient.clientSecret)
+test('uses host or Compose API endpoints with the same checkout-owned Bearer key', () => {
+    const host = collectionEnvironment('bff-sessions', metadata, serviceClient)
+    assert.equal(host.BRUNO_API_URL, metadata.apiUrl)
+    const internal = collectionEnvironment('smtp-dev', metadata, serviceClient)
+    assert.equal(internal.BRUNO_API_URL, 'http://api:3000')
+    assert.equal(host.PLATFORM_API_KEY, serviceClient.apiKey)
+    assert.equal(internal.PLATFORM_API_KEY, serviceClient.apiKey)
+    assert.equal(Object.hasOwn(internal, 'OIDC_BACKCHANNEL_URL'), false)
 })
 
 test('rejects missing or mismatched fixture metadata without exposing its values', () => {
-    for (const [client, credential] of [
-        [undefined, serviceCredential],
-        [serviceClient, undefined],
-        [{ ...serviceClient, issuer: 'http://keycloak:8080/realms/lead-email-finder' }, serviceCredential],
-        [serviceClient, { ...serviceCredential, keycloakClientId: 'another-client' }],
-        [serviceClient, { ...serviceCredential, organizationId: 'not-a-uuid' }],
-        [serviceClient, { ...serviceCredential, issuers: [] }],
+    for (const fixture of [
+        undefined,
+        { ...serviceClient, issuer: issuer },
+        { ...serviceClient, checkoutRoot: '/another-checkout' },
+        { ...serviceClient, composeProject: 'foreign' },
+        { ...serviceClient, organizationId: 'not-a-uuid' },
+        { ...serviceClient, apiKey: '' },
     ]) {
         assert.throws(
-            () => collectionEnvironment('bff-sessions', metadata, client, credential),
+            () => collectionEnvironment('bff-sessions', metadata, fixture),
             error => {
-                assert.match(error.message, /matching provisioned/)
-                assert.ok(!error.message.includes(serviceClient.clientSecret))
+                assert.match(error.message, /checkout-owned/)
+                assert.ok(!error.message.includes(serviceClient.apiKey))
                 return true
             },
         )
     }
 })
 
-test('token-minting collections always use developer sandbox and credentials never enter arguments', () => {
+test('API-key collections always use developer sandbox and credentials never enter arguments', () => {
     const environment = collectionEnvironment('smtp-dev', metadata, serviceClient, serviceCredential)
     const args = cliArguments('smtp-dev', environment, '/tmp/report.json')
     assert.deepEqual(args.slice(0, 5), ['run', '--env', 'local', '--sandbox', 'developer'])
     assert.ok(args.includes('--reporter-skip-all-headers'))
     assert.ok(args.includes('--reporter-skip-body'))
-    assert.ok(!JSON.stringify(args).includes(serviceClient.clientSecret))
-    assert.ok(!composeWorker.includes(serviceClient.clientSecret))
+    assert.ok(!JSON.stringify(args).includes(serviceClient.apiKey))
+    assert.ok(!composeWorker.includes(serviceClient.apiKey))
     assert.throws(
-        () => cliArguments('smtp-dev', { ...environment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
+        () => cliArguments('smtp-dev', { ...environment, PLATFORM_API_KEY: '' }, '/tmp/report'),
         /prerequisites/,
     )
     const bffEnvironment = collectionEnvironment('bff-sessions', metadata, serviceClient, serviceCredential)
     assert.equal(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')[4], 'developer')
     assert.ok(
-        !JSON.stringify(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')).includes(
-            serviceClient.clientSecret,
-        ),
+        !JSON.stringify(cliArguments('bff-sessions', bffEnvironment, '/tmp/report')).includes(serviceClient.apiKey),
     )
     assert.throws(
-        () => cliArguments('bff-sessions', { ...bffEnvironment, KEYCLOAK_SERVICE_CLIENT_SECRET: '' }, '/tmp/report'),
+        () => cliArguments('bff-sessions', { ...bffEnvironment, PLATFORM_API_KEY: '' }, '/tmp/report'),
         /prerequisites/,
     )
 })
@@ -451,9 +455,9 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
     })
     await new Promise(resolveListening => server.listen(0, '127.0.0.1', resolveListening))
     baseUrl = `http://127.0.0.1:${server.address().port}`
-    const testMetadata = { apiUrl: baseUrl, keycloakUrl: baseUrl }
+    const testMetadata = { ...metadata, apiUrl: baseUrl, keycloakUrl: baseUrl }
     const testIssuer = `${baseUrl}/realms/lead-email-finder`
-    const testServiceClient = { ...serviceClient, issuer: testIssuer }
+    const testServiceClient = serviceClient
     const testServiceCredential = { ...serviceCredential, issuers: [testIssuer] }
     const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'lef-bruno-test-'))
     const previousTemp = process.env.TMPDIR

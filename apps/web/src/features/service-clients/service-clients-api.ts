@@ -23,9 +23,9 @@ export async function readServiceClients(api: ApiClient, organizationId: string,
         }),
     )
     // Allow-list metadata before query caching, even if a server accidentally adds a secret field.
-    return clients.map(({ id, clientId, description, permissions, status, createdAt, updatedAt }) => ({
+    return clients.map(({ id, keyPrefix, description, permissions, status, createdAt, updatedAt }) => ({
         id,
-        clientId,
+        keyPrefix,
         description,
         permissions,
         status,

@@ -332,13 +332,13 @@ export interface paths {
         };
         /**
          * List active and disabled service clients without secrets
-         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.
+         * @description Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Returns all organization clients ordered by createdAt DESC, id DESC. Existing secrets cannot be retrieved.
          */
         get: operations["ServiceClientsController_list"];
         put?: never;
         /**
-         * Create an organization service client and reveal its secret once
-         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.
+         * Create an organization API key and reveal it once
+         * @description Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Requested permissions must be unique and within the current account grantableServiceClientPermissions.
          */
         post: operations["ServiceClientsController_create"];
         delete?: never;
@@ -358,8 +358,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete a service client and its provider client
-         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the provider client and local credential. An already-missing provider client is treated as success.
+         * Delete an organization API key
+         * @description Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Deletes the local credential immediately.
          */
         delete: operations["ServiceClientsController_remove"];
         options?: never;
@@ -378,7 +378,7 @@ export interface paths {
         put?: never;
         /**
          * Disable a service client immediately
-         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.
+         * @description Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. Revokes request authentication locally. Disabled clients remain listed. There is no re-enable endpoint.
          */
         post: operations["ServiceClientsController_disable"];
         delete?: never;
@@ -398,7 +398,7 @@ export interface paths {
         put?: never;
         /**
          * Invalidate the current secret and reveal a replacement once
-         * @description Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.
+         * @description Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header. A missing client or a client in another organization returns the same 404. Do not automatically retry when the outcome is uncertain.
          */
         post: operations["ServiceClientsController_rotate"];
         delete?: never;
@@ -950,12 +950,12 @@ export interface components {
             mxHost: string;
         };
         ServiceClientResponseDto: {
-            clientId: string;
             /** Format: date-time */
             createdAt: string;
             description: string | null;
             /** Format: uuid */
             id: string;
+            keyPrefix: string;
             permissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage" | "platform:admin")[];
             /** @enum {string} */
             status: "active" | "disabled";
@@ -963,14 +963,14 @@ export interface components {
             updatedAt: string;
         };
         ServiceClientSecretResponseDto: {
-            clientId: string;
             /** @description Returned only by this create or rotate response. Cannot be retrieved later. */
-            clientSecret: string;
+            apiKey: string;
             /** Format: date-time */
             createdAt: string;
             description: string | null;
             /** Format: uuid */
             id: string;
+            keyPrefix: string;
             permissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage" | "platform:admin")[];
             /** @enum {string} */
             status: "active" | "disabled";
@@ -2250,7 +2250,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome. */
+            /** @description Persistence failure. Reconcile the list before explicitly retrying an uncertain outcome. */
             500: {
                 headers: {
                     /** @description Prevents storage of all create and rotate responses, including failures. */
@@ -2308,7 +2308,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Provider or persistence failure. */
+            /** @description Persistence failure. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -2440,7 +2440,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying. */
+            /** @description Persistence failure. The secret may already have changed; reconcile before explicitly retrying. */
             500: {
                 headers: {
                     /** @description Prevents storage of all create and rotate responses, including failures. */

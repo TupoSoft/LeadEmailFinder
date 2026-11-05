@@ -12,10 +12,10 @@ The pull request and conventional-commit subject are `feat(credentials): replace
 
 ## Progress
 
-- [ ] (2026-10-19) Extend identity persistence and credential lifecycle transactions for hashed API keys.
-- [ ] (2026-10-19) Replace machine authentication and add the machine-only validation endpoint.
-- [ ] (2026-10-19) Update MCP, browser credential management, callers, fixtures, and HTTP contracts.
-- [ ] (2026-10-19) Run focused validation and review one-time secret handling and revocation races.
+- [x] (2026-10-24) Extend identity persistence and credential lifecycle transactions for hashed API keys.
+- [x] (2026-10-24) Replace machine authentication and add the machine-only validation endpoint.
+- [x] (2026-10-24) Update MCP, browser credential management, callers, fixtures, and HTTP contracts.
+- [x] (2026-10-24) Run focused validation and review one-time secret handling and revocation races.
 
 ## Plan dependencies
 
@@ -23,7 +23,16 @@ The pull request and conventional-commit subject are `feat(credentials): replace
 
 ## Surprises & Discoveries
 
-None yet.
+Implementation started on 2026-10-24 at `d0efdf7`, with issue #752 assigned and marked In Progress.
+The prerequisite runtime is present. This checkout still contains Harper, so prose validation remains required.
+
+Human session principals intentionally carry `permissions: []`; auth derives their effective permissions from the
+membership role. Credential use cases retain their human owner/admin check, which implies `credentials:manage`
+under the current auth role policy, while HTTP also enforces the permission guard.
+
+The complete Jest run has three failures reproduced against the unchanged starting commit with the same checkout
+line endings: guest-network function extraction, reachable-history scanning, and the approval-manifest newline
+assertion. Authentication, lifecycle, MCP, and fixture tests pass independently.
 
 ## Decision Log
 
@@ -39,7 +48,41 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+Delivered hashed application-owned API keys, transactional issuance and audit records, uncached authentication,
+and immediate committed revocation. The browser retains one-time disclosure and uncertain-outcome recovery.
+MCP and development callers use direct Bearer keys. Human browser login remains on Keycloak.
+
+Executed validation:
+
+- Identity and credential lifecycle: 32 suites and 248 tests passed with zero skipped cases. This includes 11 real
+  PostgreSQL cases for transactions, races, unique hashes, and atomic audit writes. The connection came from private temporary
+  metadata for a newly created, ownership-labeled PostgreSQL 17 container and disposable `_test` database.
+- Authentication, BFF, MCP, and request logging: 630 tests passed in the focused combined run. The real BFF runner
+  separately executed all four required cases with zero skipped cases. Database exception logs conceal key hashes.
+- Frontend: all 678 unit tests passed. All 24 mocked browser cases passed across desktop and narrow viewports.
+  The real human-session lifecycle case passed create, export, list, rotate, disable, delete, and accessibility checks.
+  It also proved old-key rejection after rotation despite a valid browser cookie.
+- Bruno: the service-client collection passed 10 requests and 10 tests. Organization onboarding passed 23 requests
+  and 23 tests. Both used the owned isolated stack and had zero skipped requests.
+- The MCP live runner passed billing parity, single verification, batch submit/status/download, verification-only
+  initialization and tool listing, billing denial, and old-key rejection after rotate, disable, and delete.
+  Each revocation check covered initialize, list, and a tool call.
+- Seed tests passed 54 cases; proxy-fleet tests passed 86 cases. The complete Node runner check passed 132 cases.
+  Later focused fixture tests also passed kind isolation, unsafe file rejection, and strict cleanup handling.
+- All 25 OpenAPI tests passed. API, web, and MCP builds, TypeScript checks, scoped ESLint, module architecture,
+  design lint, UI audit, CI-selection fixtures, shell syntax, and Compose configuration passed.
+
+The broad Jest snapshot passed 279 suites and 3631 tests. Three unrelated failing suites reproduced at the unchanged
+starting commit with the same checkout line endings: guest-network function extraction, reachable-history scanning,
+and the approval-manifest newline assertion. Optional runtime-gated cases were not counted as executed evidence.
+
+The live stack used project `lef-752-a51f` with allocated ports. Tests preserved the default stack. Existing Windows line endings in
+entry points and local secret files required normalization before container startup; normalized Git contents did not
+change. Only the new owned database's password was aligned. Repeated seeds preserved fixture keys and IDs.
+
+The optional SMTP verification overlay and Paddle sandbox were not enabled for live end-to-end checks. Their
+changed callers passed fixture tests and available static checks. No provider, production, migration, or unrelated
+business behavior was added. Old OAuth machine credentials require the documented disposable reset and reseed.
 
 ## Context and Orientation
 
@@ -48,15 +91,15 @@ Planning basis: commit `352553caa799acee39311007821d50a7a98c4cd7`. Before implem
 For the credential screen read `apps/web/AGENTS.md`, `DESIGN.md`, `UX-CONTRACT.md`, and the local frontend design,
 premium, React, and testing skills. Preserve the approved design and lifecycle behavior.
 
-`src/libs/modules/service-client-management/` currently provisions Keycloak clients, then coordinates local
+At the planning baseline, `src/libs/modules/service-client-management/` provisioned Keycloak clients and coordinated local
 credential/audit writes and compensation. Identity owns the credential entity and purpose-specific persistence
-ports. Auth verifies OIDC bearer tokens and resolves them to local credentials. The API host composes bearer and
-browser-cookie authenticators. MCP currently accepts HTTP Basic client credentials and caches exchanged tokens;
+ports. Auth previously verified OIDC bearer tokens and resolved them to local credentials. The API host composes bearer and
+browser-cookie authenticators. MCP previously accepted HTTP Basic client credentials and cached exchanged tokens;
 its initialization and tool-list requests therefore need the same replacement authentication as tool calls.
 
 The browser route `/app/service-clients` and its shared navigation entry already implement permission filtering,
 one-time disclosure, explicit rotation, unknown-outcome recovery, and secret cleanup. `scripts/keycloak/`, Bruno
-runners, SMTP/Paddle fixtures, and the MCP live runner also mint OAuth tokens and must move together in this PR.
+runners, SMTP/Paddle fixtures, and the MCP live runner formerly minted OAuth tokens and moved together in this PR.
 
 ## Scope and Non-Goals
 
@@ -204,6 +247,20 @@ Until `better-auth/05`, keep the legacy Keycloak human setup reproducible alongs
 Attach sanitized test counts, transaction-race results, OpenAPI changes, browser evidence, and revocation behavior
 to the implementation PR. Do not attach raw keys, hashes, email contents, fixture files, or unfiltered logs.
 The final PR uses this plan's conventional subject, links its synced issue, and updates this document as work proceeds.
+
+Validation commands included the plan's focused Jest, PostgreSQL, web, build, architecture, and OpenAPI commands.
+The isolated live commands were `corepack pnpm test:bff-live`, `corepack pnpm bruno:service-client-rejections`,
+`corepack pnpm bruno:organization-onboarding`, `corepack pnpm test:mcp-server-live`, and
+`PLAYWRIGHT_BROWSERS_PATH=/tmp/lef-752-playwright corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients-live`.
+Temporary containers, explicitly allowlisted volumes, images, and fixture metadata were removed after ownership
+checks. The separate PostgreSQL test container was also removed. The commands used checkout-owned metadata, `COMPOSE_PROJECT_NAME=lef-752-a51f`, and allocated loopback ports; no credentials
+were passed as command arguments or printed.
+
+The exact complete prose check is:
+
+```sh
+corepack pnpm docs:lint -- .agents/plans/better-auth/02-organization-api-keys.md README.md UX-CONTRACT.md apps/mcp-server/README.md bruno/m2m-oidc-authentication/README.md bruno/mcp-authentication/README.md bruno/mcp-request-origins/README.md bruno/mcp-request-routing/README.md bruno/organization-onboarding/README.md bruno/platform-credits/README.md bruno/service-client-management/README.md bruno/smtp-dev/README.md deploy/proxy-fleet/swarm/README.md docker/README.md docker/paddle-dev/README.md docs/auth/README.md src/libs/modules/auth/README.md src/libs/modules/identity/README.md src/libs/modules/service-client-management/README.md
+```
 
 ## Plan readiness
 

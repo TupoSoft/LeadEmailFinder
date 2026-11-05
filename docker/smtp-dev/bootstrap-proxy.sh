@@ -2,27 +2,20 @@
 
 set -eu
 
-client_id="$(sed -n 's/.*"clientId": *"\([^"]*\)".*/\1/p' /service-client.json)"
-client_secret="$(sed -n 's/.*"clientSecret": *"\([^"]*\)".*/\1/p' /service-client.json)"
+api_key="$(sed -n 's/.*"apiKey": *"\([^" ]*\)".*/\1/p' /api-key.json)"
 action="${1:-reconcile}"
-
-access_token="$(
-    curl --fail --silent --show-error \
-        --data-urlencode "grant_type=client_credentials" \
-        --data-urlencode "client_id=${client_id}" \
-        --data-urlencode "client_secret=${client_secret}" \
-        "http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/token" \
-        | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
-)"
-
-if [ -z "${access_token}" ]; then
-    printf 'Failed to obtain a Client Credentials token\n' >&2
+if [ -z "${api_key}" ]; then
+    printf 'The platform API-key fixture is missing\n' >&2
     exit 1
 fi
 
+# Header material travels on stdin instead of appearing in the curl process arguments.
+api_request() {
+    printf 'Authorization: Bearer %s\n' "${api_key}" | curl --fail --silent --show-error --header @- "$@"
+}
+
 proxies="$(
-    curl --fail --silent --show-error \
-        --header "Authorization: Bearer ${access_token}" \
+    api_request \
         "http://api:3000/v1/proxies?pageSize=100"
 )"
 proxy_id="$(
@@ -32,9 +25,8 @@ proxy_id="$(
 
 if [ "${action}" = "cleanup" ]; then
     if [ -n "${proxy_id}" ]; then
-        curl --fail --silent --show-error \
+        api_request \
             --request DELETE \
-            --header "Authorization: Bearer ${access_token}" \
             "http://api:3000/v1/proxies/${proxy_id}" >/dev/null
     fi
 
@@ -57,17 +49,15 @@ done
 proxy_payload='{"protocol":3,"host":"smtp-dev-proxy.lef.test","port":1080,"auth":{"user":"smtp-dev","pass":"smtp-dev"},"state":"active","maxConcurrent":1,"requestsPerMinute":10,"description":"Local SMTP development proxy"}'
 
 if [ -n "${proxy_id}" ]; then
-    curl --fail --silent --show-error \
+    api_request \
         --request PATCH \
         --header "Content-Type: application/json" \
-        --header "Authorization: Bearer ${access_token}" \
         --data "${proxy_payload}" \
         "http://api:3000/v1/proxies/${proxy_id}" >/dev/null
 else
-    curl --fail --silent --show-error \
+    api_request \
         --request POST \
         --header "Content-Type: application/json" \
-        --header "Authorization: Bearer ${access_token}" \
         --data "${proxy_payload}" \
         "http://api:3000/v1/proxies" >/dev/null
 fi

@@ -31,6 +31,8 @@ function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheri
     const nativeSecret = resolve(testCheckout, '.dev/auth/better-auth-secret.txt')
     writeFileSync(nativeUsers, 'synthetic native fixture identifiers')
     writeFileSync(nativeSecret, 'synthetic runtime secret')
+    const apiKeyFile = resolve(testCheckout, '.dev/auth/platform-api-key.json')
+    writeFileSync(apiKeyFile, 'synthetic stale API key')
     if (scenario === 'auth-symlink-directory') {
         rmSync(resolve(testCheckout, '.dev/auth'), { recursive: true })
         const external = resolve(directory, 'external-auth')
@@ -56,21 +58,32 @@ function runReset(scenario, args = ['--confirm-project=LEF'], input = '', inheri
     if (scenario === 'complete') {
         mkdirSync(resolve(testCheckout, 'scripts/testing'), { recursive: true })
         for (const script of ['development-stack.mjs', 'refresh-development-stack.mjs']) {
-            copyFileSync(resolve(checkoutRoot, 'scripts/testing', script), resolve(testCheckout, 'scripts/testing', script))
+            copyFileSync(
+                resolve(checkoutRoot, 'scripts/testing', script),
+                resolve(testCheckout, 'scripts/testing', script),
+            )
         }
         mkdirSync(resolve(testCheckout, 'docker/secrets'), { recursive: true })
-        writeFileSync(resolve(testCheckout, 'docker/secrets/postgres_password.txt'), 'synthetic-password', { mode: 0o600 })
-        writeFileSync(developmentStackFile, JSON.stringify({
-            checkoutRoot: testCheckout,
-            composeProject: 'lef5048fb9',
-            apiUrl: 'http://localhost:53101',
-            keycloakUrl: 'http://localhost:58101',
-            postgresUrl: 'postgresql://postgres:synthetic-password@localhost:55441/lef',
-            redisUrl: 'redis://localhost:56391',
-            keycloakAdminUsername: 'admin',
-            keycloakAdminPassword: 'synthetic-admin-password',
-        }), { mode: 0o600 })
-        writeFileSync(resolve(directory, 'pnpm'), `#!${process.execPath}
+        writeFileSync(resolve(testCheckout, 'docker/secrets/postgres_password.txt'), 'synthetic-password', {
+            mode: 0o600,
+        })
+        writeFileSync(
+            developmentStackFile,
+            JSON.stringify({
+                checkoutRoot: testCheckout,
+                composeProject: 'lef5048fb9',
+                apiUrl: 'http://localhost:53101',
+                keycloakUrl: 'http://localhost:58101',
+                postgresUrl: 'postgresql://postgres:synthetic-password@localhost:55441/lef',
+                redisUrl: 'redis://localhost:56391',
+                keycloakAdminUsername: 'admin',
+                keycloakAdminPassword: 'synthetic-admin-password',
+            }),
+            { mode: 0o600 },
+        )
+        writeFileSync(
+            resolve(directory, 'pnpm'),
+            `#!${process.execPath}
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 const command = process.argv[2];
 const file = process.env.RESET_TEST_ROOT + '/.dev/keycloak/development-stack.json';
@@ -80,17 +93,23 @@ appendFileSync(process.env.RESET_TEST_TAIL_LOG, JSON.stringify({
     environment: Object.fromEntries(['COMPOSE_PROJECT_NAME', 'KEYCLOAK_URL', 'KEYCLOAK_PUBLIC_URL', 'API_URL', 'KEYCLOAK_BFF_REDIRECT_URIS', 'KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS', 'OIDC_BACKCHANNEL_URL'].map(key => [key, process.env[key] ?? null])),
     metadata: metadata ? { composeProject: metadata.composeProject, apiUrl: metadata.apiUrl, keycloakUrl: metadata.keycloakUrl } : null,
 }) + '\\n');
-if (command === 'keycloak:bootstrap-credential') writeFileSync(process.env.RESET_TEST_ROOT + '/.dev/keycloak/service-client.json', JSON.stringify({
-    issuer: 'http://localhost:58080/realms/lead-email-finder', clientId: 'synthetic-client', clientSecret: 'synthetic-secret',
+if (command === 'keycloak:bootstrap-credential') writeFileSync(process.env.RESET_TEST_ROOT + '/.dev/auth/platform-api-key.json', JSON.stringify({
+    apiKey: 'synthetic-api-key',
 }));
 if (command === 'keycloak:seed-customer-fixture') writeFileSync(process.env.RESET_TEST_ROOT + '/.dev/keycloak/customer-fixture.json', JSON.stringify({ organizationId: 'synthetic-organization' }));
-`, { mode: 0o700 })
-        writeFileSync(resolve(directory, 'curl'), `#!${process.execPath}
+`,
+            { mode: 0o700 },
+        )
+        writeFileSync(
+            resolve(directory, 'curl'),
+            `#!${process.execPath}
 const url = process.argv.at(-1);
 if (url.endsWith('/protocol/openid-connect/token')) process.stdout.write(JSON.stringify({ access_token: 'synthetic-token' }));
 else if (url.includes('/credits/')) process.stdout.write(JSON.stringify({ balance: 1000 }));
 else process.stdout.write('Synthetic gateway page');
-`, { mode: 0o700 })
+`,
+            { mode: 0o700 },
+        )
     }
     const docker = resolve(directory, 'docker')
     writeFileSync(
@@ -172,11 +191,19 @@ else if (args.includes('up') && scenario !== 'complete') process.exit(77);
         return {
             ...result,
             calls,
-            tail: existsSync(tailLog) ? readFileSync(tailLog, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [],
-            developmentStack: existsSync(developmentStackFile) ? JSON.parse(readFileSync(developmentStackFile, 'utf8')) : undefined,
+            tail: existsSync(tailLog)
+                ? readFileSync(tailLog, 'utf8')
+                      .trim()
+                      .split('\n')
+                      .map(line => JSON.parse(line))
+                : [],
+            developmentStack: existsSync(developmentStackFile)
+                ? JSON.parse(readFileSync(developmentStackFile, 'utf8'))
+                : undefined,
             browserUsersPreserved: existsSync(browserUsers),
             nativeUsersPreserved: existsSync(nativeUsers),
             nativeSecretPreserved: existsSync(nativeSecret),
+            apiKeyPreserved: existsSync(apiKeyFile),
             seedMetadataPreserved: existsSync(seedMetadata),
         }
     } finally {
@@ -261,25 +288,32 @@ test('a successful default reset replaces stale isolated metadata before human s
         OIDC_BACKCHANNEL_URL: null,
     }
     const commands = result.tail.filter(event => event.tool === 'pnpm')
-    assert.deepEqual(commands.map(event => event.command), [
-        'keycloak:provision',
-        'keycloak:bootstrap-credential',
-        'keycloak:bootstrap-operator',
-        'keycloak:seed-customer-fixture',
-        'auth:seed',
-        'keycloak:smoke',
-    ])
+    assert.deepEqual(
+        commands.map(event => event.command),
+        [
+            'keycloak:provision',
+            'keycloak:bootstrap-credential',
+            'keycloak:bootstrap-operator',
+            'keycloak:seed-customer-fixture',
+            'auth:seed',
+            'keycloak:smoke',
+        ],
+    )
     for (const command of commands) assert.deepEqual(command.environment, expectedEnvironment)
     assert.equal(commands[0].metadata.composeProject, 'lef5048fb9')
     for (const command of commands.slice(1)) {
         assert.deepEqual(command.metadata, {
-            composeProject: 'lef', apiUrl: expectedEnvironment.API_URL, keycloakUrl: expectedEnvironment.KEYCLOAK_URL,
+            composeProject: 'lef',
+            apiUrl: expectedEnvironment.API_URL,
+            keycloakUrl: expectedEnvironment.KEYCLOAK_URL,
         })
     }
-    const webReady = result.tail.findIndex(event => event.tool === 'docker' &&
-        event.args[0] === 'inspect' && event.args.includes('lef-web-1'))
-    const discovery = result.tail.findIndex(event => event.tool === 'docker' &&
-        event.args.some(arg => arg.startsWith('label=com.docker.compose.service=')))
+    const webReady = result.tail.findIndex(
+        event => event.tool === 'docker' && event.args[0] === 'inspect' && event.args.includes('lef-web-1'),
+    )
+    const discovery = result.tail.findIndex(
+        event => event.tool === 'docker' && event.args.some(arg => arg.startsWith('label=com.docker.compose.service=')),
+    )
     const firstSeed = result.tail.findIndex(event => event.command === 'keycloak:bootstrap-credential')
     assert.ok(webReady >= 0 && discovery > webReady && firstSeed > discovery)
     assert.equal(result.developmentStack.composeProject, 'lef')

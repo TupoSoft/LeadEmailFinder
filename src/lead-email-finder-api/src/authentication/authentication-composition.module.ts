@@ -5,7 +5,7 @@ import {
     AuthGuard,
     AuthModule,
     CredentialExtractor,
-    OidcCredentialAuthenticator,
+    ApiKeyCredentialAuthenticator,
 } from '@tuposoft/lead-email-finder/modules/auth'
 import {
     BffSessionCredentialAuthenticator,
@@ -26,14 +26,14 @@ import {
             provide: AuthenticationService,
             useFactory: (
                 credentialExtractor: CredentialExtractor,
-                oidcCredentialAuthenticator: OidcCredentialAuthenticator,
+                apiKeyCredentialAuthenticator: ApiKeyCredentialAuthenticator,
                 bffSessionCredentialAuthenticator: BffSessionCredentialAuthenticator,
             ) =>
                 new AuthenticationService(credentialExtractor, [
-                    oidcCredentialAuthenticator,
+                    apiKeyCredentialAuthenticator,
                     bffSessionCredentialAuthenticator,
                 ]),
-            inject: [CredentialExtractor, OidcCredentialAuthenticator, BffSessionCredentialAuthenticator],
+            inject: [CredentialExtractor, ApiKeyCredentialAuthenticator, BffSessionCredentialAuthenticator],
         },
         AuthGuard,
         { provide: APP_GUARD, useExisting: AuthGuard },

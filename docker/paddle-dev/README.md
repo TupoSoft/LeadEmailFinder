@@ -204,27 +204,20 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
   export KEYCLOAK_PUBLIC_URL=http://localhost:58080
   export POSTGRES_URL="$(cat /run/secrets/postgres_url)"
   pnpm keycloak:provision
-  pnpm keycloak:bootstrap-credential
 '
 ```
 
-Mint a short-lived token without printing the client secret or access token:
+Load the checkout-owned platform API key without printing it:
 
 ```shell
-export LEF_ACCESS_TOKEN="$(
-  docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
-    exec -T api sh -ec '
-    client_id="$(jq -r .clientId .dev/keycloak/service-client.json)"
-    client_secret="$(jq -r .clientSecret .dev/keycloak/service-client.json)"
-    curl --fail --silent --show-error \
-      --data-urlencode grant_type=client_credentials \
-      --data-urlencode "client_id=$client_id" \
-      --data-urlencode "client_secret=$client_secret" \
-      http://keycloak:8080/realms/lead-email-finder/protocol/openid-connect/token
-  ' | jq -er .access_token
-)"
-export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/keycloak/service-credential.json)"
+pnpm keycloak:bootstrap-credential
+export LEF_ACCESS_TOKEN="$(jq -er .apiKey .dev/auth/platform-api-key.json)"
+export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/auth/platform-api-key.json)"
 ```
+
+The bootstrap runs from the host checkout and verifies Docker ownership before creating the key through the
+application's transactional credential port. Rerunning it preserves a working key. The ignored file must remain a
+private regular file with mode 0600. Do not print the key or save HTTP reports containing authorization headers.
 
 ## 6. Complete One Purchase
 

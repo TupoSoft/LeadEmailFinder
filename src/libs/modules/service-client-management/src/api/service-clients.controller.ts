@@ -36,6 +36,7 @@ import { ServiceClientRotationService } from '../application/service-client-rota
 import {
     DisabledServiceClientRotationError,
     DuplicateServiceClientPermissionsError,
+    EmptyServiceClientPermissionsError,
     ServiceClientAccessDeniedError,
     ServiceClientNotFoundError,
     ServiceClientPermissionCeilingExceededError,
@@ -51,7 +52,7 @@ import {
 function toResponse(credential: ServiceCredentialDetailRecord): ServiceClientResponseDto {
     return {
         id: credential.id,
-        clientId: credential.keycloakClientId,
+        keyPrefix: credential.keyPrefix,
         description: credential.description,
         permissions: [...credential.permissions],
         status: credential.status,
@@ -68,7 +69,7 @@ const SECRET_HEADERS = {
 }
 const MUTATION_SECURITY: Record<string, string[]>[] = [{ lef_session: [], 'x-csrf-token': [] }]
 const ACCESS_DESCRIPTION =
-    'Requires credentials:manage and an owner or administrator human session. Service-client bearer tokens are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header.'
+    'Requires credentials:manage and an owner or administrator human session. API keys are rejected regardless of their permissions. Cookie mutations require a valid Origin and CSRF header.'
 
 @UseGuards(PermissionsGuard)
 @Controller('v1/organizations/:organizationId/service-clients')
@@ -84,7 +85,7 @@ export class ServiceClientsController {
     @Post()
     @ApiOperation({
         operationId: 'ServiceClientsController_create',
-        summary: 'Create an organization service client and reveal its secret once',
+        summary: 'Create an organization API key and reveal it once',
         security: MUTATION_SECURITY,
         description:
             ACCESS_DESCRIPTION +
@@ -101,8 +102,7 @@ export class ServiceClientsController {
         headers: SECRET_HEADERS,
     })
     @ApiInternalServerErrorResponse({
-        description:
-            'Provider or persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.',
+        description: 'Persistence failure. Reconcile the list before explicitly retrying an uncertain outcome.',
         headers: SECRET_HEADERS,
     })
     @RequirePermissions('credentials:manage')
@@ -113,14 +113,14 @@ export class ServiceClientsController {
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<ServiceClientSecretResponseDto> {
         return this.handleErrors(async () => {
-            const { credential, secret } = await this.serviceClientCreation.create(
+            const { credential, apiKey } = await this.serviceClientCreation.create(
                 principal,
                 organizationId,
                 description ?? null,
                 permissions,
             )
 
-            return { ...toResponse(credential), clientSecret: secret }
+            return { ...toResponse(credential), apiKey }
         })
     }
 
@@ -176,8 +176,7 @@ export class ServiceClientsController {
         headers: SECRET_HEADERS,
     })
     @ApiInternalServerErrorResponse({
-        description:
-            'Provider or persistence failure. The secret may already have changed; reconcile before explicitly retrying.',
+        description: 'Persistence failure. The secret may already have changed; reconcile before explicitly retrying.',
         headers: SECRET_HEADERS,
     })
     @RequirePermissions('credentials:manage')
@@ -188,13 +187,13 @@ export class ServiceClientsController {
         @CurrentPrincipal() principal: AuthPrincipal,
     ): Promise<ServiceClientSecretResponseDto> {
         return this.handleErrors(async () => {
-            const { credential, secret } = await this.serviceClientRotation.rotate(
+            const { credential, apiKey } = await this.serviceClientRotation.rotate(
                 principal,
                 organizationId,
                 serviceClientId,
             )
 
-            return { ...toResponse(credential), clientSecret: secret }
+            return { ...toResponse(credential), apiKey }
         })
     }
 
@@ -229,11 +228,9 @@ export class ServiceClientsController {
     @Delete(':serviceClientId')
     @ApiOperation({
         operationId: 'ServiceClientsController_remove',
-        summary: 'Delete a service client and its provider client',
+        summary: 'Delete an organization API key',
         security: MUTATION_SECURITY,
-        description:
-            ACCESS_DESCRIPTION +
-            ' Deletes the provider client and local credential. An already-missing provider client is treated as success.',
+        description: ACCESS_DESCRIPTION + ' Deletes the local credential immediately.',
     })
     @ApiNoContentResponse({ description: 'Service client deleted.' })
     @ApiBadRequestResponse({ description: 'Invalid organization or service-client UUID.' })
@@ -242,7 +239,7 @@ export class ServiceClientsController {
     @ApiNotFoundResponse({
         description: 'Service client not found, including a client outside the caller organization.',
     })
-    @ApiInternalServerErrorResponse({ description: 'Provider or persistence failure.' })
+    @ApiInternalServerErrorResponse({ description: 'Persistence failure.' })
     @RequirePermissions('credentials:manage')
     @HttpCode(HttpStatus.NO_CONTENT)
     async remove(
@@ -261,7 +258,8 @@ export class ServiceClientsController {
             }
             if (
                 error instanceof ServiceClientPermissionCeilingExceededError ||
-                error instanceof DuplicateServiceClientPermissionsError
+                error instanceof DuplicateServiceClientPermissionsError ||
+                error instanceof EmptyServiceClientPermissionsError
             ) {
                 throw new BadRequestException(error.message)
             }

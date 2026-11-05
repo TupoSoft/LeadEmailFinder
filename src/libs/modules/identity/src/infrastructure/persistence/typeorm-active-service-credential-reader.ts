@@ -11,6 +11,11 @@ export class TypeOrmActiveServiceCredentialReader implements ActiveServiceCreden
         @InjectRepository(ServiceCredential) private readonly serviceCredentialRepo: Repository<ServiceCredential>,
     ) {}
 
+    async findByKeyHash(keyHash: string): Promise<ServiceCredentialRecord | undefined> {
+        const entity = await this.serviceCredentialRepo.findOne({ where: { keyHash } })
+        return entity ? toRecord(entity) : undefined
+    }
+
     async findByIssuerAndSubject(issuer: string, subject: string): Promise<ServiceCredentialRecord | undefined> {
         const entity = await this.serviceCredentialRepo.findOne({ where: { issuer, subject } })
         return entity ? toRecord(entity) : undefined
@@ -23,7 +28,7 @@ function toRecord(entity: ServiceCredential): ServiceCredentialRecord {
         organizationId: entity.organizationId,
         issuer: entity.issuer,
         subject: entity.subject,
-        keycloakClientId: entity.keycloakClientId,
+        keyPrefix: entity.keyPrefix,
         permissions: entity.permissions,
         status: entity.status,
     }

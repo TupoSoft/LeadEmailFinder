@@ -26,6 +26,14 @@ export class AuthGuard implements CanActivate {
 
         let principal
         try {
+            // Node may discard duplicate Authorization values from `headers`.
+            const authorizationHeaders =
+                request.rawHeaders?.filter(
+                    (_, index) => index % 2 === 0 && request.rawHeaders[index].toLowerCase() === 'authorization',
+                ) ?? []
+            if (authorizationHeaders.length > 1) {
+                throw new CredentialRejectedError('Authorization must occur exactly once')
+            }
             principal = await this.authenticationService.authenticate(request.headers)
         } catch (error) {
             if (error instanceof CredentialRejectedError) {

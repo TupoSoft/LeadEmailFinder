@@ -3,12 +3,8 @@ import { KeycloakAdminPort } from './keycloak-admin-api'
 import {
     acceptOwnerInvitation,
     createOrganizationWithOwner,
-    CUSTOMER_SERVICE_CLIENT_PERMISSIONS,
-    obtainClientCredentialsToken,
-    provisionCustomerServiceClient,
     setCreditBalance,
     seedCustomerFixture,
-    upsertCustomerServiceCredential,
 } from './customer-fixture'
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -38,7 +34,7 @@ describe('createOrganizationWithOwner', () => {
         )
     })
 
-    it('throws with the response body on failure', async () => {
+    it('reports only the status on failure', async () => {
         const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(403, { message: 'forbidden' }))
 
         await expect(
@@ -73,77 +69,19 @@ describe('setCreditBalance', () => {
     })
 })
 
-describe('provisionCustomerServiceClient', () => {
-    it('creates the client, assigns the audience scope, and returns the secret and subject', async () => {
-        const api: jest.Mocked<KeycloakAdminPort> = { request: jest.fn(), requestOrUndefined: jest.fn() }
-        api.request
-            .mockResolvedValueOnce([]) // find-by-clientId: not found
-            .mockResolvedValueOnce(undefined) // POST create
-            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }]) // find-by-clientId: found
-            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }]) // client-scopes
-            .mockResolvedValueOnce([]) // default-client-scopes: not yet assigned
-            .mockResolvedValueOnce(undefined) // PUT default-client-scope
-            .mockResolvedValueOnce({ value: 'a-secret' }) // GET client-secret
-            .mockResolvedValueOnce({ id: 'service-account-user-1' }) // GET service-account-user
-
-        const result = await provisionCustomerServiceClient(api, 'lef-svc-dev-fixture')
-
-        expect(result).toEqual({ subject: 'service-account-user-1', secret: 'a-secret' })
-    })
-})
-
-describe('upsertCustomerServiceCredential', () => {
-    it('upserts a row scoped to MEMBER_PERMISSIONS', async () => {
-        const query = jest.fn().mockResolvedValue(undefined)
-        const dataSource = { query } as unknown as DataSource
-
-        await upsertCustomerServiceCredential(dataSource, 'org-1', 'service-account-1', {
-            issuer: 'http://localhost:58080/realms/lead-email-finder',
-            keycloakClientId: 'lef-svc-dev-fixture',
-        })
-
-        expect(query).toHaveBeenCalledWith(
-            expect.stringContaining('ON CONFLICT (issuer, subject) DO UPDATE'),
-            expect.arrayContaining([
-                'org-1',
-                'service-account-1',
-                'lef-svc-dev-fixture',
-                CUSTOMER_SERVICE_CLIENT_PERMISSIONS,
-            ]),
-        )
-    })
-})
-
-describe('obtainClientCredentialsToken', () => {
-    it('returns the access token on success', async () => {
-        const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { access_token: 'a-token' }))
-
-        const token = await obtainClientCredentialsToken('https://issuer', 'client-1', 'secret', fetchImpl)
-
-        expect(token).toBe('a-token')
-    })
-
-    it('throws when the grant fails', async () => {
-        const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(401, { error: 'invalid_client' }))
-
-        await expect(obtainClientCredentialsToken('https://issuer', 'client-1', 'wrong', fetchImpl)).rejects.toThrow(
-            'invalid_client',
-        )
-    })
-})
-
 describe('seedCustomerFixture', () => {
     const previousFixture = {
         issuer: 'http://localhost:58080/realms/lead-email-finder',
         organizationId: 'org-1',
         ownerEmail: 'owner@acme.lef.test',
         ownerSubject: 'owner-1',
-        keycloakClientId: 'lef-svc-dev-fixture',
+        credentialId: 'credential-1',
+        keyPrefix: 'lef_abcdefgh',
         issuers: ['http://localhost:58080/realms/lead-email-finder'],
     }
     const owner = { id: 'owner-1', email: 'owner@acme.lef.test', username: 'owner@acme.lef.test' }
 
-    it('seeds the customer credential only under the public issuer', async () => {
+    it('seeds the customer key through the supplied application bootstrap', async () => {
         const issuer = 'http://localhost:58080/realms/lead-email-finder'
         const fetchImpl = jest
             .fn()
@@ -158,11 +96,7 @@ describe('seedCustomerFixture', () => {
             .mockResolvedValueOnce([{ name: 'owner' }, { name: 'mfa_required' }])
             .mockResolvedValueOnce([{ type: 'password' }])
             .mockResolvedValueOnce(undefined)
-            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }])
-            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
-            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
-            .mockResolvedValueOnce({ value: 'test-secret' })
-            .mockResolvedValueOnce({ id: 'subject-1' })
+
         const query = jest.fn().mockResolvedValue(undefined)
 
         const result = await seedCustomerFixture({
@@ -172,12 +106,12 @@ describe('seedCustomerFixture', () => {
             api,
             dataSource: { query } as unknown as DataSource,
             fetchImpl,
+            seedApiKey: jest.fn().mockResolvedValue({ credentialId: 'credential-1', keyPrefix: 'lef_abcdefgh' }),
         })
 
         expect(result.issuers).toEqual([issuer])
         expect(result.ownerSubject).toBe('owner-1')
-        expect(query).toHaveBeenCalledTimes(1)
-        expect(query).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining([issuer]))
+        expect(query).not.toHaveBeenCalled()
         expect(JSON.stringify(query.mock.calls)).not.toContain('keycloak:8080')
     })
 
@@ -188,11 +122,7 @@ describe('seedCustomerFixture', () => {
             .mockResolvedValueOnce(owner)
             .mockResolvedValueOnce([{ name: 'owner' }, { name: 'mfa_required' }])
             .mockResolvedValueOnce([{ type: 'password' }, { type: 'otp' }])
-            .mockResolvedValueOnce([{ id: 'internal-1', clientId: 'lef-svc-dev-fixture' }])
-            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
-            .mockResolvedValueOnce([{ id: 'scope-1', name: 'lef-api-audience' }])
-            .mockResolvedValueOnce({ value: 'test-secret' })
-            .mockResolvedValueOnce({ id: 'service-subject' })
+
         const fetchImpl = jest.fn().mockResolvedValue(jsonResponse(200, { balance: 1000 }))
         const query = jest
             .fn()
@@ -205,6 +135,7 @@ describe('seedCustomerFixture', () => {
             api,
             dataSource: { query } as unknown as DataSource,
             fetchImpl,
+            seedApiKey: jest.fn().mockResolvedValue({ credentialId: 'credential-1', keyPrefix: 'lef_abcdefgh' }),
             previousFixture,
         })
         expect(result).toEqual(previousFixture)
@@ -233,6 +164,9 @@ describe('seedCustomerFixture', () => {
                     api,
                     dataSource: { query } as unknown as DataSource,
                     fetchImpl,
+                    seedApiKey: jest
+                        .fn()
+                        .mockResolvedValue({ credentialId: 'credential-1', keyPrefix: 'lef_abcdefgh' }),
                     previousFixture: previous,
                 }),
             ).rejects.toThrow('provenance')
@@ -255,6 +189,7 @@ describe('seedCustomerFixture', () => {
                 api,
                 dataSource: { query } as unknown as DataSource,
                 fetchImpl,
+                seedApiKey: jest.fn().mockResolvedValue({ credentialId: 'credential-1', keyPrefix: 'lef_abcdefgh' }),
                 previousFixture,
             }),
         ).rejects.toThrow('active owner membership')
