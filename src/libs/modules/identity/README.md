@@ -13,8 +13,8 @@ who is acting and what they are allowed to do.
 - Organization-scoped credit accounts and the debit/grant ledger rows that back them.
 - Invitations issued during organization onboarding, and audit log entries recorded by other modules.
 - A framework-free `ExternalIdentityResolver`, `ActiveMembershipReader`, `ActiveServiceCredentialReader`, and
-  `CurrentAccountReader`, used by `bff-session` (existing-identity lookup and deferred email synchronization on OIDC
-  return, active-membership checks, and browser-safe current-account fields) and `auth` (active service-credential
+  `CurrentAccountReader`, used by `bff-session` (native verified-identity resolution, status-inclusive membership
+  checks, and browser-safe current-account fields) and `auth` (active service-credential
   checks). `ExternalIdentityResolver.findExisting` performs a read without creating an identity, while
   `synchronizeEmail` updates an already accepted identity when needed; `resolveOrCreate` retains the explicit
   creation workflow. The current-account reader returns data only for exactly one active membership in the
@@ -158,6 +158,11 @@ reachable through the fifteen supported ports above, for the narrower operations
 `OrganizationCreditAccount` carries a `reserved` column (default zero) alongside `balance`, with a database check
 that `0 <= reserved <= balance`; `CreditReservation` is keyed by `(organizationId, operationId)`, with a positive
 integer `amount` and `state` one of `reserved`, `captured`, or `released` — terminal states never reopen.
+
+`ActiveMembershipReader` exposes `findForExternalIdentity`, which includes disabled memberships. Browser
+sign-in uses it to distinguish identities without any memberships from unusable existing accounts. Its existing
+organization-specific and active-only lookups retain their filters and contracts.
+
 `ActiveMembershipReader`, `ActiveServiceCredentialReader`, `CurrentAccountReader`, `InvitationPreviewReader`,
 `MembershipDirectory`, `OrganizationDirectoryReader`, and
 `ServiceCredentialDirectory` are read-only. `OrganizationRegistrationStore`, `InvitationStore.issueWithAudit`, and

@@ -14,7 +14,7 @@ const configuration: BffSessionConfiguration = {
     isSecureCookie: false,
 }
 
-function contextFor(headers: Record<string, string | undefined>): ExecutionContext {
+function contextFor(headers: Record<string, string | string[] | undefined>): ExecutionContext {
     return {
         switchToHttp: () => ({ getRequest: () => ({ headers }) }),
     } as unknown as ExecutionContext
@@ -45,5 +45,10 @@ describe('OriginGuard', () => {
 
     it('rejects a request with a malformed Referer', () => {
         expect(() => guard.canActivate(contextFor({ referer: 'not-a-url' }))).toThrow(ForbiddenException)
+    })
+    it('rejects repeated Origin values even when the first origin is trusted', () => {
+        expect(() =>
+            guard.canActivate(contextFor({ origin: ['http://localhost:53000', 'https://evil.example.test'] })),
+        ).toThrow(ForbiddenException)
     })
 })

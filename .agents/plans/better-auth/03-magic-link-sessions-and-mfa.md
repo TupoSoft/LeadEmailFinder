@@ -4,13 +4,13 @@ This is a living document maintained according to `.agents/PLANS.md`. It describ
 
 ## Purpose / Big Picture
 
-Planned conventional commit and pull-request subject: `feat(auth): replace browser login with magic links and MFA`.
+Current foundation commit and draft pull-request subject: `feat(auth): add native session boundaries and safe sign-in state`.
 
 An invited or seeded person signs in through an emailed link, confirms the sign-in explicitly, completes TOTP when required, and reaches the existing workspace. Better Auth owns the only browser session; local membership and permission records remain the business authority. The developer can exercise this complete flow through the owned Mailpit fixture, without a Keycloak password or a privileged test bypass.
 
 ## Progress
 
-- [ ] (2026-10-19) Add native-session adapters, narrow browser authentication routes, and safe session-state contracts.
+- [x] (2026-10-19; completed 2026-11-06) Add native-session adapters, narrow browser authentication routes, and safe session-state contracts.
 - [ ] (2026-10-19) Enforce magic-link token handling, membership admission, privileged MFA, deadlines, and truthful logout.
 - [ ] (2026-10-19) Replace password-based invitation provisioning and browser screens with the approved passwordless flow.
 - [ ] (2026-10-19) Update generated contracts, Bruno, runtime browser fixtures, CI selection, and module documentation.
@@ -23,10 +23,16 @@ An invited or seeded person signs in through an emailed link, confirms the sign-
 
 ## Surprises & Discoveries
 
-None yet.
+- (2026-11-06) `ActiveMembershipReader` previously exposed only active memberships or organization-specific lookup. Added a status-inclusive external-identity lookup so disabled-only accounts cannot receive organization-setup authority.
+- (2026-11-06) The pinned native server API supports `asResponse: true`, `disableCookieCache`, and independent `getSetCookie()` capture. Better Auth automatically prefixes the configured `lef_session` name on HTTPS.
+- (2026-11-06) Docker is unavailable in this environment. HTTP tests need sandbox escalation for local socket binding; unit/static results do not establish live PostgreSQL/Mailpit behavior.
+- (2026-11-06) Pre-commit review reproduced the production `excludeAll` serializer stripping plain sign-in-state output to `{}`. Added explicit response DTO serialization metadata and enabled the production serializer in controller HTTP tests; the two state-response regressions fail without the metadata and pass with it (29 focused controller/Swagger tests passed).
 
 ## Decision Log
 
+- (2026-11-06, implementation agent, user-scoped first checklist item) Deliver only the session-reader, principal/state projection, transport, and route-contract foundation. Magic-link/MFA/logout mutations validate ingress but return redacted `503 authentication_unavailable` until the next checklist item supplies token consumption, limiters, MFA writes, deadlines, replacement fencing, and revocation. No partially secured native mutation is exposed. This intermediate checkout cannot complete browser sign-in or sign-out.
+- (2026-11-06, implementation agent) Native readers currently derive the absolute bound from creation time and configuration and always report MFA as unproven (`0`). Server-owned persisted deadline/MFA fields and rotation preservation remain the next item. Legacy OAuth/Redis implementation and historical tests remain as inactive code; production BFF wiring uses only the native reader.
+- (2026-11-06, implementation agent) Refresh generated HTTP contracts and the nearest Bruno collection as necessary evidence for the routes changed in this slice. Full browser/invitation/live-fixture/CI cutover and final documentation remain unchecked later items; no frontend screen changes are included.
 - (2026-10-19, user) Browser authentication uses email magic links. Keep invitation-based membership and require TOTP for `admin`, `owner`, and `platform_admin`; do not introduce a password fallback or weaken privileged fixtures.
 - (2026-10-19, user and planning agent) Better Auth owns native sessions; preserve the existing current-account projection, local authorization, business CSRF protection, and browser cache/session boundaries. API and MCP use the machine API keys supplied by `better-auth/02`.
 - (2026-10-19, planning agent) Expose only narrow Nest BFF routes calling the native server API through infrastructure adapters. Do not mount a native catch-all handler or return native user/session/token objects.
@@ -35,7 +41,19 @@ None yet.
 
 ## Outcomes & Retrospective
 
-Not started.
+The first checklist item is implemented. The public verified-reader capability returns filtered native session facts,
+and business authentication rereads local membership and requires session MFA for privileged roles. Safe sign-in
+state contains only `state`; genuinely zero memberships are distinguished from disabled/ambiguous membership.
+Current-account retains its safe successful document and exact 401/403 errors. Native renewal/cleanup cookies are
+forwarded independently through request-local transport scopes. Narrow routes replace the legacy login/callback
+HTTP surface; pending mutations remain explicitly unavailable. The host installs auth privacy headers before body
+parsing/logging and preserves Paddle raw-body handling. Later checklist items remain unimplemented.
+
+Issue [#753](https://github.com/TupoSoft/LeadEmailFinder/issues/753) is assigned to the requesting user and its
+project-9 Status is confirmed as `In Progress`. After the user refreshed project access, the CLI verified the
+`project` scope and the board mutation returned the updated status. GitHub CLI requests require network sandbox
+escalation in this environment. The foundation is prepared as the plan's draft pull request; the remaining
+checklist items keep it incomplete and unready for merge.
 
 ## Context and Orientation
 
@@ -125,6 +143,15 @@ Application ports include `VerifiedHumanSessionReader`, native identity/session 
 - Updated live fixtures and CI execute real mail-link plus privileged MFA flows without Keycloak credentials or bypasses; focused tests, generated contracts, Bruno, architecture, types, and prose checks pass with precise evidence.
 
 ## Validation
+
+First-slice validation executed on 2026-11-06 with the pinned dependencies and Node 24.22.1:
+
+- `corepack pnpm test -- src/libs/better-auth src/libs/modules/auth src/libs/modules/bff-session src/libs/modules/identity src/lead-email-finder-api/src/authentication src/lead-email-finder-api/src/pii-safe-request-logging.integration.spec.ts src/libs/modules/payments --runInBand`: 86 suites and 949 tests passed; five environment-gated suites / 55 tests skipped. HTTP suites ran with local socket permissions. This includes the unchanged signed-webhook/raw-body payment regressions.
+- `node --test scripts/bruno/run-collection.test.mjs scripts/testing/auth-runtime.test.mjs`: 17 tests passed, zero skips. The synthetic runner executed the pinned Bruno CLI against all 17 BFF requests / 18 assertions and verified failure/report cleanup. This is not an owned-stack result.
+- `corepack pnpm architecture:check`: nine modules, zero violations. `corepack pnpm typecheck` and `corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck`: passed.
+- `corepack pnpm openapi:export`, `corepack pnpm openapi:generate`, and `corepack pnpm openapi:check`: passed. Empty enrollment/logout bodies are optional in OpenAPI, preserving existing generated-client callers. `corepack pnpm build`: passed (772 compiled files).
+- Focused ESLint on every changed/new TypeScript and JavaScript source file except generated API types: passed, zero warnings. Edited English documentation was proofread; `git diff --check` passed.
+- `corepack pnpm test:auth-runtime`: could not execute the provider suites because Docker is absent. Owned PostgreSQL/Mailpit tests, live Bruno, and full browser flows remain unverified. No assertion is made that the full plan acceptance criteria or the remaining checklist items pass.
 
 Run these commands from the repository root after the dependencies and implementation are present:
 

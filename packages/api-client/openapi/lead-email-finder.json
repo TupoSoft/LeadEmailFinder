@@ -272,6 +272,20 @@
         ],
         "type": "object"
       },
+      "AuthenticationUnavailableDto": {
+        "properties": {
+          "code": {
+            "enum": [
+              "authentication_unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
       "BatchStatusAddressCountsDto": {
         "properties": {
           "cachedAddresses": {
@@ -760,6 +774,10 @@
         ],
         "type": "object"
       },
+      "EmptyAuthMutationDto": {
+        "properties": {},
+        "type": "object"
+      },
       "GetBatchStatusResponseDto": {
         "properties": {
           "billing": {
@@ -975,6 +993,76 @@
         ],
         "type": "object"
       },
+      "MagicLinkAcceptedDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "accepted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "MagicLinkRequestDto": {
+        "properties": {
+          "destination": {
+            "description": "Relative destination under /app; invalid destinations use /app.",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address of the invited or seeded account.",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "MagicLinkVerifiedDto": {
+        "properties": {
+          "destination": {
+            "description": "Validated relative application destination from the server-owned attempt.",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "signed_out",
+              "organization_setup_required",
+              "mfa_enrollment_required",
+              "mfa_verification_required",
+              "authenticated"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "destination"
+        ],
+        "type": "object"
+      },
+      "MagicLinkVerifyDto": {
+        "properties": {
+          "token": {
+            "description": "One-time email-link token; never supplied in a URL or query parameter.",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
       "MembershipResponseDto": {
         "properties": {
           "email": {
@@ -1007,6 +1095,40 @@
           "email",
           "role",
           "status"
+        ],
+        "type": "object"
+      },
+      "MfaCodeDto": {
+        "properties": {
+          "code": {
+            "description": "Authenticator code or single-use recovery code.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "MfaEnrollmentDto": {
+        "properties": {
+          "recoveryCodes": {
+            "description": "Sensitive single-use codes, shown only once.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "totpUri": {
+            "description": "Sensitive enrollment URI; display only on the local enrollment screen.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "totpUri",
+          "recoveryCodes"
         ],
         "type": "object"
       },
@@ -1316,6 +1438,24 @@
         },
         "required": [
           "amount"
+        ],
+        "type": "object"
+      },
+      "SignInStateDto": {
+        "properties": {
+          "state": {
+            "enum": [
+              "signed_out",
+              "organization_setup_required",
+              "mfa_enrollment_required",
+              "mfa_verification_required",
+              "authenticated"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
         ],
         "type": "object"
       },
@@ -1922,217 +2062,42 @@
         ]
       }
     },
-    "/v1/auth/callback": {
-      "get": {
-        "description": "Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.",
-        "operationId": "completeBrowserAuthorization",
-        "parameters": [
-          {
-            "description": "One-time login state. Missing, blank, repeated, expired, or mismatched values fail safely.",
-            "in": "query",
-            "name": "state",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Provider authorization code. Missing, blank, or repeated values follow the safe redirect policy.",
-            "in": "query",
-            "name": "code",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Location": {
-                "description": "Same-origin application or stable callback-error URL.",
-                "schema": {
-                  "format": "uri",
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "An unexpected provider, infrastructure, or application failure occurred without exposing detail.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "The provider ID token failed integrity or claim validation. The response contains no provider detail.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "summary": "Complete browser authorization",
-        "tags": [
-          "BffSession"
-        ],
-        "x-callback-error-codes": [
-          "login_state_invalid",
-          "authorization_code_exchange_failed",
-          "active_membership_required"
-        ]
-      }
-    },
-    "/v1/auth/login": {
-      "get": {
-        "operationId": "loginBrowserSession",
-        "parameters": [
-          {
-            "description": "Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app.",
-            "in": "query",
-            "name": "destination",
-            "required": false,
-            "schema": {
-              "example": "/app/verification?view=recent",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge.",
-            "headers": {
-              "Location": {
-                "description": "Provider authorization URL.",
-                "schema": {
-                  "format": "uri",
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "summary": "Start browser authorization",
-        "tags": [
-          "BffSession"
-        ]
-      }
-    },
     "/v1/auth/logout": {
       "post": {
-        "description": "Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.",
         "operationId": "logoutBrowserSession",
         "parameters": [
           {
-            "description": "Fallback URL for checking the application origin when Origin is absent.",
+            "description": "Same-origin fallback when Origin is absent.",
             "in": "header",
             "name": "Referer",
             "required": false,
             "schema": {
-              "format": "uri",
               "type": "string"
             }
           },
           {
-            "description": "Must match the application origin. A same-origin Referer is accepted when Origin is absent.",
+            "description": "Exact application origin.",
             "in": "header",
             "name": "Origin",
             "required": false,
             "schema": {
-              "format": "uri",
               "type": "string"
             }
           }
         ],
-        "responses": {
-          "204": {
-            "description": "The session is revoked; the lef_session and lef_csrf_token cookies are cleared.",
-            "headers": {
-              "Set-Cookie": {
-                "description": "Expires the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyAuthMutationDto"
               }
             }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Only returned after authoritative session revocation."
           },
           "401": {
             "content": {
@@ -2142,43 +2107,20 @@
                 }
               }
             },
-            "description": "Authentication is missing, invalid, or expired."
+            "description": ""
           },
           "403": {
+            "description": "Origin or CSRF check failed."
+          },
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "error": {
-                      "enum": [
-                        "Forbidden"
-                      ],
-                      "type": "string"
-                    },
-                    "message": {
-                      "enum": [
-                        "Request origin is not allowed",
-                        "CSRF token is missing or invalid"
-                      ],
-                      "type": "string"
-                    },
-                    "statusCode": {
-                      "enum": [
-                        403
-                      ],
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "statusCode",
-                    "message",
-                    "error"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
                 }
               }
             },
-            "description": "The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token."
+            "description": "Authentication is temporarily unavailable."
           }
         },
         "security": [
@@ -2193,9 +2135,238 @@
         ]
       }
     },
+    "/v1/auth/magic-link/request": {
+      "post": {
+        "operationId": "requestBrowserMagicLink",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MagicLinkRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MagicLinkAcceptedDto"
+                }
+              }
+            },
+            "description": "Generic acceptance, regardless of account existence."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [],
+        "summary": "Request an email sign-in link",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/magic-link/verify": {
+      "post": {
+        "operationId": "verifyBrowserMagicLink",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MagicLinkVerifyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MagicLinkVerifiedDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [],
+        "summary": "Explicitly confirm an email sign-in link",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/mfa/enroll": {
+      "post": {
+        "operationId": "enrollBrowserMfa",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyAuthMutationDto"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrollmentDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Enroll a passwordless authenticator",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/mfa/recover": {
+      "post": {
+        "operationId": "recoverBrowserMfa",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInStateDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Use one recovery code",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/mfa/verify": {
+      "post": {
+        "operationId": "verifyBrowserMfa",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInStateDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [
+          {
+            "lef_session": [],
+            "x-csrf-token": []
+          }
+        ],
+        "summary": "Verify an authenticator code",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
     "/v1/auth/session": {
       "get": {
-        "description": "Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.",
         "operationId": "getCurrentAccount",
         "parameters": [],
         "responses": {
@@ -2207,7 +2378,7 @@
                 }
               }
             },
-            "description": "Current browser account context."
+            "description": ""
           },
           "401": {
             "content": {
@@ -2217,7 +2388,7 @@
                 }
               }
             },
-            "description": "Authentication is missing, invalid, expired, or no longer maps to a usable account."
+            "description": ""
           },
           "403": {
             "content": {
@@ -2227,7 +2398,17 @@
                 }
               }
             },
-            "description": "The authenticated credential is a service client rather than a human session."
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
           }
         },
         "security": [
@@ -2236,6 +2417,39 @@
           }
         ],
         "summary": "Read the current browser account",
+        "tags": [
+          "BffSession"
+        ]
+      }
+    },
+    "/v1/auth/sign-in-state": {
+      "get": {
+        "operationId": "getBrowserSignInState",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInStateDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationUnavailableDto"
+                }
+              }
+            },
+            "description": "Authentication is temporarily unavailable."
+          }
+        },
+        "security": [],
+        "summary": "Read safe browser sign-in state",
         "tags": [
           "BffSession"
         ]

@@ -25,13 +25,20 @@ import this library, its native instance, or Better Auth types; infrastructure a
 - `openBetterAuthRuntime(configuration, overrides)` is the framework-free composition used by the module and by
   compiled tooling. `createBetterAuthConfiguration(read)` validates settings without echoing their values.
 - `BETTER_AUTH_TABLES`, `BETTER_AUTH_COLUMNS`, and `BETTER_AUTH_ENTITIES` describe the mapped schema.
+- `nativeSessionCookieName(baseUrl)` returns the configured `lef_session` name, including the native
+  `__Secure-` prefix for HTTPS. `nativeSessionCookieEffects.run(operation, emit)` scopes captured native
+  `Set-Cookie` values to one request and emits every cookie independently in `finally`, including rejection
+  paths. Infrastructure adapters call `capture(headers)` before mapping native outcomes. Cookie effects never
+  enter application authentication results.
 
 ## Native Configuration
 
 The runtime selects the magic-link plugin with registration disabled and hashed token storage. It also selects
 passwordless TOTP. Password sign-in, telemetry, secondary session storage, and the cookie cache are disabled.
-Sessions are stored only in PostgreSQL. Native IDs are UUIDs. No HTTP handler is mounted; later API adapters call
-the native server API directly. Secure cookies follow the `APP_BASE_URL` scheme. Native log messages pass through
+Sessions are stored only in PostgreSQL. Native IDs are UUIDs. No HTTP handler is mounted; BFF infrastructure adapters
+call the native server API directly and disable session cookie caching explicitly. The native session cookie is
+`lef_session`, HttpOnly, SameSite=Lax, and scoped to `/`; HTTPS adds the `__Secure-` prefix and Secure attribute.
+Native log messages pass through
 a redaction step that removes URLs, email addresses, and token-like values.
 
 | Native model   | Table                       |

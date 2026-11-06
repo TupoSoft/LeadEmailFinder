@@ -15,7 +15,8 @@ runtime:
           expect(res.status).to.equal(200);
           expect(res.headers['content-type']).to.include('application/json');
           expect(Object.keys(res.body.paths).sort()).to.deep.equal([
-            '/credits/{organizationId}', '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
+            '/credits/{organizationId}', '/health', '/v1/auth/logout', '/v1/auth/magic-link/request', '/v1/auth/magic-link/verify', '/v1/auth/mfa/enroll',
+            '/v1/auth/mfa/recover', '/v1/auth/mfa/verify', '/v1/auth/session', '/v1/auth/sign-in-state',
             '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases', '/v1/organizations',
             '/v1/organizations/invitations/{token}', '/v1/organizations/invitations/{token}/accept',
             '/v1/organizations/{organizationId}', '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
@@ -65,18 +66,18 @@ runtime:
           expect(res.body.paths['/verifyBatch/{id}'].get.security).to.deep.include({ lef_session: [] });
           expect(res.body.paths['/verifyBatch/{id}/results'].get.responses['200'].content['text/csv'].schema.format).to.equal('binary');
           expect(Object.keys(res.body.paths['/v1/billing/credit-packs'])).to.deep.equal(['get']);
-          var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
-            return parameter.name === 'destination';
-          });
-          expect(destination.in).to.equal('query');
-          expect(destination.required).to.equal(false);
-          expect(destination.schema.type).to.equal('string');
+          expect(res.body.paths['/v1/auth/sign-in-state'].get.operationId).to.equal('getBrowserSignInState');
+          expect(res.body.paths['/v1/auth/sign-in-state'].get.security).to.deep.equal([]);
+          expect(Object.keys(res.body.components.schemas.SignInStateDto.properties)).to.deep.equal(['state']);
+          expect(res.body.components.schemas.SignInStateDto.properties.state.enum).to.deep.equal([
+            'signed_out', 'organization_setup_required', 'mfa_enrollment_required', 'mfa_verification_required', 'authenticated'
+          ]);
+          expect(res.body.paths).not.to.have.property('/v1/auth/login');
+          expect(res.body.paths).not.to.have.property('/v1/auth/callback');
           expect(res.body.paths['/v1/auth/session'].get.operationId).to.equal('getCurrentAccount');
           expect(res.body.paths['/v1/auth/logout'].post.security).to.deep.equal([
             { lef_session: [], 'x-csrf-token': [] }
           ]);
           expect(res.body.components.schemas.CurrentAccountContextDto.properties.email.nullable).to.equal(true);
-          expect(res.body.paths['/v1/auth/callback'].get['x-callback-error-codes']).to.deep.equal([
-            'login_state_invalid', 'authorization_code_exchange_failed', 'active_membership_required'
-          ]);
+          expect(res.body.paths['/v1/auth/magic-link/request'].post.responses['503'].content['application/json'].schema.$ref).to.equal('#/components/schemas/AuthenticationUnavailableDto');
         });

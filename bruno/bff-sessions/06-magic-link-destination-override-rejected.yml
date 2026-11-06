@@ -1,0 +1,31 @@
+info:
+    name: 06-magic-link-destination-override-rejected
+    type: http
+    seq: 6
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/magic-link/verify'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"token":"synthetic-unused-token","destination":"/app/override"}
+
+settings:
+    followRedirects: false
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('rejects a client destination on token confirmation', function() {
+                expect(res.status).to.equal(400);
+                expect(JSON.stringify(res.body)).not.to.include('synthetic-unused-token');
+                expect(res.headers['cache-control']).to.equal('no-store');
+                expect(res.headers['referrer-policy']).to.equal('no-referrer');
+              });

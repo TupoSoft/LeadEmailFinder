@@ -26,7 +26,7 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 export const BRUNO_VERSION = '4.1.0'
 const registry = Object.freeze({
-    'bff-sessions': Object.freeze({ requests: 15, tests: 16, sandbox: 'developer', network: 'host' }),
+    'bff-sessions': Object.freeze({ requests: 17, tests: 18, sandbox: 'developer', network: 'host' }),
     'async-verification': Object.freeze({ requests: 22, tests: 22, sandbox: 'developer', network: 'compose' }),
     'batch-verification': Object.freeze({ requests: 20, tests: 30, sandbox: 'developer', network: 'compose' }),
     'smtp-dev': Object.freeze({ requests: 47, sandbox: 'developer', network: 'compose' }),
@@ -114,6 +114,7 @@ export function collectionEnvironment(name, metadata, apiKeyFixture) {
     const fixture = validateApiKeyFixture(apiKeyFixture, metadata.checkoutRoot, metadata, 'platform')
     return {
         BRUNO_API_URL: collection.network === 'host' ? metadata.apiUrl : 'http://api:3000',
+        ...(name === 'bff-sessions' ? { BRUNO_APP_ORIGIN: new URL(metadata.apiUrl).origin } : {}),
         OIDC_ISSUER_URL: `${metadata.keycloakUrl.replace(/\/$/, '')}/realms/lead-email-finder`,
         PLATFORM_API_KEY: fixture.apiKey,
         PLATFORM_ORGANIZATION_ID: fixture.organizationId,
@@ -126,6 +127,7 @@ export function cliArguments(name, environment, reportFile) {
     const collection = registeredCollection(name)
     if (
         !environment.BRUNO_API_URL ||
+        (name === 'bff-sessions' && !environment.BRUNO_APP_ORIGIN) ||
         !environment.OIDC_ISSUER_URL ||
         !environment.PLATFORM_API_KEY ||
         (['async-verification', 'batch-verification'].includes(name) &&
@@ -154,6 +156,7 @@ export function cliArguments(name, environment, reportFile) {
         `baseUrl=${environment.BRUNO_API_URL}`,
         '--env-var',
         `oidcIssuerUrl=${environment.OIDC_ISSUER_URL}`,
+        ...(name === 'bff-sessions' ? ['--env-var', `appOrigin=${environment.BRUNO_APP_ORIGIN}`] : []),
         '--reporter-json',
         reportFile,
         '--reporter-skip-all-headers',

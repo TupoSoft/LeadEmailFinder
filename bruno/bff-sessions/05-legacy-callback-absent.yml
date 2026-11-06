@@ -1,0 +1,20 @@
+info:
+    name: 05-legacy-callback-absent
+    type: http
+    seq: 5
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/auth/callback'
+
+settings:
+    followRedirects: false
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('does not expose legacy provider callback', function() {
+                expect(res.status).to.equal(404);
+                expect(res.headers.location).to.equal(undefined);
+              });

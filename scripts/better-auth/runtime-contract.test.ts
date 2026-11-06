@@ -13,6 +13,8 @@ import {
     BETTER_AUTH_TABLES,
     BetterAuthConfiguration,
     BetterAuthRuntime,
+    nativeSessionCookieEffects,
+    nativeSessionCookieName,
     openBetterAuthRuntime,
 } from '@tuposoft/lead-email-finder/better-auth'
 import {
@@ -386,6 +388,59 @@ void test('a magic link reaches the authentication Mailpit service without loggi
         )
         assert.equal(stored.rowCount, 0, 'the database stores only a hashed token')
         for (const secretValue of [email, token, secret]) assert.equal(output.includes(secretValue), false)
+
+        const verified = await runtime.auth.api.magicLinkVerify({
+            query: { token },
+            headers: new Headers(),
+            asResponse: true,
+        })
+        assert.equal(verified.status, 200)
+        const cookieName = nativeSessionCookieName(configuration.baseUrl)
+        const sessionCookie = verified.headers.getSetCookie().find(cookie => cookie.startsWith(`${cookieName}=`))
+        assert.ok(sessionCookie, 'native verification issues the configured session cookie')
+        assert.equal(sessionCookie.includes('HttpOnly'), true)
+        assert.equal(sessionCookie.includes('SameSite=Lax'), true)
+        assert.equal(sessionCookie.includes('Path=/'), true)
+        const headers = new Headers({ cookie: sessionCookie.split(';', 1)[0] })
+        const sessionValue = (await verified.json()) as { session: { id: string; token: string } }
+        await admin.query(
+            `UPDATE ${schema}.better_auth_sessions SET expires_at = NOW() + INTERVAL '1 hour' WHERE id = $1`,
+            [sessionValue.session.id],
+        )
+
+        let renewalCookies: readonly string[] = []
+        await nativeSessionCookieEffects.run(
+            async () => {
+                const current = await runtime.auth.api.getSession({
+                    headers,
+                    query: { disableCookieCache: true },
+                    asResponse: true,
+                })
+                nativeSessionCookieEffects.capture(current.headers)
+                assert.equal(current.status, 200)
+                const value = (await current.json()) as { user: { emailVerified: boolean } }
+                assert.equal(value.user.emailVerified, true)
+            },
+            cookies => {
+                renewalCookies = cookies
+            },
+        )
+        assert.equal(
+            renewalCookies.some(cookie => cookie.startsWith(`${cookieName}=`)),
+            true,
+        )
+
+        await (await runtime.auth.$context).internalAdapter.deleteSession(sessionValue.session.token)
+        const revoked = await runtime.auth.api.getSession({
+            headers,
+            query: { disableCookieCache: true },
+            asResponse: true,
+        })
+        assert.equal(await revoked.json(), null)
+        assert.equal(
+            revoked.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=`)),
+            true,
+        )
 
         const deleted = await fetch(new URL('/api/v1/messages', mailHttpUrl), {
             method: 'DELETE',

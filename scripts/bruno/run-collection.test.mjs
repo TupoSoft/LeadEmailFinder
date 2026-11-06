@@ -60,8 +60,8 @@ function report() {
 
 test('accepts only an exact registered collection with no extra command arguments', async () => {
     assert.equal(registeredCollection('bff-sessions').network, 'host')
-    assert.equal(registeredCollection('bff-sessions').requests, 15)
-    assert.equal(registeredCollection('bff-sessions').tests, 16)
+    assert.equal(registeredCollection('bff-sessions').requests, 17)
+    assert.equal(registeredCollection('bff-sessions').tests, 18)
     assert.equal(registeredCollection('smtp-dev').network, 'compose')
     for (const name of ['../smtp-dev', '/tmp/collection', 'constructor', '__proto__', 'unknown']) {
         assert.throws(() => registeredCollection(name), /registered/)
@@ -325,10 +325,13 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
         resolve(checkoutRoot, 'packages/api-client/openapi/lead-email-finder.json'),
         'utf8',
     )
-    let wrongIssuer = false
-    let pendingStateAvailable = false
+    let wrongState = false
     let baseUrl
     const server = createServer((request, response) => {
+        if (request.url.startsWith('/v1/auth/')) {
+            response.setHeader('cache-control', 'no-store')
+            response.setHeader('referrer-policy', 'no-referrer')
+        }
         if (request.url === '/docs') {
             response.writeHead(200, { 'content-type': 'text/html' })
             response.end('<html><body><div id="swagger-ui"></div></body></html>')
@@ -361,88 +364,28 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             response.end(JSON.stringify({ statusCode: 404 }))
             return
         }
-        if (new URL(request.url, baseUrl).pathname === '/v1/auth/login') {
-            pendingStateAvailable = true
-            const url = new URL(
-                `${
-                    wrongIssuer
-                        ? 'http://keycloak:8080/realms/lead-email-finder'
-                        : `${baseUrl}/realms/lead-email-finder`
-                }/protocol/openid-connect/auth`,
-            )
-            for (const [key, value] of Object.entries({
-                response_type: 'code',
-                client_id: 'lef-web-bff',
-                code_challenge_method: 'S256',
-                code_challenge: 'test-challenge',
-                state: 'test-state',
-                nonce: 'test-nonce',
-                redirect_uri: `${baseUrl}/v1/auth/callback`,
-            }))
-                url.searchParams.set(key, value)
-            response.writeHead(302, {
-                location: url.toString(),
-                'set-cookie': [
-                    'lef_login_state=test-state; Max-Age=600; Path=/v1/auth; HttpOnly; SameSite=Lax',
-                    'lef_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
-                    'lef_csrf_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax',
-                ],
-                'cache-control': 'no-store',
-                'referrer-policy': 'no-referrer',
+        if (request.url === '/v1/auth/sign-in-state') {
+            response.writeHead(200, {
+                'content-type': 'application/json',
+                'set-cookie': 'lef_csrf_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax',
             })
-            response.end('{}')
+            response.end(JSON.stringify({ state: wrongState ? 'authenticated' : 'signed_out' }))
             return
         }
-        if (request.url === '/v1/auth/callback?state=test-state') {
-            if (request.headers.cookie !== 'lef_login_state=test-state' || !pendingStateAvailable) {
-                response.writeHead(500).end()
-                return
-            }
-            pendingStateAvailable = false
-            response.writeHead(302, {
-                location: `${baseUrl}/auth/error?code=authorization_code_exchange_failed`,
-                'set-cookie':
-                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
-                'cache-control': 'no-store',
-                'referrer-policy': 'no-referrer',
-            })
-            response.end()
+        if (['/v1/auth/login', '/v1/auth/callback', '/v1/auth/sign-in/magic-link'].includes(request.url)) {
+            response.writeHead(404, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ statusCode: 404 }))
             return
         }
-        if (request.url === '/v1/auth/callback?code=synthetic-code') {
-            if (!pendingStateAvailable) {
-                response.writeHead(500).end()
-                return
-            }
-            response.writeHead(302, {
-                location: `${baseUrl}/auth/error?code=login_state_invalid`,
-                'set-cookie':
-                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
-                'cache-control': 'no-store',
-                'referrer-policy': 'no-referrer',
-            })
-            response.end()
+        if (request.url === '/v1/auth/magic-link/verify') {
+            response.writeHead(400, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ statusCode: 400 }))
             return
         }
-        if (request.url === '/v1/auth/callback?code=synthetic-code&state=test-state') {
-            const isMismatch = request.headers.cookie === 'lef_login_state=mismatched-state'
-            const isReplay = request.headers.cookie === 'lef_login_state=test-state'
-            if (
-                (isMismatch && !pendingStateAvailable) ||
-                (isReplay && pendingStateAvailable) ||
-                (!isMismatch && !isReplay)
-            ) {
-                response.writeHead(500).end()
-                return
-            }
-            response.writeHead(302, {
-                location: `${baseUrl}/auth/error?code=login_state_invalid`,
-                'set-cookie':
-                    'lef_login_state=; Path=/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
-                'cache-control': 'no-store',
-                'referrer-policy': 'no-referrer',
-            })
-            response.end()
+        if (request.url === '/v1/auth/magic-link/request') {
+            const sameOrigin = request.headers.origin === baseUrl
+            response.writeHead(sameOrigin ? 503 : 403, { 'content-type': 'application/json' })
+            response.end(JSON.stringify(sameOrigin ? { code: 'authentication_unavailable' } : { statusCode: 403 }))
             return
         }
         if (request.url === '/v1/auth/session' && request.headers.authorization) {
@@ -470,11 +413,11 @@ test('pinned CLI executes the real BFF collection and deletes reports on success
             testServiceCredential,
         )
         assert.deepEqual(await executeCollection('bff-sessions', environment, checkoutRoot), {
-            requests: 15,
-            tests: 16,
+            requests: 17,
+            tests: 18,
         })
         assert.deepEqual(await readdir(temporaryRoot), [])
-        wrongIssuer = true
+        wrongState = true
         await assert.rejects(executeCollection('bff-sessions', environment, checkoutRoot), /raw output is withheld/)
         assert.deepEqual(await readdir(temporaryRoot), [])
     } finally {

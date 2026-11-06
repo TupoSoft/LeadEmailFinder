@@ -1,0 +1,32 @@
+info:
+    name: 16-magic-link-unavailable
+    type: http
+    seq: 16
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/magic-link/request'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email":"synthetic@example.test"}
+
+settings:
+    followRedirects: false
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('keeps pending sign-in mutations unavailable without claiming delivery', function() {
+                expect(res.status).to.equal(503);
+                expect(res.body).to.deep.equal({ code: 'authentication_unavailable' });
+                expect(res.headers['set-cookie']).to.equal(undefined);
+                expect(res.headers['cache-control']).to.equal('no-store');
+                expect(res.headers['referrer-policy']).to.equal('no-referrer');
+              });

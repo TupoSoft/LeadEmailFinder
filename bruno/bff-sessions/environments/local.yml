@@ -2,7 +2,7 @@ name: local
 variables:
   - name: baseUrl
     value: "{{process.env.BRUNO_API_URL}}"
-  - name: oidcIssuerUrl
-    value: "{{process.env.OIDC_ISSUER_URL}}"
+  - name: appOrigin
+    value: "{{process.env.BRUNO_APP_ORIGIN}}"
   - name: platformApiKey
     value: '{{process.env.PLATFORM_API_KEY}}'

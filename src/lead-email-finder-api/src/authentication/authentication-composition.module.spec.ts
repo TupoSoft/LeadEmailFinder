@@ -2,7 +2,6 @@ import { MODULE_METADATA } from '@nestjs/common/constants'
 import { APP_GUARD } from '@nestjs/core'
 import {
     AuthenticationService,
-    AuthGuard,
     AuthModule,
     CredentialExtractor,
     ApiKeyCredentialAuthenticator,
@@ -13,6 +12,7 @@ import {
     BrowserSessionMutationGuard,
 } from '@tuposoft/lead-email-finder/modules/bff-session'
 import { AuthenticationCompositionModule } from './authentication-composition.module'
+import { BrowserAuthGuard } from './browser-auth.guard'
 
 describe('AuthenticationCompositionModule', () => {
     it('imports both business modules without depending on either module depending on the other', () => {
@@ -43,7 +43,7 @@ describe('AuthenticationCompositionModule', () => {
         const appGuardProviders = providers.filter(provider => provider.provide === APP_GUARD)
 
         expect(appGuardProviders.map(provider => provider.useExisting)).toEqual([
-            AuthGuard,
+            BrowserAuthGuard,
             BrowserSessionMutationGuard,
         ])
     })

@@ -1,208 +1,112 @@
-import { INestApplication, Module } from '@nestjs/common'
+import { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
-import { BFF_SESSION_COOKIE_NAME } from '@tuposoft/lead-email-finder/modules/auth'
-import { BffSessionFlowService } from '../application/bff-session-flow.service'
 import { BFF_SESSION_CONFIGURATION } from '../application/bff-session-configuration'
 import { CurrentAccountService } from '../application/current-account.service'
+import { NativeSignInStateService, SIGN_IN_STATES } from '../application/native-sign-in-state.service'
+import { VERIFIED_HUMAN_SESSION_READER } from '../application/verified-human-session-reader'
 import { BffSessionController } from './bff-session.controller'
+import { BrowserSessionMutationGuard } from './browser-session-mutation.guard'
+import { CsrfGuard } from './csrf.guard'
+import { OriginGuard } from './origin.guard'
 
-@Module({
-    controllers: [BffSessionController],
-    providers: [
-        { provide: BffSessionFlowService, useValue: {} },
-        { provide: CurrentAccountService, useValue: {} },
-        {
-            provide: BFF_SESSION_CONFIGURATION,
-            useValue: {
-                appBaseUrl: 'https://app.example.test',
-                issuer: 'https://issuer.example.test',
-                backchannelUrl: 'https://issuer.example.test',
-                jwksUri: 'https://issuer.example.test/protocol/openid-connect/certs',
-                clientId: 'lef-web-bff',
-                clientSecret: 'not-used',
-                sessionIdleTimeoutMs: 1_000,
-                sessionAbsoluteTimeoutMs: 2_000,
-                isSecureCookie: true,
-            },
-        },
-    ],
-})
-class BffSessionSwaggerTestModule {}
-
-describe('BFF Swagger contracts', () => {
+describe('narrow native browser Swagger contracts', () => {
     let app: INestApplication
     let document: OpenAPIObject
-
     beforeAll(async () => {
-        const moduleRef = await Test.createTestingModule({ imports: [BffSessionSwaggerTestModule] }).compile()
-        app = moduleRef.createNestApplication({ logger: false })
+        const module = await Test.createTestingModule({
+            controllers: [BffSessionController],
+            providers: [
+                { provide: BFF_SESSION_CONFIGURATION, useValue: { appBaseUrl: 'https://app.example.test' } },
+                { provide: CurrentAccountService, useValue: {} },
+                { provide: NativeSignInStateService, useValue: {} },
+                { provide: VERIFIED_HUMAN_SESSION_READER, useValue: {} },
+                OriginGuard,
+                CsrfGuard,
+                BrowserSessionMutationGuard,
+            ],
+        }).compile()
+        app = module.createNestApplication({ logger: false })
         await app.init()
         const configuration = new DocumentBuilder()
-            .addCookieAuth(BFF_SESSION_COOKIE_NAME, { type: 'apiKey' }, BFF_SESSION_COOKIE_NAME)
+            .addCookieAuth('lef_session', { type: 'apiKey' }, 'lef_session')
             .addSecurity('x-csrf-token', { type: 'apiKey', in: 'header', name: 'x-csrf-token' })
             .build()
         document = SwaggerModule.createDocument(app, configuration)
     })
+    afterAll(async () => app.close())
 
-    afterAll(async () => {
-        await app.close()
+    it('publishes only the eight explicitly owned browser auth operations', () => {
+        expect(Object.keys(document.paths).sort()).toEqual([
+            '/v1/auth/logout',
+            '/v1/auth/magic-link/request',
+            '/v1/auth/magic-link/verify',
+            '/v1/auth/mfa/enroll',
+            '/v1/auth/mfa/recover',
+            '/v1/auth/mfa/verify',
+            '/v1/auth/session',
+            '/v1/auth/sign-in-state',
+        ])
     })
 
-    it('publishes the human-session security and exact success and failure schemas', () => {
+    it('retains current-account security, nullable email, safe fields, and exact error schemas', () => {
         const operation = document.paths['/v1/auth/session']?.get
-
         expect(operation?.operationId).toBe('getCurrentAccount')
-        expect(operation?.security).toEqual([{ [BFF_SESSION_COOKIE_NAME]: [] }])
-        expect(operation?.responses['200']).toMatchObject({
-            content: {
-                'application/json': { schema: { $ref: '#/components/schemas/CurrentAccountContextDto' } },
-            },
-        })
-        expect(operation?.responses['401']).toMatchObject({
-            content: {
-                'application/json': { schema: { $ref: '#/components/schemas/AuthenticationRequiredResponseDto' } },
-            },
-        })
-        expect(operation?.responses['403']).toMatchObject({
-            content: {
-                'application/json': { schema: { $ref: '#/components/schemas/HumanSessionRequiredResponseDto' } },
-            },
-        })
-    })
-
-    it('keeps email nullable and excludes platform administration from the grantable permission enum', () => {
-        const accountSchema = document.components?.schemas?.['CurrentAccountContextDto']
-        const accountProperties = 'properties' in accountSchema! ? accountSchema.properties : undefined
-        const emailSchema = accountProperties?.['email']
-        const permissionsSchema = accountProperties?.['grantableServiceClientPermissions']
-
-        expect(emailSchema).toMatchObject({ type: 'string', format: 'email', nullable: true })
-        expect(permissionsSchema).toMatchObject({
-            type: 'array',
-            items: {
-                type: 'string',
-                enum: [
-                    'verification:run',
-                    'verification:read',
-                    'members:manage',
-                    'credentials:manage',
-                    'billing:read',
-                    'billing:manage',
-                ],
-            },
-        })
-        expect(JSON.stringify(permissionsSchema)).not.toContain('platform:admin')
-        expect(Object.keys(accountProperties!)).toEqual([
+        expect(operation?.security).toEqual([{ lef_session: [] }])
+        for (const [code, dto] of [
+            ['200', 'CurrentAccountContextDto'],
+            ['401', 'AuthenticationRequiredResponseDto'],
+            ['403', 'HumanSessionRequiredResponseDto'],
+        ]) {
+            expect(operation?.responses[code]).toMatchObject({
+                content: { 'application/json': { schema: { $ref: `#/components/schemas/${dto}` } } },
+            })
+        }
+        const schema = document.components?.schemas?.CurrentAccountContextDto
+        expect(schema).toHaveProperty('properties.email', expect.objectContaining({ type: 'string', nullable: true }))
+        expect(schema && 'properties' in schema ? Object.keys(schema.properties ?? {}) : []).toEqual([
             'email',
             'membership',
             'organization',
             'capabilities',
             'grantableServiceClientPermissions',
         ])
-        expect(document.components?.schemas?.['AuthenticationRequiredResponseDto']).toMatchObject({
-            required: ['code'],
-            properties: { code: { type: 'string', enum: ['authentication_required'] } },
-        })
-        expect(document.components?.schemas?.['HumanSessionRequiredResponseDto']).toMatchObject({
-            required: ['code'],
-            properties: { code: { type: 'string', enum: ['human_session_required'] } },
-        })
     })
 
-    it('describes login as a public redirect that issues only a transient login-state cookie', () => {
-        const operation = document.paths['/v1/auth/login']?.get
-
-        expect(operation).toMatchObject({ operationId: 'loginBrowserSession', security: [] })
-        expect(Object.keys(operation!.responses)).toEqual(['302'])
-        expect(operation?.responses['302']).toMatchObject({
-            headers: {
-                Location: { schema: { type: 'string', format: 'uri' } },
-                'Set-Cookie': { description: expect.stringContaining('lef_login_state') },
-            },
+    it('publishes safe five-state output without native identity or session fields', () => {
+        expect(document.components?.schemas?.SignInStateDto).toMatchObject({
+            type: 'object',
+            properties: { state: { type: 'string', enum: [...SIGN_IN_STATES] } },
+            required: ['state'],
         })
-        expect(operation?.parameters).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    name: 'destination',
-                    in: 'query',
-                    required: false,
-                    schema: expect.objectContaining({ type: 'string' }),
-                }),
-            ]),
-        )
-        expect(operation?.requestBody).toBeUndefined()
+        const schema = document.components?.schemas?.SignInStateDto
+        expect(schema && 'properties' in schema ? Object.keys(schema.properties ?? {}) : []).toEqual(['state'])
+        expect(document.paths['/v1/auth/sign-in-state'].get?.security).toEqual([])
     })
 
-    it('requires both cookie and CSRF credentials on logout and documents its bodyless response', () => {
-        const operation = document.paths['/v1/auth/logout']?.post
-
-        expect(operation).toMatchObject({
-            operationId: 'logoutBrowserSession',
-            security: [{ lef_session: [], 'x-csrf-token': [] }],
-        })
-        expect(operation?.parameters).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ name: 'Origin', in: 'header', required: false }),
-                expect.objectContaining({ name: 'Referer', in: 'header', required: false }),
-            ]),
-        )
-        expect(operation?.parameters).not.toContainEqual(expect.objectContaining({ name: 'x-csrf-token' }))
-        expect(Object.keys(operation!.responses)).toEqual(['204', '401', '403'])
-        expect(operation?.responses['204']).not.toHaveProperty('content')
-        expect(operation?.requestBody).toBeUndefined()
-    })
-
-    it('publishes the callback query, redirect, privacy-header, and redacted error contract', () => {
-        const operation = document.paths['/v1/auth/callback']?.get
-
-        expect(operation).toMatchObject({
-            operationId: 'completeBrowserAuthorization',
-            security: [],
-            'x-callback-error-codes': [
-                'login_state_invalid',
-                'authorization_code_exchange_failed',
-                'active_membership_required',
-            ],
-        })
-        expect(operation?.parameters).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    name: 'code',
-                    in: 'query',
-                    required: false,
-                    schema: { type: 'string' },
-                }),
-                expect.objectContaining({
-                    name: 'state',
-                    in: 'query',
-                    required: false,
-                    schema: { type: 'string' },
-                }),
-            ]),
-        )
-        expect(operation?.responses['302']).toMatchObject({
-            description: expect.stringContaining('login_state_invalid'),
-            headers: {
-                Location: { schema: { type: 'string', format: 'uri' } },
-                'Set-Cookie': { schema: { type: 'string' } },
-                'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
-                'Referrer-Policy': { schema: { type: 'string', enum: ['no-referrer'] } },
-            },
-        })
-        expect(JSON.stringify(operation?.responses['302'])).toContain('authorization_code_exchange_failed')
-        expect(JSON.stringify(operation?.responses['302'])).toContain('active_membership_required')
-        for (const status of ['500', '502']) {
-            expect(operation?.responses[status]).toMatchObject({
-                headers: {
-                    'Set-Cookie': { schema: { type: 'string' } },
-                    'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
-                    'Referrer-Policy': { schema: { type: 'string', enum: ['no-referrer'] } },
+    it('documents narrow mutation bodies, their safe responses, and current fail-closed availability', () => {
+        for (const path of [
+            'magic-link/request',
+            'magic-link/verify',
+            'mfa/enroll',
+            'mfa/verify',
+            'mfa/recover',
+            'logout',
+        ]) {
+            const operation = document.paths[`/v1/auth/${path}`].post
+            expect(operation?.requestBody).toHaveProperty('content.application/json.schema.$ref')
+            expect(operation?.responses['503']).toMatchObject({
+                content: {
+                    'application/json': { schema: { $ref: '#/components/schemas/AuthenticationUnavailableDto' } },
                 },
             })
         }
-        expect(operation?.responses).not.toHaveProperty('400')
-        expect(operation?.responses).not.toHaveProperty('401')
-        expect(operation?.responses).not.toHaveProperty('403')
+        expect(document.paths['/v1/auth/magic-link/request'].post?.security).toEqual([])
+        expect(document.paths['/v1/auth/magic-link/verify'].post?.security).toEqual([])
+        expect(document.paths['/v1/auth/logout'].post?.security).toEqual([{ lef_session: [], 'x-csrf-token': [] }])
+        expect(document.paths['/v1/auth/logout'].post?.responses['204']).not.toHaveProperty('content')
+        for (const path of ['mfa/enroll', 'logout']) {
+            expect(document.paths[`/v1/auth/${path}`].post?.requestBody).toHaveProperty('required', false)
+        }
     })
 })

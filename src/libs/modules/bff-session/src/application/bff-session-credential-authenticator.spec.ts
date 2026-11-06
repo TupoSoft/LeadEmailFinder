@@ -1,134 +1,117 @@
-import { OrganizationMembershipRecord } from '@tuposoft/lead-email-finder/modules/identity'
+import {
+    AUTH_IDENTITY_ISSUER,
+    ActiveMembershipReader,
+    AuthRole,
+    OrganizationMembershipRecord,
+} from '@tuposoft/lead-email-finder/modules/identity'
 import { CredentialRejectedError } from '@tuposoft/lead-email-finder/modules/auth'
-import { SessionRecord } from '../domain/session-record'
+import { AuthenticationUnavailableError } from './authentication-unavailable.error'
 import { BffSessionCredentialAuthenticator } from './bff-session-credential-authenticator'
-import { HumanMembershipResolver } from './human-membership-resolver.service'
-import { SessionMissingError, SessionStore } from './session-store'
-import { SessionRefreshFailedError, SessionTokenRefresher } from './session-token-refresher.service'
+import { VerifiedHumanSession, VerifiedHumanSessionReader } from './verified-human-session-reader'
 
-function sampleRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
+const now = 1_800_000_000_000
+
+function session(overrides: Partial<VerifiedHumanSession> = {}): VerifiedHumanSession {
     return {
+        nativeUserId: 'native-human-1',
         externalIdentityId: 'identity-1',
-        organizationId: 'org-1',
-        issuer: 'https://issuer',
-        subject: 'human-1',
-        csrfToken: 'csrf-token',
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        accessTokenExpiresAt: Date.now() + 60_000,
-        refreshTokenExpiresAt: Date.now() + 120_000,
-        absoluteExpiresAt: Date.now() + 86_400_000,
-        createdAt: Date.now(),
+        email: 'person@example.test',
+        emailVerified: true,
+        sessionId: 'native-session-1',
+        createdAt: now - 60_000,
+        expiresAt: now + 60_000,
+        absoluteExpiresAt: now + 86_400_000,
+        mfaVerifiedAt: 0,
         ...overrides,
     }
 }
 
-describe('BffSessionCredentialAuthenticator', () => {
-    let sessionStore: jest.Mocked<SessionStore>
-    let sessionTokenRefresher: jest.Mocked<Pick<SessionTokenRefresher, 'refreshIfNeeded'>>
-    let humanMembershipResolver: jest.Mocked<Pick<HumanMembershipResolver, 'resolveActive'>>
+function membership(role: AuthRole = 'member'): OrganizationMembershipRecord {
+    return { id: 'membership-1', organizationId: 'org-1', externalIdentityId: 'identity-1', role, status: 'active' }
+}
+
+describe('BffSessionCredentialAuthenticator native sessions', () => {
+    let sessions: jest.Mocked<VerifiedHumanSessionReader>
+    let memberships: jest.Mocked<ActiveMembershipReader>
     let authenticator: BffSessionCredentialAuthenticator
+    const credential = { scheme: 'session-cookie', token: 'signed-native-credential' } as const
 
     beforeEach(() => {
-        sessionStore = { replace: jest.fn(), create: jest.fn(), get: jest.fn(), save: jest.fn(), delete: jest.fn() }
-        sessionTokenRefresher = { refreshIfNeeded: jest.fn() }
-        humanMembershipResolver = { resolveActive: jest.fn() }
-        authenticator = new BffSessionCredentialAuthenticator(
-            sessionStore,
-            sessionTokenRefresher as unknown as SessionTokenRefresher,
-            humanMembershipResolver as unknown as HumanMembershipResolver,
-        )
+        jest.spyOn(Date, 'now').mockReturnValue(now)
+        sessions = { read: jest.fn().mockResolvedValue(session()) }
+        memberships = {
+            findForExternalIdentity: jest.fn().mockResolvedValue([membership()]),
+            findActiveForExternalIdentity: jest.fn(),
+            findByOrganizationAndExternalIdentity: jest.fn(),
+        }
+        authenticator = new BffSessionCredentialAuthenticator(sessions, memberships)
     })
 
-    it('rejects a request whose session was replaced while it was authenticating', async () => {
-        sessionStore.get.mockResolvedValue({ organizationId: 'org-1', externalIdentityId: 'identity-1' } as never)
-        sessionTokenRefresher.refreshIfNeeded.mockResolvedValue({
+    afterEach(() => jest.restoreAllMocks())
+
+    it('supports only session-cookie credentials', () => {
+        expect(authenticator.supports(credential)).toBe(true)
+        expect(authenticator.supports({ scheme: 'bearer', token: 'api-key' })).toBe(false)
+    })
+
+    it('rejects unusable native sessions before reading membership', async () => {
+        sessions.read.mockResolvedValue(undefined)
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
+        expect(memberships.findForExternalIdentity).not.toHaveBeenCalled()
+    })
+
+    it('projects only native identity and local membership authority', async () => {
+        await expect(authenticator.authenticate(credential)).resolves.toEqual({
+            credentialKind: 'human_session',
+            issuer: AUTH_IDENTITY_ISSUER,
+            subject: 'native-human-1',
             organizationId: 'org-1',
-            externalIdentityId: 'identity-1',
-        } as never)
-        humanMembershipResolver.resolveActive.mockResolvedValue({ role: 'member' } as never)
-        sessionStore.save.mockRejectedValue(new SessionMissingError())
-        await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'old-session' })).rejects.toThrow(
-            CredentialRejectedError,
-        )
+            membershipRole: 'member',
+            permissions: [],
+            credentialId: 'identity-1',
+        })
+        expect(sessions.read).toHaveBeenCalledWith('signed-native-credential')
+        expect(memberships.findForExternalIdentity).toHaveBeenCalledWith('identity-1')
     })
 
-    describe('supports', () => {
-        it('supports a session-cookie credential', () => {
-            expect(authenticator.supports({ scheme: 'session-cookie', token: 'session-id' })).toBe(true)
-        })
-
-        it('does not support a bearer credential', () => {
-            expect(authenticator.supports({ scheme: 'bearer', token: 'a.b.c' })).toBe(false)
-        })
+    it.each([
+        [],
+        [{ ...membership(), status: 'disabled' }],
+        [membership(), { ...membership(), id: 'membership-2', organizationId: 'org-2' }],
+    ])('rejects missing, disabled, or ambiguous memberships (%j)', async (...records) => {
+        memberships.findForExternalIdentity.mockResolvedValue(records as readonly OrganizationMembershipRecord[])
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
     })
 
-    describe('authenticate', () => {
-        it('throws CredentialRejectedError when no session record is found', async () => {
-            sessionStore.get.mockResolvedValue(undefined)
+    it.each<AuthRole>(['admin', 'owner', 'platform_admin'])('requires session MFA for %s', async role => {
+        memberships.findForExternalIdentity.mockResolvedValue([membership(role)])
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
+        sessions.read.mockResolvedValue(session({ mfaVerifiedAt: now - 1_000 }))
+        await expect(authenticator.authenticate(credential)).resolves.toMatchObject({ membershipRole: role })
+    })
 
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                CredentialRejectedError,
-            )
-        })
+    it.each([now - 60_001, now + 1, NaN])('rejects an unproven or invalid MFA marker %s', async mfaVerifiedAt => {
+        memberships.findForExternalIdentity.mockResolvedValue([membership('owner')])
+        sessions.read.mockResolvedValue(session({ mfaVerifiedAt }))
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
+    })
 
-        it('deletes the session and rejects with CredentialRejectedError when the refresh token is dead', async () => {
-            const record = sampleRecord()
-            sessionStore.get.mockResolvedValue(record)
-            sessionTokenRefresher.refreshIfNeeded.mockRejectedValue(new SessionRefreshFailedError())
+    it('rereads membership so promotion and disablement reject the next request', async () => {
+        await expect(authenticator.authenticate(credential)).resolves.toMatchObject({ membershipRole: 'member' })
+        memberships.findForExternalIdentity.mockResolvedValue([membership('admin')])
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
+        memberships.findForExternalIdentity.mockResolvedValue([{ ...membership(), status: 'disabled' }])
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(CredentialRejectedError)
+        expect(memberships.findForExternalIdentity).toHaveBeenCalledTimes(3)
+    })
 
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                CredentialRejectedError,
-            )
-            expect(sessionStore.delete).toHaveBeenCalledWith('session-id')
-        })
+    it('preserves the redacted native reader infrastructure failure', async () => {
+        sessions.read.mockRejectedValue(new AuthenticationUnavailableError())
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(AuthenticationUnavailableError)
+    })
 
-        it('rejects when the membership resolver rejects (e.g. disabled membership)', async () => {
-            const record = sampleRecord()
-            sessionStore.get.mockResolvedValue(record)
-            sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(record)
-            humanMembershipResolver.resolveActive.mockRejectedValue(new CredentialRejectedError('disabled'))
-
-            await expect(authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })).rejects.toThrow(
-                CredentialRejectedError,
-            )
-        })
-
-        it('builds an AuthPrincipal from the refreshed record and resolved membership, and persists the refreshed record', async () => {
-            const record = sampleRecord()
-            const refreshedRecord = { ...record, accessToken: 'new-access-token' }
-            sessionStore.get.mockResolvedValue(record)
-            sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(refreshedRecord)
-            humanMembershipResolver.resolveActive.mockResolvedValue({ role: 'admin' } as OrganizationMembershipRecord)
-
-            const principal = await authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })
-
-            expect(principal).toEqual({
-                credentialKind: 'human_session',
-                issuer: 'https://issuer',
-                subject: 'human-1',
-                organizationId: 'org-1',
-                membershipRole: 'admin',
-                permissions: [],
-                credentialId: 'identity-1',
-            })
-            expect(sessionStore.save).toHaveBeenCalledWith('session-id', refreshedRecord)
-        })
-
-        it('never derives organizationId or membershipRole from anything other than the resolved membership record', async () => {
-            const record = sampleRecord({ organizationId: 'true-organization-id' })
-            sessionStore.get.mockResolvedValue(record)
-            sessionTokenRefresher.refreshIfNeeded.mockResolvedValue(record)
-            humanMembershipResolver.resolveActive.mockResolvedValue({
-                organizationId: 'true-organization-id',
-                role: 'owner',
-            } as OrganizationMembershipRecord)
-
-            const principal = await authenticator.authenticate({ scheme: 'session-cookie', token: 'session-id' })
-
-            expect(principal.organizationId).toBe('true-organization-id')
-            expect(principal.membershipRole).toBe('owner')
-            expect(humanMembershipResolver.resolveActive).toHaveBeenCalledWith('true-organization-id', 'identity-1')
-        })
+    it('maps membership infrastructure failure to redacted unavailability instead of credential rejection', async () => {
+        memberships.findForExternalIdentity.mockRejectedValue(new Error('private database connection details'))
+        await expect(authenticator.authenticate(credential)).rejects.toThrow(AuthenticationUnavailableError)
     })
 })

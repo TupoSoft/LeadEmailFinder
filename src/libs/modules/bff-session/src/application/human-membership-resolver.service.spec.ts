@@ -7,7 +7,11 @@ describe('HumanMembershipResolver', () => {
     let resolver: HumanMembershipResolver
 
     beforeEach(() => {
-        readerMock = { findByOrganizationAndExternalIdentity: jest.fn(), findActiveForExternalIdentity: jest.fn() }
+        readerMock = {
+            findByOrganizationAndExternalIdentity: jest.fn(),
+            findActiveForExternalIdentity: jest.fn(),
+            findForExternalIdentity: jest.fn(),
+        }
         resolver = new HumanMembershipResolver(readerMock)
     })
 
@@ -45,7 +49,9 @@ describe('HumanMembershipResolver', () => {
         it('rejects when there are zero active memberships', async () => {
             readerMock.findActiveForExternalIdentity.mockResolvedValue([])
 
-            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(SingleActiveMembershipRequiredError)
+            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(
+                SingleActiveMembershipRequiredError,
+            )
         })
 
         it('rejects when there is more than one active membership', async () => {
@@ -54,7 +60,9 @@ describe('HumanMembershipResolver', () => {
                 { organizationId: 'org-2' } as OrganizationMembershipRecord,
             ])
 
-            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(SingleActiveMembershipRequiredError)
+            await expect(resolver.resolveActiveForLogin('identity-1')).rejects.toThrow(
+                SingleActiveMembershipRequiredError,
+            )
         })
     })
 })

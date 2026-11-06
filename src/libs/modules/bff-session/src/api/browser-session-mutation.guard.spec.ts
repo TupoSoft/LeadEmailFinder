@@ -1,3 +1,4 @@
+import { Request } from 'express'
 import { ExecutionContext } from '@nestjs/common'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
 import { BrowserSessionMutationGuard } from './browser-session-mutation.guard'
@@ -31,10 +32,13 @@ describe('BrowserSessionMutationGuard', () => {
     beforeEach(() => {
         originGuard = { canActivate: jest.fn().mockReturnValue(true) }
         csrfGuard = { canActivate: jest.fn().mockReturnValue(true) }
-        guard = new BrowserSessionMutationGuard(originGuard as unknown as OriginGuard, csrfGuard as unknown as CsrfGuard)
+        guard = new BrowserSessionMutationGuard(
+            originGuard as unknown as OriginGuard,
+            csrfGuard as unknown as CsrfGuard,
+        )
     })
 
-    it.each(['GET', 'HEAD', 'OPTIONS'])('allows a safe %s request without checking origin or CSRF', (method) => {
+    it.each(['GET', 'HEAD', 'OPTIONS'])('allows a safe %s request without checking origin or CSRF', method => {
         expect(guard.canActivate(contextFor(method, principalFixture({})))).toBe(true)
 
         expect(originGuard.canActivate).not.toHaveBeenCalled()
@@ -84,5 +88,18 @@ describe('BrowserSessionMutationGuard', () => {
         expect(() => guard.canActivate(contextFor('PUT', principalFixture({})))).toThrow('csrf rejected')
 
         expect(originGuard.canActivate).toHaveBeenCalled()
+    })
+    it('checks limited native-session mutations without requiring a business principal', () => {
+        const origin = { checkOrigin: jest.fn().mockReturnValue(true) }
+        const csrf = { checkCsrf: jest.fn().mockReturnValue(true) }
+        const limitedGuard = new BrowserSessionMutationGuard(
+            origin as unknown as OriginGuard,
+            csrf as unknown as CsrfGuard,
+        )
+        const request = { method: 'POST', headers: {} } as Request
+
+        expect(limitedGuard.checkSessionMutation(request)).toBe(true)
+        expect(origin.checkOrigin).toHaveBeenCalledWith(request)
+        expect(csrf.checkCsrf).toHaveBeenCalledWith(request)
     })
 })

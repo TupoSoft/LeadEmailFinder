@@ -49,43 +49,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/auth/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Complete browser authorization
-         * @description Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.
-         */
-        get: operations["completeBrowserAuthorization"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Start browser authorization */
-        get: operations["loginBrowserSession"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -95,11 +58,93 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * End the browser session
-         * @description Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.
-         */
+        /** End the browser session */
         post: operations["logoutBrowserSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/magic-link/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an email sign-in link */
+        post: operations["requestBrowserMagicLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/magic-link/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicitly confirm an email sign-in link */
+        post: operations["verifyBrowserMagicLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/mfa/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll a passwordless authenticator */
+        post: operations["enrollBrowserMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/mfa/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Use one recovery code */
+        post: operations["recoverBrowserMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify an authenticator code */
+        post: operations["verifyBrowserMfa"];
         delete?: never;
         options?: never;
         head?: never;
@@ -113,11 +158,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read the current browser account
-         * @description Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.
-         */
+        /** Read the current browser account */
         get: operations["getCurrentAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sign-in-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read safe browser sign-in state */
+        get: operations["getBrowserSignInState"];
         put?: never;
         post?: never;
         delete?: never;
@@ -672,6 +731,10 @@ export interface components {
             /** @enum {string} */
             code: "authentication_required";
         };
+        AuthenticationUnavailableDto: {
+            /** @enum {string} */
+            code: "authentication_unavailable";
+        };
         BatchStatusAddressCountsDto: {
             cachedAddresses: number;
             completedAddresses: number;
@@ -819,6 +882,7 @@ export interface components {
             /** @description Display name of the active organization. */
             name: string;
         };
+        EmptyAuthMutationDto: Record<string, never>;
         GetBatchStatusResponseDto: {
             billing: components["schemas"]["BatchStatusBillingDto"];
             counts: components["schemas"]["BatchStatusAddressCountsDto"];
@@ -883,6 +947,29 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "admin" | "member";
         };
+        MagicLinkAcceptedDto: {
+            /** @enum {string} */
+            status: "accepted";
+        };
+        MagicLinkRequestDto: {
+            /** @description Relative destination under /app; invalid destinations use /app. */
+            destination?: string;
+            /**
+             * Format: email
+             * @description Email address of the invited or seeded account.
+             */
+            email: string;
+        };
+        MagicLinkVerifiedDto: {
+            /** @description Validated relative application destination from the server-owned attempt. */
+            destination: string;
+            /** @enum {string} */
+            state: "signed_out" | "organization_setup_required" | "mfa_enrollment_required" | "mfa_verification_required" | "authenticated";
+        };
+        MagicLinkVerifyDto: {
+            /** @description One-time email-link token; never supplied in a URL or query parameter. */
+            token: string;
+        };
         MembershipResponseDto: {
             /** Format: email */
             email: string | null;
@@ -892,6 +979,16 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** @enum {string} */
             status: "active" | "disabled";
+        };
+        MfaCodeDto: {
+            /** @description Authenticator code or single-use recovery code. */
+            code: string;
+        };
+        MfaEnrollmentDto: {
+            /** @description Sensitive single-use codes, shown only once. */
+            recoveryCodes: string[];
+            /** @description Sensitive enrollment URI; display only on the local enrollment screen. */
+            totpUri: string;
         };
         OrganizationDirectoryEntryDto: {
             /** Format: date-time */
@@ -980,6 +1077,10 @@ export interface components {
         SetBalanceDto: {
             /** @description Absolute credit balance */
             amount: number;
+        };
+        SignInStateDto: {
+            /** @enum {string} */
+            state: "signed_out" | "organization_setup_required" | "mfa_enrollment_required" | "mfa_verification_required" | "authenticated";
         };
         UpdateProxyDto: {
             /** @description Complete replacement username/password pair. Omission preserves stored authentication; clearing is unsupported. */
@@ -1305,112 +1406,31 @@ export interface operations {
             };
         };
     };
-    completeBrowserAuthorization: {
-        parameters: {
-            query?: {
-                /** @description One-time login state. Missing, blank, repeated, expired, or mismatched values fail safely. */
-                state?: string;
-                /** @description Provider authorization code. Missing, blank, or repeated values follow the safe redirect policy. */
-                code?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required. */
-            302: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Same-origin application or stable callback-error URL. */
-                    Location?: string;
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An unexpected provider, infrastructure, or application failure occurred without exposing detail. */
-            500: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The provider ID token failed integrity or claim validation. The response contains no provider detail. */
-            502: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    loginBrowserSession: {
-        parameters: {
-            query?: {
-                /** @description Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app. */
-                destination?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge. */
-            302: {
-                headers: {
-                    /** @description Provider authorization URL. */
-                    Location?: string;
-                    /** @description Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     logoutBrowserSession: {
         parameters: {
             query?: never;
             header?: {
-                /** @description Fallback URL for checking the application origin when Origin is absent. */
+                /** @description Same-origin fallback when Origin is absent. */
                 Referer?: string;
-                /** @description Must match the application origin. A same-origin Referer is accepted when Origin is absent. */
+                /** @description Exact application origin. */
                 Origin?: string;
             };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EmptyAuthMutationDto"];
+            };
+        };
         responses: {
-            /** @description The session is revoked; the lef_session and lef_csrf_token cookies are cleared. */
+            /** @description Only returned after authoritative session revocation. */
             204: {
                 headers: {
-                    /** @description Expires the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Authentication is missing, invalid, or expired. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1419,20 +1439,181 @@ export interface operations {
                     "application/json": components["schemas"]["AuthenticationRequiredResponseDto"];
                 };
             };
-            /** @description The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token. */
+            /** @description Origin or CSRF check failed. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        error: "Forbidden";
-                        /** @enum {string} */
-                        message: "Request origin is not allowed" | "CSRF token is missing or invalid";
-                        /** @enum {integer} */
-                        statusCode: 403;
-                    };
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    requestBrowserMagicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Generic acceptance, regardless of account existence. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkAcceptedDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    verifyBrowserMagicLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkVerifyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkVerifiedDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    enrollBrowserMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EmptyAuthMutationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    recoverBrowserMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStateDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    verifyBrowserMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStateDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
                 };
             };
         };
@@ -1446,7 +1627,6 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current browser account context. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1455,7 +1635,6 @@ export interface operations {
                     "application/json": components["schemas"]["CurrentAccountContextDto"];
                 };
             };
-            /** @description Authentication is missing, invalid, expired, or no longer maps to a usable account. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1464,13 +1643,49 @@ export interface operations {
                     "application/json": components["schemas"]["AuthenticationRequiredResponseDto"];
                 };
             };
-            /** @description The authenticated credential is a service client rather than a human session. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["HumanSessionRequiredResponseDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
+                };
+            };
+        };
+    };
+    getBrowserSignInState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInStateDto"];
+                };
+            };
+            /** @description Authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationUnavailableDto"];
                 };
             };
         };

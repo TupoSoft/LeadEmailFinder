@@ -1,124 +1,97 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import {
+    BETTER_AUTH_RUNTIME,
+    BetterAuthRuntime,
+    BetterAuthRuntimeModule,
+} from '@tuposoft/lead-email-finder/better-auth'
+import {
     ACTIVE_MEMBERSHIP_READER,
     CURRENT_ACCOUNT_READER,
     ActiveMembershipReader,
     CurrentAccountReader,
-    ExternalIdentityResolver,
     IdentityModule,
+    ExternalIdentityResolver,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import {
     AuthModule,
     SERVICE_CLIENT_GRANT_POLICY,
     ServiceClientGrantPolicy,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { BFF_SESSION_CONFIGURATION, BffSessionConfiguration } from './application/bff-session-configuration'
-import { BffSessionFlowService } from './application/bff-session-flow.service'
+import { BFF_SESSION_CONFIGURATION, BrowserSessionConfiguration } from './application/bff-session-configuration'
 import { BffSessionCredentialAuthenticator } from './application/bff-session-credential-authenticator'
 import { BrowserCapabilityPolicy } from './application/browser-capability-policy'
 import { CurrentAccountService } from './application/current-account.service'
-import { HumanMembershipResolver } from './application/human-membership-resolver.service'
-import { ID_TOKEN_VERIFIER, IdTokenVerifier } from './application/id-token-verifier'
-import { OAUTH_PROVIDER_CLIENT, OAuthProviderClient } from './application/oauth-provider-client'
-import { PENDING_LOGIN_STATE_STORE, PendingLoginStateStore } from './application/pending-login-state-store'
-import { SESSION_STORE, SessionStore } from './application/session-store'
-import { SessionTokenRefresher } from './application/session-token-refresher.service'
-import { createBffSessionConfiguration } from './infrastructure/config/bff-session-configuration'
-import { SESSION_ENCRYPTION_KEY, SessionEncryptor } from './infrastructure/crypto/session-encryptor'
-import { JoseIdTokenVerifier } from './infrastructure/jose/jose-id-token-verifier'
-import { KeycloakOAuthClient } from './infrastructure/keycloak/keycloak-oauth-client'
-import { RedisPendingLoginStateStore } from './infrastructure/redis/redis-pending-login-state-store'
-import { RedisSessionStore } from './infrastructure/redis/redis-session-store'
+import { NativeSignInStateService } from './application/native-sign-in-state.service'
+import {
+    NATIVE_HUMAN_AUTH_FACTS_READER,
+    NativeHumanAuthFactsReader,
+    VERIFIED_HUMAN_SESSION_READER,
+    VerifiedHumanSessionReader,
+} from './application/verified-human-session-reader'
+import { createNativeBrowserSessionConfiguration } from './infrastructure/config/bff-session-configuration'
+import {
+    NativeHumanAuthFactsReaderAdapter,
+    NativeVerifiedHumanSessionReader,
+} from './infrastructure/native/native-verified-human-session-reader'
 import { BffSessionController } from './api/bff-session.controller'
 import { BrowserSessionMutationGuard } from './api/browser-session-mutation.guard'
 import { CsrfGuard } from './api/csrf.guard'
 import { OriginGuard } from './api/origin.guard'
 
 @Module({
-    imports: [ConfigModule, IdentityModule, AuthModule],
+    imports: [ConfigModule, IdentityModule, AuthModule, BetterAuthRuntimeModule],
     controllers: [BffSessionController],
     providers: [
         {
             provide: BFF_SESSION_CONFIGURATION,
-            useFactory: createBffSessionConfiguration,
+            useFactory: createNativeBrowserSessionConfiguration,
             inject: [ConfigService],
         },
         {
-            provide: SESSION_ENCRYPTION_KEY,
-            useFactory: (configService: ConfigService) => configService.getOrThrow<string>('SESSION_ENCRYPTION_KEY'),
-            inject: [ConfigService],
+            provide: NativeVerifiedHumanSessionReader,
+            useFactory: (
+                runtime: BetterAuthRuntime,
+                identities: ExternalIdentityResolver,
+                configuration: BrowserSessionConfiguration,
+            ) => new NativeVerifiedHumanSessionReader(runtime, identities, configuration),
+            inject: [BETTER_AUTH_RUNTIME, ExternalIdentityResolver, BFF_SESSION_CONFIGURATION],
         },
-        { provide: OAUTH_PROVIDER_CLIENT, useClass: KeycloakOAuthClient },
-        { provide: ID_TOKEN_VERIFIER, useClass: JoseIdTokenVerifier },
-        SessionEncryptor,
-        RedisSessionStore,
-        RedisPendingLoginStateStore,
-        { provide: SESSION_STORE, useExisting: RedisSessionStore },
-        { provide: PENDING_LOGIN_STATE_STORE, useExisting: RedisPendingLoginStateStore },
+        { provide: VERIFIED_HUMAN_SESSION_READER, useExisting: NativeVerifiedHumanSessionReader },
         {
-            provide: SessionTokenRefresher,
-            useFactory: (oauthProviderClient: OAuthProviderClient) => new SessionTokenRefresher(oauthProviderClient),
-            inject: [OAUTH_PROVIDER_CLIENT],
+            provide: NATIVE_HUMAN_AUTH_FACTS_READER,
+            useFactory: (reader: NativeVerifiedHumanSessionReader) => new NativeHumanAuthFactsReaderAdapter(reader),
+            inject: [NativeVerifiedHumanSessionReader],
         },
         {
-            provide: HumanMembershipResolver,
-            useFactory: (reader: ActiveMembershipReader) => new HumanMembershipResolver(reader),
-            inject: [ACTIVE_MEMBERSHIP_READER],
+            provide: NativeSignInStateService,
+            useFactory: (
+                sessions: VerifiedHumanSessionReader,
+                memberships: ActiveMembershipReader,
+                facts: NativeHumanAuthFactsReader,
+            ) => new NativeSignInStateService(sessions, memberships, facts),
+            inject: [VERIFIED_HUMAN_SESSION_READER, ACTIVE_MEMBERSHIP_READER, NATIVE_HUMAN_AUTH_FACTS_READER],
         },
         BrowserCapabilityPolicy,
         {
             provide: CurrentAccountService,
             useFactory: (
-                currentAccountReader: CurrentAccountReader,
-                browserCapabilityPolicy: BrowserCapabilityPolicy,
-                serviceClientGrantPolicy: ServiceClientGrantPolicy,
-            ) => new CurrentAccountService(currentAccountReader, browserCapabilityPolicy, serviceClientGrantPolicy),
+                reader: CurrentAccountReader,
+                capabilities: BrowserCapabilityPolicy,
+                grants: ServiceClientGrantPolicy,
+            ) => new CurrentAccountService(reader, capabilities, grants),
             inject: [CURRENT_ACCOUNT_READER, BrowserCapabilityPolicy, SERVICE_CLIENT_GRANT_POLICY],
         },
         {
-            provide: BffSessionFlowService,
-            useFactory: (
-                oauthProviderClient: OAuthProviderClient,
-                idTokenVerifier: IdTokenVerifier,
-                configuration: BffSessionConfiguration,
-                pendingLoginStateStore: PendingLoginStateStore,
-                sessionStore: SessionStore,
-                externalIdentityResolver: ExternalIdentityResolver,
-                humanMembershipResolver: HumanMembershipResolver,
-            ) =>
-                new BffSessionFlowService(
-                    oauthProviderClient,
-                    idTokenVerifier,
-                    configuration,
-                    pendingLoginStateStore,
-                    sessionStore,
-                    externalIdentityResolver,
-                    humanMembershipResolver,
-                ),
-            inject: [
-                OAUTH_PROVIDER_CLIENT,
-                ID_TOKEN_VERIFIER,
-                BFF_SESSION_CONFIGURATION,
-                PENDING_LOGIN_STATE_STORE,
-                SESSION_STORE,
-                ExternalIdentityResolver,
-                HumanMembershipResolver,
-            ],
-        },
-        {
             provide: BffSessionCredentialAuthenticator,
-            useFactory: (
-                sessionStore: SessionStore,
-                sessionTokenRefresher: SessionTokenRefresher,
-                humanMembershipResolver: HumanMembershipResolver,
-            ) => new BffSessionCredentialAuthenticator(sessionStore, sessionTokenRefresher, humanMembershipResolver),
-            inject: [SESSION_STORE, SessionTokenRefresher, HumanMembershipResolver],
+            useFactory: (sessions: VerifiedHumanSessionReader, memberships: ActiveMembershipReader) =>
+                new BffSessionCredentialAuthenticator(sessions, memberships),
+            inject: [VERIFIED_HUMAN_SESSION_READER, ACTIVE_MEMBERSHIP_READER],
         },
         OriginGuard,
         CsrfGuard,
         BrowserSessionMutationGuard,
     ],
-    exports: [BffSessionCredentialAuthenticator, BrowserSessionMutationGuard],
+    exports: [BffSessionCredentialAuthenticator, BrowserSessionMutationGuard, VERIFIED_HUMAN_SESSION_READER],
 })
 export class BffSessionModule {}

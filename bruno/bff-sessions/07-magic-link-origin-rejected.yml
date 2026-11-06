@@ -1,0 +1,30 @@
+info:
+    name: 07-magic-link-origin-rejected
+    type: http
+    seq: 7
+
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/magic-link/request'
+    headers:
+        - name: Origin
+          value: 'https://untrusted.example.test'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {"email":"synthetic@example.test"}
+
+settings:
+    followRedirects: false
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('rejects a cross-origin first factor before any native authentication call', function() {
+                expect(res.status).to.equal(403);
+                expect(res.headers['cache-control']).to.equal('no-store');
+                expect(res.headers['referrer-policy']).to.equal('no-referrer');
+              });

@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config'
-import { createBffSessionConfiguration } from './bff-session-configuration'
+import { createBffSessionConfiguration, createNativeBrowserSessionConfiguration } from './bff-session-configuration'
 
 function configServiceWith(values: Record<string, unknown>): ConfigService {
     return {
@@ -132,5 +132,44 @@ describe('createBffSessionConfiguration', () => {
 
         expect(httpConfiguration.isSecureCookie).toBe(false)
         expect(httpsConfiguration.isSecureCookie).toBe(true)
+    })
+})
+
+describe('native browser session configuration', () => {
+    it('starts without any legacy OIDC or encryption settings', () => {
+        expect(
+            createNativeBrowserSessionConfiguration(configServiceWith({ APP_BASE_URL: 'https://app.example.test' })),
+        ).toEqual({
+            appBaseUrl: 'https://app.example.test',
+            isSecureCookie: true,
+            sessionIdleTimeoutMs: 8 * 60 * 60 * 1000,
+            sessionAbsoluteTimeoutMs: 24 * 60 * 60 * 1000,
+        })
+    })
+
+    it('retains configurable session durations', () => {
+        const configuration = createNativeBrowserSessionConfiguration(
+            configServiceWith({
+                APP_BASE_URL: 'http://localhost:53000',
+                SESSION_IDLE_TIMEOUT_MS: '1000',
+                SESSION_ABSOLUTE_TIMEOUT_MS: 2000,
+            }),
+        )
+        expect(configuration).toMatchObject({
+            sessionIdleTimeoutMs: 1000,
+            sessionAbsoluteTimeoutMs: 2000,
+            isSecureCookie: false,
+        })
+    })
+
+    it.each([0, -1, 'invalid', 1.5, ''])('rejects invalid timeouts (%p)', value => {
+        expect(() =>
+            createNativeBrowserSessionConfiguration(
+                configServiceWith({
+                    APP_BASE_URL: 'http://localhost:53000',
+                    SESSION_ABSOLUTE_TIMEOUT_MS: value,
+                }),
+            ),
+        ).toThrow('SESSION_ABSOLUTE_TIMEOUT_MS must be a positive integer')
     })
 })

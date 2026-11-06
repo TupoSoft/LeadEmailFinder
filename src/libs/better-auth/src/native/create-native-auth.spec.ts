@@ -80,6 +80,17 @@ describe('createNativeAuth', () => {
         })
     })
 
+    it('configures the BFF session cookie with the native HTTP and HTTPS scope', () => {
+        expect(compose().options.advanced?.cookies?.session_token).toEqual({
+            name: 'lef_session',
+            attributes: { httpOnly: true, sameSite: 'lax', path: '/' },
+        })
+        expect(compose('https://app.example.test').options.advanced).toMatchObject({
+            useSecureCookies: true,
+            cookies: { session_token: { name: 'lef_session' } },
+        })
+    })
+
     it('selects magic links with registration disabled and passwordless TOTP on mapped tables', () => {
         const { magicLink, twoFactor } = compose()
 

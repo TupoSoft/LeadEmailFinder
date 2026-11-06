@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
+import { ConfigModule, ConfigService } from '@nestjs/config'
+import { nativeSessionCookieName } from '@tuposoft/lead-email-finder/better-auth'
+import { BrowserAuthGuard } from './browser-auth.guard'
 import {
     AuthenticationService,
-    AuthGuard,
     AuthModule,
     CredentialExtractor,
     ApiKeyCredentialAuthenticator,
@@ -20,8 +22,14 @@ import {
  * before the browser-session mutation check.
  */
 @Module({
-    imports: [AuthModule, BffSessionModule],
+    imports: [ConfigModule, AuthModule, BffSessionModule],
     providers: [
+        {
+            provide: CredentialExtractor,
+            useFactory: (configuration: ConfigService) =>
+                new CredentialExtractor(nativeSessionCookieName(configuration.getOrThrow<string>('APP_BASE_URL'))),
+            inject: [ConfigService],
+        },
         {
             provide: AuthenticationService,
             useFactory: (
@@ -35,8 +43,8 @@ import {
                 ]),
             inject: [CredentialExtractor, ApiKeyCredentialAuthenticator, BffSessionCredentialAuthenticator],
         },
-        AuthGuard,
-        { provide: APP_GUARD, useExisting: AuthGuard },
+        BrowserAuthGuard,
+        { provide: APP_GUARD, useExisting: BrowserAuthGuard },
         { provide: APP_GUARD, useExisting: BrowserSessionMutationGuard },
     ],
     exports: [AuthenticationService],

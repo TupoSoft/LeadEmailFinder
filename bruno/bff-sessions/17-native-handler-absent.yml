@@ -1,0 +1,20 @@
+info:
+    name: 17-native-handler-absent
+    type: http
+    seq: 17
+
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/auth/sign-in/magic-link'
+
+settings:
+    followRedirects: false
+
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('does not mount a raw native authentication handler', function() {
+                expect(res.status).to.equal(404);
+                expect(res.headers['content-type']).to.include('application/json');
+              });

@@ -12,7 +12,8 @@ Authorization header fails authentication without falling back to a cookie. `Aut
 because Node can discard duplicate Authorization values before exposing the parsed headers.
 
 The module owns role permission policy, the service-client grant ceiling, reusable authentication and permission
-guards, principal accessors, and route decorators. The host composes machine and human authenticators.
+guards, principal accessors, and route decorators. The host composes machine and human authenticators and configures the actual native browser cookie name.
+Duplicate values for that configured cookie are rejected; HTTPS uses `__Secure-lef_session`.
 
 ## Non-Responsibilities
 
@@ -31,8 +32,9 @@ provider client, token exchange, or authentication cache.
 `getAuthPrincipal`, `setAuthPrincipal`, `RequirePermissions`, and `REQUIRED_PERMISSIONS_METADATA_KEY`.
 
 `AuthModule` exports the extractor, API-key authenticator, and grant policy token. The API host's
-`AuthenticationCompositionModule` creates `AuthenticationService` and installs `AuthGuard` before
-`BrowserSessionMutationGuard`. Neither business module depends on the other through the host.
+`AuthenticationCompositionModule` creates `AuthenticationService` and installs its `BrowserAuthGuard` (an `AuthGuard` subclass) before
+`BrowserSessionMutationGuard`. The host guard captures and forwards native renewal/cleanup cookies while
+keeping `AuthPrincipal` and application ports free of transport effects. Neither business module depends on the other through the host.
 
 ## Dependencies
 
@@ -58,7 +60,7 @@ revocation may finish; the next authentication observes the committed rotation, 
 ## Configuration
 
 No machine provider configuration. SHA-256 uses the built-in Node crypto implementation, wired at the composition
-root. Browser Keycloak configuration remains owned by the BFF module until its separate replacement.
+root. Native browser runtime configuration remains owned by the BFF and shared runtime composition.
 
 ## Validation
 

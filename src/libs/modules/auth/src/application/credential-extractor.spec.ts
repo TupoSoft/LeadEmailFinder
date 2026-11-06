@@ -4,6 +4,26 @@ import { BFF_SESSION_COOKIE_NAME, CredentialExtractor } from './credential-extra
 describe('CredentialExtractor', () => {
     const extractor = new CredentialExtractor()
 
+    it('uses only the configured native HTTPS cookie name', () => {
+        const secure = new CredentialExtractor('__Secure-lef_session')
+        expect(secure.extract({ cookie: 'lef_session=legacy' })).toBeUndefined()
+        expect(secure.extract({ cookie: '__Secure-lef_session=native%2Esignature' })).toEqual({
+            scheme: 'session-cookie',
+            token: 'native.signature',
+        })
+    })
+
+    it.each(['lef_session=a; lef_session=b', 'lef_session=%ZZ; lef_session=b'])(
+        'rejects ambiguous session cookies (%s)',
+        cookie => {
+            expect(() => extractor.extract({ cookie })).toThrow(CredentialRejectedError)
+            expect(extractor.extract({ authorization: 'Bearer key', cookie })).toEqual({
+                scheme: 'bearer',
+                token: 'key',
+            })
+        },
+    )
+
     it('extracts a bearer token from the Authorization header', () => {
         const credential = extractor.extract({ authorization: 'Bearer token-value' })
 

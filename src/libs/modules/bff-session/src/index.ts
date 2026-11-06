@@ -1,3 +1,6 @@
 export * from './bff-session.module'
 export * from './application/bff-session-credential-authenticator'
 export * from './api/browser-session-mutation.guard'
+export { VERIFIED_HUMAN_SESSION_READER } from './application/verified-human-session-reader'
+export type { VerifiedHumanSession, VerifiedHumanSessionReader } from './application/verified-human-session-reader'
+export { AuthenticationUnavailableError } from './application/authentication-unavailable.error'
