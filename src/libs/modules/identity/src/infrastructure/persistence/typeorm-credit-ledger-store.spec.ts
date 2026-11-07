@@ -1,10 +1,10 @@
-import { DataSource, EntityManager, Repository } from 'typeorm'
+import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm'
 import { CreditDebit } from './credit-debit.entity'
 import { CreditGrant } from './credit-grant.entity'
 import { OrganizationCreditAccount } from './organization-credit-account.entity'
 import { TypeOrmCreditLedgerStore } from './typeorm-credit-ledger-store'
 
-type InsertMock = Record<'insert' | 'into' | 'values' | 'onConflict' | 'returning' | 'execute', jest.Mock>
+type InsertMock = Record<'insert' | 'into' | 'values' | 'onConflict' | 'execute', jest.Mock>
 
 function createInsertMock(): InsertMock {
     return {
@@ -12,8 +12,7 @@ function createInsertMock(): InsertMock {
         into: jest.fn().mockReturnThis(),
         values: jest.fn().mockReturnThis(),
         onConflict: jest.fn().mockReturnThis(),
-        returning: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ raw: [{ amount: 5 }] }),
+        execute: jest.fn().mockResolvedValue({ raw: [] }),
     }
 }
 
@@ -25,7 +24,6 @@ describe('TypeOrmCreditLedgerStore', () => {
     >
     let dataSourceMock: { transaction: jest.Mock }
     let accountInsertMock: ReturnType<typeof createInsertMock>
-    let grantInsertMock: ReturnType<typeof createInsertMock>
 
     beforeEach(() => {
         managerMock = {
@@ -37,10 +35,9 @@ describe('TypeOrmCreditLedgerStore', () => {
             createQueryBuilder: jest.fn(),
         }
         accountInsertMock = createInsertMock()
-        grantInsertMock = createInsertMock()
-        managerMock.createQueryBuilder
-            .mockReturnValueOnce(accountInsertMock as unknown as ReturnType<EntityManager['createQueryBuilder']>)
-            .mockReturnValue(grantInsertMock as unknown as ReturnType<EntityManager['createQueryBuilder']>)
+        managerMock.createQueryBuilder.mockReturnValue(
+            accountInsertMock as unknown as ReturnType<EntityManager['createQueryBuilder']>,
+        )
         dataSourceMock = {
             transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
         }
@@ -164,21 +161,18 @@ describe('TypeOrmCreditLedgerStore', () => {
                 managerMock.findOneOrFail.mock.invocationCallOrder[0],
             )
             expect(managerMock.findOneOrFail.mock.invocationCallOrder[0]).toBeLessThan(
-                grantInsertMock.execute.mock.invocationCallOrder[0],
+                managerMock.insert.mock.invocationCallOrder[0],
             )
             expect(managerMock.save).toHaveBeenCalledWith(
                 OrganizationCreditAccount,
                 expect.objectContaining({ organizationId: 'org-1', balance: 5 }),
             )
-            expect(grantInsertMock.into).toHaveBeenCalledWith(CreditGrant)
-            expect(grantInsertMock.values).toHaveBeenCalledWith({
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditGrant, {
                 organizationId: 'org-1',
                 reference: 'ref-1',
                 amount: 5,
             })
-            expect(grantInsertMock.onConflict).toHaveBeenCalledWith('("organizationId", "reference") DO NOTHING')
-            expect(grantInsertMock.returning).toHaveBeenCalledWith(['amount'])
-            expect(grantInsertMock.execute.mock.invocationCallOrder[0]).toBeLessThan(
+            expect(managerMock.insert.mock.invocationCallOrder[0]).toBeLessThan(
                 managerMock.save.mock.invocationCallOrder[0],
             )
             expect(result).toEqual({ disposition: 'inserted', recordedAmount: 5, balance: 5 })
@@ -215,26 +209,27 @@ describe('TypeOrmCreditLedgerStore', () => {
             expect(managerMock.findOne).toHaveBeenCalledWith(CreditGrant, {
                 where: { organizationId: 'org-1', reference: 'ref-1' },
             })
-            expect(grantInsertMock.execute).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
             expect(managerMock.save).not.toHaveBeenCalled()
         })
 
-        it('reads the winning grant when the unique reference insert loses a race', async () => {
-            managerMock.findOneOrFail
-                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 12 } as OrganizationCreditAccount)
-                .mockResolvedValueOnce({ amount: 7 } as CreditGrant)
-            managerMock.findOne.mockResolvedValue(null)
-            grantInsertMock.execute.mockResolvedValue({ raw: [] })
-
-            await expect(store.credit('org-1', 5, 'ref-1')).resolves.toEqual({
-                disposition: 'existing',
-                recordedAmount: 7,
+        it('propagates an unexpected duplicate grant error without changing the balance or reading a winner', async () => {
+            managerMock.findOneOrFail.mockResolvedValue({
+                organizationId: 'org-1',
                 balance: 12,
-            })
+            } as OrganizationCreditAccount)
+            managerMock.findOne.mockResolvedValue(null)
+            const failure = new QueryFailedError(
+                'INSERT INTO credit_grants',
+                [],
+                Object.assign(new Error('duplicate grant'), { code: '23505' }),
+            )
+            managerMock.insert.mockRejectedValue(failure)
 
-            expect(managerMock.findOneOrFail).toHaveBeenLastCalledWith(CreditGrant, {
-                where: { organizationId: 'org-1', reference: 'ref-1' },
-            })
+            await expect(store.credit('org-1', 5, 'ref-1')).rejects.toBe(failure)
+
+            expect(managerMock.findOne).toHaveBeenCalledTimes(1)
+            expect(managerMock.findOneOrFail).toHaveBeenCalledTimes(1)
             expect(managerMock.save).not.toHaveBeenCalled()
         })
 
@@ -245,7 +240,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             } as OrganizationCreditAccount)
             managerMock.findOne.mockResolvedValue(null)
             const failure = new Error('database unavailable')
-            grantInsertMock.execute.mockRejectedValue(failure)
+            managerMock.insert.mockRejectedValue(failure)
 
             await expect(store.credit('org-1', 5, 'ref-1')).rejects.toBe(failure)
 
@@ -324,7 +319,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 OrganizationCreditAccount,
                 expect.objectContaining({ balance: 10 }),
             )
-            expect(grantInsertMock.values).toHaveBeenCalledWith({
+            expect(managerMock.insert).toHaveBeenCalledWith(CreditGrant, {
                 organizationId: 'org-1',
                 reference: 'restore-1',
                 amount: 7,
@@ -341,7 +336,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             await expect(store.creditOnce('org-1', 9, 'restore-1')).resolves.toBe(7)
 
             expect(managerMock.save).not.toHaveBeenCalled()
-            expect(grantInsertMock.execute).not.toHaveBeenCalled()
+            expect(managerMock.insert).not.toHaveBeenCalled()
         })
     })
 

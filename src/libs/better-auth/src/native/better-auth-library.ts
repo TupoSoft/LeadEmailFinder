@@ -19,6 +19,7 @@ export async function loadBetterAuthLibrary(): Promise<BetterAuthLibrary> {
         import('better-auth/plugins/magic-link'),
         import('better-auth/plugins/two-factor'),
     ])
+
     return {
         betterAuth: core.betterAuth,
         magicLink: magicLinkPlugin.magicLink,

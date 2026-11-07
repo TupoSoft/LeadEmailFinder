@@ -3,7 +3,7 @@ import { BetterAuthConfiguration } from './better-auth-configuration'
 import { AuthMailDelivery } from './mail/auth-mail-delivery'
 import { AuthMailTransport, createNodemailerTransport, SmtpAuthMailDelivery } from './mail/smtp-auth-mail-delivery'
 import { BetterAuthLibrary, loadBetterAuthLibrary } from './native/better-auth-library'
-import { createNativeAuth, NativeAuth } from './native/create-native-auth'
+import { createBetterAuth, BetterAuthInstance } from './native/create-better-auth'
 import { NativeHumanUserProvisioner } from './provisioning/native-human-user-provisioner'
 
 export const BETTER_AUTH_RUNTIME = Symbol('BETTER_AUTH_RUNTIME')
@@ -11,9 +11,9 @@ export const BETTER_AUTH_RUNTIME = Symbol('BETTER_AUTH_RUNTIME')
 const POOL_SIZE = 5
 const CONNECTION_TIMEOUT_MS = 10_000
 
-/** One native instance with the PostgreSQL pool and mail transport it owns. */
+/** One Better Auth instance with the PostgreSQL pool and mail transport it owns. */
 export interface BetterAuthRuntime {
-    readonly auth: NativeAuth
+    readonly auth: BetterAuthInstance
     readonly provisioner: NativeHumanUserProvisioner
     readonly mailDelivery: AuthMailDelivery
     /** Releases the pool and mail transport; safe to call more than once. */
@@ -38,8 +38,11 @@ export async function openBetterAuthRuntime(
             max: POOL_SIZE,
             connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
         })
+
     const transport = overrides.mailTransport ?? createNodemailerTransport(configuration.mail)
+
     const mailDelivery = new SmtpAuthMailDelivery(transport, configuration.mail.from)
+
     let closed: Promise<void> | undefined
     const close = (): Promise<void> => {
         closed ??= (async () => {
@@ -51,8 +54,9 @@ export async function openBetterAuthRuntime(
 
     try {
         const library = overrides.library ?? (await loadBetterAuthLibrary())
+
         return {
-            auth: createNativeAuth(library, { configuration, pool, mailDelivery }),
+            auth: createBetterAuth(library, { configuration, pool, mailDelivery }),
             provisioner: new NativeHumanUserProvisioner(pool),
             mailDelivery,
             close,

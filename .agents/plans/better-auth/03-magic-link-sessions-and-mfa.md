@@ -1,6 +1,6 @@
 # Replace Browser Login with Magic Links and Enforced Privileged MFA
 
-This is a living document maintained according to `.agents/PLANS.md`. It describes one implementation pull request.
+This is a living document maintained according to `.agents/PLANS.md`. The user requested a sequence of independently reviewable stacked pull requests, each below 500 added/deleted lines, on 2026-11-07.
 
 ## Purpose / Big Picture
 
@@ -26,6 +26,8 @@ An invited or seeded person signs in through an emailed link, confirms the sign-
 None yet.
 
 ## Decision Log
+
+- (2026-11-07, user) Split the foundation into dependent PRs with fewer than 500 total additions and deletions each. This explicit request overrides the earlier one-PR packaging. Introduce tested native components alongside the legacy flow before switching and retiring old code. Preserve the original implementation at the final head; keep incomplete authentication workflows draft.
 
 - (2026-10-19, user) Browser authentication uses email magic links. Keep invitation-based membership and require TOTP for `admin`, `owner`, and `platform_admin`; do not introduce a password fallback or weaken privileged fixtures.
 - (2026-10-19, user and planning agent) Better Auth owns native sessions; preserve the existing current-account projection, local authorization, business CSRF protection, and browser cache/session boundaries. API and MCP use the machine API keys supplied by `better-auth/02`.

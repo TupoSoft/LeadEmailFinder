@@ -1,8 +1,8 @@
 # Better Auth Runtime
 
-A technical library that composes one Better Auth instance for human authentication. It owns the native
-database tables, the authentication mail transport, and passwordless native user provisioning. Business decisions,
-such as organizations, memberships, roles, credits, and audit records, remain in the business modules.
+This library creates and configures one Better Auth instance for human authentication. It configures the database
+tables used by Better Auth, sends authentication emails, and creates or reuses passwordless users.
+Business modules manage organizations, memberships, roles, credits, and audit records.
 
 Consumers import only the bare alias `@tuposoft/lead-email-finder/better-auth`. Application and domain code must not
 import this library, its native instance, or Better Auth types; infrastructure adapters in business modules use it.
@@ -12,8 +12,8 @@ import this library, its native instance, or Better Auth types; infrastructure a
 - `BetterAuthRuntimeModule` composes the runtime from `ConfigService`. It also registers the mapped native entities
   with `TypeOrmModule.forFeature`, so the importing process needs `TypeOrmModule.forRoot`. The runtime starts only
   after that data source exists, which places native startup after TypeORM synchronization.
-- `BETTER_AUTH_RUNTIME` resolves a singleton `BetterAuthRuntime`. Its `auth` property is the native instance
-  (`NativeAuth`), and `close()` releases the owned `pg.Pool` and SMTP transport. The module calls `close()` on
+- `BETTER_AUTH_RUNTIME` resolves a singleton `BetterAuthRuntime`. Its `auth` property is the Better Auth instance
+  (`BetterAuthInstance`), and `close()` releases the owned `pg.Pool` and SMTP transport. The module calls `close()` on
   application shutdown.
 - `AUTH_MAIL_DELIVERY` resolves `AuthMailDelivery.send(message)`. It delivers transactional authentication
   mail only and never calls email-verification probes. It rejects with a redacted `AuthMailDeliveryError` whose
@@ -25,13 +25,20 @@ import this library, its native instance, or Better Auth types; infrastructure a
 - `openBetterAuthRuntime(configuration, overrides)` is the framework-free composition used by the module and by
   compiled tooling. `createBetterAuthConfiguration(read)` validates settings without echoing their values.
 - `BETTER_AUTH_TABLES`, `BETTER_AUTH_COLUMNS`, and `BETTER_AUTH_ENTITIES` describe the mapped schema.
+- `betterAuthSessionCookieName(baseUrl)` returns the configured `lef_session` name, including the automatic
+  `__Secure-` prefix for HTTPS. `betterAuthSessionCookieEffects.run(operation, emit)` scopes captured
+  `Set-Cookie` values to one request and passes the cookie array to `emit` in `finally`, including rejection
+  paths. Transport adapters append each cookie independently. Infrastructure adapters call `capture(headers)`
+  before mapping Better Auth outcomes. Cookie effects never enter application authentication results.
 
-## Native Configuration
+## Better Auth Configuration
 
 The runtime selects the magic-link plugin with registration disabled and hashed token storage. It also selects
 passwordless TOTP. Password sign-in, telemetry, secondary session storage, and the cookie cache are disabled.
-Sessions are stored only in PostgreSQL. Native IDs are UUIDs. No HTTP handler is mounted; later API adapters call
-the native server API directly. Secure cookies follow the `APP_BASE_URL` scheme. Native log messages pass through
+Sessions are stored only in PostgreSQL. Native IDs are UUIDs. No HTTP handler is mounted; BFF infrastructure adapters
+call the native server API directly and disable session cookie caching explicitly. The Better Auth session cookie is
+`lef_session`, HttpOnly, SameSite=Lax, and scoped to `/`; HTTPS adds the `__Secure-` prefix and Secure attribute.
+Native log messages pass through
 a redaction step that removes URLs, email addresses, and token-like values.
 
 | Native model   | Table                       |
