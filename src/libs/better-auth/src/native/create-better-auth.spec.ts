@@ -3,7 +3,7 @@ import { BetterAuthConfiguration } from '../better-auth-configuration'
 import { AuthMailDelivery } from '../mail/auth-mail-delivery'
 import { BETTER_AUTH_TABLES } from '../persistence/better-auth-schema'
 import { BetterAuthLibrary } from './better-auth-library'
-import { createNativeAuth, NativeAuthOptions } from './create-native-auth'
+import { createBetterAuth, BetterAuthInstanceOptions } from './create-better-auth'
 
 const configuration: BetterAuthConfiguration = {
     secret: 'synthetic-secret-value-that-is-long-enough',
@@ -19,7 +19,7 @@ interface Composition {
     magicLink: jest.Mock<unknown, [unknown]>
     twoFactor: jest.Mock<unknown, [unknown]>
     betterAuth: jest.Mock<unknown, [unknown]>
-    options: NativeAuthOptions
+    options: BetterAuthInstanceOptions
 }
 
 function compose(baseUrl = configuration.baseUrl): Composition {
@@ -30,16 +30,16 @@ function compose(baseUrl = configuration.baseUrl): Composition {
     const twoFactor = jest.fn((options: unknown) => ({ id: 'two-factor', options }))
     const betterAuth = jest.fn((options: unknown) => ({ options }))
     const library = { betterAuth, magicLink, twoFactor } as unknown as BetterAuthLibrary
-    createNativeAuth(library, { configuration: { ...configuration, baseUrl }, pool, mailDelivery, logger })
-    const options = betterAuth.mock.calls[0][0] as NativeAuthOptions
+    createBetterAuth(library, { configuration: { ...configuration, baseUrl }, pool, mailDelivery, logger })
+    const options = betterAuth.mock.calls[0][0] as BetterAuthInstanceOptions
     return { pool, mailDelivery, logger, magicLink, twoFactor, betterAuth, options }
 }
 
 type MagicLinkOptions = Parameters<BetterAuthLibrary['magicLink']>[0]
 type TwoFactorOptions = Parameters<BetterAuthLibrary['twoFactor']>[0]
 
-describe('createNativeAuth', () => {
-    it('constructs exactly one native instance on the owned pool with database-only sessions', () => {
+describe('createBetterAuth', () => {
+    it('constructs exactly one Better Auth instance on the owned pool with database-only sessions', () => {
         const { betterAuth, options, pool } = compose()
 
         expect(betterAuth).toHaveBeenCalledTimes(1)
@@ -80,7 +80,7 @@ describe('createNativeAuth', () => {
         })
     })
 
-    it('configures the BFF session cookie with the native HTTP and HTTPS scope', () => {
+    it('configures the BFF session cookie with the Better Auth HTTP and HTTPS scope', () => {
         expect(compose().options.advanced?.cookies?.session_token).toEqual({
             name: 'lef_session',
             attributes: { httpOnly: true, sameSite: 'lax', path: '/' },

@@ -10,7 +10,7 @@ import { redactNativeLogMessage } from './redact-native-log-message'
 
 export const BETTER_AUTH_APP_NAME = 'Lead Email Finder'
 
-export interface NativeAuthDependencies {
+export interface BetterAuthDependencies {
     readonly configuration: BetterAuthConfiguration
     readonly pool: Pool
     readonly mailDelivery: AuthMailDelivery
@@ -18,13 +18,14 @@ export interface NativeAuthDependencies {
 }
 
 /**
- * Builds the one native instance. No HTTP handler is mounted: later API adapters call its server API. Sessions
+ * Builds the one Better Auth instance. No HTTP handler is mounted: later API adapters call its server API. Sessions
  * live only in PostgreSQL (no secondary storage or cookie cache), and passwords and sign-up are disabled.
  */
-export function createNativeAuth(library: BetterAuthLibrary, dependencies: NativeAuthDependencies): NativeAuth {
+export function createBetterAuth(library: BetterAuthLibrary, dependencies: BetterAuthDependencies): BetterAuthInstance {
     const { configuration, pool, mailDelivery } = dependencies
     const logger = dependencies.logger ?? new Logger('BetterAuth')
-    const options: NativeAuthOptions = {
+
+    const options: BetterAuthInstanceOptions = {
         appName: BETTER_AUTH_APP_NAME,
         baseURL: configuration.baseUrl,
         secret: configuration.secret,
@@ -76,15 +77,16 @@ export function createNativeAuth(library: BetterAuthLibrary, dependencies: Nativ
             }),
         ],
     }
+
     return library.betterAuth(options)
 }
 
-export type NativeAuthOptions = BetterAuthOptions & {
+export type BetterAuthInstanceOptions = BetterAuthOptions & {
     plugins: [ReturnType<BetterAuthLibrary['magicLink']>, ReturnType<BetterAuthLibrary['twoFactor']>]
 }
 
-/** The native instance with the selected plugins' server API types. */
-export type NativeAuth = Auth<NativeAuthOptions>
+/** The Better Auth instance with the selected plugins' server API types. */
+export type BetterAuthInstance = Auth<BetterAuthInstanceOptions>
 
 function withoutTwoFactor({
     twoFactorEnabled: _plugin,

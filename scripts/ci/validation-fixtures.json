@@ -62,7 +62,7 @@
   {
     "name": "backend-auth-runtime-library",
     "paths": [
-      "src/libs/better-auth/src/native/create-native-auth.ts"
+      "src/libs/better-auth/src/native/create-better-auth.ts"
     ],
     "comparisonTrusted": true,
     "expected": {

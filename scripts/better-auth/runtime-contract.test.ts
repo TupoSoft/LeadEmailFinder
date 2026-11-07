@@ -13,8 +13,8 @@ import {
     BETTER_AUTH_TABLES,
     BetterAuthConfiguration,
     BetterAuthRuntime,
-    nativeSessionCookieEffects,
-    nativeSessionCookieName,
+    betterAuthSessionCookieEffects,
+    betterAuthSessionCookieName,
     openBetterAuthRuntime,
 } from '@tuposoft/lead-email-finder/better-auth'
 import {
@@ -395,9 +395,9 @@ void test('a magic link reaches the authentication Mailpit service without loggi
             asResponse: true,
         })
         assert.equal(verified.status, 200)
-        const cookieName = nativeSessionCookieName(configuration.baseUrl)
+        const cookieName = betterAuthSessionCookieName(configuration.baseUrl)
         const sessionCookie = verified.headers.getSetCookie().find(cookie => cookie.startsWith(`${cookieName}=`))
-        assert.ok(sessionCookie, 'native verification issues the configured session cookie')
+        assert.ok(sessionCookie, 'Better Auth verification issues the configured session cookie')
         assert.equal(sessionCookie.includes('HttpOnly'), true)
         assert.equal(sessionCookie.includes('SameSite=Lax'), true)
         assert.equal(sessionCookie.includes('Path=/'), true)
@@ -409,14 +409,14 @@ void test('a magic link reaches the authentication Mailpit service without loggi
         )
 
         let renewalCookies: readonly string[] = []
-        await nativeSessionCookieEffects.run(
+        await betterAuthSessionCookieEffects.run(
             async () => {
                 const current = await runtime.auth.api.getSession({
                     headers,
                     query: { disableCookieCache: true },
                     asResponse: true,
                 })
-                nativeSessionCookieEffects.capture(current.headers)
+                betterAuthSessionCookieEffects.capture(current.headers)
                 assert.equal(current.status, 200)
                 const value = (await current.json()) as { user: { emailVerified: boolean } }
                 assert.equal(value.user.emailVerified, true)

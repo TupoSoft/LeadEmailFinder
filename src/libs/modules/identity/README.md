@@ -204,10 +204,11 @@ or reset is required.
 
 Credit grants atomically insert a zero-balance account with `ON CONFLICT DO NOTHING`, then acquire a pessimistic
 write lock on the persisted account row. This serializes first grants even when no account existed before either
-transaction started, without resetting an existing balance. Grant insertion targets the unique organization and
-reference pair; an insertion conflict reads the winning grant without changing the balance. Other database errors
-abort the transaction. Both `credit()` and `creditOnce()` use this path; `creditOnce()` still returns the originally
-recorded amount. `setBalance()` follows the same insert-then-lock sequence before comparing the target against
+transaction started, without resetting an existing balance. Under that lock, the grant lookup detects retries for
+the same organization/reference pair and returns the recorded grant amount and current balance. A new reference
+uses a plain grant insertion; any database error, including an unexpected uniqueness violation, aborts the
+transaction. Both `credit()` and `creditOnce()` use this path; `creditOnce()` still returns the originally recorded
+amount. `setBalance()` follows the same insert-then-lock sequence before comparing the target against
 `reserved`. No schema change, migration, or data reset is required.
 
 Reservation admission (`reserveMany`) and batch closure (`closeAdmissionMany`) follow the identical insert-then-lock
@@ -247,7 +248,7 @@ debit/grant, reservation admission/settlement/closure, replay) lives in the
 `application/credits.service.integration.spec.ts` file owned by `credits`, exercised through the real adapters.
 The platform cases include first grants without an existing account, duplicate and distinct concurrent keys,
 and amount conflicts. The ledger unit suite covers immutable persistence results, account insertion before
-locking, winning-grant lookup after a unique conflict, and propagation of unrelated database errors.
+locking, replay without another grant, and propagation of database errors, including unexpected unique conflicts.
 `MembershipMutationStore` final-owner locking is exercised through the
 `application/membership-mutation-concurrency.integration.spec.ts` file owned by `organization-onboarding`.
 

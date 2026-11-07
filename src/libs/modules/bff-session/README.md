@@ -1,8 +1,8 @@
 # BFF Session
 
-Implements the backend-for-frontend browser session: Keycloak Authorization Code + PKCE login, the OAuth
-callback, session lookup, silent token refresh, and logout, plus the Origin/CSRF protection that guards every
-browser-session mutation across the whole application.
+This module manages browser login and sessions for the web application. It handles Keycloak sign-in and the login
+callback, checks sessions, refreshes access tokens, and signs users out. It also checks request origins and CSRF
+tokens before allowing browser-session requests that change data.
 
 ## Responsibility
 
@@ -10,8 +10,8 @@ browser-session mutation across the whole application.
 - Atomically consuming each pending login state once and mapping recoverable callback failures to stable,
   same-origin browser redirects without provider or identity details.
 - Issuing, reading, refreshing, and revoking the encrypted `lef_session` cookie and the paired `lef_csrf_token`.
-- Resolving a human identity's active organization membership at authentication time
-  (`HumanMembershipResolver`), so a disabled membership invalidates the session on the next request.
+- Resolving a human identity's active organization membership at authentication time (`HumanMembershipResolver`), so a
+  disabled membership invalidates the session on the next request.
 - Publishing the browser-safe current-account document for an authenticated human session, including deterministic
   presentation capabilities and the service-client permissions the account may grant.
 - Enforcing Origin and CSRF double-submit checks on every unsafe request authenticated by the session cookie,
@@ -56,8 +56,8 @@ This module depends only on the public barrel `auth` exposes — `CredentialAuth
 `BffSessionController` at `v1/auth`:
 
 | Method | Path               | Access                                                                                                                                        |
-| ------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `v1/auth/login`    | Public — accepts an optional safe `destination` query and redirects to Keycloak with a PKCE S256 challenge                                                                                     |
+|--------|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `GET`  | `v1/auth/login`    | Public — accepts an optional safe `destination` query and redirects to Keycloak with a PKCE S256 challenge                                    |
 | `GET`  | `v1/auth/callback` | Public — consumes pending state, exchanges the authorization code, and sets the session/CSRF cookies                                          |
 | `GET`  | `v1/auth/session`  | Human session — returns browser-safe email, membership, organization, capabilities, and grantable service-client permissions                  |
 | `POST` | `v1/auth/logout`   | Authenticated; unsafe method, so `BrowserSessionMutationGuard` also requires a matching Origin and CSRF token for a `human_session` principal |
@@ -99,7 +99,8 @@ BFF client, any additional audience without an explicit trust policy, and a pres
 not equal the BFF client. The callback looks up an existing external identity and resolves its active membership
 before synchronizing email, so `active_membership_required` does not create or update an identity. Every callback
 response clears the transient login-state cookie and sets `Cache-Control: no-store` and
-`Referrer-Policy: no-referrer`; successful handling redirects to the validated pending application destination and issues the session and CSRF
+`Referrer-Policy: no-referrer`; successful handling redirects to the validated pending application destination and
+issues the session and CSRF
 cookies.
 
 Login accepts only a canonical relative destination under `/app`, including its query and fragment. It rejects
@@ -118,7 +119,8 @@ Concurrent login attempts from the same old session permit exactly one replaceme
 
 None owned. Session and pending-login state live in Redis, behind this module's own `SessionStore` and
 `PendingLoginStateStore` application ports, not Postgres. Production composition uses `RedisSessionStore` and
-`RedisPendingLoginStateStore`. `InMemorySessionStore` is a disposable adapter for contract and HTTP tests. Pending login state is consumed with one atomic Redis `GETDEL`, so concurrent callback
+`RedisPendingLoginStateStore`. `InMemorySessionStore` is a disposable adapter for contract and HTTP tests. Pending login
+state is consumed with one atomic Redis `GETDEL`, so concurrent callback
 requests cannot both obtain the same verifier and nonce.
 
 `SessionStore.replace` creates the new encrypted session and removes the expected old key in one Redis Lua
