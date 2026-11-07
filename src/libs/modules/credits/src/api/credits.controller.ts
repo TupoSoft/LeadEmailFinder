@@ -92,8 +92,10 @@ export class CreditsController {
         @Req() request: Request,
     ): Promise<CreditResponseDto> {
         const idempotencyKey = parseCreditIdempotencyKey(request.rawHeaders)
+
         try {
             const balance = await this.creditsService.addPlatformCredits(organizationId, amount, idempotencyKey)
+
             return { balance }
         } catch (error) {
             if (error instanceof CreditIdempotencyConflict) {

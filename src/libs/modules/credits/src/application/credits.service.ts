@@ -27,9 +27,11 @@ export class CreditsService {
 
     async addPlatformCredits(organizationId: string, amount: number, idempotencyKey: string): Promise<number> {
         const result = await this.store.credit(organizationId, amount, `platform-credit-add:${idempotencyKey}`)
+
         if (result.disposition === 'existing' && result.recordedAmount !== amount) {
             throw new CreditIdempotencyConflict()
         }
+
         return result.balance
     }
 
