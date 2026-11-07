@@ -42,6 +42,12 @@ export function createNativeAuth(library: BetterAuthLibrary, dependencies: Nativ
         advanced: {
             database: { generateId: 'uuid' },
             useSecureCookies: configuration.baseUrl.startsWith('https:'),
+            cookies: {
+                session_token: {
+                    name: 'lef_session',
+                    attributes: { httpOnly: true, sameSite: 'lax', path: '/' },
+                },
+            },
         },
         emailAndPassword: { enabled: false },
         user: { modelName: BETTER_AUTH_TABLES.user, fields: withoutTwoFactor(BETTER_AUTH_COLUMNS.user) },
