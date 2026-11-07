@@ -1,4 +1,4 @@
-import { nativeSessionCookieEffects, nativeSessionCookieName } from './native-session-cookie-effects'
+import { betterAuthSessionCookieEffects, betterAuthSessionCookieName } from './better-auth-session-cookie-effects'
 
 function cookies(...values: string[]): Headers {
     const headers = new Headers()
@@ -6,23 +6,24 @@ function cookies(...values: string[]): Headers {
     return headers
 }
 
-describe('native session cookie effects', () => {
+describe('Better Auth session cookie effects', () => {
     it('preserves distinct cookies, including an Expires comma, on success and rejection', async () => {
         const values = ['lef_session=first; HttpOnly', 'other=; Expires=Thu, 01 Jan 1970 00:00:00 GMT']
         const emit = jest.fn()
-        const result = await nativeSessionCookieEffects.run(() => {
-            nativeSessionCookieEffects.capture(cookies(...values))
+        const result = await betterAuthSessionCookieEffects.run(() => {
+            betterAuthSessionCookieEffects.capture(cookies(...values))
             return Promise.resolve('principal')
         }, emit)
         expect(result).toBe('principal')
         expect(emit).toHaveBeenLastCalledWith(values)
 
         await expect(
-            nativeSessionCookieEffects.run(() => {
-                nativeSessionCookieEffects.capture(cookies(values[1]))
+            betterAuthSessionCookieEffects.run(() => {
+                betterAuthSessionCookieEffects.capture(cookies(values[1]))
                 throw new Error('rejected')
             }, emit),
         ).rejects.toThrow('rejected')
+
         expect(emit).toHaveBeenLastCalledWith([values[1]])
     })
 
@@ -33,24 +34,24 @@ describe('native session cookie effects', () => {
         const wait = new Promise<void>(resolve => {
             release = resolve
         })
-        const pending = nativeSessionCookieEffects.run(async () => {
-            nativeSessionCookieEffects.capture(cookies('first=1'))
+        const pending = betterAuthSessionCookieEffects.run(async () => {
+            betterAuthSessionCookieEffects.capture(cookies('first=1'))
             await wait
-            nativeSessionCookieEffects.capture(cookies('first=2'))
+            betterAuthSessionCookieEffects.capture(cookies('first=2'))
         }, first)
-        await nativeSessionCookieEffects.run(() => {
-            nativeSessionCookieEffects.capture(cookies('second=1'))
+        await betterAuthSessionCookieEffects.run(() => {
+            betterAuthSessionCookieEffects.capture(cookies('second=1'))
             release()
             return Promise.resolve()
         }, second)
         await pending
-        nativeSessionCookieEffects.capture(cookies('outside=1'))
+        betterAuthSessionCookieEffects.capture(cookies('outside=1'))
         expect(first).toHaveBeenCalledWith(['first=1', 'first=2'])
         expect(second).toHaveBeenCalledWith(['second=1'])
     })
 
-    it('uses the actual native cookie name for HTTP and HTTPS', () => {
-        expect(nativeSessionCookieName('http://localhost:53000')).toBe('lef_session')
-        expect(nativeSessionCookieName('https://app.example.test')).toBe('__Secure-lef_session')
+    it('uses the actual Better Auth cookie name for HTTP and HTTPS', () => {
+        expect(betterAuthSessionCookieName('http://localhost:53000')).toBe('lef_session')
+        expect(betterAuthSessionCookieName('https://app.example.test')).toBe('__Secure-lef_session')
     })
 })
