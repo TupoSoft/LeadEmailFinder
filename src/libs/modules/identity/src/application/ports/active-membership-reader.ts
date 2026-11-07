@@ -9,6 +9,9 @@ export const ACTIVE_MEMBERSHIP_READER = Symbol('ACTIVE_MEMBERSHIP_READER')
  * caller's business logic, not this port's.
  */
 export interface ActiveMembershipReader {
+    /** Includes disabled memberships so a caller can distinguish new identities from unusable accounts. */
+    findForExternalIdentity(externalIdentityId: string): Promise<readonly OrganizationMembershipRecord[]>
+
     findByOrganizationAndExternalIdentity(
         organizationId: string,
         externalIdentityId: string,

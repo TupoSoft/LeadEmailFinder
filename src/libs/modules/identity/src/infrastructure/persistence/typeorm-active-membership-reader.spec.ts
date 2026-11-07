@@ -25,8 +25,16 @@ describe('TypeOrmActiveMembershipReader', () => {
 
             const result = await reader.findByOrganizationAndExternalIdentity('org-1', 'ext-1')
 
-            expect(repoMock.findOne).toHaveBeenCalledWith({ where: { organizationId: 'org-1', externalIdentityId: 'ext-1' } })
-            expect(result).toEqual({ id: 'm-1', organizationId: 'org-1', externalIdentityId: 'ext-1', role: 'member', status: 'active' })
+            expect(repoMock.findOne).toHaveBeenCalledWith({
+                where: { organizationId: 'org-1', externalIdentityId: 'ext-1' },
+            })
+            expect(result).toEqual({
+                id: 'm-1',
+                organizationId: 'org-1',
+                externalIdentityId: 'ext-1',
+                role: 'member',
+                status: 'active',
+            })
         })
 
         it('returns a disabled membership as-is, without filtering it out', async () => {
@@ -45,6 +53,26 @@ describe('TypeOrmActiveMembershipReader', () => {
         })
     })
 
+    describe('findForExternalIdentity', () => {
+        it('includes disabled records without filtering and maps only the safe membership fields', async () => {
+            const disabled = { ...membership, status: 'disabled' } as OrganizationMembership
+            repoMock.find.mockResolvedValueOnce([membership, disabled])
+
+            const result = await reader.findForExternalIdentity('ext-1')
+
+            expect(repoMock.find).toHaveBeenCalledWith({ where: { externalIdentityId: 'ext-1' } })
+            expect(result).toEqual([
+                { id: 'm-1', organizationId: 'org-1', externalIdentityId: 'ext-1', role: 'member', status: 'active' },
+                { id: 'm-1', organizationId: 'org-1', externalIdentityId: 'ext-1', role: 'member', status: 'disabled' },
+            ])
+        })
+
+        it('returns no memberships only when the identity has no records', async () => {
+            repoMock.find.mockResolvedValueOnce([])
+            await expect(reader.findForExternalIdentity('ext-1')).resolves.toEqual([])
+        })
+    })
+
     describe('findActiveForExternalIdentity', () => {
         it('queries with an active-status filter and maps every result', async () => {
             repoMock.find.mockResolvedValueOnce([membership])
@@ -52,7 +80,9 @@ describe('TypeOrmActiveMembershipReader', () => {
             const result = await reader.findActiveForExternalIdentity('ext-1')
 
             expect(repoMock.find).toHaveBeenCalledWith({ where: { externalIdentityId: 'ext-1', status: 'active' } })
-            expect(result).toEqual([{ id: 'm-1', organizationId: 'org-1', externalIdentityId: 'ext-1', role: 'member', status: 'active' }])
+            expect(result).toEqual([
+                { id: 'm-1', organizationId: 'org-1', externalIdentityId: 'ext-1', role: 'member', status: 'active' },
+            ])
         })
 
         it('returns an empty array when there are no active memberships', async () => {

@@ -19,6 +19,11 @@ export class TypeOrmActiveMembershipReader implements ActiveMembershipReader {
         return entity ? toRecord(entity) : undefined
     }
 
+    async findForExternalIdentity(externalIdentityId: string): Promise<readonly OrganizationMembershipRecord[]> {
+        const entities = await this.membershipRepo.find({ where: { externalIdentityId } })
+        return entities.map(toRecord)
+    }
+
     async findActiveForExternalIdentity(externalIdentityId: string): Promise<readonly OrganizationMembershipRecord[]> {
         const entities = await this.membershipRepo.find({ where: { externalIdentityId, status: 'active' } })
         return entities.map(toRecord)
