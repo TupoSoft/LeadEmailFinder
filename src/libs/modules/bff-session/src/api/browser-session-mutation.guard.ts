@@ -13,6 +13,11 @@ export class BrowserSessionMutationGuard implements CanActivate {
         private readonly csrfGuard: CsrfGuard,
     ) {}
 
+    /** The caller must first verify the native session for a limited-session route. */
+    checkSessionMutation(request: Request): boolean {
+        return this.originGuard.checkOrigin(request) && this.csrfGuard.checkCsrf(request)
+    }
+
     canActivate(context: ExecutionContext): boolean {
         const request = context.switchToHttp().getRequest<Request>()
 

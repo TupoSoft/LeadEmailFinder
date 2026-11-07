@@ -1,7 +1,7 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common'
 import { CsrfGuard } from './csrf.guard'
 
-function contextFor(headers: Record<string, string | undefined>): ExecutionContext {
+function contextFor(headers: Record<string, string | string[] | undefined>): ExecutionContext {
     return {
         switchToHttp: () => ({ getRequest: () => ({ headers }) }),
     } as unknown as ExecutionContext
@@ -38,9 +38,21 @@ describe('CsrfGuard', () => {
         expect(() => guard.canActivate(context)).toThrow(ForbiddenException)
     })
 
+    it('rejects duplicate cookies even when their final value matches the header', () => {
+        const context = contextFor({
+            cookie: 'lef_csrf_token=first; lef_csrf_token=matching',
+            'x-csrf-token': 'matching',
+        })
+        expect(() => guard.canActivate(context)).toThrow(ForbiddenException)
+    })
+
     it('rejects when the tokens have different lengths', () => {
         const context = contextFor({ cookie: 'lef_csrf_token=short', 'x-csrf-token': 'a-much-longer-token-value' })
 
+        expect(() => guard.canActivate(context)).toThrow(ForbiddenException)
+    })
+    it('rejects repeated CSRF header values', () => {
+        const context = contextFor({ cookie: 'lef_csrf_token=matching', 'x-csrf-token': ['matching', 'other'] })
         expect(() => guard.canActivate(context)).toThrow(ForbiddenException)
     })
 })

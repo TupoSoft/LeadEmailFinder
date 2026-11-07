@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { configurePiiSafeRequestLogging } from './lead-email-finder-api/src/configure-pii-safe-request-logging'
+import { configureAuthResponseHeaders } from './lead-email-finder-api/src/configure-auth-response-headers'
 import { configureInvitationResponseHeaders } from './lead-email-finder-api/src/configure-invitation-response-headers'
 import { configureServiceClientResponseHeaders } from './lead-email-finder-api/src/configure-service-client-response-headers'
 import { configureProxyResponseHeaders } from './lead-email-finder-api/src/configure-proxy-response-headers'
@@ -18,6 +19,7 @@ import {
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
+    configureAuthResponseHeaders(app)
     configureInvitationResponseHeaders(app)
     configureServiceClientResponseHeaders(app)
     configureProxyResponseHeaders(app)

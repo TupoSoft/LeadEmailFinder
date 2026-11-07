@@ -23,6 +23,7 @@ import request from 'supertest'
 import { QueryFailedError } from 'typeorm'
 import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
 import { configurePiiSafeRequestLogging } from './configure-pii-safe-request-logging'
+import { configureAuthResponseHeaders } from './configure-auth-response-headers'
 
 const API_KEY_MARKER = `lef_${'a'.repeat(43)}`
 const KEY_HASH_MARKER = 'c7'.repeat(32)
@@ -119,6 +120,7 @@ describe('PII-safe request logging', () => {
             }
             next()
         })
+        configureAuthResponseHeaders(app)
         configurePiiSafeRequestLogging(app, destination)
         app.getHttpAdapter().get('/early-route', (_incoming: Request, response: Response) => {
             response.json({ ok: true })
@@ -135,6 +137,20 @@ describe('PII-safe request logging', () => {
     afterAll(async () => {
         await app.close()
     })
+
+    it.each(['/v1/auth/magic-link/verify', '/V1/Auth/magic-link/verify'])(
+        'sets auth privacy headers before JSON parsing at %s',
+        async path => {
+            const response = await request(app.getHttpServer())
+                .post(path)
+                .set('Content-Type', 'application/json')
+                .send('{"token":"sensitive-token",')
+                .expect(400)
+            expect(response.headers['cache-control']).toBe('no-store')
+            expect(response.headers['referrer-policy']).toBe('no-referrer')
+            expect(JSON.stringify(capturedLines)).not.toContain('sensitive-token')
+        },
+    )
 
     it('captures useful request metadata without any supplied sensitive values', async () => {
         const sentinel = 'sentinel-' + randomUUID() + '@example.test'
