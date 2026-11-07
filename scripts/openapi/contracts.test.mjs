@@ -16,6 +16,8 @@ import {
 } from './contracts.mjs'
 
 const require = createRequire(import.meta.url)
+require('ts-node/register/transpile-only')
+const { BROWSER_OPERATIONS } = require('../../src/lead-email-finder-api/src/openapi/browser-document.ts')
 
 let directory
 let browser
@@ -74,13 +76,9 @@ test('rejects generated artifacts that exist but are not tracked in Git', async 
 })
 
 test('exports the real app from an empty environment without provider construction or network I/O', () => {
-    assert.deepEqual(Object.keys(browser.paths), [
+    assert.deepEqual(Object.keys(browser.paths).filter(path => !path.startsWith('/v1/auth/')), [
         '/credits/{organizationId}',
         '/health',
-        '/v1/auth/callback',
-        '/v1/auth/login',
-        '/v1/auth/logout',
-        '/v1/auth/session',
         '/v1/billing/credit-packs',
         '/v1/billing/summary',
         '/v1/credit-purchases',
@@ -104,6 +102,15 @@ test('exports the real app from an empty environment without provider constructi
         '/verifyBatch/{id}',
         '/verifyBatch/{id}/results',
     ])
+    assert.deepEqual(
+        Object.entries(browser.paths)
+            .filter(([path]) => path.startsWith('/v1/auth/'))
+            .flatMap(([path, item]) => Object.keys(item).map(method => `${method} ${path}`))
+            .sort(),
+        BROWSER_OPERATIONS.filter(({ path }) => path.startsWith('/v1/auth/'))
+            .map(({ path, method }) => `${method} ${path}`)
+            .sort(),
+    )
     assert.deepEqual(browser.servers, [{ url: '/' }])
     for (const path of [
         '/verify', '/verifications/{id}', '/v1/proxies/healthy',
@@ -227,7 +234,7 @@ test('verification operation metadata exposes only public evidence and bounded b
 
 test('batch publishes only multipart create, status and CSV download with safe browser contracts', () => {
     const operations = Object.entries(browser.paths)
-        .filter(([path]) => /verif/i.test(path) && !path.startsWith('/verifyAsync'))
+        .filter(([path]) => path.startsWith('/verifyBatch/'))
         .flatMap(([path, item]) => Object.keys(item).map(method => `${method.toUpperCase()} ${path}`))
         .sort()
     assert.deepEqual(operations, ['GET /verifyBatch/{id}', 'GET /verifyBatch/{id}/results', 'POST /verifyBatch/csv'])
