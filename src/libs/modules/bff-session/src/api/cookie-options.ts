@@ -1,9 +1,9 @@
 import { CookieOptions } from 'express'
-import { BffSessionConfiguration } from '../application/bff-session-configuration'
+import { BrowserSessionConfiguration } from '../application/bff-session-configuration'
 
 const PENDING_LOGIN_STATE_MAX_AGE_MS = 600_000
 
-function buildLoginStateCookieScope(configuration: BffSessionConfiguration): CookieOptions {
+function buildLoginStateCookieScope(configuration: BrowserSessionConfiguration): CookieOptions {
     return {
         httpOnly: true,
         sameSite: 'lax',
@@ -12,7 +12,7 @@ function buildLoginStateCookieScope(configuration: BffSessionConfiguration): Coo
     }
 }
 
-export function buildSessionCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildSessionCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     return {
         httpOnly: true,
         sameSite: 'lax',
@@ -22,7 +22,7 @@ export function buildSessionCookieOptions(configuration: BffSessionConfiguration
     }
 }
 
-export function buildCsrfCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildCsrfCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     return {
         httpOnly: false,
         sameSite: 'lax',
@@ -32,24 +32,24 @@ export function buildCsrfCookieOptions(configuration: BffSessionConfiguration): 
     }
 }
 
-export function buildLoginStateCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildLoginStateCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     return {
         ...buildLoginStateCookieScope(configuration),
         maxAge: PENDING_LOGIN_STATE_MAX_AGE_MS,
     }
 }
 
-export function buildLoginStateClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildLoginStateClearCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     return buildLoginStateCookieScope(configuration)
 }
 
-export function buildSessionClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildSessionClearCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     const scope = buildSessionCookieOptions(configuration)
     delete scope.maxAge
     return scope
 }
 
-export function buildCsrfClearCookieOptions(configuration: BffSessionConfiguration): CookieOptions {
+export function buildCsrfClearCookieOptions(configuration: BrowserSessionConfiguration): CookieOptions {
     const scope = buildCsrfCookieOptions(configuration)
     delete scope.maxAge
     return scope

@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config'
-import { BffSessionConfiguration } from '../../application/bff-session-configuration'
+import { BffSessionConfiguration, BrowserSessionConfiguration } from '../../application/bff-session-configuration'
 
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000
 const DEFAULT_SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000
@@ -55,6 +55,23 @@ export function createBffSessionConfiguration(configService: ConfigService): Bff
         clientSecret,
         sessionIdleTimeoutMs,
         sessionAbsoluteTimeoutMs,
+        isSecureCookie: new URL(appBaseUrl).protocol === 'https:',
+    }
+}
+
+/** Native browser composition does not read or require any OIDC settings. */
+export function createNativeBrowserSessionConfiguration(configService: ConfigService): BrowserSessionConfiguration {
+    const appBaseUrl = normalizeProviderUrl(configService.getOrThrow<string>('APP_BASE_URL'), 'APP_BASE_URL', true)
+    const duration = (key: string, fallback: number): number => {
+        const configured = configService.get<unknown>(key)
+        const value = configured === undefined ? fallback : Number(configured)
+        if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${key} must be a positive integer`)
+        return value
+    }
+    return {
+        appBaseUrl,
+        sessionIdleTimeoutMs: duration('SESSION_IDLE_TIMEOUT_MS', DEFAULT_SESSION_IDLE_TIMEOUT_MS),
+        sessionAbsoluteTimeoutMs: duration('SESSION_ABSOLUTE_TIMEOUT_MS', DEFAULT_SESSION_ABSOLUTE_TIMEOUT_MS),
         isSecureCookie: new URL(appBaseUrl).protocol === 'https:',
     }
 }
