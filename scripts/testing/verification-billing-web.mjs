@@ -77,6 +77,7 @@ export function runVerificationBillingWeb({
         const env = {
             ...environment,
             COMPOSE_PROJECT_NAME: stack.composeProject,
+            LEF_PLAYWRIGHT_SUITE: 'verification-billing',
             PLAYWRIGHT_NO_COPY_PROMPT: '1',
             LEF_VERIFICATION_TEST_PRIVACY: '1',
             BROWSER_FIXTURE_OUTPUT: join(directory, 'results'),
@@ -96,7 +97,7 @@ export function runVerificationBillingWeb({
             ],
             [
                 'corepack',
-                ['pnpm', 'exec', 'playwright', 'test', '--config=playwright.verification-billing.config.ts'],
+                ['pnpm', 'exec', 'playwright', 'test', '--config=playwright.config.ts'],
                 420_000,
             ],
         ]) {

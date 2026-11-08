@@ -20,17 +20,13 @@ for (const kind of ['single', 'batch', 'billing'])
             const marker = 'SYNTHETIC_VERIFICATION_MATERIAL_MUST_NOT_BE_RECORDED'
             try {
                 writeFileSync(join(directory, 'package.json'), '{"type":"module"}\n', { mode: 0o600 })
-                const config =
-                    kind === 'single'
-                        ? 'playwright.verification.config.ts'
-                        : kind === 'batch'
-                          ? 'playwright.batch-verification.config.ts'
-                          : 'playwright.verification-billing.config.ts'
+                const suite =
+                    kind === 'single' ? 'verification' : kind === 'batch' ? 'batch-verification' : 'verification-billing'
                 const testFile = kind === 'billing' ? 'verification-billing.spec.ts' : `${kind}-verification.spec.ts`
                 writeFileSync(
                     join(directory, 'playwright.config.ts'),
                     `
-import configuration from ${JSON.stringify(join(web, config))}
+import configuration from ${JSON.stringify(join(web, 'playwright.config.ts'))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
@@ -52,7 +48,7 @@ test('owner guarded verification assertion', async ({ page }) => {
 `,
                     { mode: 0o600 },
                 )
-                const environment = { ...process.env }
+                const environment = { ...process.env, LEF_PLAYWRIGHT_SUITE: suite }
                 for (const key of ['DEBUG', 'PWDEBUG', 'PW_TEST_DEBUG', 'PW_TEST_REUSE_CONTEXT', 'PWDEBUGIMPL'])
                     delete environment[key]
                 const result = spawnSync(

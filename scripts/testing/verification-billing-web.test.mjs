@@ -72,6 +72,7 @@ test('runner verifies ownership before bootstrap, forces privacy, validates coun
             assert.equal(options.env.PWDEBUG, undefined)
             assert.equal(options.env.PW_TEST_DEBUG, undefined)
             assert.equal(options.env.PLAYWRIGHT_NO_COPY_PROMPT, '1')
+            assert.equal(options.env.LEF_PLAYWRIGHT_SUITE, 'verification-billing')
             reportPath = options.env.VERIFICATION_BILLING_REPORT
             calls.push(args.at(-1))
             if (args.includes('playwright')) writeFileSync(reportPath, JSON.stringify(passing))
@@ -82,7 +83,7 @@ test('runner verifies ownership before bootstrap, forces privacy, validates coun
     assert.equal(existsSync(reportPath), false)
     assert.deepEqual(calls.slice(-2), [
         'tests/support/bootstrap-browser-fixtures.ts',
-        '--config=playwright.verification-billing.config.ts',
+        '--config=playwright.config.ts',
     ])
 })
 
