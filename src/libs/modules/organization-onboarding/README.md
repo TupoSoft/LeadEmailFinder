@@ -1,162 +1,94 @@
 # Organization Onboarding
 
-Creates organizations with a first owner, and issues and accepts the invitations that add members afterward. It
-administers membership — role changes and removal — under a final-owner invariant that a locked organization
-row makes concurrency-safe, and handles the Keycloak compensation needed when a local mutation and a realm-role
-change must stay consistent.
+Creates organizations and owner invitations, accepts invitations, and manages members through Keycloak, the external
+identity server. Concurrent changes must never leave an organization without an active owner.
 
 ## Responsibility
 
-- Creating a new organization together with its first owner's invitation (`platform:admin` only).
-- Listing organizations for platform operators through a cursor-based directory without a total count, and reading
-  one organization by UUID with the same safe directory fields.
-- Issuing invitations into an existing organization, previewing pending invitations, and accepting an invitation (public, bearer-token
-  authenticated by the invitation itself) to create or reuse a Keycloak user.
-- Listing members, changing a member's role, and removing a member, all under a final-owner protection that
-  never allows an organization to be left without an active owner, even under concurrent requests.
-- Compensating Keycloak realm-role assignments when a local transaction that depended on them fails or when a
-  promotion/removal must also update realm roles.
+- Create an organization and its first owner's invitation for platform operators.
+- List/read safe organization details and list members.
+- Issue, preview, and accept invitations; change roles and disable memberships.
+- Compensate external role changes (attempt to undo them) when the related local transaction fails.
 
 ## Non-Responsibilities
 
-- No organization/membership/invitation persistence of its own (owned by
-  [`identity`](../identity/README.md)); this module only operates on those entities.
-- No M2M service-client life cycle (owned by
-  [`service-client-management`](../service-client-management/README.md)).
-- No browser login (owned by [`bff-session`](../bff-session/README.md)); invitation acceptance creates a
-  Keycloak user directly through the Keycloak Admin API, independently of any browser session.
+[`identity`](../identity/README.md) owns persistence. [`service-client-management`](../service-client-management/README.md)
+owns machine credentials. [`bff-session`](../bff-session/README.md) owns browser login. Invitations authenticate by
+their bearer token: anyone possessing the token can use it, without an existing browser session.
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports only `OrganizationOnboardingModule`. Every service, the Keycloak admin
-port/adapter, and every DTO are internal.
+[`src/index.ts`](src/index.ts) exports only `OrganizationOnboardingModule`. Services, transport types, and the
+`KeycloakOrganizationAdmin` interface/adapter remain private.
 
 ## Architecture
 
-Layered per `module-architecture/06`. `api/` holds the controller, DTOs, and HTTP integration test — the only
-layer that may import Nest/`class-validator`/Swagger. `application/` holds the use-case services and the
-private `KeycloakOrganizationAdmin` port; both are framework-free, constructed through explicit factories in
-`organization-onboarding.module.ts`. `domain/` holds invitation token generation/hashing/TTL, and the typed
-errors `NotInOrganizationError`/`InsufficientPermissionError`/`MembershipNotFoundError`/`InvitationNotFoundError`/
-`InvitationExpiredError`/`InvitationConsumedError`/`ConflictingMembershipError`/`FinalOwnerConflictError`/
-`InvalidOrganizationCursorError`/`OrganizationNotFoundError`. `infrastructure/` holds the
-`KeycloakOrganizationAdminClient` adapter. The controller's private `handleErrors()` maps each domain error to
-the `ForbiddenException`/`NotFoundException`/`ConflictException`/`GoneException`/`BadRequestException` HTTP behavior.
-
-`OrganizationListingService` checks platform authorization and converts an opaque continuation token into a typed
-identity seek key. Tokens contain version 1, an integer creation timestamp in milliseconds, and a lowercase UUID.
-Parsing requires canonical base64url without padding and canonical JSON; unknown fields, unsupported versions, malformed
-UUIDs, fractional timestamps, and dates outside years 0001 through 9999 fail with `400`. Only identity implements
-the database ordering and seek predicate. `OrganizationDetailService` checks platform authorization before UUID
-lookup through the same reader. Absence raises `OrganizationNotFoundError`, mapped to a generic `404` without
-organization, membership, or credit details. The service never interprets a zero credit balance as existence.
-
-Every use case that must call Keycloak while a lock is held — `InvitationAcceptanceService`,
-`MembershipRoleChangeService`, `MembershipRemovalService` — does so through one of identity's two session-shaped
-ports, `InvitationAcceptanceStore` or `MembershipMutationStore`. A `begin()` call returns either a terminal
-outcome or a session that stays open across the Keycloak call. The service completes or aborts that session in a
-`try`/`finally`, so a Keycloak failure always rolls back the lock and any partial state — exactly reproducing the
-single-transaction correctness this module had before the split.
+Application services use identity's narrow persistence interfaces. Invitation acceptance and membership changes
+open a locked transaction through `InvitationAcceptanceStore` or `MembershipMutationStore`, keep it open across
+the Keycloak call, and always complete or abort it. This serializes final-owner checks and rolls back partial local
+state on failure. Application/domain code remains framework-independent; Nest and database/provider wiring stay
+at the module boundary.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md) — `AuthPrincipal`/`AuthRole`, and the persistence ports
-  `OrganizationRegistrationStore`, `InvitationStore`, `InvitationPreviewReader`, `InvitationAcceptanceStore`, `MembershipDirectory`,
-  `MembershipMutationStore`, `OrganizationDirectoryReader` (plus their record types and tokens). This module no longer imports any identity
-  TypeORM entity or `DataSource`/`EntityManager`.
-- [`auth`](../auth/README.md) — `PermissionsGuard`, `RolePermissionPolicy`, `CurrentPrincipal`, `Public`,
-  `RequirePermissions`.
-- `@tuposoft/lead-email-finder/keycloak-admin-http` — the shared Keycloak Admin HTTP transport
-  (`KeycloakAdminHttpModule`, `KEYCLOAK_ADMIN_HTTP`), also imported by
-  [`service-client-management`](../service-client-management/README.md). This module's own
-  `KeycloakOrganizationAdminClient` adapter, its business port, and its provider registration stay private and
-  not shared.
+- [`identity`](../identity/README.md): actor/role types, organization/invitation/member persistence interfaces.
+- [`auth`](../auth/README.md): permission guards and principal lookup.
+- `@tuposoft/lead-email-finder/keycloak-admin-http`: shared Keycloak Admin HTTP transport; this module's business
+  adapter remains private.
 
 ## HTTP Surface
 
-`OrganizationsController` at `v1/organizations`. Platform directory and creation, team, and invitation operations
-appear in the runtime and browser OpenAPI contracts:
+Paths below are relative to `/v1/organizations` and appear in the runtime/browser OpenAPI contract (the generated
+HTTP API schema).
 
-| Method   | Path                                                     | Access                                                |
-| -------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| `GET`    | `v1/organizations/invitations/:token`                    | Public — authenticated by the invitation token itself |
-| `POST`   | `v1/organizations/invitations/:token/accept`             | Public — authenticated by the invitation token itself |
-| `POST`   | `v1/organizations`                                       | `platform:admin`                                      |
-| `GET`    | `v1/organizations`                                       | `platform:admin`                                      |
-| `GET`    | `v1/organizations/:organizationId`                       | `platform:admin`                                      |
-| `POST`   | `v1/organizations/:organizationId/invitations`           | `members:manage`                                      |
-| `GET`    | `v1/organizations/:organizationId/members`               | `members:manage`                                      |
-| `PATCH`  | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`                                      |
-| `DELETE` | `v1/organizations/:organizationId/members/:membershipId` | `members:manage`; `204 No Content`                    |
+| Method        | Path                                     | Access                                      |
+| ------------- | ---------------------------------------- | ------------------------------------------- |
+| `POST`, `GET` | `/`                                      | `platform:admin`; create/list organizations |
+| `GET`         | `/:organizationId`                       | `platform:admin`; read organization         |
+| `POST`        | `/:organizationId/invitations`           | `members:manage`                            |
+| `GET`         | `/:organizationId/members`               | `members:manage`                            |
+| `PATCH`       | `/:organizationId/members/:membershipId` | `members:manage`                            |
+| `DELETE`      | `/:organizationId/members/:membershipId` | `members:manage`; returns `204`             |
+| `GET`         | `/invitations/:token`                    | Public token-authenticated preview          |
+| `POST`        | `/invitations/:token/accept`             | Public token-authenticated acceptance       |
 
-Organization detail returns only `{ id, name, createdAt, updatedAt }`. Invalid UUIDs return `400`, unauthenticated
-requests return `401`, customer roles return `403`, and absent organizations return `404`. Authorization runs before
-lookup and no credit data is included. Browser and runtime OpenAPI expose this refresh-safe selection contract.
+Organization detail exposes only `{ id, name, createdAt, updatedAt }`. Authorization precedes lookup: invalid UUIDs
+(unique IDs) return `400`, missing authentication `401`, insufficient permission `403`, and absent organizations `404`.
+Credit balances are not part of this read.
 
-Member listing preserves active and disabled rows, nullable email, and deterministic `createdAt ASC, id ASC`
-ordering. Role and removal operations retain server hierarchy and final-owner protection.
+Listing accepts `pageSize` 1–100 (default 50) and an opaque `pageToken`: a continuation boundary clients must not
+construct themselves. Results sort by millisecond creation time descending, then ID descending. `nextPageToken`
+appears only when another page exists. There is no total count or owner/invitation data. Malformed, noncanonical,
+or unsupported-version tokens return `400`. Member lists include active/disabled rows, nullable email, and stable
+`createdAt ASC, id ASC` order. Role hierarchy and final-owner protection remain authoritative on the server.
 
-Organization listing accepts `pageSize` from 1 through 100, defaults to 50, and accepts an optional opaque
-`pageToken`. It returns `organizations`, with only each organization's ID, name, creation timestamp, and update
-timestamp. Ordering uses the database creation time truncated to milliseconds descending, then UUID descending.
-The response includes `nextPageToken` only when another row exists; terminal pages omit it. There is no total,
-invitation authority, or owner email in directory reads. Creation retains its existing request and one-time owner
-invitation response; callers must reconcile an uncertain outcome before explicitly creating again.
+Only pending, unexpired invitations reveal name, email, role, expiry, and status. Unknown tokens return `404`;
+expired/consumed tokens return `410` with `invitation_expired`/`invitation_consumed`, without private details.
+First acceptance returns organization ID, email, and role; repeated/concurrent acceptance returns only
+`{ status: 'accepted' }`. Passwords require at least 12 characters.
 
-Preview hashes the supplied token and uses identity's narrow `InvitationPreviewReader`. Only pending, unexpired
-invitations expose organization name, invited email, role, expiry, and pending status. Unknown tokens return `404`;
-expired or consumed tokens return `410` with `invitation_expired` or `invitation_consumed` and no invitation details.
-A replayed acceptance returns only `{ "status": "accepted" }`, including a concurrent replay that loses the
-conditional acceptance update. First acceptance retains organization ID, email, and role. Password validation keeps
-its 12-character minimum.
-
-Invitation responses, including platform creation and authentication or validation failures, receive
-`Cache-Control: no-store` and `Referrer-Policy: no-referrer` from API-host middleware before body parsing, guards, and pipes run. Issued
-raw tokens are returned once; this module provides no token recovery or email delivery. Cookie-authenticated
-mutations retain the application Origin and CSRF-header requirements owned by authentication.
+Raw invitation tokens are returned once; there is no token recovery or email delivery. Invitation responses,
+including failures, use `Cache-Control: no-store` (do not cache) and `Referrer-Policy: no-referrer` (do not forward the
+URL to other sites). Cookie-authenticated mutations also require Origin checks and CSRF (cross-site request forgery) protection.
+After an uncertain organization-creation response, reconcile the outcome before submitting another creation.
 
 ## Persistence
 
-None owned. This module operates entirely through the persistence ports owned by `identity`, which read and
-write the `Organization`, `OrganizationMembership`, `OrganizationInvitation`, `ExternalIdentity`, and
-`AuditLogEntry` tables `identity` owns.
+None owned. Identity stores organizations, memberships, invitations, external identities, and audit records.
 
 ## Configuration
 
-- `OIDC_ISSUER_URL`
-- `KEYCLOAK_ADMIN_API_BASE_URL` (optional — overrides where the Keycloak Admin API is reached from)
-- `KEYCLOAK_ORG_ADMIN_CLIENT_ID`
-- `KEYCLOAK_ORG_ADMIN_CLIENT_SECRET`
+- `OIDC_ISSUER_URL`: identity provider URL; OIDC is the OpenID Connect login standard.
+- `KEYCLOAK_ADMIN_API_BASE_URL`: optional transport override.
+- `KEYCLOAK_ORG_ADMIN_CLIENT_ID`, `KEYCLOAK_ORG_ADMIN_CLIENT_SECRET`: administrative service credentials.
 
 ## Validation
 
-Focused tests live in `src/`: `application/organization-creation.service.spec.ts`,
-`application/organization-listing.service.spec.ts`, `application/organization-detail.service.spec.ts`,
-`application/invitation-issuance.service.spec.ts`, `application/invitation-acceptance.service.spec.ts`,
-`application/invitation-preview.service.spec.ts`,
-`application/membership-listing.service.spec.ts`, `application/membership-role-change.service.spec.ts`,
-`application/membership-removal.service.spec.ts`,
-`application/membership-mutation-concurrency.integration.spec.ts` (real-Postgres concurrent-mutation coverage for
-the final-owner invariant, gated on `TEST_POSTGRES_URL`, built from the real `IdentityModule` port wiring),
-`api/organizations.controller.spec.ts` (including its `handleErrors()` error-mapping cases),
-`api/organization-onboarding-http.integration.spec.ts`, `organization-onboarding.module.spec.ts` (factory-provider
-wiring), and the live-Keycloak-gated
-`infrastructure/keycloak-organization-admin.live-keycloak.integration.spec.ts`.
+Application services have focused tests in `src/application/`; HTTP validation/permissions/serialization are covered
+by `api/organization-onboarding-http.integration.spec.ts`. `organization-onboarding.module.spec.ts` checks wiring.
+The membership concurrency integration test uses `TEST_POSTGRES_URL`; the live-Keycloak integration test checks
+external role changes, including MFA (multi-factor authentication: an additional login proof).
 
-Detail tests cover UUID lookup, safe serialization, missing organizations, invalid IDs, authentication, all customer
-roles, explicit service-client permission, and unexpected storage failures.
-Directory tests cover first, continuation, empty, and terminal pages; the default and boundary sizes; invalid and
-unsupported cursors; cursor encodings that are not canonical; customer-role denial; and safe response serialization. HTTP creation tests
-verify `no-store` on success, invalid bodies, malformed JSON, missing authentication, denied permission, and an
-unexpected application failure. Identity owns the real PostgreSQL ordering and page-boundary tests. Generated
-browser contract tests live in [`scripts/openapi/contracts.test.mjs`](../../../../scripts/openapi/contracts.test.mjs).
-
-[`bruno/organization-onboarding`](../../../../bruno/organization-onboarding/README.md) proves organization
-creation with a pending owner invitation, no-session invitation acceptance, generic duplicate acceptance, pending/unknown/expired/consumed preview responses and cache headers,
-`409` on a duplicate owner invitation, cross-organization invitation rejection, and unknown-token rejection.
-Role-hierarchy enforcement, final-owner protection, and Keycloak MFA-role assignment on promotion require a
-genuine human session and are instead covered by `organization-onboarding-http.integration.spec.ts` and the
-live-Keycloak spec above.
-
-[`bruno/platform-credits`](../../../../bruno/platform-credits/README.md) covers organization detail success, absence,
-UUID validation, authentication, and customer-role denial before balance administration.
+Bruno collections cover [creation/invitations](../../../../bruno/organization-onboarding/README.md) and
+[platform organization detail](../../../../bruno/platform-credits/README.md). Human-session role hierarchy,
+final-owner races, and MFA assignment require the integration suites rather than machine-only HTTP fixtures.

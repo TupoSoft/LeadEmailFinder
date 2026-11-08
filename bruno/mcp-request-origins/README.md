@@ -1,12 +1,12 @@
-# MCP Request Origins Bruno Collection
+# MCP Request Origins Collection
 
-Seven requests check origin precedence, public health, native clients without an Origin header, allowed and denied
-origins, and missing or malformed credentials. Authenticated requests use the customer API key as a Bearer value.
-Origin rejection runs before authentication. The raw duplicate-header cases remain covered by
+MCP (Model Context Protocol) connects AI clients to tools. Origin identifies the caller's scheme, host, and port.
+This seven-request Bruno collection checks origin-before-authentication enforcement, allowed/denied origins, native
+clients without Origin, and invalid credentials. Raw duplicate-header cases use
 `apps/mcp-server/src/request-origin.integration.spec.ts`.
 
-Start the connector as described in `apps/mcp-server/README.md`, setting
-`MCP_ALLOWED_ORIGINS=https://client.example`. Then run from the repository root:
+Start the connector using [its setup guide](../../apps/mcp-server/README.md) with
+`MCP_ALLOWED_ORIGINS=https://client.example`, then run from the repository root:
 
 ```shell
 node --input-type=module <<'NODE'
@@ -30,5 +30,5 @@ try {
 NODE
 ```
 
-The private fixture reader verifies current checkout and stack ownership. The key remains in the child environment.
-Use the same free port for the connector and `MCP_BASE_URL`. Stop the manually started connector after validation.
+The reader checks checkout/stack ownership. Keys stay in the child environment; raw output is withheld. Match
+`MCP_BASE_URL` to the connector port and stop the connector afterward.

@@ -1,47 +1,40 @@
 # Paddle Sandbox Purchase Fixture
 
-This opt-in fixture proves the real Paddle purchase path while keeping the ordinary Compose stack on the
-deterministic stub provider. It serves a Paddle payment-link page, runs the API with the sandbox adapter, and
-creates a temporary public Cloudflare Quick Tunnel for the checkout and Paddle notifications. The checkout is
-also available locally at `http://localhost:57000/checkout.html` for inspecting the rendered fixture.
+Tests real Paddle checkout, signed payment events, replay, and refunds in Paddle's sandbox (its isolated test
+account). The ordinary development stack uses a stub, a predictable local substitute for the provider.
 
-The Quick Tunnel exposes only `/checkout.html`, `/health`, and the exact `/v1/payments/webhook` proxy route. Its
-URL changes on every restart. Start it only for this verification, do not share or record the URL, and stop it
-immediately afterward.
+Use a clean checkout and a dedicated Bash shell with Docker Compose, Node/pnpm, `curl`, and `jq` (a JSON query tool).
+The fixture uses a separate Compose project: a named group of containers, networks, and volumes. Host ports must be
+free; do not stop another checkout's stack to claim them.
+
+A Cloudflare Quick Tunnel temporarily exposes only `/checkout.html`, `/health`, and `/v1/payments/webhook`.
+A webhook is a provider-to-API event callback. Keep the tunnel URL private and deactivate its Paddle notification
+destination before cleanup. The local checkout page is `http://localhost:57000/checkout.html`.
 
 ## 1. Provision the Starter Catalog
 
-Connect the Paddle plugin to the sandbox account and list active products and prices before creating anything.
-Reuse an active product only when all of these fields match:
+List active sandbox products and prices before creating anything. Reuse only matching entries:
 
-- `tax_category` is `saas`;
-- `custom_data.lefPackId` is `starter`;
-- `custom_data.credits` is `100`.
+| Resource       | Required fields                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product        | Name `LeadEmailFinder Starter Credits`; description `100 LeadEmailFinder email-verification credits`; `tax_category=saas`; `custom_data.lefPackId=starter`; `custom_data.credits=100` |
+| One-time price | Description `Starter — 100 credits`; amount `500` US cents; currency `USD`; no billing cycle; minimum and maximum quantity both 1                                                     |
 
-If no match exists, create a standard product named `LeadEmailFinder Starter Credits`, described as
-`100 LeadEmailFinder email-verification credits`, with the `saas` tax category and that custom data. Do not
-substitute another tax category when `saas` is unavailable.
+`saas` means software as a service; do not substitute another tax category. Keep the resulting price ID in the shell:
 
-Under that product, reuse an active one-time price only when it is USD 5.00 and its minimum and maximum quantity
-are each one. Otherwise, create a standard one-time price described as `Starter — 100 credits`, with amount
-`500`, currency `USD`, a null billing cycle, and quantity fixed at one. Repeating this inventory-first procedure
-must return the same product and price rather than create duplicates. Keep the resulting `pri_...` identifier in
-your shell only:
-
-```shell
+```sh
 export PADDLE_STARTER_PRICE_ID=pri_replace_with_the_sandbox_price_id
 ```
 
 ## 2. Create Local Secret Files
 
-Create a sandbox API key and client-side token under **Paddle > Developer tools > Authentication**. The API key needs
-read access to transactions and read/write access to adjustments, notifications, notification settings, and client
-tokens so the verification and exact cleanup calls can run. Enter both secrets through hidden prompts so they do not
-enter shell history. The webhook secret is added after the notification destination is created or safely reused in
-the next section. Resource IDs are recorded beside their secrets so cleanup can target only the external resources
-owned by this fixture.
+Under **Paddle > Developer tools > Authentication**, create a sandbox API key and client-side token. The API key
+needs transaction read access and read/write access to adjustments, notifications, notification settings, and client
+tokens. Sandbox keys start with `pdl_sdbx_apikey_`; client tokens start with `test_`.
 
-```shell
+Hidden prompts keep secrets out of shell history. `umask 077` and mode `600` limit files to their owner:
+
+```sh
 mkdir -p .dev/paddle
 umask 077
 read -r -s -p 'Paddle sandbox API key: ' LEF_PADDLE_SECRET
@@ -55,10 +48,9 @@ printf '\n'
 chmod 600 .dev/paddle/api-key.txt .dev/paddle/client-token.txt
 ```
 
-Resolve the selected token's `ctkn_...` identifier through the API without printing any token value. The query must
-find exactly one active match:
+Resolve exactly one active token ID without printing the token; keep that ID for revocation:
 
-```shell
+```sh
 (
   set -euo pipefail
   LEF_PADDLE_CLIENT_TOKEN_ID="$(
@@ -85,16 +77,16 @@ find exactly one active match:
 )
 ```
 
-Only use sandbox values: API keys start with `pdl_sdbx_apikey_`, and client-side tokens start with `test_`.
-`.dev/paddle/` is excluded from both Git and Docker build contexts. Never put these values, an access token, an
-account-specific price identifier, a customer payload, or a raw webhook body in a tracked file.
+`.dev/paddle/` is ignored by Git and Docker builds. Do not commit credentials, account-specific IDs, customer data,
+or raw event bodies.
 
 ## 3. Start the Tunnel and Configure Paddle
 
-Start the tunnel and its checkout dependency before the rest of the stack:
+Keep this checkout-derived project name for every command:
 
-```shell
+```sh
 export LEF_PADDLE_COMPOSE_PROJECT="lef-paddle-dev-$(printf '%s' "$PWD" | sha256sum | cut -c1-8)"
+export COMPOSE_PROJECT_NAME="$LEF_PADDLE_COMPOSE_PROJECT"
 export PAYMENTS_CHECKOUT_ALLOWED_ORIGINS=http://localhost:57000
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
   up -d paddle-webhook-tunnel
@@ -102,44 +94,29 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
   logs -f paddle-webhook-tunnel
 ```
 
-The path-derived project name keeps this fixture's containers, networks, volumes, and locally built images separate
-from the ordinary `LEF` Compose project and other worktrees. Keep the same variable for every command below.
+Copy the temporary `https://...trycloudflare.com` URL from the logs, then stop following logs with `Ctrl+C`:
 
-Copy the temporary `https://...trycloudflare.com` URL from the logs, then stop following them with `Ctrl+C`.
-Keep it in the same shell that will start the full overlay:
-
-```shell
+```sh
 export PADDLE_PUBLIC_URL=https://replace-with-the-quick-tunnel.trycloudflare.com
 export PADDLE_CHECKOUT_URL="$PADDLE_PUBLIC_URL/checkout.html"
 export PAYMENTS_CHECKOUT_ALLOWED_ORIGINS="$PADDLE_PUBLIC_URL"
 ```
 
-In the Paddle sandbox dashboard, add the tunnel's fully qualified domain under **Checkout > Website approval**.
-Do not enter `localhost`: the website approval field requires a fully qualified domain even in sandbox. Set the
-account's default payment link to the public checkout URL held in `PADDLE_CHECKOUT_URL`.
+In the sandbox dashboard, approve that hostname under **Checkout > Website approval** and set the default payment
+link to `PADDLE_CHECKOUT_URL`. `localhost` is not an accepted website hostname.
 
-Before changing notification settings, list the existing Platform destinations in the sandbox dashboard. This
-fixture owns only a destination described as `LeadEmailFinder paddle-dev` whose exact ID is recorded in
-`.dev/paddle/notification-setting-id.txt`.
+Inspect existing **Platform** notification destinations. The fixture owns only the exact destination recorded in
+`.dev/paddle/notification-setting-id.txt`, described as `LeadEmailFinder paddle-dev`:
 
-- If that local ID and the corresponding `webhook-secret.txt` both exist, update that exact destination, set it active,
-  and reuse it.
-- If a stale `LeadEmailFinder paddle-dev` destination exists but its local ID or secret is unavailable, deactivate
-  it before creating a replacement. Do not adopt it by description alone.
-- Never deactivate or modify an unrelated destination, even when its URL or subscriptions look similar.
+- Reuse it only when its recorded ID and matching `webhook-secret.txt` are available.
+- Deactivate an identified stale fixture destination before replacing it; never adopt one by description alone.
+- Never alter unrelated destinations.
 
-Create a Platform notification destination when no safely reusable destination remains. Use the description
-`LeadEmailFinder paddle-dev` and this URL:
+Set the destination URL to `$PADDLE_PUBLIC_URL/v1/payments/webhook` and subscribe only to `transaction.completed`,
+`transaction.canceled`, `transaction.past_due`, `adjustment.created`, and `adjustment.updated`. Save its ID and
+signature-verification secret:
 
-```text
-https://replace-with-the-quick-tunnel.trycloudflare.com/v1/payments/webhook
-```
-
-Subscribe only to `transaction.completed`, `transaction.canceled`, `transaction.past_due`, `adjustment.created`, and
-`adjustment.updated`. Copy the exact destination ID and its secret into local files without putting the secret in
-shell history:
-
-```shell
+```sh
 read -r -p 'Paddle notification destination ID: ' LEF_PADDLE_SETTING_ID
 printf '%s' "$LEF_PADDLE_SETTING_ID" > .dev/paddle/notification-setting-id.txt
 unset LEF_PADDLE_SETTING_ID
@@ -150,17 +127,14 @@ printf '\n'
 chmod 600 .dev/paddle/notification-setting-id.txt .dev/paddle/webhook-secret.txt
 ```
 
-If the tunnel restarts, update the approved website, default payment link, notification destination URL, and
-the three URL and origin variables before testing again. Update only the destination whose ID is recorded locally. A destination
-secret belongs to that destination and must not be replaced with an API key or a secret from another environment.
+After a tunnel restart, update website approval, the default payment link, the recorded destination's URL, and all
+three URL/origin variables. A destination secret must match that exact destination and sandbox environment.
 
 ## 4. Start and Inspect the Fixture
 
-Start the full overlay after the three runtime secret files (`api-key.txt`, `client-token.txt`, and
-`webhook-secret.txt`) and two resource-ID files (`client-token-id.txt` and `notification-setting-id.txt`) exist, and
-after `PADDLE_STARTER_PRICE_ID`, `PADDLE_CHECKOUT_URL`, and `PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` are exported:
+Require all five local secret/ID files and the exported price, checkout URL, and allowed-origin variables:
 
-```shell
+```sh
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml config --quiet
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml up -d --build
 curl --fail --silent --show-error http://localhost:57000/health
@@ -168,16 +142,14 @@ curl --fail --silent --show-error "$PADDLE_PUBLIC_URL/health"
 curl --fail --silent --show-error http://localhost:53000/health | jq -e '.status == "ok"'
 ```
 
-`PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` is a comma-separated list of exact HTTP(S) origins. Both the API and web build
-normalize this same input. HTTP is accepted only for explicit loopback development. Do not use paths, credentials,
-fragments, wildcard hosts, or a provider-wide domain suffix. A changed tunnel origin requires rebuilding the web
-image and restarting the API. Only the normalized origin list enters the browser bundle; payment secrets stay on
-the server. The stub provider derives its sole allowed origin from its loopback return URL.
+An origin is a URL's scheme, host, and port. `PAYMENTS_CHECKOUT_ALLOWED_ORIGINS` accepts a comma-separated list of
+exact origins; no paths, credentials, fragments, wildcards, or provider-wide suffixes. HTTP is allowed only for
+explicit loopback development. Changing the tunnel origin requires rebuilding the web image and restarting the API.
+Only the origin list enters the browser bundle; provider secrets stay server-side.
 
-The checkout container reads its client-side token from `/run/secrets`, renders the page once, and never logs the
-token. Verify the runtime page without printing it:
+Verify that the generated checkout uses sandbox mode and contains neither unresolved placeholders nor server secrets:
 
-```shell
+```sh
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
   exec -T paddle-checkout sh -ec \
   "grep -q \"Paddle.Environment.set('sandbox')\" /usr/share/nginx/html/checkout.html && \
@@ -187,11 +159,10 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
 
 ## 5. Bootstrap Authentication
 
-The overlay inherits the public Keycloak issuer and internal protocol routes from the base stack. Refuse to
-overwrite a preexisting local Keycloak fixture, then mark the directory as owned by this run. Provision and seed
-the development M2M credential through the internal administrator address while recording the public identity:
+Keycloak is the current browser login provider. Refuse an existing local fixture directory so this run cannot
+overwrite another fixture, then provision the isolated stack through its internal administrator address:
 
-```shell
+```sh
 test ! -e .dev/keycloak || {
   printf '%s\n' '.dev/keycloak already exists; use a clean worktree or preserve that fixture explicitly.' >&2
   exit 1
@@ -207,30 +178,28 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
 '
 ```
 
-Load the checkout-owned platform API key without printing it:
+Create/load the checkout-owned platform API key. This is a direct Bearer credential, not an OAuth access token
+obtained through a token exchange; the legacy shell variable name remains for the commands below:
 
-```shell
+```sh
 pnpm keycloak:bootstrap-credential
 export LEF_ACCESS_TOKEN="$(jq -er .apiKey .dev/auth/platform-api-key.json)"
 export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/auth/platform-api-key.json)"
 ```
 
-The bootstrap runs from the host checkout and verifies Docker ownership before creating the key through the
-application's transactional credential port. Rerunning it preserves a working key. The ignored file must remain a
-private regular file with mode 0600. Do not print the key or save HTTP reports containing authorization headers.
+The host bootstrap verifies stack ownership and preserves a working key. Its `.dev/auth/` file must remain a private
+regular file (`0600`). Never print the key or save reports containing its authorization header.
 
 ## 6. Complete One Purchase
 
-For a browser purchase, sign in as the customer owner and open `/app/billing` on the local web origin. After a
-successful payment, the checkout fixture returns to `http://localhost:53000/billing/complete` in the same tab.
-The return port follows `WEB_PORT` when it is set. The return page reads purchase status and balance from the API;
-only the signed webhook can confirm payment and grant credits. A checkout page opened before this configuration
-was applied needs a manual return to `/billing/complete`; do not create another purchase just to return to the app.
+The browser path is customer-owner login → `/app/billing` → checkout → `/billing/complete` on the local web origin
+(default port 53000, overridden by `WEB_PORT`). The return page reads API state; only a signed webhook confirms
+payment. A previously opened checkout may require a manual return, not another purchase.
 
-Capture the balance and create a purchase. These commands keep the response in shell variables and assert that
-the server, not the request, selected the 100-credit pack:
+For API verification, capture the balance and create one pending purchase. The server selects the pack's amount
+and credits from `packId`; clients cannot choose their own grant:
 
-```shell
+```sh
 export LEF_STARTING_BALANCE="$(
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
@@ -249,13 +218,12 @@ export LEF_PURCHASE_ID="$(jq -er .id <<<"$LEF_PURCHASE_RESPONSE")"
 export LEF_CHECKOUT_URL="$(jq -er .redirectUrl <<<"$LEF_PURCHASE_RESPONSE")"
 ```
 
-Open the URL held in `LEF_CHECKOUT_URL` in a browser. The checkout page initializes Paddle's browser library in sandbox mode;
-Paddle's `_ptxn` parameter opens the transaction automatically. Pay with the sandbox card
-`4242 4242 4242 4242`, any future expiry date, and any three-digit CVC. Do not use a real card.
+Open `LEF_CHECKOUT_URL` in a browser. Paddle's `_ptxn` query parameter opens the transaction. Pay with test card
+`4242 4242 4242 4242`, any future expiry, and any three-digit CVC (card security code); never use a real card.
 
-After Paddle reports success, verify the stored purchase and exact balance delta:
+After payment, require `paid` and an exact 100-credit increase:
 
-```shell
+```sh
 LEF_PAID_PURCHASE="$(
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
@@ -272,16 +240,15 @@ export LEF_PAID_BALANCE="$(
 test "$((LEF_PAID_BALANCE - LEF_STARTING_BALANCE))" -eq 100
 ```
 
-In the Paddle notification destination's delivery log, confirm the original `transaction.completed` delivery
-returned HTTP 200 with `{ "received": true }`. Record only suffixes of the transaction, event, and notification
-identifiers if evidence is needed; never copy the raw body or customer/card data into the repository.
+In Paddle's delivery log, require HTTP 200 and `{"received":true}` for `transaction.completed`. Record only identifier
+suffixes as evidence, never customer/card data or raw bodies.
 
 ## 7. Replay and Prove Idempotency
 
-Replay that same delivered notification from Paddle's notification log. Confirm the replay also returns HTTP 200,
-then verify that the purchase remains paid and the balance did not change:
+Idempotency means repeating an event has no additional accounting effect. Replay the original delivered notification
+from Paddle's log; require HTTP 200, the same paid purchase, and no balance change:
 
-```shell
+```sh
 LEF_REPLAYED_PURCHASE="$(
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
@@ -298,18 +265,16 @@ LEF_REPLAYED_BALANCE="$(
 test "$LEF_REPLAYED_BALANCE" -eq "$LEF_PAID_BALANCE"
 ```
 
-A missed notification is recoverable by replaying the original after the API and tunnel are healthy. Starting a
-purchase is not idempotent; abandon any unpaid duplicate and create a fresh purchase for a retry. If Paddle
-rejects a transaction with `transaction_checkout_url_domain_is_not_approved`, confirm that `PADDLE_CHECKOUT_URL`
-uses the current tunnel domain and that the same fully qualified domain is approved in the sandbox dashboard.
+Replay a missed notification only after the API and tunnel recover. Purchase creation itself is not idempotent:
+check purchase history after an uncertain response before deliberately creating another purchase. For
+`transaction_checkout_url_domain_is_not_approved`, check that the current tunnel hostname is approved and matches
+`PADDLE_CHECKOUT_URL`.
 
 ## 8. Refund and Prove the Credit Clawback
 
-Extract the Paddle transaction ID from the checkout URL without printing the API key, then create a full sandbox
-refund. Paddle may create it as `pending_approval`; sandbox refunds are approved automatically on Paddle's periodic
-approval cycle. A pending or rejected adjustment must leave the balance unchanged.
+A clawback removes previously granted credits. Create a full sandbox refund for this transaction:
 
-```shell
+```sh
 export LEF_TRANSACTION_ID="$(
   node -e "process.stdout.write(new URL(process.env.LEF_CHECKOUT_URL).searchParams.get('_ptxn') || '')"
 )"
@@ -332,14 +297,12 @@ case "$(jq -r .data.status <<<"$LEF_REFUND_RESPONSE")" in
 esac
 ```
 
-Wait for the approved `adjustment.created` or `adjustment.updated` delivery to return HTTP 200. The paid event stores
-the transaction `grandTotal` from the signature-verified event, and the adjustment handler compares it with the
-adjustment `total` from the signature-verified event, both after tax. A full adjustment also carries explicit full
-scope, so a full remainder targets the entire purchase grant.
-Verify that the full refund removed exactly the 100 credits granted by this purchase, then replay the approved delivery
-and prove that the balance does not move again:
+`pending_approval` or rejected refunds must not change credits. Wait for an approved `adjustment.created` or
+`adjustment.updated` delivery returning HTTP 200. The handler compares signature-verified payment and adjustment
+totals after tax; a full refund removes the complete purchase grant. Require exactly 100 credits removed, then
+replay the approved delivery and require no further change:
 
-```shell
+```sh
 export LEF_REFUNDED_BALANCE="$(
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $LEF_ACCESS_TOKEN" \
@@ -356,25 +319,18 @@ LEF_REFUND_REPLAY_BALANCE="$(
 test "$LEF_REFUND_REPLAY_BALANCE" -eq "$LEF_REFUNDED_BALANCE"
 ```
 
-Seller API calls cannot manufacture Paddle's provider-generated chargeback or credit inverse actions. If this sandbox
-transaction later produces an approved `chargeback_reverse` or `credit_reverse`, verify that its delivery restores no
-more than the credits actually removed, clears any attributable shortfall first, and remains unchanged on replay. A
-`status: reversed` update for the original adjustment is informational for credit accounting; the separate approved
-inverse adjustment is the only restore event. When the sandbox cannot produce an inverse action, record that path as
-unverified rather than treating the original `reversed` update as a substitute. Signed Paddle fixture tests and the
-real-PostgreSQL integration suite provide the automated inverse proof.
+Provider-generated `chargeback_reverse` or `credit_reverse` adjustments restore at most the credits actually
+removed, clearing attributable shortfall first. A `status: reversed` update alone does not restore credits. If the
+sandbox cannot generate a separate approved inverse adjustment, mark that path unverified; signed fixtures and real
+PostgreSQL tests cover it automatically.
 
 ## 9. Deactivate the Destination and Restore the Stub Stack
 
-Before stopping the public tunnel, deactivate the Platform destination whose ID is stored in
-`.dev/paddle/notification-setting-id.txt` and verify that exact destination is inactive. Confirm that no other active
-`LeadEmailFinder paddle-dev` destination exists. Deactivation preserves its delivery logs while preventing retries and
-avoiding consumption of Paddle's active-destination limit.
+**Before stopping the tunnel**, deactivate the exact recorded destination and verify it is inactive. No other active
+`LeadEmailFinder paddle-dev` destination should remain. Revoke the recorded client token after the last checkout;
+verify its `revoked` status. Keep delivery logs for diagnosis:
 
-Revoke the fixture client token only after the final checkout is complete, then verify the exact recorded ID reports
-`revoked`:
-
-```shell
+```sh
 (
   set -euo pipefail
   LEF_PADDLE_API_KEY="$(cat .dev/paddle/api-key.txt)"
@@ -421,9 +377,9 @@ Revoke the fixture client token only after the final checkout is complete, then 
 )
 ```
 
-Only after that verification, stop the overlay, clear sensitive shell variables, and discard its local files:
+Only after those checks pass, remove the isolated fixture and its local secrets:
 
-```shell
+```sh
 docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
   down --volumes --remove-orphans --rmi local
 unset LEF_ACCESS_TOKEN LEF_ORGANIZATION_ID LEF_STARTING_BALANCE LEF_PAID_BALANCE
@@ -436,15 +392,11 @@ rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-
 if test -f .dev/keycloak/.paddle-fixture-owned; then
   rm -rf .dev/keycloak
 fi
-unset LEF_PADDLE_COMPOSE_PROJECT
+unset LEF_PADDLE_COMPOSE_PROJECT COMPOSE_PROJECT_NAME
 ```
 
-If you stopped a separately owned stub-provider stack before this run, restore it with its own explicit Compose
-project name. Do not target the shared `LEF` project as part of this fixture's cleanup.
+If deactivation fails, keep the tunnel, destination ID, and secret until that exact destination can be deactivated;
+do not run cleanup or compensate by changing another destination. Restore any separately owned stub stack using
+its own explicit project name, never the shared `LEF` project as part of this cleanup.
 
-If deactivation fails, keep the tunnel running while diagnosing delivery, retain both the notification-setting ID
-and webhook secret, and do not run the removal block or claim cleanup complete. Retry deactivation against that
-exact ID; never compensate by deleting or disabling another destination.
-
-The sandbox product and price are durable provider state. Keep matching active entries for the next run. If an
-unusable entry was created, archive only that explicitly identified entry; do not modify unrelated catalog data.
+Keep matching catalog entries for reuse. Archive only explicitly identified unusable entries created by the fixture.

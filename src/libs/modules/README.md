@@ -1,36 +1,29 @@
 # Business Modules
 
-This directory contains internal business modules. This guide is the canonical human-readable contract for their
-structure, dependencies, public boundaries, documentation, and tests, enforced as a permanent zero-violation
-invariant. The executable counterpart is `corepack pnpm architecture:check`.
+This is the architecture contract for business modules. `corepack pnpm architecture:check` enforces it across the
+repository with zero permitted violations.
 
 ## Module Structure
 
-Every module uses a kebab-case directory name and contains a `README.md`, a `src/` directory, and `src/index.ts` as its
-public barrel. A module creates only the architectural layers it needs; unused layers may be absent, and empty
-placeholder directories are unnecessary.
+Each kebab-case module contains `README.md`, `src/`, and `src/index.ts`. The last is its **public barrel**: the
+supported exports other modules may use. Create only needed layers; omit empty placeholders.
 
-The only production TypeScript files permitted directly below a module's `src/` directory are:
+Only `index.ts` and an optional matching `<module-name>.module.ts` may sit directly in `src/`. The latter is the
+Nest **composition root**, where dependencies are constructed and connected. Other production TypeScript belongs in:
 
-- `index.ts`, the public barrel; and
-- An optional `<module-name>.module.ts`, whose name exactly matches the module directory and which acts as the Nest
-  composition root.
+| Layer             | Owns                                                                     |
+| ----------------- | ------------------------------------------------------------------------ |
+| `api/`            | Controllers, DTOs (request/response data shapes), and transport handling |
+| `application/`    | Use cases, workflow coordination, and ports (required capabilities)      |
+| `domain/`         | Business entities, values, rules, and contracts                          |
+| `infrastructure/` | Adapters implementing ports for storage, providers, and frameworks       |
 
-All other production TypeScript files belong in one of these optional layers:
-
-- `api/` contains controllers, DTOs, and other transport-facing request or response code.
-- `application/` contains use cases, orchestration, application services, and ports required by those use cases.
-- `domain/` contains entities, value objects, domain services, and business contracts.
-- `infrastructure/` contains persistence implementations, provider clients, framework wiring, and other technical
-  adapters.
-
-A production TypeScript file is a `.ts` file that is not below `__tests__/` and whose name does not end in `.spec.ts`
-or `.test.ts`. Production `*.controller.ts` and `*.dto.ts` files must be below `api/`.
+Production files are `.ts` files outside `__tests__/` without `.spec.ts` or `.test.ts` suffixes.
+Production controllers and DTOs must be under `api/`.
 
 ## Layer Dependency Contract
 
-The following matrix governs imports between production files in the same module. A check mark means that the source
-layer may import the target layer.
+A check mark permits the source layer to import the target:
 
 | Source layer     | `api` | `application` | `domain` | `infrastructure` |
 | ---------------- | :---: | :-----------: | :------: | :--------------: |
@@ -39,107 +32,67 @@ layer may import the target layer.
 | `domain`         |       |               |    ✓     |                  |
 | `infrastructure` |       |       ✓       |    ✓     |        ✓         |
 
-Layer files must not import their module's root barrel. The optional matching root composition module may import and
-wire every layer in its own module.
+Layer files cannot import their own root barrel. The matching root composition module may wire every internal layer.
 
-Application and domain code must remain independent of frameworks and technical implementations. They must not
-import these packages or package prefixes, including their nested paths:
+Application/domain code cannot import these technical packages or their subpaths:
+`@automapper/`, `@aws-sdk/`, `@nestjs/`, `@paddle/`, `axios`, `bullmq`, `class-transformer`, `class-validator`,
+`express`, `ioredis`, `jose`, `multer-s3`, `nestjs-s3`, `pg`, `pino`, or `typeorm`.
+They also cannot import technical aliases rooted at `@tuposoft/lead-email-finder/` with suffixes
+`catch-all`, `config`, `dns`, `key`, `redis`, or `socket`.
 
-- `@automapper/`
-- `@aws-sdk/`
-- `@nestjs/`
-- `@paddle/`
-- `axios`
-- `bullmq`
-- `class-transformer`
-- `class-validator`
-- `express`
-- `ioredis`
-- `jose`
-- `multer-s3`
-- `nestjs-s3`
-- `pg`
-- `pino`
-- `typeorm`
-
-They also must not import the internal technical aliases rooted at:
-
-- `@tuposoft/lead-email-finder/catch-all`
-- `@tuposoft/lead-email-finder/config`
-- `@tuposoft/lead-email-finder/dns`
-- `@tuposoft/lead-email-finder/key`
-- `@tuposoft/lead-email-finder/redis`
-- `@tuposoft/lead-email-finder/socket`
-
-Shared `common` contracts and bare public business-module barrels remain allowed. Technical integrations belong behind
-small application or domain ports implemented by infrastructure adapters.
+Shared `common` contracts and bare business-module barrels are allowed. Put technical integrations behind ports
+implemented by infrastructure adapters.
 
 ## Public Boundaries and Module Dependencies
 
-A consumer outside a module may import that module only through its bare public alias:
+External consumers, including tests, may import a business module only through:
 
-    @tuposoft/lead-email-finder/modules/<module-name>
+```text
+@tuposoft/lead-email-finder/modules/<module-name>
+```
 
-Deeper aliases and relative cross-module imports are unsupported, including in tests. A deep alias that targets the
-importing file's own module is allowed. A module's `src/index.ts` barrel may export only relative paths that resolve
-inside that module.
+Cross-module relative imports and deeper aliases are unsupported. Deep aliases within the importing file's own
+module are allowed. A barrel may export only relative paths inside its own module.
 
-Every production dependency on another business module must appear under `Dependencies` in the consuming module's
-README. Extra documented capability dependencies are allowed when a runtime contract is supplied through a shared
-token rather than a direct import. The production module-dependency graph must remain acyclic.
+List every production business-module dependency under `Dependencies` in the consumer's README. Also document
+capabilities supplied through shared injection tokens—runtime identifiers used to connect implementations—even
+without direct imports. Dependencies must be **acyclic**: following imports must never lead back to the same module.
 
 ## Test Treatment
 
-Tests are exempt from production source placement, same-module layer direction, and technical-package restrictions so
-integration tests can compose concrete layers when necessary. Cross-module public boundaries still apply: tests must
-use another module's bare public barrel and must not deep-import its internals.
+Tests may compose internal layers and technical packages without production placement/import restrictions.
+Cross-module public-barrel boundaries still apply.
 
 ## Module Documentation
 
-Every module README must contain these standard sections:
-
-- `Responsibility`
-- `Non-Responsibilities`
-- `Public API`
-- `Dependencies`
-- `HTTP Surface`
-- `Persistence`
-- `Configuration`
-- `Validation`
-
-Add sections such as `Queues` or `S3 / Storage` when the module exposes those capabilities. The README must document
-what the module owns and explicitly does not own, exactly what its `src/index.ts` exports, and its business-module
-dependencies. It must also cover its routes and queues, persistence, the configuration keys it reads but never their
-values, and links to focused tests and Bruno coverage. Existing deep imports are architecture debt, not supported
-public API, and must be described as such rather than presented as contracts.
+Every module README requires `Responsibility`, `Non-Responsibilities`, `Public API`, `Dependencies`, `HTTP Surface`,
+`Persistence`, `Configuration`, and `Validation` sections. Add queue or storage sections when applicable.
+Document ownership and exclusions, exact barrel exports, module dependencies, routes/queues, storage, setting names
+without secrets, and focused tests/Bruno coverage. Bruno is the repository's HTTP request-collection test tool.
+Existing unsupported deep imports are defects, not public contracts.
 
 ## Architecture Gate
 
-Run the read-only gate after changing a module or one of its consumers:
+```sh
+corepack pnpm architecture:check
+```
 
-    corepack pnpm architecture:check
+Any violation fails; there is no baseline, exemption list, or warning-only mode. If the design cannot comply, revise
+the task's ExecPlan (implementation plan) to correct it. An intentional contract change must update this guide,
+scanner, focused tests, and plan together.
 
-The gate scans the complete repository and requires zero violations. It is a permanent invariant, not a ratchet: any
-violation fails the check, and there is no baseline, allow list, grandfathered path, or warning-only mode to accept
-one. A change that cannot satisfy the canonical contract needs a different design, not an exception; update or create
-an ExecPlan to correct it.
-
-The ignored host file `src/metadata.ts` is Nest's generated Swagger aggregate. The gate excludes this exact build
-artifact because its DTO imports describe documentation metadata. Handwritten host files and every other file named
-`metadata.ts` remain subject to the public import boundaries.
-
-Violation identities are stable, sorted, unique keys that exclude absolute paths and source positions. Diagnostics
-report current line and column information separately. A legitimate contract change must update this guide, the
-scanner, its focused tests, and the relevant ExecPlan together.
+Only generated `src/metadata.ts` is excluded: Nest uses its DTO imports for Swagger API documentation.
+Handwritten host code and other `metadata.ts` files remain checked. Diagnostic identities are sorted, unique, stable
+keys without absolute paths or positions; current line/column locations are reported separately.
 
 ## Module Catalog
 
-- [`auth`](auth/README.md) — default-deny credential authentication and permission-based authorization
-- [`bff-session`](bff-session/README.md) — browser session login, callback, refresh, logout, and CSRF/Origin protection
-- [`credits`](credits/README.md) — organization credit balance lookup and administration
-- [`email-verification`](email-verification/README.md) — synchronous, async, and batch email verification
-- [`identity`](identity/README.md) — organizations, memberships, credentials, credit ledger, and audit persistence
-- [`organization-onboarding`](organization-onboarding/README.md) — organization creation and invitation-based membership management
-- [`payments`](payments/README.md) — credit-pack checkout and payment webhook ingestion
-- [`proxy`](proxy/README.md) — proxy registry, health-based selection, and leased allocation
-- [`service-client-management`](service-client-management/README.md) — organization-owned M2M client life cycle
+- [`auth`](auth/README.md): credential authentication and permission checks.
+- [`bff-session`](bff-session/README.md): browser login, sessions, and cross-site request protection.
+- [`credits`](credits/README.md): organization credit balances and administration.
+- [`email-verification`](email-verification/README.md): direct, asynchronous, and batch verification.
+- [`identity`](identity/README.md): organizations, memberships, credentials, credit ledger, and audit storage.
+- [`organization-onboarding`](organization-onboarding/README.md): organization creation and invitations.
+- [`payments`](payments/README.md): credit-pack checkout and payment notifications.
+- [`proxy`](proxy/README.md): proxy registry, health selection, and temporary allocation.
+- [`service-client-management`](service-client-management/README.md): organization-owned machine credentials.

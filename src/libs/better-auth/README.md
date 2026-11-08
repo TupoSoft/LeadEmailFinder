@@ -1,45 +1,40 @@
 # Better Auth Runtime
 
-This library creates and configures one Better Auth instance for human authentication. It configures the database
-tables used by Better Auth, sends authentication emails, and creates or reuses passwordless users.
-Business modules manage organizations, memberships, roles, credits, and audit records.
+This library prepares Better Auth for native human authentication: PostgreSQL storage, authentication email, and
+passwordless-user provisioning. It does not mount an HTTP handler or replace the currently wired Keycloak browser
+login. Business modules retain organizations, roles, memberships, credits, and audit ownership.
 
-Consumers import only the bare alias `@tuposoft/lead-email-finder/better-auth`. Application and domain code must not
-import this library, its native instance, or Better Auth types; infrastructure adapters in business modules use it.
+Import only `@tuposoft/lead-email-finder/better-auth`, from infrastructure adapters. Application/domain code must not
+import its runtime, native instance, or vendor types.
 
 ## Public API
 
-- `BetterAuthRuntimeModule` composes the runtime from `ConfigService`. It also registers the mapped native entities
-  with `TypeOrmModule.forFeature`, so the importing process needs `TypeOrmModule.forRoot`. The runtime starts only
-  after that data source exists, which places native startup after TypeORM synchronization.
-- `BETTER_AUTH_RUNTIME` resolves a singleton `BetterAuthRuntime`. Its `auth` property is the Better Auth instance
-  (`BetterAuthInstance`), and `close()` releases the owned `pg.Pool` and SMTP transport. The module calls `close()` on
-  application shutdown.
-- `AUTH_MAIL_DELIVERY` resolves `AuthMailDelivery.send(message)`. It delivers transactional authentication
-  mail only and never calls email-verification probes. It rejects with a redacted `AuthMailDeliveryError` whose
-  reason is `invalid-message`, `rejected`, or `unavailable`.
-- `NATIVE_HUMAN_USER_PROVISIONER` resolves `NativeHumanUserProvisioner.ensureUnverifiedByEmail(email)`. It inserts
-  or reuses a passwordless native user and never upgrades an existing verification flag. It also creates no
-  account or session and grants no business authority. Concurrent inserts settle on the unique email index;
-  case-variant duplicates are refused as ambiguous.
-- `openBetterAuthRuntime(configuration, overrides)` is the framework-free composition used by the module and by
-  compiled tooling. `createBetterAuthConfiguration(read)` validates settings without echoing their values.
-- `BETTER_AUTH_TABLES`, `BETTER_AUTH_COLUMNS`, and `BETTER_AUTH_ENTITIES` describe the mapped schema.
-- `betterAuthSessionCookieName(baseUrl)` returns the configured `lef_session` name, including the automatic
-  `__Secure-` prefix for HTTPS. `betterAuthSessionCookieEffects.run(operation, emit)` scopes captured
-  `Set-Cookie` values to one request and passes the cookie array to `emit` in `finally`, including rejection
-  paths. Transport adapters append each cookie independently. Infrastructure adapters call `capture(headers)`
-  before mapping Better Auth outcomes. Cookie effects never enter application authentication results.
+- `BetterAuthRuntimeModule` composes one runtime from `ConfigService` after TypeORM's data source exists.
+  TypeORM maps application objects to database tables; the importing process must configure `TypeOrmModule.forRoot`.
+- `BETTER_AUTH_RUNTIME` resolves one shared `BetterAuthRuntime`; `auth` exposes `BetterAuthInstance`.
+  `close()` releases its PostgreSQL connection pool and mail transport; shutdown calls it automatically.
+- `AUTH_MAIL_DELIVERY` resolves `AuthMailDelivery.send(message)` for authentication mail only, never verification
+  probes. Redacted `AuthMailDeliveryError` reasons are `invalid-message`, `rejected`, or `unavailable`.
+- `NATIVE_HUMAN_USER_PROVISIONER` exposes `ensureUnverifiedByEmail(email)`: create/reuse a passwordless native user
+  without changing verification, creating a session/account, or granting authority. The unique email index resolves
+  concurrent inserts; case-variant duplicates are rejected as ambiguous.
+- `openBetterAuthRuntime(configuration, overrides)` composes without Nest; `createBetterAuthConfiguration(read)`
+  validates settings without echoing values.
+- `BETTER_AUTH_TABLES`, `BETTER_AUTH_COLUMNS`, `BETTER_AUTH_ENTITIES` describe the schema.
+- `betterAuthSessionCookieName(baseUrl)` chooses `lef_session`, automatically prefixed `__Secure-` for HTTPS.
+  `betterAuthSessionCookieEffects.run(operation, emit)` captures `Set-Cookie` values per request and emits them even
+  on rejection. Adapters call `capture(headers)` before mapping outcomes and append cookies separately; application
+  results never carry transport cookie effects.
 
 ## Better Auth Configuration
 
-The runtime selects the magic-link plugin with registration disabled and hashed token storage. It also selects
-passwordless TOTP. Password sign-in, telemetry, secondary session storage, and the cookie cache are disabled.
-Sessions are stored only in PostgreSQL. Native IDs are UUIDs. No HTTP handler is mounted; BFF infrastructure adapters
-call the native server API directly and disable session cookie caching explicitly. The Better Auth session cookie is
-`lef_session`, HttpOnly, SameSite=Lax, and scoped to `/`; HTTPS adds the `__Secure-` prefix and Secure attribute.
-Native log messages pass through
-a redaction step that removes URLs, email addresses, and token-like values.
+**Magic links** are one-use emailed sign-in links. Registration is disabled and their tokens are stored as hashes.
+**TOTP** (time-based one-time passwords) supplies time-based verification codes as a second login factor. Password sign-in, telemetry,
+secondary storage, and session-cookie caching are disabled. Sessions live only in PostgreSQL; native IDs are UUIDs
+(universally unique identifiers). Logs remove URLs, addresses, and token-like values.
+
+Cookies are HttpOnly (unreadable by browser JavaScript), SameSite=Lax (limits cross-site sending), and scoped to `/`;
+HTTPS adds Secure (encrypted transport only) and the `__Secure-` prefix.
 
 | Native model   | Table                       |
 | -------------- | --------------------------- |
@@ -49,34 +44,33 @@ a redaction step that removes URLs, email addresses, and token-like values.
 | `verification` | `better_auth_verifications` |
 | `twoFactor`    | `better_auth_two_factors`   |
 
-Columns use snake case. TypeORM synchronization owns the disposable schema; the Better Auth migration CLI is never
-used. The TOTP secret and recovery codes are encrypted by the plugin with `BETTER_AUTH_SECRET`.
+Columns use snake case. TypeORM synchronization owns this disposable schema; do not run Better Auth migrations.
+The plugin encrypts TOTP secrets and recovery codes with `BETTER_AUTH_SECRET`.
 
 ## Configuration
 
-A process validates these settings only when it composes the runtime:
+Only processes composing the runtime validate these settings:
 
-| Setting                   | Rule                                                                       |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`      | At least 32 characters; `BETTER_AUTH_SECRET_FILE` is supported.            |
-| `APP_BASE_URL`            | HTTP or HTTPS origin; production requires HTTPS.                           |
-| `POSTGRES_URL`            | The application PostgreSQL connection.                                     |
-| `AUTH_MAIL_SMTP_HOST`     | A hostname without scheme or port.                                         |
-| `AUTH_MAIL_SMTP_PORT`     | 1 to 65535.                                                                |
-| `AUTH_MAIL_SMTP_SECURE`   | Optional boolean for implicit TLS. Production otherwise requires STARTTLS. |
-| `AUTH_MAIL_SMTP_USER`     | Optional; requires `AUTH_MAIL_SMTP_PASSWORD`.                              |
-| `AUTH_MAIL_SMTP_PASSWORD` | Optional; `AUTH_MAIL_SMTP_PASSWORD_FILE` is supported.                     |
-| `AUTH_MAIL_FROM`          | A sender address, optionally with a display name.                          |
+| Setting                                          | Rule                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                             | At least 32 characters; `_FILE` alternative supported             |
+| `APP_BASE_URL`                                   | HTTP(S) origin (scheme, host, port); HTTPS required in production |
+| `POSTGRES_URL`                                   | Application PostgreSQL connection                                 |
+| `AUTH_MAIL_SMTP_HOST`, `AUTH_MAIL_SMTP_PORT`     | Mail host without scheme/port; separate port from 1–65535         |
+| `AUTH_MAIL_SMTP_SECURE`                          | Optional implicit TLS; otherwise production requires STARTTLS     |
+| `AUTH_MAIL_SMTP_USER`, `AUTH_MAIL_SMTP_PASSWORD` | Optional paired credentials; password supports `_FILE`            |
+| `AUTH_MAIL_FROM`                                 | Sender address, optionally with display name                      |
 
-The SMTP adapter uses bounded connection, greeting, socket, and send timeouts. It disables transport logging, so
-addresses, sign-in links, and provider responses are never logged.
+**SMTP** is mail delivery protocol. **TLS** encrypts a connection; implicit TLS starts encrypted, while **STARTTLS**
+upgrades the SMTP connection before credentials/messages. `_FILE` reads a secret from a file instead of a literal
+setting. Delivery timeouts are bounded and transport logging is disabled.
 
 ## Module Format
 
-Better Auth is ESM-only, and the application compiles to CommonJS. SWC rewrites the runtime's `import()` calls as
-`require()`, which Node 22.12 and later resolve through `require(esm)`. A global SWC `ignoreDynamic` setting would
-break the generated Swagger metadata loader, so it is not used. Jest cannot load the package; unit tests inject
-substitutes, and the compiled-process suite below proves the real package.
+Better Auth uses ESM (JavaScript's `import` module format), while the application emits CommonJS (`require`).
+SWC, the compiler, rewrites dynamic imports; Node 22.12+ supports loading the resulting ESM through `require(esm)`.
+Do not globally enable SWC `ignoreDynamic`: it breaks generated Swagger metadata loading. Jest tests inject
+substitutes; compiled-process tests exercise the real package.
 
 ## Validation
 
@@ -85,10 +79,7 @@ corepack pnpm test -- src/libs/better-auth scripts/better-auth --runInBand
 corepack pnpm test:auth-runtime
 ```
 
-`test:auth-runtime` compiles the runtime and tooling into the ignored `.dev/auth-tools` directory and runs them with
-`node --test`. It starts a checkout-owned disposable Compose project from `docker/compose.auth-runtime-test.yaml`.
-That project contains a `*_test` PostgreSQL database and the base `auth-mail` service definition. Each run uses a
-random schema. The runner rejects reports with failed, skipped, missing, or zero tests. Remove the owned project with
+The runtime runner compiles into ignored `.dev/auth-tools` and starts a checkout-owned disposable Compose project
+from `docker/compose.auth-runtime-test.yaml`: a `*_test` PostgreSQL database and `auth-mail` service, with a random
+schema per run. Missing, skipped, failed, or zero tests fail validation. Remove only its owned project with
 `node scripts/testing/auth-runtime.mjs --down`.
-
-The development fixtures and operational steps are described in [the authentication guide](../../../docs/auth/README.md).

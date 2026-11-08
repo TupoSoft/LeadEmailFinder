@@ -1,56 +1,42 @@
 # Asynchronous Email Verification
 
-Run the distinct asynchronous workflow with the repository-pinned Bruno CLI:
+Bruno runs API request collections with assertions. From the repository root:
 
 ```shell
 corepack pnpm bruno:async-verification
 ```
 
-The launcher requires the same-origin development stack and SMTP overlay to be active and owned by this checkout. It verifies
-current Docker labels before reading fixture credentials. Provision the platform and customer fixtures with the
-existing Keycloak seed commands, then bootstrap the owner and operator for live browser tests. Follow
-`apps/web/tests/README.md` for isolated Compose projects and MFA setup. Never reset another checkout's stack.
+Use this checkout's provisioned, disposable Compose stack with the SMTP overlay. SMTP is the mail protocol used
+for mailbox probes. The launcher checks container ownership before loading private platform and customer API keys
+from `.dev/auth/`. It requires all 22 requests and 22 tests to pass; missing, skipped, or empty results fail.
 
-The launcher retrieves the seeded customer service-client secret privately from Keycloak. It uses the
-Compose-internal API and token endpoint while requiring the public issuer to remain unchanged. Secrets travel through
-the process environment and container standard input; neither command arguments nor reports contain credentials.
-The developer sandbox is required for token requests and bounded status polling.
+## What Must Hold
 
-The twenty-two requests cover unauthenticated calls, invalid email and operation identifiers, and one real
-`person@lef.test` operation with safe public status fields, an `operation` billing block, and repeated reads.
-`person@lef.test`'s fixture domain accepts every recipient, including the catch-all control probe, so this always
-settles inconclusive: the reservation is released, never captured, and a second submission of the same address
-within 60 seconds is rejected with `429 verification_cooldown` before it can reserve another one — proving the
-durable admission stack never lets an inconclusive outcome be resubmitted for free credit exposure. A dedicated
-Idempotency-Key sequence against a distinct address proves a replayed key returns the same operation ID without a
-second charge, a key reused for a different address is rejected as a conflict, and a key older than 24 hours is
-rejected as expired. The suite also checks cross-organization concealment, insufficient credits for a
-never-before-submitted address, and rejection of customer credit administration. Status polling permits only
-`queued`, `running`, `completed`, `failed`, and `unavailable`. The SMTP fixture must complete with a sanitized
-result; failed and unavailable responses stop the run. Rare terminal states are covered with deterministic browser
-and API fixtures without changing live queue data.
+- Status is `queued`, `running`, `completed`, `failed`, or `unavailable`. The normal fixture must complete;
+  `failed` or `unavailable` stops the run.
+- A reservation temporarily holds a credit. The `person@lef.test` fixture accepts every recipient, including the
+  deliberately nonexistent catch-all control address, so its result is inconclusive and releases the hold.
+- A repeat address within 60 seconds receives `429 verification_cooldown` before another reservation.
+- An `Idempotency-Key` makes retries refer to the same operation without another charge. Reusing it for another
+  address conflicts; a key older than 24 hours is expired.
+- Foreign organizations' jobs remain concealed. Insufficient credits and customer credit administration are rejected.
 
-Credit setup applies only to the separately seeded customer organization. The launcher saves its starting balance,
-uses an exclusive local fixture lock, and restores and verifies that balance after success or failure. Run this
-collection and the live verification browser suite sequentially, while the development customer is idle. If a process
-is forcibly terminated, inspect the owned fixture balance before removing `.dev/async-verification.lock` and rerunning.
-The launcher never deletes jobs or claims a retention guarantee. Every request and test must execute and pass;
-missing, skipped, or empty reports fail the command.
+## Fixture Safety
 
-Failures report only a fixed stage (`fixture_bootstrap`, `collection`, `report`, or `balance_restore`) and any
-available numeric request position, HTTP status, and execution counts. The request position follows collection
-execution order. Balance restoration failures also identify the write or confirmation operation and preserve one
-sanitized prior failure when the collection failed too. Raw child output, credentials, URLs, headers, bodies, and
-assertion values remain suppressed.
+The launcher locks the seeded customer, saves its balance, and restores and verifies that balance after success or
+failure. Run it sequentially with other verification suites while that customer is idle. After forced termination,
+inspect the customer's balance before removing `.dev/async-verification.lock`.
 
-Run the browser workflow through its dedicated configuration so hosted MFA pages are never captured:
+Credentials, URLs, headers, bodies, and assertion values stay out of reports. Failures expose only a fixed stage
+and available request position, HTTP status, and counts. Balance-restoration failures also identify the failed
+write or confirmation. Jobs are left to the existing cleanup policy; the launcher promises no retention duration.
+
+For the real browser flow, bootstrap the owner and operator first, then run:
 
 ```shell
+corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
 corepack pnpm --filter ./apps/web test:verification-live
 ```
 
-This uses real hosted MFA, the same-origin API, and the SMTP worker. It verifies a single submission, a hard refresh
-of the returned job URL, the completed result, credit rejection, keyboard validation at a narrow viewport, automated
-accessibility checks, and recovery after the real session cookie is removed. The fixture restores the original
-customer balance even if browser validation fails. The ordinary `test:e2e` command includes deterministic verification
-states, uncertain submissions, permission-aware credit guidance, and polling while offline or hidden.
+The browser suite uses MFA (a password plus a second authentication factor), suppresses sensitive artifacts, and
+checks submission, refresh, completion, credit rejection, accessibility, and session loss. It restores the balance.
