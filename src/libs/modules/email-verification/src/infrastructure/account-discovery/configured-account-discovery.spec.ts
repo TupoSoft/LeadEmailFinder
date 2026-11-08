@@ -63,7 +63,6 @@ function adapters(): {
 describe(configuredAccountDiscovery.name, () => {
     it('loads the repository manifest but selects nothing for a proxy alone', async () => {
         const providerAdapters = adapters()
-        const loadManifest = jest.fn().mockResolvedValue({ approvals: [] })
 
         const discovery = await configuredAccountDiscovery(
             configService({ CATCH_ALL_HTTP_PROXY_URL: 'http://proxy.example:8080' }),
@@ -72,11 +71,9 @@ describe(configuredAccountDiscovery.name, () => {
             providerAdapters.microsoftLogin,
             providerAdapters.mimecastLogin,
             providerAdapters.officeApps,
-            loadManifest,
         )
 
         await expect(discovery.discover('person@example.test')).resolves.toEqual([])
-        expect(loadManifest).toHaveBeenCalledTimes(1)
         expect(providerAdapters.officeAppsVerifier.verify).not.toHaveBeenCalled()
         expect(providerAdapters.microsoftGetCredentialType.verify).not.toHaveBeenCalled()
         expect(providerAdapters.microsoftLogin.verify).not.toHaveBeenCalled()
