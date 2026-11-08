@@ -105,6 +105,10 @@ describe('privileged browser fixture integration boundaries', () => {
         ['platform-organizations-live', './tests/support/invitation-reporter.ts'],
         ['platform-credits', './tests/support/invitation-reporter.ts'],
         ['platform-credits-live', './tests/support/invitation-reporter.ts'],
+        ['service-clients', './tests/support/service-client-reporter.ts'],
+        ['service-clients-live', './tests/support/service-client-reporter.ts'],
+        ['platform-proxies', './tests/support/platform-proxy-reporter.ts'],
+        ['platform-proxies-live', './tests/support/platform-proxy-reporter.ts'],
     ])('uses the restricted reporter for %s', (suite, reporter) => {
         expect(createPlaywrightConfig(suite).reporter).toBe(reporter)
     })
@@ -126,6 +130,7 @@ describe('privileged browser fixture integration boundaries', () => {
         const { default: configuration } = await import('../../playwright.config')
 
         expect(configuration.testDir).toBe(suite === 'gateway' ? './tests/gateway' : './tests/e2e')
+        expect(configuration.testMatch).toBe(fixtureSuites.find(([name]) => name === suite)?.[1])
         for (const flag of privacyFlags) {
             expect(process.env[flag]).toBe(flag === selectedFlag ? '1' : undefined)
         }
@@ -139,13 +144,6 @@ describe('privileged browser fixture integration boundaries', () => {
     })
 
     it('isolates service-client suites before any secret-bearing test can run', () => {
-        for (const suite of ['service-clients', 'service-clients-live']) {
-            const configuration = createPlaywrightConfig(suite)
-            expect(configuration.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
-            expect(configuration.retries).toBe(0)
-            expect(configuration.workers).toBe(1)
-            expect(configuration.reporter).toBe('./tests/support/service-client-reporter.ts')
-        }
         for (const suite of ['service-clients-ui.spec.ts', 'service-clients.spec.ts']) {
             const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
             expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
@@ -154,13 +152,6 @@ describe('privileged browser fixture integration boundaries', () => {
     })
 
     it('isolates proxy credential suites before entering any credential', () => {
-        for (const suite of ['platform-proxies', 'platform-proxies-live']) {
-            const configuration = createPlaywrightConfig(suite)
-            expect(configuration.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
-            expect(configuration.retries).toBe(0)
-            expect(configuration.workers).toBe(1)
-            expect(configuration.reporter).toBe('./tests/support/platform-proxy-reporter.ts')
-        }
         for (const suite of ['platform-proxies-ui.spec.ts', 'platform-proxies.spec.ts']) {
             const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
             expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)

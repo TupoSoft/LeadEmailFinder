@@ -1,28 +1,25 @@
 # Common Contracts
 
-The common library publishes small cross-cutting types, tokens, enums, and pure utilities through
-[`src/index.ts`](src/index.ts). Business modules may depend on these contracts without importing another business
-module's implementation or the API composition root.
+[`src/index.ts`](src/index.ts) exports shared types, injection tokens (runtime dependency identifiers), enums,
+and pure utilities. Business modules can use them without importing another module's implementation or the API host.
 
 ## Customer-Object Write Security
 
-`CustomerObjectWriteSecurity` is a framework-free discriminated value describing the mandatory metadata for a write
-of customer or individual data. Production values require authenticated HTTPS intent, explicit `aws:kms` encryption,
-one configured KMS key identifier, and `no-store` cache control. The development value retains `no-store` while
-omitting KMS fields so the disposable Garage fixture remains usable.
+`CustomerObjectWriteSecurity` describes mandatory protection for stored customer/individual data. Production requires
+authenticated HTTPS intent, explicit `aws:kms` encryption, one configured KMS key, and `no-store` cache control.
+**KMS** is AWS Key Management Service; **SSE-KMS** means server-side encryption using its key. `no-store` forbids caching.
+The disposable Garage storage fixture omits KMS fields but retains `no-store`.
 
-`CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN` is the shared injection token. The API composition root creates and freezes one
-validated value, then infrastructure adapters inject the token and translate the value into provider-specific request
-fields. Common does not import AWS, configuration, or a business module for this contract.
+The API composition root (dependency wiring) creates/freezes one validated value under
+`CUSTOMER_OBJECT_WRITE_SECURITY_TOKEN`. Infrastructure adapters translate it into provider request fields.
+Common imports no AWS software development kit, configuration, or business module for this contract.
 
 ## Test Support
 
-[`src/testing/customer-object-write-security.contract.ts`](src/testing/customer-object-write-security.contract.ts)
-provides the reusable adapter contract for the exact production SSE-KMS and development `no-store` mappings. It is
-available through the testing-only deep barrel and is not exported from the common production barrel.
+[`customer-object-write-security.contract.ts`](src/testing/customer-object-write-security.contract.ts) checks production
+SSE-KMS and development mappings. It is exported only through the testing-specific deep barrel, not production exports.
 
 ## Validation
 
-The contract is exercised by the email-verification input and result adapter specifications and the API factory and
-module specifications. Repository type checking and the module architecture gate verify that consumers retain the
-intended dependency direction.
+Email-verification input/result adapter tests and API factory/module tests exercise the mappings.
+Type checking and `corepack pnpm architecture:check` verify dependency boundaries.

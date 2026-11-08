@@ -1,44 +1,35 @@
-# Organization Onboarding Bruno Collection
+# Organization Onboarding Collection
 
-This collection executes 23 requests through the HTTP boundary. A platform service creates an organization and
-its first owner invitation. The public preview returns pending organization, email, role, and expiry information.
-Acceptance creates the owner, consumed preview returns a generic `410`, and duplicate acceptance returns only
-`{ "status": "accepted" }`. Further requests cover an existing-owner conflict, organization-scoping rejection,
-unknown tokens, and deterministic expiry. Invitation responses require `Cache-Control: no-store` and
-`Referrer-Policy: no-referrer`.
+Bruno runs API requests with assertions. Provision this checkout's disposable stack, then run:
 
-The platform directory cases cover first, middle, and terminal pages, the default size, omitted terminal cursors,
-non-overlapping identifiers, metadata-only reads, malformed cursors, and page sizes outside 1 through 100.
-Customer credentials must receive `403` for list and create. Rejected creation retains `no-store`.
-
-Use the repository-pinned launcher against a development stack owned by this checkout:
-
-```sh
+```shell
 corepack pnpm bruno:organization-onboarding
 ```
 
-For an isolated stack, include its `COMPOSE_PROJECT_NAME` environment variable. Provision the development service
-credential and customer fixture first with the documented Keycloak bootstrap workflow. The launcher validates container ownership and
-loads `.dev/auth/platform-api-key.json` and `.dev/auth/customer-api-key.json` internally.
-These ignored files require matching checkout and stack ownership and mode 0600. Keys stay in the child environment.
-Credentials never enter command arguments. It runs `bru run --env local --sandbox developer` using pinned Bruno
-4.1.0 and rejects missing, skipped, failed, or zero-execution results.
+Set `COMPOSE_PROJECT_NAME` for a separately named stack. The launcher checks container ownership and loads private
+platform/customer keys from `.dev/auth/`; files must have mode `0600` (owner-only read/write). Keys stay out of
+arguments. All 23 requests and tests must pass; missing, skipped, or empty results fail.
 
-Passwords and unknown tokens are generated in process memory. The launcher inserts one invitation with a past
-expiry into the owned development database, supplies its token through the child environment, and removes that
-exact fixture in a `finally` block. Only the token hash reaches PostgreSQL. The normal HTTP scenarios create
-uniquely named development organizations and a Keycloak user; use the documented disposable-stack reset workflow
-when those fixtures are no longer useful.
+## Required Behavior
 
-The invitation segment suppresses CLI output before execution. Its reporter writes only numeric counts, boolean
-failure flags, and test statuses; it excludes URLs, request variables, headers, bodies, and assertion text before
-writing any file, including on failure. Temporary count reports are removed after validation. Do not run this
-collection with unrestricted CLI reporters or capture network, response, trace, screenshot, or video artifacts.
+A platform credential creates an organization and its first owner invitation. Public preview exposes pending
+organization, email, role, and expiry. Acceptance creates the owner; consumed preview returns generic `410`, and
+repeat acceptance returns only `{ "status": "accepted" }`. Unknown/expired tokens, existing-owner conflicts,
+organization-scoping violations, and customer administration are rejected.
 
-The launcher tests execute the actual pinned collection against a synthetic server and exercise its success and
-failure paths. They also prove that runtime secret markers do not enter reporter files or CLI output. This verifies
-tooling behavior separately from live Keycloak and PostgreSQL acceptance.
+Invitation responses use `Cache-Control: no-store` (do not retain responses) and `Referrer-Policy: no-referrer`
+(do not forward the invitation URL). Directory pagination uses a cursor, an opaque continuation value, and page
+sizes from 1 to 100. Pages must not overlap; terminal pages omit the cursor; directory reads expose metadata only.
 
-Role hierarchy, final-owner protection, real browser sessions, and MFA behavior are covered by the focused API
-integration tests and the team browser scenarios. The collection verifies the existing-user conflict status;
-the original-password and realm-role guarantees remain covered by the live Keycloak adapter tests.
+## Fixture and Secret Handling
+
+The launcher generates passwords and tokens in memory. It temporarily inserts one expired invitation, stores only
+its token hash in PostgreSQL, and removes that exact fixture afterward. Normal scenarios leave uniquely named
+organizations and a development Keycloak user; clear them only through an ownership-checked disposable reset.
+
+The invitation reporter records only counts, boolean failures, and test statuses. It suppresses URLs, headers,
+bodies, assertion text, and raw CLI output before writing files, including on failure. Temporary reports are deleted.
+Do not enable unrestricted reporters, network capture, traces, screenshots, or video.
+
+Synthetic launcher tests verify execution and secret-safe reporting. Real identity-provider acceptance, role rules,
+final-owner protection, browser sessions, and MFA (a second authentication factor) use their focused API/browser tests.

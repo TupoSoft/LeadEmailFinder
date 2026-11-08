@@ -1,56 +1,40 @@
 # Batch Verification Collection
 
-Run the pinned launcher from the repository root:
+Bruno runs API requests with assertions. Run from the repository root against this checkout's provisioned,
+disposable stack and SMTP (mail-protocol) fixtures:
 
-```bash
+```shell
 corepack pnpm bruno:batch-verification
 ```
 
-The launcher verifies that the API, web gateway, Keycloak, and SMTP development fixtures belong to this checkout.
-It retrieves the seeded customer client's current secret, preserves the public issuer through the Compose back
-channel, and runs `bru run --env local --sandbox developer` with the pinned CLI. It requires all twenty requests and
-thirty tests to execute successfully; zero execution, skipped requests, and missing reports fail validation.
+The launcher verifies container ownership, loads private platform/customer API keys, and requires all 20 requests
+and 30 tests to pass. Missing, skipped, or empty results fail. It uses an exclusive fixture lock and restores the
+customer's original balance, SMTP scenario, and temporary CSV files after success or failure. Run verification
+suites sequentially; credentials, headers, and bodies are withheld from reports.
 
-The shared verification fixture locks the seeded customer's balance against concurrent verification suites, sets
-two credits for the two-row synthetic CSV, and restores and verifies the previous balance after the run. The duplicate
-regression prepares one credit under the same lock. Tokens, credentials, headers, and bodies are withheld from reports.
-Run this only against the checkout's disposable stack.
+## Required Behavior
 
-The workflow uploads `fixtures/sample.csv`, checks the five-state public status, verifies finite progress between
-zero and one hundred, and requires `resultsAvailable` to be true only for completed jobs. Queued, running, failed,
-and unavailable jobs must report false. The workflow waits for completion and downloads the exact two synthetic
-email rows. The result must use `text/csv` and the attachment filename derived from the job UUID. An invalid CSV then
-exercises asynchronous `invalid_csv` rejection with `resultsAvailable: false`. The remaining requests verify
-authentication, concealed foreign status and result reads, and immediate rejection of a non-CSV media type. Worker
-tests cover insufficient credits and infrastructure failure.
+- Upload `fixtures/sample.csv` and download its two synthetic rows after completion. CSV means comma-separated values.
+  The download uses `text/csv` and a filename derived from the job UUID, a unique identifier.
+- Status is `queued`, `running`, `completed`, `failed`, or `unavailable`; progress is finite and between 0 and 100.
+  `resultsAvailable` is true only for a completed job with an accepted stored-result location.
+- Invalid CSV fails asynchronously with `invalid_csv` and no available result. A non-CSV media type is rejected
+  immediately. Missing authentication and foreign-organization reads are rejected or concealed.
+- Three case variants of one fresh address reserve at most one credit. The CSV preserves row order and spelling;
+  the first row carries the conclusive charge, while the two duplicate rows carry zero charge and share its result ID.
+- Two fresh unique addresses with only one available credit leave no partial reservation or charge. The job
+  completes with both addresses failed, status reports `{ state: 'settled', reserved: 0, charged: 0 }`, and the balance remains one.
 
-The retained result is read through the existing authenticated API. A true `resultsAvailable` flag means the completed
-job retains a result location accepted by the download route. Polling does not check storage availability. A later
-missing object can still return `404`, and storage errors can still prevent a download. The flag does not guarantee
-permanent retention. The collection records no job identifiers, customer filenames, rows, or raw worker failures
-in committed artifacts. Repeated runs create fresh batch jobs and use the existing retention policy for cleanup.
+A reservation holds credits until settlement, when they are charged for conclusive evidence or released. The
+`evidence.lef.test` fixture rejects a nonexistent control recipient before accepting the target, proving a
+chargeable result rather than relying on an accepts-all server. Fresh addresses prevent cached evidence from
+satisfying that check.
 
-`verification-billing/05` moved batch billing from one credit per parsed row to at most one credit per unique
-normalized address, atomically reserved for the whole upload. Requests 10–16 exercise the payer identity regression
-with a temporary CSV containing three case variations of one fresh address under `evidence.lef.test`. The launcher
-generates a new address for every run so cached evidence cannot satisfy the fixture. The existing SMTP control service
-selects `target_accepted`, which accepts the target after rejecting the catch-all control address.
+## Limits
 
-The duplicate status must report three input rows, one completed unique address, two duplicate rows, and one settled
-charge. The CSV must preserve input order and spelling, share one result UUID, and attribute the charge to the first
-row with `billingReason: conclusive`. Later rows report `billingReason: duplicate` and zero charge. A balance read
-confirms that exactly the credit reported by status and CSV was deducted. The final request restores the baseline
-SMTP scenario; the launcher also restores it after success or failure and removes the temporary CSV.
+`resultsAvailable` does not probe storage or promise permanent retention: later downloads can return `404` or fail.
+Runs create fresh jobs and use the existing cleanup policy. Reports retain no job IDs, filenames, CSV rows, or raw
+worker errors.
 
-Requests 17–20 cover a group that cannot be funded. The launcher writes a second temporary CSV with two fresh
-addresses under `evidence.lef.test`, and the collection prepares only one credit. The status must complete with
-both unique addresses failed and billing `{ state: 'settled', reserved: 0, charged: 0 }`. The balance must remain
-one, and resetting it to zero must succeed; the credits API rejects a balance below held credits, so success proves
-that the denied group left no partial hold. That reset also returns the fixture to the post-duplicate balance.
-
-Mixed `cache`/`shared`/`cooldown` uploads remain outside this collection's coverage.
-The pinned CLI runner test uses a synthetic HTTP server and explicitly rejects a debited batch whose receipt reports
-zero charge, a denied group that still reports a held credit, and a denied group that debits the balance. It also
-rejects incorrect result availability for every public status and invalid CSV. It checks the collection scripts
-rather than proving live SMTP or database behavior. Record live launcher results separately in the implementation
-ExecPlan.
+Mixed cached, shared, and cooldown outcomes are outside this collection. Synthetic runner tests verify assertions
+and reporting; they do not prove live SMTP or database behavior. Record live results separately from those tests.

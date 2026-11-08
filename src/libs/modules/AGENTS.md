@@ -1,43 +1,36 @@
 # Business Module Workflow
 
-These instructions apply whenever a task edits a business module in this directory or imports one from elsewhere.
-`src/libs/modules/README.md` is the canonical architecture contract; do not infer supported structure from an
-existing violation.
+Applies to edits within this directory and imports from its modules. [README.md](README.md) is the architecture
+contract; existing violations do not establish supported patterns.
 
 ## Before Coding
 
-1. Read `src/libs/modules/README.md` and the affected module's `README.md`.
-2. Identify the business module that owns the behavior, the target layer, the intended public surface, and every
-   dependency direction the change introduces.
-3. Confirm whether an export is an intentional public contract and whether each cross-module dependency is documented.
-4. If the requested design cannot fit the canonical contract, stop and create or update the task's ExecPlan before
-   changing the contract or implementation.
+1. Read the architecture contract and affected module README.
+2. Identify the behavior's owner, layer, public exports, and new dependency directions. Confirm that cross-module
+   imports and capability dependencies are documented.
+3. If the design cannot meet the contract, update or create the task's ExecPlan—an implementation plan recording
+   design and validation—before changing the contract or code.
 
 ## While Coding
 
-- Create only the layers the module needs, and keep every production file in a location permitted by the canonical
-  guide.
-- Keep application and domain code framework-independent. Define small injected ports there and implement technical
-  integrations in infrastructure adapters.
-- Import another business module only through its bare public barrel. Change a module barrel only when deliberately
-  changing its supported public contract.
-- Preserve routes, DTOs, authorization, persistence, queues, configuration, and provider behavior unless the task's
-  scope and ExecPlan explicitly change them.
-- Update the affected module README when ownership, non-responsibilities, public API, dependencies, runtime surfaces,
-  persistence, configuration, or validation evidence changes.
-- Add or update focused tests for changed behavior and boundary contracts.
+- Create only needed layers. Keep production files in the locations permitted by the contract.
+- Keep application/domain code independent of frameworks. Define small ports (required capabilities) there;
+  implement technical integrations as infrastructure adapters.
+- Import another module only through its bare public barrel (`src/index.ts`, the module's supported exports).
+  Change that barrel only for an intentional public-contract change.
+- Preserve routes, DTOs (transport data shapes), authorization, storage, queues, settings, and provider behavior unless
+  the task and plan explicitly change them.
+- Update the module README when ownership, exclusions, exports, dependencies, runtime behavior, storage,
+  configuration, or validation evidence changes. Add focused behavior and boundary tests.
 
 ## Before Finishing
 
-Run the architecture gate, focused tests, and type checking:
+```sh
+corepack pnpm architecture:check
+corepack pnpm test -- <focused-test-files> --runInBand
+corepack pnpm typecheck
+```
 
-    corepack pnpm architecture:check
-    corepack pnpm test -- <focused-test-files> --runInBand
-    corepack pnpm typecheck
-
-`architecture:check` scans the complete repository and must exit zero: it accepts no violation. If a change cannot
-satisfy the canonical contract, update or create an ExecPlan to correct the design instead of treating a violation
-as acceptable debt.
-
-Review the final diff against the canonical guide and report any material architectural trade-offs and validation
-limits.
+The architecture check scans the complete repository and permits zero violations. Correct the design through the
+plan rather than accepting a violation as debt. Review the diff against the contract; report trade-offs and checks
+actually run, including validation limits.

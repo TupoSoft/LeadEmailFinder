@@ -1,13 +1,14 @@
 # Single-Origin Development Gateway
 
-The base Compose stack serves the product at `http://localhost:53000`. The `web` service publishes `53000:8080`
-and proxies API requests to `api:3000`. The API has no default published port. Keycloak keeps its public issuer at
-`http://localhost:58080/realms/lead-email-finder` and uses the existing internal provider addresses for server calls.
-`APP_BASE_URL`, BFF callbacks, and payment return URLs remain on port 53000.
+Compose, Docker's multi-service configuration, serves the product at `http://localhost:53000`. An origin is a
+scheme, host, and port. The Nginx gateway routes browser/API traffic from `53000:8080` to static assets or
+`api:3000`; the API has no default host port. Keycloak, the identity provider, keeps its public issuer (the identity
+URL used for token validation) at `http://localhost:58080/realms/lead-email-finder`. Browser callbacks and payment
+returns use port 53000.
 
 ## Build and Start
 
-Build the images independently from the repository root:
+Run from the repository root:
 
 ```sh
 docker build --file docker/Dockerfile --tag lead-email-finder-api:frontend-06 .
@@ -16,105 +17,92 @@ docker compose -f docker/compose.yaml config --quiet
 docker compose -f docker/compose.yaml up -d --build --wait --wait-timeout 240
 ```
 
-The API image installs the backend workspace, compiles NestJS, and retains the existing development watcher.
-Compose defaults `API_START_COMMAND` to `pnpm start`. Automated browser runs set it to `pnpm exec nest start` for
-both initial provisioning and SMTP attachment. This completes type checking and Swagger metadata generation before
-the API starts, preventing a watched restart after the first successful health check.
-The web image builds the web workspace and its client dependency in Node 24, then copies only static assets and
-Nginx configuration into a version- and digest-pinned unprivileged runtime. Its health check requests static service
-health on a separate loopback listener at port 8081. It does not call the API. The full browser smoke requires both
-services to be healthy.
+Compose defaults to the watched `pnpm start`. Automated browser runs set `API_START_COMMAND='pnpm exec nest start'`
+so type checking and API-documentation generation finish before health succeeds. The web image contains built
+assets and a pinned, unprivileged Nginx runtime. Its loopback health endpoint on port 8081 checks static serving,
+not API readiness; full browser validation requires both web and API health.
 
-For a fresh disposable development stack, `corepack pnpm dev:reset -- --confirm-project=LEF` rebuilds the services,
-provisions Keycloak, seeds development and native authentication fixtures, waits for web and API health, and checks
-the public product and an authenticated credit balance. Reset refuses another checkout's containers or an unexpected Compose configuration,
-and validates the project labels and exact allowlisted volume names before deletion. Stop overlays before reset.
-The command removes development data; inspect its printed targets before confirming it.
+For fresh **disposable** default data:
 
-Machine callers use direct Bearer API keys. `keycloak:bootstrap-credential` invokes the compiled application seed
-for `.dev/auth/platform-api-key.json`; `keycloak:seed-customer-fixture` creates `.dev/auth/customer-api-key.json`.
-Both files are ignored, checkout-owned regular files with mode 0600. Repeating the seed preserves active keys.
-Reset removes the files after ownership checks because their credential rows are discarded with development data.
-For this incompatible credential schema, reset and reseed disposable data before starting callers. The SMTP
-overlay mounts the platform file privately; stop that overlay before resetting. Human browser fixtures continue
-using Keycloak until the browser authentication cutover.
+```sh
+corepack pnpm dev:reset -- --confirm-project=LEF
+```
 
+Reset rebuilds/provisions the stack, seeds authentication fixtures, and checks public web and authenticated billing.
+It deletes development data only after checking checkout ownership, Compose configuration, labels, and allowlisted
+volumes. Stop overlays first and inspect the printed targets. Never reset another checkout or globally prune Docker.
+
+Machine callers use direct Bearer API keys. Provisioning writes ignored, owner-only (`0600`) files:
+`.dev/auth/platform-api-key.json` and `.dev/auth/customer-api-key.json`. Repeated seeding preserves active keys;
+reset removes them because the corresponding database rows are discarded. Reseed after incompatible schema changes.
+The SMTP verification overlay privately mounts the platform file. Human browser fixtures still use Keycloak until
+that authentication path is switched.
 
 ## Authentication Mail
 
-The base stack's `auth-mail` service captures transactional authentication mail from the Better Auth runtime and never
-relays it. Containers send to `auth-mail:1025`. The host reaches the Mailpit interface at `http://127.0.0.1:8025` and
-SMTP at `127.0.0.1:51025`; set `AUTH_MAIL_HTTP_PORT` or `AUTH_MAIL_PUBLISHED_SMTP_PORT` to choose other loopback
-ports. It does not depend on the SMTP verification overlay. Reset recreates it, which clears captured messages.
-[The authentication guide](../docs/auth/README.md) describes its ownership checks and the native fixture seed.
+`auth-mail` captures Better Auth transactional messages without relaying them. Containers send SMTP (the mail
+protocol) to `auth-mail:1025`; hosts use SMTP at `127.0.0.1:51025` and Mailpit's inbox at `http://127.0.0.1:8025`.
+Override `AUTH_MAIL_PUBLISHED_SMTP_PORT` or `AUTH_MAIL_HTTP_PORT` if needed. This service is independent of the SMTP
+verification overlay. Reset clears captured messages.
 
 ## Recover an Older SMTP Network
 
-The SMTP overlay now uses a separate `smtp-dev` network. Its fixed subnet no longer replaces the base stack's
-default network. Enable it on an already provisioned base stack with:
+The verification overlay now adds a separate `smtp-dev` network:
 
 ```sh
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
 
-An older overlay may have left `172.28.0.0/24` assigned to `<project>_default`. That network must be replaced once
-before the new fixture network can use the subnet. Inspect it with `docker network inspect lef_default` for the
-default project; substitute the project name when using `-p`.
+An older overlay may have assigned its `172.28.0.0/24` subnet to `<project>_default`. Inspect the owned network
+(`docker network inspect lef_default` for the default project) before replacing it.
 
-For disposable object data, the following recovery retains the named PostgreSQL, Keycloak, and Redis volumes,
-but **deletes Garage's container-local object data**. Do not use it when existing batch files must be preserved:
+If Garage object data is disposable, the following retains named PostgreSQL, Keycloak, and Redis volumes but
+**deletes Garage's container-local files**, including retained batch results:
 
 ```sh
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
 ```
 
-To preserve object data, retain the Garage container instead. Stop the owned stack, record the container IDs and
-network configuration, and back up `/tmp/garage-meta` and `/tmp/garage-data` from Garage with `docker cp`.
-Disconnect every owned container from the old default network and remove only that network. Running
-`docker compose -f docker/compose.yaml create --no-recreate garage` creates the base network again. Reconnect
-each retained base service with `docker network connect --alias <service> --alias <container> <project>_default <container>`;
-include `smtp-dev-dns-cache-reset` if its container already exists. Then run the overlay startup command above.
-Compose recreates the fixture containers with their new network attachments. Verify service-name resolution,
-container identities, and health before discarding the backup. Never use `down -v` for this recovery.
+To preserve Garage data, stop the owned stack and retain its containers. Record IDs/network settings and back up
+`/tmp/garage-meta` and `/tmp/garage-data` with `docker cp`. Disconnect owned containers and remove only the old
+default network. `docker compose -f docker/compose.yaml create --no-recreate garage` recreates the base network;
+reconnect retained services with `docker network connect --alias <service> --alias <container> <project>_default <container>`,
+including `smtp-dev-dns-cache-reset` if present. Start the overlay, then verify container identities, service-name
+resolution, and health before deleting backups. **Never use `down -v` for this recovery:** it deletes named volumes.
 
 ## Route Ownership
 
-| Public path | Owner and result |
-| --- | --- |
-| `/` and other UI routes | Static product; hard refreshes use the SPA document and React Router's not-found handling. |
-| `/v1`, `/verify`, `/verifyAsync`, `/verifyBatch`, `/emails`, `/credits`, and descendants | API; preserve methods, bodies, queries, cookies, redirects, errors, and content type. |
-| `/docs` and descendants | API Swagger UI and assets; its server URL is `/` for same-origin requests. |
-| `/health`, `/openapi.json` | API health and normalized browser contract. |
-| `/docs-json`, `/docs-yaml` | API-reserved paths returning JSON `404`. |
+| Public path                                                                              | Owner                                                                       |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `/` and other UI paths                                                                   | Static product; browser routing handles unknown pages after a hard refresh. |
+| `/v1`, `/verify`, `/verifyAsync`, `/verifyBatch`, `/emails`, `/credits`, and descendants | API; requests and response contracts are forwarded intact.                  |
+| `/docs` and descendants                                                                  | Swagger UI, the interactive API reference.                                  |
+| `/health`, `/openapi.json`                                                               | API health and machine-readable browser API contract.                       |
+| `/docs-json`, `/docs-yaml`                                                               | API-reserved JSON `404`.                                                    |
 
-The Vite proxy uses the same explicit path boundaries. Similar names such as `/v1-other` remain UI-owned.
-Unknown API children remain backend errors; a matched protected endpoint can return an authentication error even
-when its resource ID does not exist. Test unknown routes with an unmatched child when a JSON `404` is required.
+Similar names such as `/v1-other` remain UI-owned. Unknown API children retain backend errors; protected routes may
+reject authentication before looking up a resource. Use an unmatched child when testing JSON `404`.
 
-Run `corepack pnpm --filter @tuposoft/lead-email-finder-web dev` for UI hot updates. Vite forwards explicit API paths
-to `http://localhost:53000` by default; `WEB_API_PROXY_TARGET` can select a standalone backend. Use the built gateway
-on port 53000 for the full cookie session workflow because the API's `APP_BASE_URL` owns the redirect and CSRF origins.
-Vite's development-only policy uses a nonce for its refresh bootstrap and style updates and permits local HMR
-WebSocket connections. The built gateway uses the strict policy below.
+For hot updates, run `corepack pnpm --filter @tuposoft/lead-email-finder-web dev`. Vite forwards API paths to
+`http://localhost:53000`, or `WEB_API_PROXY_TARGET`. Use the built gateway for full browser login: its
+`APP_BASE_URL` defines callback and CSRF origins. CSRF protection blocks another website from submitting
+cookie-authenticated changes. Vite's development policy permits local hot-reload connections; production assets
+use the stricter gateway policy.
 
 ## Headers, Caching, and Logs
 
-Product documents and static assets receive `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-`Referrer-Policy: strict-origin-when-cross-origin`, and a permissions policy disabling camera, microphone,
-geolocation, payment, and USB. The Content Security Policy permits same-origin scripts, styles, connections, and
-fonts; images may also use data URLs. It disables objects and framing and restricts base URLs to the same origin.
-The Nginx policy has no `unsafe-inline` or `unsafe-eval`. HTML uses `Cache-Control: no-cache`; hashed assets use
-immutable caching. Proxied API responses preserve their own headers, including callback `no-store` and `no-referrer`.
-Public invitation documents, including the sanitized `/accept-invitation` route, use `Cache-Control: no-store`
-and `Referrer-Policy: no-referrer` in both Vite and Nginx. The policy survives the internal SPA document redirect.
+The gateway disables MIME sniffing, framing, and unused device permissions. Its Content Security Policy restricts
+scripts, styles, connections, and fonts to the same origin, permits data-URL images, and disallows inline scripts,
+dynamic code evaluation, and object embeds. MIME sniffing means guessing a response type instead of honoring its
+Content-Type. HTML is revalidated (`no-cache`); hashed assets are immutable. API headers pass through unchanged.
+Invitation pages use `no-store` (no retained response) and `no-referrer` (no URL forwarding), including after the
+internal document redirect.
 
-Gateway access logs contain only a fixed method label, a fixed path label, status, and a generated request ID.
-Unknown paths also receive fixed labels. OAuth, invitation, email, cookie, authorization, query, and request-body
-values never enter the access format. Nginx request error logs are disabled because their raw messages cannot be
-sanitized; failed requests remain visible through status codes in the structured access log. Configuration failures
-remain observable through process exit and health checks. The API keeps its existing safe request logger. API uploads retain backend size validation, and the gateway allows
-one hour of idle response time for the existing synchronous SMTP workflow.
+Access logs retain fixed method/path labels, status, and generated request IDs. They exclude credentials, cookies,
+queries, bodies, email addresses, and invitation/authentication URLs. Raw Nginx request-error logging is disabled;
+status logs, process exits, and health checks expose failures. Backend upload limits still apply. The gateway allows
+one hour of idle response time for synchronous mailbox verification.
 
 ## Verification and Recovery
 
@@ -125,24 +113,15 @@ corepack pnpm test:web-live
 corepack pnpm bruno:bff-sessions
 ```
 
-The gateway test uses its own temporary Docker network and fixture containers to compare Vite and Nginx routing,
-request forwarding, caching, headers, and sanitized logs. Build the tagged web image above before running it.
-The live browser launcher verifies current checkout ownership and creates two transient Keycloak members in one
-application organization. Its six tests cover real login, safe destination recovery, session expiry, account
-replacement, competing callbacks, browser history restoration, keyboard navigation, and signing out across tabs with
-CSRF protection.
-It checks both log streams with synthetic markers and removes its own member fixtures. Only the current test's
-session key is expired; no shared Redis or database reset is used. Browser traces and artifacts that contain
-credentials are disabled. The Bruno launcher executes `bru run --env local` with the repository-pinned CLI and
-requires all requests and tests to run.
+Build the tagged web image before `test:gateway`, which compares Vite/Nginx routing, forwarding, caching, headers,
+and sanitized logs in temporary containers. The live browser runner checks real login, expiry/replacement,
+competing callbacks, browser history, keyboard navigation, and logout across tabs. It verifies ownership/health,
+creates and deletes temporary ordinary members, expires only the test session, and suppresses credential-bearing
+artifacts. Bruno executes API request collections; its launcher requires every request and test to run.
 
-For a separately named stack, set `COMPOSE_PROJECT_NAME` when invoking the live launchers. The optional Compose
-variables `WEB_PORT`, `KEYCLOAK_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, `BULLBOARD_PORT`,
-`AUTH_MAIL_HTTP_PORT`, and `AUTH_MAIL_PUBLISHED_SMTP_PORT` retain their
-usual defaults but allow another checkout to use free host ports. Web and Keycloak public URLs follow those port
-settings. When provisioning such a stack, set `KEYCLOAK_URL`, `KEYCLOAK_BFF_REDIRECT_URIS`, and
-`KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS` to its public URLs. Host-run fixture scripts also need its `API_URL` and
-`POSTGRES_URL`. The reset command is reserved for the default `LEF` project and its standard ports. The launchers discover
-port 53000 through the owned gateway and keep internal API ownership checks. They reject missing, foreign, or stale
-resources. Retry image builds and tests directly after repairing failures. Stop only a confirmed checkout-owned
-Compose project; never use a global container or volume prune. This topology is for disposable development and CI.
+For isolated stacks, set `COMPOSE_PROJECT_NAME` and free host ports through `WEB_PORT`, `KEYCLOAK_PORT`,
+`POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, `BULLBOARD_PORT`, and the authentication-mail overrides. Provision with
+matching public `KEYCLOAK_URL`, `KEYCLOAK_BFF_REDIRECT_URIS`, and `KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS`;
+host fixture scripts also need `API_URL` and `POSTGRES_URL`. BFF means backend for frontend, the server handling
+browser authentication. The reset command supports only default `LEF` and standard ports. Launchers discover owned
+endpoints and reject stale or foreign resources. Retry repaired builds/tests directly; stop only the verified project.

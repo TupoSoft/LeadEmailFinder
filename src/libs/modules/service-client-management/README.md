@@ -1,101 +1,86 @@
 # Service Client Management
 
-Organization owners and administrators create, list, rotate, disable, and delete application-owned API keys.
-The resource paths and internal `service_client` kind remain stable while machine callers use each key directly
-as a Bearer credential.
+A service client is an application calling the API with its own key rather than a human browser session.
 
 ## Responsibility
 
-- API-key issuance and lifecycle authorization, restricted to human owner/admin sessions with `credentials:manage`.
-- Nonempty, unique permission grants within the auth-owned ceiling for the caller's membership role.
-- One-time disclosure after identity commits the corresponding credential and audit transaction.
+Owns API-key issuance, rotation, disablement, and deletion for organization owners/admins. Validates grants against
+the caller's role and reveals a new key only after its credential and audit record commit together.
 
 ## Non-Responsibilities
 
-- Persistence belongs to [`identity`](../identity/README.md), accessed through its purpose-specific public ports.
-- Request authentication belongs to [`auth`](../auth/README.md), which reads current credential state on every request.
-- Human login remains in `bff-session`; this module performs no external provider administration.
+[`identity`](../identity/README.md) owns persistence; [`auth`](../auth/README.md) authenticates each request using
+current credential state; [`bff-session`](../bff-session/README.md) owns human browser login.
 
 ## Public API
 
-[`src/index.ts`](src/index.ts) exports only `ServiceClientManagementModule`. Services, DTOs, the key generator,
-and its injection token remain internal.
-
-## Architecture
-
-The API layer maps application errors to HTTP responses and exposes safe metadata. Application use cases inject
-the identity directory/writer ports, the auth grant policy, and a small key-generation function. The infrastructure
-generator uses Node cryptography: `lef_` plus 32 random bytes encoded as base64url, for 47 ASCII characters total.
-It hashes the complete key using SHA-256 and exposes the first 12 characters as display metadata. Application and
-domain code import neither Nest nor TypeORM. The composition root connects these capabilities through explicit factories.
+The [public barrel](src/index.ts) exports only `ServiceClientManagementModule`. Services, request/response models,
+and key generation remain internal.
 
 ## Dependencies
 
-- [`identity`](../identity/README.md): principal and permission types, safe credential records, the stable
-  `AUTH_IDENTITY_ISSUER`, and the directory/writer ports. This module imports no identity entity or database client.
-- [`auth`](../auth/README.md): guards, controller decorators, role policy, and the shared service-client grant policy.
+- [`identity`](../identity/README.md): safe credential records, principal/permission types, `AUTH_IDENTITY_ISSUER`,
+  and directory/writer ports. A principal is the authenticated caller; a port is an interface for an external capability.
+- [`auth`](../auth/README.md): guards, role authorization, and the grant policy defining permissions a human can issue.
+
+Application code uses these ports; infrastructure uses Node cryptography. Keys contain `lef_` plus 32 random bytes
+encoded as base64url (URL-safe text): 47 characters total. Stored key material is limited to the complete key's
+SHA-256 hash (a one-way fingerprint) and the key's first 12 display characters.
 
 ## HTTP Surface
 
-`v1/organizations/:organizationId/service-clients` retains these resource paths:
+Routes use `/v1/organizations/:organizationId/service-clients`:
 
-| Method   | Path                                           | Result                                        |
-| -------- | ---------------------------------------------- | --------------------------------------------- |
-| `POST`   | `.../service-clients`                          | `201`, safe metadata and one-time `apiKey`    |
-| `GET`    | `.../service-clients`                          | Safe metadata list                            |
-| `POST`   | `.../service-clients/:serviceClientId/rotate`  | `200`, safe metadata and replacement `apiKey` |
-| `POST`   | `.../service-clients/:serviceClientId/disable` | Empty `204`                                   |
-| `DELETE` | `.../service-clients/:serviceClientId`         | Empty `204`                                   |
+| Method   | Suffix                      | Result                                   |
+| -------- | --------------------------- | ---------------------------------------- |
+| `POST`   | `/`                         | `201`, metadata and one-time `apiKey`    |
+| `GET`    | `/`                         | Metadata list, including disabled keys   |
+| `POST`   | `/:serviceClientId/rotate`  | `200`, metadata and replacement `apiKey` |
+| `POST`   | `/:serviceClientId/disable` | Empty `204`                              |
+| `DELETE` | `/:serviceClientId`         | Empty `204`                              |
 
-Every operation requires a human owner/admin session and `credentials:manage`. The application checks the
-human credential kind and owner/admin role; both roles carry that capability in the auth role policy. The HTTP
-permission guard enforces the same policy. Human principals carry an empty explicit permission array, so it is not
-used to authorize these operations. API keys cannot manage keys,
-regardless of their permissions. Cookie mutations retain Origin and CSRF validation. Organization and credential
-parameters must be UUIDs. Create accepts an optional description of 1–200 characters and at least one unique
-permission within `grantableServiceClientPermissions`.
+Every operation requires an owner/admin **human** session with `credentials:manage`; API keys cannot manage keys.
+Browser mutations also validate Origin and CSRF protection, which prevents another website acting through a user's
+session. IDs must be UUIDs (the API's standard unique-identifier format). Creation accepts an optional 1–200 character
+description and nonempty, unique permissions within `grantableServiceClientPermissions`.
 
-Metadata contains `id`, `keyPrefix`, nullable `description`, `permissions`, `status`, `createdAt`, and `updatedAt`.
-The `apiKey` field appears only in successful create/rotate responses. Neither metadata nor HTTP DTOs expose
-`keyHash`. Existing secrets cannot be retrieved. All create/rotate responses, including failures before parsing,
-carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer` through API-host middleware.
+Metadata contains `id`, `keyPrefix`, `description`, `permissions`, `status`, `createdAt`, and `updatedAt`; never
+`keyHash`. Existing secrets cannot be retrieved. Create/rotate responses, including early errors, prohibit caching
+and referral URL disclosure with `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
 
-Invalid inputs return `400`; missing authentication returns `401`; disallowed credential kinds, roles,
-permissions, or browser checks return `403`. Create/list reject a foreign organization with `403`. Mutations
-return indistinguishable `404` responses for missing and foreign targets. Disabled rotation returns `409`;
-disablement is terminal, and there is no re-enable endpoint. Persistence failures return `500`. A lost issuance
-response requires explicit reconciliation using safe metadata before rotating, disabling, or deleting; never
-retry creation or rotation automatically.
+| Status | Meaning                                                                           |
+| ------ | --------------------------------------------------------------------------------- |
+| `400`  | Invalid input                                                                     |
+| `401`  | Missing authentication                                                            |
+| `403`  | Wrong role, credential kind, grant, browser check, or organization on create/list |
+| `404`  | Missing or foreign target on mutation; indistinguishable to callers               |
+| `409`  | Rotation of a disabled key                                                        |
+| `500`  | Persistence failure                                                               |
+
+Disablement is terminal: no re-enable endpoint exists. If an issuance response is lost, inspect safe metadata before
+an explicit recovery action. Never automatically retry creation or rotation: the first request may have committed.
 
 ## Persistence
 
-Identity owns the credential and audit tables. Each mutation and its audit commit in one local transaction.
-Rotation conditionally updates only an active scoped row and preserves its ID and permissions. Concurrent
-disablement or deletion cannot be undone by a stale rotation. Disablement remains idempotent; deleting an absent
-credential returns `404`. Lists include disabled credentials in `createdAt DESC, id DESC` order.
+Identity commits each mutation and its audit in one transaction, so both succeed or both roll back. Rotation updates
+only an active scoped row, preserving ID and permissions; stale rotations cannot undo concurrent disablement/deletion.
+Disablement is idempotent (repeating it has no extra effect); deleting an absent key returns `404`. Lists use
+`createdAt DESC, id DESC` order.
 
-The credential schema replaces the provider client ID with a unique non-null hash and display prefix. Existing
-OAuth machine credentials are discarded with disposable development data. No migration or backfill is introduced.
-Stop only the checkout-owned stack, follow the guarded reset in [`docker/README.md`](../../../../docker/README.md),
-synchronize with `TYPEORM_SYNCHRONIZE=true`, and rerun the application seed. Preserve Keycloak human fixtures until
-the later browser-login cutover.
+The API-key schema replaces legacy OAuth machine credentials without a production migration. For incompatible
+disposable development data, use the guarded [reset](../../../../docker/README.md), synchronize with
+`TYPEORM_SYNCHRONIZE=true`, and seed again. Keep Keycloak human fixtures until browser-login cutover.
 
 ## Configuration
 
-None. Issuance uses application-owned cryptography and the stable identity issuer; no provider credentials are required.
+No provider credentials or module-specific settings are required.
 
 ## Validation
 
-Focused application tests cover authorization, grant validation, one-time disclosure, uncertain outcomes, and
-concurrent persistence outcomes. Controller and HTTP suites cover DTO serialization, status codes, authorization,
-and cache headers. `infrastructure/api-key-generator.spec.ts` checks the cryptographic wire format and full-key hashing.
+Application/HTTP tests cover authorization, one-time disclosure, uncertain responses, serialization, cache headers,
+and key generation. Identity's `api-key-credential-postgres.integration.spec.ts` uses an owned `_test` database via
+`TEST_POSTGRES_URL` to verify uniqueness, audit rollback, uncached lookup, and mutation races.
 
-Identity's `api-key-credential-postgres.integration.spec.ts` exercises real local transactions in a randomly named
-schema of an owned disposable database selected through `TEST_POSTGRES_URL` (database name ending in `_test`).
-It covers hash uniqueness, safe projections, uncached permission lookup, rotation/disable/delete races, and rollback
-when audit writes fail. The former provider administration tests were removed with that adapter.
-
-[`bruno/service-client-management`](../../../../bruno/service-client-management/README.md) covers unauthenticated
-requests and machine-key rejection. The live browser credential suite supplies human-session success evidence.
-Run focused suites, the module architecture gate, type checking, OpenAPI checks, and relevant Bruno/browser runners;
-passing substituted HTTP tests alone does not establish PostgreSQL or live human-login behavior.
+[`Bruno checks`](../../../../bruno/service-client-management/README.md) cover missing authentication and machine-key
+rejection; Bruno runs API request collections. Human-session success needs the live browser suite. Run the architecture,
+type, and OpenAPI checks with focused tests; substituted HTTP tests do not prove real database or login behavior.
