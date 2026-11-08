@@ -1,12 +1,15 @@
-# MCP Request Routing Bruno Collection
+# MCP Request Routing Collection
 
-Six requests check the connector's HTTP routing. Health remains public, unknown paths return 404, and GET or DELETE
-requests to `/mcp` return 405. A double-slash request target returns 400 without stopping the process. A final health
-request confirms that the connector remains available.
+MCP (Model Context Protocol) connects AI clients to application tools. This Bruno API-request collection needs no
+credential and checks six routing outcomes: public health, unknown-path `404`, unsupported `/mcp` methods returning
+`405`, malformed double-slash targets returning `400`, and continued health afterward.
 
-These routing checks need no credential. The connector still needs its API URL configured for authenticated MCP
-requests. Build and start it using the local setup in `apps/mcp-server/README.md`, then run this collection with
-`bru run --env local` from its directory. Set `baseUrl` to the connector's current host and port.
+Start the connector using [its setup guide](../../apps/mcp-server/README.md), then run:
 
-The malformed absolute-form target with an unbalanced bracket cannot be represented by an ordinary Bruno URL.
-The focused Node HTTP integration suite covers that raw request and the process-survival behavior.
+```shell
+cd bruno/mcp-request-routing
+corepack pnpm exec bru run --env local --env-var baseUrl=http://localhost:3002
+```
+
+Use the connector's actual host and port for `baseUrl`. The connector still requires its API URL for authenticated
+requests. Raw HTTP tests separately cover malformed absolute-form request targets, which Bruno cannot represent.
