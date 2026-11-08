@@ -1,43 +1,34 @@
-# Proxy Registry Bruno Collection
+# Proxy Registry Collection
 
-Run the collection through the repository's pinned launcher after provisioning a disposable stack owned by this
-checkout:
+Bruno runs API requests with assertions. Provision this checkout's disposable stack, then run:
 
 ```shell
 corepack pnpm bruno:proxy-registry
 ```
 
-For a separately named stack, set `COMPOSE_PROJECT_NAME` to that project's name. See
-[the isolated-stack instructions](../../docker/README.md). The launcher verifies container ownership before reading
-ignored service-client metadata. It selects the owned gateway's host URL and the public Keycloak issuer explicitly,
-loads the platform service credential internally, and uses the developer sandbox. Do not run the credential-bearing
-collection directly with an unconfigured Bruno CLI.
+Set `COMPOSE_PROJECT_NAME` for a separately named stack; see [the stack guide](../../docker/README.md).
+The launcher checks ownership before loading the private platform API key. All 27 requests and 27 tests must pass;
+missing, skipped, or empty execution fails. Use this launcher rather than an unconfigured credential-bearing CLI.
 
-The launcher requires all 27 requests and 27 tests to execute successfully. Its report contains only execution
-counts and pass/fail states. Request bodies, response bodies, headers, assertion values, and CLI output are suppressed
-before reports are written, including failures. Synthetic proxy authentication is generated at runtime and is never
-printed. No credential-bearing browser or network artifacts are created.
+A proxy forwards verification traffic. The collection checks authentication, creation disabled by default,
+credential-free responses, updates with omitted or replaced credentials, lifecycle changes, blacklist deduplication,
+and deletion. Pagination uses a cursor, an opaque continuation value; traversal, terminal and malformed cursors are
+checked. Create/update responses use `Cache-Control: no-store`, including rejections.
 
-The collection covers unauthenticated access, disabled creation by default, and redaction of credentials from every
-response, including healthy selection. It checks cursor traversal, the empty terminal cursor, invalid cursors,
-field updates that omit authentication, and complete and incomplete credential replacement. It also covers lifecycle
-changes, blacklist visibility and deduplication, and deletion.
-Successful and rejected create/update responses must use `Cache-Control: no-store`.
-The HTTP read model cannot prove which credential remains stored after an update that omits authentication. Focused
-backend tests cover that persistence contract; the collection verifies omission and the returned visible fields.
+Two labeled proxies start disabled. One is briefly activated, drained, disabled, and blacklisted. Draining excludes
+new allocation but does not prove that existing leases—temporary ownership of a proxy—have finished. Only captured
+fixture IDs are deleted. Cleanup requests continue after assertion failures; if interrupted, inspect descriptions
+starting `Bruno proxy-registry` and remove only confirmed fixture IDs.
 
-Two uniquely labeled proxies are created, and only their captured IDs are deleted. Both start disabled. The lifecycle
-fixture is briefly activated before being drained, disabled, blacklisted, and deleted. Draining state makes no claim
-about existing leases. The pinned CLI continues to the cleanup requests after assertion failures; the runner tests
-verify this behavior. If execution is interrupted before cleanup, inspect the synthetic descriptions prefixed with
-`Bruno proxy-registry`, confirm the exact fixture IDs, and remove only those fixtures. Do not reset shared data.
+Synthetic credentials are generated at runtime. Reports contain only counts and pass/fail states; bodies, headers,
+assertion values, and raw CLI output are suppressed before writing, including on failure. Do not capture network
+or browser artifacts. HTTP responses cannot prove that an omitted credential update preserved stored credentials;
+focused backend tests cover that persistence rule.
 
-Focused validation runs the real pinned CLI against a disposable HTTP contract fixture, checks credential-safe
-failure reporting, and verifies that unrelated proxies remain in the registry:
+Focused launcher checks use the pinned CLI against a synthetic HTTP server:
 
 ```shell
 node --test scripts/bruno/proxy-registry-runner.test.mjs scripts/bruno/organization-onboarding-runner.test.mjs
 ```
 
-This fixture validates collection and launcher behavior. It does not replace running the collection against the
-checkout-owned API and Keycloak stack.
+Those checks verify tooling and isolation; run the collection separately to validate the live stack.

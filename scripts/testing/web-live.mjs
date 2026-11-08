@@ -228,12 +228,13 @@ export async function runWebLive() {
                 'exec',
                 'playwright',
                 'test',
-                '--config=playwright.gateway.config.ts',
+                '--config=playwright.config.ts',
             ],
             {
                 cwd: root,
                 env: {
                     ...process.env,
+                    LEF_PLAYWRIGHT_SUITE: 'gateway',
                     WEB_LIVE_ORIGIN: origin,
                     WEB_LIVE_KEYCLOAK_ORIGIN: metadata.keycloakUrl,
                     WEB_LIVE_FIXTURE: fixturePath,

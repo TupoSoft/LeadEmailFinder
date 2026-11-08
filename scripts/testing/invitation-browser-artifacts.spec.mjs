@@ -32,7 +32,7 @@ for (const configurationName of ['invitation', 'team', 'platform-organizations',
             try {
                 writeFileSync(join(directory, 'package.json'), '{"type":"module"}\n', { mode: 0o600 })
                 writeFileSync(configurationFile, `
-import configuration from ${JSON.stringify(join(webRoot, `playwright.${configurationName}.config.ts`))}
+import configuration from ${JSON.stringify(join(webRoot, 'playwright.config.ts'))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
@@ -74,7 +74,7 @@ test('private invitation failure', async ({ page, context }) => {
         : `expect(token).toBe(password)`}
 })
 `, { mode: 0o600 })
-                const environment = { ...process.env, INVITATION_TEST_TOKEN: token, INVITATION_TEST_PASSWORD: password }
+                const environment = { ...process.env, LEF_PLAYWRIGHT_SUITE: configurationName, INVITATION_TEST_TOKEN: token, INVITATION_TEST_PASSWORD: password }
                 for (const key of ['DEBUG', 'PWDEBUG', 'PW_TEST_DEBUG', 'PW_TEST_REUSE_CONTEXT', 'PWDEBUGIMPL']) delete environment[key]
                 const result = spawnSync(process.execPath, [require.resolve('@playwright/test/cli'), 'test', `--config=${configurationFile}`], {
                     cwd: webRoot, env: environment, encoding: 'utf8', timeout: 45_000, maxBuffer: 1_000_000,

@@ -1,10 +1,11 @@
-# MCP Authentication Bruno Collection
+# MCP Authentication Collection
 
-This collection checks direct Bearer API-key authentication. A valid key initializes the connector, and incorrect or
-empty keys return `401 {"error":"authentication_required"}`, and a missing credential is rejected. Each request
-validates the key through the API; the connector does not exchange or cache OAuth tokens.
+MCP (Model Context Protocol) connects AI clients to application tools. This Bruno API-request collection checks
+Bearer API keys: a valid key initializes the connector; missing, empty, or incorrect keys are rejected. Invalid keys
+return `401 { "error": "authentication_required" }`. Each request validates through the API; the connector does not
+exchange or cache OAuth tokens, which delegate authorization to another service.
 
-Build and start the connector using `apps/mcp-server/README.md`. Then run this snippet from the repository root:
+Start the connector using [its setup guide](../../apps/mcp-server/README.md), then run from the repository root:
 
 ```shell
 node --input-type=module <<'NODE'
@@ -28,7 +29,6 @@ try {
 NODE
 ```
 
-The file reader verifies the checkout directory and Compose ownership and requires a private regular file with mode 0600.
-The key stays in the child environment and never enters command arguments or printed output. Use
-`corepack pnpm test:mcp-server-live` for committed rotation, disabling, and deletion checks covering initialize,
-tool listing, and tool calls, including a key with verification permissions only.
+The reader checks checkout/stack ownership and mode `0600` (owner-only read/write). The key stays in the child
+environment, outside arguments and output. Use `corepack pnpm test:mcp-server-live` for committed rotation,
+disabling, and deletion checks across initialization, tool listing, and tool calls.

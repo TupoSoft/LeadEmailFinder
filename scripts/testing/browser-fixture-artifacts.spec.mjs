@@ -29,7 +29,7 @@ for (const { name, timeoutGuard, override, setupDelay = 0 } of scenarios) test(`
     try {
         writeFileSync(join(directory, 'package.json'), '{"type":"module"}\n', { mode: 0o600 })
         writeFileSync(configuration, `
-import configuration from ${JSON.stringify(join(webRoot, 'playwright.privileged.config.ts'))}
+import configuration from ${JSON.stringify(join(webRoot, 'playwright.config.ts'))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
@@ -66,7 +66,7 @@ test('owner guarded authentication failure', async ({ page, loginAs }) => {
     await loginAs('owner')
 })
 `, { mode: 0o600 })
-        const environment = { ...process.env }
+        const environment = { ...process.env, LEF_PLAYWRIGHT_SUITE: 'privileged' }
         for (const key of ['DEBUG', 'PWDEBUG', 'PW_TEST_DEBUG', 'PW_TEST_REUSE_CONTEXT', 'PWDEBUGIMPL']) delete environment[key]
         const result = spawnSync(process.execPath, [require.resolve('@playwright/test/cli'), 'test', `--config=${configuration}`], {
             cwd: webRoot,

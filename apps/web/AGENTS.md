@@ -1,150 +1,93 @@
 # Frontend Architecture
 
-Apply these instructions to frontend implementation, refactoring, and architecture review. Root
-[`AGENTS.md`](../../AGENTS.md) also routes changes to the browser API boundary here. Follow the current task,
-repository contracts, and applicable repository skills. This file adds architecture guidance; it does not authorize
-new features, a redesign, or unrelated refactoring.
+Applies to frontend implementation, refactoring, reviews, and the browser API boundary. Follow the current task and
+applicable repository instructions/skills; this file does not authorize new features or unrelated redesigns.
 
 ## Choose the Smallest Useful Boundary
 
-- Read the affected page, feature hooks, API functions, and tests before choosing a design. Verify earlier review
-  observations against the current code.
-- Preserve the React, Vite, React Router, TanStack Query, CSS Modules, and CSS custom property stack. Follow
-  [`DESIGN.md`](../../DESIGN.md), [`UX-CONTRACT.md`](../../UX-CONTRACT.md), and the active feature plan.
-- Keep straightforward screens as focused components, hooks, and feature API functions. Extract a separate workflow
-  when state transitions, recovery rules, reuse, or meaningful isolated tests justify it.
-- Do not add domain/application/infrastructure folders, classes, a dependency injection container, or an interface
-  for every function solely to resemble an architecture diagram. A function dependency can be a sufficient port.
+- Read the affected page, hooks, API functions, and tests; verify earlier observations against current code.
+- Preserve React, Vite, React Router, TanStack Query (server-data caching), CSS Modules, and CSS custom properties.
+- Keep simple screens as components, feature hooks, and API functions. Extract a workflow only for meaningful state,
+  recovery, reuse, or isolated tests. Do not add architecture folders, classes, containers, or an interface per function
+  just to match a pattern. A function can be a port: a required capability supplied by a caller.
 
 ## Assign Responsibilities Explicitly
 
-| Responsibility | Appropriate owner |
-| --- | --- |
-| Rendering, focus, field state, dialog visibility, and navigation | Page or UI component |
-| React lifecycle integration and server query subscriptions | Feature hook |
-| Complex workflow transitions, eligibility, and outcome classification | Plain feature functions or a small application module |
-| Endpoint paths, HTTP status translation, serialization, and response projection | Feature API adapter using the generated browser client |
-| Session invalidation, authenticated transport, and cache lifetime | Shared authentication and transport code |
-| Reusable UI behavior, styles, and browser utilities | An established canonical owner or a purpose-specific shared module |
+| Responsibility                                         | Owner                                                 |
+| ------------------------------------------------------ | ----------------------------------------------------- |
+| Rendering, focus, field state, dialogs, navigation     | Page/component                                        |
+| React lifecycle and server-query subscriptions         | Feature hook                                          |
+| Complex workflow transitions and outcome decisions     | Plain feature functions/application module            |
+| URLs, HTTP errors, serialization, response mapping     | Feature API adapter using the generated client        |
+| Authentication transport, invalidation, cache lifetime | Shared authentication/transport                       |
+| Reusable UI behavior/styles                            | Existing canonical component or focused shared module |
 
-- Keep extracted workflow policies independent of React, router, query-cache, and HTTP-client imports. Let hooks
-  connect those policies to the application. Moving all code into a hook does not establish this independence.
-- For a workflow that needs isolation, define a small contract around required operations and meaningful outcomes.
-  For example, a verification submission can return a created job, invalid input, insufficient credits, or an
-  unknown outcome. Its adapter translates the existing server contract; the UI decides how to present the result.
-- Keep each such contract with the consuming feature or application module. Inject its implementation where the
-  application or feature is assembled. Avoid requiring the workflow to import its concrete adapter.
-- For each extracted port, state the accepted inputs and relevant promises about outcomes, errors, side effects,
-  cancellation, and retries. Every implementation must accept inputs permitted by the port without stronger
-  preconditions and preserve its promises without weaker guarantees.
-- Keep adapters interchangeable through observable behavior; their internal implementations need not match. Do not
-  make application code inspect adapter identity or invent success, retry, or cancellation guarantees to satisfy a
-  contract. Preserve the documented distinction between an aborted request and a confirmed server outcome.
-- Return semantic data and outcome codes from application rules. Keep user-facing wording, translations, styling,
-  focus, and navigation in the UI. For example, return `insufficient-credits`; the UI chooses its message and any
-  permitted billing link. Adapters translate transport details; application code owns workflow decisions.
-- Retain generated API types for direct API presentation. Introduce a separate application model and mapping when
-  independent policy or presentation requirements justify it; do not copy every response type mechanically. Change generated
-  contracts through the repository's existing OpenAPI workflow.
-
-## Apply Frontend Practices at Their Owner
-
-- Give each state value one authoritative owner and an explicit lifetime. Keep state close to its consumers unless
-  the feature contract requires a longer lifetime; derive values that can be calculated from existing state.
-- Use the repository [React practices](../../.agents/skills/react-best-practices/SKILL.md#repository-react-practices)
-  for state placement, pure rendering, Effects, query dependencies, and performance work supported by measurements.
-- Use the [UX contract](../../UX-CONTRACT.md#navigation-and-responsive-behavior) for URL behavior and responsive
-  layouts, and its [accessibility rules](../../UX-CONTRACT.md#accessibility-and-motion) for controls and feedback.
-  Evaluate these rules within the affected workflow; report observed gaps without expanding an unrelated task.
+- Keep extracted policies independent of React, routing, query caches, and HTTP clients. Hooks connect them to the UI;
+  moving everything into a hook does not establish independence.
+- Keep ports with consumers; inject implementations at assembly. Define accepted inputs and guarantees for outcomes,
+  errors, side effects, cancellation, and retries. Adapters (implementations of ports) must not strengthen input
+  requirements or weaken guarantees. Do not inspect adapter identity to choose behavior.
+- Application rules return semantic outcomes such as `insufficient-credits`; UI owns wording, translations, styling,
+  and focus. Keep generated API types for direct presentation; add separate models/mappings only for actual policy.
+  Change generated contracts through the existing OpenAPI workflow (machine-readable API definitions).
+- Give state one owner and an explicit lifetime. Keep it close to consumers; derive calculable values.
+  Use pure rendering, appropriate Effects/query dependencies, and measured performance changes.
+- Preserve responsive layouts, URL behavior, keyboard/focus behavior, accessible controls, and reduced-motion support
+  within the affected workflow; report other gaps without expanding scope.
 
 ## Compose Product Content with Shared Spacing
 
-- Use [`Stack`](src/shared/Stack.tsx) for new or changed vertical content groups inside product panels. Use
-  `gap="content"` between logical groups and `gap="control"` within a related group. The default gap is content.
-  The existing roles resolve to 24 and 12 pixels at the default root font size; consume the tokens rather than literals.
-- The parent owns the spacing. `Stack` removes the outer margins of its direct children. Do not add margins or gap
-  overrides in feature styles, empty spacer elements, or line breaks to create space between those children. Nest
-  stacks when the grouping changes. Preserve internal padding and row separators in components such as `SignalDetails`.
-- Reuse [`SupportingText`](src/shared/SupportingText.tsx) for short explanatory paragraphs. It owns compact type,
-  regular weight, readable ink contrast, and zero outer margins. Keep customer-facing copy in its existing owner.
-- Keep `ProductPanel` responsible for its header, loading, feedback, and content reservation. Apply this contract
-  to the content being changed; leave unrelated existing screen layouts for their own tasks.
-- When a list ends at a panel boundary, draw item dividers only between rows. Let `ProductPanel` own the section
-  rule; do not duplicate it with a border after the final row. Check both single-item and empty lists.
-- Verify the affected screen at desktop and mobile widths, including its relevant loading and recovery states.
-  Assert important rendered gaps in the existing browser suite and run `design:lint` and `ui:audit`.
-- Inspect screenshots and review visual differences before updating any screenshot baseline. A passing static
-  audit or a newly recorded baseline does not establish visual correctness.
-
-Compose related values and their explanation like this, using the feature's existing values and copy:
-
-```tsx
-<Stack gap="content">
-    <Stack gap="control">
-        <p>{primaryValue}</p>
-        <SignalDetails entries={entries} />
-    </Stack>
-    <SupportingText>{explanation}</SupportingText>
-</Stack>
-```
-
-The [design contract](../../DESIGN.md#content-spacing-and-supporting-text) owns these roles. The billing summary in
-[`BillingPanels.tsx`](src/features/billing/BillingPanels.tsx) is the working example. The shared components accept
-`id`, `role`, `hidden`, `lang`, `dir`, `title`, and ARIA attributes, and omit local styling overrides. Add a justified
-shared variant and update the contracts if a new recurring layout requires one.
+- Use [`Stack`](src/shared/Stack.tsx) for vertical groups in product panels: `gap="content"` between logical groups,
+  `gap="control"` within them. Defaults are content; spacing tokens resolve to 24/12 pixels at the default root size.
+- Parent groups own spacing. `Stack` removes direct-child outer margins; do not add feature margin/gap overrides,
+  empty spacers, or line breaks. Nest stacks for groups; retain internal padding/row separators.
+- Use [`SupportingText`](src/shared/SupportingText.tsx) for short explanations: compact text, readable contrast, no
+  outer margins. Keep customer wording in its feature.
+- `ProductPanel` owns headers, loading/feedback, reserved content space, and its section divider. Draw list dividers
+  only between rows; verify single/empty lists. Change only affected layouts.
+- The [billing panels](src/features/billing/BillingPanels.tsx) show the pattern. Shared components accept standard
+  identity, role, visibility, language/direction, title, and ARIA attributes (accessibility metadata), without local
+  styling overrides. Add a justified shared variant when a recurring layout needs one.
+- Check desktop/mobile loading and recovery states, assert important gaps in browser tests, and run `design:lint` and
+  `ui:audit`. Inspect screenshots before updating baselines (approved comparison images); passing static checks or
+  recording a new baseline does not establish visual correctness.
 
 ## Keep Shared Infrastructure Free of Feature Policy
 
-- Do not add product-feature imports or feature endpoint lists to shared authentication and transport code. Express
-  necessary feature cleanup or operation-specific recovery through small explicit dependencies wired at application
-  setup. Keep session expiry handling global; locate feature-specific rejection presentation with its feature.
-- Preserve cleanup timing when introducing these boundaries. A callback or lifecycle registration must run at the
-  required authentication transition even when its feature page is unmounted. Preserve failure isolation so one
-  cleanup cannot prevent session invalidation. Do not replace synchronous cleanup with a later React effect.
-- Reuse canonical UI owners before creating alternatives. Existing shared behavior may still live under a feature,
-  such as `TeamDialog`; its location does not authorize a migration during an unrelated task.
-- When shared ownership is part of the task, move the generic implementation and styles together, update affected
-  consumers and canonical ownership records, and preserve behavior. Avoid routing shared utilities through unrelated
-  features. Keep intentional dependencies on another feature's public contract explicit and small.
+- Keep feature imports/endpoint lists out of shared authentication/transport. Supply feature cleanup and recovery
+  through small dependencies at application setup. Session expiry is global; feature rejection presentation is local.
+- Preserve synchronous authentication cleanup even when a feature is unmounted. One failing cleanup must not prevent
+  invalidation; do not defer required cleanup to a React Effect.
+- Reuse existing shared owners, including components currently located inside a feature. Do not migrate them during
+  unrelated work. When moving shared behavior, move its styles, update consumers/ownership records, and preserve
+  behavior. Avoid shared utilities importing unrelated features; document small intentional feature contracts.
 
 ## Preserve Workflow and Data Lifetimes
 
-- Distinguish UI state, server state, and workflow state. Choose each lifetime from the maintained contract. In
-  particular, preserve the single-verification coordinator across in-app navigation and clear it at authentication
-  boundaries; moving it into component state would change behavior.
-- Preserve organization or principal scoping of query keys and recovery records. Retain cancellation and request
-  generation checks, including protection against late callbacks and response parsing after session changes.
-- Preserve the documented handling of page hide and restoration from the browser's back/forward cache. Clear
-  protected or ephemeral data at the required boundary and reconfirm identity before restoring protected content.
-- Keep upload files, multipart bodies, invitation tokens, passwords, and one-time secrets out of shared caches and
-  persistent storage. Preserve existing local cleanup and download URL revocation. Keep explicitly permitted recovery
-  records limited to the fields, scope, and retention required by their feature contract.
-- Distinguish confirmed rejection from an unknown mutation outcome. Preserve duplicate-submission guards and
-  acknowledgment or reconciliation requirements. Aborting a browser request does not prove the server canceled work.
-- Do not introduce automatic mutation retries or replay merely to simplify a hook. Preserve each operation's
-  established idempotency and recovery contract. Keep polling bounded, pause it when required, and stop at the
-  documented terminal or recovery states.
-- Keep server authorization, charging, and validation authoritative. Do not invent permissions, statuses, backend
-  cancellation, history, or retry guarantees to make a frontend abstraction convenient.
+- Distinguish component, server, and workflow state. Keep the single-verification coordinator alive across in-app
+  navigation and clear it at authentication boundaries.
+- Scope query keys/recovery records to organization or principal (authenticated caller). Preserve cancellation,
+  request-generation checks, and protection against callbacks/parsing that finish after the session changes.
+- On page hide or back/forward-cache restoration (a saved live page restored by browser history), clear protected or
+  temporary data at the established boundary and reconfirm identity before showing protected content.
+- Keep files, multipart upload bodies, invitation tokens, passwords, and one-time secrets out of shared caches and
+  persistent storage. Retain cleanup/download-URL revocation. Limit allowed recovery records by fields, scope, retention.
+- Distinguish confirmed rejection from unknown mutation outcome. Aborting a browser request does not confirm server
+  cancellation. Preserve duplicate guards, acknowledgment, and reconciliation (checking the server's actual result).
+- Do not add automatic mutation replay/retries. Preserve idempotency (repeating one operation does not repeat its
+  effect), bounded polling, pause conditions, and terminal/recovery states.
+- Server authorization, charging, and validation remain authoritative. Do not invent permissions, statuses,
+  cancellation, history, or retry guarantees to simplify a frontend abstraction.
 
 ## Verify the Boundary You Changed
 
-- Test extracted decisions with ordinary inputs and explicit outcomes. Test adapters at the HTTP boundary and use
-  component or integration tests for lifecycle, navigation, cache, and authentication behavior. Avoid tests that only
-  assert internal helper calls or repeat the implementation.
-- When multiple adapters implement the same port, reuse focused contract tests for the observable guarantees that
-  consumers rely on, including relevant input, failure, side-effect, and cancellation cases. Add adapter-specific
-  checks where needed. Fakes must preserve the semantics exercised by their tests; they need not reproduce unrelated
-  infrastructure. A focused stub does not prove that an adapter satisfies the full contract.
-- For changes to submission, session, or recovery logic, select relevant cases such as duplicate activation,
-  uncertain completion, route departure, logout with a late response, principal replacement, or cached-page
-  restoration. Preserve existing behavior tests when extracting code; do not rewrite their expected outcomes just
-  to accommodate a new structure.
-- Run the focused checks required by the active plan and changed behavior. Use the existing web lint, typecheck,
-  test, build, and browser scripts as applicable; shared UI changes also use the repository's design and UI audits.
-  Follow the root Bruno policy when observable HTTP behavior changes and the prose policy for documentation.
-- In reviews, cite the actual import or responsibility that causes coupling and explain its practical consequence.
-  Distinguish a demonstrated defect, a maintainability trade-off, and an optional refinement. Evaluate existing
-  injectable functions and adapters before claiming that a feature has no ports.
-- Report checks actually executed, any missing runtime evidence, and material architectural trade-offs. These
-  instructions guide decisions; they are not an automated architecture gate.
+- Test outcomes/branches for extracted policies, HTTP contracts for adapters, and lifecycle/navigation/cache/auth
+  behavior through component/integration tests. Do not test only private calls or mirror implementation.
+- Reuse contract tests for interchangeable adapters; cover relevant input, errors, side effects, and cancellation.
+  Fakes must preserve tested semantics; a stub is not proof of full conformance.
+- For stateful changes, cover relevant duplicates, uncertain completion, navigation, logout/late responses, principal
+  replacement, and cached-page restoration. Preserve expectations during extraction.
+- Run applicable web lint, typecheck, tests, build, and browser scripts; shared UI also needs design/UI audits.
+  Cover observable HTTP changes with the appropriate Bruno request collection. Follow active validation requirements.
+- Reviews must cite actual imports/responsibilities and consequences. Distinguish defects, trade-offs, and optional
+  improvements; recognize existing functions/ports. Report executed checks, missing runtime evidence, and trade-offs.

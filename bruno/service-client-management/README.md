@@ -1,31 +1,28 @@
-# Service Client Management Bruno Collection
+# Service Client Management Collection
 
-Ten requests cover human-only management and direct API-key authentication. Create without authentication returns
-401; create, list, rotate, disable, and delete with a machine key return 403 even for its own organization. Active
-keys validate at `GET /v1/auth/api-key` with an empty 204 response. Missing, malformed, and legacy JWT credentials
-return 401. Validation and issuance responses use `Cache-Control: no-store`, including rejection responses.
-No request creates or rotates a key.
-
-Run the pinned launcher against the development stack owned by this checkout:
+A service client is an application using a direct Bearer API key. Bruno runs API requests with assertions:
 
 ```shell
 corepack pnpm bruno:service-client-rejections
 ```
 
-The launcher verifies stack ownership, reads the ignored development credential internally, and runs
-`bru run --env local --sandbox developer` with the pinned CLI. It requires all ten requests and ten tests to execute
-successfully. Credentials stay outside command arguments. The count-only reporter prevents headers, bodies,
-assertion details, and raw CLI output from reaching artifacts or logs, including failure paths.
+The launcher verifies this checkout's disposable stack, loads its private key, and requires all ten requests and
+ten tests to pass. Keys stay out of arguments. Count-only reporting excludes headers, bodies, assertion details,
+and raw CLI output, including on failure.
 
-The live browser suite uses the existing MFA-aware human owner fixture and proves create, list, explicit copy and
-download, rotate, disable, and delete. It uses the dedicated configuration so traces, screenshots, videos, DOM
-attachments, and raw failures are disabled before authentication:
+The collection checks that missing authentication returns `401`, and machine keys receive `403` for human-only
+create, list, rotate, disable, and delete operations—even in their own organization. Active keys validate at
+`GET /v1/auth/api-key` with empty `204`; missing, malformed, and legacy JWT (JSON Web Token) credentials return `401`.
+Validation and issuance responses use `Cache-Control: no-store` to prevent retention, including rejection responses.
+No collection request creates or rotates a key.
+
+For successful lifecycle operations, bootstrap the human owner and run:
 
 ```shell
+corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
 corepack pnpm --filter ./apps/web test:service-clients-live
 ```
 
-Wrong-organization access, duplicate and unsupported permissions, disabled rotation, and secret-free list responses
-are covered by focused HTTP integration tests under
-`src/libs/modules/service-client-management/src/api/`. Bruno cannot mint a genuine human session and does not claim
-positive lifecycle coverage or application-level validation through an M2M rejection.
+That suite uses MFA (password plus a second factor), disables sensitive artifacts before login, and checks creation,
+listing, explicit copy/download, rotation, disabling, and deletion. Focused API tests cover wrong-organization access,
+permission validation, disabled rotation, and secret-free lists. Machine rejection alone does not prove those rules.

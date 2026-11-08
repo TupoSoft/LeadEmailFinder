@@ -38,7 +38,7 @@ for (const configurationName of ['platform-proxies', 'platform-proxies-live']) {
                     writeFileSync(
                         configurationFile,
                         `
-import configuration from ${JSON.stringify(join(webRoot, `playwright.${configurationName}.config.ts`))}
+import configuration from ${JSON.stringify(join(webRoot, 'playwright.config.ts'))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
@@ -98,6 +98,7 @@ test('private platform-proxy failure', async ({ page, context }, info) => {
                     )
                     const environment = {
                         ...process.env,
+                        LEF_PLAYWRIGHT_SUITE: configurationName,
                         PROXY_TEST_USER: token,
                         PROXY_TEST_PASSWORD: password,
                     }

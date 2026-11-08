@@ -37,7 +37,7 @@ for (const configurationName of ['service-clients', 'service-clients-live']) {
                     writeFileSync(
                         configurationFile,
                         `
-import configuration from ${JSON.stringify(join(webRoot, `playwright.${configurationName}.config.ts`))}
+import configuration from ${JSON.stringify(join(webRoot, 'playwright.config.ts'))}
 export default {
     ...configuration,
     testDir: ${JSON.stringify(directory)},
@@ -95,6 +95,7 @@ test('private service-client failure', async ({ page, context }) => {
                     )
                     const environment = {
                         ...process.env,
+                        LEF_PLAYWRIGHT_SUITE: configurationName,
                         SERVICE_CLIENT_TEST_SECRET: token,
                         SERVICE_CLIENT_TEST_PASSWORD: password,
                     }
