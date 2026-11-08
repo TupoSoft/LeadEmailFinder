@@ -11,7 +11,7 @@ export interface BetterAuthLibrary {
 
 /**
  * Loads the ESM-only package from the CommonJS application. SWC emits these as `require()` calls, which
- * Node 22.12+ resolves through `require(esm)`; `test:auth-runtime` proves it with a compiled Node process.
+ * Node 22.12+ resolves through `require(esm)`.
  */
 export async function loadBetterAuthLibrary(): Promise<BetterAuthLibrary> {
     const [core, magicLinkPlugin, twoFactorPlugin] = await Promise.all([

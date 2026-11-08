@@ -9,7 +9,6 @@ export default tseslint.config(
         ignores: [
             'eslint.config.mjs',
             'apps/web/**',
-            'docker/scripts/**',
             '**/dist/**',
             '.dev/**',
             'deploy/**',
@@ -73,15 +72,7 @@ export default tseslint.config(
     },
     {
         name: 'repository-tooling',
-        files: [
-            'scripts/ci/*.mjs',
-            'scripts/bruno/*.mjs',
-            'scripts/better-auth/*.mjs',
-            'scripts/testing/*.mjs',
-            'scripts/frontend/*.mjs',
-            'scripts/openapi/*.mjs',
-            'docker/smtp-dev/*.mjs',
-        ],
+        files: ['docker/smtp-dev/*.mjs'],
         languageOptions: {
             sourceType: 'module',
             parserOptions: {

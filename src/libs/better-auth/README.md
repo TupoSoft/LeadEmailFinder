@@ -70,16 +70,10 @@ setting. Delivery timeouts are bounded and transport logging is disabled.
 Better Auth uses ESM (JavaScript's `import` module format), while the application emits CommonJS (`require`).
 SWC, the compiler, rewrites dynamic imports; Node 22.12+ supports loading the resulting ESM through `require(esm)`.
 Do not globally enable SWC `ignoreDynamic`: it breaks generated Swagger metadata loading. Jest tests inject
-substitutes; compiled-process tests exercise the real package.
+substitutes; they do not establish compiled-process compatibility with the real package.
 
 ## Validation
 
 ```sh
-corepack pnpm test -- src/libs/better-auth scripts/better-auth --runInBand
-corepack pnpm test:auth-runtime
+corepack pnpm test -- src/libs/better-auth --runInBand
 ```
-
-The runtime runner compiles into ignored `.dev/auth-tools` and starts a checkout-owned disposable Compose project
-from `docker/compose.auth-runtime-test.yaml`: a `*_test` PostgreSQL database and `auth-mail` service, with a random
-schema per run. Missing, skipped, failed, or zero tests fail validation. Remove only its owned project with
-`node scripts/testing/auth-runtime.mjs --down`.

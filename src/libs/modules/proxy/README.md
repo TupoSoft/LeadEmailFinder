@@ -71,4 +71,4 @@ Redis lease behavior. HTTP tests with substituted repositories do not establish 
 
 [`bruno/proxy-registry`](../../../../bruno/proxy-registry/README.md) exercises the API lifecycle;
 [`bruno/smtp-dev`](../../../../bruno/smtp-dev/README.md) tests draining and real local SMTP allocation. Bruno is the
-API-request runner used for those integration checks. Run the architecture gate and focused module tests after changes.
+API-request runner used for those integration checks. Review dependency boundaries and run focused module tests after changes.

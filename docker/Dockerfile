@@ -27,7 +27,6 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 
 COPY nest-cli.json tsconfig*.json .swcrc jest.config.ts ./
 COPY src ./src
-COPY scripts ./scripts
 COPY config ./config
 
 # Compile during the image build; Compose retains the existing source-watch workflow.

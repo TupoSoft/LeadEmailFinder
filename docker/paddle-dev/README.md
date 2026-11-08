@@ -159,36 +159,10 @@ docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker
 
 ## 5. Bootstrap Authentication
 
-Keycloak is the current browser login provider. Refuse an existing local fixture directory so this run cannot
-overwrite another fixture, then provision the isolated stack through its internal administrator address:
-
-```sh
-test ! -e .dev/keycloak || {
-  printf '%s\n' '.dev/keycloak already exists; use a clean worktree or preserve that fixture explicitly.' >&2
-  exit 1
-}
-mkdir -p .dev/keycloak
-touch .dev/keycloak/.paddle-fixture-owned
-docker compose -p "$LEF_PADDLE_COMPOSE_PROJECT" -f docker/compose.yaml -f docker/compose.paddle-dev.yaml \
-  exec -T api sh -ec '
-  export KEYCLOAK_URL=http://keycloak:8080
-  export KEYCLOAK_PUBLIC_URL=http://localhost:58080
-  export POSTGRES_URL="$(cat /run/secrets/postgres_url)"
-  pnpm keycloak:provision
-'
-```
-
-Create/load the checkout-owned platform API key. This is a direct Bearer credential, not an OAuth access token
-obtained through a token exchange; the legacy shell variable name remains for the commands below:
-
-```sh
-pnpm keycloak:bootstrap-credential
-export LEF_ACCESS_TOKEN="$(jq -er .apiKey .dev/auth/platform-api-key.json)"
-export LEF_ORGANIZATION_ID="$(jq -er .organizationId .dev/auth/platform-api-key.json)"
-```
-
-The host bootstrap verifies stack ownership and preserves a working key. Its `.dev/auth/` file must remain a private
-regular file (`0600`). Never print the key or save reports containing its authorization header.
+Keycloak is the current browser login provider. Configure the isolated realm, application identities, and a platform
+API key before continuing. Set `LEF_ACCESS_TOKEN` to that direct Bearer API key and `LEF_ORGANIZATION_ID` to its
+organization ID in your private shell environment. Never print the key or save reports containing its authorization
+header.
 
 ## 6. Complete One Purchase
 
@@ -389,9 +363,6 @@ unset LEF_REFUND_REPLAY_BALANCE
 unset PADDLE_STARTER_PRICE_ID PADDLE_CHECKOUT_URL PADDLE_PUBLIC_URL PAYMENTS_CHECKOUT_ALLOWED_ORIGINS
 rm -f .dev/paddle/api-key.txt .dev/paddle/webhook-secret.txt .dev/paddle/client-token.txt \
   .dev/paddle/client-token-id.txt .dev/paddle/notification-setting-id.txt
-if test -f .dev/keycloak/.paddle-fixture-owned; then
-  rm -rf .dev/keycloak
-fi
 unset LEF_PADDLE_COMPOSE_PROJECT COMPOSE_PROJECT_NAME
 ```
 

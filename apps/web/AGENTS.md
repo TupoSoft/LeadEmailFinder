@@ -29,7 +29,7 @@ applicable repository instructions/skills; this file does not authorize new feat
   requirements or weaken guarantees. Do not inspect adapter identity to choose behavior.
 - Application rules return semantic outcomes such as `insufficient-credits`; UI owns wording, translations, styling,
   and focus. Keep generated API types for direct presentation; add separate models/mappings only for actual policy.
-  Change generated contracts through the existing OpenAPI workflow (machine-readable API definitions).
+  Keep generated contracts consistent with the OpenAPI definitions (machine-readable API definitions).
 - Give state one owner and an explicit lifetime. Keep it close to consumers; derive calculable values.
   Use pure rendering, appropriate Effects/query dependencies, and measured performance changes.
 - Preserve responsive layouts, URL behavior, keyboard/focus behavior, accessible controls, and reduced-motion support
@@ -48,8 +48,8 @@ applicable repository instructions/skills; this file does not authorize new feat
 - The [billing panels](src/features/billing/BillingPanels.tsx) show the pattern. Shared components accept standard
   identity, role, visibility, language/direction, title, and ARIA attributes (accessibility metadata), without local
   styling overrides. Add a justified shared variant when a recurring layout needs one.
-- Check desktop/mobile loading and recovery states, assert important gaps in browser tests, and run `design:lint` and
-  `ui:audit`. Inspect screenshots before updating baselines (approved comparison images); passing static checks or
+- Check desktop/mobile loading and recovery states and assert important gaps in browser tests.
+  Inspect screenshots before updating baselines (approved comparison images); passing static checks or
   recording a new baseline does not establish visual correctness.
 
 ## Keep Shared Infrastructure Free of Feature Policy
@@ -87,7 +87,7 @@ applicable repository instructions/skills; this file does not authorize new feat
   Fakes must preserve tested semantics; a stub is not proof of full conformance.
 - For stateful changes, cover relevant duplicates, uncertain completion, navigation, logout/late responses, principal
   replacement, and cached-page restoration. Preserve expectations during extraction.
-- Run applicable web lint, typecheck, tests, build, and browser scripts; shared UI also needs design/UI audits.
+- Run applicable web lint, typecheck, tests, build, and browser checks; inspect affected shared UI visually.
   Cover observable HTTP changes with the appropriate Bruno request collection. Follow active validation requirements.
 - Reviews must cite actual imports/responsibilities and consequences. Distinguish defects, trade-offs, and optional
   improvements; recognize existing functions/ports. Report executed checks, missing runtime evidence, and trade-offs.

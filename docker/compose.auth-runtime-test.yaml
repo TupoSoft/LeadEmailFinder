@@ -1,11 +1,11 @@
-# Disposable stack for `corepack pnpm test:auth-runtime`. The runner names the project after this checkout,
-# verifies Compose labels before every use, and publishes ports only on loopback.
+# Disposable infrastructure for authentication runtime integration tests.
+# PostgreSQL and mail ports are published only on loopback.
 services:
     auth-runtime-postgres:
         image: postgres:18-alpine
         environment:
             POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: ${AUTH_RUNTIME_TEST_PASSWORD:?Set by test:auth-runtime}
+            POSTGRES_PASSWORD: ${AUTH_RUNTIME_TEST_PASSWORD:?Set AUTH_RUNTIME_TEST_PASSWORD}
             POSTGRES_DB: auth_runtime_test
         ports:
             - '127.0.0.1::5432'
@@ -18,8 +18,8 @@ services:
             retries: 60
 
     # The base development service definition, with ephemeral loopback ports and one rejected domain so the
-    # runtime contract can observe a permanent SMTP rejection. The runner sets the checkout as the project
-    # directory, which is what this relative path resolves against.
+    # runtime contract can observe a permanent SMTP rejection. Set the checkout root as the Compose
+    # project directory so the relative path resolves correctly.
     auth-mail:
         extends:
             file: docker/infra.yaml

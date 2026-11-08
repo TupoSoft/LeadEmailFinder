@@ -11,98 +11,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  changes:
-    runs-on: ubuntu-24.04
-    outputs:
-      repositoryPolicy: ${{ steps.select.outputs.repositoryPolicy }}
-      backend: ${{ steps.select.outputs.backend }}
-      web: ${{ steps.select.outputs.web }}
-      contract: ${{ steps.select.outputs.contract }}
-      images: ${{ steps.select.outputs.images }}
-      browser: ${{ steps.select.outputs.browser }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Select affected validation
-        id: select
-        run: node scripts/ci/select-validation.mjs --event
-  repository-policy:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.repositoryPolicy }}
-    steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.repositoryPolicy == 'false'
-        run: 'echo "repository-policy: selected=$VALIDATION_SELECTED; checks were not run."'
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Enable Corepack
-        run: corepack enable
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Locate pnpm store
-        id: pnpm-store
-        run: |
-          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Restore pnpm store
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Install dependencies
-        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Validate account-discovery approvals
-        env:
-          ACCOUNT_DISCOVERY_APPROVALS_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: corepack pnpm privacy:account-discovery-approvals-check
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Scan for LinkedIn session material
-        run: corepack pnpm security:scan-linkedin-session-material -- --scope=working-tree
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Check module architecture
-        run: corepack pnpm architecture:check
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Test validation selection and workflow
-        run: corepack pnpm test -- select-validation validate-workflow execplan-repository-fixture --runInBand
-        if: needs.changes.outputs.repositoryPolicy == 'true'
-      - name: Check validation fixtures
-        run: corepack pnpm test:ci-paths
-        if: needs.changes.outputs.repositoryPolicy == 'true'
   backend:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: ${{ needs.changes.outputs.backend == 'true' && 'postgres:18-alpine' || '' }}
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: lef_identity_test
           POSTGRES_USER: postgres
@@ -110,37 +23,20 @@ jobs:
         ports:
           - 5432:5432
         options: --health-cmd "pg_isready -U postgres -d lef_identity_test" --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.backend }}
     steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.backend == 'false'
-        run: 'echo "backend: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        if: needs.changes.outputs.backend == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-        if: needs.changes.outputs.backend == 'true'
       - name: Enable Corepack
         run: corepack enable
-        if: needs.changes.outputs.backend == 'true'
       - name: Locate pnpm store
         id: pnpm-store
         run: |
           echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.backend == 'true'
       - name: Restore pnpm store
         uses: actions/cache@v4
         continue-on-error: true
@@ -149,98 +45,52 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
-        if: needs.changes.outputs.backend == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
-        if: needs.changes.outputs.backend == 'true'
-      - name: Prepare Ruby tool cache and libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libyaml-0-2 libgmp10
-          sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/hostedtoolcache
-        if: needs.changes.outputs.backend == 'true'
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-        if: needs.changes.outputs.backend == 'true'
-      - name: Test Vagrant provider configuration
-        run: |
-          ruby -c deploy/proxy-fleet/vagrant/Vagrantfile
-          ruby scripts/testing/proxy-fleet-vagrant-config.test.rb
-        if: needs.changes.outputs.backend == 'true'
       - name: Lint
         run: corepack pnpm lint
-        if: needs.changes.outputs.backend == 'true'
       - name: Type check
         run: corepack pnpm typecheck
-        if: needs.changes.outputs.backend == 'true'
       - name: Test
         run: corepack pnpm test:ci
-        if: needs.changes.outputs.backend == 'true'
       - name: Test empty-database synchronization
         env:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
-        if: needs.changes.outputs.backend == 'true'
       - name: Test credit account debits against a real database
         env:
           TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
-        if: needs.changes.outputs.backend == 'true'
       - name: Test payment adjustments against a real database
         env:
           TEST_PAYMENT_WEBHOOK_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand
-        if: needs.changes.outputs.backend == 'true'
       - name: Test email-verification persistence stores against a real database
         env:
           TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm test -- typeorm-stores-organization-isolation.integration.spec.ts --runInBand
-        if: needs.changes.outputs.backend == 'true'
       - name: Test organization directory PostgreSQL page boundaries
         env:
           TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
         run: corepack pnpm exec jest organization-directory.integration.spec.ts --runInBand
-        if: needs.changes.outputs.backend == 'true'
       - name: Build application
         run: corepack pnpm build
-        if: needs.changes.outputs.backend == 'true'
   web:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.web }}
     steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.web == 'false'
-        run: 'echo "web: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        if: needs.changes.outputs.web == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-        if: needs.changes.outputs.web == 'true'
       - name: Enable Corepack
         run: corepack enable
-        if: needs.changes.outputs.web == 'true'
       - name: Locate pnpm store
         id: pnpm-store
         run: |
           echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.web == 'true'
       - name: Restore pnpm store
         uses: actions/cache@v4
         continue-on-error: true
@@ -249,126 +99,35 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-
-        if: needs.changes.outputs.web == 'true'
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
-        if: needs.changes.outputs.web == 'true'
-      - name: Test premium UI audit
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ui-audit
-        if: needs.changes.outputs.web == 'true'
-      - name: Lint design contract
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web design:lint
-        if: needs.changes.outputs.web == 'true'
-      - name: Audit premium UI contracts
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web ui:audit
-        if: needs.changes.outputs.web == 'true'
       - name: Lint web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web lint
-        if: needs.changes.outputs.web == 'true'
       - name: Type check web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web typecheck
-        if: needs.changes.outputs.web == 'true'
       - name: Build generated API client
         run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
-        if: needs.changes.outputs.web == 'true'
       - name: Test web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
-        if: needs.changes.outputs.web == 'true'
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
-        if: needs.changes.outputs.web == 'true'
-  contract:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.contract }}
-    steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.contract == 'false'
-        run: 'echo "contract: selected=$VALIDATION_SELECTED; checks were not run."'
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-        if: needs.changes.outputs.contract == 'true'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-        if: needs.changes.outputs.contract == 'true'
-      - name: Enable Corepack
-        run: corepack enable
-        if: needs.changes.outputs.contract == 'true'
-      - name: Locate pnpm store
-        id: pnpm-store
-        run: |
-          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.contract == 'true'
-      - name: Restore pnpm store
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
-        if: needs.changes.outputs.contract == 'true'
-      - name: Install dependencies
-        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... install --frozen-lockfile
-        if: needs.changes.outputs.contract == 'true'
-      - name: Check browser API contract drift
-        run: corepack pnpm openapi:check
-        if: needs.changes.outputs.contract == 'true'
-      - name: Test browser API contract tooling
-        run: node --test scripts/openapi/*.test.mjs
-        if: needs.changes.outputs.contract == 'true'
-      - name: Build generated API client
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-api-client build
-        if: needs.changes.outputs.contract == 'true'
   images:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.images }}
     steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.images == 'false'
-        run: 'echo "images: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        if: needs.changes.outputs.images == 'true'
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v2
-        if: needs.changes.outputs.images == 'true'
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v4
         with:
           driver: docker-container
           use: false
-        if: needs.changes.outputs.images == 'true'
       - name: Build production image
         uses: docker/build-push-action@v7
         with:
@@ -380,10 +139,8 @@ jobs:
           push: false
           cache-from: type=gha,version=2,scope=lef-production
           cache-to: type=gha,version=2,scope=lef-production,mode=max,ignore-error=true
-        if: needs.changes.outputs.images == 'true'
       - name: Test packaged account-discovery manifest
         run: docker run --rm --entrypoint node lead-email-finder:ci -e "const { accessSync, constants, readFileSync, statSync } = require('node:fs'); const { parse } = require('yaml'); const path = '/app/config/privacy/account-discovery-approvals.yaml'; const manifest = parse(readFileSync(path, 'utf8')); if (manifest.schemaVersion !== 1 || manifest.revision !== 'initial-empty' || manifest.approvals.length !== 0) process.exit(1); const stat = statSync(path); if (stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) !== 0) process.exit(1); try { accessSync(path, constants.W_OK); process.exit(1); } catch (error) { if (error.code !== 'EACCES') throw error; }"
-        if: needs.changes.outputs.images == 'true'
       - name: Build independent development API image
         uses: docker/build-push-action@v7
         with:
@@ -395,7 +152,6 @@ jobs:
           push: false
           cache-from: type=gha,version=2,scope=lef-api
           cache-to: type=gha,version=2,scope=lef-api,mode=max,ignore-error=true
-        if: needs.changes.outputs.images == 'true'
       - name: Build independent static web image
         uses: docker/build-push-action@v7
         with:
@@ -407,7 +163,6 @@ jobs:
           push: false
           cache-from: type=gha,version=2,scope=lef-web
           cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
-        if: needs.changes.outputs.images == 'true'
       - name: Build independent MCP connector image
         uses: docker/build-push-action@v7
         with:
@@ -419,118 +174,25 @@ jobs:
           push: false
           cache-from: type=gha,version=2,scope=lef-mcp-server
           cache-to: type=gha,version=2,scope=lef-mcp-server,mode=max,ignore-error=true
-        if: needs.changes.outputs.images == 'true'
       - name: Validate Compose topology
         run: docker compose -f docker/compose.yaml config --quiet
-        if: needs.changes.outputs.images == 'true'
-  browser-artifacts:
-    needs:
-      - changes
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
-    steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: No validation needed
-        if: needs.changes.outputs.browser == 'false'
-        run: 'echo "browser-artifacts: selected=$VALIDATION_SELECTED; checks were not run."'
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-        if: needs.changes.outputs.browser == 'true'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-        if: needs.changes.outputs.browser == 'true'
-      - name: Enable Corepack
-        run: corepack enable
-        if: needs.changes.outputs.browser == 'true'
-      - name: Locate pnpm store
-        id: pnpm-store
-        run: |
-          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.browser == 'true'
-      - name: Restore pnpm store
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
-        if: needs.changes.outputs.browser == 'true'
-      - name: Install workspace dependencies
-        run: corepack pnpm install --frozen-lockfile
-        if: needs.changes.outputs.browser == 'true'
-      - name: Install Chromium
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-        if: needs.changes.outputs.browser == 'true'
-      - name: Verify privileged authentication artifact suppression
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:privileged-artifacts
-        if: needs.changes.outputs.browser == 'true'
-      - name: Verify invitation browser artifact suppression
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitation-artifacts
-        if: needs.changes.outputs.browser == 'true'
-      - name: Verify verification browser artifact suppression
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-artifacts
-        if: needs.changes.outputs.browser == 'true'
-      - name: Verify service-client browser artifact suppression
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-client-artifacts
-        if: needs.changes.outputs.browser == 'true'
-      - name: Verify proxy browser artifact suppression
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:proxy-artifacts
-        if: needs.changes.outputs.browser == 'true'
   browser-ui:
-    needs:
-      - changes
-      - browser-artifacts
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
-      BROWSER_ARTIFACTS_RESULT: ${{ needs.browser-artifacts.result }}
     steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: Require browser artifact guards to succeed
-        run: test "$BROWSER_ARTIFACTS_RESULT" = success
-      - name: No validation needed
-        if: needs.changes.outputs.browser == 'false'
-        run: 'echo "browser-ui: selected=$VALIDATION_SELECTED; checks were not run."'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        if: needs.changes.outputs.browser == 'true'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-        if: needs.changes.outputs.browser == 'true'
       - name: Enable Corepack
         run: corepack enable
-        if: needs.changes.outputs.browser == 'true'
       - name: Locate pnpm store
         id: pnpm-store
         run: |
           echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
           echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.browser == 'true'
       - name: Restore pnpm store
         uses: actions/cache@v4
         continue-on-error: true
@@ -539,252 +201,49 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
-        if: needs.changes.outputs.browser == 'true'
       - name: Install workspace dependencies
         run: corepack pnpm install --frozen-lockfile
-        if: needs.changes.outputs.browser == 'true'
       - name: Install Chromium
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-        if: needs.changes.outputs.browser == 'true'
       - name: Build web application for browser suites
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
-        if: needs.changes.outputs.browser == 'true'
       - name: Test web browser workflows
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt
-        if: needs.changes.outputs.browser == 'true'
       - name: Test service-client secret handling and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients
-        if: needs.changes.outputs.browser == 'true'
       - name: Test invitation browser behavior and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitations
-        if: needs.changes.outputs.browser == 'true'
       - name: Test platform organization directory and invitation recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-organizations
-        if: needs.changes.outputs.browser == 'true'
       - name: Test platform credit adjustment and recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits
-        if: needs.changes.outputs.browser == 'true'
       - name: Test proxy fleet management and credential recovery
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies
-        if: needs.changes.outputs.browser == 'true'
       - name: Test web accessibility
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt
-        if: needs.changes.outputs.browser == 'true'
       - name: Test web visual baselines
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt
-        if: needs.changes.outputs.browser == 'true'
-  browser-live:
-    needs:
-      - changes
-      - browser-artifacts
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      DOCKER_BUILD_RECORD_UPLOAD: "false"
-      API_START_COMMAND: pnpm exec nest start
-      DISCOVERY_RESULT: ${{ needs.changes.result }}
-      VALIDATION_SELECTED: ${{ needs.changes.outputs.browser }}
-      BROWSER_ARTIFACTS_RESULT: ${{ needs.browser-artifacts.result }}
-    steps:
-      - name: Validate discovery result
-        run: |
-          test "$DISCOVERY_RESULT" = success
-          case "$VALIDATION_SELECTED" in
-            true|false) ;;
-            *) echo "Missing or invalid validation selection" >&2; exit 1 ;;
-          esac
-      - name: Require browser artifact guards to succeed
-        run: test "$BROWSER_ARTIFACTS_RESULT" = success
-      - name: No validation needed
-        if: needs.changes.outputs.browser == 'false'
-        run: 'echo "browser-live: selected=$VALIDATION_SELECTED; checks were not run."'
-      - uses: actions/checkout@v4
-        id: browser-live-checkout
-        with:
-          fetch-depth: 0
-        if: needs.changes.outputs.browser == 'true'
-      - name: Prepare live test tools and shared temporary directory
-        run: |
-          test -d "$RUNNER_TEMP" && test -w "$RUNNER_TEMP"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y gettext-base
-          {
-            printf 'TMPDIR=%s\n' "$RUNNER_TEMP"
-            printf 'TMP=%s\n' "$RUNNER_TEMP"
-            printf 'TEMP=%s\n' "$RUNNER_TEMP"
-          } >> "$GITHUB_ENV"
-        if: needs.changes.outputs.browser == 'true'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-        if: needs.changes.outputs.browser == 'true'
-      - name: Enable Corepack
-        run: corepack enable
-        if: needs.changes.outputs.browser == 'true'
-      - name: Locate pnpm store
-        id: pnpm-store
-        run: |
-          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-        if: needs.changes.outputs.browser == 'true'
-      - name: Restore pnpm store
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
-        if: needs.changes.outputs.browser == 'true'
-      - name: Install workspace dependencies
-        run: corepack pnpm install --frozen-lockfile
-        if: needs.changes.outputs.browser == 'true'
-      - name: Install Chromium
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-        if: needs.changes.outputs.browser == 'true'
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v2
-        if: needs.changes.outputs.browser == 'true'
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver: docker-container
-          use: false
-        if: needs.changes.outputs.browser == 'true'
-      - name: Build independent static web image
-        uses: docker/build-push-action@v7
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: docker/web.Dockerfile
-          tags: lead-email-finder-web:frontend-06
-          load: true
-          push: false
-          cache-from: type=gha,version=2,scope=lef-web
-          cache-to: type=gha,version=2,scope=lef-web,mode=max,ignore-error=true
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test Vite and Nginx route ownership and privacy
-        run: corepack pnpm test:gateway
-        if: needs.changes.outputs.browser == 'true'
-      - name: Reset, provision, and check disposable development stack
-        id: dev-reset
-        run: corepack pnpm dev:reset -- --confirm-project=LEF
-        if: needs.changes.outputs.browser == 'true'
-      - name: Preserve safe stack startup diagnostics
-        if: always() && needs.changes.outputs.browser == 'true' && steps.dev-reset.outcome == 'failure'
-        continue-on-error: true
-        timeout-minutes: 1
-        run: node scripts/testing/dev-stack-diagnostics.mjs
-      - name: Test live MCP connector tool set
-        run: corepack pnpm test:mcp-server-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test genuine same-origin browser session and log privacy
-        run: corepack pnpm test:web-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test BFF and gateway HTTP contracts with Bruno
-        run: corepack pnpm bruno:bff-sessions
-        if: needs.changes.outputs.browser == 'true'
-      - name: Bootstrap MFA-aware browser identities
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web browser-fixtures:bootstrap
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test organization onboarding HTTP contracts with Bruno
-        run: corepack pnpm bruno:organization-onboarding
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live platform organization bootstrap
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-organizations-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test platform credit HTTP contracts with Bruno
-        run: corepack pnpm bruno:platform-credits
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live platform credit adjustment and recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test proxy registry HTTP contracts with Bruno
-        run: corepack pnpm bruno:proxy-registry
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live proxy fleet lifecycle
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live team management and invitation acceptance
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:team-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test service-client rejection contracts with Bruno
-        run: corepack pnpm bruno:service-client-rejections
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live service-client lifecycle
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Attach disposable SMTP and DNS verification fixtures
-        run: |
-          docker compose -f docker/compose.yaml down
-          docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d
-          verification_bootstrap=$(docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml ps -aq smtp-dev-proxy-bootstrap)
-          test -n "$verification_bootstrap"
-          verification_bootstrap_exit=$(timeout 120s docker wait "$verification_bootstrap")
-          test "$verification_bootstrap_exit" = 0
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test async verification HTTP contracts with Bruno
-        run: corepack pnpm bruno:async-verification
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live single-email verification and route recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:verification-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test batch verification HTTP contracts with Bruno
-        run: corepack pnpm bruno:batch-verification
-        if: needs.changes.outputs.browser == 'true'
-      - name: Test live batch upload, route recovery, and result download
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:batch-verification-live
-        if: needs.changes.outputs.browser == 'true'
-      - name: Report service health
-        if: always() && needs.changes.outputs.browser == 'true' && steps.browser-live-checkout.outcome == 'success'
-        timeout-minutes: 5
-        run: docker compose -f docker/compose.yaml ps
-      - name: Stop this runner's disposable stack
-        if: always() && needs.changes.outputs.browser == 'true' && steps.browser-live-checkout.outcome == 'success'
-        timeout-minutes: 5
-        run: docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml down --volumes --remove-orphans
   browser:
     needs:
-      - changes
-      - browser-artifacts
       - browser-ui
-      - browser-live
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Require every browser worker to succeed
-        env:
-          BROWSER_NEEDS_JSON: ${{ toJSON(needs) }}
-        run: node scripts/ci/browser-summary.mjs
+      - name: Require browser checks to succeed
+        run: test '${{ needs.browser-ui.result }}' = success
   validate:
     name: validate
     if: ${{ !cancelled() }}
     needs:
-      - changes
-      - repository-policy
       - backend
       - web
-      - contract
       - images
       - browser
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
       - name: Require every validation consumer to succeed
-        env:
-          VALIDATION_NEEDS_JSON: ${{ toJSON(needs) }}
-        run: node scripts/ci/validation-summary.mjs
+        run: |
+          test '${{ needs.backend.result }}' = success
+          test '${{ needs.web.result }}' = success
+          test '${{ needs.images.result }}' = success
+          test '${{ needs.browser.result }}' = success

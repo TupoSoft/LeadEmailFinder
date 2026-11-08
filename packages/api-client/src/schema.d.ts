@@ -1,6 +1,5 @@
 /**
  * Generated file. Do not edit.
- * Regenerate: corepack pnpm openapi:generate
  */
 
 export interface paths {

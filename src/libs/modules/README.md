@@ -1,7 +1,6 @@
 # Business Modules
 
-This is the architecture contract for business modules. `corepack pnpm architecture:check` enforces it across the
-repository with zero permitted violations.
+This is the architecture contract for business modules.
 
 ## Module Structure
 
@@ -70,20 +69,6 @@ Every module README requires `Responsibility`, `Non-Responsibilities`, `Public A
 Document ownership and exclusions, exact barrel exports, module dependencies, routes/queues, storage, setting names
 without secrets, and focused tests/Bruno coverage. Bruno is the repository's HTTP request-collection test tool.
 Existing unsupported deep imports are defects, not public contracts.
-
-## Architecture Gate
-
-```sh
-corepack pnpm architecture:check
-```
-
-Any violation fails; there is no baseline, exemption list, or warning-only mode. If the design cannot comply, revise
-the task's ExecPlan (implementation plan) to correct it. An intentional contract change must update this guide,
-scanner, focused tests, and plan together.
-
-Only generated `src/metadata.ts` is excluded: Nest uses its DTO imports for Swagger API documentation.
-Handwritten host code and other `metadata.ts` files remain checked. Diagnostic identities are sorted, unique, stable
-keys without absolute paths or positions; current line/column locations are reported separately.
 
 ## Module Catalog
 

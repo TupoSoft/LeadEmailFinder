@@ -81,8 +81,8 @@ function realmName(): string {
     return issuer!.split('/realms/')[1]
 }
 
-// The simulated browser runs in the API container during test:bff-live. Assert each browser URL is public,
-// then route only this browser driver's HTTP transport to Keycloak; the application receives no rewrite.
+// Assert each browser URL is public, then route only this browser driver's HTTP transport to Keycloak;
+// the application receives no rewrite.
 function browserTransportUrl(publicUrl: string): string {
     const url = new URL(publicUrl)
     expect(url.origin).toBe(new URL(issuer!).origin)

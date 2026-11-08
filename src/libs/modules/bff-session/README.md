@@ -65,13 +65,7 @@ session; replacements require the original cookie and live old record. Concurren
 The host publishes `/openapi.json` (machine-readable browser API contract) and `/docs` (Swagger UI). Stable operation
 IDs are `loginBrowserSession`, `completeBrowserAuthorization`, `getCurrentAccount`, and `logoutBrowserSession`.
 Callback codes use the `x-callback-error-codes` extension; logout documents combined cookie/CSRF requirements and
-Origin's Referer fallback. After changing browser annotations:
-
-```sh
-corepack pnpm openapi:export
-corepack pnpm openapi:generate
-corepack pnpm openapi:check
-```
+Origin's Referer fallback. Keep the browser API contract consistent when changing these annotations.
 
 ## Persistence
 

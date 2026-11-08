@@ -71,19 +71,10 @@ None: this module reads no environment variables.
 ## Validation
 
 Run focused unit/HTTP suites under `src/api/` and `src/application/`; `credits.module.spec.ts` checks wiring.
-`corepack pnpm test:credits-postgres` runs real ledger/reservation and payment-webhook suites serially against an
-owned disposable `credits_test` database. It rejects skipped/empty runs and ignores external connection overrides.
-The runner synchronizes a fresh test schema, never application data; private stack metadata is stored in
-`.dev/credits-postgres/stack.json`.
+Real PostgreSQL integration suites require a separately provisioned disposable test database.
 
 Coverage includes replay/conflict, concurrent first grants, zero-debit replay after top-up, reserve/capture/release,
 and reserve-versus-close races. A closed denial must remain closed after replenishment.
-
-To remove the test container, read `projectName` from that metadata and run:
-
-```shell
-CREDITS_TEST_PASSWORD=unused docker compose -p <projectName> -f docker/compose.credits-test.yaml down
-```
 
 Bruno (the HTTP collection runner) covers [platform credit administration](../../../../bruno/platform-credits/README.md),
 [payment/billing summary](../../../../bruno/credit-purchases/README.md), and verification charging through

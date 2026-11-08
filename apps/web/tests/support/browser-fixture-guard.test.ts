@@ -6,21 +6,11 @@ import { createPlaywrightConfig } from '../../playwright.config'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const fixtureSuites = [
-    ['privileged', 'privileged-*.spec.ts'],
-    ['billing', 'billing.spec.ts'],
-    ['verification', 'single-verification.spec.ts'],
-    ['batch-verification', 'batch-verification.spec.ts'],
-    ['verification-billing', 'verification-billing.spec.ts'],
     ['invitation', 'invitations-ui.spec.ts'],
-    ['team', 'team-and-invitations.spec.ts'],
     ['platform-organizations', 'platform-organizations-ui.spec.ts'],
-    ['platform-organizations-live', 'platform-organizations.spec.ts'],
     ['platform-credits', 'platform-credits-ui.spec.ts'],
-    ['platform-credits-live', 'platform-credits.spec.ts'],
     ['service-clients', 'service-clients-ui.spec.ts'],
-    ['service-clients-live', 'service-clients.spec.ts'],
     ['platform-proxies', 'platform-proxies-ui.spec.ts'],
-    ['platform-proxies-live', 'platform-proxies.spec.ts'],
 ] as const
 const previewSuites = new Set([
     'invitation',
@@ -31,7 +21,6 @@ const previewSuites = new Set([
 ])
 const privacyFlags = [
     'LEF_INVITATION_TEST_PRIVACY',
-    'LEF_VERIFICATION_TEST_PRIVACY',
     'LEF_SERVICE_CLIENT_TEST_PRIVACY',
     'LEF_PROXY_TEST_PRIVACY',
 ] as const
@@ -41,7 +30,7 @@ afterEach(() => {
     vi.resetModules()
 })
 
-describe('privileged browser fixture integration boundaries', () => {
+describe('sensitive browser suite integration boundaries', () => {
     it.each(fixtureSuites)('isolates the %s suite without authentication artifacts or retries', (suite, testMatch) => {
         const configuration = createPlaywrightConfig(suite)
         expect(configuration.testDir).toBe('./tests/e2e')
@@ -85,30 +74,18 @@ describe('privileged browser fixture integration boundaries', () => {
         expect(() => createPlaywrightConfig(suite)).toThrow()
     })
 
-    it('preserves the longer live verification deadlines and invitation restoration coverage', () => {
-        expect(createPlaywrightConfig('billing').timeout).toBe(90_000)
-        expect(createPlaywrightConfig('batch-verification').timeout).toBe(120_000)
+    it('preserves invitation back/forward cache restoration coverage', () => {
         expect(createPlaywrightConfig('invitation').use?.launchOptions).toEqual({
             ignoreDefaultArgs: ['--disable-back-forward-cache'],
         })
     })
 
     it.each([
-        ['privileged', './tests/support/browser-fixture-reporter.ts'],
-        ['billing', './tests/support/browser-fixture-reporter.ts'],
-        ['verification', './tests/support/browser-fixture-reporter.ts'],
-        ['batch-verification', './tests/support/browser-fixture-reporter.ts'],
-        ['verification-billing', '../../scripts/testing/verification-billing-web.mjs'],
         ['invitation', './tests/support/invitation-reporter.ts'],
-        ['team', './tests/support/invitation-reporter.ts'],
         ['platform-organizations', './tests/support/invitation-reporter.ts'],
-        ['platform-organizations-live', './tests/support/invitation-reporter.ts'],
         ['platform-credits', './tests/support/invitation-reporter.ts'],
-        ['platform-credits-live', './tests/support/invitation-reporter.ts'],
         ['service-clients', './tests/support/service-client-reporter.ts'],
-        ['service-clients-live', './tests/support/service-client-reporter.ts'],
         ['platform-proxies', './tests/support/platform-proxy-reporter.ts'],
-        ['platform-proxies-live', './tests/support/platform-proxy-reporter.ts'],
     ])('uses the restricted reporter for %s', (suite, reporter) => {
         expect(createPlaywrightConfig(suite).reporter).toBe(reporter)
     })
@@ -116,9 +93,7 @@ describe('privileged browser fixture integration boundaries', () => {
     it.each([
         ['ui', undefined],
         ['gateway', undefined],
-        ['billing', undefined],
         ['invitation', 'LEF_INVITATION_TEST_PRIVACY'],
-        ['verification', 'LEF_VERIFICATION_TEST_PRIVACY'],
         ['service-clients', 'LEF_SERVICE_CLIENT_TEST_PRIVACY'],
         ['platform-proxies', 'LEF_PROXY_TEST_PRIVACY'],
     ])('selects only the %s privacy policy before tests load', async (suite, selectedFlag) => {
@@ -144,7 +119,7 @@ describe('privileged browser fixture integration boundaries', () => {
     })
 
     it('isolates service-client suites before any secret-bearing test can run', () => {
-        for (const suite of ['service-clients-ui.spec.ts', 'service-clients.spec.ts']) {
+        for (const suite of ['service-clients-ui.spec.ts']) {
             const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
             expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
             expect(source).not.toMatch(/storageState|addCookies|client_credentials|saveAs|\.screenshot\(|\.attach\(/)
@@ -152,28 +127,10 @@ describe('privileged browser fixture integration boundaries', () => {
     })
 
     it('isolates proxy credential suites before entering any credential', () => {
-        for (const suite of ['platform-proxies-ui.spec.ts', 'platform-proxies.spec.ts']) {
+        for (const suite of ['platform-proxies-ui.spec.ts']) {
             const source = readFileSync(resolve(root, 'apps/web/tests/e2e', suite), 'utf8')
             expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
             expect(source).not.toMatch(/storageState|addCookies|client_credentials|saveAs|\.screenshot\(|\.attach\(/)
-        }
-    })
-
-    it('requires the shared fixture in privileged suites and prohibits synthetic authentication', () => {
-        const e2e = resolve(root, 'apps/web/tests/e2e')
-        const suites = readdirSync(e2e).filter(
-            name =>
-                /^privileged-.*\.spec\.ts$/.test(name) ||
-                name === 'billing.spec.ts' ||
-                name === 'single-verification.spec.ts',
-        )
-        expect(suites.length).toBeGreaterThan(0)
-        for (const suite of suites) {
-            const source = readFileSync(resolve(e2e, suite), 'utf8')
-            expect(source).toMatch(/from ['"]\.\.\/support\/privileged-login['"]/)
-            expect(source).not.toMatch(
-                /storageState|addCookies|client_credentials|clientSecret|\.route\(|reset-password/,
-            )
         }
     })
 
